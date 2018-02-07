@@ -139,13 +139,29 @@ impl<'a> PrattParser<'a> {
 #[cfg(test)]
 mod tests {
 
+    use super::SQLToken::*;
     use super::*;
     #[test]
-    fn it_works() {
+    fn parse_kudu_create_table() {
+
+        // CREATE TABLE test (col1 int8) HASH (col1)
         let tokens = vec![
-            SQLToken::Keyword("CREATE".to_string()),
-            SQLToken::Keyword("TABLE".to_string()),
-            SQLToken::Keyword("test".to_string()),
+            k("CREATE"), k("TABLE"), i("test"), LParen,
+            i("col1"), k("int8"),
+            RParen,
+            k("HASH"), LParen, i("col1"), RParen
         ];
+
+        //let parser = KuduParser { generic_parser: }
     }
+
+    fn k(s: &str) -> SQLToken {
+        Keyword(s.to_string())
+    }
+
+    fn i(s: &str) -> SQLToken {
+        Identifier(s.to_string())
+    }
+
+
 }

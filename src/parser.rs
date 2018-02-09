@@ -1,3 +1,6 @@
+use std::cmp::PartialEq;
+use std::fmt::Debug;
+
 use super::tokenizer::*;
 
 #[derive(Debug)]
@@ -35,23 +38,29 @@ pub enum SQLExpr<T> {
 }
 
 #[derive(Debug)]
-pub enum ParserError<T> {
-    WrongToken { expected: Vec<SQLToken<T>>, actual: SQLToken<T>, line: usize, col: usize },
-    Custom(T)
+pub enum ParserError<S, PE>
+    where S: Debug + PartialEq {
+
+    WrongToken { expected: Vec<SQLToken<S>>, actual: SQLToken<S>, line: usize, col: usize },
+    Custom(PE)
 }
 
-impl<T> From<TokenizerError<T>> for ParserError<T> {
-    fn from(_: TokenizerError<T>) -> Self {
+impl<S, TE> From<TokenizerError<TE>> for ParserError<S, TE>
+    where S: Debug + PartialEq {
+
+    fn from(_: TokenizerError<TE>) -> Self {
         unimplemented!()
     }
 }
 
 
-trait Parser<S, PE> {
+trait Parser<S, PE>
+    where S: Debug + PartialEq {
+
     /// parse the prefix and stop once an infix operator is reached
-    fn parse_prefix(&mut self) -> Result<Box<SQLExpr<S>>, ParserError<PE>> ;
+    fn parse_prefix(&mut self) -> Result<Box<SQLExpr<S>>, ParserError<S, PE>> ;
     /// parse the next infix expression, returning None if the precedence has changed
-    fn parse_infix(&mut self, left: SQLExpr<S>) -> Result<Option<Box<SQLExpr<S>>>, ParserError<PE>>;
+    fn parse_infix(&mut self, left: SQLExpr<S>) -> Result<Option<Box<SQLExpr<S>>>, ParserError<S, PE>>;
 }
 
 //

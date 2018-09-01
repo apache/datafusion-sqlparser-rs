@@ -8,5 +8,5 @@ Goals for this version:
 - Good error reporting (e.g. show line / column numbers and descriptive messages)
 - Zero-copy of tokens when parsing
 - Concise code
-
+- Full support for ANSI SQL:2011 standard
 

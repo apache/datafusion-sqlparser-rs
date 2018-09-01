@@ -3,6 +3,57 @@ use std::fmt::Debug;
 
 use super::tokenizer::*;
 
+// https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html
+
+/// ANSI SQL:2011 Data Types
+#[derive(Debug)]
+pub enum SQLDataType<T> {
+    /// BOOLEAN
+    Boolean,
+    /// NUMERIC, DECIMAL, DEC
+    Numeric { precision: usize, scale: Option<usize> },
+    /// SMALLINT
+    SmallInt,
+    /// INT, INTEGER
+    Int,
+    /// BIGINT
+    BigInt,
+    /// Floating point: `FLOAT(precision)`
+    Float(usize),
+    /// REAL
+    Real,
+    /// Double: `DOUBLE PRECISION`
+    Double,
+    /// Fixed-length character. `CHAR, CHARACTER`
+    Char(usize),
+    /// Variable-length character: `VARCHAR, CHARACTER VARYING, CHAR VARYING`
+    VarChar(usize),
+    /// Character Large Object: `CHARACTER LARGE OBJECT, CHAR LARGE OBJECT, CLOB`
+    Clob(usize),
+    /// Fixed-length character. `NCHAR, NATIONAL CHAR, NATIONAL CHARACTER`
+    NChar(usize),
+    /// Variable-length character: `NCHAR VARYING, NATIONAL CHARACTER VARYING, NATIONAL CHAR VARYING`
+    NVarChar(usize),
+    /// National Character Large Object: `NATIONAL CHARACTER LARGE OBJECT, NCHAR LARGE OBJECT, NCLOB`
+    NClob(usize),
+    /// Fixed-length binary
+    Binary(usize),
+    /// Variable-length binary
+    VarBinary(usize),
+    /// Binary large object
+    Blob(usize),
+    /// Date
+    Date,
+    /// Time: `TIME [(precision)] [WITH TIME ZONE | WITHOUT TIME ZONE]`
+    Time { precision: usize, tz: bool },
+    /// Time: `TIMESTAMP [(precision)] [WITH TIME ZONE | WITHOUT TIME ZONE]`
+    Timestamp { precision: usize, tz: bool },
+    /// Custom data type
+    Custom(T)
+}
+
+
+
 #[derive(Debug)]
 pub enum SQLOperator<T> {
     Plus,

@@ -117,37 +117,43 @@ pub trait SQLParser<TokenType, ExprType>
 }
 
 
-
-struct PrattParser<'a, TokenType, ExprType> {
-    chars: Peekable<Chars<'a>>,
-    tokenizer: Rc<SQLTokenizer<TokenType>>,
-    parser: SQLParser<TokenType, ExprType>
+pub fn parse_expr<'a, TokenType, ExprType>(_tokenizer: Rc<SQLTokenizer<TokenType>>, _parser: Rc<SQLParser<TokenType, ExprType>>, _chars: &mut Peekable<Chars<'a>>)
+    -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> where TokenType: Debug + PartialEq, ExprType: Debug {
+    unimplemented!()
 }
 
-impl<'a, TokenType, ExprType> PrattParser<'a, TokenType, ExprType>
-    where TokenType: Debug + PartialEq, ExprType: Debug {
 
-    fn parse_expr(&mut self) -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> {
-
-        let precedence: usize = 0;
-
-        let mut expr = self.parser.parse_prefix()?;
-
-        while let Some(token) = self.tokenizer.peek_token(&mut self.chars)? {
-
-            let next_precedence = self.tokenizer.precedence(&token);
-
-            if precedence >= next_precedence {
-                break;
-            }
-
-            expr = self.parser.parse_infix(&expr, next_precedence)?.unwrap(); //TODO: fix me
-        }
-
-        Ok(expr)
-    }
-
-}
+//pub struct PrattParser<'a, TokenType, ExprType> {
+//    chars: Peekable<Chars<'a>>,
+//    tokenizer: Rc<SQLTokenizer<TokenType>>,
+//    parser: Rc<SQLParser<TokenType, ExprType>>
+//}
+//
+//impl<'a, TokenType, ExprType> PrattParser<'a, TokenType, ExprType>
+//    where TokenType: Debug + PartialEq, ExprType: Debug {
+//
+//    pub fn parse_expr(&mut self) -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> {
+//
+//        let precedence: usize = 0;
+//        let parser_ref = self.parser.as_ref();
+//
+//        let mut expr = parser_ref.parse_prefix()?;
+//
+//        while let Some(token) = self.tokenizer.peek_token(&mut self.chars)? {
+//
+//            let next_precedence = self.tokenizer.precedence(&token);
+//
+//            if precedence >= next_precedence {
+//                break;
+//            }
+//
+//            expr = parser_ref.parse_infix(&expr, next_precedence)?.unwrap(); //TODO: fix me
+//        }
+//
+//        Ok(expr)
+//    }
+//
+//}
 
 //    fn parse_prefix(&mut self) -> Result<Box<SQLExpr>, ParserError> {
 //

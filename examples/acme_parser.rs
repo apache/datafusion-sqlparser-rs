@@ -1,5 +1,6 @@
 use std::str::Chars;
 use std::iter::Peekable;
+use std::rc::Rc;
 
 extern crate datafusion_sql;
 
@@ -62,43 +63,58 @@ impl SQLTokenizer<AcmeToken> for AcmeTokenizer {
     }
 }
 
-struct AcmeParser<'a> {
-    chars: Peekable<Chars<'a>>
+struct AcmeParser {
+    tokenizer: Rc<SQLTokenizer<AcmeToken>>
 }
+//
+//impl<'a> AcmeParser<'a> {
+//
+//    pub fn new(sql: &'a str) -> Self {
+//        AcmeParser {
+//            chars: sql.chars().peekable()
+//        }
+//    }
+//}
 
-impl<'a> AcmeParser<'a> {
-
-    pub fn new(sql: &'a str) -> Self {
-        AcmeParser {
-            chars: sql.chars().peekable()
-        }
-    }
-}
-
-impl<'a> SQLParser<AcmeToken, AcmeExpr> for AcmeParser<'a> {
+impl SQLParser<AcmeToken, AcmeExpr> for AcmeParser {
 
     fn parse_prefix(&mut self) -> Result<Box<SQLExpr<AcmeExpr>>, ParserError<AcmeToken>> {
         unimplemented!()
     }
 
-    fn parse_infix(&mut self, left: &SQLExpr<AcmeExpr>, precedence: usize) -> Result<Option<Box<SQLExpr<AcmeExpr>>>, ParserError<AcmeToken>> {
+    fn parse_infix(&mut self, left: &SQLExpr<AcmeExpr>, _precedence: usize) -> Result<Option<Box<SQLExpr<AcmeExpr>>>, ParserError<AcmeToken>> {
         unimplemented!()
     }
 }
-
 
 fn main() {
 
     let sql = "1 + !! 5 * 2";
 
-    let acme_parser = AcmeParser::new(sql);
+//    let acme_parser = AcmeParser::new(sql);
 
 
     //acme_parser
 
-//    let mut acme_tokenizer = AcmeTokenizer {
-//        generic: ANSISQLTokenizer { }
-//    };
+    let mut acme_tokenizer: Rc<SQLTokenizer<AcmeToken>> = Rc::new(AcmeTokenizer {
+        generic: ANSISQLTokenizer { }
+    });
+
+    let mut acme_parser: Rc<SQLParser<AcmeToken, AcmeExpr>> = Rc::new(AcmeParser {
+        tokenizer: acme_tokenizer.clone()
+    });
+
+//    let mut pratt_parser = Rc::new(PrattParser {
+//        chars: sql.chars().peekable(),
+//        tokenizer: acme_tokenizer.clone(),
+//        parser: acme_parser.clone()
+//    });
+
+    let mut chars = sql.chars().peekable();
+
+    let expr = parse_expr(acme_tokenizer, acme_parser, &mut chars);
+
+    println!("Parsed: {:?}", expr);
 //
 //    let tokens = tokenize(&sql, &mut acme_tokenizer).unwrap();
 //

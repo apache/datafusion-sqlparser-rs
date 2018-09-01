@@ -1,7 +1,7 @@
 use std::cmp::PartialEq;
 use std::fmt::Debug;
-use std::iter::Peekable;
-use std::str::Chars;
+//use std::iter::Peekable;
+//use std::str::Chars;
 
 #[derive(Debug)]
 pub struct Position {
@@ -54,31 +54,35 @@ pub trait SQLTokenizer<TokenType>
     fn precedence(&self, token: &SQLToken<TokenType>) -> usize;
 
     /// return a reference to the next token but do not advance the index
-    fn peek_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>>;
+    fn peek_token(&mut self) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>>;
 
     /// return a reference to the next token and advance the index
-    fn next_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>>;
+    fn next_token(&mut self) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>>;
+
+    fn peek_char(&mut self) -> Option<&char>;
+
+    fn next_char(&mut self) -> Option<&char>;
 }
 
-
-pub fn tokenize<TokenType>(sql: &str, tokenizer: &mut SQLTokenizer<TokenType>) -> Result<Vec<SQLToken<TokenType>>, TokenizerError<TokenType>>
-    where TokenType: Debug + PartialEq
-    {
-
-    let mut peekable = sql.chars().peekable();
-
-    let mut tokens : Vec<SQLToken<TokenType>> = vec![];
-
-    loop {
-        match tokenizer.next_token(&mut peekable)? {
-            Some(SQLToken::Whitespace(_)) => { /* ignore */ },
-            Some(token) => {
-                println!("Token: {:?}", token);
-                tokens.push(token)
-            },
-            None => break
-        }
-    }
-
-    Ok(tokens)
-}
+//
+//pub fn tokenize<TokenType>(sql: &str, tokenizer: &mut SQLTokenizer<TokenType>) -> Result<Vec<SQLToken<TokenType>>, TokenizerError<TokenType>>
+//    where TokenType: Debug + PartialEq
+//    {
+//
+//    let mut peekable = sql.chars().peekable();
+//
+//    let mut tokens : Vec<SQLToken<TokenType>> = vec![];
+//
+//    loop {
+//        match tokenizer.next_token(&mut peekable)? {
+//            Some(SQLToken::Whitespace(_)) => { /* ignore */ },
+//            Some(token) => {
+//                println!("Token: {:?}", token);
+//                tokens.push(token)
+//            },
+//            None => break
+//        }
+//    }
+//
+//    Ok(tokens)
+//}

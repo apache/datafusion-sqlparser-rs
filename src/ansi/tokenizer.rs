@@ -5,30 +5,32 @@ use std::str::Chars;
 
 use super::super::tokenizer::*;
 
-pub struct ANSISQLTokenizer {}
+pub struct ANSISQLTokenizer<'a> {
+    pub chars: Peekable<Chars<'a>>
+}
 
-impl<TokenType> SQLTokenizer<TokenType> for ANSISQLTokenizer
+impl<'a, TokenType> SQLTokenizer<TokenType> for ANSISQLTokenizer<'a>
     where TokenType: Debug + PartialEq {
 
     fn precedence(&self, _token: &SQLToken<TokenType>) -> usize {
         unimplemented!()
     }
 
-    fn peek_token(&self, _chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>> {
+    fn peek_token(&mut self) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>> {
         unimplemented!()
     }
 
-    fn next_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>> {
-        match chars.next() {
+    fn next_token(&mut self) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>> {
+        match self.chars.next() {
             Some(ch) => match ch {
                 ' ' | '\t' | '\n' => Ok(Some(SQLToken::Whitespace(ch))),
                 '0' ... '9' => {
                     let mut s = String::new();
                     s.push(ch);
-                    while let Some(&ch) = chars.peek() {
+                    while let Some(&ch) = self.chars.peek() {
                         match ch {
                             '0' ... '9' => {
-                                chars.next(); // consume
+                                self.chars.next(); // consume
                                 s.push(ch);
                             },
                             _ => break
@@ -44,6 +46,14 @@ impl<TokenType> SQLTokenizer<TokenType> for ANSISQLTokenizer
             },
             None => Ok(None)
         }
+    }
+
+    fn peek_char(&mut self) -> Option<&char> {
+        unimplemented!()
+    }
+
+    fn next_char(&mut self) -> Option<&char> {
+        unimplemented!()
     }
 }
 

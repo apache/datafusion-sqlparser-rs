@@ -1,10 +1,9 @@
-use std::str::Chars;
-use std::iter::Peekable;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 extern crate datafusion_sql;
 
 use datafusion_sql::ansi::tokenizer::ANSISQLTokenizer;
+use datafusion_sql::ansi::parser::ANSISQLParser;
 use datafusion_sql::tokenizer::*;
 use datafusion_sql::parser::*;
 
@@ -26,29 +25,30 @@ enum AcmeExpr {
 }
 
 struct AcmeTokenizer {
-    generic: ANSISQLTokenizer
+    ansi_tokenizer: Arc<Mutex<SQLTokenizer<AcmeToken>>>
 }
 
 /// The ACME tokenizer looks for the factorial operator `!!` but delegates everything else
 impl SQLTokenizer<AcmeToken> for AcmeTokenizer {
 
-    fn precedence(&self, token: &SQLToken<AcmeToken>) -> usize {
+    fn precedence(&self, _token: &SQLToken<AcmeToken>) -> usize {
         unimplemented!()
     }
 
-    fn peek_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<AcmeToken>>, TokenizerError<AcmeToken>> {
+    fn peek_token(&mut self) -> Result<Option<SQLToken<AcmeToken>>, TokenizerError<AcmeToken>> {
         unimplemented!()
     }
 
-    fn next_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<AcmeToken>>, TokenizerError<AcmeToken>> {
-        match chars.peek() {
+    fn next_token(&mut self) -> Result<Option<SQLToken<AcmeToken>>, TokenizerError<AcmeToken>> {
+        let mut arc = self.ansi_tokenizer.lock().unwrap();
+        match arc.peek_char() {
             Some(&ch) => match ch {
                 '!' => {
-                    chars.next(); // consume the first `!`
-                    match chars.peek() {
+                    arc.next_char(); // consume the first `!`
+                    match arc.peek_char() {
                         Some(&ch) => match ch {
                             '!' => {
-                                chars.next(); // consume the second `!`
+                                arc.next_char(); // consume the second `!`
                                 Ok(Some(SQLToken::Custom(AcmeToken::Factorial)))
                             },
                             _ => Err(TokenizerError::UnexpectedChar(ch,Position::new(0,0)))
@@ -56,34 +56,35 @@ impl SQLTokenizer<AcmeToken> for AcmeTokenizer {
                         None => Ok(Some(SQLToken::Not))
                     }
                 }
-                _ => self.generic.next_token(chars)
+                _ => arc.next_token()
             }
-            _ => self.generic.next_token(chars)
+            _ => arc.next_token()
         }
+    }
+
+    fn peek_char(&mut self) -> Option<&char> {
+        unimplemented!()
+    }
+
+    fn next_char(&mut self) -> Option<&char> {
+        unimplemented!()
     }
 }
 
 struct AcmeParser {
-    tokenizer: Rc<SQLTokenizer<AcmeToken>>
+    ansi_parser: Arc<Mutex<SQLParser<AcmeToken, AcmeExpr>>>
 }
-//
-//impl<'a> AcmeParser<'a> {
-//
-//    pub fn new(sql: &'a str) -> Self {
-//        AcmeParser {
-//            chars: sql.chars().peekable()
-//        }
-//    }
-//}
 
 impl SQLParser<AcmeToken, AcmeExpr> for AcmeParser {
 
     fn parse_prefix(&mut self) -> Result<Box<SQLExpr<AcmeExpr>>, ParserError<AcmeToken>> {
-        unimplemented!()
+        //TODO: add custom overrides
+        self.ansi_parser.lock().unwrap().parse_prefix()
     }
 
-    fn parse_infix(&mut self, left: &SQLExpr<AcmeExpr>, _precedence: usize) -> Result<Option<Box<SQLExpr<AcmeExpr>>>, ParserError<AcmeToken>> {
-        unimplemented!()
+    fn parse_infix(&mut self, left: &SQLExpr<AcmeExpr>, precedence: usize) -> Result<Option<Box<SQLExpr<AcmeExpr>>>, ParserError<AcmeToken>> {
+        //TODO: add custom overrides
+        self.ansi_parser.lock().unwrap().parse_infix(left, precedence)
     }
 }
 
@@ -91,35 +92,22 @@ fn main() {
 
     let sql = "1 + !! 5 * 2";
 
-//    let acme_parser = AcmeParser::new(sql);
+    // ANSI SQL tokenizer
+    let ansi_tokenizer = Arc::new(Mutex::new(ANSISQLTokenizer { chars: sql.chars().peekable() }));
 
+    // Custom ACME tokenizer
+    let mut acme_tokenizer = Arc::new(Mutex::new(AcmeTokenizer {
+        ansi_tokenizer: ansi_tokenizer.clone()
+    }));
 
-    //acme_parser
+    // Custom ACME parser
+    let acme_parser: Arc<Mutex<SQLParser<AcmeToken, AcmeExpr>>> = Arc::new(Mutex::new(AcmeParser {
+        ansi_parser: Arc::new(Mutex::new(ANSISQLParser::new(acme_tokenizer)))
+    }));
 
-    let mut acme_tokenizer: Rc<SQLTokenizer<AcmeToken>> = Rc::new(AcmeTokenizer {
-        generic: ANSISQLTokenizer { }
-    });
-
-    let mut acme_parser: Rc<SQLParser<AcmeToken, AcmeExpr>> = Rc::new(AcmeParser {
-        tokenizer: acme_tokenizer.clone()
-    });
-
-//    let mut pratt_parser = Rc::new(PrattParser {
-//        chars: sql.chars().peekable(),
-//        tokenizer: acme_tokenizer.clone(),
-//        parser: acme_parser.clone()
-//    });
-
-    let mut chars = sql.chars().peekable();
-
-    let expr = parse_expr(acme_tokenizer, acme_parser, &mut chars);
+    let expr = parse_expr(acme_parser).unwrap();
 
     println!("Parsed: {:?}", expr);
-//
-//    let tokens = tokenize(&sql, &mut acme_tokenizer).unwrap();
-//
-//    println!("tokens = {:?}", tokens);
-
 
 
 }

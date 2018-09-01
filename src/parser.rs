@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use std::rc::Rc;
 use std::str::Chars;
 use std::iter::Peekable;
+use std::sync::{Arc, Mutex};
 
 use super::tokenizer::*;
 
@@ -117,9 +118,13 @@ pub trait SQLParser<TokenType, ExprType>
 }
 
 
-pub fn parse_expr<'a, TokenType, ExprType>(_tokenizer: Rc<SQLTokenizer<TokenType>>, _parser: Rc<SQLParser<TokenType, ExprType>>, _chars: &mut Peekable<Chars<'a>>)
+pub fn parse_expr<'a, TokenType, ExprType>(parser: Arc<Mutex<SQLParser<TokenType, ExprType>>>)
     -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> where TokenType: Debug + PartialEq, ExprType: Debug {
-    unimplemented!()
+    let mut guard = parser.lock().unwrap();
+
+    //Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>>
+    let x = guard.parse_prefix();
+    x
 }
 
 

@@ -70,48 +70,47 @@ pub enum SQLOperator<T> {
 
 /// SQL Expressions
 #[derive(Debug)]
-pub enum SQLExpr<T> {
+pub enum SQLExpr<ExprType> {
     /// Identifier e.g. table name or column name
     Identifier(String),
     /// Literal value
     Literal(String),
     /// Binary expression e.g. `1 + 2` or `fname LIKE "A%"`
-    Binary(Box<SQLExpr<T>>, SQLOperator<T>, Box<SQLExpr<T>>),
+    Binary(Box<SQLExpr<ExprType>>, SQLOperator<ExprType>, Box<SQLExpr<ExprType>>),
     /// Function invocation with function name and list of argument expressions
-    FunctionCall(String, Vec<SQLExpr<T>>),
+    FunctionCall(String, Vec<SQLExpr<ExprType>>),
     Insert,
     Update,
     Delete,
     Select,
     CreateTable,
     /// Custom expression (vendor-specific)
-    Custom(T)
+    Custom(ExprType)
 }
 
 #[derive(Debug)]
-pub enum ParserError<S, PE>
-    where S: Debug + PartialEq {
-
-    WrongToken { expected: Vec<SQLToken<S>>, actual: SQLToken<S>, line: usize, col: usize },
-    Custom(PE)
+pub enum ParserError<TokenType>
+    where TokenType: Debug + PartialEq {
+    WrongToken { expected: Vec<SQLToken<TokenType>>, actual: SQLToken<TokenType>, line: usize, col: usize },
+    Custom(String)
 }
 
-impl<S, TE> From<TokenizerError<TE>> for ParserError<S, TE>
-    where S: Debug + PartialEq {
+impl<TokenType> From<TokenizerError<TokenType>> for ParserError<TokenType>
+    where TokenType: Debug + PartialEq {
 
-    fn from(_: TokenizerError<TE>) -> Self {
+    fn from(_: TokenizerError<TokenType>) -> Self {
         unimplemented!()
     }
 }
 
 
-pub trait SQLParser<S, PE>
-    where S: Debug + PartialEq {
+pub trait SQLParser<TokenType, ExprType>
+    where TokenType: Debug + PartialEq, ExprType: Debug + PartialEq {
 
     /// parse the prefix and stop once an infix operator is reached
-    fn parse_prefix(&mut self) -> Result<Box<SQLExpr<S>>, ParserError<S, PE>> ;
+    fn parse_prefix(&mut self) -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> ;
     /// parse the next infix expression, returning None if the precedence has changed
-    fn parse_infix(&mut self, left: SQLExpr<S>) -> Result<Option<Box<SQLExpr<S>>>, ParserError<S, PE>>;
+    fn parse_infix(&mut self, left: SQLExpr<ExprType>) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>>;
 }
 
 //

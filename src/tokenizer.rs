@@ -47,21 +47,24 @@ pub enum SQLToken<T: Debug + PartialEq> {
     Custom(T)
 }
 
-pub trait SQLTokenizer<S, TE>
-    where S: Debug + PartialEq {
+pub trait SQLTokenizer<TokenType>
+    where TokenType: Debug + PartialEq {
+
+    /// return a reference to the next token but do not advance the index
+    fn peek_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>>;
 
     /// return a reference to the next token and advance the index
-    fn next_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<S>>, TokenizerError<TE>>;
+    fn next_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>>;
 }
 
 
-pub fn tokenize<S,TE>(sql: &str, tokenizer: &mut SQLTokenizer<S,TE>) -> Result<Vec<SQLToken<S>>, TokenizerError<TE>>
-    where S: Debug + PartialEq
+pub fn tokenize<TokenType>(sql: &str, tokenizer: &mut SQLTokenizer<TokenType>) -> Result<Vec<SQLToken<TokenType>>, TokenizerError<TokenType>>
+    where TokenType: Debug + PartialEq
     {
 
     let mut peekable = sql.chars().peekable();
 
-    let mut tokens : Vec<SQLToken<S>> = vec![];
+    let mut tokens : Vec<SQLToken<TokenType>> = vec![];
 
     loop {
         match tokenizer.next_token(&mut peekable)? {

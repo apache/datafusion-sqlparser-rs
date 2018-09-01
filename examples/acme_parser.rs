@@ -32,9 +32,13 @@ struct AcmeTokenizer {
 }
 
 /// The ACME tokenizer looks for the factorial operator `!!` but delegates everything else
-impl SQLTokenizer<AcmeToken, AcmeTokenizerError> for AcmeTokenizer {
+impl SQLTokenizer<AcmeToken> for AcmeTokenizer {
 
-    fn next_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<AcmeToken>>, TokenizerError<AcmeTokenizerError>> {
+    fn peek_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<AcmeToken>>, TokenizerError<AcmeToken>> {
+        unimplemented!()
+    }
+
+    fn next_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<AcmeToken>>, TokenizerError<AcmeToken>> {
         match chars.peek() {
             Some(&ch) => match ch {
                 '!' => {

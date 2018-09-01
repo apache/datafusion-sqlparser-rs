@@ -7,10 +7,14 @@ use super::super::tokenizer::*;
 
 pub struct ANSISQLTokenizer {}
 
-impl<S,TE> SQLTokenizer<S,TE> for ANSISQLTokenizer
-    where S: Debug + PartialEq {
+impl<TokenType> SQLTokenizer<TokenType> for ANSISQLTokenizer
+    where TokenType: Debug + PartialEq {
 
-    fn next_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<S>>, TokenizerError<TE>> {
+    fn peek_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>> {
+        unimplemented!()
+    }
+
+    fn next_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>> {
         match chars.next() {
             Some(ch) => match ch {
                 ' ' | '\t' | '\n' => Ok(Some(SQLToken::Whitespace(ch))),

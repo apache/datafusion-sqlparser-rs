@@ -3,11 +3,11 @@ use std::fmt::Debug;
 use std::iter::Peekable;
 use std::str::Chars;
 
-use super::tokenizer::*;
+use super::super::tokenizer::*;
 
-pub struct GenericTokenizer {}
+pub struct ANSISQLTokenizer {}
 
-impl<S,TE> SQLTokenizer<S,TE> for GenericTokenizer
+impl<S,TE> SQLTokenizer<S,TE> for ANSISQLTokenizer
     where S: Debug + PartialEq {
 
     fn next_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<S>>, TokenizerError<TE>> {

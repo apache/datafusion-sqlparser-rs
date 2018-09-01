@@ -105,7 +105,7 @@ impl<S, TE> From<TokenizerError<TE>> for ParserError<S, TE>
 }
 
 
-trait Parser<S, PE>
+pub trait SQLParser<S, PE>
     where S: Debug + PartialEq {
 
     /// parse the prefix and stop once an infix operator is reached

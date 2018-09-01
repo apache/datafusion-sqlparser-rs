@@ -3,8 +3,8 @@ use std::iter::Peekable;
 
 extern crate datafusion_sql;
 
+use datafusion_sql::ansi::tokenizer::ANSISQLTokenizer;
 use datafusion_sql::tokenizer::*;
-use datafusion_sql::generic_tokenizer::*;
 use datafusion_sql::parser::*;
 
 ///
@@ -28,7 +28,7 @@ enum AcmeTokenizerError {
 }
 
 struct AcmeTokenizer {
-    generic: GenericTokenizer
+    generic: ANSISQLTokenizer
 }
 
 /// The ACME tokenizer looks for the factorial operator `!!` but delegates everything else
@@ -64,7 +64,7 @@ fn main() {
     let sql = "1 + !! 5 * 2";
 
     let mut acme_tokenizer = AcmeTokenizer {
-        generic: GenericTokenizer { }
+        generic: ANSISQLTokenizer { }
     };
 
     let tokens = tokenize(&sql, &mut acme_tokenizer).unwrap();

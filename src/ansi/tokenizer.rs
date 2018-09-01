@@ -10,6 +10,10 @@ pub struct ANSISQLTokenizer {}
 impl<TokenType> SQLTokenizer<TokenType> for ANSISQLTokenizer
     where TokenType: Debug + PartialEq {
 
+    fn precedence(&self, token: &SQLToken<TokenType>) -> usize {
+        unimplemented!()
+    }
+
     fn peek_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>> {
         unimplemented!()
     }

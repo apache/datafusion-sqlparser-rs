@@ -29,7 +29,7 @@ impl<'a, TokenType, ExprType> SQLParser<TokenType, ExprType> for ANSISQLParser<'
         }
     }
 
-    fn parse_infix(&mut self, left: SQLExpr<ExprType>) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>> {
+    fn parse_infix(&mut self, left: &SQLExpr<ExprType>, precedence: usize) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>> {
         unimplemented!()
     }
 }

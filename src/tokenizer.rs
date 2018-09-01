@@ -50,6 +50,9 @@ pub enum SQLToken<T: Debug + PartialEq> {
 pub trait SQLTokenizer<TokenType>
     where TokenType: Debug + PartialEq {
 
+    /// get the precendence of a token
+    fn precedence(&self, token: &SQLToken<TokenType>) -> usize;
+
     /// return a reference to the next token but do not advance the index
     fn peek_token(&self, chars: &mut Peekable<Chars>) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>>;
 

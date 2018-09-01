@@ -1,5 +1,8 @@
 use std::cmp::PartialEq;
 use std::fmt::Debug;
+use std::rc::Rc;
+use std::str::Chars;
+use std::iter::Peekable;
 
 use super::tokenizer::*;
 
@@ -105,41 +108,47 @@ impl<TokenType> From<TokenizerError<TokenType>> for ParserError<TokenType>
 
 
 pub trait SQLParser<TokenType, ExprType>
-    where TokenType: Debug + PartialEq, ExprType: Debug + PartialEq {
+    where TokenType: Debug + PartialEq, ExprType: Debug {
 
     /// parse the prefix and stop once an infix operator is reached
     fn parse_prefix(&mut self) -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> ;
     /// parse the next infix expression, returning None if the precedence has changed
-    fn parse_infix(&mut self, left: SQLExpr<ExprType>) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>>;
+    fn parse_infix(&mut self, left: &SQLExpr<ExprType>, precedence: usize) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>>;
 }
 
-//
-//
-//struct GenericParser {
-//    tokenizer: SQLTokenizer
-//}
-//
-//impl GenericParser {
-//
-//    fn parse_expr(&mut self, precedence: u8) -> Result<Box<SQLExpr>, ParserError> {
-//
-//        let mut expr = self.parse_prefix()?;
-//
-//        // loop while there are more tokens and until the precedence changes
-//        while let Some(token) = self.tokenizer.peek_token()? {
-//
-//            let next_precedence = self.get_precedence(&token);
-//
-//            if precedence >= next_precedence {
-//                break;
-//            }
-//
-//            expr = self.parse_infix(expr, next_precedence)?;
-//        }
-//
-//        Ok(expr)
-//    }
-//
+
+
+struct PrattParser<'a, TokenType, ExprType> {
+    chars: Peekable<Chars<'a>>,
+    tokenizer: Rc<SQLTokenizer<TokenType>>,
+    parser: SQLParser<TokenType, ExprType>
+}
+
+impl<'a, TokenType, ExprType> PrattParser<'a, TokenType, ExprType>
+    where TokenType: Debug + PartialEq, ExprType: Debug {
+
+    fn parse_expr(&mut self) -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> {
+
+        let precedence: usize = 0;
+
+        let mut expr = self.parser.parse_prefix()?;
+
+        while let Some(token) = self.tokenizer.peek_token(&mut self.chars)? {
+
+            let next_precedence = self.tokenizer.precedence(&token);
+
+            if precedence >= next_precedence {
+                break;
+            }
+
+            expr = self.parser.parse_infix(&expr, next_precedence)?.unwrap(); //TODO: fix me
+        }
+
+        Ok(expr)
+    }
+
+}
+
 //    fn parse_prefix(&mut self) -> Result<Box<SQLExpr>, ParserError> {
 //
 //        match self.tokenizer.peek_token()? {

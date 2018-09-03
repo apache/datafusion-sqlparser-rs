@@ -113,6 +113,12 @@ pub trait SQLParser<TokenType, ExprType>
     fn parse_infix(&mut self, chars: &mut CharSeq, left: &SQLExpr<ExprType>, precedence: usize) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>>;
 }
 
+//struct PrattParser<ExprType, TokenType> {
+//
+//    ansi_parser:
+//
+//}
+
 //
 //pub fn parse_expr<'a, TokenType, ExprType>(parser: Arc<Mutex<SQLParser<TokenType, ExprType>>>)
 //    -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> where TokenType: Debug + PartialEq, ExprType: Debug {

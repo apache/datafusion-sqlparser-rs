@@ -36,27 +36,33 @@ impl SQLTokenizer<AcmeToken> for AcmeTokenizer {
     }
 
     fn next_token(&mut self, chars: &mut CharSeq) -> Result<Option<SQLToken<AcmeToken>>, TokenizerError> {
-//        let mut arc = self.ansi_tokenizer.lock().unwrap();
-//        match arc.peek_char() {
-//            Some(&ch) => match ch {
-//                '!' => {
-//                    arc.next_char(); // consume the first `!`
-//                    match arc.peek_char() {
-//                        Some(&ch) => match ch {
-//                            '!' => {
-//                                arc.next_char(); // consume the second `!`
-//                                Ok(Some(SQLToken::Custom(AcmeToken::Factorial)))
-//                            },
-//                            _ => Err(TokenizerError::UnexpectedChar(ch,Position::new(0,0)))
-//                        },
-//                        None => Ok(Some(SQLToken::Not))
-//                    }
-//                }
-//                _ => arc.next_token()
-//            }
-//            _ => arc.next_token()
-//        }
-        unimplemented!()
+        let mut ansi = self.ansi_tokenizer.lock().unwrap();
+        match chars.peek() {
+            Some(&ch) => match ch {
+                '!' => {
+                    chars.mark();
+                    chars.next(); // consume the first `!`
+                    match chars.peek() {
+                        Some(&ch) => match ch {
+                            '!' => {
+                                chars.next(); // consume the second `!`
+                                Ok(Some(SQLToken::Custom(AcmeToken::Factorial)))
+                            },
+                            _ => {
+                                chars.reset();
+                                ansi.next_token(chars)
+                            }
+                        },
+                        None => {
+                            chars.reset();
+                            ansi.next_token(chars)
+                        }
+                    }
+                }
+                _ => ansi.next_token(chars)
+            }
+            _ => ansi.next_token(chars)
+        }
     }
 
 }
@@ -99,7 +105,9 @@ fn main() {
     let ansi_parser = Arc::new(Mutex::new(ANSISQLParser::new(acme_tokenizer.clone())));
     let acme_parser = Arc::new(Mutex::new(AcmeParser::new(acme_tokenizer.clone())));
 
-    //let parser_list: Vec<Arc<Mutex<SQLParser<>>>> = vec![acme_parser, ansi_parser];
+   // ansi_parser.lock().unwrap().next_token();
+
+    //let parser_list = vec![acme_parser, ansi_parser];
 
     // Custom ACME parser
 //    let acme_parser: Arc<Mutex<SQLParser<AcmeToken, AcmeExpr>>> = Arc::new(Mutex::new(AcmeParser {

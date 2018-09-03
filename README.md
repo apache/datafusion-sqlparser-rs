@@ -20,3 +20,5 @@ This outputs
 ```rust
 AST: SQLSelect { projection: [SQLIdentifier("a"), SQLIdentifier("b"), SQLLiteralLong(123), SQLFunction { id: "myfunc", args: [SQLIdentifier("b")] }], relation: Some(SQLIdentifier("table_1")), selection: Some(SQLBinaryExpr { left: SQLBinaryExpr { left: SQLIdentifier("a"), op: Gt, right: SQLIdentifier("b") }, op: And, right: SQLBinaryExpr { left: SQLIdentifier("b"), op: Lt, right: SQLLiteralLong(100) } }), order_by: Some([SQLOrderBy { expr: SQLIdentifier("a"), asc: false }, SQLOrderBy { expr: SQLIdentifier("b"), asc: true }]), group_by: None, having: None, limit: None }
 ```
+
+Please get involved in helping build first class SQL support in Rust by filing issues for missing features (there are plenty!) and create pull requests.

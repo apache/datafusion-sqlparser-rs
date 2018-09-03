@@ -309,7 +309,6 @@ impl Parser {
         true
     }
 
-
     //TODO: this function is inconsistent and sometimes returns bool and sometimes fails
 
     /// Consume the next token if it matches the expected token, otherwise return an error
@@ -383,10 +382,7 @@ impl Parser {
                         }
                     }
 
-                    Ok(ASTNode::SQLCreateTable {
-                        name: id,
-                        columns,
-                    })
+                    Ok(ASTNode::SQLCreateTable { name: id, columns })
                 }
                 _ => parser_err!(format!(
                     "Unexpected token after CREATE EXTERNAL TABLE: {:?}",
@@ -802,10 +798,7 @@ mod tests {
         );
         let ast = parse_sql(&sql);
         match ast {
-            ASTNode::SQLCreateTable {
-                name,
-                columns,
-            } => {
+            ASTNode::SQLCreateTable { name, columns } => {
                 assert_eq!("uk_cities", name);
                 assert_eq!(3, columns.len());
 

@@ -166,8 +166,7 @@ impl Tokenizer {
             .filter(|t| match t {
                 Token::Whitespace => false,
                 _ => true,
-            })
-            .collect())
+            }).collect())
     }
 
     /// Get the next token or return None

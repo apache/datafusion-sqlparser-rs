@@ -117,7 +117,6 @@ pub enum SQLType {
     Time,
     /// Timestamp
     Timestamp,
-
 }
 
 /// SQL Operator

@@ -107,7 +107,7 @@ fn main() {
 
     let mut pratt_parser = PrattParser {
         chars: CharSeq::new(sql),
-        parser: acme_parser
+        parsers: vec![acme_parser, ansi_parser]
     };
 
     let expr = pratt_parser.parse_expr().unwrap();

@@ -116,16 +116,26 @@ pub trait SQLParser<TokenType, ExprType>
 
 pub struct PrattParser<TokenType, ExprType> {
     pub chars: CharSeq,
-    pub parser: Arc<Mutex<SQLParser<TokenType, ExprType>>>
+    pub parsers: Vec<Arc<Mutex<SQLParser<TokenType, ExprType>>>>
 }
 
 impl<TokenType, ExprType> PrattParser<TokenType, ExprType> where TokenType: Debug + PartialEq, ExprType: Debug {
 
     pub fn parse_expr(&mut self) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>> {
 
-        let mut p = self.parser.lock().unwrap();
+        for i in 0..self.parsers.len() {
+            let mut p = self.parsers[i].lock().unwrap();
+            let expr = p.parse_prefix(&mut self.chars)?;
 
-        p.parse_prefix(&mut self.chars)
+            // return as soon as we have a match
+            match expr {
+                Some(_) => return Ok(expr),
+                _ => {}
+            }
+        }
+
+        // found no valid token
+        Ok(None)
     }
 
 }

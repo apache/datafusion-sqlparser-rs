@@ -1,0 +1,32 @@
+dist: trusty
+sudo: required
+cache: cargo
+language: rust
+addons:
+  apt:
+    packages:
+      - libcurl4-openssl-dev
+      - libelf-dev
+      - libdw-dev
+      - binutils-dev
+      - cmake
+    sources:
+      - kalakris-cmake
+
+rust:
+  - nightly
+
+before_script:
+  - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
+  - cargo install --force cargo-travis && export PATH=$HOME/.cargo/bin:$PATH
+
+script:
+  - travis-cargo build
+  - travis-cargo test
+
+after_success:
+  - cargo coveralls --verbose
+
+env:
+  global:
+    - TRAVIS_CARGO_NIGHTLY_FEATURE=""

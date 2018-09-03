@@ -35,7 +35,7 @@ impl SQLTokenizer<AcmeToken> for AcmeTokenizer {
         unimplemented!()
     }
 
-    fn next_token(&mut self) -> Result<Option<SQLToken<AcmeToken>>, TokenizerError> {
+    fn next_token(&mut self, chars: &mut CharSeq) -> Result<Option<SQLToken<AcmeToken>>, TokenizerError> {
 //        let mut arc = self.ansi_tokenizer.lock().unwrap();
 //        match arc.peek_char() {
 //            Some(&ch) => match ch {
@@ -67,14 +67,14 @@ struct AcmeParser {
 
 impl SQLParser<AcmeToken, AcmeExpr> for AcmeParser {
 
-    fn parse_prefix(&mut self) -> Result<Box<SQLExpr<AcmeExpr>>, ParserError<AcmeToken>> {
+    fn parse_prefix(&mut self, chars: &mut CharSeq) -> Result<Box<SQLExpr<AcmeExpr>>, ParserError<AcmeToken>> {
         //TODO: add custom overrides
-        self.ansi_parser.lock().unwrap().parse_prefix()
+        self.ansi_parser.lock().unwrap().parse_prefix(chars)
     }
 
-    fn parse_infix(&mut self, left: &SQLExpr<AcmeExpr>, precedence: usize) -> Result<Option<Box<SQLExpr<AcmeExpr>>>, ParserError<AcmeToken>> {
+    fn parse_infix(&mut self, chars: &mut CharSeq, left: &SQLExpr<AcmeExpr>, precedence: usize) -> Result<Option<Box<SQLExpr<AcmeExpr>>>, ParserError<AcmeToken>> {
         //TODO: add custom overrides
-        self.ansi_parser.lock().unwrap().parse_infix(left, precedence)
+        self.ansi_parser.lock().unwrap().parse_infix(chars, left, precedence)
     }
 }
 
@@ -83,7 +83,7 @@ fn main() {
     let sql = "1 + !! 5 * 2";
 
     // ANSI SQL tokenizer
-    let ansi_tokenizer = Arc::new(Mutex::new(ANSISQLTokenizer { chars: sql.chars().peekable() }));
+    let ansi_tokenizer = Arc::new(Mutex::new(ANSISQLTokenizer { }));
 
     // Custom ACME tokenizer
     let mut acme_tokenizer = Arc::new(Mutex::new(AcmeTokenizer {
@@ -95,9 +95,9 @@ fn main() {
         ansi_parser: Arc::new(Mutex::new(ANSISQLParser::new(acme_tokenizer)))
     }));
 
-    let expr = parse_expr(acme_parser).unwrap();
-
-    println!("Parsed: {:?}", expr);
+//    let expr = parse_expr(acme_parser).unwrap();
+//
+//    println!("Parsed: {:?}", expr);
 
 
 }

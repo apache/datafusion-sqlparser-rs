@@ -5,28 +5,27 @@ use std::str::Chars;
 
 use super::super::tokenizer::*;
 
-pub struct ANSISQLTokenizer<'a> {
-    pub chars: Peekable<Chars<'a>>
+pub struct ANSISQLTokenizer {
 }
 
-impl<'a, TokenType> SQLTokenizer<TokenType> for ANSISQLTokenizer<'a>
+impl<TokenType> SQLTokenizer<TokenType> for ANSISQLTokenizer
     where TokenType: Debug + PartialEq {
 
     fn precedence(&self, _token: &SQLToken<TokenType>) -> usize {
         unimplemented!()
     }
 
-    fn next_token(&mut self) -> Result<Option<SQLToken<TokenType>>, TokenizerError> {
-        match self.chars.next() {
+    fn next_token(&mut self, chars: &mut CharSeq) -> Result<Option<SQLToken<TokenType>>, TokenizerError> {
+        match chars.next() {
             Some(ch) => match ch {
                 ' ' | '\t' | '\n' => Ok(Some(SQLToken::Whitespace(ch))),
                 '0' ... '9' => {
                     let mut s = String::new();
                     s.push(ch);
-                    while let Some(&ch) = self.chars.peek() {
+                    while let Some(&ch) = chars.peek() {
                         match ch {
                             '0' ... '9' => {
-                                self.chars.next(); // consume
+                                chars.next(); // consume
                                 s.push(ch);
                             },
                             _ => break

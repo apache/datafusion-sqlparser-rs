@@ -22,9 +22,9 @@ impl<TokenType> ANSISQLParser<TokenType> where TokenType: Debug + PartialEq {
 impl<TokenType, ExprType> SQLParser<TokenType, ExprType> for ANSISQLParser<TokenType>
     where TokenType: Debug + PartialEq, ExprType: Debug {
 
-    fn parse_prefix(&mut self) -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> {
+    fn parse_prefix(&mut self, chars: &mut CharSeq) -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> {
 
-        match self.tokenizer.lock().unwrap().next_token()? {
+        match self.tokenizer.lock().unwrap().next_token(chars)? {
             Some(SQLToken::Keyword(ref k)) => match k.to_uppercase().as_ref() {
                 "INSERT" => unimplemented!(),
                 "UPDATE" => unimplemented!(),
@@ -37,7 +37,7 @@ impl<TokenType, ExprType> SQLParser<TokenType, ExprType> for ANSISQLParser<Token
         }
     }
 
-    fn parse_infix(&mut self, _left: &SQLExpr<ExprType>, _precedence: usize) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>> {
+    fn parse_infix(&mut self, _chars: &mut CharSeq, _left: &SQLExpr<ExprType>, _precedence: usize) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>> {
         unimplemented!()
     }
 }

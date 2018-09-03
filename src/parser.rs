@@ -110,20 +110,20 @@ pub trait SQLParser<TokenType, ExprType>
     where TokenType: Debug + PartialEq, ExprType: Debug {
 
     /// parse the prefix and stop once an infix operator is reached
-    fn parse_prefix(&mut self) -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> ;
+    fn parse_prefix(&mut self, chars: &mut CharSeq) -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> ;
     /// parse the next infix expression, returning None if the precedence has changed
-    fn parse_infix(&mut self, left: &SQLExpr<ExprType>, precedence: usize) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>>;
+    fn parse_infix(&mut self, chars: &mut CharSeq, left: &SQLExpr<ExprType>, precedence: usize) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>>;
 }
 
-
-pub fn parse_expr<'a, TokenType, ExprType>(parser: Arc<Mutex<SQLParser<TokenType, ExprType>>>)
-    -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> where TokenType: Debug + PartialEq, ExprType: Debug {
-    let mut guard = parser.lock().unwrap();
-
-    //Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>>
-    let x = guard.parse_prefix();
-    x
-}
+//
+//pub fn parse_expr<'a, TokenType, ExprType>(parser: Arc<Mutex<SQLParser<TokenType, ExprType>>>)
+//    -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> where TokenType: Debug + PartialEq, ExprType: Debug {
+//    let mut guard = parser.lock().unwrap();
+//
+//    //Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>>
+//    let x = guard.parse_prefix();
+//    x
+//}
 
 
 //pub struct PrattParser<'a, TokenType, ExprType> {

@@ -1,6 +1,22 @@
 [package]
-name = "datafusion-sql"
+name = "sqlparser"
+description = "ANSI SQL parser"
 version = "0.1.0"
 authors = ["Andy Grove <andygrove73@gmail.com>"]
+homepage = "https://github.com/andygrove/sqlparser-rs"
+documentation = "https://github.com/andygrove/sqlparser-rs"
+keywords = [ "sql", "lexer", "parser" ]
+repository = "https://github.com/andygrove/sqlparser-rs"
+license = "Apache-2.0"
+include = [
+    "src/**/*.rs",
+    "Cargo.toml",
+]
+
+[lib]
+name = "sqlparser"
+path = "src/lib.rs"
 
 [dependencies]
+fnv = "1.0.3"
+lazy_static = "1.0"

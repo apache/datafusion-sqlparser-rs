@@ -44,6 +44,10 @@ I am a fan of this design pattern over parser generators for the following reaso
 - Debugging is much easier with hand-written code
 - It is far easier to extend and make dialect-specific extensions compared to using a parser generator
 
+## Supporting custom SQL dialects
+
+This is a work in progress but I started some notes on [writing a custom SQL parser](docs/custom_sql_parser.md).
+
 ## Contributing
 
 Contributors are welcome! Please see the [current issues](https://github.com/andygrove/sqlparser-rs/issues) and feel free to file more!

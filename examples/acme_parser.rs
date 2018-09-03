@@ -35,40 +35,30 @@ impl SQLTokenizer<AcmeToken> for AcmeTokenizer {
         unimplemented!()
     }
 
-    fn peek_token(&mut self) -> Result<Option<SQLToken<AcmeToken>>, TokenizerError<AcmeToken>> {
+    fn next_token(&mut self) -> Result<Option<SQLToken<AcmeToken>>, TokenizerError> {
+//        let mut arc = self.ansi_tokenizer.lock().unwrap();
+//        match arc.peek_char() {
+//            Some(&ch) => match ch {
+//                '!' => {
+//                    arc.next_char(); // consume the first `!`
+//                    match arc.peek_char() {
+//                        Some(&ch) => match ch {
+//                            '!' => {
+//                                arc.next_char(); // consume the second `!`
+//                                Ok(Some(SQLToken::Custom(AcmeToken::Factorial)))
+//                            },
+//                            _ => Err(TokenizerError::UnexpectedChar(ch,Position::new(0,0)))
+//                        },
+//                        None => Ok(Some(SQLToken::Not))
+//                    }
+//                }
+//                _ => arc.next_token()
+//            }
+//            _ => arc.next_token()
+//        }
         unimplemented!()
     }
 
-    fn next_token(&mut self) -> Result<Option<SQLToken<AcmeToken>>, TokenizerError<AcmeToken>> {
-        let mut arc = self.ansi_tokenizer.lock().unwrap();
-        match arc.peek_char() {
-            Some(&ch) => match ch {
-                '!' => {
-                    arc.next_char(); // consume the first `!`
-                    match arc.peek_char() {
-                        Some(&ch) => match ch {
-                            '!' => {
-                                arc.next_char(); // consume the second `!`
-                                Ok(Some(SQLToken::Custom(AcmeToken::Factorial)))
-                            },
-                            _ => Err(TokenizerError::UnexpectedChar(ch,Position::new(0,0)))
-                        },
-                        None => Ok(Some(SQLToken::Not))
-                    }
-                }
-                _ => arc.next_token()
-            }
-            _ => arc.next_token()
-        }
-    }
-
-    fn peek_char(&mut self) -> Option<&char> {
-        unimplemented!()
-    }
-
-    fn next_char(&mut self) -> Option<&char> {
-        unimplemented!()
-    }
 }
 
 struct AcmeParser {

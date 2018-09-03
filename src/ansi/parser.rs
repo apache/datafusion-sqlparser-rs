@@ -24,7 +24,7 @@ impl<TokenType, ExprType> SQLParser<TokenType, ExprType> for ANSISQLParser<Token
 
     fn parse_prefix(&mut self) -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> {
 
-        match self.tokenizer.lock().unwrap().peek_token()? {
+        match self.tokenizer.lock().unwrap().next_token()? {
             Some(SQLToken::Keyword(ref k)) => match k.to_uppercase().as_ref() {
                 "INSERT" => unimplemented!(),
                 "UPDATE" => unimplemented!(),

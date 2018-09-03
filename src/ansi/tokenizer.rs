@@ -16,11 +16,7 @@ impl<'a, TokenType> SQLTokenizer<TokenType> for ANSISQLTokenizer<'a>
         unimplemented!()
     }
 
-    fn peek_token(&mut self) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>> {
-        unimplemented!()
-    }
-
-    fn next_token(&mut self) -> Result<Option<SQLToken<TokenType>>, TokenizerError<TokenType>> {
+    fn next_token(&mut self) -> Result<Option<SQLToken<TokenType>>, TokenizerError> {
         match self.chars.next() {
             Some(ch) => match ch {
                 ' ' | '\t' | '\n' => Ok(Some(SQLToken::Whitespace(ch))),
@@ -48,12 +44,5 @@ impl<'a, TokenType> SQLTokenizer<TokenType> for ANSISQLTokenizer<'a>
         }
     }
 
-    fn peek_char(&mut self) -> Option<&char> {
-        unimplemented!()
-    }
-
-    fn next_char(&mut self) -> Option<&char> {
-        unimplemented!()
-    }
 }
 

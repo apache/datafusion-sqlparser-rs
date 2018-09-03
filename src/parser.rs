@@ -1,8 +1,6 @@
 use std::cmp::PartialEq;
 use std::fmt::Debug;
 use std::rc::Rc;
-use std::str::Chars;
-use std::iter::Peekable;
 use std::sync::{Arc, Mutex};
 
 use super::tokenizer::*;
@@ -99,10 +97,10 @@ pub enum ParserError<TokenType>
     Custom(String)
 }
 
-impl<TokenType> From<TokenizerError<TokenType>> for ParserError<TokenType>
+impl<TokenType> From<TokenizerError> for ParserError<TokenType>
     where TokenType: Debug + PartialEq {
 
-    fn from(_: TokenizerError<TokenType>) -> Self {
+    fn from(_: TokenizerError) -> Self {
         unimplemented!()
     }
 }

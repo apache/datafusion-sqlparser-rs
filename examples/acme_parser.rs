@@ -62,19 +62,24 @@ impl SQLTokenizer<AcmeToken> for AcmeTokenizer {
 }
 
 struct AcmeParser {
-    ansi_parser: Arc<Mutex<SQLParser<AcmeToken, AcmeExpr>>>
+    tokenizer: Arc<Mutex<SQLTokenizer<AcmeToken>>>
 }
 
+impl AcmeParser {
+
+    pub fn new(tokenizer: Arc<Mutex<SQLTokenizer<AcmeToken>>>) -> Self {
+        AcmeParser { tokenizer: tokenizer.clone() }
+    }
+
+}
 impl SQLParser<AcmeToken, AcmeExpr> for AcmeParser {
 
-    fn parse_prefix(&mut self, chars: &mut CharSeq) -> Result<Box<SQLExpr<AcmeExpr>>, ParserError<AcmeToken>> {
-        //TODO: add custom overrides
-        self.ansi_parser.lock().unwrap().parse_prefix(chars)
+    fn parse_prefix(&mut self, chars: &mut CharSeq) -> Result<Option<Box<SQLExpr<AcmeExpr>>>, ParserError<AcmeToken>> {
+        Ok(None)
     }
 
     fn parse_infix(&mut self, chars: &mut CharSeq, left: &SQLExpr<AcmeExpr>, precedence: usize) -> Result<Option<Box<SQLExpr<AcmeExpr>>>, ParserError<AcmeToken>> {
-        //TODO: add custom overrides
-        self.ansi_parser.lock().unwrap().parse_infix(chars, left, precedence)
+        Ok(None)
     }
 }
 
@@ -90,14 +95,18 @@ fn main() {
         ansi_tokenizer: ansi_tokenizer.clone()
     }));
 
+    // Create parsers
+    let ansi_parser = Arc::new(Mutex::new(ANSISQLParser::new(acme_tokenizer.clone())));
+    let acme_parser = Arc::new(Mutex::new(AcmeParser::new(acme_tokenizer.clone())));
+
+    //let parser_list: Vec<Arc<Mutex<SQLParser<>>>> = vec![acme_parser, ansi_parser];
+
     // Custom ACME parser
-    let acme_parser: Arc<Mutex<SQLParser<AcmeToken, AcmeExpr>>> = Arc::new(Mutex::new(AcmeParser {
-        ansi_parser: Arc::new(Mutex::new(ANSISQLParser::new(acme_tokenizer)))
-    }));
+//    let acme_parser: Arc<Mutex<SQLParser<AcmeToken, AcmeExpr>>> = Arc::new(Mutex::new(AcmeParser {
+//        ansi_parser: Arc::new(Mutex::new(ANSISQLParser::new(acme_tokenizer)))
+//    }));
 
 //    let expr = parse_expr(acme_parser).unwrap();
 //
 //    println!("Parsed: {:?}", expr);
-
-
 }

@@ -22,7 +22,7 @@ impl<TokenType> ANSISQLParser<TokenType> where TokenType: Debug + PartialEq {
 impl<TokenType, ExprType> SQLParser<TokenType, ExprType> for ANSISQLParser<TokenType>
     where TokenType: Debug + PartialEq, ExprType: Debug {
 
-    fn parse_prefix(&mut self, chars: &mut CharSeq) -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> {
+    fn parse_prefix(&mut self, chars: &mut CharSeq) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>> {
 
         match self.tokenizer.lock().unwrap().next_token(chars)? {
             Some(SQLToken::Keyword(ref k)) => match k.to_uppercase().as_ref() {

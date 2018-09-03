@@ -1,7 +1,5 @@
 use std::cmp::PartialEq;
 use std::fmt::Debug;
-use std::iter::Peekable;
-use std::str::Chars;
 
 use super::super::tokenizer::*;
 

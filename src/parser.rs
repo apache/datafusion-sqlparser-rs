@@ -1,7 +1,5 @@
 use std::cmp::PartialEq;
 use std::fmt::Debug;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 
 use super::tokenizer::*;
 
@@ -110,7 +108,7 @@ pub trait SQLParser<TokenType, ExprType>
     where TokenType: Debug + PartialEq, ExprType: Debug {
 
     /// parse the prefix and stop once an infix operator is reached
-    fn parse_prefix(&mut self, chars: &mut CharSeq) -> Result<Box<SQLExpr<ExprType>>, ParserError<TokenType>> ;
+    fn parse_prefix(&mut self, chars: &mut CharSeq) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>> ;
     /// parse the next infix expression, returning None if the precedence has changed
     fn parse_infix(&mut self, chars: &mut CharSeq, left: &SQLExpr<ExprType>, precedence: usize) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>>;
 }

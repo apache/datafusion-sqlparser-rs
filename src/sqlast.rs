@@ -95,8 +95,8 @@ pub enum SQLType {
     Int,
     /// Big integer
     BigInt,
-    /// Floating point with precision e.g. FLOAT(8)
-    Float(usize),
+    /// Floating point with optional precision e.g. FLOAT(8)
+    Float(Option<usize>),
     /// Floating point e.g. REAL
     Real,
     /// Double e.g. DOUBLE PRECISION

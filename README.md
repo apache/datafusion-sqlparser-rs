@@ -1,4 +1,10 @@
-# SQL Parser
+# ANSI SQL Lexer and Parser for Rust
+
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Version](https://img.shields.io/crates/v/sqlparser.svg)](https://crates.io/crates/sqlparser)
+[![Build Status](https://travis-ci.org/andygrove/sqlparser.svg?branch=master)](https://travis-ci.org/andygrove/sqlparser-rs)
+[![Coverage Status](https://coveralls.io/repos/github/andygrove/sqlparser-rs/badge.svg?branch=master)](https://coveralls.io/github/andygrove/sqlparser-rs?branch=master)
+[![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/datafusion-rs)
 
 The main goal of this project is to build a SQL lexer and parser capable of parsing ANSI SQL:2011 (or 2016 if I can get access to the specification for free).
 

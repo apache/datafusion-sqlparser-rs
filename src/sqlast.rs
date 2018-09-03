@@ -89,6 +89,22 @@ pub struct SQLColumnDef {
 /// SQL datatypes for literals in SQL statements
 #[derive(Debug, Clone, PartialEq)]
 pub enum SQLType {
+    /// Fixed-length character type e.g. CHAR(10)
+    Char(usize),
+    /// Variable-length character type e.g. VARCHAR(10)
+    Varchar(usize),
+    /// Large character object e.g. CLOB(1000)
+    Clob(usize),
+    /// Fixed-length binary type e.g. BINARY(10)
+    Binary(usize),
+    /// Variable-length binary type e.g. VARBINARY(10)
+    Varbinary(usize),
+    /// Large binary object e.g. BLOB(1000)
+    Blob(usize),
+
+
+    //TODO: remove these non ANSI sql stypes
+
     Boolean,
     UInt8,
     UInt16,

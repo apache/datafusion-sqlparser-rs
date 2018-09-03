@@ -14,8 +14,6 @@ A secondary goal is to make it easy for others to use this library as a foundati
 
 The current code is capable of parsing some trivial SELECT and CREATE TABLE statements.
 
-## Example
-
 ```rust
 let sql = "SELECT a, b, 123, myfunc(b) \
     FROM table_1 \

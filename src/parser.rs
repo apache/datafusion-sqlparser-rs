@@ -1,5 +1,6 @@
 use std::cmp::PartialEq;
 use std::fmt::Debug;
+use std::sync::{Arc, Mutex};
 
 use super::tokenizer::*;
 
@@ -113,11 +114,21 @@ pub trait SQLParser<TokenType, ExprType>
     fn parse_infix(&mut self, chars: &mut CharSeq, left: &SQLExpr<ExprType>, precedence: usize) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>>;
 }
 
-//struct PrattParser<ExprType, TokenType> {
-//
-//    ansi_parser:
-//
-//}
+pub struct PrattParser<TokenType, ExprType> {
+    pub chars: CharSeq,
+    pub parser: Arc<Mutex<SQLParser<TokenType, ExprType>>>
+}
+
+impl<TokenType, ExprType> PrattParser<TokenType, ExprType> where TokenType: Debug + PartialEq, ExprType: Debug {
+
+    pub fn parse_expr(&mut self) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>> {
+
+        let mut p = self.parser.lock().unwrap();
+
+        p.parse_prefix(&mut self.chars)
+    }
+
+}
 
 //
 //pub fn parse_expr<'a, TokenType, ExprType>(parser: Arc<Mutex<SQLParser<TokenType, ExprType>>>)
@@ -130,12 +141,6 @@ pub trait SQLParser<TokenType, ExprType>
 //}
 
 
-//pub struct PrattParser<'a, TokenType, ExprType> {
-//    chars: Peekable<Chars<'a>>,
-//    tokenizer: Rc<SQLTokenizer<TokenType>>,
-//    parser: Rc<SQLParser<TokenType, ExprType>>
-//}
-//
 //impl<'a, TokenType, ExprType> PrattParser<'a, TokenType, ExprType>
 //    where TokenType: Debug + PartialEq, ExprType: Debug {
 //

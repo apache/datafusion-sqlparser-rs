@@ -105,16 +105,11 @@ fn main() {
     let ansi_parser = Arc::new(Mutex::new(ANSISQLParser::new(acme_tokenizer.clone())));
     let acme_parser = Arc::new(Mutex::new(AcmeParser::new(acme_tokenizer.clone())));
 
-   // ansi_parser.lock().unwrap().next_token();
+    let mut pratt_parser = PrattParser {
+        chars: CharSeq::new(sql),
+        parser: acme_parser
+    };
 
-    //let parser_list = vec![acme_parser, ansi_parser];
-
-    // Custom ACME parser
-//    let acme_parser: Arc<Mutex<SQLParser<AcmeToken, AcmeExpr>>> = Arc::new(Mutex::new(AcmeParser {
-//        ansi_parser: Arc::new(Mutex::new(ANSISQLParser::new(acme_tokenizer)))
-//    }));
-
-//    let expr = parse_expr(acme_parser).unwrap();
-//
-//    println!("Parsed: {:?}", expr);
+    let expr = pratt_parser.parse_expr().unwrap();
+    println!("{:?}", expr);
 }

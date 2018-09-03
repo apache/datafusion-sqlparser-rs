@@ -14,14 +14,6 @@
 
 //! SQL Abstract Syntax Tree (AST) types
 
-/// Supported file types for `CREATE EXTERNAL TABLE`
-#[derive(Debug, Clone, PartialEq)]
-pub enum FileType {
-    CSV,
-    NdJson,
-    Parquet,
-}
-
 /// SQL Abstract Syntax Tree (AST)
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASTNode {

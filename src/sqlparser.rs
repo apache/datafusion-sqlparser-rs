@@ -408,12 +408,12 @@ impl Parser {
     }
 
     /// Parse a literal string
-    fn parse_literal_string(&mut self) -> Result<String, ParserError> {
-        match self.next_token() {
-            Some(Token::String(ref s)) => Ok(s.clone()),
-            other => parser_err!(format!("Expected literal string, found {:?}", other)),
-        }
-    }
+//    fn parse_literal_string(&mut self) -> Result<String, ParserError> {
+//        match self.next_token() {
+//            Some(Token::String(ref s)) => Ok(s.clone()),
+//            other => parser_err!(format!("Expected literal string, found {:?}", other)),
+//        }
+//    }
 
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)
     fn parse_data_type(&mut self) -> Result<SQLType, ParserError> {

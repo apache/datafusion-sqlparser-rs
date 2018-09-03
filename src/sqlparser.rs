@@ -309,13 +309,8 @@ impl Parser {
         true
     }
 
-    //    fn parse_identifier(&mut self) -> Result<ASTNode::SQLIdentifier, Err> {
-    //        let expr = self.parse_expr()?;
-    //        match expr {
-    //            Some(ASTNode::SQLIdentifier { .. }) => Ok(expr),
-    //            _ => parser_err!(format!("Expected identifier but found {:?}", expr)))
-    //        }
-    //    }
+
+    //TODO: this function is inconsistent and sometimes returns bool and sometimes fails
 
     /// Consume the next token if it matches the expected token, otherwise return an error
     fn consume_token(&mut self, expected: &Token) -> Result<bool, ParserError> {
@@ -336,7 +331,7 @@ impl Parser {
 
     /// Parse a SQL CREATE statement
     fn parse_create(&mut self) -> Result<ASTNode, ParserError> {
-        if self.parse_keywords(vec!["EXTERNAL", "TABLE"]) {
+        if self.parse_keywords(vec!["TABLE"]) {
             match self.next_token() {
                 Some(Token::Identifier(id)) => {
                     // parse optional column list (schema)
@@ -388,39 +383,9 @@ impl Parser {
                         }
                     }
 
-                    //println!("Parsed {} column defs", columns.len());
-
-                    let mut headers = true;
-                    let file_type: FileType = if self.parse_keywords(vec!["STORED", "AS", "CSV"]) {
-                        if self.parse_keywords(vec!["WITH", "HEADER", "ROW"]) {
-                            headers = true;
-                        } else if self.parse_keywords(vec!["WITHOUT", "HEADER", "ROW"]) {
-                            headers = false;
-                        }
-                        FileType::CSV
-                    } else if self.parse_keywords(vec!["STORED", "AS", "NDJSON"]) {
-                        FileType::NdJson
-                    } else if self.parse_keywords(vec!["STORED", "AS", "PARQUET"]) {
-                        FileType::Parquet
-                    } else {
-                        return parser_err!(format!(
-                            "Expected 'STORED AS' clause, found {:?}",
-                            self.peek_token()
-                        ));
-                    };
-
-                    let location: String = if self.parse_keywords(vec!["LOCATION"]) {
-                        self.parse_literal_string()?
-                    } else {
-                        return parser_err!("Missing 'LOCATION' clause");
-                    };
-
                     Ok(ASTNode::SQLCreateTable {
                         name: id,
                         columns,
-                        file_type,
-                        header_row: headers,
-                        location,
                     })
                 }
                 _ => parser_err!(format!(
@@ -459,29 +424,32 @@ impl Parser {
         match self.next_token() {
             Some(Token::Keyword(k)) => match k.to_uppercase().as_ref() {
                 "BOOLEAN" => Ok(SQLType::Boolean),
-                "UINT8" => Ok(SQLType::UInt8),
-                "UINT16" => Ok(SQLType::UInt16),
-                "UINT32" => Ok(SQLType::UInt32),
-                "UINT64" => Ok(SQLType::UInt64),
-                "INT8" => Ok(SQLType::Int8),
-                "INT16" => Ok(SQLType::Int16),
-                "INT32" | "INT" | "INTEGER" => Ok(SQLType::Int32),
-                "INT64" | "LONG" => Ok(SQLType::Int64),
-                "FLOAT32" | "FLOAT" => Ok(SQLType::Float32),
-                "FLOAT64" | "DOUBLE" => Ok(SQLType::Double64),
-                "UTF8" | "VARCHAR" | "STRING" => {
-                    // optional length
-                    if self.consume_token(&Token::LParen)? {
-                        let n = self.parse_literal_int()?;
-                        self.consume_token(&Token::RParen)?;
-                        Ok(SQLType::Utf8(n as usize))
-                    } else {
-                        Ok(SQLType::Utf8(100 as usize))
-                    }
-                }
+                "FLOAT" => Ok(SQLType::Float(self.parse_precision()?)),
+                "REAL" => Ok(SQLType::Real),
+                "DOUBLE" => Ok(SQLType::Double),
+                "SMALLINT" => Ok(SQLType::SmallInt),
+                "INT" | "INTEGER" => Ok(SQLType::Int),
+                "BIGINT" => Ok(SQLType::BigInt),
+                "VARCHAR" => Ok(SQLType::Varchar(self.parse_precision()?)),
                 _ => parser_err!(format!("Invalid data type '{:?}'", k)),
             },
             other => parser_err!(format!("Invalid data type: '{:?}'", other)),
+        }
+    }
+
+    fn parse_precision(&mut self) -> Result<usize, ParserError> {
+        //TODO: error handling
+        Ok(self.parse_optional_precision()?.unwrap())
+    }
+
+    fn parse_optional_precision(&mut self) -> Result<Option<usize>, ParserError> {
+        if self.consume_token(&Token::LParen)? {
+            let n = self.parse_literal_int()?;
+            //TODO: check return value of reading rparen
+            self.consume_token(&Token::RParen)?;
+            Ok(Some(n as usize))
+        } else {
+            Ok(None)
         }
     }
 
@@ -807,7 +775,7 @@ mod tests {
 
     #[test]
     fn parse_cast() {
-        let sql = String::from("SELECT CAST(id AS DOUBLE) FROM customer");
+        let sql = String::from("SELECT CAST(id AS BIGINT) FROM customer");
         let ast = parse_sql(&sql);
         match ast {
             ASTNode::SQLSelect { projection, .. } => {
@@ -815,7 +783,7 @@ mod tests {
                 assert_eq!(
                     ASTNode::SQLCast {
                         expr: Box::new(ASTNode::SQLIdentifier("id".to_string())),
-                        data_type: SQLType::Double64
+                        data_type: SQLType::BigInt
                     },
                     projection[0]
                 );
@@ -825,98 +793,36 @@ mod tests {
     }
 
     #[test]
-    fn parse_create_external_table_csv_with_header_row() {
+    fn parse_create_table() {
         let sql = String::from(
-            "CREATE EXTERNAL TABLE uk_cities (\
+            "CREATE TABLE uk_cities (\
              name VARCHAR(100) NOT NULL,\
              lat DOUBLE NULL,\
-             lng DOUBLE NULL) \
-             STORED AS CSV WITH HEADER ROW \
-             LOCATION '/mnt/ssd/uk_cities.csv'",
+             lng DOUBLE NULL)",
         );
         let ast = parse_sql(&sql);
         match ast {
             ASTNode::SQLCreateTable {
                 name,
                 columns,
-                file_type,
-                header_row,
-                location,
             } => {
                 assert_eq!("uk_cities", name);
                 assert_eq!(3, columns.len());
-                assert_eq!(FileType::CSV, file_type);
-                assert_eq!(true, header_row);
-                assert_eq!("/mnt/ssd/uk_cities.csv", location);
 
                 let c_name = &columns[0];
                 assert_eq!("name", c_name.name);
-                assert_eq!(SQLType::Utf8(100), c_name.data_type);
+                assert_eq!(SQLType::Varchar(100), c_name.data_type);
                 assert_eq!(false, c_name.allow_null);
 
                 let c_lat = &columns[1];
                 assert_eq!("lat", c_lat.name);
-                assert_eq!(SQLType::Double64, c_lat.data_type);
+                assert_eq!(SQLType::Double, c_lat.data_type);
                 assert_eq!(true, c_lat.allow_null);
 
                 let c_lng = &columns[2];
                 assert_eq!("lng", c_lng.name);
-                assert_eq!(SQLType::Double64, c_lng.data_type);
+                assert_eq!(SQLType::Double, c_lng.data_type);
                 assert_eq!(true, c_lng.allow_null);
-            }
-            _ => assert!(false),
-        }
-    }
-
-    #[test]
-    fn parse_create_external_table_csv_without_header_row() {
-        let sql = String::from(
-            "CREATE EXTERNAL TABLE uk_cities (\
-             name VARCHAR(100) NOT NULL,\
-             lat DOUBLE NOT NULL,\
-             lng DOUBLE NOT NULL) \
-             STORED AS CSV WITHOUT HEADER ROW \
-             LOCATION '/mnt/ssd/uk_cities.csv'",
-        );
-        let ast = parse_sql(&sql);
-        match ast {
-            ASTNode::SQLCreateTable {
-                name,
-                columns,
-                file_type,
-                header_row,
-                location,
-            } => {
-                assert_eq!("uk_cities", name);
-                assert_eq!(3, columns.len());
-                assert_eq!(FileType::CSV, file_type);
-                assert_eq!(false, header_row);
-                assert_eq!("/mnt/ssd/uk_cities.csv", location);
-            }
-            _ => assert!(false),
-        }
-    }
-
-    #[test]
-    fn parse_create_external_table_parquet() {
-        let sql = String::from(
-            "CREATE EXTERNAL TABLE uk_cities \
-             STORED AS PARQUET \
-             LOCATION '/mnt/ssd/uk_cities.parquet'",
-        );
-        let ast = parse_sql(&sql);
-        match ast {
-            ASTNode::SQLCreateTable {
-                name,
-                columns,
-                file_type,
-                location,
-                ..
-            } => {
-                assert_eq!("uk_cities", name);
-                assert_eq!(0, columns.len());
-                assert_eq!(FileType::Parquet, file_type);
-                assert_eq!("/mnt/ssd/uk_cities.parquet", location);
             }
             _ => assert!(false),
         }

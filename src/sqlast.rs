@@ -69,12 +69,6 @@ pub enum ASTNode {
         name: String,
         /// Optional schema
         columns: Vec<SQLColumnDef>,
-        /// File type (CSV or Parquet)
-        file_type: FileType,
-        /// For CSV files, indicate whether the file has a header row or not
-        header_row: bool,
-        /// Path to file or directory contianing files
-        location: String,
     },
 }
 
@@ -101,22 +95,29 @@ pub enum SQLType {
     Varbinary(usize),
     /// Large binary object e.g. BLOB(1000)
     Blob(usize),
-
-
-    //TODO: remove these non ANSI sql stypes
-
+    /// Decimal type with precision and optional scale e.g. DECIMAL(10,2)
+    Decimal(usize, Option<usize>),
+    /// Small integer
+    SmallInt,
+    /// Integer
+    Int,
+    /// Big integer
+    BigInt,
+    /// Floating point with precision e.g. FLOAT(8)
+    Float(usize),
+    /// Floating point e.g. REAL
+    Real,
+    /// Double e.g. DOUBLE PRECISION
+    Double,
+    /// Boolean
     Boolean,
-    UInt8,
-    UInt16,
-    UInt32,
-    UInt64,
-    Int8,
-    Int16,
-    Int32,
-    Int64,
-    Float32,
-    Double64,
-    Utf8(usize),
+    /// Date
+    Date,
+    /// Time
+    Time,
+    /// Timestamp
+    Timestamp,
+
 }
 
 /// SQL Operator

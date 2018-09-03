@@ -108,27 +108,31 @@ lazy_static! {
         m.insert("ROW");
 
         // SQL types
-        m.insert("STRING");
+        m.insert("CHAR");
+        m.insert("CHARACTER");
+        m.insert("VARYING");
+        m.insert("LARGE");
+        m.insert("OBJECT");
         m.insert("VARCHAR");
+        m.insert("CLOB");
+        m.insert("BINARY");
+        m.insert("VARBINARY");
+        m.insert("BLOB");
         m.insert("FLOAT");
+        m.insert("REAL");
         m.insert("DOUBLE");
+        m.insert("PRECISION");
         m.insert("INT");
         m.insert("INTEGER");
-        m.insert("LONG");
-
-        // Arrow native types
+        m.insert("SMALLINT");
+        m.insert("BIGINT");
+        m.insert("NUMERIC");
+        m.insert("DECIMAL");
+        m.insert("DEC");
         m.insert("BOOLEAN");
-        m.insert("UINT8");
-        m.insert("UINT16");
-        m.insert("UINT32");
-        m.insert("UINT64");
-        m.insert("INT8");
-        m.insert("INT16");
-        m.insert("INT32");
-        m.insert("INT64");
-        m.insert("FLOAT32");
-        m.insert("FLOAT64");
-        m.insert("UTF8");
+        m.insert("DATE");
+        m.insert("TIME");
+        m.insert("TIMESTAMP");
 
         m
     };

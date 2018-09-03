@@ -70,7 +70,7 @@ pub enum TokenizerError {
 
 /// SQL Tokens
 #[derive(Debug,PartialEq)]
-pub enum SQLToken<T: Debug + PartialEq> {
+pub enum SQLToken {
     Whitespace(char),
     Keyword(String),
     Identifier(String),
@@ -89,31 +89,28 @@ pub enum SQLToken<T: Debug + PartialEq> {
     LParen,
     RParen,
     Comma,
-    /// Custom token (dialect-specific)
-    Custom(T)
 }
 
-pub trait SQLTokenizer<TokenType>
-    where TokenType: Debug + PartialEq {
+pub trait SQLTokenizer {
 
     /// get the precendence of a token
-    fn precedence(&self, token: &SQLToken<TokenType>) -> usize;
+    fn precedence(&self, token: &SQLToken) -> usize;
+
+    fn peek_token(&mut self) -> Result<Option<SQLToken>, TokenizerError>;
 
     /// return a reference to the next token and advance the index
-    fn next_token(&mut self, chars: &mut CharSeq) -> Result<Option<SQLToken<TokenType>>, TokenizerError>;
+    fn next_token(&mut self) -> Result<Option<SQLToken>, TokenizerError>;
 }
 
 
-pub fn tokenize<TokenType>(sql: &str, tokenizer: &mut SQLTokenizer<TokenType>) -> Result<Vec<SQLToken<TokenType>>, TokenizerError>
-    where TokenType: Debug + PartialEq
-    {
+pub fn tokenize(sql: &str, tokenizer: &mut SQLTokenizer) -> Result<Vec<SQLToken>, TokenizerError> {
 
     let mut chars = CharSeq::new(sql);
 
-    let mut tokens : Vec<SQLToken<TokenType>> = vec![];
+    let mut tokens : Vec<SQLToken> = vec![];
 
     loop {
-        match tokenizer.next_token(&mut chars)? {
+        match tokenizer.next_token()? {
             Some(SQLToken::Whitespace(_)) => { /* ignore */ },
             Some(token) => {
                 println!("Token: {:?}", token);

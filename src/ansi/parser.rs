@@ -1,30 +1,56 @@
 use std::cmp::PartialEq;
 use std::fmt::Debug;
-//use std::iter::Peekable;
-//use std::str::Chars;
+//use std::rc::Rc;
+//use std::sync::{Arc, Mutex};
 
-use std::sync::{Arc, Mutex};
-
+use super::tokenizer::ANSISQLTokenizer;
 use super::super::tokenizer::*;
 use super::super::parser::*;
 
-pub struct ANSISQLParser<TokenType> {
-    tokenizer: Arc<Mutex<SQLTokenizer<TokenType>>>
+pub struct ANSISQLParser {
+    tokenizer: Box<SQLTokenizer>
 }
 
-impl<TokenType> ANSISQLParser<TokenType> where TokenType: Debug + PartialEq {
+impl ANSISQLParser where {
 
-    pub fn new(tokenizer: Arc<Mutex<SQLTokenizer<TokenType>>>) -> Self {
-        ANSISQLParser { tokenizer: tokenizer.clone() }
+    pub fn parse(sql: &str) -> Result<Option<Box<SQLExpr>>, ParserError> {
+        let mut parser = ANSISQLParser { tokenizer: Box::new(ANSISQLTokenizer::new(sql)) };
+        parser.parse_expr()
     }
 }
 
-impl<TokenType, ExprType> SQLParser<TokenType, ExprType> for ANSISQLParser<TokenType>
-    where TokenType: Debug + PartialEq, ExprType: Debug {
+impl SQLParser for ANSISQLParser {
 
-    fn parse_prefix(&mut self, chars: &mut CharSeq) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>> {
+    fn parse_expr(&mut self) -> Result<Option<Box<SQLExpr>>, ParserError> {
 
-        match self.tokenizer.lock().unwrap().next_token(chars)? {
+        let precedence: usize = 0;
+
+        let mut e = self.parse_prefix()?;
+
+        match e {
+            Some(mut expr) => {
+                while let Some(token) = self.tokenizer.peek_token()? {
+                    let next_precedence = self.tokenizer.precedence(&token);
+
+                    if precedence >= next_precedence {
+                        break;
+                    }
+
+                    expr = self.parse_infix(&expr, next_precedence)?.unwrap(); //TODO: fix me
+                }
+
+                Ok(Some(expr))
+            }
+            _ => {
+                Ok(None)
+            }
+        }
+
+    }
+
+    fn parse_prefix(&mut self) -> Result<Option<Box<SQLExpr>>, ParserError> {
+
+        match self.tokenizer.next_token()? {
             Some(SQLToken::Keyword(ref k)) => match k.to_uppercase().as_ref() {
                 "INSERT" => unimplemented!(),
                 "UPDATE" => unimplemented!(),
@@ -37,7 +63,7 @@ impl<TokenType, ExprType> SQLParser<TokenType, ExprType> for ANSISQLParser<Token
         }
     }
 
-    fn parse_infix(&mut self, _chars: &mut CharSeq, _left: &SQLExpr<ExprType>, _precedence: usize) -> Result<Option<Box<SQLExpr<ExprType>>>, ParserError<TokenType>> {
+    fn parse_infix(&mut self, _left: &SQLExpr, _precedence: usize) -> Result<Option<Box<SQLExpr>>, ParserError> {
         unimplemented!()
     }
 }

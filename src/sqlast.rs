@@ -56,6 +56,12 @@ pub enum ASTNode {
         having: Option<Box<ASTNode>>,
         limit: Option<Box<ASTNode>>,
     },
+    SQLDelete {
+        relation: Option<Box<ASTNode>>,     // FROM statement
+        selection: Option<Box<ASTNode>>,    // WHERE statement
+        order_by: Option<Vec<ASTNode>>,
+        limit: Option<Box<ASTNode>>,
+    },
     SQLCreateTable {
         /// Table name
         name: String,

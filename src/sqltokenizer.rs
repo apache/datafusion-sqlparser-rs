@@ -23,17 +23,19 @@ use fnv::FnvHashSet;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     /// SQL identifier e.g. table or column name
-    Identifier(String),
+    Identifier{key: String, line: u64, col: u64},
     /// SQL keyword  e.g. Keyword("SELECT")
-    Keyword(String),
+    Keyword{key: String, line: u64, col: u64},
     /// Numeric literal
-    Number(String),
+    Number{num: String, line: u64, col: u64},
     /// String literal
-    String(String),
+    String{key: String, line: u64, col: u64},
     /// Comma
     Comma,
     /// Whitespace (space, tab, etc)
     Whitespace,
+    /// NewLine
+    NewLine,
     /// Equality operator `=`
     Eq,
     /// Not Equals operator `!=` or `<>`
@@ -65,8 +67,8 @@ pub enum Token {
 }
 
 /// Tokenizer error
-#[derive(Debug)]
-pub struct TokenizerError(String);
+#[derive(Debug, PartialEq)]
+pub struct TokenizerError{key: String, line: u64, col: u64}
 
 lazy_static! {
     static ref KEYWORDS: FnvHashSet<&'static str> = {
@@ -141,6 +143,8 @@ lazy_static! {
 /// SQL Tokenizer
 pub struct Tokenizer {
     pub query: String,
+    pub line: u64,
+    pub col: u64,
 }
 
 impl Tokenizer {
@@ -148,6 +152,8 @@ impl Tokenizer {
     pub fn new(query: &str) -> Self {
         Self {
             query: query.to_string(),
+            line: 0,
+            col: 0,
         }
     }
 
@@ -158,6 +164,11 @@ impl Tokenizer {
         let mut tokens: Vec<Token> = vec![];
 
         while let Some(token) = self.next_token(&mut peekable)? {
+
+            if token == Token::NewLine {
+                self.line += 1;
+            }
+
             tokens.push(token);
         }
 
@@ -193,9 +204,9 @@ impl Tokenizer {
                     }
                     let upper_str = s.to_uppercase();
                     if KEYWORDS.contains(upper_str.as_str()) {
-                        Ok(Some(Token::Keyword(upper_str)))
+                        Ok(Some(Token::Keyword{key: upper_str, line: self.line, col: self.col}))
                     } else {
-                        Ok(Some(Token::Identifier(s)))
+                        Ok(Some(Token::Identifier{key: s, line: self.line, col: self.col}))
                     }
                 }
                 // string
@@ -216,7 +227,7 @@ impl Tokenizer {
                             }
                         }
                     }
-                    Ok(Some(Token::String(s)))
+                    Ok(Some(Token::String{key: s, line: self.line, col: self.col}))
                 }
                 // numbers
                 '0'...'9' => {
@@ -230,7 +241,7 @@ impl Tokenizer {
                             _ => break,
                         }
                     }
-                    Ok(Some(Token::Number(s)))
+                    Ok(Some(Token::Number{num: s, line: self.line, col: self.col}))
                 }
                 // punctuation
                 ',' => {
@@ -282,9 +293,17 @@ impl Tokenizer {
                                 chars.next();
                                 Ok(Some(Token::Neq))
                             }
-                            _ => Err(TokenizerError(format!("TBD"))),
+                            _ => Err(TokenizerError{
+                                        key: format!("TBD"),
+                                        line: self.line,
+                                        col: self.col,
+                            }),
                         },
-                        None => Err(TokenizerError(format!("TBD"))),
+                        None => Err(TokenizerError{
+                                        key: format!("TBD"),
+                                        line: self.line,
+                                        col: self.col,
+                        }),
                     }
                 }
                 '<' => {
@@ -317,10 +336,11 @@ impl Tokenizer {
                         None => Ok(Some(Token::Gt)),
                     }
                 }
-                _ => Err(TokenizerError(format!(
-                    "unhandled char '{}' in tokenizer",
-                    ch
-                ))),
+                _ => Err(TokenizerError{
+                        key: format!("unhandled char '{}' in tokenizer",ch),
+                        line: self.line,
+                        col: self.col,
+                        }),
             },
             None => Ok(None),
         }
@@ -338,11 +358,27 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
-            Token::Keyword(String::from("SELECT")),
-            Token::Number(String::from("1")),
+            Token::Keyword{key: String::from("SELECT"), line: 0, col: 0},
+            Token::Number{num: String::from("1"), line: 0, col: 0},
         ];
-
+    
         compare(expected, tokens);
+    }
+    
+    #[test]
+    fn test_invalid_string() {
+        let sql = String::from("فروردین");
+
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize();
+        
+        let error: TokenizerError = TokenizerError{key: "unhandled char \'ف\' in tokenizer".to_string(), line: 0, col: 0};
+
+        match tokens {
+            Err(e) => assert_eq!(e, error),
+            Ok(_) => panic!("This Should never be hit"),
+        }
+    
     }
 
     #[test]
@@ -352,10 +388,10 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
-            Token::Keyword(String::from("SELECT")),
-            Token::Identifier(String::from("sqrt")),
+            Token::Keyword{key: String::from("SELECT"), line: 0, col: 0},
+            Token::Identifier{key: String::from("sqrt"), line: 0, col: 0},
             Token::LParen,
-            Token::Number(String::from("1")),
+            Token::Number{num: String::from("1"), line: 0, col: 0},
             Token::RParen,
         ];
 
@@ -369,16 +405,16 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
-            Token::Keyword(String::from("SELECT")),
+            Token::Keyword{key: String::from("SELECT"), line: 0, col: 0},
             Token::Mult,
-            Token::Keyword(String::from("FROM")),
-            Token::Identifier(String::from("customer")),
-            Token::Keyword(String::from("WHERE")),
-            Token::Identifier(String::from("id")),
+            Token::Keyword{key: String::from("FROM"), line: 0, col: 0},
+            Token::Identifier{key: String::from("customer"), line: 0, col: 0},
+            Token::Keyword{key: String::from("WHERE"), line: 0, col: 0},
+            Token::Identifier{key: String::from("id"), line: 0, col: 0},
             Token::Eq,
-            Token::Number(String::from("1")),
-            Token::Keyword(String::from("LIMIT")),
-            Token::Number(String::from("5")),
+            Token::Number{num: String::from("1"), line: 0, col: 0},
+            Token::Keyword{key: String::from("LIMIT"), line: 0, col: 0},
+            Token::Number{num: String::from("5"), line: 0, col: 0},
         ];
 
         compare(expected, tokens);
@@ -391,14 +427,14 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
-            Token::Keyword(String::from("SELECT")),
+            Token::Keyword{key: String::from("SELECT"), line: 0, col: 0},
             Token::Mult,
-            Token::Keyword(String::from("FROM")),
-            Token::Identifier(String::from("customer")),
-            Token::Keyword(String::from("WHERE")),
-            Token::Identifier(String::from("salary")),
+            Token::Keyword{key: String::from("FROM"), line: 0, col: 0},
+            Token::Identifier{key: String::from("customer"), line: 0, col: 0},
+            Token::Keyword{key: String::from("WHERE"), line: 0, col: 0},
+            Token::Identifier{key: String::from("salary"), line: 0, col: 0},
             Token::Neq,
-            Token::String(String::from("Not Provided")),
+            Token::String{key: String::from("Not Provided"), line: 0, col: 0},
         ];
 
         compare(expected, tokens);
@@ -411,9 +447,9 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
-            Token::Identifier(String::from("a")),
-            Token::Keyword("IS".to_string()),
-            Token::Keyword("NULL".to_string()),
+            Token::Identifier{key: String::from("a"), line: 0, col: 0},
+            Token::Keyword{key: "IS".to_string(), line: 0, col: 0},
+            Token::Keyword{key: "NULL".to_string(), line: 0, col: 0},
         ];
 
         compare(expected, tokens);

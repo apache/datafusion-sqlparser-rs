@@ -84,52 +84,54 @@ impl Parser {
         match self.next_token() {
             Some(t) => {
                 match t {
-                    Token::Keyword(k) => match k.to_uppercase().as_ref() {
+                    Token::Keyword{key, line, col} => match key.to_uppercase().as_ref() {
                         "SELECT" => Ok(self.parse_select()?),
                         "CREATE" => Ok(self.parse_create()?),
-                        _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
+                        _ => return parser_err!(format!("Parse Error at line: {}, column: {}, No prefix parser for keyword {}", line, col, key)),
                     },
                     Token::Mult => Ok(ASTNode::SQLWildcard),
-                    Token::Identifier(id) => {
+                    Token::Identifier{key, line, col} => {
                         match self.peek_token() {
                             Some(Token::LParen) => {
                                 self.next_token(); // skip lparen
-                                match id.to_uppercase().as_ref() {
+                                match key.to_uppercase().as_ref() {
                                     "CAST" => self.parse_cast_expression(),
                                     _ => {
                                         let args = self.parse_expr_list()?;
                                         self.next_token(); // skip rparen
-                                        Ok(ASTNode::SQLFunction { id, args })
+                                        Ok(ASTNode::SQLFunction{id: key, args})
                                     }
                                 }
                             }
                             Some(Token::Period) => {
-                                let mut id_parts: Vec<String> = vec![id];
+                                let mut id_parts: Vec<String> = vec![key];
                                 while self.peek_token() == Some(Token::Period) {
                                     self.consume_token(&Token::Period)?;
                                     match self.next_token() {
-                                        Some(Token::Identifier(id)) => id_parts.push(id),
+                                        Some(Token::Identifier{key, line: _, col: _}) => id_parts.push(key),
                                         _ => {
                                             return parser_err!(format!(
-                                                "Error parsing compound identifier"
+                                                "Parse Error at line: {}, col: {}, Error parsing compound identifier",
+                                                line,
+                                                col,
                                             ))
                                         }
                                     }
                                 }
                                 Ok(ASTNode::SQLCompoundIdentifier(id_parts))
                             }
-                            _ => Ok(ASTNode::SQLIdentifier(id)),
+                            _ => Ok(ASTNode::SQLIdentifier(key)),
                         }
                     }
-                    Token::Number(ref n) if n.contains(".") => match n.parse::<f64>() {
-                        Ok(n) => Ok(ASTNode::SQLLiteralDouble(n)),
-                        Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
+                    Token::Number{ref num, line, col} if num.contains(".") => match num.parse::<f64>() {
+                        Ok(num) => Ok(ASTNode::SQLLiteralDouble(num)),
+                        Err(e) => parser_err!(format!("Parse Error at line: {}, col: {}, Could not parse '{}' as i64: {}", line, col, num, e)),
                     },
-                    Token::Number(ref n) => match n.parse::<i64>() {
-                        Ok(n) => Ok(ASTNode::SQLLiteralLong(n)),
-                        Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
+                    Token::Number{ref num, line, col} => match num.parse::<i64>() {
+                        Ok(num) => Ok(ASTNode::SQLLiteralLong(num)),
+                        Err(e) => parser_err!(format!("Parse Error at line: {}, col: {}, Could not parse '{}' as i64: {}", line, col, num, e)),
                     },
-                    Token::String(ref s) => Ok(ASTNode::SQLLiteralString(s.to_string())),
+                    Token::String{ref key, line: _, col: _} => Ok(ASTNode::SQLLiteralString(key.to_string())),
                     _ => parser_err!(format!(
                         "Prefix parser expected a keyword but found {:?}",
                         t
@@ -143,7 +145,7 @@ impl Parser {
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
     pub fn parse_cast_expression(&mut self) -> Result<ASTNode, ParserError> {
         let expr = self.parse_expr(0)?;
-        self.consume_token(&Token::Keyword("AS".to_string()))?;
+        self.consume_token(&Token::Keyword{key: "AS".to_string(), line: 0, col: 0})?;
         let data_type = self.parse_data_type()?;
         self.consume_token(&Token::RParen)?;
         Ok(ASTNode::SQLCast {
@@ -160,13 +162,13 @@ impl Parser {
     ) -> Result<Option<ASTNode>, ParserError> {
         match self.next_token() {
             Some(tok) => match tok {
-                Token::Keyword(ref k) => if k == "IS" {
+                Token::Keyword{ref key, line, col} => if key == "IS" {
                     if self.parse_keywords(vec!["NULL"]) {
                         Ok(Some(ASTNode::SQLIsNull(Box::new(expr))))
                     } else if self.parse_keywords(vec!["NOT", "NULL"]) {
                         Ok(Some(ASTNode::SQLIsNotNull(Box::new(expr))))
                     } else {
-                        parser_err!("Invalid tokens after IS")
+                        parser_err!(format!("Parse Error at line: {}, column{}, Invalid tokens after IS", line, col))
                     }
                 } else {
                     Ok(Some(ASTNode::SQLBinaryExpr {
@@ -210,8 +212,8 @@ impl Parser {
             &Token::Mult => Ok(SQLOperator::Multiply),
             &Token::Div => Ok(SQLOperator::Divide),
             &Token::Mod => Ok(SQLOperator::Modulus),
-            &Token::Keyword(ref k) if k == "AND" => Ok(SQLOperator::And),
-            &Token::Keyword(ref k) if k == "OR" => Ok(SQLOperator::Or),
+            &Token::Keyword{ref key, line: _, col: _} if key == "AND" => Ok(SQLOperator::And),
+            &Token::Keyword{ref key, line: _, col: _} if key == "OR" => Ok(SQLOperator::Or),
             _ => parser_err!(format!("Unsupported SQL operator {:?}", tok)),
         }
     }
@@ -230,9 +232,9 @@ impl Parser {
         //println!("get_precedence() {:?}", tok);
 
         match tok {
-            &Token::Keyword(ref k) if k == "OR" => Ok(5),
-            &Token::Keyword(ref k) if k == "AND" => Ok(10),
-            &Token::Keyword(ref k) if k == "IS" => Ok(15),
+            &Token::Keyword{ref key, line: _, col: _} if key == "OR" => Ok(5),
+            &Token::Keyword{ref key, line: _, col: _} if key == "AND" => Ok(10),
+            &Token::Keyword{ref key, line: _, col: _} if key == "IS" => Ok(15),
             &Token::Eq | &Token::Lt | &Token::LtEq | &Token::Neq | &Token::Gt | &Token::GtEq => {
                 Ok(20)
             }
@@ -273,8 +275,8 @@ impl Parser {
     /// Look for an expected keyword and consume it if it exists
     pub fn parse_keyword(&mut self, expected: &'static str) -> bool {
         match self.peek_token() {
-            Some(Token::Keyword(k)) => {
-                if expected.eq_ignore_ascii_case(k.as_str()) {
+            Some(Token::Keyword{key, line: _, col: _}) => {
+                if expected.eq_ignore_ascii_case(key.as_str()) {
                     self.next_token();
                     true
                 } else {
@@ -323,12 +325,12 @@ impl Parser {
     pub fn parse_create(&mut self) -> Result<ASTNode, ParserError> {
         if self.parse_keywords(vec!["TABLE"]) {
             match self.next_token() {
-                Some(Token::Identifier(id)) => {
+                Some(Token::Identifier{key, line, col}) => {
                     // parse optional column list (schema)
                     let mut columns = vec![];
                     if self.consume_token(&Token::LParen)? {
                         loop {
-                            if let Some(Token::Identifier(column_name)) = self.next_token() {
+                            if let Some(Token::Identifier{key, line: _, col: _}) = self.next_token() {
                                 if let Ok(data_type) = self.parse_data_type() {
                                     let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
                                         false
@@ -342,7 +344,7 @@ impl Parser {
                                         Some(Token::Comma) => {
                                             self.next_token();
                                             columns.push(SQLColumnDef {
-                                                name: column_name,
+                                                name: key,
                                                 data_type: data_type,
                                                 allow_null,
                                             });
@@ -350,21 +352,23 @@ impl Parser {
                                         Some(Token::RParen) => {
                                             self.next_token();
                                             columns.push(SQLColumnDef {
-                                                name: column_name,
+                                                name: key,
                                                 data_type: data_type,
                                                 allow_null,
                                             });
                                             break;
                                         }
                                         _ => {
-                                            return parser_err!(
-                                                "Expected ',' or ')' after column definition"
-                                            );
+                                            return parser_err!(format!(
+                                                "Parse Error at line: {} column: {}, Expected ',' or ')' after column definition",
+                                                line,
+                                                col
+                                            ));
                                         }
                                     }
                                 } else {
                                     return parser_err!(
-                                        "Error parsing data type in column definition"
+                                        format!("Parse Error at line: {} column: {}, Error parsing data type in column definition", line, col)
                                     );
                                 }
                             } else {
@@ -373,7 +377,7 @@ impl Parser {
                         }
                     }
 
-                    Ok(ASTNode::SQLCreateTable { name: id, columns })
+                    Ok(ASTNode::SQLCreateTable { name: key, columns })
                 }
                 _ => parser_err!(format!(
                     "Unexpected token after CREATE EXTERNAL TABLE: {:?}",
@@ -391,8 +395,8 @@ impl Parser {
     /// Parse a literal integer/long
     pub fn parse_literal_int(&mut self) -> Result<i64, ParserError> {
         match self.next_token() {
-            Some(Token::Number(s)) => s.parse::<i64>().map_err(|e| {
-                ParserError::ParserError(format!("Could not parse '{}' as i64: {}", s, e))
+            Some(Token::Number{num, line, col}) => num.parse::<i64>().map_err(|e| {
+                ParserError::ParserError(format!("Parse Error at line: {}, col: {}, Could not parse '{}' as i64: {}", line, col, num, e))
             }),
             other => parser_err!(format!("Expected literal int, found {:?}", other)),
         }
@@ -401,15 +405,15 @@ impl Parser {
     /// Parse a literal string
     pub fn parse_literal_string(&mut self) -> Result<String, ParserError> {
         match self.next_token() {
-            Some(Token::String(ref s)) => Ok(s.clone()),
-            other => parser_err!(format!("Expected literal string, found {:?}", other)),
+            Some(Token::String{ref key, line: _, col: _}) => Ok(key.clone()),
+            other => parser_err!(format!("Expected literal string, found {:?}",  other)),
         }
     }
 
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)
     pub fn parse_data_type(&mut self) -> Result<SQLType, ParserError> {
         match self.next_token() {
-            Some(Token::Keyword(k)) => match k.to_uppercase().as_ref() {
+            Some(Token::Keyword{key, line, col}) => match key.to_uppercase().as_ref() {
                 "BOOLEAN" => Ok(SQLType::Boolean),
                 "FLOAT" => Ok(SQLType::Float(self.parse_optional_precision()?)),
                 "REAL" => Ok(SQLType::Real),
@@ -418,7 +422,7 @@ impl Parser {
                 "INT" | "INTEGER" => Ok(SQLType::Int),
                 "BIGINT" => Ok(SQLType::BigInt),
                 "VARCHAR" => Ok(SQLType::Varchar(self.parse_precision()?)),
-                _ => parser_err!(format!("Invalid data type '{:?}'", k)),
+                _ => parser_err!(format!("Parse Error at line: {}, column: {}, Invalid data type '{:?}'", line, col, key)),
             },
             other => parser_err!(format!("Invalid data type: '{:?}'", other)),
         }
@@ -526,22 +530,24 @@ impl Parser {
 
             // look for optional ASC / DESC specifier
             let asc = match self.peek_token() {
-                Some(Token::Keyword(k)) => {
+                Some(Token::Keyword{key, line, col}) => {
                     self.next_token(); // consume it
-                    match k.to_uppercase().as_ref() {
+                    match key.to_uppercase().as_ref() {
                         "ASC" => true,
                         "DESC" => false,
                         _ => {
                             return parser_err!(format!(
-                                "Invalid modifier for ORDER BY expression: {:?}",
-                                k
+                                "Invalid modifier at line: {}, col: {} for ORDER BY expression: {:?}",
+                                line,
+                                col,
+                                key
                             ))
                         }
                     }
                 }
                 Some(Token::Comma) => true,
                 Some(other) => {
-                    return parser_err!(format!("Unexpected token after ORDER BY expr: {:?}", other))
+                    return parser_err!(format!("Unexpected token at  after ORDER BY expr: {:?}", other))
                 }
                 None => true,
             };

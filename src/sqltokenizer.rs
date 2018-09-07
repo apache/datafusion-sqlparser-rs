@@ -33,7 +33,7 @@ pub enum Token {
     /// Comma
     Comma,
     /// Whitespace (space, tab, etc)
-    Whitespace,
+    Whitespace(char),
     /// Equality operator `=`
     Eq,
     /// Not Equals operator `!=` or `<>`
@@ -65,7 +65,7 @@ pub enum Token {
 }
 
 /// Tokenizer error
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct TokenizerError(String);
 
 lazy_static! {
@@ -141,6 +141,8 @@ lazy_static! {
 /// SQL Tokenizer
 pub struct Tokenizer {
     pub query: String,
+    pub line: u64,
+    pub col: u64,
 }
 
 impl Tokenizer {
@@ -148,6 +150,8 @@ impl Tokenizer {
     pub fn new(query: &str) -> Self {
         Self {
             query: query.to_string(),
+            line: 1,
+            col: 1,
         }
     }
 
@@ -158,13 +162,20 @@ impl Tokenizer {
         let mut tokens: Vec<Token> = vec![];
 
         while let Some(token) = self.next_token(&mut peekable)? {
+
+            if token == Token::Whitespace('\n') {
+                self.line += 1;
+                self.col = 0;
+            } else if token == Token::Whitespace('\t') {
+                self.col += 1;
+            }
             tokens.push(token);
         }
 
         Ok(tokens
             .into_iter()
             .filter(|t| match t {
-                Token::Whitespace => false,
+                Token::Whitespace(..) => false,
                 _ => true,
             }).collect())
     }
@@ -177,7 +188,7 @@ impl Tokenizer {
                 // whitespace
                 ' ' | '\t' | '\n' => {
                     chars.next(); // consume
-                    Ok(Some(Token::Whitespace))
+                    Ok(Some(Token::Whitespace(ch)))
                 }
                 // identifier or keyword
                 'a'...'z' | 'A'...'Z' | '_' | '@' => {
@@ -282,9 +293,9 @@ impl Tokenizer {
                                 chars.next();
                                 Ok(Some(Token::Neq))
                             }
-                            _ => Err(TokenizerError(format!("TBD"))),
+                            _ => Err(TokenizerError(format!("Tokenizer Error at Line: {}, Col: {}", self.line, self.col))),
                         },
-                        None => Err(TokenizerError(format!("TBD"))),
+                        None => Err(TokenizerError(format!("Tokenizer Error at Line: {}, Col: {}", self.line, self.col))),
                     }
                 }
                 '<' => {
@@ -318,7 +329,9 @@ impl Tokenizer {
                     }
                 }
                 _ => Err(TokenizerError(format!(
-                    "unhandled char '{}' in tokenizer",
+                    "Tokenizer Error at Line: {}, Column: {}, unhandled char '{}'",
+                    self.line,
+                    self.col,
                     ch
                 ))),
             },
@@ -402,6 +415,34 @@ mod tests {
         ];
 
         compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_invalid_string() {
+        let sql = String::from("\nمصطفىh");
+
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize();
+
+        match tokens {
+            Err(e) => assert_eq!(TokenizerError("Tokenizer Error at Line: 2, Column: 0, unhandled char \'م\'".to_string()), e),
+            _ => panic!("Test Failure in tokenize_invalid_string"),
+        }
+
+    }
+    
+    #[test]
+    fn tokenize_invalid_string_cols() {
+        
+        let sql = String::from("\n\nSELECT * FROM table\tمصطفىh");
+
+        let mut tokenizer = Tokenizer::new(&sql);
+        let tokens = tokenizer.tokenize();
+        match tokens {
+            Err(e) => assert_eq!(TokenizerError("Tokenizer Error at Line: 3, Column: 1, unhandled char \'م\'".to_string()), e),
+            _ => panic!("Test Failure in tokenize_invalid_string_cols"),
+        }
+
     }
 
     #[test]

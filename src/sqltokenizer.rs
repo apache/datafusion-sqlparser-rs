@@ -195,55 +195,22 @@ impl<'a> Tokenizer<'a> {
                     Ok(Some(Token::Number(s)))
                 }
                 // punctuation
-                ',' => {
-                    chars.next();
-                    Ok(Some(Token::Comma))
-                }
-                '(' => {
-                    chars.next();
-                    Ok(Some(Token::LParen))
-                }
-                ')' => {
-                    chars.next();
-                    Ok(Some(Token::RParen))
-                }
+                '(' => self.consume_and_return(chars, Token::LParen),
+                ')' => self.consume_and_return(chars, Token::RParen),
+                ',' => self.consume_and_return(chars, Token::Comma),
                 // operators
-                '+' => {
-                    chars.next();
-                    Ok(Some(Token::Plus))
-                }
-                '-' => {
-                    chars.next();
-                    Ok(Some(Token::Minus))
-                }
-                '*' => {
-                    chars.next();
-                    Ok(Some(Token::Mult))
-                }
-                '/' => {
-                    chars.next();
-                    Ok(Some(Token::Div))
-                }
-                '%' => {
-                    chars.next();
-                    Ok(Some(Token::Mod))
-                }
-                '=' => {
-                    chars.next();
-                    Ok(Some(Token::Eq))
-                }
-                '.' => {
-                    chars.next();
-                    Ok(Some(Token::Period))
-                }
+                '+' => self.consume_and_return(chars, Token::Plus),
+                '-' => self.consume_and_return(chars, Token::Minus),
+                '*' => self.consume_and_return(chars, Token::Mult),
+                '/' => self.consume_and_return(chars, Token::Div),
+                '%' => self.consume_and_return(chars, Token::Mod),
+                '=' => self.consume_and_return(chars, Token::Eq),
+                '.' => self.consume_and_return(chars, Token::Period),
                 '!' => {
                     chars.next(); // consume
                     match chars.peek() {
                         Some(&ch) => match ch {
-                            '=' => {
-                                chars.next();
-                                Ok(Some(Token::Neq))
-                            }
+                            '=' => self.consume_and_return(chars, Token::Neq),
                             _ => Err(TokenizerError(format!(
                                 "Tokenizer Error at Line: {}, Col: {}",
                                 self.line, self.col
@@ -259,14 +226,8 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some(&ch) => match ch {
-                            '=' => {
-                                chars.next();
-                                Ok(Some(Token::LtEq))
-                            }
-                            '>' => {
-                                chars.next();
-                                Ok(Some(Token::Neq))
-                            }
+                            '=' => self.consume_and_return(chars, Token::LtEq),
+                            '>' => self.consume_and_return(chars, Token::Neq),
                             _ => Ok(Some(Token::Lt)),
                         },
                         None => Ok(Some(Token::Lt)),
@@ -276,10 +237,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some(&ch) => match ch {
-                            '=' => {
-                                chars.next();
-                                Ok(Some(Token::GtEq))
-                            }
+                            '=' => self.consume_and_return(chars, Token::GtEq),
                             _ => Ok(Some(Token::Gt)),
                         },
                         None => Ok(Some(Token::Gt)),
@@ -292,6 +250,11 @@ impl<'a> Tokenizer<'a> {
             },
             None => Ok(None),
         }
+    }
+
+    fn consume_and_return(&self, chars: &mut Peekable<Chars>, t: Token) -> Result<Option<Token>, TokenizerError> {
+        chars.next();
+        Ok(Some(t))
     }
 }
 

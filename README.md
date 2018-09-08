@@ -6,9 +6,11 @@
 [![Coverage Status](https://coveralls.io/repos/github/andygrove/sqlparser-rs/badge.svg?branch=master)](https://coveralls.io/github/andygrove/sqlparser-rs?branch=master)
 [![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/datafusion-rs)
 
-The main goal of this project is to build a SQL lexer and parser capable of parsing ANSI SQL:2011 (or 2016 if I can get access to the specification for free).
+The primary goal of this project is to build a SQL lexer and parser capable of parsing SQL that conforms with the [ANSI SQL:2011](https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#_5_1_sql_terminal_character) standard.
 
 A secondary goal is to make it easy for others to use this library as a foundation for building custom SQL parsers for vendor-specific dialects.
+
+This parser is currently being used by the [DataFusion](https://github.com/datafusion-rs/datafusion) query engine.
 
 ## Example
 

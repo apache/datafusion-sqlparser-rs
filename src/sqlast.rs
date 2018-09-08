@@ -72,7 +72,7 @@ pub enum ASTNode {
         /// WHERE
         selection: Option<Box<ASTNode>>,
         /// ORDER BY
-        order_by: Option<Vec<ASTNode>>,
+        order_by: Option<Vec<SQLOrderByExpr>>,
         /// GROUP BY
         group_by: Option<Vec<ASTNode>>,
         /// HAVING
@@ -105,7 +105,7 @@ pub enum ASTNode {
         /// WHERE
         selection: Option<Box<ASTNode>>,
         /// ORDER BY
-        order_by: Option<Vec<ASTNode>>,
+        order_by: Option<Vec<SQLOrderByExpr>>,
         limit: Option<Box<ASTNode>>,
     },
     /// CREATE TABLE
@@ -122,6 +122,20 @@ pub enum ASTNode {
 pub struct SQLAssigment {
     id: String,
     value: Box<ASTNode>
+}
+
+/// SQL ORDER BY expression
+#[derive(Debug, Clone, PartialEq)]
+pub struct SQLOrderByExpr {
+    pub expr: Box<ASTNode>,
+    pub asc: bool
+}
+
+impl SQLOrderByExpr {
+    pub fn new(expr: Box<ASTNode>,
+               asc: bool) -> Self {
+        SQLOrderByExpr { expr, asc }
+    }
 }
 
 /// SQL column definition

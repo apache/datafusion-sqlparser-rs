@@ -563,8 +563,8 @@ impl Parser {
     }
 
     /// Parse a comma-delimited list of SQL ORDER BY expressions
-    pub fn parse_order_by_expr_list(&mut self) -> Result<Vec<ASTNode>, ParserError> {
-        let mut expr_list: Vec<ASTNode> = vec![];
+    pub fn parse_order_by_expr_list(&mut self) -> Result<Vec<SQLOrderByExpr>, ParserError> {
+        let mut expr_list: Vec<SQLOrderByExpr> = vec![];
         loop {
             let expr = self.parse_expr(0)?;
 
@@ -590,10 +590,7 @@ impl Parser {
                 None => true,
             };
 
-            expr_list.push(ASTNode::SQLOrderBy {
-                expr: Box::new(expr),
-                asc,
-            });
+            expr_list.push(SQLOrderByExpr::new(Box::new(expr),asc));
 
             if let Some(t) = self.peek_token() {
                 if t == Token::Comma {
@@ -805,11 +802,11 @@ mod tests {
             ASTNode::SQLSelect { order_by, .. } => {
                 assert_eq!(
                     Some(vec![
-                        ASTNode::SQLOrderBy {
+                        SQLOrderByExpr {
                             expr: Box::new(ASTNode::SQLIdentifier("lname".to_string())),
                             asc: true,
                         },
-                        ASTNode::SQLOrderBy {
+                        SQLOrderByExpr {
                             expr: Box::new(ASTNode::SQLIdentifier("fname".to_string())),
                             asc: false,
                         },

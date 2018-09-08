@@ -162,14 +162,24 @@ impl Tokenizer {
         let mut tokens: Vec<Token> = vec![];
 
         while let Some(token) = self.next_token(&mut peekable)? {
+            
+            match &token {
+                
+                Token::Whitespace('\n') => {
+                    self.line += 1;
+                    self.col = 1;
+                },
 
-            if token == Token::Whitespace('\n') {
-                self.line += 1;
-                self.col = 0;
-            } else if token == Token::Whitespace('\t') {
-                self.col += 1;
+                Token::Whitespace('\t') => self.col += 4,
+                Token::Identifier(s) => self.col += s.len() as u64,
+                Token::Keyword(s) => self.col += s.len() as u64,
+                Token::Number(s) => self.col += s.len() as u64,
+                Token::String(s) => self.col += s.len() as u64,
+                _ => self.col += 1,
             }
+
             tokens.push(token);
+
         }
 
         Ok(tokens
@@ -425,7 +435,7 @@ mod tests {
         let tokens = tokenizer.tokenize();
 
         match tokens {
-            Err(e) => assert_eq!(TokenizerError("Tokenizer Error at Line: 2, Column: 0, unhandled char \'م\'".to_string()), e),
+            Err(e) => assert_eq!(TokenizerError("Tokenizer Error at Line: 2, Column: 1, unhandled char \'م\'".to_string()), e),
             _ => panic!("Test Failure in tokenize_invalid_string"),
         }
 
@@ -439,7 +449,7 @@ mod tests {
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize();
         match tokens {
-            Err(e) => assert_eq!(TokenizerError("Tokenizer Error at Line: 3, Column: 1, unhandled char \'م\'".to_string()), e),
+            Err(e) => assert_eq!(TokenizerError("Tokenizer Error at Line: 3, Column: 24, unhandled char \'م\'".to_string()), e),
             _ => panic!("Test Failure in tokenize_invalid_string_cols"),
         }
 

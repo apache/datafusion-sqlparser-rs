@@ -20,23 +20,22 @@
 //! Syntax Tree (AST).
 //!
 //! ```
+//! use sqlparser::dialect::GenericSqlDialect;
 //! use sqlparser::sqlparser::Parser;
+//!
+//! let dialect = GenericSqlDialect {}; // or AnsiSqlDialect
 //!
 //! let sql = "SELECT a, b, 123, myfunc(b) \
 //!            FROM table_1 \
 //!            WHERE a > b AND b < 100 \
 //!            ORDER BY a DESC, b";
 //!
-//! let ast = Parser::parse_sql(sql.to_string()).unwrap();
+//! let ast = Parser::parse_sql(&dialect, sql.to_string()).unwrap();
 //!
 //! println!("AST: {:?}", ast);
 //! ```
 
-extern crate fnv;
-
-#[macro_use]
-extern crate lazy_static;
-
+pub mod dialect;
 pub mod sqlast;
 pub mod sqlparser;
 pub mod sqltokenizer;

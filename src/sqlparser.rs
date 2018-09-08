@@ -14,6 +14,7 @@
 
 //! SQL Parser
 
+use super::dialect::Dialect;
 use super::sqlast::*;
 use super::sqltokenizer::*;
 
@@ -51,8 +52,8 @@ impl Parser {
     }
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
-    pub fn parse_sql(sql: String) -> Result<ASTNode, ParserError> {
-        let mut tokenizer = Tokenizer::new(&sql);
+    pub fn parse_sql(dialect: &Dialect, sql: String) -> Result<ASTNode, ParserError> {
+        let mut tokenizer = Tokenizer::new(dialect, &sql);
         let tokens = tokenizer.tokenize()?;
         let mut parser = Parser::new(tokens);
         parser.parse()
@@ -619,6 +620,7 @@ impl Parser {
 mod tests {
 
     use super::*;
+    use super::super::dialect::GenericSqlDialect;
 
     #[test]
     fn parse_delete_statement() {
@@ -949,7 +951,8 @@ mod tests {
     }
 
     fn parse_sql(sql: &str) -> ASTNode {
-        let mut tokenizer = Tokenizer::new(&sql);
+        let dialect = GenericSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect,&sql, );
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();

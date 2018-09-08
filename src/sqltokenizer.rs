@@ -17,7 +17,7 @@
 use std::iter::Peekable;
 use std::str::Chars;
 
-use fnv::FnvHashSet;
+use super::dialect::Dialect;
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq)]
@@ -68,78 +68,9 @@ pub enum Token {
 #[derive(Debug, PartialEq)]
 pub struct TokenizerError(String);
 
-lazy_static! {
-    static ref KEYWORDS: FnvHashSet<&'static str> = {
-        let mut m = FnvHashSet::default();
-
-        m.insert("SELECT");
-        m.insert("FROM");
-        m.insert("WHERE");
-        m.insert("LIMIT");
-        m.insert("ORDER");
-        m.insert("GROUP");
-        m.insert("BY");
-        m.insert("HAVING");
-        m.insert("UNION");
-        m.insert("ALL");
-        m.insert("INSERT");
-        m.insert("UPDATE");
-        m.insert("DELETE");
-        m.insert("IN");
-        m.insert("IS");
-        m.insert("NULL");
-        m.insert("SET");
-        m.insert("CREATE");
-        m.insert("EXTERNAL");
-        m.insert("TABLE");
-        m.insert("ASC");
-        m.insert("DESC");
-        m.insert("AND");
-        m.insert("OR");
-        m.insert("NOT");
-        m.insert("AS");
-        m.insert("STORED");
-        m.insert("CSV");
-        m.insert("PARQUET");
-        m.insert("LOCATION");
-        m.insert("WITH");
-        m.insert("WITHOUT");
-        m.insert("HEADER");
-        m.insert("ROW");
-
-        // SQL types
-        m.insert("CHAR");
-        m.insert("CHARACTER");
-        m.insert("VARYING");
-        m.insert("LARGE");
-        m.insert("OBJECT");
-        m.insert("VARCHAR");
-        m.insert("CLOB");
-        m.insert("BINARY");
-        m.insert("VARBINARY");
-        m.insert("BLOB");
-        m.insert("FLOAT");
-        m.insert("REAL");
-        m.insert("DOUBLE");
-        m.insert("PRECISION");
-        m.insert("INT");
-        m.insert("INTEGER");
-        m.insert("SMALLINT");
-        m.insert("BIGINT");
-        m.insert("NUMERIC");
-        m.insert("DECIMAL");
-        m.insert("DEC");
-        m.insert("BOOLEAN");
-        m.insert("DATE");
-        m.insert("TIME");
-        m.insert("TIMESTAMP");
-
-        m
-    };
-}
-
 /// SQL Tokenizer
 pub struct Tokenizer {
+    keywords: Vec<&'static str>,
     pub query: String,
     pub line: u64,
     pub col: u64,
@@ -147,12 +78,21 @@ pub struct Tokenizer {
 
 impl Tokenizer {
     /// Create a new SQL tokenizer for the specified SQL statement
-    pub fn new(query: &str) -> Self {
+    pub fn new(dialect: &Dialect, query: &str) -> Self {
         Self {
+            keywords: dialect.keywords(),
             query: query.to_string(),
             line: 1,
             col: 1,
         }
+    }
+
+    fn is_keyword(&self, s: &str) -> bool {
+        //TODO: need to reintroduce FnvHashSet at some point .. iterating over keywords is
+        // not fast but I want the simplicity for now while I experiment with pluggable
+        // dialects
+        return self.keywords.contains(&s);
+
     }
 
     /// Tokenize the statement and produce a vector of tokens
@@ -210,7 +150,7 @@ impl Tokenizer {
                         }
                     }
                     let upper_str = s.to_uppercase();
-                    if KEYWORDS.contains(upper_str.as_str()) {
+                    if self.is_keyword(upper_str.as_str()) {
                         Ok(Some(Token::Keyword(upper_str)))
                     } else {
                         Ok(Some(Token::Identifier(s)))
@@ -354,11 +294,13 @@ impl Tokenizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::dialect::{GenericSqlDialect};
 
     #[test]
     fn tokenize_select_1() {
         let sql = String::from("SELECT 1");
-        let mut tokenizer = Tokenizer::new(&sql);
+        let dialect = GenericSqlDialect{};
+        let mut tokenizer = Tokenizer::new(&dialect,&sql);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
@@ -372,7 +314,8 @@ mod tests {
     #[test]
     fn tokenize_scalar_function() {
         let sql = String::from("SELECT sqrt(1)");
-        let mut tokenizer = Tokenizer::new(&sql);
+        let dialect = GenericSqlDialect{};
+        let mut tokenizer = Tokenizer::new(&dialect,&sql);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
@@ -389,7 +332,8 @@ mod tests {
     #[test]
     fn tokenize_simple_select() {
         let sql = String::from("SELECT * FROM customer WHERE id = 1 LIMIT 5");
-        let mut tokenizer = Tokenizer::new(&sql);
+        let dialect = GenericSqlDialect{};
+        let mut tokenizer = Tokenizer::new(&dialect,&sql);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
@@ -411,7 +355,8 @@ mod tests {
     #[test]
     fn tokenize_string_predicate() {
         let sql = String::from("SELECT * FROM customer WHERE salary != 'Not Provided'");
-        let mut tokenizer = Tokenizer::new(&sql);
+        let dialect = GenericSqlDialect{};
+        let mut tokenizer = Tokenizer::new(&dialect,&sql);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
@@ -432,7 +377,8 @@ mod tests {
     fn tokenize_invalid_string() {
         let sql = String::from("\nمصطفىh");
 
-        let mut tokenizer = Tokenizer::new(&sql);
+        let dialect = GenericSqlDialect{};
+        let mut tokenizer = Tokenizer::new(&dialect,&sql);
         let tokens = tokenizer.tokenize();
 
         match tokens {
@@ -450,7 +396,8 @@ mod tests {
     fn tokenize_invalid_string_cols() {
         let sql = String::from("\n\nSELECT * FROM table\tمصطفىh");
 
-        let mut tokenizer = Tokenizer::new(&sql);
+        let dialect = GenericSqlDialect{};
+        let mut tokenizer = Tokenizer::new(&dialect,&sql);
         let tokens = tokenizer.tokenize();
         match tokens {
             Err(e) => assert_eq!(
@@ -466,7 +413,8 @@ mod tests {
     #[test]
     fn tokenize_is_null() {
         let sql = String::from("a IS NULL");
-        let mut tokenizer = Tokenizer::new(&sql);
+        let dialect = GenericSqlDialect{};
+        let mut tokenizer = Tokenizer::new(&dialect,&sql);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![

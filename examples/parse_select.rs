@@ -1,6 +1,6 @@
 extern crate sqlparser;
 
-use sqlparser::dialect::AnsiSqlDialect;
+use sqlparser::dialect::GenericSqlDialect;
 use sqlparser::sqlparser::*;
 
 fn main() {
@@ -9,7 +9,7 @@ fn main() {
                WHERE a > b AND b < 100 \
                ORDER BY a DESC, b";
 
-    let dialect = AnsiSqlDialect{};
+    let dialect = GenericSqlDialect{};
 
     let ast = Parser::parse_sql(&dialect,sql.to_string()).unwrap();
 

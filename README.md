@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Version](https://img.shields.io/crates/v/sqlparser.svg)](https://crates.io/crates/sqlparser)
-[![Build Status](https://travis-ci.org/andygrove/sqlparser.svg?branch=master)](https://travis-ci.org/andygrove/sqlparser-rs)
+[![Build Status](https://travis-ci.org/andygrove/sqlparser-rs.svg?branch=master)](https://travis-ci.org/andygrove/sqlparser-rs)
 [![Coverage Status](https://coveralls.io/repos/github/andygrove/sqlparser-rs/badge.svg?branch=master)](https://coveralls.io/github/andygrove/sqlparser-rs?branch=master)
 [![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/datafusion-rs)
 

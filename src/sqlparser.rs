@@ -619,8 +619,8 @@ impl Parser {
 #[cfg(test)]
 mod tests {
 
-    use super::*;
     use super::super::dialect::GenericSqlDialect;
+    use super::*;
 
     #[test]
     fn parse_delete_statement() {
@@ -952,7 +952,7 @@ mod tests {
 
     fn parse_sql(sql: &str) -> ASTNode {
         let dialect = GenericSqlDialect {};
-        let mut tokenizer = Tokenizer::new(&dialect,&sql, );
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();

@@ -13,6 +13,10 @@
 // limitations under the License.
 
 //! SQL Tokenizer
+//!
+//! The tokenizer (a.k.a. lexer) converts a string into a sequence of tokens.
+//!
+//! The tokens then form the input for the parser, which outputs an Abstract Syntax Tree (AST).
 
 use std::iter::Peekable;
 use std::str::Chars;
@@ -69,18 +73,18 @@ pub enum Token {
 pub struct TokenizerError(String);
 
 /// SQL Tokenizer
-pub struct Tokenizer {
-    keywords: Vec<&'static str>,
+pub struct Tokenizer<'a> {
+    dialect: &'a Dialect,
     pub query: String,
     pub line: u64,
     pub col: u64,
 }
 
-impl Tokenizer {
+impl<'a> Tokenizer<'a> {
     /// Create a new SQL tokenizer for the specified SQL statement
-    pub fn new(dialect: &Dialect, query: &str) -> Self {
+    pub fn new(dialect: &'a Dialect, query: &str) -> Self {
         Self {
-            keywords: dialect.keywords(),
+            dialect,
             query: query.to_string(),
             line: 1,
             col: 1,
@@ -91,8 +95,7 @@ impl Tokenizer {
         //TODO: need to reintroduce FnvHashSet at some point .. iterating over keywords is
         // not fast but I want the simplicity for now while I experiment with pluggable
         // dialects
-        return self.keywords.contains(&s);
-
+        return self.dialect.keywords().contains(&s);
     }
 
     /// Tokenize the statement and produce a vector of tokens
@@ -138,15 +141,16 @@ impl Tokenizer {
                     Ok(Some(Token::Whitespace(ch)))
                 }
                 // identifier or keyword
-                'a'...'z' | 'A'...'Z' | '_' | '@' => {
+                ch if self.dialect.is_identifier_start(ch) => {
                     let mut s = String::new();
+                    chars.next(); // consume
+                    s.push(ch);
                     while let Some(&ch) = chars.peek() {
-                        match ch {
-                            'a'...'z' | 'A'...'Z' | '_' | '0'...'9' | '@' => {
-                                chars.next(); // consume
-                                s.push(ch);
-                            }
-                            _ => break,
+                        if self.dialect.is_identifier_part(ch) {
+                            chars.next(); // consume
+                            s.push(ch);
+                        } else {
+                            break;
                         }
                     }
                     let upper_str = s.to_uppercase();
@@ -293,14 +297,14 @@ impl Tokenizer {
 
 #[cfg(test)]
 mod tests {
+    use super::super::dialect::GenericSqlDialect;
     use super::*;
-    use super::super::dialect::{GenericSqlDialect};
 
     #[test]
     fn tokenize_select_1() {
         let sql = String::from("SELECT 1");
-        let dialect = GenericSqlDialect{};
-        let mut tokenizer = Tokenizer::new(&dialect,&sql);
+        let dialect = GenericSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
@@ -314,8 +318,8 @@ mod tests {
     #[test]
     fn tokenize_scalar_function() {
         let sql = String::from("SELECT sqrt(1)");
-        let dialect = GenericSqlDialect{};
-        let mut tokenizer = Tokenizer::new(&dialect,&sql);
+        let dialect = GenericSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
@@ -332,8 +336,8 @@ mod tests {
     #[test]
     fn tokenize_simple_select() {
         let sql = String::from("SELECT * FROM customer WHERE id = 1 LIMIT 5");
-        let dialect = GenericSqlDialect{};
-        let mut tokenizer = Tokenizer::new(&dialect,&sql);
+        let dialect = GenericSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
@@ -355,8 +359,8 @@ mod tests {
     #[test]
     fn tokenize_string_predicate() {
         let sql = String::from("SELECT * FROM customer WHERE salary != 'Not Provided'");
-        let dialect = GenericSqlDialect{};
-        let mut tokenizer = Tokenizer::new(&dialect,&sql);
+        let dialect = GenericSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
@@ -377,8 +381,8 @@ mod tests {
     fn tokenize_invalid_string() {
         let sql = String::from("\nمصطفىh");
 
-        let dialect = GenericSqlDialect{};
-        let mut tokenizer = Tokenizer::new(&dialect,&sql);
+        let dialect = GenericSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize();
 
         match tokens {
@@ -396,8 +400,8 @@ mod tests {
     fn tokenize_invalid_string_cols() {
         let sql = String::from("\n\nSELECT * FROM table\tمصطفىh");
 
-        let dialect = GenericSqlDialect{};
-        let mut tokenizer = Tokenizer::new(&dialect,&sql);
+        let dialect = GenericSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize();
         match tokens {
             Err(e) => assert_eq!(
@@ -413,8 +417,8 @@ mod tests {
     #[test]
     fn tokenize_is_null() {
         let sql = String::from("a IS NULL");
-        let dialect = GenericSqlDialect{};
-        let mut tokenizer = Tokenizer::new(&dialect,&sql);
+        let dialect = GenericSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![

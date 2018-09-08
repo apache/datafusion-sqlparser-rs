@@ -17,51 +17,100 @@
 /// SQL Abstract Syntax Tree (AST)
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASTNode {
+    /// Identifier e.g. table name or column name
     SQLIdentifier(String),
+    /// Wildcard e.g. `*`
     SQLWildcard,
+    /// Multi part identifier e.g. `myschema.dbo.mytable`
     SQLCompoundIdentifier(Vec<String>),
+    /// Assigment e.g. `name = 'Fred'` in an UPDATE statement
+    SQLAssignment(String, Box<ASTNode>),
+    /// `IS NULL` expression
     SQLIsNull(Box<ASTNode>),
+    /// `IS NOT NULL` expression
     SQLIsNotNull(Box<ASTNode>),
+    /// Binary expression e.g. `1 + 1` or `foo > bar`
     SQLBinaryExpr {
         left: Box<ASTNode>,
         op: SQLOperator,
         right: Box<ASTNode>,
     },
+    /// CAST an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
     SQLCast {
         expr: Box<ASTNode>,
         data_type: SQLType,
     },
+    /// Nested expression e.g. `(foo > bar)` or `(1)`
     SQLNested(Box<ASTNode>),
+    /// Unary expression
     SQLUnary {
         operator: SQLOperator,
         rex: Box<ASTNode>,
     },
+    /// Literal signed long
     SQLLiteralLong(i64),
+    /// Literal floating point value
     SQLLiteralDouble(f64),
+    /// Literal string
     SQLLiteralString(String),
+    /// Scalar function call e.g. `LEFT(foo, 5)`
     SQLFunction {
         id: String,
         args: Vec<ASTNode>,
     },
+    /// Expression with ASC/DESC attribute e.g. `foo ASC` or `foo DESC`.=
     SQLOrderBy {
         expr: Box<ASTNode>,
         asc: bool,
     },
+    /// SELECT
     SQLSelect {
+        /// projection expressions
         projection: Vec<ASTNode>,
+        /// FROM
         relation: Option<Box<ASTNode>>,
+        /// WHERE
         selection: Option<Box<ASTNode>>,
+        /// ORDER BY
         order_by: Option<Vec<ASTNode>>,
+        /// GROUP BY
         group_by: Option<Vec<ASTNode>>,
+        /// HAVING
         having: Option<Box<ASTNode>>,
+        /// LIMIT
         limit: Option<Box<ASTNode>>,
     },
+    /// INSERT
+    SQLInsert {
+        /// TABLE
+        table_name: String,
+        /// COLUMNS
+        columns: Vec<String>,
+        /// VALUES (vector of rows to insert)
+        values: Vec<Vec<ASTNode>>,
+    },
+    /// UPDATE
+    SQLUpdate {
+        /// TABLE
+        table_name: String,
+        /// Columns being assigned
+        columns: Vec<String>,
+        /// Values being assigned
+        values: Vec<ASTNode>,
+        /// WHERE
+        selection: Option<Box<ASTNode>>,
+    },
+    /// DELETE
     SQLDelete {
-        relation: Option<Box<ASTNode>>,     // FROM statement
-        selection: Option<Box<ASTNode>>,    // WHERE statement
+        /// FROM
+        relation: Option<Box<ASTNode>>,
+        /// WHERE
+        selection: Option<Box<ASTNode>>,
+        /// ORDER BY
         order_by: Option<Vec<ASTNode>>,
         limit: Option<Box<ASTNode>>,
     },
+    /// CREATE TABLE
     SQLCreateTable {
         /// Table name
         name: String,

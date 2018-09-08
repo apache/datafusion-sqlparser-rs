@@ -12,6 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! SQL Parser for Rust
+//!
+//! Example code:
+//!
+//! This crate provides an ANSI:SQL 2011 lexer and parser that can parsed SQL into an Abstract
+//! Syntax Tree (AST).
+//!
+//! ```
+//! use sqlparser::sqlparser::Parser;
+//!
+//! let sql = "SELECT a, b, 123, myfunc(b) \
+//!            FROM table_1 \
+//!            WHERE a > b AND b < 100 \
+//!            ORDER BY a DESC, b";
+//!
+//! let ast = Parser::parse_sql(sql.to_string()).unwrap();
+//!
+//! println!("AST: {:?}", ast);
+//! ```
+
+
 extern crate fnv;
 
 #[macro_use]

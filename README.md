@@ -16,11 +16,13 @@ The current code is capable of parsing some trivial SELECT and CREATE TABLE stat
 
 ```rust
 let sql = "SELECT a, b, 123, myfunc(b) \
-    FROM table_1 \
-    WHERE a > b AND b < 100 \
-    ORDER BY a DESC, b";
+           FROM table_1 \
+           WHERE a > b AND b < 100 \
+           ORDER BY a DESC, b";
 
-let ast = Parser::parse_sql(sql.to_string()).unwrap();
+let dialect = GenericSqlDialect{}; // or AnsiSqlDialect, or your own dialect ...
+
+let ast = Parser::parse_sql(&dialect,sql.to_string()).unwrap();
 
 println!("AST: {:?}", ast);
 ```

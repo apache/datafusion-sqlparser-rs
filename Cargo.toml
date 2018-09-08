@@ -1,11 +1,11 @@
 [package]
 name = "sqlparser"
-description = "ANSI SQL parser"
+description = "ANSI SQL:2011 Lexer and Parser"
 version = "0.1.5-alpha.0"
 authors = ["Andy Grove <andygrove73@gmail.com>"]
 homepage = "https://github.com/andygrove/sqlparser-rs"
-documentation = "https://github.com/andygrove/sqlparser-rs"
-keywords = [ "sql", "lexer", "parser" ]
+documentation = "https://docs.rs/sqlparser/"
+keywords = [ "ansi", "sql", "lexer", "parser" ]
 repository = "https://github.com/andygrove/sqlparser-rs"
 license = "Apache-2.0"
 include = [

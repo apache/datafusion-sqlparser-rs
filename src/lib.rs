@@ -32,7 +32,6 @@
 //! println!("AST: {:?}", ast);
 //! ```
 
-
 extern crate fnv;
 
 #[macro_use]

@@ -162,13 +162,11 @@ impl Tokenizer {
         let mut tokens: Vec<Token> = vec![];
 
         while let Some(token) = self.next_token(&mut peekable)? {
-            
             match &token {
-                
                 Token::Whitespace('\n') => {
                     self.line += 1;
                     self.col = 1;
-                },
+                }
 
                 Token::Whitespace('\t') => self.col += 4,
                 Token::Identifier(s) => self.col += s.len() as u64,
@@ -179,7 +177,6 @@ impl Tokenizer {
             }
 
             tokens.push(token);
-
         }
 
         Ok(tokens
@@ -303,9 +300,15 @@ impl Tokenizer {
                                 chars.next();
                                 Ok(Some(Token::Neq))
                             }
-                            _ => Err(TokenizerError(format!("Tokenizer Error at Line: {}, Col: {}", self.line, self.col))),
+                            _ => Err(TokenizerError(format!(
+                                "Tokenizer Error at Line: {}, Col: {}",
+                                self.line, self.col
+                            ))),
                         },
-                        None => Err(TokenizerError(format!("Tokenizer Error at Line: {}, Col: {}", self.line, self.col))),
+                        None => Err(TokenizerError(format!(
+                            "Tokenizer Error at Line: {}, Col: {}",
+                            self.line, self.col
+                        ))),
                     }
                 }
                 '<' => {
@@ -340,9 +343,7 @@ impl Tokenizer {
                 }
                 _ => Err(TokenizerError(format!(
                     "Tokenizer Error at Line: {}, Column: {}, unhandled char '{}'",
-                    self.line,
-                    self.col,
-                    ch
+                    self.line, self.col, ch
                 ))),
             },
             None => Ok(None),
@@ -435,24 +436,31 @@ mod tests {
         let tokens = tokenizer.tokenize();
 
         match tokens {
-            Err(e) => assert_eq!(TokenizerError("Tokenizer Error at Line: 2, Column: 1, unhandled char \'م\'".to_string()), e),
+            Err(e) => assert_eq!(
+                TokenizerError(
+                    "Tokenizer Error at Line: 2, Column: 1, unhandled char \'م\'".to_string()
+                ),
+                e
+            ),
             _ => panic!("Test Failure in tokenize_invalid_string"),
         }
-
     }
-    
+
     #[test]
     fn tokenize_invalid_string_cols() {
-        
         let sql = String::from("\n\nSELECT * FROM table\tمصطفىh");
 
         let mut tokenizer = Tokenizer::new(&sql);
         let tokens = tokenizer.tokenize();
         match tokens {
-            Err(e) => assert_eq!(TokenizerError("Tokenizer Error at Line: 3, Column: 24, unhandled char \'م\'".to_string()), e),
+            Err(e) => assert_eq!(
+                TokenizerError(
+                    "Tokenizer Error at Line: 3, Column: 24, unhandled char \'م\'".to_string()
+                ),
+                e
+            ),
             _ => panic!("Test Failure in tokenize_invalid_string_cols"),
         }
-
     }
 
     #[test]

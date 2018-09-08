@@ -54,15 +54,7 @@ pub enum ASTNode {
     /// Literal string
     SQLLiteralString(String),
     /// Scalar function call e.g. `LEFT(foo, 5)`
-    SQLFunction {
-        id: String,
-        args: Vec<ASTNode>,
-    },
-    /// Expression with ASC/DESC attribute e.g. `foo ASC` or `foo DESC`.=
-    SQLOrderBy {
-        expr: Box<ASTNode>,
-        asc: bool,
-    },
+    SQLFunction { id: String, args: Vec<ASTNode> },
     /// SELECT
     SQLSelect {
         /// projection expressions
@@ -121,19 +113,18 @@ pub enum ASTNode {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLAssigment {
     id: String,
-    value: Box<ASTNode>
+    value: Box<ASTNode>,
 }
 
 /// SQL ORDER BY expression
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLOrderByExpr {
     pub expr: Box<ASTNode>,
-    pub asc: bool
+    pub asc: bool,
 }
 
 impl SQLOrderByExpr {
-    pub fn new(expr: Box<ASTNode>,
-               asc: bool) -> Self {
+    pub fn new(expr: Box<ASTNode>, asc: bool) -> Self {
         SQLOrderByExpr { expr, asc }
     }
 }

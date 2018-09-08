@@ -442,8 +442,7 @@ impl Parser {
     }
 
     pub fn parse_delete(&mut self) -> Result<ASTNode, ParserError> {
-
-        let relation:  Option<Box<ASTNode>> = if self.parse_keyword("FROM") {
+        let relation: Option<Box<ASTNode>> = if self.parse_keyword("FROM") {
             Some(Box::new(self.parse_expr(0)?))
         } else {
             None
@@ -472,7 +471,7 @@ impl Parser {
             parser_err!(format!(
                 "Unexpected token at end of DELETE: {:?}",
                 next_token
-            ))       
+            ))
         } else {
             Ok(ASTNode::SQLDelete {
                 relation,
@@ -481,7 +480,6 @@ impl Parser {
                 limit,
             })
         }
-
     }
 
     /// Parse a SELECT statement
@@ -590,7 +588,7 @@ impl Parser {
                 None => true,
             };
 
-            expr_list.push(SQLOrderByExpr::new(Box::new(expr),asc));
+            expr_list.push(SQLOrderByExpr::new(Box::new(expr), asc));
 
             if let Some(t) = self.peek_token() {
                 if t == Token::Comma {
@@ -624,17 +622,15 @@ mod tests {
 
     #[test]
     fn parse_delete_statement() {
-        
         let sql: &str = "DELETE FROM 'table'";
 
         match parse_sql(&sql) {
-            
-            ASTNode::SQLDelete {
-                relation, 
-                ..
-            } => {
-                assert_eq!(Some(Box::new(ASTNode::SQLLiteralString("table".to_string()))), relation);
-            },
+            ASTNode::SQLDelete { relation, .. } => {
+                assert_eq!(
+                    Some(Box::new(ASTNode::SQLLiteralString("table".to_string()))),
+                    relation
+                );
+            }
 
             _ => assert!(false),
         }
@@ -642,21 +638,22 @@ mod tests {
 
     #[test]
     fn parse_where_delete_statement() {
-        
         let sql: &str = "DELETE FROM 'table' WHERE name = 5";
 
         use self::ASTNode::*;
         use self::SQLOperator::*;
 
         match parse_sql(&sql) {
-            
             ASTNode::SQLDelete {
                 relation,
                 selection,
                 ..
             } => {
-                assert_eq!(Some(Box::new(ASTNode::SQLLiteralString("table".to_string()))), relation);
-                
+                assert_eq!(
+                    Some(Box::new(ASTNode::SQLLiteralString("table".to_string()))),
+                    relation
+                );
+
                 assert_eq!(
                     SQLBinaryExpr {
                         left: Box::new(SQLIdentifier("name".to_string())),
@@ -665,8 +662,7 @@ mod tests {
                     },
                     *selection.unwrap(),
                 );
-
-            },
+            }
 
             _ => assert!(false),
         }
@@ -932,16 +928,11 @@ mod tests {
         let sql = "SELECT 'one'";
         match parse_sql(&sql) {
             ASTNode::SQLSelect { ref projection, .. } => {
-                assert_eq!(
-                    projection[0],
-                    ASTNode::SQLLiteralString("one".to_string())
-                );
+                assert_eq!(projection[0], ASTNode::SQLLiteralString("one".to_string()));
             }
             _ => panic!(),
         }
-
     }
-
 
     #[test]
     fn parse_select_version() {

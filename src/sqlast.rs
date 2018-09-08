@@ -93,10 +93,8 @@ pub enum ASTNode {
     SQLUpdate {
         /// TABLE
         table_name: String,
-        /// Columns being assigned
-        columns: Vec<String>,
-        /// Values being assigned
-        values: Vec<ASTNode>,
+        /// Column assignments
+        assignemnts: Vec<SQLAssigment>,
         /// WHERE
         selection: Option<Box<ASTNode>>,
     },
@@ -117,6 +115,13 @@ pub enum ASTNode {
         /// Optional schema
         columns: Vec<SQLColumnDef>,
     },
+}
+
+/// SQL assignment `foo = expr` as used in SQLUpdate
+#[derive(Debug, Clone, PartialEq)]
+pub struct SQLAssigment {
+    id: String,
+    value: Box<ASTNode>
 }
 
 /// SQL column definition

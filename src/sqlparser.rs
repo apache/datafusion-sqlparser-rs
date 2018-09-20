@@ -266,7 +266,8 @@ impl Parser {
     /// Get the previous token and decrement the token index
     pub fn prev_token(&mut self) -> Option<Token> {
         if self.index > 0 {
-            Some(self.tokens[self.index - 1].clone())
+            self.index = self.index - 1;
+            Some(self.tokens[self.index].clone())
         } else {
             None
         }
@@ -621,6 +622,19 @@ mod tests {
 
     use super::super::dialect::GenericSqlDialect;
     use super::*;
+
+    #[test]
+    fn test_prev_index(){
+        let sql: &str = "SELECT version()";
+        let mut tokenizer = Tokenizer::new(&GenericSqlDialect{}, &sql);
+        let tokens = tokenizer.tokenize().expect("error tokenizing");
+        let mut parser = Parser::new(tokens);
+        assert_eq!(parser.prev_token(), None);
+        assert_eq!(parser.next_token(), Some(Token::Keyword("SELECT".into())));
+        assert_eq!(parser.next_token(), Some(Token::Identifier("version".into())));
+        assert_eq!(parser.prev_token(), Some(Token::Identifier("version".into())));
+        assert_eq!(parser.prev_token(), Some(Token::Keyword("SELECT".into())));
+    }
 
     #[test]
     fn parse_delete_statement() {

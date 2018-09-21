@@ -383,6 +383,7 @@ impl Dialect for GenericSqlDialect {
             "UNION",
             "ALL",
             "INSERT",
+            "INTO",
             "UPDATE",
             "DELETE",
             "IN",
@@ -432,6 +433,7 @@ impl Dialect for GenericSqlDialect {
             "DATE",
             "TIME",
             "TIMESTAMP",
+            "VALUES",
         ];
     }
 

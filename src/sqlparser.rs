@@ -89,6 +89,7 @@ impl Parser {
                         "SELECT" => Ok(self.parse_select()?),
                         "CREATE" => Ok(self.parse_create()?),
                         "DELETE" => Ok(self.parse_delete()?),
+                        "INSERT" => Ok(self.parse_insert()?),
                         _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
                     },
                     Token::Mult => Ok(ASTNode::SQLWildcard),
@@ -314,10 +315,10 @@ impl Parser {
             } else {
                 Ok(false)
             },
-            _ => parser_err!(format!(
+            other => parser_err!(format!(
                 "expected token {:?} but was {:?}",
                 expected,
-                self.prev_token()
+                other,
             )),
         }
     }
@@ -424,6 +425,61 @@ impl Parser {
                 _ => parser_err!(format!("Invalid data type '{:?}'", k)),
             },
             other => parser_err!(format!("Invalid data type: '{:?}'", other)),
+        }
+    }
+
+
+    pub fn parse_compound_identifier(&mut self, separator: &Token) -> Result<ASTNode, ParserError> {
+        let mut idents = vec![];
+        let mut expect_identifier = true;
+        loop {
+            let token = &self.next_token();
+            println!("--> token: {:?}", token);
+            match token{
+                Some(token) => match token{
+                    Token::Identifier(s) => if expect_identifier{
+                        expect_identifier = false;
+                        idents.push(s.to_string());
+                    }else{
+                        self.prev_token();
+                        break;
+                    }
+                    token if token == separator => {
+                        if expect_identifier{
+                            return parser_err!(format!("Expecting identifier, found {:?}", token));
+                        }else{
+                            expect_identifier = true;
+                            continue;
+                        }
+                    }
+                    _ => {
+                        self.prev_token();
+                        break;
+                    }
+                }
+                None => {
+                    self.prev_token();
+                    break;
+                }
+            }
+        }
+        Ok(ASTNode::SQLCompoundIdentifier(idents))
+    }
+
+    pub fn parse_tablename(&mut self) -> Result<String, ParserError> {
+        let identifier = self.parse_compound_identifier(&Token::Period)?;
+        match identifier{
+            ASTNode::SQLCompoundIdentifier(idents) => Ok(idents.join(".")),
+            other => parser_err!(format!("Expecting compound identifier, found: {:?}", other)),
+        }
+    }
+
+    pub fn parse_column_names(&mut self) -> Result<Vec<String>, ParserError> {
+        let identifier = self.parse_compound_identifier(&Token::Comma)?;
+        println!(" peek : {:?}", self.peek_token());
+        match identifier{
+            ASTNode::SQLCompoundIdentifier(idents) => Ok(idents),
+            other => parser_err!(format!("Expecting compound identifier, found: {:?}", other)),
         }
     }
 
@@ -541,6 +597,29 @@ impl Parser {
                 having,
             })
         }
+    }
+
+    /// Parse an INSERT statement
+    pub fn parse_insert(&mut self) -> Result<ASTNode, ParserError> {
+        self.parse_keyword("INTO");
+        let table_name = self.parse_tablename()?;
+        println!("table_name: {}", table_name);
+        println!("peek token: {:?}", self.peek_token());
+        let columns = if self.consume_token(&Token::LParen)?{
+            println!("Got (");
+            let column_names = self.parse_column_names()?;
+            println!("column names: {:?}", column_names);
+            self.consume_token(&Token::RParen)?;
+            column_names
+        }else{
+            vec![]
+        };
+        println!("column names: {:?}", columns);
+        self.parse_keyword("VALUES");
+        self.consume_token(&Token::LParen)?;
+        let values = self.parse_expr_list()?;
+        self.consume_token(&Token::RParen)?;
+        Ok(ASTNode::SQLInsert{table_name, columns, values: vec![values]})
     }
 
     /// Parse a comma-delimited list of SQL expressions
@@ -694,6 +773,85 @@ mod tests {
             } => {
                 assert_eq!(3, projection.len());
                 assert_eq!(Some(Box::new(ASTNode::SQLLiteralLong(5))), limit);
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn parse_simple_insert() {
+        let sql = String::from("INSERT INTO customer VALUES(1, 2, 3)");
+        println!("SQL: {}", sql);
+        let ast = parse_sql(&sql);
+        println!("ast: {:?}", ast);
+        match ast {
+            ASTNode::SQLInsert {
+                table_name, columns, values, ..
+            } => {
+                assert_eq!(table_name, "customer");
+                assert!(columns.is_empty());
+                assert_eq!(vec![vec![ASTNode::SQLLiteralLong(1),ASTNode::SQLLiteralLong(2),ASTNode::SQLLiteralLong(3)]], values);
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn parse_common_insert() {
+        let sql = String::from("INSERT INTO public.customer VALUES(1, 2, 3)");
+        println!("SQL: {}", sql);
+        let ast = parse_sql(&sql);
+        println!("ast: {:?}", ast);
+        match ast {
+            ASTNode::SQLInsert {
+                table_name, columns, values, ..
+            } => {
+                assert_eq!(table_name, "public.customer");
+                assert!(columns.is_empty());
+                assert_eq!(vec![vec![ASTNode::SQLLiteralLong(1),ASTNode::SQLLiteralLong(2),ASTNode::SQLLiteralLong(3)]], values);
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn parse_complex_insert() {
+        let sql = String::from("INSERT INTO db.public.customer VALUES(1,2,3)");
+        println!("SQL: {}", sql);
+        let ast = parse_sql(&sql);
+        println!("ast: {:?}", ast);
+        match ast {
+            ASTNode::SQLInsert {
+                table_name, columns, values, ..
+            } => {
+                assert_eq!(table_name, "db.public.customer");
+                assert!(columns.is_empty());
+                assert_eq!(vec![vec![ASTNode::SQLLiteralLong(1),ASTNode::SQLLiteralLong(2),ASTNode::SQLLiteralLong(3)]], values);
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn parse_invalid_table_name() {
+        let mut parser = parser("db.public..customer");
+        let ast = parser.parse_tablename();
+        assert!(ast.is_err());
+    }
+
+    #[test]
+    fn parse_insert_with_columns() {
+        let sql = String::from("INSERT INTO public.customer (id, name, active) VALUES(1, 2, 3)");
+        println!("SQL: {}", sql);
+        let ast = parse_sql(&sql);
+        println!("ast: {:?}", ast);
+        match ast {
+            ASTNode::SQLInsert {
+                table_name, columns, values, ..
+            } => {
+                assert_eq!(table_name, "public.customer");
+                assert_eq!(columns, vec!["id".to_string(), "name".to_string(), "active".to_string()]);
+                assert_eq!(vec![vec![ASTNode::SQLLiteralLong(1),ASTNode::SQLLiteralLong(2),ASTNode::SQLLiteralLong(3)]], values);
             }
             _ => assert!(false),
         }
@@ -965,12 +1123,16 @@ mod tests {
     }
 
     fn parse_sql(sql: &str) -> ASTNode {
+        let mut parser = parser(sql);
+        let ast = parser.parse().unwrap();
+        ast
+    }
+
+    fn parser(sql: &str) -> Parser {
         let dialect = GenericSqlDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse().unwrap();
-        ast
+        Parser::new(tokens)
     }
 
 }

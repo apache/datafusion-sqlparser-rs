@@ -434,7 +434,6 @@ impl Parser {
         let mut expect_identifier = true;
         loop {
             let token = &self.next_token();
-            println!("--> token: {:?}", token);
             match token{
                 Some(token) => match token{
                     Token::Identifier(s) => if expect_identifier{
@@ -476,7 +475,6 @@ impl Parser {
 
     pub fn parse_column_names(&mut self) -> Result<Vec<String>, ParserError> {
         let identifier = self.parse_compound_identifier(&Token::Comma)?;
-        println!(" peek : {:?}", self.peek_token());
         match identifier{
             ASTNode::SQLCompoundIdentifier(idents) => Ok(idents),
             other => parser_err!(format!("Expecting compound identifier, found: {:?}", other)),
@@ -603,18 +601,13 @@ impl Parser {
     pub fn parse_insert(&mut self) -> Result<ASTNode, ParserError> {
         self.parse_keyword("INTO");
         let table_name = self.parse_tablename()?;
-        println!("table_name: {}", table_name);
-        println!("peek token: {:?}", self.peek_token());
         let columns = if self.consume_token(&Token::LParen)?{
-            println!("Got (");
             let column_names = self.parse_column_names()?;
-            println!("column names: {:?}", column_names);
             self.consume_token(&Token::RParen)?;
             column_names
         }else{
             vec![]
         };
-        println!("column names: {:?}", columns);
         self.parse_keyword("VALUES");
         self.consume_token(&Token::LParen)?;
         let values = self.parse_expr_list()?;
@@ -781,9 +774,7 @@ mod tests {
     #[test]
     fn parse_simple_insert() {
         let sql = String::from("INSERT INTO customer VALUES(1, 2, 3)");
-        println!("SQL: {}", sql);
         let ast = parse_sql(&sql);
-        println!("ast: {:?}", ast);
         match ast {
             ASTNode::SQLInsert {
                 table_name, columns, values, ..
@@ -799,9 +790,7 @@ mod tests {
     #[test]
     fn parse_common_insert() {
         let sql = String::from("INSERT INTO public.customer VALUES(1, 2, 3)");
-        println!("SQL: {}", sql);
         let ast = parse_sql(&sql);
-        println!("ast: {:?}", ast);
         match ast {
             ASTNode::SQLInsert {
                 table_name, columns, values, ..
@@ -817,9 +806,7 @@ mod tests {
     #[test]
     fn parse_complex_insert() {
         let sql = String::from("INSERT INTO db.public.customer VALUES(1,2,3)");
-        println!("SQL: {}", sql);
         let ast = parse_sql(&sql);
-        println!("ast: {:?}", ast);
         match ast {
             ASTNode::SQLInsert {
                 table_name, columns, values, ..
@@ -842,9 +829,7 @@ mod tests {
     #[test]
     fn parse_insert_with_columns() {
         let sql = String::from("INSERT INTO public.customer (id, name, active) VALUES(1, 2, 3)");
-        println!("SQL: {}", sql);
         let ast = parse_sql(&sql);
-        println!("ast: {:?}", ast);
         match ast {
             ASTNode::SQLInsert {
                 table_name, columns, values, ..

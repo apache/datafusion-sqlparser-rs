@@ -438,6 +438,8 @@ impl Dialect for GenericSqlDialect {
             "REGCLASS",
             "TEXT",
             "BYTEA",
+            "TRUE",
+            "FALSE",
         ];
     }
 

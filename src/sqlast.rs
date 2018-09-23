@@ -53,6 +53,8 @@ pub enum ASTNode {
     SQLLiteralDouble(f64),
     /// Literal string
     SQLLiteralString(String),
+    /// Boolean value true or false,
+    SQLBoolean(bool),
     /// Scalar function call e.g. `LEFT(foo, 5)`
     SQLFunction { id: String, args: Vec<ASTNode> },
     /// SELECT

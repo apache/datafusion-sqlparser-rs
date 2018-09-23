@@ -92,6 +92,8 @@ impl Parser {
                         "SELECT" => Ok(self.parse_select()?),
                         "CREATE" => Ok(self.parse_create()?),
                         "DELETE" => Ok(self.parse_delete()?),
+                        "TRUE" => Ok(ASTNode::SQLBoolean(true)),
+                        "FALSE" => Ok(ASTNode::SQLBoolean(false)),
                         _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
                     },
                     Token::Mult => Ok(ASTNode::SQLWildcard),
@@ -385,9 +387,8 @@ impl Parser {
                         println!("column name: {}", column_name);
                         if let Ok(data_type) = self.parse_data_type() {
                             let default = if self.parse_keyword("DEFAULT"){
-                                self.consume_token(&Token::LParen);
                                 let expr = self.parse_expr(0)?;
-                                self.consume_token(&Token::RParen);
+                                println!("expr: {:?}", expr);
                                 Some(Box::new(expr))
                             }else{
                                 None
@@ -472,7 +473,11 @@ impl Parser {
                 "BOOLEAN" => Ok(SQLType::Boolean),
                 "FLOAT" => Ok(SQLType::Float(self.parse_optional_precision()?)),
                 "REAL" => Ok(SQLType::Real),
-                "DOUBLE" => Ok(SQLType::Double),
+                "DOUBLE" => if self.parse_keyword("PRECISION"){
+                    Ok(SQLType::Double)
+                }else{
+                    Ok(SQLType::Double)
+                }
                 "SMALLINT" => Ok(SQLType::SmallInt),
                 "INT" | "INTEGER" => Ok(SQLType::Int),
                 "BIGINT" => Ok(SQLType::BigInt),
@@ -494,6 +499,21 @@ impl Parser {
                 }else if self.parse_keyword("WITHOUT"){
                     if self.parse_keywords(vec!["TIME","ZONE"]){
                         Ok(SQLType::Timestamp)
+                    }else{
+                        parser_err!(format!("Expecting 'time zone', found: {:?}", self.peek_token()))
+                    }
+                }else{
+                    Ok(SQLType::Timestamp)
+                }
+                "TIME" => if self.parse_keyword("WITH"){
+                    if self.parse_keywords(vec!["TIME","ZONE"]){
+                        Ok(SQLType::Time)
+                    }else{
+                        parser_err!(format!("Expecting 'time zone', found: {:?}", self.peek_token()))
+                    }
+                }else if self.parse_keyword("WITHOUT"){
+                    if self.parse_keywords(vec!["TIME","ZONE"]){
+                        Ok(SQLType::Time)
                     }else{
                         parser_err!(format!("Expecting 'time zone', found: {:?}", self.peek_token()))
                     }
@@ -1159,6 +1179,30 @@ mod tests {
                 assert_eq!("first_name", c_lng.name);
                 assert_eq!(SQLType::Varchar(Some(45)), c_lng.data_type);
                 assert_eq!(false, c_lng.allow_null);
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
+    fn parse_create_table_with_inherit() {
+        let sql = String::from("
+         CREATE TABLE bazaar.settings (
+            user_id uuid,
+            value text[],
+            settings_id uuid DEFAULT uuid_generate_v4() NOT NULL,
+            use_metric boolean DEFAULT true
+        )
+        INHERITS (system.record)");
+        let ast = parse_sql(&sql);
+        match ast {
+            ASTNode::SQLCreateTable { name, columns } => {
+                assert_eq!("bazaar.settings", name);
+
+                let c_name = &columns[0];
+                assert_eq!("user_id", c_name.name);
+                assert_eq!(SQLType::Custom("uuid".into()), c_name.data_type);
+                assert_eq!(true, c_name.allow_null);
             }
             _ => assert!(false),
         }

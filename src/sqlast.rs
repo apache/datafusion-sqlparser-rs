@@ -135,15 +135,16 @@ pub struct SQLColumnDef {
     pub name: String,
     pub data_type: SQLType,
     pub allow_null: bool,
+    pub default: Option<Box<ASTNode>>,
 }
 
 /// SQL datatypes for literals in SQL statements
 #[derive(Debug, Clone, PartialEq)]
 pub enum SQLType {
     /// Fixed-length character type e.g. CHAR(10)
-    Char(usize),
+    Char(Option<usize>),
     /// Variable-length character type e.g. VARCHAR(10)
-    Varchar(usize),
+    Varchar(Option<usize>),
     /// Large character object e.g. CLOB(1000)
     Clob(usize),
     /// Fixed-length binary type e.g. BINARY(10)
@@ -174,6 +175,16 @@ pub enum SQLType {
     Time,
     /// Timestamp
     Timestamp,
+    /// Regclass used in postgresql serial
+    Regclass,
+    /// Text
+    Text,
+    /// Bytea
+    Bytea,
+    /// Custom type such as enums
+    Custom(String),
+    /// Arrays
+    Array(Box<SQLType>),
 }
 
 /// SQL Operator

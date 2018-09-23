@@ -432,6 +432,12 @@ impl Dialect for GenericSqlDialect {
             "DATE",
             "TIME",
             "TIMESTAMP",
+            "VALUES",
+            "DEFAULT",
+            "ZONE",
+            "REGCLASS",
+            "TEXT",
+            "BYTEA",
         ];
     }
 

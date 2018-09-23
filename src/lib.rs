@@ -35,6 +35,9 @@
 //! println!("AST: {:?}", ast);
 //! ```
 
+#[macro_use]
+extern crate log;
+
 pub mod dialect;
 pub mod sqlast;
 pub mod sqlparser;

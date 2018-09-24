@@ -66,6 +66,14 @@ pub enum Token {
     RParen,
     /// Period (used for compound identifiers or projections into nested types)
     Period,
+    /// Colon `:` 
+    Colon,
+    /// DoubleColon `::` (used for casting in postgresql)
+    DoubleColon,
+    /// Left bracket `[`
+    LBracket,
+    /// Right bracket `]`
+    RBracket,
 }
 
 /// Tokenizer error
@@ -243,6 +251,23 @@ impl<'a> Tokenizer<'a> {
                         None => Ok(Some(Token::Gt)),
                     }
                 }
+                // colon
+                ':' => {
+                    chars.next();
+                    match chars.peek() {
+                        Some(&ch) => match ch {
+                            // double colon
+                            ':' => {
+                                self.consume_and_return(chars, Token::DoubleColon)
+                            }
+                             _ => Ok(Some(Token::Colon)),
+                        },
+                        None => Ok(Some(Token::Colon)),
+                    }
+                }
+                // brakets
+                '[' => self.consume_and_return(chars, Token::LBracket),
+                ']' => self.consume_and_return(chars, Token::RBracket),
                 _ => Err(TokenizerError(format!(
                     "Tokenizer Error at Line: {}, Column: {}, unhandled char '{}'",
                     self.line, self.col, ch

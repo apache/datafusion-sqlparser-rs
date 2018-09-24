@@ -85,6 +85,14 @@ pub enum ASTNode {
         /// VALUES (vector of rows to insert)
         values: Vec<Vec<ASTNode>>,
     },
+    SQLCopy{
+        /// TABLE
+        table_name: String,
+        /// COLUMNS
+        columns: Vec<String>,
+        /// VALUES a vector of values to be copied
+        values: Vec<SQLValue>,
+    },
     /// UPDATE
     SQLUpdate {
         /// TABLE
@@ -111,6 +119,23 @@ pub enum ASTNode {
         /// Optional schema
         columns: Vec<SQLColumnDef>,
     },
+}
+
+/// SQL values such as int, double, string timestamp
+#[derive(Debug, Clone, PartialEq)]
+pub enum SQLValue{
+    /// Literal signed long
+    SQLLiteralLong(i64),
+    /// Literal floating point value
+    SQLLiteralDouble(f64),
+    /// Literal string
+    SQLLiteralString(String),
+    /// Boolean value true or false,
+    SQLBoolean(bool),
+    /// NULL value in insert statements,
+    SQLNullValue,
+    /// Timestamp
+    SQLLiteralTimestamp(String),
 }
 
 /// SQL assignment `foo = expr` as used in SQLUpdate

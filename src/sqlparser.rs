@@ -93,6 +93,7 @@ impl Parser {
                         "CREATE" => Ok(self.parse_create()?),
                         "DELETE" => Ok(self.parse_delete()?),
                         "INSERT" => Ok(self.parse_insert()?),
+                        "COPY"  => Ok(self.parse_copy()?),
                         "TRUE" => Ok(ASTNode::SQLBoolean(true)),
                         "FALSE" => Ok(ASTNode::SQLBoolean(false)),
                         "NULL" => Ok(ASTNode::SQLNullValue),
@@ -447,6 +448,70 @@ impl Parser {
                 "Unexpected token after CREATE: {:?}",
                 self.peek_token()
             ))
+        }
+    }
+
+    /// Parse a copy statement
+    pub fn parse_copy(&mut self) -> Result<ASTNode, ParserError> {
+        let table_name = self.parse_tablename()?;
+        let columns = if self.consume_token(&Token::LParen)?{
+            let column_names = self.parse_column_names()?;
+            self.consume_token(&Token::RParen)?;
+            column_names
+        }else{
+            vec![]
+        };
+        self.parse_keyword("FROM");
+        self.parse_keyword("STDIN");
+        self.consume_token(&Token::SemiColon);
+        let values = self.parse_tsv()?;
+        Ok(ASTNode::SQLCopy{table_name, columns, values})
+    }
+
+    /// Parse a tab separated values in
+    /// COPY payload
+    fn parse_tsv(&mut self) -> Result<Vec<SQLValue>, ParserError>{
+        let mut values: Vec<SQLValue> = vec![];
+        loop {
+            if let Ok(true) = self.consume_token(&Token::Backslash){
+                if let Ok(true) = self.consume_token(&Token::Period) {
+                    break;
+                }else{
+                    //TODO: handle escape of values in characters
+                }
+            }else{
+                values.push(self.parse_sql_value()?);
+            }
+        }
+        Ok(values)
+
+    }
+
+    fn parse_sql_value(&mut self) -> Result<SQLValue, ParserError> {
+        match self.next_token() {
+            Some(t) => {
+                match t {
+                    Token::Keyword(k) => match k.to_uppercase().as_ref() {
+                        "TRUE" => Ok(SQLValue::SQLBoolean(true)),
+                        "FALSE" => Ok(SQLValue::SQLBoolean(false)),
+                        "NULL" => Ok(SQLValue::SQLNullValue),
+                        _ => return parser_err!(format!("No value parser for keyword {}", k)),
+                    },
+                    //TODO: parse the timestamp here
+                    Token::Number(ref n) if n.contains(".") => match n.parse::<f64>() {
+                        Ok(n) => Ok(SQLValue::SQLLiteralDouble(n)),
+                        Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
+                    },
+                    Token::Number(ref n) => match n.parse::<i64>() {
+                        Ok(n) => Ok(SQLValue::SQLLiteralLong(n)),
+                        Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
+                    },
+                    Token::Identifier(id) => Ok(SQLValue::SQLLiteralString(id.to_string())),
+                    Token::String(ref s) => Ok(SQLValue::SQLLiteralString(s.to_string())),
+                    other => parser_err!(format!("Unsupported value: {:?}", self.peek_token())),
+                }
+            }
+            None => parser_err!("Expecting a value, but found EOF"),
         }
     }
 
@@ -1297,6 +1362,31 @@ mod tests {
             }
             _ => assert!(false),
         }
+    }
+
+    #[test]
+    fn parse_copy_example(){
+        let sql = String::from("
+        COPY public.actor (actor_id, first_name, last_name, last_update) FROM stdin;
+        1	PENELOPE	GUINESS	2006-02-15 09:34:33
+        2	NICK	WAHLBERG	2006-02-15 09:34:33
+        3	ED	CHASE	2006-02-15 09:34:33
+        4	JENNIFER	DAVIS	2006-02-15 09:34:33
+        5	JOHNNY	LOLLOBRIGIDA	2006-02-15 09:34:33
+        6	BETTE	NICHOLSON	2006-02-15 09:34:33
+        7	GRACE	MOSTEL	2006-02-15 09:34:33
+        8	MATTHEW	JOHANSSON	2006-02-15 09:34:33
+        9	JOE	SWANK	2006-02-15 09:34:33
+        10	CHRISTIAN	GABLE	2006-02-15 09:34:33
+        11	ZERO	CAGE	2006-02-15 09:34:33
+        12	KARL	BERRY	2006-02-15 09:34:33
+        \\.
+        ");
+        let mut parser = parser(&sql);
+        let ast = parser.parse();
+        println!("ast: {:?}", ast);
+        assert!(ast.is_ok());
+        panic!();
     }
 
     #[test]

@@ -441,6 +441,8 @@ impl Dialect for GenericSqlDialect {
             "BYTEA",
             "TRUE",
             "FALSE",
+            "COPY",
+            "STDIN",
         ];
     }
 

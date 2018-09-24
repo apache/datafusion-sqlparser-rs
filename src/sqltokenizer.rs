@@ -70,6 +70,10 @@ pub enum Token {
     Colon,
     /// DoubleColon `::` (used for casting in postgresql)
     DoubleColon,
+    /// SemiColon `;` used as separator for COPY and payload
+    SemiColon,
+    /// Backslash `\` used in terminating the COPY payload with `\.`
+    Backslash,
     /// Left bracket `[`
     LBracket,
     /// Right bracket `]`
@@ -265,6 +269,8 @@ impl<'a> Tokenizer<'a> {
                         None => Ok(Some(Token::Colon)),
                     }
                 }
+                ';' => self.consume_and_return(chars, Token::SemiColon),
+                '\\' => self.consume_and_return(chars, Token::Backslash),
                 // brakets
                 '[' => self.consume_and_return(chars, Token::LBracket),
                 ']' => self.consume_and_return(chars, Token::RBracket),

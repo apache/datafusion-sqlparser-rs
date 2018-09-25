@@ -37,6 +37,7 @@
 
 #[macro_use]
 extern crate log;
+extern crate chrono;
 
 pub mod dialect;
 pub mod sqlast;

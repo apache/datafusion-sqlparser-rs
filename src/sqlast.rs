@@ -13,6 +13,11 @@
 // limitations under the License.
 
 //! SQL Abstract Syntax Tree (AST) types
+//!
+use chrono::{NaiveDate,
+             NaiveDateTime,
+             NaiveTime,
+            };
 
 /// SQL Abstract Syntax Tree (AST)
 #[derive(Debug, Clone, PartialEq)]
@@ -47,16 +52,8 @@ pub enum ASTNode {
         operator: SQLOperator,
         rex: Box<ASTNode>,
     },
-    /// Literal signed long
-    SQLLiteralLong(i64),
-    /// Literal floating point value
-    SQLLiteralDouble(f64),
-    /// Literal string
-    SQLLiteralString(String),
-    /// Boolean value true or false,
-    SQLBoolean(bool),
-    /// NULL value in insert statements,
-    SQLNullValue,
+    /// SQLValue
+    SQLValue(Value),
     /// Scalar function call e.g. `LEFT(foo, 5)`
     SQLFunction { id: String, args: Vec<ASTNode> },
     /// SELECT
@@ -91,7 +88,7 @@ pub enum ASTNode {
         /// COLUMNS
         columns: Vec<String>,
         /// VALUES a vector of values to be copied
-        values: Vec<SQLValue>,
+        values: Vec<Value>,
     },
     /// UPDATE
     SQLUpdate {
@@ -123,19 +120,23 @@ pub enum ASTNode {
 
 /// SQL values such as int, double, string timestamp
 #[derive(Debug, Clone, PartialEq)]
-pub enum SQLValue{
+pub enum Value{
     /// Literal signed long
-    SQLLiteralLong(i64),
+    Long(i64),
     /// Literal floating point value
-    SQLLiteralDouble(f64),
+    Double(f64),
     /// Literal string
-    SQLLiteralString(String),
+    String(String),
     /// Boolean value true or false,
-    SQLBoolean(bool),
-    /// NULL value in insert statements,
-    SQLNullValue,
+    Boolean(bool),
+    /// Date value
+    Date(NaiveDate),
+    // Time
+    Time(NaiveTime),
     /// Timestamp
-    SQLLiteralTimestamp(String),
+    DateTime(NaiveDateTime),
+    /// NULL value in insert statements,
+    Null,
 }
 
 /// SQL assignment `foo = expr` as used in SQLUpdate

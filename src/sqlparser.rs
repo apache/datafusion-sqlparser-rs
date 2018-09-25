@@ -17,6 +17,10 @@
 use super::dialect::Dialect;
 use super::sqlast::*;
 use super::sqltokenizer::*;
+use chrono::{NaiveDate,
+             NaiveDateTime,
+             NaiveTime,
+            };
 
 #[derive(Debug, Clone)]
 pub enum ParserError {
@@ -94,9 +98,9 @@ impl Parser {
                         "DELETE" => Ok(self.parse_delete()?),
                         "INSERT" => Ok(self.parse_insert()?),
                         "COPY"  => Ok(self.parse_copy()?),
-                        "TRUE" => Ok(ASTNode::SQLBoolean(true)),
-                        "FALSE" => Ok(ASTNode::SQLBoolean(false)),
-                        "NULL" => Ok(ASTNode::SQLNullValue),
+                        "TRUE" => Ok(ASTNode::SQLValue(Value::Boolean(true))),
+                        "FALSE" => Ok(ASTNode::SQLValue(Value::Boolean(false))),
+                        "NULL" => Ok(ASTNode::SQLValue(Value::Null)),
                         _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
                     },
                     Token::Mult => Ok(ASTNode::SQLWildcard),
@@ -128,14 +132,14 @@ impl Parser {
                         }
                     }
                     Token::Number(ref n) if n.contains(".") => match n.parse::<f64>() {
-                        Ok(n) => Ok(ASTNode::SQLLiteralDouble(n)),
+                        Ok(n) => Ok(ASTNode::SQLValue(Value::Double(n))),
                         Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
                     },
                     Token::Number(ref n) => match n.parse::<i64>() {
-                        Ok(n) => Ok(ASTNode::SQLLiteralLong(n)),
+                        Ok(n) => Ok(ASTNode::SQLValue(Value::Long(n))),
                         Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
                     },
-                    Token::String(ref s) => Ok(ASTNode::SQLLiteralString(s.to_string())),
+                    Token::String(ref s) => Ok(ASTNode::SQLValue(Value::String(s.to_string()))),
                     _ => parser_err!(format!(
                         "Prefix parser expected a keyword but found {:?}",
                         t
@@ -470,8 +474,8 @@ impl Parser {
 
     /// Parse a tab separated values in
     /// COPY payload
-    fn parse_tsv(&mut self) -> Result<Vec<SQLValue>, ParserError>{
-        let mut values: Vec<SQLValue> = vec![];
+    fn parse_tsv(&mut self) -> Result<Vec<Value>, ParserError>{
+        let mut values: Vec<Value> = vec![];
         loop {
             if let Ok(true) = self.consume_token(&Token::Backslash){
                 if let Ok(true) = self.consume_token(&Token::Period) {
@@ -487,27 +491,33 @@ impl Parser {
 
     }
 
-    fn parse_sql_value(&mut self) -> Result<SQLValue, ParserError> {
+    fn parse_sql_value(&mut self) -> Result<Value, ParserError> {
         match self.next_token() {
             Some(t) => {
                 match t {
                     Token::Keyword(k) => match k.to_uppercase().as_ref() {
-                        "TRUE" => Ok(SQLValue::SQLBoolean(true)),
-                        "FALSE" => Ok(SQLValue::SQLBoolean(false)),
-                        "NULL" => Ok(SQLValue::SQLNullValue),
+                        "TRUE" => Ok(Value::Boolean(true)),
+                        "FALSE" => Ok(Value::Boolean(false)),
+                        "NULL" => Ok(Value::Null),
                         _ => return parser_err!(format!("No value parser for keyword {}", k)),
                     },
                     //TODO: parse the timestamp here
                     Token::Number(ref n) if n.contains(".") => match n.parse::<f64>() {
-                        Ok(n) => Ok(SQLValue::SQLLiteralDouble(n)),
+                        Ok(n) => Ok(Value::Double(n)),
                         Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
                     },
                     Token::Number(ref n) => match n.parse::<i64>() {
-                        Ok(n) => Ok(SQLValue::SQLLiteralLong(n)),
+                        Ok(n) => {
+                            if let Some(Token::Minus) = self.peek_token(){
+                                self.parse_date_or_timestamp(n)
+                            }else{
+                                Ok(Value::Long(n))
+                            }
+                        }
                         Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
                     },
-                    Token::Identifier(id) => Ok(SQLValue::SQLLiteralString(id.to_string())),
-                    Token::String(ref s) => Ok(SQLValue::SQLLiteralString(s.to_string())),
+                    Token::Identifier(id) => Ok(Value::String(id.to_string())),
+                    Token::String(ref s) => Ok(Value::String(s.to_string())),
                     other => parser_err!(format!("Unsupported value: {:?}", self.peek_token())),
                 }
             }
@@ -531,6 +541,34 @@ impl Parser {
             Some(Token::String(ref s)) => Ok(s.clone()),
             other => parser_err!(format!("Expected literal string, found {:?}", other)),
         }
+    }
+
+    pub fn parse_date_or_timestamp(&mut self, year: i64) -> Result<Value, ParserError> {
+        if let Ok(true) = self.consume_token(&Token::Minus){
+            let month = self.parse_literal_int()?;
+            if let Ok(true) = self.consume_token(&Token::Minus){
+                let day = self.parse_literal_int()?;
+                let date = NaiveDate::from_ymd(year as i32, month as u32, day as u32);
+                if let Ok(time) = self.parse_time(){
+                    Ok(Value::DateTime(NaiveDateTime::new(date, time)))
+                }else{
+                    Ok(Value::Date(date))
+                }
+            }else{
+                parser_err!(format!("Expecting `-` for date separator, found {:?}", self.peek_token()))
+            }
+        }else{
+            parser_err!(format!("Expecting `-` for date separator, found {:?}", self.peek_token()))
+        }
+    }
+
+    pub fn parse_time(&mut self) -> Result<NaiveTime, ParserError> {
+        let hour = self.parse_literal_int()?;
+        self.consume_token(&Token::Colon)?;
+        let min = self.parse_literal_int()?;
+        self.consume_token(&Token::Colon)?;
+        let sec = self.parse_literal_int()?;
+        Ok(NaiveTime::from_hms(hour as u32, min as u32, sec as u32))
     }
 
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)
@@ -886,7 +924,7 @@ impl Parser {
             Ok(None)
         } else {
             self.parse_literal_int()
-                .map(|n| Some(Box::new(ASTNode::SQLLiteralLong(n))))
+                .map(|n| Some(Box::new(ASTNode::SQLValue(Value::Long(n)))))
         }
     }
 }
@@ -917,7 +955,7 @@ mod tests {
         match parse_sql(&sql) {
             ASTNode::SQLDelete { relation, .. } => {
                 assert_eq!(
-                    Some(Box::new(ASTNode::SQLLiteralString("table".to_string()))),
+                    Some(Box::new(ASTNode::SQLValue(Value::String("table".to_string())))),
                     relation
                 );
             }
@@ -940,7 +978,7 @@ mod tests {
                 ..
             } => {
                 assert_eq!(
-                    Some(Box::new(ASTNode::SQLLiteralString("table".to_string()))),
+                    Some(Box::new(ASTNode::SQLValue(Value::String("table".to_string())))),
                     relation
                 );
 
@@ -948,7 +986,7 @@ mod tests {
                     SQLBinaryExpr {
                         left: Box::new(SQLIdentifier("name".to_string())),
                         op: Eq,
-                        right: Box::new(SQLLiteralLong(5)),
+                        right: Box::new(ASTNode::SQLValue(Value::Long(5))),
                     },
                     *selection.unwrap(),
                 );
@@ -967,7 +1005,7 @@ mod tests {
                 projection, limit, ..
             } => {
                 assert_eq!(3, projection.len());
-                assert_eq!(Some(Box::new(ASTNode::SQLLiteralLong(5))), limit);
+                assert_eq!(Some(Box::new(ASTNode::SQLValue(Value::Long(5)))), limit);
             }
             _ => assert!(false),
         }
@@ -983,7 +1021,7 @@ mod tests {
             } => {
                 assert_eq!(table_name, "customer");
                 assert!(columns.is_empty());
-                assert_eq!(vec![vec![ASTNode::SQLLiteralLong(1),ASTNode::SQLLiteralLong(2),ASTNode::SQLLiteralLong(3)]], values);
+                assert_eq!(vec![vec![ASTNode::SQLValue(Value::Long(1)),ASTNode::SQLValue(Value::Long(2)),ASTNode::SQLValue(Value::Long(3))]], values);
             }
             _ => assert!(false),
         }
@@ -999,7 +1037,7 @@ mod tests {
             } => {
                 assert_eq!(table_name, "public.customer");
                 assert!(columns.is_empty());
-                assert_eq!(vec![vec![ASTNode::SQLLiteralLong(1),ASTNode::SQLLiteralLong(2),ASTNode::SQLLiteralLong(3)]], values);
+                assert_eq!(vec![vec![ASTNode::SQLValue(Value::Long(1)),ASTNode::SQLValue(Value::Long(2)),ASTNode::SQLValue(Value::Long(3))]], values);
             }
             _ => assert!(false),
         }
@@ -1015,7 +1053,7 @@ mod tests {
             } => {
                 assert_eq!(table_name, "db.public.customer");
                 assert!(columns.is_empty());
-                assert_eq!(vec![vec![ASTNode::SQLLiteralLong(1),ASTNode::SQLLiteralLong(2),ASTNode::SQLLiteralLong(3)]], values);
+                assert_eq!(vec![vec![ASTNode::SQLValue(Value::Long(1)),ASTNode::SQLValue(Value::Long(2)),ASTNode::SQLValue(Value::Long(3))]], values);
             }
             _ => assert!(false),
         }
@@ -1038,7 +1076,7 @@ mod tests {
             } => {
                 assert_eq!(table_name, "public.customer");
                 assert_eq!(columns, vec!["id".to_string(), "name".to_string(), "active".to_string()]);
-                assert_eq!(vec![vec![ASTNode::SQLLiteralLong(1),ASTNode::SQLLiteralLong(2),ASTNode::SQLLiteralLong(3)]], values);
+                assert_eq!(vec![vec![ASTNode::SQLValue(Value::Long(1)),ASTNode::SQLValue(Value::Long(2)),ASTNode::SQLValue(Value::Long(3))]], values);
             }
             _ => assert!(false),
         }
@@ -1386,7 +1424,6 @@ mod tests {
         let ast = parser.parse();
         println!("ast: {:?}", ast);
         assert!(ast.is_ok());
-        panic!();
     }
 
     #[test]
@@ -1418,7 +1455,7 @@ mod tests {
         let sql = "SELECT 'one'";
         match parse_sql(&sql) {
             ASTNode::SQLSelect { ref projection, .. } => {
-                assert_eq!(projection[0], ASTNode::SQLLiteralString("one".to_string()));
+                assert_eq!(projection[0], ASTNode::SQLValue(Value::String("one".to_string())));
             }
             _ => panic!(),
         }

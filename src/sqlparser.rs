@@ -20,6 +20,11 @@ use super::sqltokenizer::*;
 use chrono::{NaiveDate,
              NaiveDateTime,
              NaiveTime,
+             offset::{FixedOffset,
+                 TimeZone,
+             },
+             DateTime,
+             Utc,
             };
 
 #[derive(Debug, Clone)]
@@ -509,7 +514,16 @@ impl Parser {
                     Token::Number(ref n) => match n.parse::<i64>() {
                         Ok(n) => {
                             if let Some(Token::Minus) = self.peek_token(){
-                                self.parse_date_or_timestamp(n)
+                                if let Ok(timestamp) = self.parse_timestamp_with_timezone(){
+                                    Ok(Value::Timestamp(timestamp))
+                                }else{
+                                    println!("unable to parse timestamp with year, trying with time zone :{:?}", self.peek_token());
+                                    if let Ok(date_time) = self.parse_timestamp_with_year(n){
+                                        Ok(Value::DateTime(date_time))
+                                    }else{
+                                        parser_err!(format!("expecting timestamp, but found {:?}", self.peek_token()))
+                                    }
+                                }
                             }else{
                                 Ok(Value::Long(n))
                             }
@@ -535,6 +549,16 @@ impl Parser {
         }
     }
 
+    /// Parse a literal integer/long
+    pub fn parse_literal_double(&mut self) -> Result<f64, ParserError> {
+        match self.next_token() {
+            Some(Token::Number(s)) => s.parse::<f64>().map_err(|e| {
+                ParserError::ParserError(format!("Could not parse '{}' as i64: {}", s, e))
+            }),
+            other => parser_err!(format!("Expected literal int, found {:?}", other)),
+        }
+    }
+
     /// Parse a literal string
     pub fn parse_literal_string(&mut self) -> Result<String, ParserError> {
         match self.next_token() {
@@ -543,23 +567,56 @@ impl Parser {
         }
     }
 
-    pub fn parse_date_or_timestamp(&mut self, year: i64) -> Result<Value, ParserError> {
+    pub fn parse_timestamp(&mut self) -> Result<NaiveDateTime, ParserError> {
+        let year = self.parse_literal_int()?;
+        self.parse_timestamp_with_year(year)
+    }
+
+    pub fn parse_timestamp_with_timezone(&mut self) -> Result<DateTime<FixedOffset>, ParserError> {
+        let timestamp = self.parse_timestamp()?;
+        let tz_offset = self.parse_timezone_offset()?;
+        let offset =  FixedOffset::east(tz_offset as i32 * 3600);
+        Ok(DateTime::from_utc(timestamp, offset))
+    }
+
+    pub fn parse_timezone_offset(&mut self) -> Result<i8, ParserError> {
+        match self.next_token(){
+            Some(Token::Plus) => {
+                let n = self.parse_literal_int()?;
+                Ok(n as i8)
+            }
+            Some(Token::Minus) => {
+                let n = self.parse_literal_int()?;
+                Ok(-n as i8)
+            }
+            other => parser_err!(format!("Expecting `+` or `-` in timezone, but found {:?}", other)),
+        }
+    }
+
+
+    pub fn parse_timestamp_with_year(&mut self, year: i64) -> Result<NaiveDateTime, ParserError> {
+        let date = self.parse_date(year)?;
+        if let Ok(time) = self.parse_time(){
+            Ok(NaiveDateTime::new(date, time))
+        }else{
+            parser_err!(format!("Expecting time after date, but found {:?}", self.peek_token()))
+        }
+    }
+
+    pub fn parse_date(&mut self, year: i64) -> Result<NaiveDate, ParserError> {
         if let Ok(true) = self.consume_token(&Token::Minus){
             let month = self.parse_literal_int()?;
             if let Ok(true) = self.consume_token(&Token::Minus){
                 let day = self.parse_literal_int()?;
                 let date = NaiveDate::from_ymd(year as i32, month as u32, day as u32);
-                if let Ok(time) = self.parse_time(){
-                    Ok(Value::DateTime(NaiveDateTime::new(date, time)))
-                }else{
-                    Ok(Value::Date(date))
-                }
+                Ok(date)
             }else{
                 parser_err!(format!("Expecting `-` for date separator, found {:?}", self.peek_token()))
             }
         }else{
             parser_err!(format!("Expecting `-` for date separator, found {:?}", self.peek_token()))
         }
+
     }
 
     pub fn parse_time(&mut self) -> Result<NaiveTime, ParserError> {
@@ -567,8 +624,17 @@ impl Parser {
         self.consume_token(&Token::Colon)?;
         let min = self.parse_literal_int()?;
         self.consume_token(&Token::Colon)?;
-        let sec = self.parse_literal_int()?;
-        Ok(NaiveTime::from_hms(hour as u32, min as u32, sec as u32))
+        let sec = self.parse_literal_double()?;
+        println!("sec: {}", sec);
+        let ms = (sec.fract() * 1000.0).round();
+        println!("ms: {:?}", ms);
+        if let Ok(true) = self.consume_token(&Token::Period){
+            println!("milliseconds here");
+            let ms = self.parse_literal_int()?;
+            Ok(NaiveTime::from_hms_milli(hour as u32, min as u32, sec as u32, ms as u32))
+        }else{
+            Ok(NaiveTime::from_hms(hour as u32, min as u32, sec as u32))
+        }
     }
 
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)
@@ -1405,25 +1471,43 @@ mod tests {
     #[test]
     fn parse_copy_example(){
         let sql = String::from("
-        COPY public.actor (actor_id, first_name, last_name, last_update) FROM stdin;
-        1	PENELOPE	GUINESS	2006-02-15 09:34:33
-        2	NICK	WAHLBERG	2006-02-15 09:34:33
-        3	ED	CHASE	2006-02-15 09:34:33
-        4	JENNIFER	DAVIS	2006-02-15 09:34:33
-        5	JOHNNY	LOLLOBRIGIDA	2006-02-15 09:34:33
-        6	BETTE	NICHOLSON	2006-02-15 09:34:33
-        7	GRACE	MOSTEL	2006-02-15 09:34:33
-        8	MATTHEW	JOHANSSON	2006-02-15 09:34:33
-        9	JOE	SWANK	2006-02-15 09:34:33
-        10	CHRISTIAN	GABLE	2006-02-15 09:34:33
-        11	ZERO	CAGE	2006-02-15 09:34:33
-        12	KARL	BERRY	2006-02-15 09:34:33
+        COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM stdin;
+        1	PENELOPE	GUINESS	2006-02-15 09:34:33 0.11111
+        2	NICK	WAHLBERG	2006-02-15 09:34:33 0.22222
+        3	ED	CHASE	2006-02-15 09:34:33 0.312323
+        4	JENNIFER	DAVIS	2006-02-15 09:34:33 0.3232
+        5	JOHNNY	LOLLOBRIGIDA	2006-02-15 09:34:33 1.343
+        6	BETTE	NICHOLSON	2006-02-15 09:34:33 5.0
+        7	GRACE	MOSTEL	2006-02-15 09:34:33 6.0
+        8	MATTHEW	JOHANSSON	2006-02-15 09:34:33 7.0
+        9	JOE	SWANK	2006-02-15 09:34:33 8.0
+        10	CHRISTIAN	GABLE	2006-02-15 09:34:33 9.1
+        11	ZERO	CAGE	2006-02-15 09:34:33 10.001
+        12	KARL	BERRY	2017-11-02 19:15:42.308637+08 11.001
         \\.
         ");
         let mut parser = parser(&sql);
         let ast = parser.parse();
         println!("ast: {:?}", ast);
         assert!(ast.is_ok());
+    }
+
+    #[test]
+    fn parse_timestamps_example(){
+        let sql = "2016-02-15 09:43:33";
+        let mut parser = parser(&sql);
+        let ast = parser.parse_timestamp();
+        println!("ast: {:?}", ast);
+        assert!(ast.is_ok())
+    }
+
+    #[test]
+    fn parse_timestamps_with_millis_example(){
+        let sql = "2017-11-02 19:15:42.308637";
+        let mut parser = parser(&sql);
+        let ast = parser.parse_timestamp();
+        println!("ast: {:?}", ast);
+        assert!(ast.is_ok())
     }
 
     #[test]

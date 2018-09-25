@@ -17,6 +17,11 @@
 use chrono::{NaiveDate,
              NaiveDateTime,
              NaiveTime,
+             offset::{FixedOffset,
+                 TimeZone,
+             },
+             DateTime,
+             Utc,
             };
 
 /// SQL Abstract Syntax Tree (AST)
@@ -133,8 +138,10 @@ pub enum Value{
     Date(NaiveDate),
     // Time
     Time(NaiveTime),
-    /// Timestamp
+    /// Date and time
     DateTime(NaiveDateTime),
+    /// Timstamp with time zone
+    Timestamp(DateTime<FixedOffset>),
     /// NULL value in insert statements,
     Null,
 }

@@ -515,7 +515,7 @@ impl Parser {
                         Ok(n) => {
                             if let Some(Token::Minus) = self.peek_token(){
                                 self.prev_token();
-                                self.parse_timestamp()
+                                self.parse_timestamp_value()
                             }else{
                                 Ok(Value::Long(n))
                             }
@@ -559,11 +559,6 @@ impl Parser {
         }
     }
 
-    pub fn parse_timestamp(&mut self) -> Result<Value, ParserError> {
-        let year = self.parse_literal_int()?;
-        self.parse_timestamp_value(year)
-    }
-
 
     pub fn parse_timezone_offset(&mut self) -> Result<i8, ParserError> {
         match self.next_token(){
@@ -580,13 +575,8 @@ impl Parser {
     }
 
 
-    pub fn parse_timestamp_with_year(&mut self, year: i64) -> Result<NaiveDateTime, ParserError> {
-        let date = self.parse_date(year)?;
-        let time = self.parse_time()?;
-        Ok(NaiveDateTime::new(date, time))
-    }
-
-    pub fn parse_timestamp_value(&mut self, year: i64) -> Result<Value, ParserError> {
+    pub fn parse_timestamp_value(&mut self) -> Result<Value, ParserError> {
+        let year = self.parse_literal_int()?;
         let date = self.parse_date(year)?;
         if let Ok(time) = self.parse_time(){
             let date_time = NaiveDateTime::new(date, time);
@@ -1499,7 +1489,7 @@ mod tests {
     fn parse_timestamps_example(){
         let sql = "2016-02-15 09:43:33";
         let mut parser = parser(&sql);
-        let ast = parser.parse_timestamp();
+        let ast = parser.parse_timestamp_value();
         println!("ast: {:?}", ast);
         assert!(ast.is_ok())
     }
@@ -1508,7 +1498,7 @@ mod tests {
     fn parse_timestamps_with_millis_example(){
         let sql = "2017-11-02 19:15:42.308637";
         let mut parser = parser(&sql);
-        let ast = parser.parse_timestamp();
+        let ast = parser.parse_timestamp_value();
         println!("ast: {:?}", ast);
         assert!(ast.is_ok())
     }

@@ -103,9 +103,18 @@ impl Parser {
                         "DELETE" => Ok(self.parse_delete()?),
                         "INSERT" => Ok(self.parse_insert()?),
                         "COPY"  => Ok(self.parse_copy()?),
-                        "TRUE" => Ok(ASTNode::SQLValue(Value::Boolean(true))),
-                        "FALSE" => Ok(ASTNode::SQLValue(Value::Boolean(false))),
-                        "NULL" => Ok(ASTNode::SQLValue(Value::Null)),
+                        "TRUE" => {
+                            self.prev_token();
+                            self.parse_sql_value()
+                        }
+                        "FALSE" => {
+                            self.prev_token();
+                            self.parse_sql_value()
+                        }
+                        "NULL" => {
+                            self.prev_token();
+                            self.parse_sql_value()
+                        }
                         _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
                     },
                     Token::Mult => Ok(ASTNode::SQLWildcard),
@@ -136,15 +145,14 @@ impl Parser {
                             }
                         }
                     }
-                    Token::Number(ref n) if n.contains(".") => match n.parse::<f64>() {
-                        Ok(n) => Ok(ASTNode::SQLValue(Value::Double(n))),
-                        Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
+                    Token::Number(ref n) => {
+                        self.prev_token();
+                        self.parse_sql_value()
                     },
-                    Token::Number(ref n) => match n.parse::<i64>() {
-                        Ok(n) => Ok(ASTNode::SQLValue(Value::Long(n))),
-                        Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
-                    },
-                    Token::String(ref s) => Ok(ASTNode::SQLValue(Value::String(s.to_string()))),
+                    Token::String(ref s) => {
+                        self.prev_token();
+                        self.parse_sql_value()
+                    }
                     _ => parser_err!(format!(
                         "Prefix parser expected a keyword but found {:?}",
                         t
@@ -489,14 +497,18 @@ impl Parser {
                     //TODO: handle escape of values in characters
                 }
             }else{
-                values.push(self.parse_sql_value()?);
+                values.push(self.parse_value()?);
             }
         }
         Ok(values)
 
     }
 
-    fn parse_sql_value(&mut self) -> Result<Value, ParserError> {
+    fn parse_sql_value(&mut self) -> Result<ASTNode, ParserError> {
+        Ok(ASTNode::SQLValue(self.parse_value()?))
+    }
+
+    fn parse_value(&mut self) -> Result<Value, ParserError> {
         match self.next_token() {
             Some(t) => {
                 match t {

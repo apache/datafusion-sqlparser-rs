@@ -34,6 +34,7 @@ pub enum Token {
     Number(String),
     /// String literal
     String(String),
+    Char(char),
     /// Single quoted string: i.e: 'string'
     SingleQuotedString(String),
     /// Double quoted string: i.e: "string"
@@ -97,6 +98,7 @@ impl ToString for Token{
             Token::Keyword(ref k) =>k.to_string(),
             Token::Number(ref n) => n.to_string(),
             Token::String(ref s) => s.to_string(),
+            Token::Char(ref c) => c.to_string(),
             Token::SingleQuotedString(ref s) => format!("'{}'",s),
             Token::DoubleQuotedString(ref s) => format!("\"{}\"",s),
             Token::Comma => ",".to_string(),
@@ -371,10 +373,7 @@ impl<'a> Tokenizer<'a> {
                 '&' => self.consume_and_return(chars, Token::Ampersand),
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
-                _ => Err(TokenizerError(format!(
-                    "Tokenizer Error at Line: {}, Column: {}, unhandled char '{}'",
-                    self.line, self.col, ch
-                ))),
+                other => self.consume_and_return(chars, Token::Char(other))
             },
             None => Ok(None),
         }
@@ -492,17 +491,19 @@ mod tests {
 
         let dialect = GenericSqlDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
-        let tokens = tokenizer.tokenize();
+        let tokens = tokenizer.tokenize().unwrap();
+        println!("tokens: {:#?}", tokens);
+        let expected = vec![
+                    Token::Whitespace(Whitespace::Newline),
+                    Token::Char('م'),
+                    Token::Char('ص'),
+                    Token::Char('ط'),
+                    Token::Char('ف'),
+                    Token::Char('ى'),
+                    Token::Identifier("h".to_string())
+            ];
+        compare(expected, tokens);
 
-        match tokens {
-            Err(e) => assert_eq!(
-                TokenizerError(
-                    "Tokenizer Error at Line: 2, Column: 1, unhandled char \'م\'".to_string()
-                ),
-                e
-            ),
-            _ => panic!("Test Failure in tokenize_invalid_string"),
-        }
     }
 
     #[test]
@@ -511,16 +512,27 @@ mod tests {
 
         let dialect = GenericSqlDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
-        let tokens = tokenizer.tokenize();
-        match tokens {
-            Err(e) => assert_eq!(
-                TokenizerError(
-                    "Tokenizer Error at Line: 3, Column: 24, unhandled char \'م\'".to_string()
-                ),
-                e
-            ),
-            _ => panic!("Test Failure in tokenize_invalid_string_cols"),
-        }
+        let tokens = tokenizer.tokenize().unwrap();
+        println!("tokens: {:#?}", tokens);
+        let expected = vec![
+            Token::Whitespace(Whitespace::Newline),
+            Token::Whitespace(Whitespace::Newline),
+            Token::Keyword("SELECT".into()),
+            Token::Whitespace(Whitespace::Space),
+            Token::Mult,
+            Token::Whitespace(Whitespace::Space),
+            Token::Keyword("FROM".into()),
+            Token::Whitespace(Whitespace::Space),
+            Token::Keyword("TABLE".into()),
+            Token::Whitespace(Whitespace::Tab),
+            Token::Char('م'),
+            Token::Char('ص'),
+            Token::Char('ط'),
+            Token::Char('ف'),
+            Token::Char('ى'),
+            Token::Identifier("h".to_string()),
+        ];
+        compare(expected, tokens);
     }
 
     #[test]

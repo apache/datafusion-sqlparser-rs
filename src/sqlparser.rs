@@ -514,16 +514,8 @@ impl Parser {
                     Token::Number(ref n) => match n.parse::<i64>() {
                         Ok(n) => {
                             if let Some(Token::Minus) = self.peek_token(){
-                                if let Ok(timestamp) = self.parse_timestamp_with_timezone(){
-                                    Ok(Value::Timestamp(timestamp))
-                                }else{
-                                    println!("unable to parse timestamp with year, trying with time zone :{:?}", self.peek_token());
-                                    if let Ok(date_time) = self.parse_timestamp_with_year(n){
-                                        Ok(Value::DateTime(date_time))
-                                    }else{
-                                        parser_err!(format!("expecting timestamp, but found {:?}", self.peek_token()))
-                                    }
-                                }
+                                self.prev_token();
+                                self.parse_timestamp()
                             }else{
                                 Ok(Value::Long(n))
                             }
@@ -567,17 +559,11 @@ impl Parser {
         }
     }
 
-    pub fn parse_timestamp(&mut self) -> Result<NaiveDateTime, ParserError> {
+    pub fn parse_timestamp(&mut self) -> Result<Value, ParserError> {
         let year = self.parse_literal_int()?;
-        self.parse_timestamp_with_year(year)
+        self.parse_timestamp_value(year)
     }
 
-    pub fn parse_timestamp_with_timezone(&mut self) -> Result<DateTime<FixedOffset>, ParserError> {
-        let timestamp = self.parse_timestamp()?;
-        let tz_offset = self.parse_timezone_offset()?;
-        let offset =  FixedOffset::east(tz_offset as i32 * 3600);
-        Ok(DateTime::from_utc(timestamp, offset))
-    }
 
     pub fn parse_timezone_offset(&mut self) -> Result<i8, ParserError> {
         match self.next_token(){
@@ -596,8 +582,25 @@ impl Parser {
 
     pub fn parse_timestamp_with_year(&mut self, year: i64) -> Result<NaiveDateTime, ParserError> {
         let date = self.parse_date(year)?;
+        let time = self.parse_time()?;
+        Ok(NaiveDateTime::new(date, time))
+    }
+
+    pub fn parse_timestamp_value(&mut self, year: i64) -> Result<Value, ParserError> {
+        let date = self.parse_date(year)?;
         if let Ok(time) = self.parse_time(){
-            Ok(NaiveDateTime::new(date, time))
+            let date_time = NaiveDateTime::new(date, time);
+            match self.peek_token(){
+                Some(token) => match token{
+                        Token::Plus | Token::Minus => {
+                            let tz = self.parse_timezone_offset()?;
+                            let offset =  FixedOffset::east(tz as i32 * 3600);
+                            Ok(Value::Timestamp(DateTime::from_utc(date_time, offset)))
+                        }
+                        _ => Ok(Value::DateTime(date_time)),
+                    },
+                _ => Ok(Value::DateTime(date_time)),
+            }
         }else{
             parser_err!(format!("Expecting time after date, but found {:?}", self.peek_token()))
         }
@@ -1488,7 +1491,7 @@ mod tests {
         ");
         let mut parser = parser(&sql);
         let ast = parser.parse();
-        println!("ast: {:?}", ast);
+        println!("ast: {:#?}", ast);
         assert!(ast.is_ok());
     }
 

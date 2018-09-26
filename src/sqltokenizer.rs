@@ -34,10 +34,14 @@ pub enum Token {
     Number(String),
     /// String literal
     String(String),
+    /// Single quoted string: i.e: 'string'
+    SingleQuotedString(String),
+    /// Double quoted string: i.e: "string"
+    DoubleQuotedString(String),
     /// Comma
     Comma,
     /// Whitespace (space, tab, etc)
-    Whitespace(char),
+    Whitespace(Whitespace),
     /// Equality operator `=`
     Eq,
     /// Not Equals operator `!=` or `<>`
@@ -78,6 +82,67 @@ pub enum Token {
     LBracket,
     /// Right bracket `]`
     RBracket,
+    /// Ampersand &
+    Ampersand,
+    /// Left brace `{`
+    LBrace,
+    /// Right brace `}`
+    RBrace,
+}
+
+impl ToString for Token{
+    fn to_string(&self) -> String {
+        match self{
+            Token::Identifier(ref id) => id.to_string(),
+            Token::Keyword(ref k) =>k.to_string(),
+            Token::Number(ref n) => n.to_string(),
+            Token::String(ref s) => s.to_string(),
+            Token::SingleQuotedString(ref s) => format!("'{}'",s),
+            Token::DoubleQuotedString(ref s) => format!("\"{}\"",s),
+            Token::Comma => ",".to_string(),
+            Token::Whitespace(ws) => ws.to_string(),
+            Token::Eq => "=".to_string(),
+            Token::Neq => "-".to_string(),
+            Token::Lt => "<".to_string(),
+            Token::Gt => ">".to_string(),
+            Token::LtEq => "<=".to_string(),
+            Token::GtEq => ">=".to_string(),
+            Token::Plus => "+".to_string(),
+            Token::Minus => "-".to_string(),
+            Token::Mult => "*".to_string(),
+            Token::Div => "/".to_string(),
+            Token::Mod => "%".to_string(),
+            Token::LParen => "(".to_string(),
+            Token::RParen => ")".to_string(),
+            Token::Period => ".".to_string(),
+            Token::Colon => ":".to_string(),
+            Token::DoubleColon => "::".to_string(),
+            Token::SemiColon => ";".to_string(),
+            Token::Backslash => "\\".to_string(),
+            Token::LBracket => "[".to_string(),
+            Token::RBracket => "]".to_string(),
+            Token::Ampersand => "&".to_string(),
+            Token::LBrace => "{".to_string(),
+            Token::RBrace => "}".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Whitespace{
+    Space,
+    Newline,
+    Tab
+}
+
+impl ToString for Whitespace{
+    fn to_string(&self) -> String {
+        match self{
+            Whitespace::Space => " ".to_string(),
+            Whitespace::Newline => "\n".to_string(),
+            Whitespace::Tab => "\t".to_string(),
+        }
+    }
 }
 
 /// Tokenizer error
@@ -118,28 +183,32 @@ impl<'a> Tokenizer<'a> {
 
         while let Some(token) = self.next_token(&mut peekable)? {
             match &token {
-                Token::Whitespace('\n') => {
+                Token::Whitespace(Whitespace::Newline) => {
                     self.line += 1;
                     self.col = 1;
                 }
 
-                Token::Whitespace('\t') => self.col += 4,
+                Token::Whitespace(Whitespace::Tab) => self.col += 4,
                 Token::Identifier(s) => self.col += s.len() as u64,
                 Token::Keyword(s) => self.col += s.len() as u64,
                 Token::Number(s) => self.col += s.len() as u64,
                 Token::String(s) => self.col += s.len() as u64,
+                Token::SingleQuotedString(s) => self.col += s.len() as u64,
+                Token::DoubleQuotedString(s) => self.col += s.len() as u64,
                 _ => self.col += 1,
             }
 
             tokens.push(token);
         }
-
+        Ok(tokens)
+        /*
         Ok(tokens
             .into_iter()
             .filter(|t| match t {
                 Token::Whitespace(..) => false,
                 _ => true,
             }).collect())
+        */
     }
 
     /// Get the next token or return None
@@ -147,10 +216,17 @@ impl<'a> Tokenizer<'a> {
         //println!("next_token: {:?}", chars.peek());
         match chars.peek() {
             Some(&ch) => match ch {
-                // whitespace
-                ' ' | '\t' | '\n' => {
-                    chars.next(); // consume
-                    Ok(Some(Token::Whitespace(ch)))
+                ' ' => {
+                    chars.next();
+                    Ok(Some(Token::Whitespace(Whitespace::Space)))
+                }
+                '\t' => {
+                    chars.next();
+                    Ok(Some(Token::Whitespace(Whitespace::Tab)))
+                }
+                '\n' => {
+                    chars.next();
+                    Ok(Some(Token::Whitespace(Whitespace::Newline)))
                 }
                 // identifier or keyword
                 ch if self.dialect.is_identifier_start(ch) => {
@@ -190,7 +266,25 @@ impl<'a> Tokenizer<'a> {
                             }
                         }
                     }
-                    Ok(Some(Token::String(s)))
+                    Ok(Some(Token::SingleQuotedString(s)))
+                }
+                // string
+                '"' => {
+                    let mut s = String::new();
+                    chars.next(); // consume
+                    while let Some(&ch) = chars.peek() {
+                        match ch {
+                            '"' => {
+                                chars.next(); // consume
+                                break;
+                            }
+                            _ => {
+                                chars.next(); // consume
+                                s.push(ch);
+                            }
+                        }
+                    }
+                    Ok(Some(Token::DoubleQuotedString(s)))
                 }
                 // numbers
                 '0'...'9' => {
@@ -274,6 +368,9 @@ impl<'a> Tokenizer<'a> {
                 // brakets
                 '[' => self.consume_and_return(chars, Token::LBracket),
                 ']' => self.consume_and_return(chars, Token::RBracket),
+                '&' => self.consume_and_return(chars, Token::Ampersand),
+                '{' => self.consume_and_return(chars, Token::LBrace),
+                '}' => self.consume_and_return(chars, Token::RBrace),
                 _ => Err(TokenizerError(format!(
                     "Tokenizer Error at Line: {}, Column: {}, unhandled char '{}'",
                     self.line, self.col, ch
@@ -303,6 +400,7 @@ mod tests {
 
         let expected = vec![
             Token::Keyword(String::from("SELECT")),
+            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1")),
         ];
 
@@ -318,6 +416,7 @@ mod tests {
 
         let expected = vec![
             Token::Keyword(String::from("SELECT")),
+            Token::Whitespace(Whitespace::Space),
             Token::Identifier(String::from("sqrt")),
             Token::LParen,
             Token::Number(String::from("1")),
@@ -336,14 +435,23 @@ mod tests {
 
         let expected = vec![
             Token::Keyword(String::from("SELECT")),
+            Token::Whitespace(Whitespace::Space),
             Token::Mult,
+            Token::Whitespace(Whitespace::Space),
             Token::Keyword(String::from("FROM")),
+            Token::Whitespace(Whitespace::Space),
             Token::Identifier(String::from("customer")),
+            Token::Whitespace(Whitespace::Space),
             Token::Keyword(String::from("WHERE")),
+            Token::Whitespace(Whitespace::Space),
             Token::Identifier(String::from("id")),
+            Token::Whitespace(Whitespace::Space),
             Token::Eq,
+            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1")),
+            Token::Whitespace(Whitespace::Space),
             Token::Keyword(String::from("LIMIT")),
+            Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("5")),
         ];
 
@@ -359,13 +467,20 @@ mod tests {
 
         let expected = vec![
             Token::Keyword(String::from("SELECT")),
+            Token::Whitespace(Whitespace::Space),
             Token::Mult,
+            Token::Whitespace(Whitespace::Space),
             Token::Keyword(String::from("FROM")),
+            Token::Whitespace(Whitespace::Space),
             Token::Identifier(String::from("customer")),
+            Token::Whitespace(Whitespace::Space),
             Token::Keyword(String::from("WHERE")),
+            Token::Whitespace(Whitespace::Space),
             Token::Identifier(String::from("salary")),
+            Token::Whitespace(Whitespace::Space),
             Token::Neq,
-            Token::String(String::from("Not Provided")),
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString(String::from("Not Provided")),
         ];
 
         compare(expected, tokens);
@@ -417,7 +532,9 @@ mod tests {
 
         let expected = vec![
             Token::Identifier(String::from("a")),
+            Token::Whitespace(Whitespace::Space),
             Token::Keyword("IS".to_string()),
+            Token::Whitespace(Whitespace::Space),
             Token::Keyword("NULL".to_string()),
         ];
 

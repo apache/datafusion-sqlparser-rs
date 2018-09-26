@@ -153,6 +153,14 @@ impl Parser {
                         self.prev_token();
                         self.parse_sql_value()
                     }
+                    Token::SingleQuotedString(ref s) => {
+                        self.prev_token();
+                        self.parse_sql_value()
+                    }
+                    Token::DoubleQuotedString(ref s) => {
+                        self.prev_token();
+                        self.parse_sql_value()
+                    }
                     _ => parser_err!(format!(
                         "Prefix parser expected a keyword but found {:?}",
                         t
@@ -165,7 +173,6 @@ impl Parser {
 
     pub fn parse_function_or_pg_cast(&mut self, id: &str) -> Result<ASTNode, ParserError> {
         let func = self.parse_function(&id)?;
-        println!("func: {:?}", func);
         if let Some(Token::DoubleColon) = self.peek_token(){
             self.parse_pg_cast(func)
         }else{
@@ -186,7 +193,6 @@ impl Parser {
 
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
     pub fn parse_cast_expression(&mut self) -> Result<ASTNode, ParserError> {
-        println!("parsing cast");
         self.consume_token(&Token::LParen)?;
         let expr = self.parse_expr(0)?;
         self.consume_token(&Token::Keyword("AS".to_string()))?;
@@ -291,8 +297,8 @@ impl Parser {
 
     /// Get the precedence of the next token
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
-        if self.index < self.tokens.len() {
-            self.get_precedence(&self.tokens[self.index])
+        if let Some(token) = self.peek_token() {
+            self.get_precedence(&token)
         } else {
             Ok(0)
         }
@@ -316,17 +322,66 @@ impl Parser {
         }
     }
 
-    /// Peek at the next token
-    pub fn peek_token(&mut self) -> Option<Token> {
-        if self.index < self.tokens.len() {
-            Some(self.tokens[self.index].clone())
-        } else {
+    pub fn peek_token(&self) -> Option<Token> {
+        self.peek_token_skip_whitespace()
+    }
+
+
+    pub fn skip_whitespace(&mut self) -> Option<Token> {
+        loop {
+            match self.next_token_no_skip(){
+                Some(Token::Whitespace(ws)) => {
+                    continue;
+                }
+                token => {
+                    return token;
+                }
+            }
+        }
+    }
+
+    /// get the index for non whitepsace token
+    fn til_non_whitespace(&self) -> Option<usize> {
+        let mut index = self.index;
+        loop {
+            match self.token_at(index){
+                Some(Token::Whitespace(ws)) => {
+                    index = index + 1;
+                }
+                Some(token) => {
+                    return Some(index);
+                }
+                None => {
+                    return None;
+                }
+            }
+        }
+    }
+
+    /// see the token at this index
+    fn token_at(&self, n: usize) -> Option<Token>{
+        if let Some(token) = self.tokens.get(n){
+            Some(token.clone())
+        }else{
             None
         }
     }
 
-    /// Get the next token and increment the token index
+    pub fn peek_token_skip_whitespace(&self) -> Option<Token> {
+        if let Some(n) = self.til_non_whitespace(){
+            self.token_at(n)
+        }else{
+            None
+        }
+    }
+
+
+    /// Get the next token skipping whitespace and increment the token index
     pub fn next_token(&mut self) -> Option<Token> {
+        self.skip_whitespace()
+    }
+
+    pub fn next_token_no_skip(&mut self) -> Option<Token> {
         if self.index < self.tokens.len() {
             self.index = self.index + 1;
             Some(self.tokens[self.index - 1].clone())
@@ -335,8 +390,27 @@ impl Parser {
         }
     }
 
-    /// Get the previous token and decrement the token index
+    /// if prev token is whitespace skip it
+    /// if prev token is not whitespace skipt it as well
+    pub fn prev_token_skip_whitespace(&mut self) -> Option<Token>{
+        loop{
+            match self.prev_token_no_skip(){
+                Some(Token::Whitespace(ws)) => {
+                    continue;
+                }
+                token => {
+                    return token;
+                },
+            }
+        }
+    }
+
     pub fn prev_token(&mut self) -> Option<Token> {
+        self.prev_token_skip_whitespace()
+    }
+
+    /// Get the previous token and decrement the token index
+    pub fn prev_token_no_skip(&mut self) -> Option<Token> {
         if self.index > 0 {
             self.index = self.index - 1;
             Some(self.tokens[self.index].clone())
@@ -364,7 +438,6 @@ impl Parser {
     pub fn parse_keywords(&mut self, keywords: Vec<&'static str>) -> bool {
         let index = self.index;
         for keyword in keywords {
-            //println!("parse_keywords aborting .. expecting {}", keyword);
             if !self.parse_keyword(&keyword) {
                 //println!("parse_keywords aborting .. did not find {}", keyword);
                 // reset index and return immediately
@@ -394,26 +467,23 @@ impl Parser {
         }
     }
 
+
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<ASTNode, ParserError> {
         if self.parse_keywords(vec!["TABLE"]) {
             let table_name = self.parse_tablename()?;
             // parse optional column list (schema)
-            println!("table_name: {}", table_name);
             let mut columns = vec![];
             if self.consume_token(&Token::LParen)? {
                 loop {
                     if let Some(Token::Identifier(column_name)) = self.next_token() {
-                        println!("column name: {}", column_name);
                         if let Ok(data_type) = self.parse_data_type() {
                             let default = if self.parse_keyword("DEFAULT"){
                                 let expr = self.parse_expr(0)?;
-                                println!("expr: {:?}", expr);
                                 Some(Box::new(expr))
                             }else{
                                 None
                             };
-                            println!("default: {:?}", default);
                             let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
                                 false
                             } else if self.parse_keyword("NULL") {
@@ -488,24 +558,41 @@ impl Parser {
     /// Parse a tab separated values in
     /// COPY payload
     fn parse_tsv(&mut self) -> Result<Vec<Value>, ParserError>{
-        let mut values: Vec<Value> = vec![];
-        loop {
-            if let Ok(true) = self.consume_token(&Token::Backslash){
-                if let Ok(true) = self.consume_token(&Token::Period) {
-                    break;
-                }else{
-                    //TODO: handle escape of values in characters
-                }
-            }else{
-                values.push(self.parse_value()?);
-            }
-        }
+        let values = self.parse_tab_value()?;
         Ok(values)
 
     }
 
     fn parse_sql_value(&mut self) -> Result<ASTNode, ParserError> {
         Ok(ASTNode::SQLValue(self.parse_value()?))
+    }
+
+    fn parse_tab_value(&mut self) -> Result<Vec<Value>, ParserError> {
+        let mut values = vec![];
+        let mut content = String::from("");
+        while let Some(t) = self.next_token_no_skip(){
+            match t{
+                Token::Whitespace(Whitespace::Tab) => {
+                    values.push(Value::String(content.to_string()));
+                    content.clear();
+                }
+                Token::Whitespace(Whitespace::Newline) => {
+                    values.push(Value::String(content.to_string()));
+                    content.clear();
+                }
+                Token::Backslash => {
+                    if let Ok(true) = self.consume_token(&Token::Period) {
+                        return Ok(values);
+                    }else{
+                        continue;
+                    }
+                }
+                _ => {
+                    content.push_str(&t.to_string());
+                }
+            }
+        }
+        Ok(values)
     }
 
     fn parse_value(&mut self) -> Result<Value, ParserError> {
@@ -536,6 +623,8 @@ impl Parser {
                     },
                     Token::Identifier(id) => Ok(Value::String(id.to_string())),
                     Token::String(ref s) => Ok(Value::String(s.to_string())),
+                    Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
+                    Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
                     other => parser_err!(format!("Unsupported value: {:?}", self.peek_token())),
                 }
             }
@@ -630,11 +719,8 @@ impl Parser {
         let min = self.parse_literal_int()?;
         self.consume_token(&Token::Colon)?;
         let sec = self.parse_literal_double()?;
-        println!("sec: {}", sec);
         let ms = (sec.fract() * 1000.0).round();
-        println!("ms: {:?}", ms);
         if let Ok(true) = self.consume_token(&Token::Period){
-            println!("milliseconds here");
             let ms = self.parse_literal_int()?;
             Ok(NaiveTime::from_hms_milli(hour as u32, min as u32, sec as u32, ms as u32))
         }else{
@@ -861,7 +947,8 @@ impl Parser {
         };
 
         let selection = if self.parse_keyword("WHERE") {
-            Some(Box::new(self.parse_expr(0)?))
+            let expr = self.parse_expr(0)?;
+            Some(Box::new(expr))
         } else {
             None
         };
@@ -1016,7 +1103,9 @@ mod tests {
         assert_eq!(parser.next_token(), Some(Token::Keyword("SELECT".into())));
         assert_eq!(parser.next_token(), Some(Token::Identifier("version".into())));
         assert_eq!(parser.prev_token(), Some(Token::Identifier("version".into())));
+        assert_eq!(parser.peek_token(), Some(Token::Identifier("version".into())));
         assert_eq!(parser.prev_token(), Some(Token::Keyword("SELECT".into())));
+        assert_eq!(parser.prev_token(), None);
     }
 
     #[test]
@@ -1026,7 +1115,7 @@ mod tests {
         match parse_sql(&sql) {
             ASTNode::SQLDelete { relation, .. } => {
                 assert_eq!(
-                    Some(Box::new(ASTNode::SQLValue(Value::String("table".to_string())))),
+                    Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString("table".to_string())))),
                     relation
                 );
             }
@@ -1049,7 +1138,7 @@ mod tests {
                 ..
             } => {
                 assert_eq!(
-                    Some(Box::new(ASTNode::SQLValue(Value::String("table".to_string())))),
+                    Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString("table".to_string())))),
                     relation
                 );
 
@@ -1191,7 +1280,7 @@ mod tests {
             "SELECT id, fname, lname FROM customer \
              WHERE salary != 'Not Provided' AND salary != ''",
         );
-        let _ast = parse_sql(&sql);
+        let ast = parse_sql(&sql);
         //TODO: add assertions
     }
 
@@ -1475,26 +1564,29 @@ mod tests {
 
     #[test]
     fn parse_copy_example(){
-        let sql = String::from("
+        let sql = String::from(r#"
         COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM stdin;
-        1	PENELOPE	GUINESS	2006-02-15 09:34:33 0.11111
-        2	NICK	WAHLBERG	2006-02-15 09:34:33 0.22222
-        3	ED	CHASE	2006-02-15 09:34:33 0.312323
-        4	JENNIFER	DAVIS	2006-02-15 09:34:33 0.3232
-        5	JOHNNY	LOLLOBRIGIDA	2006-02-15 09:34:33 1.343
-        6	BETTE	NICHOLSON	2006-02-15 09:34:33 5.0
-        7	GRACE	MOSTEL	2006-02-15 09:34:33 6.0
-        8	MATTHEW	JOHANSSON	2006-02-15 09:34:33 7.0
-        9	JOE	SWANK	2006-02-15 09:34:33 8.0
-        10	CHRISTIAN	GABLE	2006-02-15 09:34:33 9.1
-        11	ZERO	CAGE	2006-02-15 09:34:33 10.001
-        12	KARL	BERRY	2017-11-02 19:15:42.308637+08 11.001
+1	PENELOPE	GUINESS	2006-02-15 09:34:33 0.11111
+2	NICK	WAHLBERG	2006-02-15 09:34:33 0.22222
+3	ED	CHASE	2006-02-15 09:34:33 0.312323
+4	JENNIFER	DAVIS	2006-02-15 09:34:33 0.3232
+5	JOHNNY	LOLLOBRIGIDA	2006-02-15 09:34:33 1.343
+6	BETTE	NICHOLSON	2006-02-15 09:34:33 5.0
+7	GRACE	MOSTEL	2006-02-15 09:34:33 6.0
+8	MATTHEW	JOHANSSON	2006-02-15 09:34:33 7.0
+9	JOE	SWANK	2006-02-15 09:34:33 8.0
+10	CHRISTIAN	GABLE	2006-02-15 09:34:33 9.1
+11	ZERO	CAGE	2006-02-15 09:34:33 10.001
+12	KARL	BERRY	2017-11-02 19:15:42.308637+08 11.001
+A Fateful Reflection of a Waitress And a Boat who must Discover a Sumo Wrestler in Ancient China
+Kwara & Kogi
+{"Deleted Scenes","Behind the Scenes"}
         \\.
-        ");
+        "#);
         let mut parser = parser(&sql);
         let ast = parser.parse();
         println!("ast: {:#?}", ast);
-        assert!(ast.is_ok());
+        //assert!(!ast.is_ok());
     }
 
     #[test]
@@ -1502,7 +1594,6 @@ mod tests {
         let sql = "2016-02-15 09:43:33";
         let mut parser = parser(&sql);
         let ast = parser.parse_timestamp_value();
-        println!("ast: {:?}", ast);
         assert!(ast.is_ok())
     }
 
@@ -1511,8 +1602,15 @@ mod tests {
         let sql = "2017-11-02 19:15:42.308637";
         let mut parser = parser(&sql);
         let ast = parser.parse_timestamp_value();
-        println!("ast: {:?}", ast);
         assert!(ast.is_ok())
+    }
+
+    #[test]
+    fn parse_example_value(){
+        let sql = "SARAH.LEWIS@sakilacustomer.org";
+        let mut parser = parser(&sql);
+        let ast = parser.parse_value();
+        assert!(ast.is_ok());
     }
 
     #[test]
@@ -1544,7 +1642,7 @@ mod tests {
         let sql = "SELECT 'one'";
         match parse_sql(&sql) {
             ASTNode::SQLSelect { ref projection, .. } => {
-                assert_eq!(projection[0], ASTNode::SQLValue(Value::String("one".to_string())));
+                assert_eq!(projection[0], ASTNode::SQLValue(Value::SingleQuotedString("one".to_string())));
             }
             _ => panic!(),
         }
@@ -1569,13 +1667,11 @@ mod tests {
         let sql = "now()";
         let mut parser = parser(sql);
         let ast = parser.parse();
-        println!("ast: {:?}", ast);
         assert!(ast.is_ok());
     }
 
     fn parse_sql(sql: &str) -> ASTNode {
         debug!("sql: {}", sql);
-        println!("sql: {}", sql);
         let mut parser = parser(sql);
         let ast = parser.parse().unwrap();
         ast

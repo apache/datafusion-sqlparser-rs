@@ -130,8 +130,12 @@ pub enum Value{
     Long(i64),
     /// Literal floating point value
     Double(f64),
-    /// Literal string
+    /// Unquoted string
     String(String),
+    /// 'string value'
+    SingleQuotedString(String),
+    /// "string value"
+    DoubleQuotedString(String),
     /// Boolean value true or false,
     Boolean(bool),
     /// Date value

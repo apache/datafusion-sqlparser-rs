@@ -1581,12 +1581,13 @@ mod tests {
 A Fateful Reflection of a Waitress And a Boat who must Discover a Sumo Wrestler in Ancient China
 Kwara & Kogi
 {"Deleted Scenes","Behind the Scenes"}
+'awe':5 'awe-inspir':4 'barbarella':1 'cat':13 'conquer':16 'dog':18 'feminist':10 'inspir':6 'monasteri':21 'must':15 'stori':7 'streetcar':2
         \\.
         "#);
         let mut parser = parser(&sql);
         let ast = parser.parse();
         println!("ast: {:#?}", ast);
-        //assert!(!ast.is_ok());
+        assert!(ast.is_ok());
     }
 
     #[test]

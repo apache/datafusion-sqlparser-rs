@@ -478,6 +478,8 @@ impl Parser {
                 loop {
                     if let Some(Token::Identifier(column_name)) = self.next_token() {
                         if let Ok(data_type) = self.parse_data_type() {
+                            let is_primary = self.parse_keywords(vec!["PRIMARY", "KEY"]);
+                            let is_unique = self.parse_keyword("UNIQUE");
                             let default = if self.parse_keyword("DEFAULT"){
                                 let expr = self.parse_expr(0)?;
                                 Some(Box::new(expr))
@@ -500,6 +502,8 @@ impl Parser {
                                         name: column_name,
                                         data_type: data_type,
                                         allow_null,
+                                        is_primary,
+                                        is_unique,
                                         default,
                                     });
                                 }
@@ -509,6 +513,8 @@ impl Parser {
                                         name: column_name,
                                         data_type: data_type,
                                         allow_null,
+                                        is_primary,
+                                        is_unique,
                                         default,
                                     });
                                     break;
@@ -537,6 +543,7 @@ impl Parser {
             ))
         }
     }
+
 
     /// Parse a copy statement
     pub fn parse_copy(&mut self) -> Result<ASTNode, ParserError> {
@@ -1090,13 +1097,13 @@ impl Parser {
 #[cfg(test)]
 mod tests {
 
-    use super::super::dialect::GenericSqlDialect;
+    use super::super::dialect::PostgreSqlDialect;
     use super::*;
 
     #[test]
     fn test_prev_index(){
         let sql: &str = "SELECT version()";
-        let mut tokenizer = Tokenizer::new(&GenericSqlDialect{}, &sql);
+        let mut tokenizer = Tokenizer::new(&PostgreSqlDialect{}, &sql);
         let tokens = tokenizer.tokenize().expect("error tokenizing");
         let mut parser = Parser::new(tokens);
         assert_eq!(parser.prev_token(), None);
@@ -1542,9 +1549,9 @@ mod tests {
     fn parse_create_table_with_inherit() {
         let sql = String::from("
          CREATE TABLE bazaar.settings (
-            user_id uuid,
+            settings_id uuid PRIMARY KEY DEFAULT uuid_generate_v4() NOT NULL,
+            user_id uuid UNIQUE,
             value text[],
-            settings_id uuid DEFAULT uuid_generate_v4() NOT NULL,
             use_metric boolean DEFAULT true
         )
         INHERITS (system.record)");
@@ -1554,12 +1561,38 @@ mod tests {
                 assert_eq!("bazaar.settings", name);
 
                 let c_name = &columns[0];
+                assert_eq!("settings_id", c_name.name);
+                assert_eq!(SQLType::Custom("uuid".into()), c_name.data_type);
+                assert_eq!(false, c_name.allow_null);
+                assert_eq!(true, c_name.is_primary);
+                assert_eq!(false, c_name.is_unique);
+
+                let c_name = &columns[1];
                 assert_eq!("user_id", c_name.name);
                 assert_eq!(SQLType::Custom("uuid".into()), c_name.data_type);
                 assert_eq!(true, c_name.allow_null);
+                assert_eq!(false, c_name.is_primary);
+                assert_eq!(true, c_name.is_unique);
             }
             _ => assert!(false),
         }
+    }
+
+    #[test]
+    fn parse_alter_table_constraint_primary_key(){
+        let sql = String::from("
+        ALTER TABLE ONLY bazaar.address
+            ADD CONSTRAINT address_pkey PRIMARY KEY (address_id)");
+        let ast = parse_sql(&sql);
+    }
+
+    #[test]
+    fn parse_alter_table_constraint_foreign_key(){
+        let sql = String::from("
+        ALTER TABLE ONLY public.customer
+            ADD CONSTRAINT customer_address_id_fkey FOREIGN KEY (address_id) REFERENCES public.address(address_id) ON UPDATE CASCADE ON DELETE RESTRICT;
+        ");
+        let ast = parse_sql(&sql);
     }
 
     #[test]
@@ -1681,7 +1714,7 @@ PHP	₱ USD $
     }
 
     fn parser(sql: &str) -> Parser {
-        let dialect = GenericSqlDialect {};
+        let dialect = PostgreSqlDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
         debug!("tokens: {:#?}", tokens);

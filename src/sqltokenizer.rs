@@ -203,14 +203,6 @@ impl<'a> Tokenizer<'a> {
             tokens.push(token);
         }
         Ok(tokens)
-        /*
-        Ok(tokens
-            .into_iter()
-            .filter(|t| match t {
-                Token::Whitespace(..) => false,
-                _ => true,
-            }).collect())
-        */
     }
 
     /// Get the next token or return None

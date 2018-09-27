@@ -176,6 +176,8 @@ pub struct SQLColumnDef {
     pub name: String,
     pub data_type: SQLType,
     pub allow_null: bool,
+    pub is_primary: bool,
+    pub is_unique: bool,
     pub default: Option<Box<ASTNode>>,
 }
 

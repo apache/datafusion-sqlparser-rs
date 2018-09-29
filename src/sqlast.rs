@@ -24,6 +24,8 @@ use chrono::{NaiveDate,
              Utc,
             };
 
+use uuid::Uuid;
+
 /// SQL Abstract Syntax Tree (AST)
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASTNode {
@@ -132,6 +134,7 @@ pub enum Value{
     Double(f64),
     /// Unquoted string
     String(String),
+    Uuid(Uuid),
     /// 'string value'
     SingleQuotedString(String),
     /// "string value"
@@ -188,6 +191,8 @@ pub enum SQLType {
     Char(Option<usize>),
     /// Variable-length character type e.g. VARCHAR(10)
     Varchar(Option<usize>),
+    /// Uuid value
+    Uuid,
     /// Large character object e.g. CLOB(1000)
     Clob(usize),
     /// Fixed-length binary type e.g. BINARY(10)

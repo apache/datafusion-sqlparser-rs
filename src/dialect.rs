@@ -528,6 +528,7 @@ impl Dialect for PostgreSqlDialect {
             "PRIMARY",
             "KEY",
             "UNIQUE",
+            "UUID",
         ];
     }
 

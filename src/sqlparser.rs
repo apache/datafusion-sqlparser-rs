@@ -758,6 +758,7 @@ impl Parser {
                         Ok(SQLType::Char(self.parse_optional_precision()?))
                     }
                 }
+                "UUID" => Ok(SQLType::Uuid),
                 "DATE" => Ok(SQLType::Date),
                 "TIMESTAMP" => if self.parse_keyword("WITH"){
                     if self.parse_keywords(vec!["TIME","ZONE"]){
@@ -1562,14 +1563,14 @@ mod tests {
 
                 let c_name = &columns[0];
                 assert_eq!("settings_id", c_name.name);
-                assert_eq!(SQLType::Custom("uuid".into()), c_name.data_type);
+                assert_eq!(SQLType::Uuid, c_name.data_type);
                 assert_eq!(false, c_name.allow_null);
                 assert_eq!(true, c_name.is_primary);
                 assert_eq!(false, c_name.is_unique);
 
                 let c_name = &columns[1];
                 assert_eq!("user_id", c_name.name);
-                assert_eq!(SQLType::Custom("uuid".into()), c_name.data_type);
+                assert_eq!(SQLType::Uuid, c_name.data_type);
                 assert_eq!(true, c_name.allow_null);
                 assert_eq!(false, c_name.is_primary);
                 assert_eq!(true, c_name.is_unique);

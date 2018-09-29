@@ -102,6 +102,7 @@ impl Parser {
                         "CREATE" => Ok(self.parse_create()?),
                         "DELETE" => Ok(self.parse_delete()?),
                         "INSERT" => Ok(self.parse_insert()?),
+                        "ALTER" => Ok(self.parse_alter()?),
                         "COPY"  => Ok(self.parse_copy()?),
                         "TRUE" => {
                             self.prev_token();
@@ -541,6 +542,68 @@ impl Parser {
                 "Unexpected token after CREATE: {:?}",
                 self.peek_token()
             ))
+        }
+    }
+
+    pub fn parse_table_key(&mut self, constraint_name: &str) -> Result<TableKey, ParserError> {
+        let is_primary_key = self.parse_keywords(vec!["PRIMARY", "KEY"]);
+        let is_unique_key = self.parse_keywords(vec!["UNIQUE", "KEY"]);
+        let is_foreign_key = self.parse_keywords(vec!["FOREIGN", "KEY"]);
+        self.consume_token(&Token::LParen)?;
+        let column_names= self.parse_column_names()?;
+        self.consume_token(&Token::RParen)?;
+        let key = Key{ 
+            name: Some(constraint_name.to_string()),
+            columns: column_names
+        };
+        if is_primary_key{
+            Ok(TableKey::PrimaryKey(key))
+        } 
+        else if is_unique_key{
+            Ok(TableKey::UniqueKey(key))
+        }
+        else if is_foreign_key{
+            if self.parse_keyword("REFERENCES"){
+                let foreign_table = self.parse_tablename()?;
+                self.consume_token(&Token::LParen)?;
+                let referred_columns = self.parse_column_names()?;
+                self.consume_token(&Token::RParen)?;
+                Ok(TableKey::ForeignKey{
+                    key,
+                    foreign_table,
+                    referred_columns,
+                })
+            }else{
+                parser_err!("Expecting references")
+            }
+        }else{
+           parser_err!(format!("Expecting primary key, unique key, or foreign key, found: {:?}", self.peek_token()))
+        }
+    }
+
+    pub fn parse_alter(&mut self) -> Result<ASTNode, ParserError> {
+        if self.parse_keyword("TABLE") {
+            let is_only = self.parse_keyword("ONLY");
+            let table_name = self.parse_tablename()?;
+            let operation:Result<AlterOperation,ParserError> = if self.parse_keywords(vec!["ADD", "CONSTRAINT"]){
+                match self.next_token(){
+                    Some(Token::Identifier(ref id)) => {
+                        let table_key = self.parse_table_key(id)?;
+                        Ok(AlterOperation::AddConstraint(table_key))
+                    }
+                    _ => {
+                        return parser_err!(format!("Expecting identifier, found : {:?}", self.peek_token()));
+                    }
+                }
+            }else{
+                return parser_err!(format!("Expecting ADD CONSTRAINT, found :{:?}", self.peek_token()));
+            };
+            Ok(ASTNode::SQLAlterTable{
+                name: table_name,
+                operation: operation?,
+            })
+        } else {
+            parser_err!(format!("Expecting TABLE after ALTER, found {:?}", self.peek_token()))
         }
     }
 
@@ -1585,6 +1648,13 @@ mod tests {
         ALTER TABLE ONLY bazaar.address
             ADD CONSTRAINT address_pkey PRIMARY KEY (address_id)");
         let ast = parse_sql(&sql);
+        println!("ast: {:?}", ast);
+        match ast {
+            ASTNode::SQLAlterTable{ name, operation } => {
+                assert_eq!(name, "bazaar.address");
+            }
+            _ => assert!(false),
+        }
     }
 
     #[test]
@@ -1594,6 +1664,13 @@ mod tests {
             ADD CONSTRAINT customer_address_id_fkey FOREIGN KEY (address_id) REFERENCES public.address(address_id) ON UPDATE CASCADE ON DELETE RESTRICT;
         ");
         let ast = parse_sql(&sql);
+        println!("ast: {:?}", ast);
+        match ast {
+            ASTNode::SQLAlterTable{ name, operation } => {
+                assert_eq!(name, "public.customer");
+            }
+            _ => assert!(false),
+        }
     }
 
     #[test]

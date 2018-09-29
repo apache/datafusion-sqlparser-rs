@@ -454,6 +454,8 @@ pub struct PostgreSqlDialect {}
 impl Dialect for PostgreSqlDialect {
     fn keywords(&self) -> Vec<&'static str> {
         return vec![
+            "ALTER",
+            "ONLY",
             "SELECT",
             "FROM",
             "WHERE",
@@ -529,6 +531,10 @@ impl Dialect for PostgreSqlDialect {
             "KEY",
             "UNIQUE",
             "UUID",
+            "ADD",
+            "CONSTRAINT",
+            "FOREIGN",
+            "REFERENCES",
         ];
     }
 

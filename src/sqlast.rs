@@ -123,6 +123,12 @@ pub enum ASTNode {
         /// Optional schema
         columns: Vec<SQLColumnDef>,
     },
+    /// ALTER TABLE
+    SQLAlterTable {
+        /// Table name
+        name: String,
+        operation: AlterOperation,
+    }
 }
 
 /// SQL values such as int, double, string timestamp
@@ -251,4 +257,31 @@ pub enum SQLOperator {
     NotEq,
     And,
     Or,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum AlterOperation{
+    AddConstraint(TableKey),
+    RemoveConstraint{
+        name: String,
+    }
+}
+
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Key{
+    pub name: Option<String>,
+    pub columns: Vec<String>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum TableKey{
+    PrimaryKey(Key),
+    UniqueKey(Key),
+    Key(Key),
+    ForeignKey {
+        key: Key,
+        foreign_table: String,
+        referred_columns: Vec<String>,
+    }
 }

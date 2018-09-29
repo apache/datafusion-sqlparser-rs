@@ -223,6 +223,7 @@ impl ToString for ASTNode{
                                         .collect::<Vec<String>>().join("\t")
                                 );
                 }
+                s += "\n\\.";
                 s
             }
             ASTNode::SQLUpdate{table_name, assignments, selection} => {

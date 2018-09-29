@@ -558,9 +558,11 @@ Kwara & Kogi
 {"Deleted Scenes","Behind the Scenes"}
 'awe':5 'awe-inspir':4 'barbarella':1 'cat':13 'conquer':16 'dog':18 'feminist':10 'inspir':6 'monasteri':21 'must':15 'stori':7 'streetcar':2
 PHP	₱ USD $
+\N  Some other value
 \\."#);
     let ast = parse_sql(&sql);
-    //assert_eq!(sql, ast.to_string());
+    println!("{:#?}", ast);
+    assert_eq!(sql, ast.to_string());
 }
 
 #[test]

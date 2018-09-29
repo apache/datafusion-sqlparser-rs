@@ -656,6 +656,10 @@ impl Parser {
                 Token::Backslash => {
                     if let Ok(true) = self.consume_token(&Token::Period) {
                         return Ok(values);
+                    }if let Some(token) = self.next_token(){
+                        if token == Token::Identifier("N".to_string()){
+                            values.push(Value::Null);
+                        }
                     }else{
                         continue;
                     }

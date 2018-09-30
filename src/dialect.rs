@@ -22,7 +22,7 @@ mod ansi_sql;
 mod generic_sql;
 mod postgresql;
 
-mod keywords;
+pub mod keywords;
 
 pub trait Dialect {
     /// Get a list of keywords for this dialect

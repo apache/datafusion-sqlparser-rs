@@ -18,3 +18,6 @@ name = "sqlparser"
 path = "src/lib.rs"
 
 [dependencies]
+log = "0.4.5"
+chrono = "0.4.6"
+uuid = "0.7.1"

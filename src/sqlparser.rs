@@ -27,9 +27,6 @@ use chrono::{NaiveDate,
              Utc,
             };
 
-#[cfg(test)]
-mod tests;
-
 #[derive(Debug, Clone)]
 pub enum ParserError {
     TokenizerError(String),

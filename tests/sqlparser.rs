@@ -1,6 +1,12 @@
+extern crate log;
+extern crate sqlparser;
 
-use super::super::dialect::PostgreSqlDialect;
-use super::*;
+use sqlparser::sqlast::*;
+use sqlparser::sqltokenizer::*;
+use sqlparser::sqlparser::*;
+use sqlparser::dialect::PostgreSqlDialect;
+
+use log::*;
 
 #[test]
 fn test_prev_index(){

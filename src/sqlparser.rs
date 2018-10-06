@@ -18,8 +18,8 @@ use super::dialect::Dialect;
 use super::sqlast::*;
 use super::sqltokenizer::*;
 use chrono::{
-    offset::{FixedOffset, TimeZone},
-    DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc,
+    offset::{FixedOffset},
+    DateTime, NaiveDate, NaiveDateTime, NaiveTime,
 };
 
 #[derive(Debug, Clone)]
@@ -138,19 +138,19 @@ impl Parser {
                         }
                     }
                 }
-                Token::Number(ref n) => {
+                Token::Number(_) => {
                     self.prev_token();
                     self.parse_sql_value()
                 }
-                Token::String(ref s) => {
+                Token::String(_) => {
                     self.prev_token();
                     self.parse_sql_value()
                 }
-                Token::SingleQuotedString(ref s) => {
+                Token::SingleQuotedString(_) => {
                     self.prev_token();
                     self.parse_sql_value()
                 }
-                Token::DoubleQuotedString(ref s) => {
+                Token::DoubleQuotedString(_) => {
                     self.prev_token();
                     self.parse_sql_value()
                 }
@@ -204,7 +204,7 @@ impl Parser {
 
     /// Parse a postgresql casting style which is in the form or expr::datatype
     pub fn parse_pg_cast(&mut self, expr: ASTNode) -> Result<ASTNode, ParserError> {
-        let ast = self.consume_token(&Token::DoubleColon)?;
+        let _ = self.consume_token(&Token::DoubleColon)?;
         let datatype = if let Ok(data_type) = self.parse_data_type() {
             Ok(data_type)
         } else if let Ok(table_name) = self.parse_tablename() {
@@ -328,7 +328,7 @@ impl Parser {
     pub fn skip_whitespace(&mut self) -> Option<Token> {
         loop {
             match self.next_token_no_skip() {
-                Some(Token::Whitespace(ws)) => {
+                Some(Token::Whitespace(_)) => {
                     continue;
                 }
                 token => {
@@ -343,10 +343,10 @@ impl Parser {
         let mut index = self.index;
         loop {
             match self.token_at(index) {
-                Some(Token::Whitespace(ws)) => {
+                Some(Token::Whitespace(_)) => {
                     index = index + 1;
                 }
-                Some(token) => {
+                Some(_) => {
                     return Some(index);
                 }
                 None => {
@@ -392,7 +392,7 @@ impl Parser {
     pub fn prev_token_skip_whitespace(&mut self) -> Option<Token> {
         loop {
             match self.prev_token_no_skip() {
-                Some(Token::Whitespace(ws)) => {
+                Some(Token::Whitespace(_)) => {
                     continue;
                 }
                 token => {
@@ -581,7 +581,7 @@ impl Parser {
 
     pub fn parse_alter(&mut self) -> Result<ASTNode, ParserError> {
         if self.parse_keyword("TABLE") {
-            let is_only = self.parse_keyword("ONLY");
+            let _ = self.parse_keyword("ONLY");
             let table_name = self.parse_tablename()?;
             let operation: Result<AlterOperation, ParserError> =
                 if self.parse_keywords(vec!["ADD", "CONSTRAINT"]) {
@@ -627,7 +627,7 @@ impl Parser {
         };
         self.parse_keyword("FROM");
         self.parse_keyword("STDIN");
-        self.consume_token(&Token::SemiColon);
+        self.consume_token(&Token::SemiColon)?;
         let values = self.parse_tsv()?;
         Ok(ASTNode::SQLCopy {
             table_name,
@@ -724,7 +724,7 @@ impl Parser {
                     Token::DoubleQuotedString(ref s) => {
                         Ok(Value::DoubleQuotedString(s.to_string()))
                     }
-                    other => parser_err!(format!("Unsupported value: {:?}", self.peek_token())),
+                    _ => parser_err!(format!("Unsupported value: {:?}", self.peek_token())),
                 }
             }
             None => parser_err!("Expecting a value, but found EOF"),
@@ -827,7 +827,7 @@ impl Parser {
         let min = self.parse_literal_int()?;
         self.consume_token(&Token::Colon)?;
         let sec = self.parse_literal_double()?;
-        let ms = (sec.fract() * 1000.0).round();
+        let _ = (sec.fract() * 1000.0).round();
         if let Ok(true) = self.consume_token(&Token::Period) {
             let ms = self.parse_literal_int()?;
             Ok(NaiveTime::from_hms_milli(

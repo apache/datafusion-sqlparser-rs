@@ -1,6 +1,6 @@
 use chrono::{
-    offset::{FixedOffset, TimeZone},
-    DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc,
+    offset::{FixedOffset},
+    DateTime, NaiveDate, NaiveDateTime, NaiveTime,
 };
 
 use uuid::Uuid;

@@ -14,15 +14,10 @@
 
 //! SQL Abstract Syntax Tree (AST) types
 //!
-use chrono::{
-    offset::{FixedOffset, TimeZone},
-    DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc,
-};
 
 pub use self::sqltype::SQLType;
 pub use self::table_key::{AlterOperation, Key, TableKey};
 pub use self::value::Value;
-use uuid::Uuid;
 
 pub use self::sql_operator::SQLOperator;
 

@@ -582,7 +582,7 @@ fn parse_alter_table_constraint_primary_key() {
     println!("ast: {:?}", ast);
     assert_eq!(sql, ast.to_string());
     match ast {
-        ASTNode::SQLAlterTable { name, operation } => {
+        ASTNode::SQLAlterTable { name, .. } => {
             assert_eq!(name, "bazaar.address");
         }
         _ => assert!(false),
@@ -598,7 +598,7 @@ fn parse_alter_table_constraint_foreign_key() {
     assert_eq!(sql, ast.to_string());
     println!("ast: {:?}", ast);
     match ast {
-        ASTNode::SQLAlterTable { name, operation } => {
+        ASTNode::SQLAlterTable { name, .. } => {
             assert_eq!(name, "public.customer");
         }
         _ => assert!(false),
@@ -642,7 +642,7 @@ fn parse_timestamps_example() {
 #[test]
 fn parse_timestamps_with_millis_example() {
     let sql = "2017-11-02 19:15:42.308637";
-    let ast = parse_sql(sql);
+    let _ = parse_sql(sql);
 }
 
 #[test]

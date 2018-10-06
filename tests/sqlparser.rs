@@ -1,22 +1,31 @@
 extern crate log;
 extern crate sqlparser;
 
-use sqlparser::sqlast::*;
-use sqlparser::sqltokenizer::*;
-use sqlparser::sqlparser::*;
 use sqlparser::dialect::PostgreSqlDialect;
+use sqlparser::sqlast::*;
+use sqlparser::sqlparser::*;
+use sqlparser::sqltokenizer::*;
 
 use log::*;
 
 #[test]
-fn test_prev_index(){
+fn test_prev_index() {
     let sql: &str = "SELECT version()";
     let mut parser = parser(sql);
     assert_eq!(parser.prev_token(), None);
     assert_eq!(parser.next_token(), Some(Token::Keyword("SELECT".into())));
-    assert_eq!(parser.next_token(), Some(Token::Identifier("version".into())));
-    assert_eq!(parser.prev_token(), Some(Token::Identifier("version".into())));
-    assert_eq!(parser.peek_token(), Some(Token::Identifier("version".into())));
+    assert_eq!(
+        parser.next_token(),
+        Some(Token::Identifier("version".into()))
+    );
+    assert_eq!(
+        parser.prev_token(),
+        Some(Token::Identifier("version".into()))
+    );
+    assert_eq!(
+        parser.peek_token(),
+        Some(Token::Identifier("version".into()))
+    );
     assert_eq!(parser.prev_token(), Some(Token::Keyword("SELECT".into())));
     assert_eq!(parser.prev_token(), None);
 }
@@ -30,7 +39,9 @@ fn parse_delete_statement() {
     match parse_sql(&sql) {
         ASTNode::SQLDelete { relation, .. } => {
             assert_eq!(
-                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString("table".to_string())))),
+                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                    "table".to_string()
+                )))),
                 relation
             );
         }
@@ -56,7 +67,9 @@ fn parse_where_delete_statement() {
             ..
         } => {
             assert_eq!(
-                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString("table".to_string())))),
+                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                    "table".to_string()
+                )))),
                 relation
             );
 
@@ -97,11 +110,21 @@ fn parse_simple_insert() {
     assert_eq!(sql, ast.to_string());
     match ast {
         ASTNode::SQLInsert {
-            table_name, columns, values, ..
+            table_name,
+            columns,
+            values,
+            ..
         } => {
             assert_eq!(table_name, "customer");
             assert!(columns.is_empty());
-            assert_eq!(vec![vec![ASTNode::SQLValue(Value::Long(1)),ASTNode::SQLValue(Value::Long(2)),ASTNode::SQLValue(Value::Long(3))]], values);
+            assert_eq!(
+                vec![vec![
+                    ASTNode::SQLValue(Value::Long(1)),
+                    ASTNode::SQLValue(Value::Long(2)),
+                    ASTNode::SQLValue(Value::Long(3))
+                ]],
+                values
+            );
         }
         _ => assert!(false),
     }
@@ -114,11 +137,21 @@ fn parse_common_insert() {
     assert_eq!(sql, ast.to_string());
     match ast {
         ASTNode::SQLInsert {
-            table_name, columns, values, ..
+            table_name,
+            columns,
+            values,
+            ..
         } => {
             assert_eq!(table_name, "public.customer");
             assert!(columns.is_empty());
-            assert_eq!(vec![vec![ASTNode::SQLValue(Value::Long(1)),ASTNode::SQLValue(Value::Long(2)),ASTNode::SQLValue(Value::Long(3))]], values);
+            assert_eq!(
+                vec![vec![
+                    ASTNode::SQLValue(Value::Long(1)),
+                    ASTNode::SQLValue(Value::Long(2)),
+                    ASTNode::SQLValue(Value::Long(3))
+                ]],
+                values
+            );
         }
         _ => assert!(false),
     }
@@ -131,11 +164,21 @@ fn parse_complex_insert() {
     assert_eq!(sql, ast.to_string());
     match ast {
         ASTNode::SQLInsert {
-            table_name, columns, values, ..
+            table_name,
+            columns,
+            values,
+            ..
         } => {
             assert_eq!(table_name, "db.public.customer");
             assert!(columns.is_empty());
-            assert_eq!(vec![vec![ASTNode::SQLValue(Value::Long(1)),ASTNode::SQLValue(Value::Long(2)),ASTNode::SQLValue(Value::Long(3))]], values);
+            assert_eq!(
+                vec![vec![
+                    ASTNode::SQLValue(Value::Long(1)),
+                    ASTNode::SQLValue(Value::Long(2)),
+                    ASTNode::SQLValue(Value::Long(3))
+                ]],
+                values
+            );
         }
         _ => assert!(false),
     }
@@ -155,11 +198,24 @@ fn parse_insert_with_columns() {
     assert_eq!(sql, ast.to_string());
     match ast {
         ASTNode::SQLInsert {
-            table_name, columns, values, ..
+            table_name,
+            columns,
+            values,
+            ..
         } => {
             assert_eq!(table_name, "public.customer");
-            assert_eq!(columns, vec!["id".to_string(), "name".to_string(), "active".to_string()]);
-            assert_eq!(vec![vec![ASTNode::SQLValue(Value::Long(1)),ASTNode::SQLValue(Value::Long(2)),ASTNode::SQLValue(Value::Long(3))]], values);
+            assert_eq!(
+                columns,
+                vec!["id".to_string(), "name".to_string(), "active".to_string()]
+            );
+            assert_eq!(
+                vec![vec![
+                    ASTNode::SQLValue(Value::Long(1)),
+                    ASTNode::SQLValue(Value::Long(2)),
+                    ASTNode::SQLValue(Value::Long(3))
+                ]],
+                values
+            );
         }
         _ => assert!(false),
     }
@@ -412,7 +468,8 @@ fn parse_create_table_with_defaults() {
             activebool boolean DEFAULT true NOT NULL,
             create_date date DEFAULT now()::text NOT NULL,
             last_update timestamp without time zone DEFAULT now() NOT NULL,
-            active integer NOT NULL)");
+            active integer NOT NULL)",
+    );
     let ast = parse_sql(&sql);
     match ast {
         ASTNode::SQLCreateTable { name, columns } => {
@@ -481,13 +538,15 @@ fn parse_create_table_from_pg_dump() {
 
 #[test]
 fn parse_create_table_with_inherit() {
-    let sql = String::from("\
-     CREATE TABLE bazaar.settings (\
-        settings_id uuid PRIMARY KEY DEFAULT uuid_generate_v4() NOT NULL, \
-        user_id uuid UNIQUE, \
-        value text[], \
-        use_metric boolean DEFAULT true\
-    )");
+    let sql = String::from(
+        "\
+         CREATE TABLE bazaar.settings (\
+         settings_id uuid PRIMARY KEY DEFAULT uuid_generate_v4() NOT NULL, \
+         user_id uuid UNIQUE, \
+         value text[], \
+         use_metric boolean DEFAULT true\
+         )",
+    );
     let ast = parse_sql(&sql);
     assert_eq!(sql, ast.to_string());
     match ast {
@@ -513,15 +572,17 @@ fn parse_create_table_with_inherit() {
 }
 
 #[test]
-fn parse_alter_table_constraint_primary_key(){
-    let sql = String::from("\
-    ALTER TABLE bazaar.address \
-        ADD CONSTRAINT address_pkey PRIMARY KEY (address_id)");
+fn parse_alter_table_constraint_primary_key() {
+    let sql = String::from(
+        "\
+         ALTER TABLE bazaar.address \
+         ADD CONSTRAINT address_pkey PRIMARY KEY (address_id)",
+    );
     let ast = parse_sql(&sql);
     println!("ast: {:?}", ast);
     assert_eq!(sql, ast.to_string());
     match ast {
-        ASTNode::SQLAlterTable{ name, operation } => {
+        ASTNode::SQLAlterTable { name, operation } => {
             assert_eq!(name, "bazaar.address");
         }
         _ => assert!(false),
@@ -529,7 +590,7 @@ fn parse_alter_table_constraint_primary_key(){
 }
 
 #[test]
-fn parse_alter_table_constraint_foreign_key(){
+fn parse_alter_table_constraint_foreign_key() {
     let sql = String::from("\
     ALTER TABLE public.customer \
         ADD CONSTRAINT customer_address_id_fkey FOREIGN KEY (address_id) REFERENCES public.address(address_id)");
@@ -537,7 +598,7 @@ fn parse_alter_table_constraint_foreign_key(){
     assert_eq!(sql, ast.to_string());
     println!("ast: {:?}", ast);
     match ast {
-        ASTNode::SQLAlterTable{ name, operation } => {
+        ASTNode::SQLAlterTable { name, operation } => {
             assert_eq!(name, "public.customer");
         }
         _ => assert!(false),
@@ -545,7 +606,7 @@ fn parse_alter_table_constraint_foreign_key(){
 }
 
 #[test]
-fn parse_copy_example(){
+fn parse_copy_example() {
     let sql = String::from(r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM stdin;
 1	PENELOPE	GUINESS	2006-02-15 09:34:33 0.11111
 2	NICK	WAHLBERG	2006-02-15 09:34:33 0.22222
@@ -572,20 +633,20 @@ PHP	₱ USD $
 }
 
 #[test]
-fn parse_timestamps_example(){
+fn parse_timestamps_example() {
     let sql = "2016-02-15 09:43:33";
     let ast = parse_sql(sql);
     assert_eq!(sql, ast.to_string());
 }
 
 #[test]
-fn parse_timestamps_with_millis_example(){
+fn parse_timestamps_with_millis_example() {
     let sql = "2017-11-02 19:15:42.308637";
     let ast = parse_sql(sql);
 }
 
 #[test]
-fn parse_example_value(){
+fn parse_example_value() {
     let sql = "SARAH.LEWIS@sakilacustomer.org";
     let ast = parse_sql(sql);
     assert_eq!(sql, ast.to_string());
@@ -623,7 +684,10 @@ fn parse_literal_string() {
     assert_eq!(sql, ast.to_string());
     match ast {
         ASTNode::SQLSelect { ref projection, .. } => {
-            assert_eq!(projection[0], ASTNode::SQLValue(Value::SingleQuotedString("one".to_string())));
+            assert_eq!(
+                projection[0],
+                ASTNode::SQLValue(Value::SingleQuotedString("one".to_string()))
+            );
         }
         _ => panic!(),
     }
@@ -634,7 +698,7 @@ fn parse_select_version() {
     let sql = "SELECT @@version";
     let ast = parse_sql(&sql);
     assert_eq!(sql, ast.to_string());
-    match ast{
+    match ast {
         ASTNode::SQLSelect { ref projection, .. } => {
             assert_eq!(
                 projection[0],
@@ -646,7 +710,7 @@ fn parse_select_version() {
 }
 
 #[test]
-fn parse_function_now(){
+fn parse_function_now() {
     let sql = "now()";
     let ast = parse_sql(sql);
     assert_eq!(sql, ast.to_string());
@@ -666,4 +730,3 @@ fn parser(sql: &str) -> Parser {
     debug!("tokens: {:#?}", tokens);
     Parser::new(tokens)
 }
-

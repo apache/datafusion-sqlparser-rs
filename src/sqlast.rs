@@ -14,31 +14,22 @@
 
 //! SQL Abstract Syntax Tree (AST) types
 //!
-use chrono::{NaiveDate,
-             NaiveDateTime,
-             NaiveTime,
-             offset::{FixedOffset,
-                 TimeZone,
-             },
-             DateTime,
-             Utc,
-            };
-
-use uuid::Uuid;
-pub use self::value::Value;
-pub use self::sqltype::SQLType;
-pub use self::table_key::{
-    AlterOperation,
-    TableKey,
-    Key
+use chrono::{
+    offset::{FixedOffset, TimeZone},
+    DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc,
 };
+
+pub use self::sqltype::SQLType;
+pub use self::table_key::{AlterOperation, Key, TableKey};
+pub use self::value::Value;
+use uuid::Uuid;
 
 pub use self::sql_operator::SQLOperator;
 
-mod value;
+mod sql_operator;
 mod sqltype;
 mod table_key;
-mod sql_operator;
+mod value;
 
 /// SQL Abstract Syntax Tree (AST)
 #[derive(Debug, Clone, PartialEq)]
@@ -103,7 +94,7 @@ pub enum ASTNode {
         /// VALUES (vector of rows to insert)
         values: Vec<Vec<ASTNode>>,
     },
-    SQLCopy{
+    SQLCopy {
         /// TABLE
         table_name: String,
         /// COLUMNS
@@ -139,33 +130,43 @@ pub enum ASTNode {
         /// Table name
         name: String,
         operation: AlterOperation,
-    }
+    },
 }
 
-
-impl ToString for ASTNode{
-
+impl ToString for ASTNode {
     fn to_string(&self) -> String {
-        match self{
+        match self {
             ASTNode::SQLIdentifier(s) => s.to_string(),
             ASTNode::SQLWildcard => "*".to_string(),
             ASTNode::SQLCompoundIdentifier(s) => s.join("."),
             ASTNode::SQLAssignment(ass) => ass.to_string(),
-            ASTNode::SQLIsNull(ast) => format!("{} IS NULL",ast.as_ref().to_string()),
+            ASTNode::SQLIsNull(ast) => format!("{} IS NULL", ast.as_ref().to_string()),
             ASTNode::SQLIsNotNull(ast) => format!("{} IS NOT NULL", ast.as_ref().to_string()),
-            ASTNode::SQLBinaryExpr{left, op, right} => {
-                format!("{} {} {}", left.as_ref().to_string(), op.to_string(), right.as_ref().to_string())
-            }
-            ASTNode::SQLCast{expr, data_type} => {
-                format!("CAST({} AS {})", expr.as_ref().to_string(), data_type.to_string())
-            }
+            ASTNode::SQLBinaryExpr { left, op, right } => format!(
+                "{} {} {}",
+                left.as_ref().to_string(),
+                op.to_string(),
+                right.as_ref().to_string()
+            ),
+            ASTNode::SQLCast { expr, data_type } => format!(
+                "CAST({} AS {})",
+                expr.as_ref().to_string(),
+                data_type.to_string()
+            ),
             ASTNode::SQLNested(ast) => format!("({})", ast.as_ref().to_string()),
-            ASTNode::SQLUnary {operator, rex } => {
+            ASTNode::SQLUnary { operator, rex } => {
                 format!("{} {}", operator.to_string(), rex.as_ref().to_string())
             }
             ASTNode::SQLValue(v) => v.to_string(),
-            ASTNode::SQLFunction{id, args} => format!("{}({})", id, args.iter().map(|a|a.to_string()).collect::<Vec<String>>().join(", ")),
-            ASTNode::SQLSelect{
+            ASTNode::SQLFunction { id, args } => format!(
+                "{}({})",
+                id,
+                args.iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+            ASTNode::SQLSelect {
                 projection,
                 relation,
                 selection,
@@ -174,82 +175,147 @@ impl ToString for ASTNode{
                 having,
                 limit,
             } => {
-                let mut s = format!("SELECT {}", projection.iter().map(|p|p.to_string()).collect::<Vec<String>>().join(", "));
-                if let Some(relation) = relation{
+                let mut s = format!(
+                    "SELECT {}",
+                    projection
+                        .iter()
+                        .map(|p| p.to_string())
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                );
+                if let Some(relation) = relation {
                     s += &format!(" FROM {}", relation.as_ref().to_string());
                 }
-                if let Some(selection) = selection{
+                if let Some(selection) = selection {
                     s += &format!(" WHERE {}", selection.as_ref().to_string());
                 }
                 if let Some(group_by) = group_by {
-                    s += &format!(" GROUP BY {}", group_by.iter().map(|g|g.to_string()).collect::<Vec<String>>().join(", "));
+                    s += &format!(
+                        " GROUP BY {}",
+                        group_by
+                            .iter()
+                            .map(|g| g.to_string())
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    );
                 }
-                if let Some(having) = having{
+                if let Some(having) = having {
                     s += &format!(" HAVING {}", having.as_ref().to_string());
                 }
-                if let Some(order_by) = order_by{
-                    s += &format!(" ORDER BY {}", order_by.iter().map(|o|o.to_string()).collect::<Vec<String>>().join(", "));
+                if let Some(order_by) = order_by {
+                    s += &format!(
+                        " ORDER BY {}",
+                        order_by
+                            .iter()
+                            .map(|o| o.to_string())
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    );
                 }
                 if let Some(limit) = limit {
                     s += &format!(" LIMIT {}", limit.as_ref().to_string());
                 }
                 s
             }
-            ASTNode::SQLInsert{ table_name, columns, values } => {
+            ASTNode::SQLInsert {
+                table_name,
+                columns,
+                values,
+            } => {
                 let mut s = format!("INSERT INTO {}", table_name);
                 if columns.len() > 0 {
                     s += &format!(" ({})", columns.join(", "));
                 }
                 if values.len() > 0 {
-                    s += &format!(" VALUES({})", 
-                                 values.iter()
-                                    .map(|row|row.iter().map(|c|c.to_string())
-                                            .collect::<Vec<String>>().join(", ")
-                                        ).collect::<Vec<String>>().join(", ")
-                                );
+                    s += &format!(
+                        " VALUES({})",
+                        values
+                            .iter()
+                            .map(|row| row
+                                .iter()
+                                .map(|c| c.to_string())
+                                .collect::<Vec<String>>()
+                                .join(", "))
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    );
                 }
                 s
             }
-            ASTNode::SQLCopy{table_name, columns, values} => {
+            ASTNode::SQLCopy {
+                table_name,
+                columns,
+                values,
+            } => {
                 let mut s = format!("COPY {}", table_name);
                 if columns.len() > 0 {
-                    s += &format!(" ({})", columns.iter().map(|c|c.to_string()).collect::<Vec<String>>().join(", "));
+                    s += &format!(
+                        " ({})",
+                        columns
+                            .iter()
+                            .map(|c| c.to_string())
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    );
                 }
                 s += " FROM stdin; ";
                 if values.len() > 0 {
-                    s += &format!("\n{}",
-                                 values.iter()
-                                    .map(|v|v.to_string())
-                                        .collect::<Vec<String>>().join("\t")
-                                );
+                    s += &format!(
+                        "\n{}",
+                        values
+                            .iter()
+                            .map(|v| v.to_string())
+                            .collect::<Vec<String>>()
+                            .join("\t")
+                    );
                 }
                 s += "\n\\.";
                 s
             }
-            ASTNode::SQLUpdate{table_name, assignments, selection} => {
+            ASTNode::SQLUpdate {
+                table_name,
+                assignments,
+                selection,
+            } => {
                 let mut s = format!("UPDATE {}", table_name);
                 if assignments.len() > 0 {
-                    s += &format!("{}", assignments.iter().map(|ass|ass.to_string()).collect::<Vec<String>>().join(", "));
+                    s += &format!(
+                        "{}",
+                        assignments
+                            .iter()
+                            .map(|ass| ass.to_string())
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    );
                 }
-                if let Some(selection) = selection{
+                if let Some(selection) = selection {
                     s += &format!(" WHERE {}", selection.as_ref().to_string());
                 }
                 s
             }
-            ASTNode::SQLDelete{relation, selection} => {
+            ASTNode::SQLDelete {
+                relation,
+                selection,
+            } => {
                 let mut s = String::from("DELETE");
-                if let Some(relation) = relation{
+                if let Some(relation) = relation {
                     s += &format!(" FROM {}", relation.as_ref().to_string());
                 }
-                if let Some(selection) = selection{
+                if let Some(selection) = selection {
                     s += &format!(" WHERE {}", selection.as_ref().to_string());
                 }
                 s
             }
-            ASTNode::SQLCreateTable{name, columns} => {
-                format!("CREATE TABLE {} ({})", name, columns.iter().map(|c|c.to_string()).collect::<Vec<String>>().join(", "))
-            }
-            ASTNode::SQLAlterTable{name, operation} => {
+            ASTNode::SQLCreateTable { name, columns } => format!(
+                "CREATE TABLE {} ({})",
+                name,
+                columns
+                    .iter()
+                    .map(|c| c.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+            ASTNode::SQLAlterTable { name, operation } => {
                 format!("ALTER TABLE {} {}", name, operation.to_string())
             }
         }
@@ -264,8 +330,7 @@ pub struct SQLAssignment {
     value: Box<ASTNode>,
 }
 
-impl ToString for SQLAssignment{
-    
+impl ToString for SQLAssignment {
     fn to_string(&self) -> String {
         format!("SET {} = {}", self.id, self.value.as_ref().to_string())
     }
@@ -284,11 +349,11 @@ impl SQLOrderByExpr {
     }
 }
 
-impl ToString for SQLOrderByExpr{
+impl ToString for SQLOrderByExpr {
     fn to_string(&self) -> String {
-        if self.asc{
+        if self.asc {
             format!("{} ASC", self.expr.as_ref().to_string())
-        }else{
+        } else {
             format!("{} DESC", self.expr.as_ref().to_string())
         }
     }
@@ -305,24 +370,21 @@ pub struct SQLColumnDef {
     pub allow_null: bool,
 }
 
-
-impl ToString for SQLColumnDef{
-
+impl ToString for SQLColumnDef {
     fn to_string(&self) -> String {
         let mut s = format!("{} {}", self.name, self.data_type.to_string());
-        if self.is_primary{
+        if self.is_primary {
             s += " PRIMARY KEY";
         }
-        if self.is_unique{
+        if self.is_unique {
             s += " UNIQUE";
         }
-        if let Some(ref default) = self.default{
+        if let Some(ref default) = self.default {
             s += &format!(" DEFAULT {}", default.as_ref().to_string());
         }
-        if !self.allow_null{
+        if !self.allow_null {
             s += " NOT NULL";
         }
         s
     }
 }
-

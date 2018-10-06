@@ -32,5 +32,3 @@ pub trait Dialect {
     /// Determine if a character is a valid identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
 }
-
-

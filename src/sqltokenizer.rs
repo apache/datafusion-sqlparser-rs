@@ -71,7 +71,7 @@ pub enum Token {
     RParen,
     /// Period (used for compound identifiers or projections into nested types)
     Period,
-    /// Colon `:` 
+    /// Colon `:`
     Colon,
     /// DoubleColon `::` (used for casting in postgresql)
     DoubleColon,
@@ -91,16 +91,16 @@ pub enum Token {
     RBrace,
 }
 
-impl ToString for Token{
+impl ToString for Token {
     fn to_string(&self) -> String {
-        match self{
+        match self {
             Token::Identifier(ref id) => id.to_string(),
-            Token::Keyword(ref k) =>k.to_string(),
+            Token::Keyword(ref k) => k.to_string(),
             Token::Number(ref n) => n.to_string(),
             Token::String(ref s) => s.to_string(),
             Token::Char(ref c) => c.to_string(),
-            Token::SingleQuotedString(ref s) => format!("'{}'",s),
-            Token::DoubleQuotedString(ref s) => format!("\"{}\"",s),
+            Token::SingleQuotedString(ref s) => format!("'{}'", s),
+            Token::DoubleQuotedString(ref s) => format!("\"{}\"", s),
             Token::Comma => ",".to_string(),
             Token::Whitespace(ws) => ws.to_string(),
             Token::Eq => "=".to_string(),
@@ -131,15 +131,15 @@ impl ToString for Token{
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Whitespace{
+pub enum Whitespace {
     Space,
     Newline,
-    Tab
+    Tab,
 }
 
-impl ToString for Whitespace{
+impl ToString for Whitespace {
     fn to_string(&self) -> String {
-        match self{
+        match self {
             Whitespace::Space => " ".to_string(),
             Whitespace::Newline => "\n".to_string(),
             Whitespace::Tab => "\t".to_string(),
@@ -349,10 +349,8 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some(&ch) => match ch {
                             // double colon
-                            ':' => {
-                                self.consume_and_return(chars, Token::DoubleColon)
-                            }
-                             _ => Ok(Some(Token::Colon)),
+                            ':' => self.consume_and_return(chars, Token::DoubleColon),
+                            _ => Ok(Some(Token::Colon)),
                         },
                         None => Ok(Some(Token::Colon)),
                     }
@@ -365,13 +363,17 @@ impl<'a> Tokenizer<'a> {
                 '&' => self.consume_and_return(chars, Token::Ampersand),
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
-                other => self.consume_and_return(chars, Token::Char(other))
+                other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),
         }
     }
 
-    fn consume_and_return(&self, chars: &mut Peekable<Chars>, t: Token) -> Result<Option<Token>, TokenizerError> {
+    fn consume_and_return(
+        &self,
+        chars: &mut Peekable<Chars>,
+        t: Token,
+    ) -> Result<Option<Token>, TokenizerError> {
         chars.next();
         Ok(Some(t))
     }
@@ -486,16 +488,15 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
         println!("tokens: {:#?}", tokens);
         let expected = vec![
-                    Token::Whitespace(Whitespace::Newline),
-                    Token::Char('م'),
-                    Token::Char('ص'),
-                    Token::Char('ط'),
-                    Token::Char('ف'),
-                    Token::Char('ى'),
-                    Token::Identifier("h".to_string())
-            ];
+            Token::Whitespace(Whitespace::Newline),
+            Token::Char('م'),
+            Token::Char('ص'),
+            Token::Char('ط'),
+            Token::Char('ف'),
+            Token::Char('ى'),
+            Token::Identifier("h".to_string()),
+        ];
         compare(expected, tokens);
-
     }
 
     #[test]

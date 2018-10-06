@@ -17,15 +17,10 @@
 use super::dialect::Dialect;
 use super::sqlast::*;
 use super::sqltokenizer::*;
-use chrono::{NaiveDate,
-             NaiveDateTime,
-             NaiveTime,
-             offset::{FixedOffset,
-                 TimeZone,
-             },
-             DateTime,
-             Utc,
-            };
+use chrono::{
+    offset::{FixedOffset, TimeZone},
+    DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc,
+};
 
 #[derive(Debug, Clone)]
 pub enum ParserError {
@@ -95,100 +90,102 @@ impl Parser {
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<ASTNode, ParserError> {
         match self.next_token() {
-            Some(t) => {
-                match t {
-                    Token::Keyword(k) => match k.to_uppercase().as_ref() {
-                        "SELECT" => Ok(self.parse_select()?),
-                        "CREATE" => Ok(self.parse_create()?),
-                        "DELETE" => Ok(self.parse_delete()?),
-                        "INSERT" => Ok(self.parse_insert()?),
-                        "ALTER" => Ok(self.parse_alter()?),
-                        "COPY"  => Ok(self.parse_copy()?),
-                        "TRUE" => {
-                            self.prev_token();
-                            self.parse_sql_value()
-                        }
-                        "FALSE" => {
-                            self.prev_token();
-                            self.parse_sql_value()
-                        }
-                        "NULL" => {
-                            self.prev_token();
-                            self.parse_sql_value()
-                        }
-                        _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
-                    },
-                    Token::Mult => Ok(ASTNode::SQLWildcard),
-                    Token::Identifier(id) => {
-                        if "CAST" == id.to_uppercase(){
-                            self.parse_cast_expression()
-                        }else{
-                            match self.peek_token() {
-                                Some(Token::LParen) => {
-                                    self.parse_function_or_pg_cast(&id)
-                                }
-                                Some(Token::Period) => {
-                                    let mut id_parts: Vec<String> = vec![id];
-                                    while self.peek_token() == Some(Token::Period) {
-                                        self.consume_token(&Token::Period)?;
-                                        match self.next_token() {
-                                            Some(Token::Identifier(id)) => id_parts.push(id),
-                                            _ => {
-                                                return parser_err!(format!(
-                                                    "Error parsing compound identifier"
-                                                ))
-                                            }
+            Some(t) => match t {
+                Token::Keyword(k) => match k.to_uppercase().as_ref() {
+                    "SELECT" => Ok(self.parse_select()?),
+                    "CREATE" => Ok(self.parse_create()?),
+                    "DELETE" => Ok(self.parse_delete()?),
+                    "INSERT" => Ok(self.parse_insert()?),
+                    "ALTER" => Ok(self.parse_alter()?),
+                    "COPY" => Ok(self.parse_copy()?),
+                    "TRUE" => {
+                        self.prev_token();
+                        self.parse_sql_value()
+                    }
+                    "FALSE" => {
+                        self.prev_token();
+                        self.parse_sql_value()
+                    }
+                    "NULL" => {
+                        self.prev_token();
+                        self.parse_sql_value()
+                    }
+                    _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
+                },
+                Token::Mult => Ok(ASTNode::SQLWildcard),
+                Token::Identifier(id) => {
+                    if "CAST" == id.to_uppercase() {
+                        self.parse_cast_expression()
+                    } else {
+                        match self.peek_token() {
+                            Some(Token::LParen) => self.parse_function_or_pg_cast(&id),
+                            Some(Token::Period) => {
+                                let mut id_parts: Vec<String> = vec![id];
+                                while self.peek_token() == Some(Token::Period) {
+                                    self.consume_token(&Token::Period)?;
+                                    match self.next_token() {
+                                        Some(Token::Identifier(id)) => id_parts.push(id),
+                                        _ => {
+                                            return parser_err!(format!(
+                                                "Error parsing compound identifier"
+                                            ))
                                         }
                                     }
-                                    Ok(ASTNode::SQLCompoundIdentifier(id_parts))
                                 }
-                                _ => Ok(ASTNode::SQLIdentifier(id)),
+                                Ok(ASTNode::SQLCompoundIdentifier(id_parts))
                             }
+                            _ => Ok(ASTNode::SQLIdentifier(id)),
                         }
                     }
-                    Token::Number(ref n) => {
-                        self.prev_token();
-                        self.parse_sql_value()
-                    },
-                    Token::String(ref s) => {
-                        self.prev_token();
-                        self.parse_sql_value()
-                    }
-                    Token::SingleQuotedString(ref s) => {
-                        self.prev_token();
-                        self.parse_sql_value()
-                    }
-                    Token::DoubleQuotedString(ref s) => {
-                        self.prev_token();
-                        self.parse_sql_value()
-                    }
-                    _ => parser_err!(format!(
-                        "Prefix parser expected a keyword but found {:?}",
-                        t
-                    )),
                 }
-            }
+                Token::Number(ref n) => {
+                    self.prev_token();
+                    self.parse_sql_value()
+                }
+                Token::String(ref s) => {
+                    self.prev_token();
+                    self.parse_sql_value()
+                }
+                Token::SingleQuotedString(ref s) => {
+                    self.prev_token();
+                    self.parse_sql_value()
+                }
+                Token::DoubleQuotedString(ref s) => {
+                    self.prev_token();
+                    self.parse_sql_value()
+                }
+                _ => parser_err!(format!(
+                    "Prefix parser expected a keyword but found {:?}",
+                    t
+                )),
+            },
             None => parser_err!(format!("Prefix parser expected a keyword but hit EOF")),
         }
     }
 
     pub fn parse_function_or_pg_cast(&mut self, id: &str) -> Result<ASTNode, ParserError> {
         let func = self.parse_function(&id)?;
-        if let Some(Token::DoubleColon) = self.peek_token(){
+        if let Some(Token::DoubleColon) = self.peek_token() {
             self.parse_pg_cast(func)
-        }else{
+        } else {
             Ok(func)
         }
     }
 
     pub fn parse_function(&mut self, id: &str) -> Result<ASTNode, ParserError> {
         self.consume_token(&Token::LParen)?;
-        if let Ok(true) = self.consume_token(&Token::RParen){
-            Ok(ASTNode::SQLFunction { id: id.to_string(), args: vec![] })
-        }else{
+        if let Ok(true) = self.consume_token(&Token::RParen) {
+            Ok(ASTNode::SQLFunction {
+                id: id.to_string(),
+                args: vec![],
+            })
+        } else {
             let args = self.parse_expr_list()?;
             self.consume_token(&Token::RParen)?;
-            Ok(ASTNode::SQLFunction { id: id.to_string(), args })
+            Ok(ASTNode::SQLFunction {
+                id: id.to_string(),
+                args,
+            })
         }
     }
 
@@ -205,24 +202,23 @@ impl Parser {
         })
     }
 
-
     /// Parse a postgresql casting style which is in the form or expr::datatype
     pub fn parse_pg_cast(&mut self, expr: ASTNode) -> Result<ASTNode, ParserError> {
         let ast = self.consume_token(&Token::DoubleColon)?;
-        let datatype = if let Ok(data_type) = self.parse_data_type(){
+        let datatype = if let Ok(data_type) = self.parse_data_type() {
             Ok(data_type)
-        }else if let Ok(table_name) = self.parse_tablename(){
+        } else if let Ok(table_name) = self.parse_tablename() {
             Ok(SQLType::Custom(table_name))
-        }else{
-             parser_err!("Expecting datatype or identifier")
+        } else {
+            parser_err!("Expecting datatype or identifier")
         };
-        let pg_cast = ASTNode::SQLCast{
-                expr: Box::new(expr),
-                data_type: datatype?,
-            };
-        if let Some(Token::DoubleColon) = self.peek_token(){
+        let pg_cast = ASTNode::SQLCast {
+            expr: Box::new(expr),
+            data_type: datatype?,
+        };
+        if let Some(Token::DoubleColon) = self.peek_token() {
             self.parse_pg_cast(pg_cast)
-        }else{
+        } else {
             Ok(pg_cast)
         }
     }
@@ -236,21 +232,23 @@ impl Parser {
         debug!("parsing infix");
         match self.next_token() {
             Some(tok) => match tok {
-                Token::Keyword(ref k) => if k == "IS" {
-                    if self.parse_keywords(vec!["NULL"]) {
-                        Ok(Some(ASTNode::SQLIsNull(Box::new(expr))))
-                    } else if self.parse_keywords(vec!["NOT", "NULL"]) {
-                        Ok(Some(ASTNode::SQLIsNotNull(Box::new(expr))))
+                Token::Keyword(ref k) => {
+                    if k == "IS" {
+                        if self.parse_keywords(vec!["NULL"]) {
+                            Ok(Some(ASTNode::SQLIsNull(Box::new(expr))))
+                        } else if self.parse_keywords(vec!["NOT", "NULL"]) {
+                            Ok(Some(ASTNode::SQLIsNotNull(Box::new(expr))))
+                        } else {
+                            parser_err!("Invalid tokens after IS")
+                        }
                     } else {
-                        parser_err!("Invalid tokens after IS")
+                        Ok(Some(ASTNode::SQLBinaryExpr {
+                            left: Box::new(expr),
+                            op: self.to_sql_operator(&tok)?,
+                            right: Box::new(self.parse_expr(precedence)?),
+                        }))
                     }
-                } else {
-                    Ok(Some(ASTNode::SQLBinaryExpr {
-                        left: Box::new(expr),
-                        op: self.to_sql_operator(&tok)?,
-                        right: Box::new(self.parse_expr(precedence)?),
-                    }))
-                },
+                }
                 Token::Eq
                 | Token::Neq
                 | Token::Gt
@@ -266,10 +264,10 @@ impl Parser {
                     op: self.to_sql_operator(&tok)?,
                     right: Box::new(self.parse_expr(precedence)?),
                 })),
-                | Token::DoubleColon => {
+                Token::DoubleColon => {
                     let pg_cast = self.parse_pg_cast(expr)?;
                     Ok(Some(pg_cast))
-                },
+                }
                 _ => parser_err!(format!("No infix parser for token {:?}", tok)),
             },
             None => Ok(None),
@@ -327,10 +325,9 @@ impl Parser {
         self.peek_token_skip_whitespace()
     }
 
-
     pub fn skip_whitespace(&mut self) -> Option<Token> {
         loop {
-            match self.next_token_no_skip(){
+            match self.next_token_no_skip() {
                 Some(Token::Whitespace(ws)) => {
                     continue;
                 }
@@ -345,7 +342,7 @@ impl Parser {
     fn til_non_whitespace(&self) -> Option<usize> {
         let mut index = self.index;
         loop {
-            match self.token_at(index){
+            match self.token_at(index) {
                 Some(Token::Whitespace(ws)) => {
                     index = index + 1;
                 }
@@ -360,22 +357,21 @@ impl Parser {
     }
 
     /// see the token at this index
-    fn token_at(&self, n: usize) -> Option<Token>{
-        if let Some(token) = self.tokens.get(n){
+    fn token_at(&self, n: usize) -> Option<Token> {
+        if let Some(token) = self.tokens.get(n) {
             Some(token.clone())
-        }else{
+        } else {
             None
         }
     }
 
     pub fn peek_token_skip_whitespace(&self) -> Option<Token> {
-        if let Some(n) = self.til_non_whitespace(){
+        if let Some(n) = self.til_non_whitespace() {
             self.token_at(n)
-        }else{
+        } else {
             None
         }
     }
-
 
     /// Get the next token skipping whitespace and increment the token index
     pub fn next_token(&mut self) -> Option<Token> {
@@ -393,15 +389,15 @@ impl Parser {
 
     /// if prev token is whitespace skip it
     /// if prev token is not whitespace skipt it as well
-    pub fn prev_token_skip_whitespace(&mut self) -> Option<Token>{
-        loop{
-            match self.prev_token_no_skip(){
+    pub fn prev_token_skip_whitespace(&mut self) -> Option<Token> {
+        loop {
+            match self.prev_token_no_skip() {
                 Some(Token::Whitespace(ws)) => {
                     continue;
                 }
                 token => {
                     return token;
-                },
+                }
             }
         }
     }
@@ -454,20 +450,17 @@ impl Parser {
     /// Consume the next token if it matches the expected token, otherwise return an error
     pub fn consume_token(&mut self, expected: &Token) -> Result<bool, ParserError> {
         match self.peek_token() {
-            Some(ref t) => if *t == *expected {
-                self.next_token();
-                Ok(true)
-            } else {
-                Ok(false)
-            },
-            other => parser_err!(format!(
-                "expected token {:?} but was {:?}",
-                expected,
-                other,
-            )),
+            Some(ref t) => {
+                if *t == *expected {
+                    self.next_token();
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            other => parser_err!(format!("expected token {:?} but was {:?}", expected, other,)),
         }
     }
-
 
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<ASTNode, ParserError> {
@@ -481,10 +474,10 @@ impl Parser {
                         if let Ok(data_type) = self.parse_data_type() {
                             let is_primary = self.parse_keywords(vec!["PRIMARY", "KEY"]);
                             let is_unique = self.parse_keyword("UNIQUE");
-                            let default = if self.parse_keyword("DEFAULT"){
+                            let default = if self.parse_keyword("DEFAULT") {
                                 let expr = self.parse_expr(0)?;
                                 Some(Box::new(expr))
-                            }else{
+                            } else {
                                 None
                             };
                             let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
@@ -527,16 +520,20 @@ impl Parser {
                                 }
                             }
                         } else {
-                            return parser_err!(
-                                format!("Error parsing data type in column definition near: {:?}", self.peek_token())
-                            );
+                            return parser_err!(format!(
+                                "Error parsing data type in column definition near: {:?}",
+                                self.peek_token()
+                            ));
                         }
                     } else {
                         return parser_err!("Error parsing column name");
                     }
                 }
             }
-            Ok(ASTNode::SQLCreateTable { name: table_name, columns })
+            Ok(ASTNode::SQLCreateTable {
+                name: table_name,
+                columns,
+            })
         } else {
             parser_err!(format!(
                 "Unexpected token after CREATE: {:?}",
@@ -550,34 +547,35 @@ impl Parser {
         let is_unique_key = self.parse_keywords(vec!["UNIQUE", "KEY"]);
         let is_foreign_key = self.parse_keywords(vec!["FOREIGN", "KEY"]);
         self.consume_token(&Token::LParen)?;
-        let column_names= self.parse_column_names()?;
+        let column_names = self.parse_column_names()?;
         self.consume_token(&Token::RParen)?;
-        let key = Key{ 
+        let key = Key {
             name: constraint_name.to_string(),
-            columns: column_names
+            columns: column_names,
         };
-        if is_primary_key{
+        if is_primary_key {
             Ok(TableKey::PrimaryKey(key))
-        } 
-        else if is_unique_key{
+        } else if is_unique_key {
             Ok(TableKey::UniqueKey(key))
-        }
-        else if is_foreign_key{
-            if self.parse_keyword("REFERENCES"){
+        } else if is_foreign_key {
+            if self.parse_keyword("REFERENCES") {
                 let foreign_table = self.parse_tablename()?;
                 self.consume_token(&Token::LParen)?;
                 let referred_columns = self.parse_column_names()?;
                 self.consume_token(&Token::RParen)?;
-                Ok(TableKey::ForeignKey{
+                Ok(TableKey::ForeignKey {
                     key,
                     foreign_table,
                     referred_columns,
                 })
-            }else{
+            } else {
                 parser_err!("Expecting references")
             }
-        }else{
-           parser_err!(format!("Expecting primary key, unique key, or foreign key, found: {:?}", self.peek_token()))
+        } else {
+            parser_err!(format!(
+                "Expecting primary key, unique key, or foreign key, found: {:?}",
+                self.peek_token()
+            ))
         }
     }
 
@@ -585,52 +583,64 @@ impl Parser {
         if self.parse_keyword("TABLE") {
             let is_only = self.parse_keyword("ONLY");
             let table_name = self.parse_tablename()?;
-            let operation:Result<AlterOperation,ParserError> = if self.parse_keywords(vec!["ADD", "CONSTRAINT"]){
-                match self.next_token(){
-                    Some(Token::Identifier(ref id)) => {
-                        let table_key = self.parse_table_key(id)?;
-                        Ok(AlterOperation::AddConstraint(table_key))
+            let operation: Result<AlterOperation, ParserError> =
+                if self.parse_keywords(vec!["ADD", "CONSTRAINT"]) {
+                    match self.next_token() {
+                        Some(Token::Identifier(ref id)) => {
+                            let table_key = self.parse_table_key(id)?;
+                            Ok(AlterOperation::AddConstraint(table_key))
+                        }
+                        _ => {
+                            return parser_err!(format!(
+                                "Expecting identifier, found : {:?}",
+                                self.peek_token()
+                            ));
+                        }
                     }
-                    _ => {
-                        return parser_err!(format!("Expecting identifier, found : {:?}", self.peek_token()));
-                    }
-                }
-            }else{
-                return parser_err!(format!("Expecting ADD CONSTRAINT, found :{:?}", self.peek_token()));
-            };
-            Ok(ASTNode::SQLAlterTable{
+                } else {
+                    return parser_err!(format!(
+                        "Expecting ADD CONSTRAINT, found :{:?}",
+                        self.peek_token()
+                    ));
+                };
+            Ok(ASTNode::SQLAlterTable {
                 name: table_name,
                 operation: operation?,
             })
         } else {
-            parser_err!(format!("Expecting TABLE after ALTER, found {:?}", self.peek_token()))
+            parser_err!(format!(
+                "Expecting TABLE after ALTER, found {:?}",
+                self.peek_token()
+            ))
         }
     }
-
 
     /// Parse a copy statement
     pub fn parse_copy(&mut self) -> Result<ASTNode, ParserError> {
         let table_name = self.parse_tablename()?;
-        let columns = if self.consume_token(&Token::LParen)?{
+        let columns = if self.consume_token(&Token::LParen)? {
             let column_names = self.parse_column_names()?;
             self.consume_token(&Token::RParen)?;
             column_names
-        }else{
+        } else {
             vec![]
         };
         self.parse_keyword("FROM");
         self.parse_keyword("STDIN");
         self.consume_token(&Token::SemiColon);
         let values = self.parse_tsv()?;
-        Ok(ASTNode::SQLCopy{table_name, columns, values})
+        Ok(ASTNode::SQLCopy {
+            table_name,
+            columns,
+            values,
+        })
     }
 
     /// Parse a tab separated values in
     /// COPY payload
-    fn parse_tsv(&mut self) -> Result<Vec<Value>, ParserError>{
+    fn parse_tsv(&mut self) -> Result<Vec<Value>, ParserError> {
         let values = self.parse_tab_value()?;
         Ok(values)
-
     }
 
     fn parse_sql_value(&mut self) -> Result<ASTNode, ParserError> {
@@ -640,8 +650,8 @@ impl Parser {
     fn parse_tab_value(&mut self) -> Result<Vec<Value>, ParserError> {
         let mut values = vec![];
         let mut content = String::from("");
-        while let Some(t) = self.next_token_no_skip(){
-            match t{
+        while let Some(t) = self.next_token_no_skip() {
+            match t {
                 Token::Whitespace(Whitespace::Tab) => {
                     values.push(Value::String(content.to_string()));
                     content.clear();
@@ -653,11 +663,12 @@ impl Parser {
                 Token::Backslash => {
                     if let Ok(true) = self.consume_token(&Token::Period) {
                         return Ok(values);
-                    }if let Some(token) = self.next_token(){
-                        if token == Token::Identifier("N".to_string()){
+                    }
+                    if let Some(token) = self.next_token() {
+                        if token == Token::Identifier("N".to_string()) {
                             values.push(Value::Null);
                         }
-                    }else{
+                    } else {
                         continue;
                     }
                 }
@@ -685,10 +696,10 @@ impl Parser {
                         Err(e) => {
                             let index = self.index;
                             self.prev_token();
-                            if let Ok(timestamp) = self.parse_timestamp_value(){
+                            if let Ok(timestamp) = self.parse_timestamp_value() {
                                 println!("timstamp: {:?}", timestamp);
                                 Ok(timestamp)
-                            }else{
+                            } else {
                                 self.index = index;
                                 parser_err!(format!("Could not parse '{}' as i64: {}", n, e))
                             }
@@ -696,10 +707,10 @@ impl Parser {
                     },
                     Token::Number(ref n) => match n.parse::<i64>() {
                         Ok(n) => {
-                            if let Some(Token::Minus) = self.peek_token(){
+                            if let Some(Token::Minus) = self.peek_token() {
                                 self.prev_token();
                                 self.parse_timestamp_value()
-                            }else{
+                            } else {
                                 Ok(Value::Long(n))
                             }
                         }
@@ -707,8 +718,12 @@ impl Parser {
                     },
                     Token::Identifier(id) => Ok(Value::String(id.to_string())),
                     Token::String(ref s) => Ok(Value::String(s.to_string())),
-                    Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
-                    Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
+                    Token::SingleQuotedString(ref s) => {
+                        Ok(Value::SingleQuotedString(s.to_string()))
+                    }
+                    Token::DoubleQuotedString(ref s) => {
+                        Ok(Value::DoubleQuotedString(s.to_string()))
+                    }
                     other => parser_err!(format!("Unsupported value: {:?}", self.peek_token())),
                 }
             }
@@ -744,9 +759,8 @@ impl Parser {
         }
     }
 
-
     pub fn parse_timezone_offset(&mut self) -> Result<i8, ParserError> {
-        match self.next_token(){
+        match self.next_token() {
             Some(Token::Plus) => {
                 let n = self.parse_literal_int()?;
                 Ok(n as i8)
@@ -755,46 +769,56 @@ impl Parser {
                 let n = self.parse_literal_int()?;
                 Ok(-n as i8)
             }
-            other => parser_err!(format!("Expecting `+` or `-` in timezone, but found {:?}", other)),
+            other => parser_err!(format!(
+                "Expecting `+` or `-` in timezone, but found {:?}",
+                other
+            )),
         }
     }
-
 
     pub fn parse_timestamp_value(&mut self) -> Result<Value, ParserError> {
         let year = self.parse_literal_int()?;
         let date = self.parse_date(year)?;
-        if let Ok(time) = self.parse_time(){
+        if let Ok(time) = self.parse_time() {
             let date_time = NaiveDateTime::new(date, time);
-            match self.peek_token(){
-                Some(token) => match token{
-                        Token::Plus | Token::Minus => {
-                            let tz = self.parse_timezone_offset()?;
-                            let offset =  FixedOffset::east(tz as i32 * 3600);
-                            Ok(Value::Timestamp(DateTime::from_utc(date_time, offset)))
-                        }
-                        _ => Ok(Value::DateTime(date_time)),
-                    },
+            match self.peek_token() {
+                Some(token) => match token {
+                    Token::Plus | Token::Minus => {
+                        let tz = self.parse_timezone_offset()?;
+                        let offset = FixedOffset::east(tz as i32 * 3600);
+                        Ok(Value::Timestamp(DateTime::from_utc(date_time, offset)))
+                    }
+                    _ => Ok(Value::DateTime(date_time)),
+                },
                 _ => Ok(Value::DateTime(date_time)),
             }
-        }else{
-            parser_err!(format!("Expecting time after date, but found {:?}", self.peek_token()))
+        } else {
+            parser_err!(format!(
+                "Expecting time after date, but found {:?}",
+                self.peek_token()
+            ))
         }
     }
 
     pub fn parse_date(&mut self, year: i64) -> Result<NaiveDate, ParserError> {
-        if let Ok(true) = self.consume_token(&Token::Minus){
+        if let Ok(true) = self.consume_token(&Token::Minus) {
             let month = self.parse_literal_int()?;
-            if let Ok(true) = self.consume_token(&Token::Minus){
+            if let Ok(true) = self.consume_token(&Token::Minus) {
                 let day = self.parse_literal_int()?;
                 let date = NaiveDate::from_ymd(year as i32, month as u32, day as u32);
                 Ok(date)
-            }else{
-                parser_err!(format!("Expecting `-` for date separator, found {:?}", self.peek_token()))
+            } else {
+                parser_err!(format!(
+                    "Expecting `-` for date separator, found {:?}",
+                    self.peek_token()
+                ))
             }
-        }else{
-            parser_err!(format!("Expecting `-` for date separator, found {:?}", self.peek_token()))
+        } else {
+            parser_err!(format!(
+                "Expecting `-` for date separator, found {:?}",
+                self.peek_token()
+            ))
         }
-
     }
 
     pub fn parse_time(&mut self) -> Result<NaiveTime, ParserError> {
@@ -804,10 +828,15 @@ impl Parser {
         self.consume_token(&Token::Colon)?;
         let sec = self.parse_literal_double()?;
         let ms = (sec.fract() * 1000.0).round();
-        if let Ok(true) = self.consume_token(&Token::Period){
+        if let Ok(true) = self.consume_token(&Token::Period) {
             let ms = self.parse_literal_int()?;
-            Ok(NaiveTime::from_hms_milli(hour as u32, min as u32, sec as u32, ms as u32))
-        }else{
+            Ok(NaiveTime::from_hms_milli(
+                hour as u32,
+                min as u32,
+                sec as u32,
+                ms as u32,
+            ))
+        } else {
             Ok(NaiveTime::from_hms(hour as u32, min as u32, sec as u32))
         }
     }
@@ -819,60 +848,78 @@ impl Parser {
                 "BOOLEAN" => Ok(SQLType::Boolean),
                 "FLOAT" => Ok(SQLType::Float(self.parse_optional_precision()?)),
                 "REAL" => Ok(SQLType::Real),
-                "DOUBLE" => if self.parse_keyword("PRECISION"){
-                    Ok(SQLType::Double)
-                }else{
-                    Ok(SQLType::Double)
+                "DOUBLE" => {
+                    if self.parse_keyword("PRECISION") {
+                        Ok(SQLType::Double)
+                    } else {
+                        Ok(SQLType::Double)
+                    }
                 }
                 "SMALLINT" => Ok(SQLType::SmallInt),
                 "INT" | "INTEGER" => Ok(SQLType::Int),
                 "BIGINT" => Ok(SQLType::BigInt),
                 "VARCHAR" => Ok(SQLType::Varchar(self.parse_optional_precision()?)),
                 "CHARACTER" => {
-                    if self.parse_keyword("VARYING"){
+                    if self.parse_keyword("VARYING") {
                         Ok(SQLType::Varchar(self.parse_optional_precision()?))
-                    }else{
+                    } else {
                         Ok(SQLType::Char(self.parse_optional_precision()?))
                     }
                 }
                 "UUID" => Ok(SQLType::Uuid),
                 "DATE" => Ok(SQLType::Date),
-                "TIMESTAMP" => if self.parse_keyword("WITH"){
-                    if self.parse_keywords(vec!["TIME","ZONE"]){
+                "TIMESTAMP" => {
+                    if self.parse_keyword("WITH") {
+                        if self.parse_keywords(vec!["TIME", "ZONE"]) {
+                            Ok(SQLType::Timestamp)
+                        } else {
+                            parser_err!(format!(
+                                "Expecting 'time zone', found: {:?}",
+                                self.peek_token()
+                            ))
+                        }
+                    } else if self.parse_keyword("WITHOUT") {
+                        if self.parse_keywords(vec!["TIME", "ZONE"]) {
+                            Ok(SQLType::Timestamp)
+                        } else {
+                            parser_err!(format!(
+                                "Expecting 'time zone', found: {:?}",
+                                self.peek_token()
+                            ))
+                        }
+                    } else {
                         Ok(SQLType::Timestamp)
-                    }else{
-                        parser_err!(format!("Expecting 'time zone', found: {:?}", self.peek_token()))
                     }
-                }else if self.parse_keyword("WITHOUT"){
-                    if self.parse_keywords(vec!["TIME","ZONE"]){
-                        Ok(SQLType::Timestamp)
-                    }else{
-                        parser_err!(format!("Expecting 'time zone', found: {:?}", self.peek_token()))
-                    }
-                }else{
-                    Ok(SQLType::Timestamp)
                 }
-                "TIME" => if self.parse_keyword("WITH"){
-                    if self.parse_keywords(vec!["TIME","ZONE"]){
-                        Ok(SQLType::Time)
-                    }else{
-                        parser_err!(format!("Expecting 'time zone', found: {:?}", self.peek_token()))
+                "TIME" => {
+                    if self.parse_keyword("WITH") {
+                        if self.parse_keywords(vec!["TIME", "ZONE"]) {
+                            Ok(SQLType::Time)
+                        } else {
+                            parser_err!(format!(
+                                "Expecting 'time zone', found: {:?}",
+                                self.peek_token()
+                            ))
+                        }
+                    } else if self.parse_keyword("WITHOUT") {
+                        if self.parse_keywords(vec!["TIME", "ZONE"]) {
+                            Ok(SQLType::Time)
+                        } else {
+                            parser_err!(format!(
+                                "Expecting 'time zone', found: {:?}",
+                                self.peek_token()
+                            ))
+                        }
+                    } else {
+                        Ok(SQLType::Timestamp)
                     }
-                }else if self.parse_keyword("WITHOUT"){
-                    if self.parse_keywords(vec!["TIME","ZONE"]){
-                        Ok(SQLType::Time)
-                    }else{
-                        parser_err!(format!("Expecting 'time zone', found: {:?}", self.peek_token()))
-                    }
-                }else{
-                    Ok(SQLType::Timestamp)
                 }
                 "REGCLASS" => Ok(SQLType::Regclass),
                 "TEXT" => {
-                    if let Ok(true) = self.consume_token(&Token::LBracket){
+                    if let Ok(true) = self.consume_token(&Token::LBracket) {
                         self.consume_token(&Token::RBracket)?;
                         Ok(SQLType::Array(Box::new(SQLType::Text)))
-                    }else{
+                    } else {
                         Ok(SQLType::Text)
                     }
                 }
@@ -886,8 +933,8 @@ impl Parser {
             Some(Token::Identifier(id)) => {
                 if let Ok(true) = self.consume_token(&Token::Period) {
                     let ids = self.parse_tablename()?;
-                    Ok(SQLType::Custom(format!("{}.{}",id,ids)))
-                }else{
+                    Ok(SQLType::Custom(format!("{}.{}", id, ids)))
+                } else {
                     Ok(SQLType::Custom(id))
                 }
             }
@@ -895,25 +942,26 @@ impl Parser {
         }
     }
 
-
     pub fn parse_compound_identifier(&mut self, separator: &Token) -> Result<ASTNode, ParserError> {
         let mut idents = vec![];
         let mut expect_identifier = true;
         loop {
             let token = &self.next_token();
-            match token{
-                Some(token) => match token{
-                    Token::Identifier(s) => if expect_identifier{
-                        expect_identifier = false;
-                        idents.push(s.to_string());
-                    }else{
-                        self.prev_token();
-                        break;
+            match token {
+                Some(token) => match token {
+                    Token::Identifier(s) => {
+                        if expect_identifier {
+                            expect_identifier = false;
+                            idents.push(s.to_string());
+                        } else {
+                            self.prev_token();
+                            break;
+                        }
                     }
                     token if token == separator => {
-                        if expect_identifier{
+                        if expect_identifier {
                             return parser_err!(format!("Expecting identifier, found {:?}", token));
-                        }else{
+                        } else {
                             expect_identifier = true;
                             continue;
                         }
@@ -922,7 +970,7 @@ impl Parser {
                         self.prev_token();
                         break;
                     }
-                }
+                },
                 None => {
                     self.prev_token();
                     break;
@@ -934,7 +982,7 @@ impl Parser {
 
     pub fn parse_tablename(&mut self) -> Result<String, ParserError> {
         let identifier = self.parse_compound_identifier(&Token::Period)?;
-        match identifier{
+        match identifier {
             ASTNode::SQLCompoundIdentifier(idents) => Ok(idents.join(".")),
             other => parser_err!(format!("Expecting compound identifier, found: {:?}", other)),
         }
@@ -942,7 +990,7 @@ impl Parser {
 
     pub fn parse_column_names(&mut self) -> Result<Vec<String>, ParserError> {
         let identifier = self.parse_compound_identifier(&Token::Comma)?;
-        match identifier{
+        match identifier {
             ASTNode::SQLCompoundIdentifier(idents) => Ok(idents),
             other => parser_err!(format!("Expecting compound identifier, found: {:?}", other)),
         }
@@ -964,12 +1012,14 @@ impl Parser {
         }
     }
 
-    pub fn parse_optional_precision_scale(&mut self) -> Result<(usize, Option<usize>), ParserError> {
+    pub fn parse_optional_precision_scale(
+        &mut self,
+    ) -> Result<(usize, Option<usize>), ParserError> {
         if self.consume_token(&Token::LParen)? {
             let n = self.parse_literal_int()?;
-            let scale = if let Ok(true) = self.consume_token(&Token::Comma){
+            let scale = if let Ok(true) = self.consume_token(&Token::Comma) {
                 Some(self.parse_literal_int()? as usize)
-            }else{
+            } else {
                 None
             };
             self.consume_token(&Token::RParen)?;
@@ -1070,18 +1120,22 @@ impl Parser {
     pub fn parse_insert(&mut self) -> Result<ASTNode, ParserError> {
         self.parse_keyword("INTO");
         let table_name = self.parse_tablename()?;
-        let columns = if self.consume_token(&Token::LParen)?{
+        let columns = if self.consume_token(&Token::LParen)? {
             let column_names = self.parse_column_names()?;
             self.consume_token(&Token::RParen)?;
             column_names
-        }else{
+        } else {
             vec![]
         };
         self.parse_keyword("VALUES");
         self.consume_token(&Token::LParen)?;
         let values = self.parse_expr_list()?;
         self.consume_token(&Token::RParen)?;
-        Ok(ASTNode::SQLInsert{table_name, columns, values: vec![values]})
+        Ok(ASTNode::SQLInsert {
+            table_name,
+            columns,
+            values: vec![values],
+        })
     }
 
     /// Parse a comma-delimited list of SQL expressions
@@ -1157,4 +1211,3 @@ impl Parser {
         }
     }
 }
-

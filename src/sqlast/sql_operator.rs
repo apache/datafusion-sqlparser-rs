@@ -1,4 +1,3 @@
-
 /// SQL Operator
 #[derive(Debug, PartialEq, Clone)]
 pub enum SQLOperator {
@@ -17,10 +16,9 @@ pub enum SQLOperator {
     Or,
 }
 
-impl ToString for SQLOperator{
-
+impl ToString for SQLOperator {
     fn to_string(&self) -> String {
-        match self{
+        match self {
             SQLOperator::Plus => "+".to_string(),
             SQLOperator::Minus => "-".to_string(),
             SQLOperator::Multiply => "*".to_string(),
@@ -37,4 +35,3 @@ impl ToString for SQLOperator{
         }
     }
 }
-

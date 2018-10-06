@@ -1,19 +1,13 @@
-
-use chrono::{NaiveDate,
-             NaiveDateTime,
-             NaiveTime,
-             offset::{FixedOffset,
-                 TimeZone,
-             },
-             DateTime,
-             Utc,
-            };
+use chrono::{
+    offset::{FixedOffset, TimeZone},
+    DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc,
+};
 
 use uuid::Uuid;
 
 /// SQL values such as int, double, string timestamp
 #[derive(Debug, Clone, PartialEq)]
-pub enum Value{
+pub enum Value {
     /// Literal signed long
     Long(i64),
     /// Literal floating point value
@@ -40,11 +34,9 @@ pub enum Value{
     Null,
 }
 
-
-impl ToString for Value{
-    
+impl ToString for Value {
     fn to_string(&self) -> String {
-        match self{
+        match self {
             Value::Long(v) => v.to_string(),
             Value::Double(v) => v.to_string(),
             Value::String(v) => v.to_string(),

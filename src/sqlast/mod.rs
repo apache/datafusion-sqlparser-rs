@@ -13,18 +13,17 @@
 // limitations under the License.
 
 //! SQL Abstract Syntax Tree (AST) types
-//!
+
+mod sql_operator;
+mod sqltype;
+mod table_key;
+mod value;
 
 pub use self::sqltype::SQLType;
 pub use self::table_key::{AlterOperation, Key, TableKey};
 pub use self::value::Value;
 
 pub use self::sql_operator::SQLOperator;
-
-mod sql_operator;
-mod sqltype;
-mod table_key;
-mod value;
 
 /// SQL Abstract Syntax Tree (AST)
 #[derive(Debug, Clone, PartialEq)]

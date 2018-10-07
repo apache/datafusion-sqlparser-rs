@@ -153,7 +153,14 @@ impl Parser {
                 Token::DoubleQuotedString(_) => {
                     self.prev_token();
                     self.parse_sql_value()
-                }
+                },
+                Token::LParen => {
+                    let expr = self.parse();
+                    if !self.consume_token(&Token::RParen)? {
+                        return parser_err!(format!("expected token RParen"));
+                    }
+                    expr
+                },
                 _ => parser_err!(format!(
                     "Prefix parser expected a keyword but found {:?}",
                     t

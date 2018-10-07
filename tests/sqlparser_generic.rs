@@ -334,6 +334,29 @@ fn parse_select_version() {
     }
 }
 
+#[test]
+fn parse_parens() {
+    use self::ASTNode::*;
+    use self::SQLOperator::*;
+    let sql = "(a + b) - (c + d)";
+    let ast = parse_sql(&sql);
+    assert_eq!(
+        SQLBinaryExpr { 
+            left: Box::new(SQLBinaryExpr {
+                left: Box::new(SQLIdentifier("a".to_string())), 
+                op: Plus, 
+                right: Box::new(SQLIdentifier("b".to_string())) 
+            }), 
+            op: Minus, 
+            right: Box::new(SQLBinaryExpr { 
+                left: Box::new(SQLIdentifier("c".to_string())),
+                op: Plus, 
+                right: Box::new(SQLIdentifier("d".to_string()))
+            })
+        }
+    , ast);
+}
+
 fn parse_sql(sql: &str) -> ASTNode {
     let dialect = GenericSqlDialect {};
     let mut tokenizer = Tokenizer::new(&dialect,&sql, );

@@ -384,6 +384,37 @@ fn parse_parens() {
     , ast);
 }
 
+#[test]
+fn parse_case_expression() {
+    let sql = "SELECT CASE WHEN bar IS NULL THEN 'null' WHEN bar = 0 THEN '=0' WHEN bar >= 0 THEN '>=0' ELSE '<0' END FROM foo";
+    let ast = parse_sql(&sql);
+    assert_eq!(sql, ast.to_string());
+    use self::ASTNode::*;
+    use self::SQLOperator::*;
+    match ast {
+        ASTNode::SQLSelect { projection, .. } => {
+            assert_eq!(1, projection.len());
+            assert_eq!(
+                SQLCase {
+                    conditions: vec![
+                        SQLIsNull(Box::new(SQLIdentifier("bar".to_string()))),
+                        SQLBinaryExpr { left: Box::new(SQLIdentifier("bar".to_string())), 
+                                        op: Eq, right: Box::new(SQLValue(Value::Long(0))) }, 
+                        SQLBinaryExpr { left: Box::new(SQLIdentifier("bar".to_string())), 
+                                        op: GtEq, right: Box::new(SQLValue(Value::Long(0))) }
+                    ],
+                    results: vec![SQLValue(Value::SingleQuotedString("null".to_string())),
+                                  SQLValue(Value::SingleQuotedString("=0".to_string())),
+                                  SQLValue(Value::SingleQuotedString(">=0".to_string()))],
+                    else_result: Some(Box::new(SQLValue(Value::SingleQuotedString("<0".to_string()))))
+                },
+                projection[0]
+            );
+        }
+        _ => assert!(false),
+    }
+}
+
 fn parse_sql(sql: &str) -> ASTNode {
     let dialect = GenericSqlDialect {};
     let mut tokenizer = Tokenizer::new(&dialect,&sql, );

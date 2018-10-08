@@ -62,6 +62,13 @@ pub enum ASTNode {
     SQLValue(Value),
     /// Scalar function call e.g. `LEFT(foo, 5)`
     SQLFunction { id: String, args: Vec<ASTNode> },
+    /// CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END
+    SQLCase {
+        // TODO: support optional operand for "simple case"
+        conditions: Vec<ASTNode>,
+        results: Vec<ASTNode>,
+        else_result: Option<Box<ASTNode>>,
+    },
     /// SELECT
     SQLSelect {
         /// projection expressions
@@ -160,6 +167,19 @@ impl ToString for ASTNode {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
+            ASTNode::SQLCase { conditions, results, else_result } => {
+                let mut s = format!(
+                    "CASE {}",
+                    conditions.iter().zip(results)
+                        .map(|(c, r)| format!("WHEN {} THEN {}", c.to_string(), r.to_string()))
+                        .collect::<Vec<String>>()
+                        .join(" ")
+                );
+                if let Some(else_result) = else_result {
+                    s += &format!(" ELSE {}", else_result.to_string())
+                }
+                s + " END"
+            },
             ASTNode::SQLSelect {
                 projection,
                 relation,

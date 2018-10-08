@@ -109,6 +109,9 @@ impl Parser {
                     "NULL" => {
                         self.prev_token();
                         self.parse_sql_value()
+                    },
+                    "CASE" => {
+                        self.parse_case_expression()
                     }
                     _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
                 },
@@ -193,6 +196,40 @@ impl Parser {
                 id: id.to_string(),
                 args,
             })
+        }
+    }
+
+    pub fn parse_case_expression(&mut self) -> Result<ASTNode, ParserError> {
+        if self.parse_keywords(vec!["WHEN"]) {
+            let mut conditions = vec![];
+            let mut results = vec![];
+            let mut else_result = None;
+            loop {
+                conditions.push(self.parse_expr(0)?);
+                self.consume_token(&Token::Keyword("THEN".to_string()))?;
+                results.push(self.parse_expr(0)?);
+                if self.parse_keywords(vec!["ELSE"]) {
+                    else_result = Some(Box::new(self.parse_expr(0)?));
+                    if self.parse_keywords(vec!["END"]) {
+                        break
+                    } else {
+                        return parser_err!("Expecting END after a CASE..ELSE");
+                    }
+                }
+                if self.parse_keywords(vec!["END"]) {
+                    break
+                }
+                self.consume_token(&Token::Keyword("WHEN".to_string()))?;
+            }
+            Ok(ASTNode::SQLCase {
+                conditions,
+                results,
+                else_result
+            })
+        } else {
+            // TODO: implement "simple" case
+            // https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-case
+            parser_err!("Simple case not implemented")
         }
     }
 

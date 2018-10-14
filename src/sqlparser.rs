@@ -714,12 +714,12 @@ impl Parser {
                     },
                     Token::Number(ref n) => match n.parse::<i64>() {
                         Ok(n) => {
-                            if let Some(Token::Minus) = self.peek_token() {
-                                self.prev_token();
-                                self.parse_timestamp_value()
-                            } else {
+//                            if let Some(Token::Minus) = self.peek_token() {
+//                                self.prev_token();
+//                                self.parse_timestamp_value()
+//                            } else {
                                 Ok(Value::Long(n))
-                            }
+//                            }
                         }
                         Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
                     },

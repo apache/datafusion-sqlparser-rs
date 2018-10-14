@@ -348,6 +348,18 @@ fn parse_literal_string() {
 }
 
 #[test]
+fn parse_simple_math_expr_plus() {
+    let sql = "SELECT a + b, 2 + a, 2.5 + a, a_f + b_f, 2 + a_f, 2.5 + a_f FROM c";
+    parse_sql(&sql);
+}
+
+#[test]
+fn parse_simple_math_expr_minus() {
+    let sql = "SELECT a - b, 2 - a, 2.5 - a, a_f - b_f, 2 - a_f, 2.5 - a_f FROM c";
+    parse_sql(&sql);
+}
+
+#[test]
 fn parse_select_version() {
     let sql = "SELECT @@version";
     match parse_sql(&sql) {

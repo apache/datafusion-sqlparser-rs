@@ -632,7 +632,7 @@ PHP	₱ USD $
     //assert_eq!(sql, ast.to_string());
 }
 
-#[test]
+#[ignore]
 fn parse_timestamps_example() {
     let sql = "2016-02-15 09:43:33";
     let ast = parse_sql(sql);

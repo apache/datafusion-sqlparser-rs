@@ -762,6 +762,8 @@ impl Parser {
     pub fn parse_literal_string(&mut self) -> Result<String, ParserError> {
         match self.next_token() {
             Some(Token::String(ref s)) => Ok(s.clone()),
+            Some(Token::SingleQuotedString(ref s)) => Ok(s.clone()),
+            Some(Token::DoubleQuotedString(ref s)) => Ok(s.clone()),
             other => parser_err!(format!("Expected literal string, found {:?}", other)),
         }
     }

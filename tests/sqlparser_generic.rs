@@ -201,6 +201,33 @@ fn parse_select_order_by() {
 }
 
 #[test]
+fn parse_select_order_by_limit() {
+    let sql = String::from(
+        "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC LIMIT 2",
+    );
+    let ast = parse_sql(&sql);
+    match ast {
+        ASTNode::SQLSelect { order_by, limit, .. } => {
+            assert_eq!(
+                Some(vec![
+                    SQLOrderByExpr {
+                        expr: Box::new(ASTNode::SQLIdentifier("lname".to_string())),
+                        asc: true,
+                    },
+                    SQLOrderByExpr {
+                        expr: Box::new(ASTNode::SQLIdentifier("fname".to_string())),
+                        asc: false,
+                    },
+                ]),
+                order_by
+            );
+            assert_eq!(Some(Box::new(ASTNode::SQLValue(Value::Long(2)))), limit);
+        }
+        _ => assert!(false),
+    }
+}
+
+#[test]
 fn parse_select_group_by() {
     let sql = String::from("SELECT id, fname, lname FROM customer GROUP BY lname, fname");
     let ast = parse_sql(&sql);

@@ -1173,23 +1173,20 @@ impl Parser {
             // look for optional ASC / DESC specifier
             let asc = match self.peek_token() {
                 Some(Token::Keyword(k)) => {
-                    self.next_token(); // consume it
                     match k.to_uppercase().as_ref() {
-                        "ASC" => true,
-                        "DESC" => false,
-                        _ => {
-                            return parser_err!(format!(
-                                "Invalid modifier for ORDER BY expression: {:?}",
-                                k
-                            ))
-                        }
+                        "ASC" => {
+                            self.next_token();
+                            true
+                        },
+                        "DESC" => {
+                            self.next_token();
+                            false
+                        },
+                        _ => true
                     }
                 }
                 Some(Token::Comma) => true,
-                Some(other) => {
-                    return parser_err!(format!("Unexpected token after ORDER BY expr: {:?}", other))
-                }
-                None => true,
+                _ => true,
             };
 
             expr_list.push(SQLOrderByExpr::new(Box::new(expr), asc));

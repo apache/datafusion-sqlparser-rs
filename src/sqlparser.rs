@@ -1088,6 +1088,8 @@ impl Parser {
             None
         };
 
+        let _ = self.consume_token(&Token::SemiColon);
+
         // parse next token
         if let Some(next_token) = self.peek_token() {
             parser_err!(format!(
@@ -1143,6 +1145,8 @@ impl Parser {
         } else {
             None
         };
+
+        let _ = self.consume_token(&Token::SemiColon);
 
         if let Some(next_token) = self.peek_token() {
             parser_err!(format!(

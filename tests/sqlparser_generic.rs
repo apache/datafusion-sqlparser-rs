@@ -420,7 +420,33 @@ fn parse_case_expression() {
                                   SQLValue(Value::SingleQuotedString(">=0".to_string()))],
                     else_result: Some(Box::new(SQLValue(Value::SingleQuotedString("<0".to_string()))))
                 },
-                projection[0]
+                projection[0]);
+        }
+        _ => assert!(false),
+    }
+}
+
+#[test]
+fn parse_select_with_semi_colon() {
+    let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1;");
+    let ast = parse_sql(&sql);
+    match ast {
+        ASTNode::SQLSelect { projection, .. } => {
+            assert_eq!(3, projection.len());
+        }
+        _ => assert!(false),
+    }
+}
+
+#[test]
+fn parse_delete_with_semi_colon() {
+    let sql: &str = "DELETE FROM 'table';";
+
+    match parse_sql(&sql) {
+        ASTNode::SQLDelete { relation, .. } => {
+            assert_eq!(
+                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString("table".to_string())))),
+                relation
             );
         }
         _ => assert!(false),

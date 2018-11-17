@@ -529,21 +529,20 @@ fn parse_joins_on() {
             })),
         }
     }
-
     assert_eq!(
-        joins_from("SELECT * FROM t1 JOIN t2 ON c1 = c2"),
+        joins_from(verified("SELECT * FROM t1 JOIN t2 ON c1 = c2")),
         vec![join_with_constraint("t2", JoinOperator::Inner)]
     );
     assert_eq!(
-        joins_from("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2"),
+        joins_from(verified("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2")),
         vec![join_with_constraint("t2", JoinOperator::LeftOuter)]
     );
     assert_eq!(
-        joins_from("SELECT * FROM t1 RIGHT JOIN t2  ON c1 = c2"),
+        joins_from(verified("SELECT * FROM t1 RIGHT JOIN t2 ON c1 = c2")),
         vec![join_with_constraint("t2", JoinOperator::RightOuter)]
     );
     assert_eq!(
-        joins_from("SELECT * FROM t1 FULL OUTER JOIN t2 ON c1 = c2"),
+        joins_from(verified("SELECT * FROM t1 FULL JOIN t2 ON c1 = c2")),
         vec![join_with_constraint("t2", JoinOperator::FullOuter)]
     );
 }
@@ -561,25 +560,61 @@ fn parse_joins_using() {
     }
 
     assert_eq!(
-        joins_from("SELECT * FROM t1 JOIN t2 USING(c1)"),
+        joins_from(verified("SELECT * FROM t1 JOIN t2 USING(c1)")),
         vec![join_with_constraint("t2", JoinOperator::Inner)]
     );
     assert_eq!(
-        joins_from("SELECT * FROM t1 LEFT JOIN t2 USING(c1)"),
+        joins_from(verified("SELECT * FROM t1 LEFT JOIN t2 USING(c1)")),
         vec![join_with_constraint("t2", JoinOperator::LeftOuter)]
     );
     assert_eq!(
-        joins_from("SELECT * FROM t1 RIGHT JOIN t2 USING(c1)"),
+        joins_from(verified("SELECT * FROM t1 RIGHT JOIN t2 USING(c1)")),
         vec![join_with_constraint("t2", JoinOperator::RightOuter)]
     );
     assert_eq!(
-        joins_from("SELECT * FROM t1 FULL OUTER JOIN t2 USING(c1)"),
+        joins_from(verified("SELECT * FROM t1 FULL JOIN t2 USING(c1)")),
         vec![join_with_constraint("t2", JoinOperator::FullOuter)]
     );
 }
 
-fn joins_from(sql: &str) -> Vec<Join> {
-    match parse_sql(sql) {
+#[test]
+fn parse_complex_join() {
+    let sql = "SELECT c1, c2 FROM t1, t4 JOIN t2 ON t2.c = t1.c LEFT JOIN t3 USING(q, c) WHERE t4.c = t1.c";
+    assert_eq!(sql, parse_sql(sql).to_string());
+}
+
+#[test]
+fn parse_join_syntax_variants() {
+    fn parses_to(from: &str, to: &str) {
+        assert_eq!(to, &parse_sql(from).to_string())
+    }
+
+    parses_to(
+        "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
+        "SELECT c1 FROM t1 JOIN t2 USING(c1)",
+    );
+    parses_to(
+        "SELECT c1 FROM t1 LEFT OUTER JOIN t2 USING(c1)",
+        "SELECT c1 FROM t1 LEFT JOIN t2 USING(c1)",
+    );
+    parses_to(
+        "SELECT c1 FROM t1 RIGHT OUTER JOIN t2 USING(c1)",
+        "SELECT c1 FROM t1 RIGHT JOIN t2 USING(c1)",
+    );
+    parses_to(
+        "SELECT c1 FROM t1 FULL OUTER JOIN t2 USING(c1)",
+        "SELECT c1 FROM t1 FULL JOIN t2 USING(c1)",
+    );
+}
+
+fn verified(query: &str) -> ASTNode {
+    let ast = parse_sql(query);
+    assert_eq!(query, &ast.to_string());
+    ast
+}
+
+fn joins_from(ast: ASTNode) -> Vec<Join> {
+    match ast {
         ASTNode::SQLSelect { joins, .. } => joins,
         _ => panic!("Expected SELECT"),
     }

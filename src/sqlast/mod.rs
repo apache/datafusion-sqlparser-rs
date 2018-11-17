@@ -431,34 +431,34 @@ impl ToString for Join {
         }
         fn suffix(constraint: &JoinConstraint) -> String {
             match constraint {
-                JoinConstraint::On(expr) => format!(" ON({})", expr.to_string()),
-                JoinConstraint::Using(attrs) => format!(" USING({})", attrs.join(", ")),
+                JoinConstraint::On(expr) => format!("ON {}", expr.to_string()),
+                JoinConstraint::Using(attrs) => format!("USING({})", attrs.join(", ")),
                 _ => "".to_string(),
             }
         }
         match &self.join_operator {
             JoinOperator::Inner(constraint) => format!(
-                "{}INNER JOIN {}{}",
+                " {}JOIN {} {}",
                 prefix(constraint),
                 self.relation.to_string(),
-                prefix(constraint)
+                suffix(constraint)
             ),
-            JoinOperator::Cross => format!("CROSS JOIN {}", self.relation.to_string()),
+            JoinOperator::Cross => format!(" CROSS JOIN {}", self.relation.to_string()),
             JoinOperator::Implicit => format!(", {}", self.relation.to_string()),
             JoinOperator::LeftOuter(constraint) => format!(
-                "{}LEFT OUTER JOIN {}{}",
+                " {}LEFT JOIN {} {}",
                 prefix(constraint),
                 self.relation.to_string(),
                 suffix(constraint)
             ),
             JoinOperator::RightOuter(constraint) => format!(
-                "{}RIGHT OUTER JOIN {}{}",
+                " {}RIGHT JOIN {} {}",
                 prefix(constraint),
                 self.relation.to_string(),
                 suffix(constraint)
             ),
             JoinOperator::FullOuter(constraint) => format!(
-                "{}FULL OUTER JOIN {}{}",
+                " {}FULL JOIN {} {}",
                 prefix(constraint),
                 self.relation.to_string(),
                 suffix(constraint)

@@ -75,6 +75,8 @@ pub enum ASTNode {
         projection: Vec<ASTNode>,
         /// FROM
         relation: Option<Box<ASTNode>>,
+        // JOIN
+        joins: Vec<Join>,
         /// WHERE
         selection: Option<Box<ASTNode>>,
         /// ORDER BY
@@ -167,10 +169,16 @@ impl ToString for ASTNode {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-            ASTNode::SQLCase { conditions, results, else_result } => {
+            ASTNode::SQLCase {
+                conditions,
+                results,
+                else_result,
+            } => {
                 let mut s = format!(
                     "CASE {}",
-                    conditions.iter().zip(results)
+                    conditions
+                        .iter()
+                        .zip(results)
                         .map(|(c, r)| format!("WHEN {} THEN {}", c.to_string(), r.to_string()))
                         .collect::<Vec<String>>()
                         .join(" ")
@@ -179,10 +187,11 @@ impl ToString for ASTNode {
                     s += &format!(" ELSE {}", else_result.to_string())
                 }
                 s + " END"
-            },
+            }
             ASTNode::SQLSelect {
                 projection,
                 relation,
+                joins,
                 selection,
                 order_by,
                 group_by,
@@ -199,6 +208,9 @@ impl ToString for ASTNode {
                 );
                 if let Some(relation) = relation {
                     s += &format!(" FROM {}", relation.as_ref().to_string());
+                }
+                for join in joins {
+                    s += &join.to_string();
                 }
                 if let Some(selection) = selection {
                     s += &format!(" WHERE {}", selection.as_ref().to_string());
@@ -401,4 +413,73 @@ impl ToString for SQLColumnDef {
         }
         s
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Join {
+    pub relation: ASTNode,
+    pub join_operator: JoinOperator,
+}
+
+impl ToString for Join {
+    fn to_string(&self) -> String {
+        fn prefix(constraint: &JoinConstraint) -> String {
+            match constraint {
+                JoinConstraint::Natural => "NATURAL ".to_string(),
+                _ => "".to_string(),
+            }
+        }
+        fn suffix(constraint: &JoinConstraint) -> String {
+            match constraint {
+                JoinConstraint::On(expr) => format!(" ON({})", expr.to_string()),
+                JoinConstraint::Using(attrs) => format!(" USING({})", attrs.join(", ")),
+                _ => "".to_string(),
+            }
+        }
+        match &self.join_operator {
+            JoinOperator::Inner(constraint) => format!(
+                "{}INNER JOIN {}{}",
+                prefix(constraint),
+                self.relation.to_string(),
+                prefix(constraint)
+            ),
+            JoinOperator::Cross => format!("CROSS JOIN {}", self.relation.to_string()),
+            JoinOperator::Implicit => format!(", {}", self.relation.to_string()),
+            JoinOperator::LeftOuter(constraint) => format!(
+                "{}LEFT OUTER JOIN {}{}",
+                prefix(constraint),
+                self.relation.to_string(),
+                suffix(constraint)
+            ),
+            JoinOperator::RightOuter(constraint) => format!(
+                "{}RIGHT OUTER JOIN {}{}",
+                prefix(constraint),
+                self.relation.to_string(),
+                suffix(constraint)
+            ),
+            JoinOperator::FullOuter(constraint) => format!(
+                "{}FULL OUTER JOIN {}{}",
+                prefix(constraint),
+                self.relation.to_string(),
+                suffix(constraint)
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum JoinOperator {
+    Inner(JoinConstraint),
+    LeftOuter(JoinConstraint),
+    RightOuter(JoinConstraint),
+    FullOuter(JoinConstraint),
+    Implicit,
+    Cross,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum JoinConstraint {
+    On(ASTNode),
+    Using(Vec<String>),
+    Natural,
 }

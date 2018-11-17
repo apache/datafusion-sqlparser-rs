@@ -13,7 +13,9 @@ fn parse_delete_statement() {
     match parse_sql(&sql) {
         ASTNode::SQLDelete { relation, .. } => {
             assert_eq!(
-                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString("table".to_string())))),
+                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                    "table".to_string()
+                )))),
                 relation
             );
         }
@@ -36,7 +38,9 @@ fn parse_where_delete_statement() {
             ..
         } => {
             assert_eq!(
-                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString("table".to_string())))),
+                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                    "table".to_string()
+                )))),
                 relation
             );
 
@@ -207,7 +211,9 @@ fn parse_select_order_by_limit() {
     );
     let ast = parse_sql(&sql);
     match ast {
-        ASTNode::SQLSelect { order_by, limit, .. } => {
+        ASTNode::SQLSelect {
+            order_by, limit, ..
+        } => {
             assert_eq!(
                 Some(vec![
                     SQLOrderByExpr {
@@ -341,7 +347,10 @@ fn parse_literal_string() {
     let sql = "SELECT 'one'";
     match parse_sql(&sql) {
         ASTNode::SQLSelect { ref projection, .. } => {
-            assert_eq!(projection[0], ASTNode::SQLValue(Value::SingleQuotedString("one".to_string())));
+            assert_eq!(
+                projection[0],
+                ASTNode::SQLValue(Value::SingleQuotedString("one".to_string()))
+            );
         }
         _ => panic!(),
     }
@@ -380,20 +389,21 @@ fn parse_parens() {
     let sql = "(a + b) - (c + d)";
     let ast = parse_sql(&sql);
     assert_eq!(
-        SQLBinaryExpr { 
+        SQLBinaryExpr {
             left: Box::new(SQLBinaryExpr {
-                left: Box::new(SQLIdentifier("a".to_string())), 
-                op: Plus, 
-                right: Box::new(SQLIdentifier("b".to_string())) 
-            }), 
-            op: Minus, 
-            right: Box::new(SQLBinaryExpr { 
+                left: Box::new(SQLIdentifier("a".to_string())),
+                op: Plus,
+                right: Box::new(SQLIdentifier("b".to_string()))
+            }),
+            op: Minus,
+            right: Box::new(SQLBinaryExpr {
                 left: Box::new(SQLIdentifier("c".to_string())),
-                op: Plus, 
+                op: Plus,
                 right: Box::new(SQLIdentifier("d".to_string()))
             })
-        }
-    , ast);
+        },
+        ast
+    );
 }
 
 #[test]
@@ -410,17 +420,28 @@ fn parse_case_expression() {
                 SQLCase {
                     conditions: vec![
                         SQLIsNull(Box::new(SQLIdentifier("bar".to_string()))),
-                        SQLBinaryExpr { left: Box::new(SQLIdentifier("bar".to_string())), 
-                                        op: Eq, right: Box::new(SQLValue(Value::Long(0))) }, 
-                        SQLBinaryExpr { left: Box::new(SQLIdentifier("bar".to_string())), 
-                                        op: GtEq, right: Box::new(SQLValue(Value::Long(0))) }
+                        SQLBinaryExpr {
+                            left: Box::new(SQLIdentifier("bar".to_string())),
+                            op: Eq,
+                            right: Box::new(SQLValue(Value::Long(0)))
+                        },
+                        SQLBinaryExpr {
+                            left: Box::new(SQLIdentifier("bar".to_string())),
+                            op: GtEq,
+                            right: Box::new(SQLValue(Value::Long(0)))
+                        }
                     ],
-                    results: vec![SQLValue(Value::SingleQuotedString("null".to_string())),
-                                  SQLValue(Value::SingleQuotedString("=0".to_string())),
-                                  SQLValue(Value::SingleQuotedString(">=0".to_string()))],
-                    else_result: Some(Box::new(SQLValue(Value::SingleQuotedString("<0".to_string()))))
+                    results: vec![
+                        SQLValue(Value::SingleQuotedString("null".to_string())),
+                        SQLValue(Value::SingleQuotedString("=0".to_string())),
+                        SQLValue(Value::SingleQuotedString(">=0".to_string()))
+                    ],
+                    else_result: Some(Box::new(SQLValue(Value::SingleQuotedString(
+                        "<0".to_string()
+                    ))))
                 },
-                projection[0]);
+                projection[0]
+            );
         }
         _ => assert!(false),
     }
@@ -445,7 +466,9 @@ fn parse_delete_with_semi_colon() {
     match parse_sql(&sql) {
         ASTNode::SQLDelete { relation, .. } => {
             assert_eq!(
-                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString("table".to_string())))),
+                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                    "table".to_string()
+                )))),
                 relation
             );
         }
@@ -453,12 +476,120 @@ fn parse_delete_with_semi_colon() {
     }
 }
 
+#[test]
+fn parse_implicit_join() {
+    let sql = "SELECT * FROM t1,t2";
+
+    match parse_sql(sql) {
+        ASTNode::SQLSelect { joins, .. } => {
+            assert_eq!(joins.len(), 1);
+            assert_eq!(
+                joins[0],
+                Join {
+                    relation: ASTNode::SQLIdentifier("t2".to_string()),
+                    join_operator: JoinOperator::Implicit
+                }
+            )
+        }
+        _ => assert!(false),
+    }
+}
+
+#[test]
+fn parse_cross_join() {
+    let sql = "SELECT * FROM t1 CROSS JOIN t2";
+
+    match parse_sql(sql) {
+        ASTNode::SQLSelect { joins, .. } => {
+            assert_eq!(joins.len(), 1);
+            assert_eq!(
+                joins[0],
+                Join {
+                    relation: ASTNode::SQLIdentifier("t2".to_string()),
+                    join_operator: JoinOperator::Cross
+                }
+            )
+        }
+        _ => assert!(false),
+    }
+}
+
+#[test]
+fn parse_joins_on() {
+    fn join_with_constraint(
+        relation: impl Into<String>,
+        f: impl Fn(JoinConstraint) -> JoinOperator,
+    ) -> Join {
+        Join {
+            relation: ASTNode::SQLIdentifier(relation.into()),
+            join_operator: f(JoinConstraint::On(ASTNode::SQLBinaryExpr {
+                left: Box::new(ASTNode::SQLIdentifier("c1".into())),
+                op: SQLOperator::Eq,
+                right: Box::new(ASTNode::SQLIdentifier("c2".into())),
+            })),
+        }
+    }
+
+    assert_eq!(
+        joins_from("SELECT * FROM t1 JOIN t2 ON c1 = c2"),
+        vec![join_with_constraint("t2", JoinOperator::Inner)]
+    );
+    assert_eq!(
+        joins_from("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2"),
+        vec![join_with_constraint("t2", JoinOperator::LeftOuter)]
+    );
+    assert_eq!(
+        joins_from("SELECT * FROM t1 RIGHT JOIN t2  ON c1 = c2"),
+        vec![join_with_constraint("t2", JoinOperator::RightOuter)]
+    );
+    assert_eq!(
+        joins_from("SELECT * FROM t1 FULL OUTER JOIN t2 ON c1 = c2"),
+        vec![join_with_constraint("t2", JoinOperator::FullOuter)]
+    );
+}
+
+#[test]
+fn parse_joins_using() {
+    fn join_with_constraint(
+        relation: impl Into<String>,
+        f: impl Fn(JoinConstraint) -> JoinOperator,
+    ) -> Join {
+        Join {
+            relation: ASTNode::SQLIdentifier(relation.into()),
+            join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
+        }
+    }
+
+    assert_eq!(
+        joins_from("SELECT * FROM t1 JOIN t2 USING(c1)"),
+        vec![join_with_constraint("t2", JoinOperator::Inner)]
+    );
+    assert_eq!(
+        joins_from("SELECT * FROM t1 LEFT JOIN t2 USING(c1)"),
+        vec![join_with_constraint("t2", JoinOperator::LeftOuter)]
+    );
+    assert_eq!(
+        joins_from("SELECT * FROM t1 RIGHT JOIN t2 USING(c1)"),
+        vec![join_with_constraint("t2", JoinOperator::RightOuter)]
+    );
+    assert_eq!(
+        joins_from("SELECT * FROM t1 FULL OUTER JOIN t2 USING(c1)"),
+        vec![join_with_constraint("t2", JoinOperator::FullOuter)]
+    );
+}
+
+fn joins_from(sql: &str) -> Vec<Join> {
+    match parse_sql(sql) {
+        ASTNode::SQLSelect { joins, .. } => joins,
+        _ => panic!("Expected SELECT"),
+    }
+}
+
 fn parse_sql(sql: &str) -> ASTNode {
     let dialect = GenericSqlDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect,&sql, );
+    let mut tokenizer = Tokenizer::new(&dialect, &sql);
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(tokens);
     let ast = parser.parse().unwrap();
     ast
 }
-

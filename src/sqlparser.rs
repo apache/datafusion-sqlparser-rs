@@ -17,10 +17,7 @@
 use super::dialect::Dialect;
 use super::sqlast::*;
 use super::sqltokenizer::*;
-use chrono::{
-    offset::{FixedOffset},
-    DateTime, NaiveDate, NaiveDateTime, NaiveTime,
-};
+use chrono::{offset::FixedOffset, DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 
 #[derive(Debug, Clone)]
 pub enum ParserError {
@@ -109,10 +106,8 @@ impl Parser {
                     "NULL" => {
                         self.prev_token();
                         self.parse_sql_value()
-                    },
-                    "CASE" => {
-                        self.parse_case_expression()
                     }
+                    "CASE" => self.parse_case_expression(),
                     _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
                 },
                 Token::Mult => Ok(ASTNode::SQLWildcard),
@@ -156,14 +151,14 @@ impl Parser {
                 Token::DoubleQuotedString(_) => {
                     self.prev_token();
                     self.parse_sql_value()
-                },
+                }
                 Token::LParen => {
                     let expr = self.parse();
                     if !self.consume_token(&Token::RParen)? {
                         return parser_err!(format!("expected token RParen"));
                     }
                     expr
-                },
+                }
                 _ => parser_err!(format!(
                     "Prefix parser expected a keyword but found {:?}",
                     t
@@ -211,20 +206,20 @@ impl Parser {
                 if self.parse_keywords(vec!["ELSE"]) {
                     else_result = Some(Box::new(self.parse_expr(0)?));
                     if self.parse_keywords(vec!["END"]) {
-                        break
+                        break;
                     } else {
                         return parser_err!("Expecting END after a CASE..ELSE");
                     }
                 }
                 if self.parse_keywords(vec!["END"]) {
-                    break
+                    break;
                 }
                 self.consume_token(&Token::Keyword("WHEN".to_string()))?;
             }
             Ok(ASTNode::SQLCase {
                 conditions,
                 results,
-                else_result
+                else_result,
             })
         } else {
             // TODO: implement "simple" case
@@ -489,6 +484,18 @@ impl Parser {
         true
     }
 
+    pub fn expect_keyword(&mut self, expected: &'static str) -> Result<(), ParserError> {
+        if self.parse_keyword(expected) {
+            Ok(())
+        } else {
+            parser_err!(format!(
+                "Expected keyword {}, found {:?}",
+                expected,
+                self.peek_token()
+            ))
+        }
+    }
+
     //TODO: this function is inconsistent and sometimes returns bool and sometimes fails
 
     /// Consume the next token if it matches the expected token, otherwise return an error
@@ -751,12 +758,12 @@ impl Parser {
                     },
                     Token::Number(ref n) => match n.parse::<i64>() {
                         Ok(n) => {
-//                            if let Some(Token::Minus) = self.peek_token() {
-//                                self.prev_token();
-//                                self.parse_timestamp_value()
-//                            } else {
-                                Ok(Value::Long(n))
-//                            }
+                            //                            if let Some(Token::Minus) = self.peek_token() {
+                            //                                self.prev_token();
+                            //                                self.parse_timestamp_value()
+                            //                            } else {
+                            Ok(Value::Long(n))
+                            //                            }
                         }
                         Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
                     },
@@ -1108,11 +1115,12 @@ impl Parser {
     pub fn parse_select(&mut self) -> Result<ASTNode, ParserError> {
         let projection = self.parse_expr_list()?;
 
-        let relation: Option<Box<ASTNode>> = if self.parse_keyword("FROM") {
-            //TODO: add support for JOIN
-            Some(Box::new(self.parse_expr(0)?))
+        let (relation, joins): (Option<Box<ASTNode>>, Vec<Join>) = if self.parse_keyword("FROM") {
+            let relation = Some(Box::new(self.parse_expr(0)?));
+            let joins = self.parse_joins()?;
+            (relation, joins)
         } else {
-            None
+            (None, vec![])
         };
 
         let selection = if self.parse_keyword("WHERE") {
@@ -1158,12 +1166,138 @@ impl Parser {
                 projection,
                 selection,
                 relation,
+                joins,
                 limit,
                 order_by,
                 group_by,
                 having,
             })
         }
+    }
+
+    fn parse_join_constraint(&mut self, natural: bool) -> Result<JoinConstraint, ParserError> {
+        if natural {
+            Ok(JoinConstraint::Natural)
+        } else if self.parse_keyword("ON") {
+            let constraint = self.parse_expr(0)?;
+            Ok(JoinConstraint::On(constraint))
+        } else if self.parse_keyword("USING") {
+            if self.consume_token(&Token::LParen)? {
+                let attributes = self
+                    .parse_expr_list()?
+                    .into_iter()
+                    .map(|ast_node| match ast_node {
+                        ASTNode::SQLIdentifier(ident) => Ok(ident),
+                        unexpected => {
+                            parser_err!(format!("Expected identifier, found {:?}", unexpected))
+                        }
+                    })
+                    .collect::<Result<Vec<String>, ParserError>>()?;
+
+                if self.consume_token(&Token::RParen)? {
+                    Ok(JoinConstraint::Using(attributes))
+                } else {
+                    parser_err!(format!("Expected token ')', found {:?}", self.peek_token()))
+                }
+            } else {
+                parser_err!(format!("Expected token '(', found {:?}", self.peek_token()))
+            }
+        } else {
+            parser_err!(format!(
+                "Unexpected token after JOIN: {:?}",
+                self.peek_token()
+            ))
+        }
+    }
+
+    fn parse_joins(&mut self) -> Result<Vec<Join>, ParserError> {
+        let mut joins = vec![];
+        loop {
+            let natural = match &self.peek_token() {
+                Some(Token::Comma) => {
+                    self.next_token();
+                    let relation = self.parse_expr(0)?;
+                    let join = Join {
+                        relation,
+                        join_operator: JoinOperator::Implicit,
+                    };
+                    joins.push(join);
+                    continue;
+                }
+                Some(Token::Keyword(kw)) if kw == "CROSS" => {
+                    self.next_token();
+                    self.expect_keyword("JOIN")?;
+                    let relation = self.parse_expr(0)?;
+                    let join = Join {
+                        relation,
+                        join_operator: JoinOperator::Cross,
+                    };
+                    joins.push(join);
+                    continue;
+                }
+                Some(Token::Keyword(kw)) if kw == "NATURAL" => {
+                    self.next_token();
+                    true
+                }
+                Some(_) => false,
+                None => return Ok(joins),
+            };
+
+            let join = match &self.peek_token() {
+                Some(Token::Keyword(kw)) if kw == "INNER" => {
+                    self.next_token();
+                    self.expect_keyword("JOIN")?;
+                    Join {
+                        relation: self.parse_expr(0)?,
+                        join_operator: JoinOperator::Inner(self.parse_join_constraint(natural)?),
+                    }
+                }
+                Some(Token::Keyword(kw)) if kw == "JOIN" => {
+                    self.next_token();
+                    Join {
+                        relation: self.parse_expr(0)?,
+                        join_operator: JoinOperator::Inner(self.parse_join_constraint(natural)?),
+                    }
+                }
+                Some(Token::Keyword(kw)) if kw == "LEFT" => {
+                    self.next_token();
+                    self.parse_keyword("OUTER");
+                    self.expect_keyword("JOIN")?;
+                    Join {
+                        relation: self.parse_expr(0)?,
+                        join_operator: JoinOperator::LeftOuter(
+                            self.parse_join_constraint(natural)?,
+                        ),
+                    }
+                }
+                Some(Token::Keyword(kw)) if kw == "RIGHT" => {
+                    self.next_token();
+                    self.parse_keyword("OUTER");
+                    self.expect_keyword("JOIN")?;
+                    Join {
+                        relation: self.parse_expr(0)?,
+                        join_operator: JoinOperator::RightOuter(
+                            self.parse_join_constraint(natural)?,
+                        ),
+                    }
+                }
+                Some(Token::Keyword(kw)) if kw == "FULL" => {
+                    self.next_token();
+                    self.parse_keyword("OUTER");
+                    self.expect_keyword("JOIN")?;
+                    Join {
+                        relation: self.parse_expr(0)?,
+                        join_operator: JoinOperator::FullOuter(
+                            self.parse_join_constraint(natural)?,
+                        ),
+                    }
+                }
+                _ => break,
+            };
+            joins.push(join);
+        }
+
+        Ok(joins)
     }
 
     /// Parse an INSERT statement
@@ -1215,19 +1349,17 @@ impl Parser {
 
             // look for optional ASC / DESC specifier
             let asc = match self.peek_token() {
-                Some(Token::Keyword(k)) => {
-                    match k.to_uppercase().as_ref() {
-                        "ASC" => {
-                            self.next_token();
-                            true
-                        },
-                        "DESC" => {
-                            self.next_token();
-                            false
-                        },
-                        _ => true
+                Some(Token::Keyword(k)) => match k.to_uppercase().as_ref() {
+                    "ASC" => {
+                        self.next_token();
+                        true
                     }
-                }
+                    "DESC" => {
+                        self.next_token();
+                        false
+                    }
+                    _ => true,
+                },
                 Some(Token::Comma) => true,
                 _ => true,
             };

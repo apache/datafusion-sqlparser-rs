@@ -14,6 +14,7 @@ pub enum SQLOperator {
     NotEq,
     And,
     Or,
+    Not,
     Like,
 }
 
@@ -33,6 +34,7 @@ impl ToString for SQLOperator {
             SQLOperator::NotEq => "!=".to_string(),
             SQLOperator::And => "AND".to_string(),
             SQLOperator::Or => "OR".to_string(),
+            SQLOperator::Not => "NOT".to_string(),
             SQLOperator::Like => "LIKE".to_string(),
         }
     }

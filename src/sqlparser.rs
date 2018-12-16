@@ -108,6 +108,10 @@ impl Parser {
                         self.parse_sql_value()
                     }
                     "CASE" => self.parse_case_expression(),
+                    "NOT" => Ok(ASTNode::SQLUnary {
+                        operator: SQLOperator::Not,
+                        rex: Box::new(self.parse_expr(0)?),
+                    }),
                     _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
                 },
                 Token::Mult => Ok(ASTNode::SQLWildcard),
@@ -329,6 +333,7 @@ impl Parser {
             &Token::Mod => Ok(SQLOperator::Modulus),
             &Token::Keyword(ref k) if k == "AND" => Ok(SQLOperator::And),
             &Token::Keyword(ref k) if k == "OR" => Ok(SQLOperator::Or),
+            &Token::Keyword(ref k) if k == "NOT" => Ok(SQLOperator::Not),
             &Token::Keyword(ref k) if k == "LIKE" => Ok(SQLOperator::Like),
             _ => parser_err!(format!("Unsupported SQL operator {:?}", tok)),
         }

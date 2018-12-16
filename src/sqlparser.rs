@@ -110,7 +110,7 @@ impl Parser {
                     "CASE" => self.parse_case_expression(),
                     "NOT" => Ok(ASTNode::SQLUnary {
                         operator: SQLOperator::Not,
-                        rex: Box::new(self.parse_expr(0)?),
+                        expr: Box::new(self.parse_expr(0)?),
                     }),
                     _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
                 },

@@ -275,23 +275,31 @@ impl Parser {
         debug!("parsing infix");
         match self.next_token() {
             Some(tok) => match tok {
-                Token::Keyword(ref k) => {
-                    if k == "IS" {
-                        if self.parse_keywords(vec!["NULL"]) {
-                            Ok(Some(ASTNode::SQLIsNull(Box::new(expr))))
-                        } else if self.parse_keywords(vec!["NOT", "NULL"]) {
-                            Ok(Some(ASTNode::SQLIsNotNull(Box::new(expr))))
-                        } else {
-                            parser_err!("Invalid tokens after IS")
-                        }
+                Token::Keyword(ref k) if k == "IS" => {
+                    if self.parse_keywords(vec!["NULL"]) {
+                        Ok(Some(ASTNode::SQLIsNull(Box::new(expr))))
+                    } else if self.parse_keywords(vec!["NOT", "NULL"]) {
+                        Ok(Some(ASTNode::SQLIsNotNull(Box::new(expr))))
                     } else {
-                        Ok(Some(ASTNode::SQLBinaryExpr {
-                            left: Box::new(expr),
-                            op: self.to_sql_operator(&tok)?,
-                            right: Box::new(self.parse_expr(precedence)?),
-                        }))
+                        parser_err!("Invalid tokens after IS")
                     }
                 }
+                Token::Keyword(ref k) if k == "NOT" => {
+                    if self.parse_keywords(vec!["LIKE"]) {
+                        Ok(Some(ASTNode::SQLBinaryExpr {
+                            left: Box::new(expr),
+                            op: SQLOperator::NotLike,
+                            right: Box::new(self.parse_expr(precedence)?),
+                        }))
+                    } else {
+                        parser_err!("Invalid tokens after NOT")
+                    }
+                }
+                Token::Keyword(_) => Ok(Some(ASTNode::SQLBinaryExpr {
+                    left: Box::new(expr),
+                    op: self.to_sql_operator(&tok)?,
+                    right: Box::new(self.parse_expr(precedence)?),
+                })),
                 Token::Eq
                 | Token::Neq
                 | Token::Gt
@@ -333,7 +341,7 @@ impl Parser {
             &Token::Mod => Ok(SQLOperator::Modulus),
             &Token::Keyword(ref k) if k == "AND" => Ok(SQLOperator::And),
             &Token::Keyword(ref k) if k == "OR" => Ok(SQLOperator::Or),
-            &Token::Keyword(ref k) if k == "NOT" => Ok(SQLOperator::Not),
+            //&Token::Keyword(ref k) if k == "NOT" => Ok(SQLOperator::Not),
             &Token::Keyword(ref k) if k == "LIKE" => Ok(SQLOperator::Like),
             _ => parser_err!(format!("Unsupported SQL operator {:?}", tok)),
         }
@@ -355,6 +363,7 @@ impl Parser {
         match tok {
             &Token::Keyword(ref k) if k == "OR" => Ok(5),
             &Token::Keyword(ref k) if k == "AND" => Ok(10),
+            &Token::Keyword(ref k) if k == "NOT" => Ok(15),
             &Token::Keyword(ref k) if k == "IS" => Ok(15),
             &Token::Keyword(ref k) if k == "LIKE" => Ok(20),
             &Token::Eq | &Token::Lt | &Token::LtEq | &Token::Neq | &Token::Gt | &Token::GtEq => {

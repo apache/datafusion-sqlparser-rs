@@ -3,7 +3,6 @@ mod generic_sql;
 pub mod keywords;
 mod postgresql;
 
-
 pub use self::ansi_sql::AnsiSqlDialect;
 pub use self::generic_sql::GenericSqlDialect;
 pub use self::postgresql::PostgreSqlDialect;

@@ -11,15 +11,12 @@ fn parse_simple_select() {
     let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1");
     let ast = parse_sql(&sql);
     match ast {
-        ASTNode::SQLSelect {
-            projection, ..
-        } => {
+        ASTNode::SQLSelect { projection, .. } => {
             assert_eq!(3, projection.len());
         }
         _ => assert!(false),
     }
 }
-
 
 fn parse_sql(sql: &str) -> ASTNode {
     let dialect = AnsiSqlDialect {};
@@ -29,4 +26,3 @@ fn parse_sql(sql: &str) -> ASTNode {
     let ast = parser.parse().unwrap();
     ast
 }
-

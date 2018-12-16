@@ -167,10 +167,16 @@ impl ToString for ASTNode {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-            ASTNode::SQLCase { conditions, results, else_result } => {
+            ASTNode::SQLCase {
+                conditions,
+                results,
+                else_result,
+            } => {
                 let mut s = format!(
                     "CASE {}",
-                    conditions.iter().zip(results)
+                    conditions
+                        .iter()
+                        .zip(results)
                         .map(|(c, r)| format!("WHEN {} THEN {}", c.to_string(), r.to_string()))
                         .collect::<Vec<String>>()
                         .join(" ")
@@ -179,7 +185,7 @@ impl ToString for ASTNode {
                     s += &format!(" ELSE {}", else_result.to_string())
                 }
                 s + " END"
-            },
+            }
             ASTNode::SQLSelect {
                 projection,
                 relation,

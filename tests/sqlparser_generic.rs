@@ -13,7 +13,9 @@ fn parse_delete_statement() {
     match parse_sql(&sql) {
         ASTNode::SQLDelete { relation, .. } => {
             assert_eq!(
-                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString("table".to_string())))),
+                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                    "table".to_string()
+                )))),
                 relation
             );
         }
@@ -36,7 +38,9 @@ fn parse_where_delete_statement() {
             ..
         } => {
             assert_eq!(
-                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString("table".to_string())))),
+                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                    "table".to_string()
+                )))),
                 relation
             );
 
@@ -207,7 +211,9 @@ fn parse_select_order_by_limit() {
     );
     let ast = parse_sql(&sql);
     match ast {
-        ASTNode::SQLSelect { order_by, limit, .. } => {
+        ASTNode::SQLSelect {
+            order_by, limit, ..
+        } => {
             assert_eq!(
                 Some(vec![
                     SQLOrderByExpr {
@@ -341,7 +347,10 @@ fn parse_literal_string() {
     let sql = "SELECT 'one'";
     match parse_sql(&sql) {
         ASTNode::SQLSelect { ref projection, .. } => {
-            assert_eq!(projection[0], ASTNode::SQLValue(Value::SingleQuotedString("one".to_string())));
+            assert_eq!(
+                projection[0],
+                ASTNode::SQLValue(Value::SingleQuotedString("one".to_string()))
+            );
         }
         _ => panic!(),
     }
@@ -380,20 +389,21 @@ fn parse_parens() {
     let sql = "(a + b) - (c + d)";
     let ast = parse_sql(&sql);
     assert_eq!(
-        SQLBinaryExpr { 
+        SQLBinaryExpr {
             left: Box::new(SQLBinaryExpr {
-                left: Box::new(SQLIdentifier("a".to_string())), 
-                op: Plus, 
-                right: Box::new(SQLIdentifier("b".to_string())) 
-            }), 
-            op: Minus, 
-            right: Box::new(SQLBinaryExpr { 
+                left: Box::new(SQLIdentifier("a".to_string())),
+                op: Plus,
+                right: Box::new(SQLIdentifier("b".to_string()))
+            }),
+            op: Minus,
+            right: Box::new(SQLBinaryExpr {
                 left: Box::new(SQLIdentifier("c".to_string())),
-                op: Plus, 
+                op: Plus,
                 right: Box::new(SQLIdentifier("d".to_string()))
             })
-        }
-    , ast);
+        },
+        ast
+    );
 }
 
 #[test]
@@ -410,17 +420,28 @@ fn parse_case_expression() {
                 SQLCase {
                     conditions: vec![
                         SQLIsNull(Box::new(SQLIdentifier("bar".to_string()))),
-                        SQLBinaryExpr { left: Box::new(SQLIdentifier("bar".to_string())), 
-                                        op: Eq, right: Box::new(SQLValue(Value::Long(0))) }, 
-                        SQLBinaryExpr { left: Box::new(SQLIdentifier("bar".to_string())), 
-                                        op: GtEq, right: Box::new(SQLValue(Value::Long(0))) }
+                        SQLBinaryExpr {
+                            left: Box::new(SQLIdentifier("bar".to_string())),
+                            op: Eq,
+                            right: Box::new(SQLValue(Value::Long(0)))
+                        },
+                        SQLBinaryExpr {
+                            left: Box::new(SQLIdentifier("bar".to_string())),
+                            op: GtEq,
+                            right: Box::new(SQLValue(Value::Long(0)))
+                        }
                     ],
-                    results: vec![SQLValue(Value::SingleQuotedString("null".to_string())),
-                                  SQLValue(Value::SingleQuotedString("=0".to_string())),
-                                  SQLValue(Value::SingleQuotedString(">=0".to_string()))],
-                    else_result: Some(Box::new(SQLValue(Value::SingleQuotedString("<0".to_string()))))
+                    results: vec![
+                        SQLValue(Value::SingleQuotedString("null".to_string())),
+                        SQLValue(Value::SingleQuotedString("=0".to_string())),
+                        SQLValue(Value::SingleQuotedString(">=0".to_string()))
+                    ],
+                    else_result: Some(Box::new(SQLValue(Value::SingleQuotedString(
+                        "<0".to_string()
+                    ))))
                 },
-                projection[0]);
+                projection[0]
+            );
         }
         _ => assert!(false),
     }
@@ -445,7 +466,9 @@ fn parse_delete_with_semi_colon() {
     match parse_sql(&sql) {
         ASTNode::SQLDelete { relation, .. } => {
             assert_eq!(
-                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString("table".to_string())))),
+                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                    "table".to_string()
+                )))),
                 relation
             );
         }
@@ -455,10 +478,9 @@ fn parse_delete_with_semi_colon() {
 
 fn parse_sql(sql: &str) -> ASTNode {
     let dialect = GenericSqlDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect,&sql, );
+    let mut tokenizer = Tokenizer::new(&dialect, &sql);
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(tokens);
     let ast = parser.parse().unwrap();
     ast
 }
-

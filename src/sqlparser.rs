@@ -17,10 +17,7 @@
 use super::dialect::Dialect;
 use super::sqlast::*;
 use super::sqltokenizer::*;
-use chrono::{
-    offset::FixedOffset,
-    DateTime, NaiveDate, NaiveDateTime, NaiveTime,
-};
+use chrono::{offset::FixedOffset, DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 
 #[derive(Debug, Clone)]
 pub enum ParserError {
@@ -109,10 +106,8 @@ impl Parser {
                     "NULL" => {
                         self.prev_token();
                         self.parse_sql_value()
-                    },
-                    "CASE" => {
-                        self.parse_case_expression()
                     }
+                    "CASE" => self.parse_case_expression(),
                     _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
                 },
                 Token::Mult => Ok(ASTNode::SQLWildcard),
@@ -156,14 +151,14 @@ impl Parser {
                 Token::DoubleQuotedString(_) => {
                     self.prev_token();
                     self.parse_sql_value()
-                },
+                }
                 Token::LParen => {
                     let expr = self.parse();
                     if !self.consume_token(&Token::RParen)? {
                         return parser_err!(format!("expected token RParen"));
                     }
                     expr
-                },
+                }
                 _ => parser_err!(format!(
                     "Prefix parser expected a keyword but found {:?}",
                     t
@@ -211,20 +206,20 @@ impl Parser {
                 if self.parse_keywords(vec!["ELSE"]) {
                     else_result = Some(Box::new(self.parse_expr(0)?));
                     if self.parse_keywords(vec!["END"]) {
-                        break
+                        break;
                     } else {
                         return parser_err!("Expecting END after a CASE..ELSE");
                     }
                 }
                 if self.parse_keywords(vec!["END"]) {
-                    break
+                    break;
                 }
                 self.consume_token(&Token::Keyword("WHEN".to_string()))?;
             }
             Ok(ASTNode::SQLCase {
                 conditions,
                 results,
-                else_result
+                else_result,
             })
         } else {
             // TODO: implement "simple" case
@@ -356,7 +351,7 @@ impl Parser {
             &Token::Keyword(ref k) if k == "OR" => Ok(5),
             &Token::Keyword(ref k) if k == "AND" => Ok(10),
             &Token::Keyword(ref k) if k == "IS" => Ok(15),
-            &Token::Keyword(ref k )if k == "LIKE" => Ok(20),
+            &Token::Keyword(ref k) if k == "LIKE" => Ok(20),
             &Token::Eq | &Token::Lt | &Token::LtEq | &Token::Neq | &Token::Gt | &Token::GtEq => {
                 Ok(20)
             }
@@ -753,12 +748,12 @@ impl Parser {
                     },
                     Token::Number(ref n) => match n.parse::<i64>() {
                         Ok(n) => {
-//                            if let Some(Token::Minus) = self.peek_token() {
-//                                self.prev_token();
-//                                self.parse_timestamp_value()
-//                            } else {
-                                Ok(Value::Long(n))
-//                            }
+                            //                            if let Some(Token::Minus) = self.peek_token() {
+                            //                                self.prev_token();
+                            //                                self.parse_timestamp_value()
+                            //                            } else {
+                            Ok(Value::Long(n))
+                            //                            }
                         }
                         Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
                     },
@@ -1217,19 +1212,17 @@ impl Parser {
 
             // look for optional ASC / DESC specifier
             let asc = match self.peek_token() {
-                Some(Token::Keyword(k)) => {
-                    match k.to_uppercase().as_ref() {
-                        "ASC" => {
-                            self.next_token();
-                            true
-                        },
-                        "DESC" => {
-                            self.next_token();
-                            false
-                        },
-                        _ => true
+                Some(Token::Keyword(k)) => match k.to_uppercase().as_ref() {
+                    "ASC" => {
+                        self.next_token();
+                        true
                     }
-                }
+                    "DESC" => {
+                        self.next_token();
+                        false
+                    }
+                    _ => true,
+                },
                 Some(Token::Comma) => true,
                 _ => true,
             };

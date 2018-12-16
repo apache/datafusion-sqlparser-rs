@@ -23,7 +23,7 @@ fn parse_simple_select() {
 
 fn parse_sql(sql: &str) -> ASTNode {
     let dialect = AnsiSqlDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect,&sql, );
+    let mut tokenizer = Tokenizer::new(&dialect, &sql);
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(tokens);
     let ast = parser.parse().unwrap();

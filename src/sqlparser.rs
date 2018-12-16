@@ -18,7 +18,7 @@ use super::dialect::Dialect;
 use super::sqlast::*;
 use super::sqltokenizer::*;
 use chrono::{
-    offset::{FixedOffset},
+    offset::FixedOffset,
     DateTime, NaiveDate, NaiveDateTime, NaiveTime,
 };
 
@@ -334,6 +334,7 @@ impl Parser {
             &Token::Mod => Ok(SQLOperator::Modulus),
             &Token::Keyword(ref k) if k == "AND" => Ok(SQLOperator::And),
             &Token::Keyword(ref k) if k == "OR" => Ok(SQLOperator::Or),
+            &Token::Keyword(ref k) if k == "LIKE" => Ok(SQLOperator::Like),
             _ => parser_err!(format!("Unsupported SQL operator {:?}", tok)),
         }
     }
@@ -355,6 +356,7 @@ impl Parser {
             &Token::Keyword(ref k) if k == "OR" => Ok(5),
             &Token::Keyword(ref k) if k == "AND" => Ok(10),
             &Token::Keyword(ref k) if k == "IS" => Ok(15),
+            &Token::Keyword(ref k )if k == "LIKE" => Ok(20),
             &Token::Eq | &Token::Lt | &Token::LtEq | &Token::Neq | &Token::Gt | &Token::GtEq => {
                 Ok(20)
             }

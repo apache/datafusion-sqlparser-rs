@@ -730,3 +730,23 @@ fn parser(sql: &str) -> Parser {
     debug!("tokens: {:#?}", tokens);
     Parser::new(tokens)
 }
+
+#[test]
+fn parse_like() {
+    let sql = String::from("SELECT * FROM customers WHERE name LIKE '%a'");
+    let ast = parse_sql(&sql);
+    assert_eq!(sql, ast.to_string());
+    match ast {
+        ASTNode::SQLSelect { selection, .. } => {
+            assert_eq!(
+                ASTNode::SQLBinaryExpr {
+                    left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
+                    op: SQLOperator::Like,
+                    right: Box::new(ASTNode::SQLValue(Value::SingleQuotedString("%a".to_string()))),
+                },
+                *selection.unwrap()
+            );
+        }
+        _ => assert!(false),
+    }
+}

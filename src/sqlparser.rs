@@ -95,15 +95,7 @@ impl Parser {
                     "INSERT" => Ok(self.parse_insert()?),
                     "ALTER" => Ok(self.parse_alter()?),
                     "COPY" => Ok(self.parse_copy()?),
-                    "TRUE" => {
-                        self.prev_token();
-                        self.parse_sql_value()
-                    }
-                    "FALSE" => {
-                        self.prev_token();
-                        self.parse_sql_value()
-                    }
-                    "NULL" => {
+                    "TRUE" | "FALSE" | "NULL" => {
                         self.prev_token();
                         self.parse_sql_value()
                     }
@@ -136,19 +128,10 @@ impl Parser {
                         }
                     }
                 }
-                Token::Number(_) => {
-                    self.prev_token();
-                    self.parse_sql_value()
-                }
-                Token::String(_) => {
-                    self.prev_token();
-                    self.parse_sql_value()
-                }
-                Token::SingleQuotedString(_) => {
-                    self.prev_token();
-                    self.parse_sql_value()
-                }
-                Token::DoubleQuotedString(_) => {
+                Token::Number(_)
+                | Token::String(_)
+                | Token::SingleQuotedString(_)
+                | Token::DoubleQuotedString(_) => {
                     self.prev_token();
                     self.parse_sql_value()
                 }

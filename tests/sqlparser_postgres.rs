@@ -657,6 +657,7 @@ fn parse_timestamps_example() {
     let sql = "2016-02-15 09:43:33";
     let _ = parse_sql(sql);
     //TODO add assertion
+    //assert_eq!(sql, ast.to_string());
 }
 
 #[test]
@@ -664,6 +665,7 @@ fn parse_timestamps_with_millis_example() {
     let sql = "2017-11-02 19:15:42.308637";
     let _ = parse_sql(sql);
     //TODO add assertion
+    //assert_eq!(sql, ast.to_string());
 }
 
 #[test]

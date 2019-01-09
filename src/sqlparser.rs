@@ -682,30 +682,13 @@ impl Parser {
                         "NULL" => Ok(Value::Null),
                         _ => return parser_err!(format!("No value parser for keyword {}", k)),
                     },
-                    //TODO: parse the timestamp here
+                    //TODO: parse the timestamp here (see parse_timestamp_value())
                     Token::Number(ref n) if n.contains(".") => match n.parse::<f64>() {
                         Ok(n) => Ok(Value::Double(n)),
-                        Err(e) => {
-                            let index = self.index;
-                            self.prev_token();
-                            if let Ok(timestamp) = self.parse_timestamp_value() {
-                                println!("timstamp: {:?}", timestamp);
-                                Ok(timestamp)
-                            } else {
-                                self.index = index;
-                                parser_err!(format!("Could not parse '{}' as i64: {}", n, e))
-                            }
-                        }
+                        Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
                     },
                     Token::Number(ref n) => match n.parse::<i64>() {
-                        Ok(n) => {
-                            //                            if let Some(Token::Minus) = self.peek_token() {
-                            //                                self.prev_token();
-                            //                                self.parse_timestamp_value()
-                            //                            } else {
-                            Ok(Value::Long(n))
-                            //                            }
-                        }
+                        Ok(n) => Ok(Value::Long(n)),
                         Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
                     },
                     Token::Identifier(id) => Ok(Value::String(id.to_string())),
@@ -733,13 +716,13 @@ impl Parser {
         }
     }
 
-    /// Parse a literal integer/long
+    /// Parse a literal double
     pub fn parse_literal_double(&mut self) -> Result<f64, ParserError> {
         match self.next_token() {
             Some(Token::Number(s)) => s.parse::<f64>().map_err(|e| {
-                ParserError::ParserError(format!("Could not parse '{}' as i64: {}", s, e))
+                ParserError::ParserError(format!("Could not parse '{}' as f64: {}", s, e))
             }),
-            other => parser_err!(format!("Expected literal int, found {:?}", other)),
+            other => parser_err!(format!("Expected literal number, found {:?}", other)),
         }
     }
 
@@ -820,19 +803,17 @@ impl Parser {
         self.consume_token(&Token::Colon)?;
         let min = self.parse_literal_int()?;
         self.consume_token(&Token::Colon)?;
+        // On one hand, the SQL specs defines <seconds fraction> ::= <unsigned integer>,
+        // so it would be more correct to parse it as such
         let sec = self.parse_literal_double()?;
-        let _ = (sec.fract() * 1000.0).round();
-        if let Ok(true) = self.consume_token(&Token::Period) {
-            let ms = self.parse_literal_int()?;
-            Ok(NaiveTime::from_hms_milli(
-                hour as u32,
-                min as u32,
-                sec as u32,
-                ms as u32,
-            ))
-        } else {
-            Ok(NaiveTime::from_hms(hour as u32, min as u32, sec as u32))
-        }
+        // On the other, chrono only supports nanoseconds, which should(?) fit in seconds-as-f64...
+        let nanos = (sec.fract() * 1_000_000_000.0).round();
+        Ok(NaiveTime::from_hms_nano(
+            hour as u32,
+            min as u32,
+            sec as u32,
+            nanos as u32,
+        ))
     }
 
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)

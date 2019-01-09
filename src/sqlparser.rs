@@ -345,11 +345,17 @@ impl Parser {
         }
     }
 
+    /// Return first non-whitespace token that has not yet been processed
     pub fn peek_token(&self) -> Option<Token> {
-        self.peek_token_skip_whitespace()
+        if let Some(n) = self.til_non_whitespace() {
+            self.token_at(n)
+        } else {
+            None
+        }
     }
 
-    pub fn skip_whitespace(&mut self) -> Option<Token> {
+    /// Get the next token skipping whitespace and increment the token index
+    pub fn next_token(&mut self) -> Option<Token> {
         loop {
             match self.next_token_no_skip() {
                 Some(Token::Whitespace(_)) => {
@@ -389,19 +395,6 @@ impl Parser {
         }
     }
 
-    pub fn peek_token_skip_whitespace(&self) -> Option<Token> {
-        if let Some(n) = self.til_non_whitespace() {
-            self.token_at(n)
-        } else {
-            None
-        }
-    }
-
-    /// Get the next token skipping whitespace and increment the token index
-    pub fn next_token(&mut self) -> Option<Token> {
-        self.skip_whitespace()
-    }
-
     pub fn next_token_no_skip(&mut self) -> Option<Token> {
         if self.index < self.tokens.len() {
             self.index = self.index + 1;
@@ -411,9 +404,9 @@ impl Parser {
         }
     }
 
-    /// if prev token is whitespace skip it
-    /// if prev token is not whitespace skipt it as well
-    pub fn prev_token_skip_whitespace(&mut self) -> Option<Token> {
+    /// Push back the last one non-whitespace token
+    pub fn prev_token(&mut self) -> Option<Token> {
+        // TODO: returned value is unused (available via peek_token)
         loop {
             match self.prev_token_no_skip() {
                 Some(Token::Whitespace(_)) => {
@@ -426,12 +419,8 @@ impl Parser {
         }
     }
 
-    pub fn prev_token(&mut self) -> Option<Token> {
-        self.prev_token_skip_whitespace()
-    }
-
     /// Get the previous token and decrement the token index
-    pub fn prev_token_no_skip(&mut self) -> Option<Token> {
+    fn prev_token_no_skip(&mut self) -> Option<Token> {
         if self.index > 0 {
             self.index = self.index - 1;
             Some(self.tokens[self.index].clone())

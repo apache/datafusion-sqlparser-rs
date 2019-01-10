@@ -108,7 +108,7 @@ impl Parser {
                         self.parse_cast_expression()
                     } else {
                         match self.peek_token() {
-                            Some(Token::LParen) => self.parse_function_or_pg_cast(&id),
+                            Some(Token::LParen) => self.parse_function(&id),
                             Some(Token::Period) => {
                                 let mut id_parts: Vec<String> = vec![id];
                                 while self.peek_token() == Some(Token::Period) {
@@ -148,15 +148,6 @@ impl Parser {
                 )),
             },
             None => parser_err!(format!("Prefix parser expected a keyword but hit EOF")),
-        }
-    }
-
-    pub fn parse_function_or_pg_cast(&mut self, id: &str) -> Result<ASTNode, ParserError> {
-        let func = self.parse_function(&id)?;
-        if let Some(Token::DoubleColon) = self.peek_token() {
-            self.parse_pg_cast(func)
-        } else {
-            Ok(func)
         }
     }
 

@@ -227,16 +227,10 @@ impl Parser {
     /// Parse a postgresql casting style which is in the form of `expr::datatype`
     pub fn parse_pg_cast(&mut self, expr: ASTNode) -> Result<ASTNode, ParserError> {
         let _ = self.consume_token(&Token::DoubleColon)?;
-        let datatype = self.parse_data_type()?;
-        let pg_cast = ASTNode::SQLCast {
+        Ok(ASTNode::SQLCast {
             expr: Box::new(expr),
-            data_type: datatype,
-        };
-        if let Some(Token::DoubleColon) = self.peek_token() {
-            self.parse_pg_cast(pg_cast)
-        } else {
-            Ok(pg_cast)
-        }
+            data_type: self.parse_data_type()?,
+        })
     }
 
     /// Parse an expression infix (typically an operator)

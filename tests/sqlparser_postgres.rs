@@ -532,6 +532,20 @@ fn parse_create_table_from_pg_dump() {
             assert_eq!(SQLType::Varchar(Some(45)), c_first_name.data_type);
             assert_eq!(false, c_first_name.allow_null);
 
+            let c_create_date1 = &columns[8];
+            assert_eq!(
+                Some(Box::new(ASTNode::SQLCast {
+                    expr: Box::new(ASTNode::SQLCast {
+                        expr: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                            "now".to_string()
+                        ))),
+                        data_type: SQLType::Text
+                    }),
+                    data_type: SQLType::Date
+                })),
+                c_create_date1.default
+            );
+
             let c_release_year = &columns[10];
             assert_eq!(
                 SQLType::Custom("public.year".to_string()),

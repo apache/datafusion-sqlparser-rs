@@ -224,19 +224,13 @@ impl Parser {
         })
     }
 
-    /// Parse a postgresql casting style which is in the form or expr::datatype
+    /// Parse a postgresql casting style which is in the form of `expr::datatype`
     pub fn parse_pg_cast(&mut self, expr: ASTNode) -> Result<ASTNode, ParserError> {
         let _ = self.consume_token(&Token::DoubleColon)?;
-        let datatype = if let Ok(data_type) = self.parse_data_type() {
-            Ok(data_type)
-        } else if let Ok(table_name) = self.parse_tablename() {
-            Ok(SQLType::Custom(table_name))
-        } else {
-            parser_err!("Expecting datatype or identifier")
-        };
+        let datatype = self.parse_data_type()?;
         let pg_cast = ASTNode::SQLCast {
             expr: Box::new(expr),
-            data_type: datatype?,
+            data_type: datatype,
         };
         if let Some(Token::DoubleColon) = self.peek_token() {
             self.parse_pg_cast(pg_cast)
@@ -945,13 +939,10 @@ impl Parser {
                 }
                 _ => parser_err!(format!("Invalid data type '{:?}'", k)),
             },
-            Some(Token::Identifier(id)) => {
-                if let Ok(true) = self.consume_token(&Token::Period) {
-                    let ids = self.parse_tablename()?;
-                    Ok(SQLType::Custom(format!("{}.{}", id, ids)))
-                } else {
-                    Ok(SQLType::Custom(id))
-                }
+            Some(Token::Identifier(_)) => {
+                self.prev_token();
+                let type_name = self.parse_tablename()?; // TODO: this actually reads a possibly schema-qualified name of a (custom) type
+                Ok(SQLType::Custom(type_name))
             }
             other => parser_err!(format!("Invalid data type: '{:?}'", other)),
         }

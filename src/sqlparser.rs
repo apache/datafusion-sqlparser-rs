@@ -158,7 +158,6 @@ impl Parser {
                     }
                 }
                 Token::Number(_)
-                | Token::String(_)
                 | Token::SingleQuotedString(_)
                 | Token::DoubleQuotedString(_) => {
                     self.prev_token();
@@ -755,7 +754,6 @@ impl Parser {
                         Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
                     },
                     Token::Identifier(id) => Ok(Value::String(id.to_string())),
-                    Token::String(ref s) => Ok(Value::String(s.to_string())),
                     Token::SingleQuotedString(ref s) => {
                         Ok(Value::SingleQuotedString(s.to_string()))
                     }
@@ -792,7 +790,6 @@ impl Parser {
     /// Parse a literal string
     pub fn parse_literal_string(&mut self) -> Result<String, ParserError> {
         match self.next_token() {
-            Some(Token::String(ref s)) => Ok(s.clone()),
             Some(Token::SingleQuotedString(ref s)) => Ok(s.clone()),
             Some(Token::DoubleQuotedString(ref s)) => Ok(s.clone()),
             other => parser_err!(format!("Expected literal string, found {:?}", other)),

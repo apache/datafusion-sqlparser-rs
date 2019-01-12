@@ -437,6 +437,18 @@ impl Parser {
         true
     }
 
+    pub fn expect_keyword(&mut self, expected: &'static str) -> Result<(), ParserError> {
+        if self.parse_keyword(expected) {
+            Ok(())
+        } else {
+            parser_err!(format!(
+                "Expected keyword {}, found {:?}",
+                expected,
+                self.peek_token()
+            ))
+        }
+    }
+
     //TODO: this function is inconsistent and sometimes returns bool and sometimes fails
 
     /// Consume the next token if it matches the expected token, otherwise return an error
@@ -1034,11 +1046,12 @@ impl Parser {
     pub fn parse_select(&mut self) -> Result<ASTNode, ParserError> {
         let projection = self.parse_expr_list()?;
 
-        let relation: Option<Box<ASTNode>> = if self.parse_keyword("FROM") {
-            //TODO: add support for JOIN
-            Some(Box::new(self.parse_expr(0)?))
+        let (relation, joins): (Option<Box<ASTNode>>, Vec<Join>) = if self.parse_keyword("FROM") {
+            let relation = Some(Box::new(self.parse_expr(0)?));
+            let joins = self.parse_joins()?;
+            (relation, joins)
         } else {
-            None
+            (None, vec![])
         };
 
         let selection = if self.parse_keyword("WHERE") {
@@ -1084,12 +1097,138 @@ impl Parser {
                 projection,
                 selection,
                 relation,
+                joins,
                 limit,
                 order_by,
                 group_by,
                 having,
             })
         }
+    }
+
+    fn parse_join_constraint(&mut self, natural: bool) -> Result<JoinConstraint, ParserError> {
+        if natural {
+            Ok(JoinConstraint::Natural)
+        } else if self.parse_keyword("ON") {
+            let constraint = self.parse_expr(0)?;
+            Ok(JoinConstraint::On(constraint))
+        } else if self.parse_keyword("USING") {
+            if self.consume_token(&Token::LParen)? {
+                let attributes = self
+                    .parse_expr_list()?
+                    .into_iter()
+                    .map(|ast_node| match ast_node {
+                        ASTNode::SQLIdentifier(ident) => Ok(ident),
+                        unexpected => {
+                            parser_err!(format!("Expected identifier, found {:?}", unexpected))
+                        }
+                    })
+                    .collect::<Result<Vec<String>, ParserError>>()?;
+
+                if self.consume_token(&Token::RParen)? {
+                    Ok(JoinConstraint::Using(attributes))
+                } else {
+                    parser_err!(format!("Expected token ')', found {:?}", self.peek_token()))
+                }
+            } else {
+                parser_err!(format!("Expected token '(', found {:?}", self.peek_token()))
+            }
+        } else {
+            parser_err!(format!(
+                "Unexpected token after JOIN: {:?}",
+                self.peek_token()
+            ))
+        }
+    }
+
+    fn parse_joins(&mut self) -> Result<Vec<Join>, ParserError> {
+        let mut joins = vec![];
+        loop {
+            let natural = match &self.peek_token() {
+                Some(Token::Comma) => {
+                    self.next_token();
+                    let relation = self.parse_expr(0)?;
+                    let join = Join {
+                        relation,
+                        join_operator: JoinOperator::Implicit,
+                    };
+                    joins.push(join);
+                    continue;
+                }
+                Some(Token::Keyword(kw)) if kw == "CROSS" => {
+                    self.next_token();
+                    self.expect_keyword("JOIN")?;
+                    let relation = self.parse_expr(0)?;
+                    let join = Join {
+                        relation,
+                        join_operator: JoinOperator::Cross,
+                    };
+                    joins.push(join);
+                    continue;
+                }
+                Some(Token::Keyword(kw)) if kw == "NATURAL" => {
+                    self.next_token();
+                    true
+                }
+                Some(_) => false,
+                None => return Ok(joins),
+            };
+
+            let join = match &self.peek_token() {
+                Some(Token::Keyword(kw)) if kw == "INNER" => {
+                    self.next_token();
+                    self.expect_keyword("JOIN")?;
+                    Join {
+                        relation: self.parse_expr(0)?,
+                        join_operator: JoinOperator::Inner(self.parse_join_constraint(natural)?),
+                    }
+                }
+                Some(Token::Keyword(kw)) if kw == "JOIN" => {
+                    self.next_token();
+                    Join {
+                        relation: self.parse_expr(0)?,
+                        join_operator: JoinOperator::Inner(self.parse_join_constraint(natural)?),
+                    }
+                }
+                Some(Token::Keyword(kw)) if kw == "LEFT" => {
+                    self.next_token();
+                    self.parse_keyword("OUTER");
+                    self.expect_keyword("JOIN")?;
+                    Join {
+                        relation: self.parse_expr(0)?,
+                        join_operator: JoinOperator::LeftOuter(
+                            self.parse_join_constraint(natural)?,
+                        ),
+                    }
+                }
+                Some(Token::Keyword(kw)) if kw == "RIGHT" => {
+                    self.next_token();
+                    self.parse_keyword("OUTER");
+                    self.expect_keyword("JOIN")?;
+                    Join {
+                        relation: self.parse_expr(0)?,
+                        join_operator: JoinOperator::RightOuter(
+                            self.parse_join_constraint(natural)?,
+                        ),
+                    }
+                }
+                Some(Token::Keyword(kw)) if kw == "FULL" => {
+                    self.next_token();
+                    self.parse_keyword("OUTER");
+                    self.expect_keyword("JOIN")?;
+                    Join {
+                        relation: self.parse_expr(0)?,
+                        join_operator: JoinOperator::FullOuter(
+                            self.parse_join_constraint(natural)?,
+                        ),
+                    }
+                }
+                _ => break,
+            };
+            joins.push(join);
+        }
+
+        Ok(joins)
     }
 
     /// Parse an INSERT statement

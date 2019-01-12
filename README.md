@@ -8,7 +8,7 @@
 
 The goal of this project is to build a SQL lexer and parser capable of parsing SQL that conforms with the [ANSI SQL:2011](https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#_5_1_sql_terminal_character) standard but also making it easy to support custom dialects so that this crate can be used as a foundation for vendor-specific parsers.
 
-This parser is currently being used by the [DataFusion](https://github.com/datafusion-rs/datafusion) query engine.
+This parser is currently being used by the [DataFusion](https://github.com/andygrove/datafusion) query engine and [LocustDB](https://github.com/cswinter/LocustDB).
 
 ## Example
 

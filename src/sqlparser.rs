@@ -246,7 +246,6 @@ impl Parser {
 
     /// Parse a postgresql casting style which is in the form of `expr::datatype`
     pub fn parse_pg_cast(&mut self, expr: ASTNode) -> Result<ASTNode, ParserError> {
-        let _ = self.consume_token(&Token::DoubleColon)?;
         Ok(ASTNode::SQLCast {
             expr: Box::new(expr),
             data_type: self.parse_data_type()?,

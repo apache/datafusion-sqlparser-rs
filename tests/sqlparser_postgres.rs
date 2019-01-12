@@ -13,20 +13,11 @@ fn test_prev_index() {
     let sql: &str = "SELECT version()";
     let mut parser = parser(sql);
     assert_eq!(parser.prev_token(), None);
-    assert_eq!(parser.next_token(), Some(Token::Keyword("SELECT".into())));
-    assert_eq!(
-        parser.next_token(),
-        Some(Token::Identifier("version".into()))
-    );
-    assert_eq!(
-        parser.prev_token(),
-        Some(Token::Identifier("version".into()))
-    );
-    assert_eq!(
-        parser.peek_token(),
-        Some(Token::Identifier("version".into()))
-    );
-    assert_eq!(parser.prev_token(), Some(Token::Keyword("SELECT".into())));
+    assert_eq!(parser.next_token(), Some(Token::make_keyword("SELECT")));
+    assert_eq!(parser.next_token(), Some(Token::make_word("version", None)));
+    assert_eq!(parser.prev_token(), Some(Token::make_word("version", None)));
+    assert_eq!(parser.peek_token(), Some(Token::make_word("version", None)));
+    assert_eq!(parser.prev_token(), Some(Token::make_keyword("SELECT")));
     assert_eq!(parser.prev_token(), None);
 }
 

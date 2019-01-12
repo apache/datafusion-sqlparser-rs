@@ -25,15 +25,18 @@ pub use self::value::Value;
 
 pub use self::sql_operator::SQLOperator;
 
+// This could be enhanced to remember the way the identifier was quoted
+pub type SQLIdent = String;
+
 /// SQL Abstract Syntax Tree (AST)
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASTNode {
     /// Identifier e.g. table name or column name
-    SQLIdentifier(String),
+    SQLIdentifier(SQLIdent),
     /// Wildcard e.g. `*`
     SQLWildcard,
     /// Multi part identifier e.g. `myschema.dbo.mytable`
-    SQLCompoundIdentifier(Vec<String>),
+    SQLCompoundIdentifier(Vec<SQLIdent>),
     /// Assigment e.g. `name = 'Fred'` in an UPDATE statement
     SQLAssignment(SQLAssignment),
     /// `IS NULL` expression
@@ -93,7 +96,7 @@ pub enum ASTNode {
         /// TABLE
         table_name: String,
         /// COLUMNS
-        columns: Vec<String>,
+        columns: Vec<SQLIdent>,
         /// VALUES (vector of rows to insert)
         values: Vec<Vec<ASTNode>>,
     },
@@ -101,7 +104,7 @@ pub enum ASTNode {
         /// TABLE
         table_name: String,
         /// COLUMNS
-        columns: Vec<String>,
+        columns: Vec<SQLIdent>,
         /// VALUES a vector of values to be copied
         values: Vec<Option<String>>,
     },
@@ -388,7 +391,7 @@ impl ToString for SQLOrderByExpr {
 /// SQL column definition
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLColumnDef {
-    pub name: String,
+    pub name: SQLIdent,
     pub data_type: SQLType,
     pub is_primary: bool,
     pub is_unique: bool,

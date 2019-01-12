@@ -180,7 +180,7 @@ impl Parser {
 
     pub fn parse_function(&mut self, id: &str) -> Result<ASTNode, ParserError> {
         self.expect_token(&Token::LParen)?;
-        if let Ok(true) = self.consume_token(&Token::RParen) {
+        if self.consume_token(&Token::RParen) {
             Ok(ASTNode::SQLFunction {
                 id: id.to_string(),
                 args: vec![],
@@ -488,26 +488,25 @@ impl Parser {
         }
     }
 
-    //TODO: this function is inconsistent and sometimes returns bool and sometimes fails
-
-    /// Consume the next token if it matches the expected token, otherwise return an error
-    pub fn consume_token(&mut self, expected: &Token) -> Result<bool, ParserError> {
+    /// Consume the next token if it matches the expected token, otherwise return false
+    #[must_use]
+    pub fn consume_token(&mut self, expected: &Token) -> bool {
         match self.peek_token() {
             Some(ref t) => {
                 if *t == *expected {
                     self.next_token();
-                    Ok(true)
+                    true
                 } else {
-                    Ok(false)
+                    false
                 }
             }
-            other => parser_err!(format!("expected token {:?} but was {:?}", expected, other,)),
+            _ => false,
         }
     }
 
     /// Bail out if the current token is not an expected keyword, or consume it if it is
     pub fn expect_token(&mut self, expected: &Token) -> Result<(), ParserError> {
-        if self.consume_token(expected)? {
+        if self.consume_token(expected) {
             Ok(())
         } else {
             parser_err!(format!(
@@ -524,7 +523,7 @@ impl Parser {
             let table_name = self.parse_tablename()?;
             // parse optional column list (schema)
             let mut columns = vec![];
-            if self.consume_token(&Token::LParen)? {
+            if self.consume_token(&Token::LParen) {
                 loop {
                     if let Some(Token::Identifier(column_name)) = self.next_token() {
                         if let Ok(data_type) = self.parse_data_type() {
@@ -674,7 +673,7 @@ impl Parser {
     /// Parse a copy statement
     pub fn parse_copy(&mut self) -> Result<ASTNode, ParserError> {
         let table_name = self.parse_tablename()?;
-        let columns = if self.consume_token(&Token::LParen)? {
+        let columns = if self.consume_token(&Token::LParen) {
             let column_names = self.parse_column_names()?;
             self.expect_token(&Token::RParen)?;
             column_names
@@ -717,7 +716,7 @@ impl Parser {
                     content.clear();
                 }
                 Token::Backslash => {
-                    if let Ok(true) = self.consume_token(&Token::Period) {
+                    if self.consume_token(&Token::Period) {
                         return Ok(values);
                     }
                     if let Some(token) = self.next_token() {
@@ -842,9 +841,9 @@ impl Parser {
     }
 
     pub fn parse_date(&mut self, year: i64) -> Result<NaiveDate, ParserError> {
-        if let Ok(true) = self.consume_token(&Token::Minus) {
+        if self.consume_token(&Token::Minus) {
             let month = self.parse_literal_int()?;
-            if let Ok(true) = self.consume_token(&Token::Minus) {
+            if self.consume_token(&Token::Minus) {
                 let day = self.parse_literal_int()?;
                 let date = NaiveDate::from_ymd(year as i32, month as u32, day as u32);
                 Ok(date)
@@ -955,7 +954,8 @@ impl Parser {
                 }
                 "REGCLASS" => Ok(SQLType::Regclass),
                 "TEXT" => {
-                    if let Ok(true) = self.consume_token(&Token::LBracket) {
+                    if self.consume_token(&Token::LBracket) {
+                        // Note: this is postgresql-specific
                         self.expect_token(&Token::RBracket)?;
                         Ok(SQLType::Array(Box::new(SQLType::Text)))
                     } else {
@@ -1038,7 +1038,7 @@ impl Parser {
     }
 
     pub fn parse_optional_precision(&mut self) -> Result<Option<usize>, ParserError> {
-        if self.consume_token(&Token::LParen)? {
+        if self.consume_token(&Token::LParen) {
             let n = self.parse_literal_int()?;
             //TODO: check return value of reading rparen
             self.expect_token(&Token::RParen)?;
@@ -1051,9 +1051,9 @@ impl Parser {
     pub fn parse_optional_precision_scale(
         &mut self,
     ) -> Result<(usize, Option<usize>), ParserError> {
-        if self.consume_token(&Token::LParen)? {
+        if self.consume_token(&Token::LParen) {
             let n = self.parse_literal_int()?;
-            let scale = if let Ok(true) = self.consume_token(&Token::Comma) {
+            let scale = if self.consume_token(&Token::Comma) {
                 Some(self.parse_literal_int()? as usize)
             } else {
                 None
@@ -1165,7 +1165,7 @@ impl Parser {
             let constraint = self.parse_expr(0)?;
             Ok(JoinConstraint::On(constraint))
         } else if self.parse_keyword("USING") {
-            if self.consume_token(&Token::LParen)? {
+            if self.consume_token(&Token::LParen) {
                 let attributes = self
                     .parse_expr_list()?
                     .into_iter()
@@ -1177,7 +1177,7 @@ impl Parser {
                     })
                     .collect::<Result<Vec<String>, ParserError>>()?;
 
-                if self.consume_token(&Token::RParen)? {
+                if self.consume_token(&Token::RParen) {
                     Ok(JoinConstraint::Using(attributes))
                 } else {
                     parser_err!(format!("Expected token ')', found {:?}", self.peek_token()))
@@ -1287,7 +1287,7 @@ impl Parser {
     pub fn parse_insert(&mut self) -> Result<ASTNode, ParserError> {
         self.expect_keyword("INTO")?;
         let table_name = self.parse_tablename()?;
-        let columns = if self.consume_token(&Token::LParen)? {
+        let columns = if self.consume_token(&Token::LParen) {
             let column_names = self.parse_column_names()?;
             self.expect_token(&Token::RParen)?;
             column_names

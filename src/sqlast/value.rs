@@ -15,8 +15,6 @@ pub enum Value {
     Uuid(Uuid),
     /// 'string value'
     SingleQuotedString(String),
-    /// "string value"
-    DoubleQuotedString(String),
     /// Boolean value true or false,
     Boolean(bool),
     /// Date value
@@ -39,7 +37,6 @@ impl ToString for Value {
             Value::String(v) => v.to_string(),
             Value::Uuid(v) => v.to_string(),
             Value::SingleQuotedString(v) => format!("'{}'", v),
-            Value::DoubleQuotedString(v) => format!("\"{}\"", v),
             Value::Boolean(v) => v.to_string(),
             Value::Date(v) => v.to_string(),
             Value::Time(v) => v.to_string(),

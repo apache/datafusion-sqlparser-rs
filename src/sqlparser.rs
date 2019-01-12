@@ -157,9 +157,7 @@ impl Parser {
                         }
                     }
                 }
-                Token::Number(_)
-                | Token::SingleQuotedString(_)
-                | Token::DoubleQuotedString(_) => {
+                Token::Number(_) | Token::SingleQuotedString(_) => {
                     self.prev_token();
                     self.parse_sql_value()
                 }
@@ -757,9 +755,6 @@ impl Parser {
                     Token::SingleQuotedString(ref s) => {
                         Ok(Value::SingleQuotedString(s.to_string()))
                     }
-                    Token::DoubleQuotedString(ref s) => {
-                        Ok(Value::DoubleQuotedString(s.to_string()))
-                    }
                     _ => parser_err!(format!("Unsupported value: {:?}", self.peek_token())),
                 }
             }
@@ -791,7 +786,6 @@ impl Parser {
     pub fn parse_literal_string(&mut self) -> Result<String, ParserError> {
         match self.next_token() {
             Some(Token::SingleQuotedString(ref s)) => Ok(s.clone()),
-            Some(Token::DoubleQuotedString(ref s)) => Ok(s.clone()),
             other => parser_err!(format!("Expected literal string, found {:?}", other)),
         }
     }

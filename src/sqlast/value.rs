@@ -1,7 +1,4 @@
-use chrono::{
-    offset::{FixedOffset},
-    DateTime, NaiveDate, NaiveDateTime, NaiveTime,
-};
+use chrono::{offset::FixedOffset, DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 
 use uuid::Uuid;
 

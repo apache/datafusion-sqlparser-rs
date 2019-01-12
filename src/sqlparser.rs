@@ -690,7 +690,7 @@ impl Parser {
 
     /// Parse a tab separated values in
     /// COPY payload
-    fn parse_tsv(&mut self) -> Result<Vec<Value>, ParserError> {
+    fn parse_tsv(&mut self) -> Result<Vec<Option<String>>, ParserError> {
         let values = self.parse_tab_value()?;
         Ok(values)
     }
@@ -699,17 +699,17 @@ impl Parser {
         Ok(ASTNode::SQLValue(self.parse_value()?))
     }
 
-    fn parse_tab_value(&mut self) -> Result<Vec<Value>, ParserError> {
+    fn parse_tab_value(&mut self) -> Result<Vec<Option<String>>, ParserError> {
         let mut values = vec![];
         let mut content = String::from("");
         while let Some(t) = self.next_token_no_skip() {
             match t {
                 Token::Whitespace(Whitespace::Tab) => {
-                    values.push(Value::String(content.to_string()));
+                    values.push(Some(content.to_string()));
                     content.clear();
                 }
                 Token::Whitespace(Whitespace::Newline) => {
-                    values.push(Value::String(content.to_string()));
+                    values.push(Some(content.to_string()));
                     content.clear();
                 }
                 Token::Backslash => {
@@ -718,7 +718,7 @@ impl Parser {
                     }
                     if let Some(token) = self.next_token() {
                         if token == Token::Identifier("N".to_string()) {
-                            values.push(Value::Null);
+                            values.push(None);
                         }
                     } else {
                         continue;

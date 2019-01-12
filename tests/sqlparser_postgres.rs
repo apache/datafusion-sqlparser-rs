@@ -517,20 +517,40 @@ fn parse_create_table_from_pg_dump() {
         ASTNode::SQLCreateTable { name, columns } => {
             assert_eq!("public.customer", name);
 
-            let c_name = &columns[0];
-            assert_eq!("customer_id", c_name.name);
-            assert_eq!(SQLType::Int, c_name.data_type);
-            assert_eq!(false, c_name.allow_null);
+            let c_customer_id = &columns[0];
+            assert_eq!("customer_id", c_customer_id.name);
+            assert_eq!(SQLType::Int, c_customer_id.data_type);
+            assert_eq!(false, c_customer_id.allow_null);
 
-            let c_lat = &columns[1];
-            assert_eq!("store_id", c_lat.name);
-            assert_eq!(SQLType::SmallInt, c_lat.data_type);
-            assert_eq!(false, c_lat.allow_null);
+            let c_store_id = &columns[1];
+            assert_eq!("store_id", c_store_id.name);
+            assert_eq!(SQLType::SmallInt, c_store_id.data_type);
+            assert_eq!(false, c_store_id.allow_null);
 
-            let c_lng = &columns[2];
-            assert_eq!("first_name", c_lng.name);
-            assert_eq!(SQLType::Varchar(Some(45)), c_lng.data_type);
-            assert_eq!(false, c_lng.allow_null);
+            let c_first_name = &columns[2];
+            assert_eq!("first_name", c_first_name.name);
+            assert_eq!(SQLType::Varchar(Some(45)), c_first_name.data_type);
+            assert_eq!(false, c_first_name.allow_null);
+
+            let c_create_date1 = &columns[8];
+            assert_eq!(
+                Some(Box::new(ASTNode::SQLCast {
+                    expr: Box::new(ASTNode::SQLCast {
+                        expr: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                            "now".to_string()
+                        ))),
+                        data_type: SQLType::Text
+                    }),
+                    data_type: SQLType::Date
+                })),
+                c_create_date1.default
+            );
+
+            let c_release_year = &columns[10];
+            assert_eq!(
+                SQLType::Custom("public.year".to_string()),
+                c_release_year.data_type
+            );
         }
         _ => assert!(false),
     }
@@ -637,6 +657,7 @@ fn parse_timestamps_example() {
     let sql = "2016-02-15 09:43:33";
     let _ = parse_sql(sql);
     //TODO add assertion
+    //assert_eq!(sql, ast.to_string());
 }
 
 #[test]
@@ -644,6 +665,7 @@ fn parse_timestamps_with_millis_example() {
     let sql = "2017-11-02 19:15:42.308637";
     let _ = parse_sql(sql);
     //TODO add assertion
+    //assert_eq!(sql, ast.to_string());
 }
 
 #[test]
@@ -715,6 +737,150 @@ fn parse_function_now() {
     let sql = "now()";
     let ast = parse_sql(sql);
     assert_eq!(sql, ast.to_string());
+}
+
+#[test]
+fn parse_implicit_join() {
+    let sql = "SELECT * FROM t1, t2";
+
+    match verified(sql) {
+        ASTNode::SQLSelect { joins, .. } => {
+            assert_eq!(joins.len(), 1);
+            assert_eq!(
+                joins[0],
+                Join {
+                    relation: ASTNode::SQLIdentifier("t2".to_string()),
+                    join_operator: JoinOperator::Implicit
+                }
+            )
+        }
+        _ => assert!(false),
+    }
+}
+
+#[test]
+fn parse_cross_join() {
+    let sql = "SELECT * FROM t1 CROSS JOIN t2";
+
+    match verified(sql) {
+        ASTNode::SQLSelect { joins, .. } => {
+            assert_eq!(joins.len(), 1);
+            assert_eq!(
+                joins[0],
+                Join {
+                    relation: ASTNode::SQLIdentifier("t2".to_string()),
+                    join_operator: JoinOperator::Cross
+                }
+            )
+        }
+        _ => assert!(false),
+    }
+}
+
+#[test]
+fn parse_joins_on() {
+    fn join_with_constraint(
+        relation: impl Into<String>,
+        f: impl Fn(JoinConstraint) -> JoinOperator,
+    ) -> Join {
+        Join {
+            relation: ASTNode::SQLIdentifier(relation.into()),
+            join_operator: f(JoinConstraint::On(ASTNode::SQLBinaryExpr {
+                left: Box::new(ASTNode::SQLIdentifier("c1".into())),
+                op: SQLOperator::Eq,
+                right: Box::new(ASTNode::SQLIdentifier("c2".into())),
+            })),
+        }
+    }
+    assert_eq!(
+        joins_from(verified("SELECT * FROM t1 JOIN t2 ON c1 = c2")),
+        vec![join_with_constraint("t2", JoinOperator::Inner)]
+    );
+    assert_eq!(
+        joins_from(verified("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2")),
+        vec![join_with_constraint("t2", JoinOperator::LeftOuter)]
+    );
+    assert_eq!(
+        joins_from(verified("SELECT * FROM t1 RIGHT JOIN t2 ON c1 = c2")),
+        vec![join_with_constraint("t2", JoinOperator::RightOuter)]
+    );
+    assert_eq!(
+        joins_from(verified("SELECT * FROM t1 FULL JOIN t2 ON c1 = c2")),
+        vec![join_with_constraint("t2", JoinOperator::FullOuter)]
+    );
+}
+
+#[test]
+fn parse_joins_using() {
+    fn join_with_constraint(
+        relation: impl Into<String>,
+        f: impl Fn(JoinConstraint) -> JoinOperator,
+    ) -> Join {
+        Join {
+            relation: ASTNode::SQLIdentifier(relation.into()),
+            join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
+        }
+    }
+
+    assert_eq!(
+        joins_from(verified("SELECT * FROM t1 JOIN t2 USING(c1)")),
+        vec![join_with_constraint("t2", JoinOperator::Inner)]
+    );
+    assert_eq!(
+        joins_from(verified("SELECT * FROM t1 LEFT JOIN t2 USING(c1)")),
+        vec![join_with_constraint("t2", JoinOperator::LeftOuter)]
+    );
+    assert_eq!(
+        joins_from(verified("SELECT * FROM t1 RIGHT JOIN t2 USING(c1)")),
+        vec![join_with_constraint("t2", JoinOperator::RightOuter)]
+    );
+    assert_eq!(
+        joins_from(verified("SELECT * FROM t1 FULL JOIN t2 USING(c1)")),
+        vec![join_with_constraint("t2", JoinOperator::FullOuter)]
+    );
+}
+
+#[test]
+fn parse_join_syntax_variants() {
+    fn parses_to(from: &str, to: &str) {
+        assert_eq!(to, &parse_sql(from).to_string())
+    }
+
+    parses_to(
+        "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
+        "SELECT c1 FROM t1 JOIN t2 USING(c1)",
+    );
+    parses_to(
+        "SELECT c1 FROM t1 LEFT OUTER JOIN t2 USING(c1)",
+        "SELECT c1 FROM t1 LEFT JOIN t2 USING(c1)",
+    );
+    parses_to(
+        "SELECT c1 FROM t1 RIGHT OUTER JOIN t2 USING(c1)",
+        "SELECT c1 FROM t1 RIGHT JOIN t2 USING(c1)",
+    );
+    parses_to(
+        "SELECT c1 FROM t1 FULL OUTER JOIN t2 USING(c1)",
+        "SELECT c1 FROM t1 FULL JOIN t2 USING(c1)",
+    );
+}
+
+#[test]
+fn parse_complex_join() {
+    let sql = "SELECT c1, c2 FROM t1, t4 JOIN t2 ON t2.c = t1.c LEFT JOIN t3 USING(q, c) WHERE t4.c = t1.c";
+    assert_eq!(sql, parse_sql(sql).to_string());
+}
+
+fn verified(query: &str) -> ASTNode {
+    let ast = parse_sql(query);
+    assert_eq!(query, &ast.to_string());
+    ast
+}
+
+fn joins_from(ast: ASTNode) -> Vec<Join> {
+    match ast {
+        ASTNode::SQLSelect { joins, .. } => joins,
+        _ => panic!("Expected SELECT"),
+    }
 }
 
 fn parse_sql(sql: &str) -> ASTNode {

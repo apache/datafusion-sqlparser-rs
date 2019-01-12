@@ -447,6 +447,7 @@ impl Parser {
     }
 
     /// Look for an expected keyword and consume it if it exists
+    #[must_use]
     pub fn parse_keyword(&mut self, expected: &'static str) -> bool {
         match self.peek_token() {
             Some(Token::Keyword(k)) => {
@@ -462,6 +463,7 @@ impl Parser {
     }
 
     /// Look for an expected sequence of keywords and consume them if they exist
+    #[must_use]
     pub fn parse_keywords(&mut self, keywords: Vec<&'static str>) -> bool {
         let index = self.index;
         for keyword in keywords {
@@ -475,6 +477,7 @@ impl Parser {
         true
     }
 
+    /// Bail out if the current token is not an expected keyword, or consume it if it is
     pub fn expect_keyword(&mut self, expected: &'static str) -> Result<(), ParserError> {
         if self.parse_keyword(expected) {
             Ok(())
@@ -667,8 +670,8 @@ impl Parser {
         } else {
             vec![]
         };
-        self.parse_keyword("FROM");
-        self.parse_keyword("STDIN");
+        self.expect_keyword("FROM")?;
+        self.expect_keyword("STDIN")?;
         self.consume_token(&Token::SemiColon)?;
         let values = self.parse_tsv()?;
         Ok(ASTNode::SQLCopy {
@@ -1230,7 +1233,7 @@ impl Parser {
                 }
                 Some(Token::Keyword(kw)) if kw == "LEFT" => {
                     self.next_token();
-                    self.parse_keyword("OUTER");
+                    let _ = self.parse_keyword("OUTER");
                     self.expect_keyword("JOIN")?;
                     Join {
                         relation: self.parse_expr(0)?,
@@ -1241,7 +1244,7 @@ impl Parser {
                 }
                 Some(Token::Keyword(kw)) if kw == "RIGHT" => {
                     self.next_token();
-                    self.parse_keyword("OUTER");
+                    let _ = self.parse_keyword("OUTER");
                     self.expect_keyword("JOIN")?;
                     Join {
                         relation: self.parse_expr(0)?,
@@ -1252,7 +1255,7 @@ impl Parser {
                 }
                 Some(Token::Keyword(kw)) if kw == "FULL" => {
                     self.next_token();
-                    self.parse_keyword("OUTER");
+                    let _ = self.parse_keyword("OUTER");
                     self.expect_keyword("JOIN")?;
                     Join {
                         relation: self.parse_expr(0)?,
@@ -1271,7 +1274,7 @@ impl Parser {
 
     /// Parse an INSERT statement
     pub fn parse_insert(&mut self) -> Result<ASTNode, ParserError> {
-        self.parse_keyword("INTO");
+        self.expect_keyword("INTO")?;
         let table_name = self.parse_tablename()?;
         let columns = if self.consume_token(&Token::LParen)? {
             let column_names = self.parse_column_names()?;
@@ -1280,7 +1283,7 @@ impl Parser {
         } else {
             vec![]
         };
-        self.parse_keyword("VALUES");
+        self.expect_keyword("VALUES")?;
         self.consume_token(&Token::LParen)?;
         let values = self.parse_expr_list()?;
         self.consume_token(&Token::RParen)?;

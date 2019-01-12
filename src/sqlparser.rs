@@ -734,6 +734,7 @@ impl Parser {
         Ok(values)
     }
 
+    /// Parse a literal value (numbers, strings, date/time, booleans)
     fn parse_value(&mut self) -> Result<Value, ParserError> {
         match self.next_token() {
             Some(t) => {
@@ -753,7 +754,6 @@ impl Parser {
                         Ok(n) => Ok(Value::Long(n)),
                         Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
                     },
-                    Token::Identifier(id) => Ok(Value::String(id.to_string())),
                     Token::SingleQuotedString(ref s) => {
                         Ok(Value::SingleQuotedString(s.to_string()))
                     }

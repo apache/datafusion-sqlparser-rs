@@ -141,7 +141,7 @@ impl Parser {
                             Some(Token::Period) => {
                                 let mut id_parts: Vec<String> = vec![id];
                                 while self.peek_token() == Some(Token::Period) {
-                                    self.consume_token(&Token::Period)?;
+                                    self.expect_token(&Token::Period)?;
                                     match self.next_token() {
                                         Some(Token::Identifier(id)) => id_parts.push(id),
                                         _ => {
@@ -166,9 +166,7 @@ impl Parser {
                 }
                 Token::LParen => {
                     let expr = self.parse();
-                    if !self.consume_token(&Token::RParen)? {
-                        return parser_err!(format!("expected token RParen"));
-                    }
+                    self.expect_token(&Token::RParen)?;
                     expr
                 }
                 _ => parser_err!(format!(
@@ -181,7 +179,7 @@ impl Parser {
     }
 
     pub fn parse_function(&mut self, id: &str) -> Result<ASTNode, ParserError> {
-        self.consume_token(&Token::LParen)?;
+        self.expect_token(&Token::LParen)?;
         if let Ok(true) = self.consume_token(&Token::RParen) {
             Ok(ASTNode::SQLFunction {
                 id: id.to_string(),
@@ -189,7 +187,7 @@ impl Parser {
             })
         } else {
             let args = self.parse_expr_list()?;
-            self.consume_token(&Token::RParen)?;
+            self.expect_token(&Token::RParen)?;
             Ok(ASTNode::SQLFunction {
                 id: id.to_string(),
                 args,
@@ -233,11 +231,11 @@ impl Parser {
 
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
     pub fn parse_cast_expression(&mut self) -> Result<ASTNode, ParserError> {
-        self.consume_token(&Token::LParen)?;
+        self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr(0)?;
         self.expect_keyword("AS")?;
         let data_type = self.parse_data_type()?;
-        self.consume_token(&Token::RParen)?;
+        self.expect_token(&Token::RParen)?;
         Ok(ASTNode::SQLCast {
             expr: Box::new(expr),
             data_type,
@@ -507,6 +505,19 @@ impl Parser {
         }
     }
 
+    /// Bail out if the current token is not an expected keyword, or consume it if it is
+    pub fn expect_token(&mut self, expected: &Token) -> Result<(), ParserError> {
+        if self.consume_token(expected)? {
+            Ok(())
+        } else {
+            parser_err!(format!(
+                "Expected token {:?}, found {:?}",
+                expected,
+                self.peek_token()
+            ))
+        }
+    }
+
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<ASTNode, ParserError> {
         if self.parse_keywords(vec!["TABLE"]) {
@@ -591,9 +602,9 @@ impl Parser {
         let is_primary_key = self.parse_keywords(vec!["PRIMARY", "KEY"]);
         let is_unique_key = self.parse_keywords(vec!["UNIQUE", "KEY"]);
         let is_foreign_key = self.parse_keywords(vec!["FOREIGN", "KEY"]);
-        self.consume_token(&Token::LParen)?;
+        self.expect_token(&Token::LParen)?;
         let column_names = self.parse_column_names()?;
-        self.consume_token(&Token::RParen)?;
+        self.expect_token(&Token::RParen)?;
         let key = Key {
             name: constraint_name.to_string(),
             columns: column_names,
@@ -605,9 +616,9 @@ impl Parser {
         } else if is_foreign_key {
             if self.parse_keyword("REFERENCES") {
                 let foreign_table = self.parse_tablename()?;
-                self.consume_token(&Token::LParen)?;
+                self.expect_token(&Token::LParen)?;
                 let referred_columns = self.parse_column_names()?;
-                self.consume_token(&Token::RParen)?;
+                self.expect_token(&Token::RParen)?;
                 Ok(TableKey::ForeignKey {
                     key,
                     foreign_table,
@@ -665,14 +676,14 @@ impl Parser {
         let table_name = self.parse_tablename()?;
         let columns = if self.consume_token(&Token::LParen)? {
             let column_names = self.parse_column_names()?;
-            self.consume_token(&Token::RParen)?;
+            self.expect_token(&Token::RParen)?;
             column_names
         } else {
             vec![]
         };
         self.expect_keyword("FROM")?;
         self.expect_keyword("STDIN")?;
-        self.consume_token(&Token::SemiColon)?;
+        self.expect_token(&Token::SemiColon)?;
         let values = self.parse_tsv()?;
         Ok(ASTNode::SQLCopy {
             table_name,
@@ -853,9 +864,9 @@ impl Parser {
 
     pub fn parse_time(&mut self) -> Result<NaiveTime, ParserError> {
         let hour = self.parse_literal_int()?;
-        self.consume_token(&Token::Colon)?;
+        self.expect_token(&Token::Colon)?;
         let min = self.parse_literal_int()?;
-        self.consume_token(&Token::Colon)?;
+        self.expect_token(&Token::Colon)?;
         // On one hand, the SQL specs defines <seconds fraction> ::= <unsigned integer>,
         // so it would be more correct to parse it as such
         let sec = self.parse_literal_double()?;
@@ -945,7 +956,7 @@ impl Parser {
                 "REGCLASS" => Ok(SQLType::Regclass),
                 "TEXT" => {
                     if let Ok(true) = self.consume_token(&Token::LBracket) {
-                        self.consume_token(&Token::RBracket)?;
+                        self.expect_token(&Token::RBracket)?;
                         Ok(SQLType::Array(Box::new(SQLType::Text)))
                     } else {
                         Ok(SQLType::Text)
@@ -1030,7 +1041,7 @@ impl Parser {
         if self.consume_token(&Token::LParen)? {
             let n = self.parse_literal_int()?;
             //TODO: check return value of reading rparen
-            self.consume_token(&Token::RParen)?;
+            self.expect_token(&Token::RParen)?;
             Ok(Some(n as usize))
         } else {
             Ok(None)
@@ -1047,7 +1058,7 @@ impl Parser {
             } else {
                 None
             };
-            self.consume_token(&Token::RParen)?;
+            self.expect_token(&Token::RParen)?;
             Ok((n as usize, scale))
         } else {
             parser_err!("Expecting `(`")
@@ -1278,15 +1289,15 @@ impl Parser {
         let table_name = self.parse_tablename()?;
         let columns = if self.consume_token(&Token::LParen)? {
             let column_names = self.parse_column_names()?;
-            self.consume_token(&Token::RParen)?;
+            self.expect_token(&Token::RParen)?;
             column_names
         } else {
             vec![]
         };
         self.expect_keyword("VALUES")?;
-        self.consume_token(&Token::LParen)?;
+        self.expect_token(&Token::LParen)?;
         let values = self.parse_expr_list()?;
-        self.consume_token(&Token::RParen)?;
+        self.expect_token(&Token::RParen)?;
         Ok(ASTNode::SQLInsert {
             table_name,
             columns,

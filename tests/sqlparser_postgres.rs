@@ -517,20 +517,40 @@ fn parse_create_table_from_pg_dump() {
         ASTNode::SQLCreateTable { name, columns } => {
             assert_eq!("public.customer", name);
 
-            let c_name = &columns[0];
-            assert_eq!("customer_id", c_name.name);
-            assert_eq!(SQLType::Int, c_name.data_type);
-            assert_eq!(false, c_name.allow_null);
+            let c_customer_id = &columns[0];
+            assert_eq!("customer_id", c_customer_id.name);
+            assert_eq!(SQLType::Int, c_customer_id.data_type);
+            assert_eq!(false, c_customer_id.allow_null);
 
-            let c_lat = &columns[1];
-            assert_eq!("store_id", c_lat.name);
-            assert_eq!(SQLType::SmallInt, c_lat.data_type);
-            assert_eq!(false, c_lat.allow_null);
+            let c_store_id = &columns[1];
+            assert_eq!("store_id", c_store_id.name);
+            assert_eq!(SQLType::SmallInt, c_store_id.data_type);
+            assert_eq!(false, c_store_id.allow_null);
 
-            let c_lng = &columns[2];
-            assert_eq!("first_name", c_lng.name);
-            assert_eq!(SQLType::Varchar(Some(45)), c_lng.data_type);
-            assert_eq!(false, c_lng.allow_null);
+            let c_first_name = &columns[2];
+            assert_eq!("first_name", c_first_name.name);
+            assert_eq!(SQLType::Varchar(Some(45)), c_first_name.data_type);
+            assert_eq!(false, c_first_name.allow_null);
+
+            let c_create_date1 = &columns[8];
+            assert_eq!(
+                Some(Box::new(ASTNode::SQLCast {
+                    expr: Box::new(ASTNode::SQLCast {
+                        expr: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                            "now".to_string()
+                        ))),
+                        data_type: SQLType::Text
+                    }),
+                    data_type: SQLType::Date
+                })),
+                c_create_date1.default
+            );
+
+            let c_release_year = &columns[10];
+            assert_eq!(
+                SQLType::Custom("public.year".to_string()),
+                c_release_year.data_type
+            );
         }
         _ => assert!(false),
     }
@@ -637,6 +657,7 @@ fn parse_timestamps_example() {
     let sql = "2016-02-15 09:43:33";
     let _ = parse_sql(sql);
     //TODO add assertion
+    //assert_eq!(sql, ast.to_string());
 }
 
 #[test]
@@ -644,6 +665,7 @@ fn parse_timestamps_with_millis_example() {
     let sql = "2017-11-02 19:15:42.308637";
     let _ = parse_sql(sql);
     //TODO add assertion
+    //assert_eq!(sql, ast.to_string());
 }
 
 #[test]

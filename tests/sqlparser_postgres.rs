@@ -919,3 +919,25 @@ fn parse_like() {
         _ => assert!(false),
     }
 }
+
+#[test]
+fn parse_not_like() {
+    let sql = String::from("SELECT * FROM customers WHERE name NOT LIKE '%a'");
+    let ast = parse_sql(&sql);
+    assert_eq!(sql, ast.to_string());
+    match ast {
+        ASTNode::SQLSelect { selection, .. } => {
+            assert_eq!(
+                ASTNode::SQLBinaryExpr {
+                    left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
+                    op: SQLOperator::NotLike,
+                    right: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                        "%a".to_string()
+                    ))),
+                },
+                *selection.unwrap()
+            );
+        }
+        _ => assert!(false),
+    }
+}

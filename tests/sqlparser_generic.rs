@@ -106,6 +106,16 @@ fn parse_select_count_wildcard() {
 }
 
 #[test]
+fn parse_not() {
+    let sql = String::from(
+        "SELECT id FROM customer \
+         WHERE NOT salary = ''",
+    );
+    let _ast = parse_sql(&sql);
+    //TODO: add assertions
+}
+
+#[test]
 fn parse_select_string_predicate() {
     let sql = String::from(
         "SELECT id, fname, lname FROM customer \

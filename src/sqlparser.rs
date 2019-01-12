@@ -84,6 +84,32 @@ impl Parser {
         Ok(expr)
     }
 
+    /// Parse expression for DEFAULT clause in CREATE TABLE
+    pub fn parse_default_expr(&mut self, precedence: u8) -> Result<ASTNode, ParserError> {
+        debug!("parsing expr");
+        let mut expr = self.parse_prefix()?;
+        debug!("prefix: {:?}", expr);
+        loop {
+
+            // stop parsing on `NULL` | `NOT NULL`
+            match self.peek_token() {
+                Some(Token::Keyword(ref k)) if k == "NOT" || k == "NULL" => break,
+                _ => {}
+            }
+
+            let next_precedence = self.get_next_precedence()?;
+            debug!("next precedence: {:?}", next_precedence);
+            if precedence >= next_precedence {
+                break;
+            }
+
+            if let Some(infix_expr) = self.parse_infix(expr.clone(), next_precedence)? {
+                expr = infix_expr;
+            }
+        }
+        Ok(expr)
+    }
+
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<ASTNode, ParserError> {
         match self.next_token() {
@@ -100,6 +126,10 @@ impl Parser {
                         self.parse_sql_value()
                     }
                     "CASE" => self.parse_case_expression(),
+                    "NOT" => Ok(ASTNode::SQLUnary {
+                        operator: SQLOperator::Not,
+                        expr: Box::new(self.parse_expr(0)?),
+                    }),
                     _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
                 },
                 Token::Mult => Ok(ASTNode::SQLWildcard),
@@ -233,23 +263,31 @@ impl Parser {
         debug!("parsing infix");
         match self.next_token() {
             Some(tok) => match tok {
-                Token::Keyword(ref k) => {
-                    if k == "IS" {
-                        if self.parse_keywords(vec!["NULL"]) {
-                            Ok(Some(ASTNode::SQLIsNull(Box::new(expr))))
-                        } else if self.parse_keywords(vec!["NOT", "NULL"]) {
-                            Ok(Some(ASTNode::SQLIsNotNull(Box::new(expr))))
-                        } else {
-                            parser_err!("Invalid tokens after IS")
-                        }
+                Token::Keyword(ref k) if k == "IS" => {
+                    if self.parse_keywords(vec!["NULL"]) {
+                        Ok(Some(ASTNode::SQLIsNull(Box::new(expr))))
+                    } else if self.parse_keywords(vec!["NOT", "NULL"]) {
+                        Ok(Some(ASTNode::SQLIsNotNull(Box::new(expr))))
                     } else {
-                        Ok(Some(ASTNode::SQLBinaryExpr {
-                            left: Box::new(expr),
-                            op: self.to_sql_operator(&tok)?,
-                            right: Box::new(self.parse_expr(precedence)?),
-                        }))
+                        parser_err!("Invalid tokens after IS")
                     }
                 }
+                Token::Keyword(ref k) if k == "NOT" => {
+                    if self.parse_keywords(vec!["LIKE"]) {
+                        Ok(Some(ASTNode::SQLBinaryExpr {
+                            left: Box::new(expr),
+                            op: SQLOperator::NotLike,
+                            right: Box::new(self.parse_expr(precedence)?),
+                        }))
+                    } else {
+                        parser_err!("Invalid tokens after NOT")
+                    }
+                }
+                Token::Keyword(_) => Ok(Some(ASTNode::SQLBinaryExpr {
+                    left: Box::new(expr),
+                    op: self.to_sql_operator(&tok)?,
+                    right: Box::new(self.parse_expr(precedence)?),
+                })),
                 Token::Eq
                 | Token::Neq
                 | Token::Gt
@@ -291,6 +329,7 @@ impl Parser {
             &Token::Mod => Ok(SQLOperator::Modulus),
             &Token::Keyword(ref k) if k == "AND" => Ok(SQLOperator::And),
             &Token::Keyword(ref k) if k == "OR" => Ok(SQLOperator::Or),
+            //&Token::Keyword(ref k) if k == "NOT" => Ok(SQLOperator::Not),
             &Token::Keyword(ref k) if k == "LIKE" => Ok(SQLOperator::Like),
             _ => parser_err!(format!("Unsupported SQL operator {:?}", tok)),
         }
@@ -312,6 +351,7 @@ impl Parser {
         match tok {
             &Token::Keyword(ref k) if k == "OR" => Ok(5),
             &Token::Keyword(ref k) if k == "AND" => Ok(10),
+            &Token::Keyword(ref k) if k == "NOT" => Ok(15),
             &Token::Keyword(ref k) if k == "IS" => Ok(15),
             &Token::Keyword(ref k) if k == "LIKE" => Ok(20),
             &Token::Eq | &Token::Lt | &Token::LtEq | &Token::Neq | &Token::Gt | &Token::GtEq => {
@@ -479,7 +519,7 @@ impl Parser {
                             let is_primary = self.parse_keywords(vec!["PRIMARY", "KEY"]);
                             let is_unique = self.parse_keyword("UNIQUE");
                             let default = if self.parse_keyword("DEFAULT") {
-                                let expr = self.parse_expr(0)?;
+                                let expr = self.parse_default_expr(0)?;
                                 Some(Box::new(expr))
                             } else {
                                 None

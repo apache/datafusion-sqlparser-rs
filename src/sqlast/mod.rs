@@ -56,7 +56,7 @@ pub enum ASTNode {
     /// Unary expression
     SQLUnary {
         operator: SQLOperator,
-        rex: Box<ASTNode>,
+        expr: Box<ASTNode>,
     },
     /// SQLValue
     SQLValue(Value),
@@ -157,8 +157,8 @@ impl ToString for ASTNode {
                 data_type.to_string()
             ),
             ASTNode::SQLNested(ast) => format!("({})", ast.as_ref().to_string()),
-            ASTNode::SQLUnary { operator, rex } => {
-                format!("{} {}", operator.to_string(), rex.as_ref().to_string())
+            ASTNode::SQLUnary { operator, expr } => {
+                format!("{} {}", operator.to_string(), expr.as_ref().to_string())
             }
             ASTNode::SQLValue(v) => v.to_string(),
             ASTNode::SQLFunction { id, args } => format!(

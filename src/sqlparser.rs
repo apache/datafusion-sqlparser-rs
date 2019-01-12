@@ -84,6 +84,32 @@ impl Parser {
         Ok(expr)
     }
 
+    /// Parse expression for DEFAULT clause in CREATE TABLE
+    pub fn parse_default_expr(&mut self, precedence: u8) -> Result<ASTNode, ParserError> {
+        debug!("parsing expr");
+        let mut expr = self.parse_prefix()?;
+        debug!("prefix: {:?}", expr);
+        loop {
+
+            // stop parsing on `NULL` | `NOT NULL`
+            match self.peek_token() {
+                Some(Token::Keyword(ref k)) if k == "NOT" || k == "NULL" => break,
+                _ => {}
+            }
+
+            let next_precedence = self.get_next_precedence()?;
+            debug!("next precedence: {:?}", next_precedence);
+            if precedence >= next_precedence {
+                break;
+            }
+
+            if let Some(infix_expr) = self.parse_infix(expr.clone(), next_precedence)? {
+                expr = infix_expr;
+            }
+        }
+        Ok(expr)
+    }
+
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<ASTNode, ParserError> {
         match self.next_token() {
@@ -493,7 +519,7 @@ impl Parser {
                             let is_primary = self.parse_keywords(vec!["PRIMARY", "KEY"]);
                             let is_unique = self.parse_keyword("UNIQUE");
                             let default = if self.parse_keyword("DEFAULT") {
-                                let expr = self.parse_expr(0)?;
+                                let expr = self.parse_default_expr(0)?;
                                 Some(Box::new(expr))
                             } else {
                                 None

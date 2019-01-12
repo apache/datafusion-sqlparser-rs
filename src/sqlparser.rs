@@ -90,7 +90,6 @@ impl Parser {
         let mut expr = self.parse_prefix()?;
         debug!("prefix: {:?}", expr);
         loop {
-
             // stop parsing on `NULL` | `NOT NULL`
             match self.peek_token() {
                 Some(Token::Keyword(ref k)) if k == "NOT" || k == "NULL" => break,

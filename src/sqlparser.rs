@@ -204,7 +204,7 @@ impl Parser {
             let mut else_result = None;
             loop {
                 conditions.push(self.parse_expr(0)?);
-                self.consume_token(&Token::Keyword("THEN".to_string()))?;
+                self.expect_keyword("THEN")?;
                 results.push(self.parse_expr(0)?);
                 if self.parse_keywords(vec!["ELSE"]) {
                     else_result = Some(Box::new(self.parse_expr(0)?));
@@ -217,7 +217,7 @@ impl Parser {
                 if self.parse_keywords(vec!["END"]) {
                     break;
                 }
-                self.consume_token(&Token::Keyword("WHEN".to_string()))?;
+                self.expect_keyword("WHEN")?;
             }
             Ok(ASTNode::SQLCase {
                 conditions,
@@ -235,7 +235,7 @@ impl Parser {
     pub fn parse_cast_expression(&mut self) -> Result<ASTNode, ParserError> {
         self.consume_token(&Token::LParen)?;
         let expr = self.parse_expr(0)?;
-        self.consume_token(&Token::Keyword("AS".to_string()))?;
+        self.expect_keyword("AS")?;
         let data_type = self.parse_data_type()?;
         self.consume_token(&Token::RParen)?;
         Ok(ASTNode::SQLCast {

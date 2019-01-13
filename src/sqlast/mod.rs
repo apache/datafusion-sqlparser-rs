@@ -366,21 +366,21 @@ impl ToString for SQLAssignment {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLOrderByExpr {
     pub expr: Box<ASTNode>,
-    pub asc: bool,
+    pub asc: Option<bool>,
 }
 
 impl SQLOrderByExpr {
-    pub fn new(expr: Box<ASTNode>, asc: bool) -> Self {
+    pub fn new(expr: Box<ASTNode>, asc: Option<bool>) -> Self {
         SQLOrderByExpr { expr, asc }
     }
 }
 
 impl ToString for SQLOrderByExpr {
     fn to_string(&self) -> String {
-        if self.asc {
-            format!("{} ASC", self.expr.as_ref().to_string())
-        } else {
-            format!("{} DESC", self.expr.as_ref().to_string())
+        match self.asc {
+            Some(true) => format!("{} ASC", self.expr.to_string()),
+            Some(false) => format!("{} DESC", self.expr.to_string()),
+            None => self.expr.to_string(),
         }
     }
 }

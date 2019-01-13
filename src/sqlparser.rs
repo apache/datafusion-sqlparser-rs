@@ -1321,33 +1321,19 @@ impl Parser {
         loop {
             let expr = self.parse_expr(0)?;
 
-            // look for optional ASC / DESC specifier
-            let asc = match self.peek_token() {
-                Some(Token::Keyword(k)) => match k.to_uppercase().as_ref() {
-                    "ASC" => {
-                        self.next_token();
-                        true
-                    }
-                    "DESC" => {
-                        self.next_token();
-                        false
-                    }
-                    _ => true,
-                },
-                Some(Token::Comma) => true,
-                _ => true,
+            let asc = if self.parse_keyword("ASC") {
+                Some(true)
+            } else if self.parse_keyword("DESC") {
+                Some(false)
+            } else {
+                None
             };
 
             expr_list.push(SQLOrderByExpr::new(Box::new(expr), asc));
 
-            if let Some(t) = self.peek_token() {
-                if t == Token::Comma {
-                    self.next_token();
-                } else {
-                    break;
-                }
+            if let Some(Token::Comma) = self.peek_token() {
+                self.next_token();
             } else {
-                // EOF
                 break;
             }
         }

@@ -951,30 +951,24 @@ impl Parser {
         loop {
             let token = &self.next_token();
             match token {
-                Some(token) => match token {
-                    Token::SQLWord(s) => {
-                        if expect_identifier {
-                            expect_identifier = false;
-                            idents.push(s.to_string());
-                        } else {
-                            self.prev_token();
-                            break;
-                        }
-                    }
-                    token if token == separator => {
-                        if expect_identifier {
-                            return parser_err!(format!("Expecting identifier, found {:?}", token));
-                        } else {
-                            expect_identifier = true;
-                            continue;
-                        }
-                    }
-                    _ => {
+                Some(Token::SQLWord(s)) => {
+                    if expect_identifier {
+                        expect_identifier = false;
+                        idents.push(s.to_string());
+                    } else {
                         self.prev_token();
                         break;
                     }
-                },
-                None => {
+                }
+                Some(token) if token == separator => {
+                    if expect_identifier {
+                        return parser_err!(format!("Expecting identifier, found {:?}", token));
+                    } else {
+                        expect_identifier = true;
+                        continue;
+                    }
+                }
+                _ => {
                     self.prev_token();
                     break;
                 }

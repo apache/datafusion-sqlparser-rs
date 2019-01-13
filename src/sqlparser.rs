@@ -589,19 +589,16 @@ impl Parser {
         } else if is_unique_key {
             Ok(TableKey::UniqueKey(key))
         } else if is_foreign_key {
-            if self.parse_keyword("REFERENCES") {
-                let foreign_table = self.parse_tablename()?;
-                self.expect_token(&Token::LParen)?;
-                let referred_columns = self.parse_column_names()?;
-                self.expect_token(&Token::RParen)?;
-                Ok(TableKey::ForeignKey {
-                    key,
-                    foreign_table,
-                    referred_columns,
-                })
-            } else {
-                parser_err!("Expecting references")
-            }
+            self.expect_keyword("REFERENCES")?;
+            let foreign_table = self.parse_tablename()?;
+            self.expect_token(&Token::LParen)?;
+            let referred_columns = self.parse_column_names()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(TableKey::ForeignKey {
+                key,
+                foreign_table,
+                referred_columns,
+            })
         } else {
             parser_err!(format!(
                 "Expecting primary key, unique key, or foreign key, found: {:?}",
@@ -611,39 +608,33 @@ impl Parser {
     }
 
     pub fn parse_alter(&mut self) -> Result<ASTNode, ParserError> {
-        if self.parse_keyword("TABLE") {
-            let _ = self.parse_keyword("ONLY");
-            let table_name = self.parse_tablename()?;
-            let operation: Result<AlterOperation, ParserError> =
-                if self.parse_keywords(vec!["ADD", "CONSTRAINT"]) {
-                    match self.next_token() {
-                        Some(Token::SQLWord(ref id)) => {
-                            let table_key = self.parse_table_key(&id.value)?;
-                            Ok(AlterOperation::AddConstraint(table_key))
-                        }
-                        _ => {
-                            return parser_err!(format!(
-                                "Expecting identifier, found : {:?}",
-                                self.peek_token()
-                            ));
-                        }
+        self.expect_keyword("TABLE")?;
+        let _ = self.parse_keyword("ONLY");
+        let table_name = self.parse_tablename()?;
+        let operation: Result<AlterOperation, ParserError> =
+            if self.parse_keywords(vec!["ADD", "CONSTRAINT"]) {
+                match self.next_token() {
+                    Some(Token::SQLWord(ref id)) => {
+                        let table_key = self.parse_table_key(&id.value)?;
+                        Ok(AlterOperation::AddConstraint(table_key))
                     }
-                } else {
-                    return parser_err!(format!(
-                        "Expecting ADD CONSTRAINT, found :{:?}",
-                        self.peek_token()
-                    ));
-                };
-            Ok(ASTNode::SQLAlterTable {
-                name: table_name,
-                operation: operation?,
-            })
-        } else {
-            parser_err!(format!(
-                "Expecting TABLE after ALTER, found {:?}",
-                self.peek_token()
-            ))
-        }
+                    _ => {
+                        return parser_err!(format!(
+                            "Expecting identifier, found : {:?}",
+                            self.peek_token()
+                        ));
+                    }
+                }
+            } else {
+                return parser_err!(format!(
+                    "Expecting ADD CONSTRAINT, found :{:?}",
+                    self.peek_token()
+                ));
+            };
+        Ok(ASTNode::SQLAlterTable {
+            name: table_name,
+            operation: operation?,
+        })
     }
 
     /// Parse a copy statement
@@ -1142,26 +1133,20 @@ impl Parser {
             let constraint = self.parse_expr(0)?;
             Ok(JoinConstraint::On(constraint))
         } else if self.parse_keyword("USING") {
-            if self.consume_token(&Token::LParen) {
-                let attributes = self
-                    .parse_expr_list()?
-                    .into_iter()
-                    .map(|ast_node| match ast_node {
-                        ASTNode::SQLIdentifier(ident) => Ok(ident),
-                        unexpected => {
-                            parser_err!(format!("Expected identifier, found {:?}", unexpected))
-                        }
-                    })
-                    .collect::<Result<Vec<String>, ParserError>>()?;
+            self.expect_token(&Token::LParen)?;
+            let attributes = self
+                .parse_expr_list()?
+                .into_iter()
+                .map(|ast_node| match ast_node {
+                    ASTNode::SQLIdentifier(ident) => Ok(ident),
+                    unexpected => {
+                        parser_err!(format!("Expected identifier, found {:?}", unexpected))
+                    }
+                })
+                .collect::<Result<Vec<String>, ParserError>>()?;
 
-                if self.consume_token(&Token::RParen) {
-                    Ok(JoinConstraint::Using(attributes))
-                } else {
-                    parser_err!(format!("Expected token ')', found {:?}", self.peek_token()))
-                }
-            } else {
-                parser_err!(format!("Expected token '(', found {:?}", self.peek_token()))
-            }
+            self.expect_token(&Token::RParen)?;
+            Ok(JoinConstraint::Using(attributes))
         } else {
             parser_err!(format!(
                 "Unexpected token after JOIN: {:?}",

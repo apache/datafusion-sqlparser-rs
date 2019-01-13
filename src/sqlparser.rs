@@ -276,12 +276,12 @@ impl Parser {
                         parser_err!("Invalid tokens after NOT")
                     }
                 }
-                Token::Keyword(_) => Ok(Some(ASTNode::SQLBinaryExpr {
-                    left: Box::new(expr),
-                    op: self.to_sql_operator(&tok)?,
-                    right: Box::new(self.parse_expr(precedence)?),
-                })),
-                Token::Eq
+                Token::DoubleColon => {
+                    let pg_cast = self.parse_pg_cast(expr)?;
+                    Ok(Some(pg_cast))
+                }
+                Token::Keyword(_)
+                | Token::Eq
                 | Token::Neq
                 | Token::Gt
                 | Token::GtEq
@@ -296,10 +296,6 @@ impl Parser {
                     op: self.to_sql_operator(&tok)?,
                     right: Box::new(self.parse_expr(precedence)?),
                 })),
-                Token::DoubleColon => {
-                    let pg_cast = self.parse_pg_cast(expr)?;
-                    Ok(Some(pg_cast))
-                }
                 _ => parser_err!(format!("No infix parser for token {:?}", tok)),
             },
             None => Ok(None),

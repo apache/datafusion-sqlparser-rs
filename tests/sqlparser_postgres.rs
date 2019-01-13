@@ -104,6 +104,13 @@ fn parse_invalid_table_name() {
 }
 
 #[test]
+fn parse_no_table_name() {
+    let mut parser = parser("");
+    let ast = parser.parse_tablename();
+    assert!(ast.is_err());
+}
+
+#[test]
 fn parse_insert_with_columns() {
     let sql = String::from("INSERT INTO public.customer (id, name, active) VALUES(1, 2, 3)");
     match verified(&sql) {

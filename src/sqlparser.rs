@@ -945,36 +945,37 @@ impl Parser {
         }
     }
 
+    /// Parse one or more identifiers with the specified separator between them
     pub fn parse_compound_identifier(&mut self, separator: &Token) -> Result<ASTNode, ParserError> {
         let mut idents = vec![];
         let mut expect_identifier = true;
         loop {
             let token = &self.next_token();
             match token {
-                Some(Token::SQLWord(s)) => {
-                    if expect_identifier {
-                        expect_identifier = false;
-                        idents.push(s.to_string());
-                    } else {
-                        self.prev_token();
-                        break;
-                    }
+                Some(Token::SQLWord(s)) if expect_identifier => {
+                    expect_identifier = false;
+                    idents.push(s.to_string());
                 }
-                Some(token) if token == separator => {
-                    if expect_identifier {
-                        return parser_err!(format!("Expecting identifier, found {:?}", token));
-                    } else {
-                        expect_identifier = true;
-                        continue;
-                    }
+                Some(token) if token == separator && !expect_identifier => {
+                    expect_identifier = true;
+                    continue;
                 }
                 _ => {
-                    self.prev_token();
+                    if token.is_some() {
+                        self.prev_token();
+                    }
                     break;
                 }
             }
         }
-        Ok(ASTNode::SQLCompoundIdentifier(idents))
+        if expect_identifier {
+            parser_err!(format!(
+                "Expecting identifier, found {:?}",
+                self.peek_token()
+            ))
+        } else {
+            Ok(ASTNode::SQLCompoundIdentifier(idents))
+        }
     }
 
     pub fn parse_tablename(&mut self) -> Result<String, ParserError> {

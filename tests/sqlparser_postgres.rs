@@ -222,6 +222,16 @@ fn parse_insert_with_columns() {
 }
 
 #[test]
+fn parse_insert_invalid() {
+    let sql = String::from("INSERT public.customer (id, name, active) VALUES (1, 2, 3)");
+    let mut parser = parser(&sql);
+    match parser.parse() {
+        Err(_) => {}
+        _ => assert!(false),
+    }
+}
+
+#[test]
 fn parse_select_wildcard() {
     let sql = String::from("SELECT * FROM customer");
     let ast = parse_sql(&sql);

@@ -1,7 +1,7 @@
 extern crate log;
 extern crate sqlparser;
 
-use sqlparser::dialect::GenericSqlDialect;
+use sqlparser::dialect::*;
 use sqlparser::sqlast::*;
 use sqlparser::sqlparser::*;
 use sqlparser::sqltokenizer::*;
@@ -630,8 +630,14 @@ fn joins_from(ast: ASTNode) -> Vec<Join> {
 }
 
 fn parse_sql(sql: &str) -> ASTNode {
-    let dialect = GenericSqlDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, &sql);
+    let generic_ast = parse_sql_with(sql, &GenericSqlDialect {});
+    let pg_ast = parse_sql_with(sql, &PostgreSqlDialect {});
+    assert_eq!(generic_ast, pg_ast);
+    generic_ast
+}
+
+fn parse_sql_with(sql: &str, dialect: &Dialect) -> ASTNode {
+    let mut tokenizer = Tokenizer::new(dialect, &sql);
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(tokens);
     let ast = parser.parse().unwrap();

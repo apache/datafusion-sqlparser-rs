@@ -14,6 +14,7 @@
 
 //! SQL Parser
 
+use super::dialect::keywords;
 use super::dialect::Dialect;
 use super::sqlast::*;
 use super::sqltokenizer::*;
@@ -950,13 +951,18 @@ impl Parser {
     /// `SELECT ... FROM t1 foo, t2 bar`, `SELECT ... FROM (...) AS bar`
     pub fn parse_optional_alias(
         &mut self,
+        reserved_kwds: &[&str],
     ) -> Result<Option<SQLIdent>, ParserError> {
         let after_as = self.parse_keyword("AS");
         let maybe_alias = self.next_token();
         match maybe_alias {
             // Accept any identifier after `AS` (though many dialects have restrictions on
-            // keywords that may appear here).
-            Some(Token::SQLWord(ref w)) if after_as  =>
+            // keywords that may appear here). If there's no `AS`: don't parse keywords,
+            // which may start a construct allowed in this position, to be parsed as aliases.
+            // (For example, in `FROM t1 JOIN` the `JOIN` will always be parsed as a keyword,
+            // not an alias.)
+            Some(Token::SQLWord(ref w))
+                if after_as || !reserved_kwds.contains(&w.keyword.as_str()) =>
             {
                 // have to clone here until #![feature(bind_by_move_pattern_guards)] is enabled by default
                 Ok(Some(w.value.clone()))
@@ -1157,7 +1163,7 @@ impl Parser {
         } else {
             self.parse_compound_identifier(&Token::Period)?
         };
-        let alias = self.parse_optional_alias()?;
+        let alias = self.parse_optional_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
         Ok(ASTNode::TableFactor {
             relation: Box::new(relation),
             alias,

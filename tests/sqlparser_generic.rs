@@ -601,6 +601,10 @@ fn parse_joins_on() {
             JoinOperator::Inner
         )]
     );
+    parses_to(
+        "SELECT * FROM t1 JOIN t2 foo ON c1 = c2",
+        "SELECT * FROM t1 JOIN t2 AS foo ON c1 = c2",
+    );
     // Test parsing of different join operators
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 JOIN t2 ON c1 = c2")),
@@ -643,6 +647,10 @@ fn parse_joins_using() {
             Some("foo".to_string()),
             JoinOperator::Inner
         )]
+    );
+    parses_to(
+        "SELECT * FROM t1 JOIN t2 foo USING(c1)",
+        "SELECT * FROM t1 JOIN t2 AS foo USING(c1)",
     );
     // Test parsing of different join operators
     assert_eq!(

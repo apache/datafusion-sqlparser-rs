@@ -33,9 +33,7 @@ fn test_prev_index() {
 #[test]
 fn parse_simple_insert() {
     let sql = String::from("INSERT INTO customer VALUES(1, 2, 3)");
-    let ast = parse_sql(&sql);
-    assert_eq!(sql, ast.to_string());
-    match ast {
+    match verified(&sql) {
         ASTNode::SQLInsert {
             table_name,
             columns,
@@ -60,9 +58,7 @@ fn parse_simple_insert() {
 #[test]
 fn parse_common_insert() {
     let sql = String::from("INSERT INTO public.customer VALUES(1, 2, 3)");
-    let ast = parse_sql(&sql);
-    assert_eq!(sql, ast.to_string());
-    match ast {
+    match verified(&sql) {
         ASTNode::SQLInsert {
             table_name,
             columns,
@@ -87,9 +83,7 @@ fn parse_common_insert() {
 #[test]
 fn parse_complex_insert() {
     let sql = String::from("INSERT INTO db.public.customer VALUES(1, 2, 3)");
-    let ast = parse_sql(&sql);
-    assert_eq!(sql, ast.to_string());
-    match ast {
+    match verified(&sql) {
         ASTNode::SQLInsert {
             table_name,
             columns,
@@ -121,9 +115,7 @@ fn parse_invalid_table_name() {
 #[test]
 fn parse_insert_with_columns() {
     let sql = String::from("INSERT INTO public.customer (id, name, active) VALUES(1, 2, 3)");
-    let ast = parse_sql(&sql);
-    assert_eq!(sql, ast.to_string());
-    match ast {
+    match verified(&sql) {
         ASTNode::SQLInsert {
             table_name,
             columns,
@@ -173,8 +165,7 @@ fn parse_create_table_with_defaults() {
             last_update timestamp without time zone DEFAULT now() NOT NULL,
             active integer NOT NULL)",
     );
-    let ast = parse_sql(&sql);
-    match ast {
+    match parse_sql(&sql) {
         ASTNode::SQLCreateTable { name, columns } => {
             assert_eq!("public.customer", name);
             assert_eq!(10, columns.len());
@@ -270,9 +261,7 @@ fn parse_create_table_with_inherit() {
          use_metric boolean DEFAULT true\
          )",
     );
-    let ast = parse_sql(&sql);
-    assert_eq!(sql, ast.to_string());
-    match ast {
+    match verified(&sql) {
         ASTNode::SQLCreateTable { name, columns } => {
             assert_eq!("bazaar.settings", name);
 
@@ -301,10 +290,7 @@ fn parse_alter_table_constraint_primary_key() {
          ALTER TABLE bazaar.address \
          ADD CONSTRAINT address_pkey PRIMARY KEY (address_id)",
     );
-    let ast = parse_sql(&sql);
-    println!("ast: {:?}", ast);
-    assert_eq!(sql, ast.to_string());
-    match ast {
+    match verified(&sql) {
         ASTNode::SQLAlterTable { name, .. } => {
             assert_eq!(name, "bazaar.address");
         }
@@ -317,10 +303,7 @@ fn parse_alter_table_constraint_foreign_key() {
     let sql = String::from("\
     ALTER TABLE public.customer \
         ADD CONSTRAINT customer_address_id_fkey FOREIGN KEY (address_id) REFERENCES public.address(address_id)");
-    let ast = parse_sql(&sql);
-    assert_eq!(sql, ast.to_string());
-    println!("ast: {:?}", ast);
-    match ast {
+    match verified(&sql) {
         ASTNode::SQLAlterTable { name, .. } => {
             assert_eq!(name, "public.customer");
         }
@@ -389,10 +372,6 @@ fn verified(query: &str) -> ASTNode {
     let ast = parse_sql(query);
     assert_eq!(query, &ast.to_string());
     ast
-}
-
-fn parses_to(from: &str, to: &str) {
-    assert_eq!(to, &parse_sql(from).to_string())
 }
 
 fn parse_sql(sql: &str) -> ASTNode {

@@ -72,12 +72,17 @@ pub enum ASTNode {
         results: Vec<ASTNode>,
         else_result: Option<Box<ASTNode>>,
     },
+    /// A table name or a parenthesized subquery with an optional alias
+    TableFactor {
+        relation: Box<ASTNode>, // SQLNested or SQLCompoundIdentifier
+        alias: Option<SQLIdent>,
+    },
     /// SELECT
     SQLSelect {
         /// projection expressions
         projection: Vec<ASTNode>,
         /// FROM
-        relation: Option<Box<ASTNode>>,
+        relation: Option<Box<ASTNode>>, // TableFactor
         // JOIN
         joins: Vec<Join>,
         /// WHERE
@@ -190,6 +195,13 @@ impl ToString for ASTNode {
                     s += &format!(" ELSE {}", else_result.to_string())
                 }
                 s + " END"
+            }
+            ASTNode::TableFactor { relation, alias } => {
+                if let Some(alias) = alias {
+                    format!("{} AS {}", relation.to_string(), alias)
+                } else {
+                    relation.to_string()
+                }
             }
             ASTNode::SQLSelect {
                 projection,
@@ -420,7 +432,7 @@ impl ToString for SQLColumnDef {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Join {
-    pub relation: ASTNode,
+    pub relation: ASTNode, // TableFactor
     pub join_operator: JoinOperator,
 }
 

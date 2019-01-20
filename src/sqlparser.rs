@@ -945,6 +945,34 @@ impl Parser {
         }
     }
 
+    /// Parse `AS identifier` (or simply `identifier` if it's not a reserved keyword)
+    /// Some examples with aliases: `SELECT 1 foo`, `SELECT COUNT(*) AS cnt`,
+    /// `SELECT ... FROM t1 foo, t2 bar`, `SELECT ... FROM (...) AS bar`
+    pub fn parse_optional_alias(
+        &mut self,
+    ) -> Result<Option<SQLIdent>, ParserError> {
+        let after_as = self.parse_keyword("AS");
+        let maybe_alias = self.next_token();
+        match maybe_alias {
+            // Accept any identifier after `AS` (though many dialects have restrictions on
+            // keywords that may appear here).
+            Some(Token::SQLWord(ref w)) if after_as  =>
+            {
+                // have to clone here until #![feature(bind_by_move_pattern_guards)] is enabled by default
+                Ok(Some(w.value.clone()))
+            }
+            ref not_an_ident if after_as => parser_err!(format!(
+                "Expected an identifier after AS, got {:?}",
+                not_an_ident
+            )),
+            Some(_not_an_ident) => {
+                self.prev_token();
+                Ok(None) // no alias found
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Parse one or more identifiers with the specified separator between them
     pub fn parse_compound_identifier(&mut self, separator: &Token) -> Result<ASTNode, ParserError> {
         let mut idents = vec![];
@@ -1062,7 +1090,7 @@ impl Parser {
         let projection = self.parse_expr_list()?;
 
         let (relation, joins): (Option<Box<ASTNode>>, Vec<Join>) = if self.parse_keyword("FROM") {
-            let relation = Some(Box::new(self.parse_expr(0)?));
+            let relation = Some(Box::new(self.parse_table_factor()?));
             let joins = self.parse_joins()?;
             (relation, joins)
         } else {
@@ -1121,6 +1149,21 @@ impl Parser {
         }
     }
 
+    /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
+    pub fn parse_table_factor(&mut self) -> Result<ASTNode, ParserError> {
+        let relation = if self.consume_token(&Token::LParen) {
+            self.prev_token();
+            self.parse_expr(0)?
+        } else {
+            self.parse_compound_identifier(&Token::Period)?
+        };
+        let alias = self.parse_optional_alias()?;
+        Ok(ASTNode::TableFactor {
+            relation: Box::new(relation),
+            alias,
+        })
+    }
+
     fn parse_join_constraint(&mut self, natural: bool) -> Result<JoinConstraint, ParserError> {
         if natural {
             Ok(JoinConstraint::Natural)
@@ -1156,7 +1199,7 @@ impl Parser {
             let natural = match &self.peek_token() {
                 Some(Token::Comma) => {
                     self.next_token();
-                    let relation = self.parse_expr(0)?;
+                    let relation = self.parse_table_factor()?;
                     let join = Join {
                         relation,
                         join_operator: JoinOperator::Implicit,
@@ -1167,7 +1210,7 @@ impl Parser {
                 Some(Token::SQLWord(kw)) if kw.keyword == "CROSS" => {
                     self.next_token();
                     self.expect_keyword("JOIN")?;
-                    let relation = self.parse_expr(0)?;
+                    let relation = self.parse_table_factor()?;
                     let join = Join {
                         relation,
                         join_operator: JoinOperator::Cross,
@@ -1188,14 +1231,14 @@ impl Parser {
                     self.next_token();
                     self.expect_keyword("JOIN")?;
                     Join {
-                        relation: self.parse_expr(0)?,
+                        relation: self.parse_table_factor()?,
                         join_operator: JoinOperator::Inner(self.parse_join_constraint(natural)?),
                     }
                 }
                 Some(Token::SQLWord(kw)) if kw.keyword == "JOIN" => {
                     self.next_token();
                     Join {
-                        relation: self.parse_expr(0)?,
+                        relation: self.parse_table_factor()?,
                         join_operator: JoinOperator::Inner(self.parse_join_constraint(natural)?),
                     }
                 }
@@ -1204,7 +1247,7 @@ impl Parser {
                     let _ = self.parse_keyword("OUTER");
                     self.expect_keyword("JOIN")?;
                     Join {
-                        relation: self.parse_expr(0)?,
+                        relation: self.parse_table_factor()?,
                         join_operator: JoinOperator::LeftOuter(
                             self.parse_join_constraint(natural)?,
                         ),
@@ -1215,7 +1258,7 @@ impl Parser {
                     let _ = self.parse_keyword("OUTER");
                     self.expect_keyword("JOIN")?;
                     Join {
-                        relation: self.parse_expr(0)?,
+                        relation: self.parse_table_factor()?,
                         join_operator: JoinOperator::RightOuter(
                             self.parse_join_constraint(natural)?,
                         ),
@@ -1226,7 +1269,7 @@ impl Parser {
                     let _ = self.parse_keyword("OUTER");
                     self.expect_keyword("JOIN")?;
                     Join {
-                        relation: self.parse_expr(0)?,
+                        relation: self.parse_table_factor()?,
                         join_operator: JoinOperator::FullOuter(
                             self.parse_join_constraint(natural)?,
                         ),

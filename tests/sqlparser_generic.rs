@@ -539,7 +539,10 @@ fn parse_implicit_join() {
             assert_eq!(
                 joins[0],
                 Join {
-                    relation: ASTNode::SQLIdentifier("t2".to_string()),
+                    relation: ASTNode::TableFactor {
+                        relation: Box::new(ASTNode::SQLCompoundIdentifier(vec!["t2".to_string()])),
+                        alias: None,
+                    },
                     join_operator: JoinOperator::Implicit
                 }
             )
@@ -558,7 +561,10 @@ fn parse_cross_join() {
             assert_eq!(
                 joins[0],
                 Join {
-                    relation: ASTNode::SQLIdentifier("t2".to_string()),
+                    relation: ASTNode::TableFactor {
+                        relation: Box::new(ASTNode::SQLCompoundIdentifier(vec!["t2".to_string()])),
+                        alias: None,
+                    },
                     join_operator: JoinOperator::Cross
                 }
             )
@@ -571,10 +577,14 @@ fn parse_cross_join() {
 fn parse_joins_on() {
     fn join_with_constraint(
         relation: impl Into<String>,
+        alias: Option<SQLIdent>,
         f: impl Fn(JoinConstraint) -> JoinOperator,
     ) -> Join {
         Join {
-            relation: ASTNode::SQLIdentifier(relation.into()),
+            relation: ASTNode::TableFactor {
+                relation: Box::new(ASTNode::SQLCompoundIdentifier(vec![relation.into()])),
+                alias,
+            },
             join_operator: f(JoinConstraint::On(ASTNode::SQLBinaryExpr {
                 left: Box::new(ASTNode::SQLIdentifier("c1".into())),
                 op: SQLOperator::Eq,
@@ -582,21 +592,31 @@ fn parse_joins_on() {
             })),
         }
     }
+    // Test parsing of aliases
+    assert_eq!(
+        joins_from(verified("SELECT * FROM t1 JOIN t2 AS foo ON c1 = c2")),
+        vec![join_with_constraint(
+            "t2",
+            Some("foo".to_string()),
+            JoinOperator::Inner
+        )]
+    );
+    // Test parsing of different join operators
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 JOIN t2 ON c1 = c2")),
-        vec![join_with_constraint("t2", JoinOperator::Inner)]
+        vec![join_with_constraint("t2", None, JoinOperator::Inner)]
     );
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2")),
-        vec![join_with_constraint("t2", JoinOperator::LeftOuter)]
+        vec![join_with_constraint("t2", None, JoinOperator::LeftOuter)]
     );
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 RIGHT JOIN t2 ON c1 = c2")),
-        vec![join_with_constraint("t2", JoinOperator::RightOuter)]
+        vec![join_with_constraint("t2", None, JoinOperator::RightOuter)]
     );
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 FULL JOIN t2 ON c1 = c2")),
-        vec![join_with_constraint("t2", JoinOperator::FullOuter)]
+        vec![join_with_constraint("t2", None, JoinOperator::FullOuter)]
     );
 }
 
@@ -604,29 +624,42 @@ fn parse_joins_on() {
 fn parse_joins_using() {
     fn join_with_constraint(
         relation: impl Into<String>,
+        alias: Option<SQLIdent>,
         f: impl Fn(JoinConstraint) -> JoinOperator,
     ) -> Join {
         Join {
-            relation: ASTNode::SQLIdentifier(relation.into()),
+            relation: ASTNode::TableFactor {
+                relation: Box::new(ASTNode::SQLCompoundIdentifier(vec![relation.into()])),
+                alias,
+            },
             join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
         }
     }
-
+    // Test parsing of aliases
+    assert_eq!(
+        joins_from(verified("SELECT * FROM t1 JOIN t2 AS foo USING(c1)")),
+        vec![join_with_constraint(
+            "t2",
+            Some("foo".to_string()),
+            JoinOperator::Inner
+        )]
+    );
+    // Test parsing of different join operators
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 JOIN t2 USING(c1)")),
-        vec![join_with_constraint("t2", JoinOperator::Inner)]
+        vec![join_with_constraint("t2", None, JoinOperator::Inner)]
     );
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 LEFT JOIN t2 USING(c1)")),
-        vec![join_with_constraint("t2", JoinOperator::LeftOuter)]
+        vec![join_with_constraint("t2", None, JoinOperator::LeftOuter)]
     );
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 RIGHT JOIN t2 USING(c1)")),
-        vec![join_with_constraint("t2", JoinOperator::RightOuter)]
+        vec![join_with_constraint("t2", None, JoinOperator::RightOuter)]
     );
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 FULL JOIN t2 USING(c1)")),
-        vec![join_with_constraint("t2", JoinOperator::FullOuter)]
+        vec![join_with_constraint("t2", None, JoinOperator::FullOuter)]
     );
 }
 

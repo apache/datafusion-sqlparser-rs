@@ -229,31 +229,33 @@ fn parse_not_like() {
 
 #[test]
 fn parse_select_order_by() {
-    let sql = String::from(
-        "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC, id",
-    );
-    match verified(&sql) {
-        ASTNode::SQLSelect { order_by, .. } => {
-            assert_eq!(
-                Some(vec![
-                    SQLOrderByExpr {
-                        expr: Box::new(ASTNode::SQLIdentifier("lname".to_string())),
-                        asc: Some(true),
-                    },
-                    SQLOrderByExpr {
-                        expr: Box::new(ASTNode::SQLIdentifier("fname".to_string())),
-                        asc: Some(false),
-                    },
-                    SQLOrderByExpr {
-                        expr: Box::new(ASTNode::SQLIdentifier("id".to_string())),
-                        asc: None,
-                    },
-                ]),
-                order_by
-            );
+    fn chk(sql: &str) {
+        match verified(&sql) {
+            ASTNode::SQLSelect { order_by, .. } => {
+                assert_eq!(
+                    Some(vec![
+                        SQLOrderByExpr {
+                            expr: Box::new(ASTNode::SQLIdentifier("lname".to_string())),
+                            asc: Some(true),
+                        },
+                        SQLOrderByExpr {
+                            expr: Box::new(ASTNode::SQLIdentifier("fname".to_string())),
+                            asc: Some(false),
+                        },
+                        SQLOrderByExpr {
+                            expr: Box::new(ASTNode::SQLIdentifier("id".to_string())),
+                            asc: None,
+                        },
+                    ]),
+                    order_by
+                );
+            }
+            _ => assert!(false),
         }
-        _ => assert!(false),
     }
+    chk("SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC, id");
+    // make sure ORDER is not treated as an alias
+    chk("SELECT id, fname, lname FROM customer ORDER BY lname ASC, fname DESC, id");
 }
 
 #[test]

@@ -716,5 +716,5 @@ pub const RESERVED_FOR_TABLE_ALIAS: &'static [&'static str] = &[
     WHERE, GROUP, ON, // keyword is 'reserved' in most dialects
     JOIN, INNER, CROSS, FULL, LEFT, RIGHT, // not reserved in Oracle
     NATURAL, USING, // not reserved in Oracle & MSSQL
-    // UNION, EXCEPT, INTERSECT, ORDER // TODO add these with tests.
+    ORDER, // UNION, EXCEPT, INTERSECT,  // TODO add these with tests.
 ];

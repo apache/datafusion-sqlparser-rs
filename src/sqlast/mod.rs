@@ -20,7 +20,7 @@ mod sqltype;
 mod table_key;
 mod value;
 
-pub use self::query::SQLSelect;
+pub use self::query::{Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLSelect};
 pub use self::sqltype::SQLType;
 pub use self::table_key::{AlterOperation, Key, TableKey};
 pub use self::value::Value;
@@ -308,29 +308,6 @@ impl ToString for SQLAssignment {
     }
 }
 
-/// SQL ORDER BY expression
-#[derive(Debug, Clone, PartialEq)]
-pub struct SQLOrderByExpr {
-    pub expr: Box<ASTNode>,
-    pub asc: Option<bool>,
-}
-
-impl SQLOrderByExpr {
-    pub fn new(expr: Box<ASTNode>, asc: Option<bool>) -> Self {
-        SQLOrderByExpr { expr, asc }
-    }
-}
-
-impl ToString for SQLOrderByExpr {
-    fn to_string(&self) -> String {
-        match self.asc {
-            Some(true) => format!("{} ASC", self.expr.to_string()),
-            Some(false) => format!("{} DESC", self.expr.to_string()),
-            None => self.expr.to_string(),
-        }
-    }
-}
-
 /// SQL column definition
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLColumnDef {
@@ -359,73 +336,4 @@ impl ToString for SQLColumnDef {
         }
         s
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Join {
-    pub relation: ASTNode, // TableFactor
-    pub join_operator: JoinOperator,
-}
-
-impl ToString for Join {
-    fn to_string(&self) -> String {
-        fn prefix(constraint: &JoinConstraint) -> String {
-            match constraint {
-                JoinConstraint::Natural => "NATURAL ".to_string(),
-                _ => "".to_string(),
-            }
-        }
-        fn suffix(constraint: &JoinConstraint) -> String {
-            match constraint {
-                JoinConstraint::On(expr) => format!("ON {}", expr.to_string()),
-                JoinConstraint::Using(attrs) => format!("USING({})", attrs.join(", ")),
-                _ => "".to_string(),
-            }
-        }
-        match &self.join_operator {
-            JoinOperator::Inner(constraint) => format!(
-                " {}JOIN {} {}",
-                prefix(constraint),
-                self.relation.to_string(),
-                suffix(constraint)
-            ),
-            JoinOperator::Cross => format!(" CROSS JOIN {}", self.relation.to_string()),
-            JoinOperator::Implicit => format!(", {}", self.relation.to_string()),
-            JoinOperator::LeftOuter(constraint) => format!(
-                " {}LEFT JOIN {} {}",
-                prefix(constraint),
-                self.relation.to_string(),
-                suffix(constraint)
-            ),
-            JoinOperator::RightOuter(constraint) => format!(
-                " {}RIGHT JOIN {} {}",
-                prefix(constraint),
-                self.relation.to_string(),
-                suffix(constraint)
-            ),
-            JoinOperator::FullOuter(constraint) => format!(
-                " {}FULL JOIN {} {}",
-                prefix(constraint),
-                self.relation.to_string(),
-                suffix(constraint)
-            ),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum JoinOperator {
-    Inner(JoinConstraint),
-    LeftOuter(JoinConstraint),
-    RightOuter(JoinConstraint),
-    FullOuter(JoinConstraint),
-    Implicit,
-    Cross,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum JoinConstraint {
-    On(ASTNode),
-    Using(Vec<String>),
-    Natural,
 }

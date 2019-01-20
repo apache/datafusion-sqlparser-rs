@@ -1142,7 +1142,7 @@ impl Parser {
                 next_token
             ))
         } else {
-            Ok(ASTNode::SQLSelect {
+            Ok(ASTNode::SQLSelect(SQLSelect {
                 projection,
                 selection,
                 relation,
@@ -1151,7 +1151,7 @@ impl Parser {
                 order_by,
                 group_by,
                 having,
-            })
+            }))
         }
     }
 

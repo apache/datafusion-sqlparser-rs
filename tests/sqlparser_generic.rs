@@ -62,9 +62,9 @@ fn parse_where_delete_statement() {
 fn parse_simple_select() {
     let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5");
     match verified(&sql) {
-        ASTNode::SQLSelect {
+        ASTNode::SQLSelect(SQLSelect {
             projection, limit, ..
-        } => {
+        }) => {
             assert_eq!(3, projection.len());
             assert_eq!(Some(Box::new(ASTNode::SQLValue(Value::Long(5)))), limit);
         }
@@ -76,7 +76,7 @@ fn parse_simple_select() {
 fn parse_select_wildcard() {
     let sql = String::from("SELECT * FROM customer");
     match verified(&sql) {
-        ASTNode::SQLSelect { projection, .. } => {
+        ASTNode::SQLSelect(SQLSelect { projection, .. }) => {
             assert_eq!(1, projection.len());
             assert_eq!(ASTNode::SQLWildcard, projection[0]);
         }
@@ -88,7 +88,7 @@ fn parse_select_wildcard() {
 fn parse_select_count_wildcard() {
     let sql = String::from("SELECT COUNT(*) FROM customer");
     match verified(&sql) {
-        ASTNode::SQLSelect { projection, .. } => {
+        ASTNode::SQLSelect(SQLSelect { projection, .. }) => {
             assert_eq!(1, projection.len());
             assert_eq!(
                 ASTNode::SQLFunction {
@@ -191,7 +191,7 @@ fn parse_is_not_null() {
 fn parse_like() {
     let sql = String::from("SELECT * FROM customers WHERE name LIKE '%a'");
     match verified(&sql) {
-        ASTNode::SQLSelect { selection, .. } => {
+        ASTNode::SQLSelect(SQLSelect { selection, .. }) => {
             assert_eq!(
                 ASTNode::SQLBinaryExpr {
                     left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
@@ -211,7 +211,7 @@ fn parse_like() {
 fn parse_not_like() {
     let sql = String::from("SELECT * FROM customers WHERE name NOT LIKE '%a'");
     match verified(&sql) {
-        ASTNode::SQLSelect { selection, .. } => {
+        ASTNode::SQLSelect(SQLSelect { selection, .. }) => {
             assert_eq!(
                 ASTNode::SQLBinaryExpr {
                     left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
@@ -231,7 +231,7 @@ fn parse_not_like() {
 fn parse_select_order_by() {
     fn chk(sql: &str) {
         match verified(&sql) {
-            ASTNode::SQLSelect { order_by, .. } => {
+            ASTNode::SQLSelect(SQLSelect { order_by, .. }) => {
                 assert_eq!(
                     Some(vec![
                         SQLOrderByExpr {
@@ -265,9 +265,9 @@ fn parse_select_order_by_limit() {
     );
     let ast = parse_sql(&sql);
     match ast {
-        ASTNode::SQLSelect {
+        ASTNode::SQLSelect(SQLSelect {
             order_by, limit, ..
-        } => {
+        }) => {
             assert_eq!(
                 Some(vec![
                     SQLOrderByExpr {
@@ -291,7 +291,7 @@ fn parse_select_order_by_limit() {
 fn parse_select_group_by() {
     let sql = String::from("SELECT id, fname, lname FROM customer GROUP BY lname, fname");
     match verified(&sql) {
-        ASTNode::SQLSelect { group_by, .. } => {
+        ASTNode::SQLSelect(SQLSelect { group_by, .. }) => {
             assert_eq!(
                 Some(vec![
                     ASTNode::SQLIdentifier("lname".to_string()),
@@ -316,7 +316,7 @@ fn parse_limit_accepts_all() {
 fn parse_cast() {
     let sql = String::from("SELECT CAST(id AS bigint) FROM customer");
     match verified(&sql) {
-        ASTNode::SQLSelect { projection, .. } => {
+        ASTNode::SQLSelect(SQLSelect { projection, .. }) => {
             assert_eq!(1, projection.len());
             assert_eq!(
                 ASTNode::SQLCast {
@@ -377,7 +377,7 @@ fn parse_create_table() {
 fn parse_scalar_function_in_projection() {
     let sql = String::from("SELECT sqrt(id) FROM foo");
     match verified(&sql) {
-        ASTNode::SQLSelect { projection, .. } => {
+        ASTNode::SQLSelect(SQLSelect { projection, .. }) => {
             assert_eq!(
                 vec![ASTNode::SQLFunction {
                     id: String::from("sqrt"),
@@ -401,7 +401,7 @@ fn parse_aggregate_with_group_by() {
 fn parse_literal_string() {
     let sql = "SELECT 'one'";
     match verified(&sql) {
-        ASTNode::SQLSelect { ref projection, .. } => {
+        ASTNode::SQLSelect(SQLSelect { ref projection, .. }) => {
             assert_eq!(
                 projection[0],
                 ASTNode::SQLValue(Value::SingleQuotedString("one".to_string()))
@@ -427,7 +427,7 @@ fn parse_simple_math_expr_minus() {
 fn parse_select_version() {
     let sql = "SELECT @@version";
     match verified(&sql) {
-        ASTNode::SQLSelect { ref projection, .. } => {
+        ASTNode::SQLSelect(SQLSelect { ref projection, .. }) => {
             assert_eq!(
                 projection[0],
                 ASTNode::SQLIdentifier("@@version".to_string())
@@ -466,10 +466,10 @@ fn parse_case_expression() {
     let sql = "SELECT CASE WHEN bar IS NULL THEN 'null' WHEN bar = 0 THEN '=0' WHEN bar >= 0 THEN '>=0' ELSE '<0' END FROM foo";
     let ast = parse_sql(&sql);
     assert_eq!(sql, ast.to_string());
-    use self::ASTNode::*;
+    use self::ASTNode::{SQLBinaryExpr, SQLCase, SQLIdentifier, SQLIsNull, SQLValue};
     use self::SQLOperator::*;
     match ast {
-        ASTNode::SQLSelect { projection, .. } => {
+        ASTNode::SQLSelect(SQLSelect { projection, .. }) => {
             assert_eq!(1, projection.len());
             assert_eq!(
                 SQLCase {
@@ -507,7 +507,7 @@ fn parse_select_with_semi_colon() {
     let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1;");
     let ast = parse_sql(&sql);
     match ast {
-        ASTNode::SQLSelect { projection, .. } => {
+        ASTNode::SQLSelect(SQLSelect { projection, .. }) => {
             assert_eq!(3, projection.len());
         }
         _ => assert!(false),
@@ -536,7 +536,7 @@ fn parse_implicit_join() {
     let sql = "SELECT * FROM t1, t2";
 
     match verified(sql) {
-        ASTNode::SQLSelect { joins, .. } => {
+        ASTNode::SQLSelect(SQLSelect { joins, .. }) => {
             assert_eq!(joins.len(), 1);
             assert_eq!(
                 joins[0],
@@ -558,7 +558,7 @@ fn parse_cross_join() {
     let sql = "SELECT * FROM t1 CROSS JOIN t2";
 
     match verified(sql) {
-        ASTNode::SQLSelect { joins, .. } => {
+        ASTNode::SQLSelect(SQLSelect { joins, .. }) => {
             assert_eq!(joins.len(), 1);
             assert_eq!(
                 joins[0],
@@ -711,7 +711,7 @@ fn parses_to(from: &str, to: &str) {
 
 fn joins_from(ast: ASTNode) -> Vec<Join> {
     match ast {
-        ASTNode::SQLSelect { joins, .. } => joins,
+        ASTNode::SQLSelect(SQLSelect { joins, .. }) => joins,
         _ => panic!("Expected SELECT"),
     }
 }

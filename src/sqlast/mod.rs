@@ -14,11 +14,13 @@
 
 //! SQL Abstract Syntax Tree (AST) types
 
+mod query;
 mod sql_operator;
 mod sqltype;
 mod table_key;
 mod value;
 
+pub use self::query::SQLSelect;
 pub use self::sqltype::SQLType;
 pub use self::table_key::{AlterOperation, Key, TableKey};
 pub use self::value::Value;
@@ -78,24 +80,7 @@ pub enum ASTNode {
         alias: Option<SQLIdent>,
     },
     /// SELECT
-    SQLSelect {
-        /// projection expressions
-        projection: Vec<ASTNode>,
-        /// FROM
-        relation: Option<Box<ASTNode>>, // TableFactor
-        // JOIN
-        joins: Vec<Join>,
-        /// WHERE
-        selection: Option<Box<ASTNode>>,
-        /// ORDER BY
-        order_by: Option<Vec<SQLOrderByExpr>>,
-        /// GROUP BY
-        group_by: Option<Vec<ASTNode>>,
-        /// HAVING
-        having: Option<Box<ASTNode>>,
-        /// LIMIT
-        limit: Option<Box<ASTNode>>,
-    },
+    SQLSelect(SQLSelect),
     /// INSERT
     SQLInsert {
         /// TABLE
@@ -203,61 +188,7 @@ impl ToString for ASTNode {
                     relation.to_string()
                 }
             }
-            ASTNode::SQLSelect {
-                projection,
-                relation,
-                joins,
-                selection,
-                order_by,
-                group_by,
-                having,
-                limit,
-            } => {
-                let mut s = format!(
-                    "SELECT {}",
-                    projection
-                        .iter()
-                        .map(|p| p.to_string())
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                );
-                if let Some(relation) = relation {
-                    s += &format!(" FROM {}", relation.as_ref().to_string());
-                }
-                for join in joins {
-                    s += &join.to_string();
-                }
-                if let Some(selection) = selection {
-                    s += &format!(" WHERE {}", selection.as_ref().to_string());
-                }
-                if let Some(group_by) = group_by {
-                    s += &format!(
-                        " GROUP BY {}",
-                        group_by
-                            .iter()
-                            .map(|g| g.to_string())
-                            .collect::<Vec<String>>()
-                            .join(", ")
-                    );
-                }
-                if let Some(having) = having {
-                    s += &format!(" HAVING {}", having.as_ref().to_string());
-                }
-                if let Some(order_by) = order_by {
-                    s += &format!(
-                        " ORDER BY {}",
-                        order_by
-                            .iter()
-                            .map(|o| o.to_string())
-                            .collect::<Vec<String>>()
-                            .join(", ")
-                    );
-                }
-                if let Some(limit) = limit {
-                    s += &format!(" LIMIT {}", limit.as_ref().to_string());
-                }
-                s
-            }
+            ASTNode::SQLSelect(s) => s.to_string(),
             ASTNode::SQLInsert {
                 table_name,
                 columns,

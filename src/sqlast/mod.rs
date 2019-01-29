@@ -39,8 +39,6 @@ pub enum ASTNode {
     SQLWildcard,
     /// Multi part identifier e.g. `myschema.dbo.mytable`
     SQLCompoundIdentifier(Vec<SQLIdent>),
-    /// Assigment e.g. `name = 'Fred'` in an UPDATE statement
-    SQLAssignment(SQLAssignment),
     /// `IS NULL` expression
     SQLIsNull(Box<ASTNode>),
     /// `IS NOT NULL` expression
@@ -135,7 +133,6 @@ impl ToString for ASTNode {
             ASTNode::SQLIdentifier(s) => s.to_string(),
             ASTNode::SQLWildcard => "*".to_string(),
             ASTNode::SQLCompoundIdentifier(s) => s.join("."),
-            ASTNode::SQLAssignment(ass) => ass.to_string(),
             ASTNode::SQLIsNull(ast) => format!("{} IS NULL", ast.as_ref().to_string()),
             ASTNode::SQLIsNotNull(ast) => format!("{} IS NOT NULL", ast.as_ref().to_string()),
             ASTNode::SQLBinaryExpr { left, op, right } => format!(
@@ -295,7 +292,6 @@ impl ToString for ASTNode {
 }
 
 /// SQL assignment `foo = expr` as used in SQLUpdate
-/// TODO: unify this with the ASTNode SQLAssignment
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLAssignment {
     id: String,

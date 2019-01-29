@@ -109,12 +109,12 @@ impl Parser {
     }
 
     /// Parse a new expression
-    pub fn parse(&mut self) -> Result<ASTNode, ParserError> {
-        self.parse_expr(0)
+    pub fn parse_expr(&mut self) -> Result<ASTNode, ParserError> {
+        self.parse_subexpr(0)
     }
 
     /// Parse tokens until the precedence changes
-    pub fn parse_expr(&mut self, precedence: u8) -> Result<ASTNode, ParserError> {
+    pub fn parse_subexpr(&mut self, precedence: u8) -> Result<ASTNode, ParserError> {
         debug!("parsing expr");
         let mut expr = self.parse_prefix()?;
         debug!("prefix: {:?}", expr);
@@ -167,7 +167,7 @@ impl Parser {
                     "CAST" => self.parse_cast_expression(),
                     "NOT" => Ok(ASTNode::SQLUnary {
                         operator: SQLOperator::Not,
-                        expr: Box::new(self.parse_expr(0)?),
+                        expr: Box::new(self.parse_subexpr(0)?), // TBD (2)
                     }),
                     _ => match self.peek_token() {
                         Some(Token::LParen) => self.parse_function(&w.value),
@@ -194,7 +194,7 @@ impl Parser {
                     self.parse_sql_value()
                 }
                 Token::LParen => {
-                    let expr = self.parse();
+                    let expr = self.parse_expr(); // TBD (1)
                     self.expect_token(&Token::RParen)?;
                     expr
                 }
@@ -230,11 +230,11 @@ impl Parser {
             let mut results = vec![];
             let mut else_result = None;
             loop {
-                conditions.push(self.parse_expr(0)?);
+                conditions.push(self.parse_expr()?);
                 self.expect_keyword("THEN")?;
-                results.push(self.parse_expr(0)?);
+                results.push(self.parse_expr()?);
                 if self.parse_keywords(vec!["ELSE"]) {
-                    else_result = Some(Box::new(self.parse_expr(0)?));
+                    else_result = Some(Box::new(self.parse_expr()?));
                     if self.parse_keywords(vec!["END"]) {
                         break;
                     } else {
@@ -261,7 +261,7 @@ impl Parser {
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
     pub fn parse_cast_expression(&mut self) -> Result<ASTNode, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let expr = self.parse_expr(0)?;
+        let expr = self.parse_expr()?;
         self.expect_keyword("AS")?;
         let data_type = self.parse_data_type()?;
         self.expect_token(&Token::RParen)?;
@@ -298,7 +298,7 @@ impl Parser {
                         Ok(ASTNode::SQLBinaryExpr {
                             left: Box::new(expr),
                             op: SQLOperator::NotLike,
-                            right: Box::new(self.parse_expr(precedence)?),
+                            right: Box::new(self.parse_subexpr(precedence)?),
                         })
                     } else {
                         parser_err!("Invalid tokens after NOT")
@@ -322,12 +322,12 @@ impl Parser {
                 | Token::Div => Ok(ASTNode::SQLBinaryExpr {
                     left: Box::new(expr),
                     op: self.to_sql_operator(&tok)?,
-                    right: Box::new(self.parse_expr(precedence)?),
+                    right: Box::new(self.parse_subexpr(precedence)?),
                 }),
                 _ => parser_err!(format!("No infix parser for token {:?}", tok)),
             },
             // This is not supposed to happen, because of the precedence check
-            // in parse_expr.
+            // in parse_subexpr.
             None => parser_err!("Unexpected EOF in parse_infix"),
         }
     }
@@ -1106,13 +1106,13 @@ impl Parser {
 
     pub fn parse_delete(&mut self) -> Result<SQLStatement, ParserError> {
         let relation: Option<Box<ASTNode>> = if self.parse_keyword("FROM") {
-            Some(Box::new(self.parse_expr(0)?))
+            Some(Box::new(self.parse_subexpr(0)?)) /* TBD (4) */
         } else {
             None
         };
 
         let selection = if self.parse_keyword("WHERE") {
-            Some(Box::new(self.parse_expr(0)?))
+            Some(Box::new(self.parse_expr()?))
         } else {
             None
         };
@@ -1136,7 +1136,7 @@ impl Parser {
         };
 
         let selection = if self.parse_keyword("WHERE") {
-            let expr = self.parse_expr(0)?;
+            let expr = self.parse_expr()?;
             Some(Box::new(expr))
         } else {
             None
@@ -1149,7 +1149,7 @@ impl Parser {
         };
 
         let having = if self.parse_keyword("HAVING") {
-            Some(Box::new(self.parse_expr(0)?))
+            Some(Box::new(self.parse_expr()?))
         } else {
             None
         };
@@ -1182,7 +1182,7 @@ impl Parser {
     pub fn parse_table_factor(&mut self) -> Result<ASTNode, ParserError> {
         let relation = if self.consume_token(&Token::LParen) {
             self.prev_token();
-            self.parse_expr(0)?
+            self.parse_subexpr(0)? /* TBD (3) */
         } else {
             self.parse_compound_identifier(&Token::Period)?
         };
@@ -1197,7 +1197,7 @@ impl Parser {
         if natural {
             Ok(JoinConstraint::Natural)
         } else if self.parse_keyword("ON") {
-            let constraint = self.parse_expr(0)?;
+            let constraint = self.parse_expr()?;
             Ok(JoinConstraint::On(constraint))
         } else if self.parse_keyword("USING") {
             self.expect_token(&Token::LParen)?;
@@ -1338,7 +1338,7 @@ impl Parser {
     pub fn parse_expr_list(&mut self) -> Result<Vec<ASTNode>, ParserError> {
         let mut expr_list: Vec<ASTNode> = vec![];
         loop {
-            expr_list.push(self.parse_expr(0)?);
+            expr_list.push(self.parse_expr()?);
             if let Some(t) = self.peek_token() {
                 if t == Token::Comma {
                     self.next_token();
@@ -1357,7 +1357,7 @@ impl Parser {
     pub fn parse_order_by_expr_list(&mut self) -> Result<Vec<SQLOrderByExpr>, ParserError> {
         let mut expr_list: Vec<SQLOrderByExpr> = vec![];
         loop {
-            let expr = self.parse_expr(0)?;
+            let expr = self.parse_expr()?;
 
             let asc = if self.parse_keyword("ASC") {
                 Some(true)

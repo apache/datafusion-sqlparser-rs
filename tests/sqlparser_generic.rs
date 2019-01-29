@@ -734,6 +734,6 @@ fn parse_sql_expr_with(dialect: &Dialect, sql: &str) -> ASTNode {
     let mut tokenizer = Tokenizer::new(dialect, &sql);
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(tokens);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse_expr().unwrap();
     ast
 }

@@ -389,7 +389,7 @@ fn parse_sql_statements(sql: &str) -> Result<Vec<SQLStatement>, ParserError> {
 fn parse_sql_expr(sql: &str) -> ASTNode {
     debug!("sql: {}", sql);
     let mut parser = parser(sql);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse_expr().unwrap();
     ast
 }
 

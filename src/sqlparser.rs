@@ -77,9 +77,7 @@ impl Parser {
                 break;
             }
 
-            if let Some(infix_expr) = self.parse_infix(expr.clone(), next_precedence)? {
-                expr = infix_expr;
-            }
+            expr = self.parse_infix(expr, next_precedence)?;
         }
         Ok(expr)
     }
@@ -102,9 +100,7 @@ impl Parser {
                 break;
             }
 
-            if let Some(infix_expr) = self.parse_infix(expr.clone(), next_precedence)? {
-                expr = infix_expr;
-            }
+            expr = self.parse_infix(expr, next_precedence)?;
         }
         Ok(expr)
     }
@@ -248,37 +244,33 @@ impl Parser {
     }
 
     /// Parse an expression infix (typically an operator)
-    pub fn parse_infix(
-        &mut self,
-        expr: ASTNode,
-        precedence: u8,
-    ) -> Result<Option<ASTNode>, ParserError> {
+    pub fn parse_infix(&mut self, expr: ASTNode, precedence: u8) -> Result<ASTNode, ParserError> {
         debug!("parsing infix");
         match self.next_token() {
             Some(tok) => match tok {
                 Token::Keyword(ref k) if k == "IS" => {
                     if self.parse_keywords(vec!["NULL"]) {
-                        Ok(Some(ASTNode::SQLIsNull(Box::new(expr))))
+                        Ok(ASTNode::SQLIsNull(Box::new(expr)))
                     } else if self.parse_keywords(vec!["NOT", "NULL"]) {
-                        Ok(Some(ASTNode::SQLIsNotNull(Box::new(expr))))
+                        Ok(ASTNode::SQLIsNotNull(Box::new(expr)))
                     } else {
                         parser_err!("Invalid tokens after IS")
                     }
                 }
                 Token::Keyword(ref k) if k == "NOT" => {
                     if self.parse_keywords(vec!["LIKE"]) {
-                        Ok(Some(ASTNode::SQLBinaryExpr {
+                        Ok(ASTNode::SQLBinaryExpr {
                             left: Box::new(expr),
                             op: SQLOperator::NotLike,
                             right: Box::new(self.parse_expr(precedence)?),
-                        }))
+                        })
                     } else {
                         parser_err!("Invalid tokens after NOT")
                     }
                 }
                 Token::DoubleColon => {
                     let pg_cast = self.parse_pg_cast(expr)?;
-                    Ok(Some(pg_cast))
+                    Ok(pg_cast)
                 }
                 Token::Keyword(_)
                 | Token::Eq
@@ -291,14 +283,16 @@ impl Parser {
                 | Token::Minus
                 | Token::Mult
                 | Token::Mod
-                | Token::Div => Ok(Some(ASTNode::SQLBinaryExpr {
+                | Token::Div => Ok(ASTNode::SQLBinaryExpr {
                     left: Box::new(expr),
                     op: self.to_sql_operator(&tok)?,
                     right: Box::new(self.parse_expr(precedence)?),
-                })),
+                }),
                 _ => parser_err!(format!("No infix parser for token {:?}", tok)),
             },
-            None => Ok(None),
+            // This is not supposed to happen, because of the precedence check
+            // in parse_expr.
+            None => parser_err!("Unexpected EOF in parse_infix"),
         }
     }
 

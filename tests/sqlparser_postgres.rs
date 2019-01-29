@@ -372,11 +372,18 @@ fn verified_stmt(query: &str) -> SQLStatement {
 /// converting AST back to string equals to `canonical` (unless an empty string
 /// is provided).
 fn one_statement_parses_to(sql: &str, canonical: &str) -> SQLStatement {
-    let only_statement = Parser::parse_sql(&PostgreSqlDialect {}, sql.to_string()).unwrap();
+    let mut statements = parse_sql_statements(&sql).unwrap();
+    assert_eq!(statements.len(), 1);
+
+    let only_statement = statements.pop().unwrap();
     if !canonical.is_empty() {
         assert_eq!(canonical, only_statement.to_string())
     }
     only_statement
+}
+
+fn parse_sql_statements(sql: &str) -> Result<Vec<SQLStatement>, ParserError> {
+    Parser::parse_sql(&PostgreSqlDialect {}, sql.to_string())
 }
 
 fn parse_sql_expr(sql: &str) -> ASTNode {

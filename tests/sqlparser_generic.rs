@@ -474,34 +474,6 @@ fn parse_case_expression() {
 }
 
 #[test]
-fn parse_select_with_semi_colon() {
-    let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1;");
-    match one_statement_parses_to(&sql, "") {
-        SQLStatement::SQLSelect(SQLSelect { projection, .. }) => {
-            assert_eq!(3, projection.len());
-        }
-        _ => assert!(false),
-    }
-}
-
-#[test]
-fn parse_delete_with_semi_colon() {
-    let sql: &str = "DELETE FROM 'table';";
-
-    match one_statement_parses_to(&sql, "") {
-        SQLStatement::SQLDelete { relation, .. } => {
-            assert_eq!(
-                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
-                    "table".to_string()
-                )))),
-                relation
-            );
-        }
-        _ => assert!(false),
-    }
-}
-
-#[test]
 fn parse_implicit_join() {
     let sql = "SELECT * FROM t1, t2";
 
@@ -669,6 +641,37 @@ fn parse_join_syntax_variants() {
     );
 }
 
+#[test]
+fn parse_multiple_statements() {
+    fn test_with(sql1: &str, sql2_kw: &str, sql2_rest: &str) {
+        // Check that a string consisting of two statements delimited by a semicolon
+        // parses the same as both statements individually:
+        let res = parse_sql_statements(&(sql1.to_owned() + ";" + sql2_kw + sql2_rest));
+        assert_eq!(
+            vec![
+                one_statement_parses_to(&sql1, ""),
+                one_statement_parses_to(&(sql2_kw.to_owned() + sql2_rest), ""),
+            ],
+            res.unwrap()
+        );
+        // Check that extra semicolon at the end is stripped by normalization:
+        one_statement_parses_to(&(sql1.to_owned() + ";"), sql1);
+        // Check that forgetting the semicolon results in an error:
+        let res = parse_sql_statements(&(sql1.to_owned() + " " + sql2_kw + sql2_rest));
+        assert_eq!(
+            ParserError::ParserError("Expected end of statement, found: ".to_string() + sql2_kw),
+            res.unwrap_err()
+        );
+    }
+    test_with("SELECT foo", "SELECT", " bar");
+    test_with("DELETE FROM foo", "SELECT", " bar");
+    test_with("INSERT INTO foo VALUES(1)", "SELECT", " bar");
+    test_with("CREATE TABLE foo (baz int)", "SELECT", " bar");
+    // Make sure that empty statements do not cause an error:
+    let res = parse_sql_statements(";;");
+    assert_eq!(0, res.unwrap().len());
+}
+
 fn only<'a, T>(v: &'a Vec<T>) -> &'a T {
     assert_eq!(1, v.len());
     v.first().unwrap()
@@ -699,17 +702,24 @@ fn verified_expr(query: &str) -> ASTNode {
     ast
 }
 
-/// Ensures that `sql` parses as a statement, optionally checking that
+/// Ensures that `sql` parses as a single statement, optionally checking that
 /// converting AST back to string equals to `canonical` (unless an empty string
 /// is provided).
 fn one_statement_parses_to(sql: &str, canonical: &str) -> SQLStatement {
-    let generic_ast = Parser::parse_sql(&GenericSqlDialect {}, sql.to_string()).unwrap();
-    let pg_ast = Parser::parse_sql(&PostgreSqlDialect {}, sql.to_string()).unwrap();
-    assert_eq!(generic_ast, pg_ast);
+    let mut statements = parse_sql_statements(&sql).unwrap();
+    assert_eq!(statements.len(), 1);
 
+    let only_statement = statements.pop().unwrap();
     if !canonical.is_empty() {
-        assert_eq!(canonical, generic_ast.to_string())
+        assert_eq!(canonical, only_statement.to_string())
     }
+    only_statement
+}
+
+fn parse_sql_statements(sql: &str) -> Result<Vec<SQLStatement>, ParserError> {
+    let generic_ast = Parser::parse_sql(&GenericSqlDialect {}, sql.to_string());
+    let pg_ast = Parser::parse_sql(&PostgreSqlDialect {}, sql.to_string());
+    assert_eq!(generic_ast, pg_ast);
     generic_ast
 }
 

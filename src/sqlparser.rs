@@ -20,7 +20,7 @@ use super::sqlast::*;
 use super::sqltokenizer::*;
 use chrono::{offset::FixedOffset, DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ParserError {
     TokenizerError(String),
     ParserError(String),
@@ -54,14 +54,36 @@ impl Parser {
     }
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
-    pub fn parse_sql(dialect: &Dialect, sql: String) -> Result<SQLStatement, ParserError> {
+    pub fn parse_sql(dialect: &Dialect, sql: String) -> Result<Vec<SQLStatement>, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, &sql);
         let tokens = tokenizer.tokenize()?;
         let mut parser = Parser::new(tokens);
-        parser.parse_statement()
+        let mut stmts = Vec::new();
+        let mut expecting_statement_delimiter = false;
+        loop {
+            // ignore empty statements (between successive statement delimiters)
+            while parser.consume_token(&Token::SemiColon) {
+                expecting_statement_delimiter = false;
+            }
+
+            if parser.peek_token().is_none() {
+                break;
+            } else if expecting_statement_delimiter {
+                return parser_err!(format!(
+                    "Expected end of statement, found: {}",
+                    parser.peek_token().unwrap().to_string()
+                ));
+            }
+
+            let statement = parser.parse_statement()?;
+            stmts.push(statement);
+            expecting_statement_delimiter = true;
+        }
+        Ok(stmts)
     }
 
-    /// Parse a single top-level statement (such as SELECT, INSERT, CREATE, etc.)
+    /// Parse a single top-level statement (such as SELECT, INSERT, CREATE, etc.),
+    /// stopping before the statement separator, if any.
     pub fn parse_statement(&mut self) -> Result<SQLStatement, ParserError> {
         match self.next_token() {
             Some(t) => match t {
@@ -1095,20 +1117,10 @@ impl Parser {
             None
         };
 
-        let _ = self.consume_token(&Token::SemiColon);
-
-        // parse next token
-        if let Some(next_token) = self.peek_token() {
-            parser_err!(format!(
-                "Unexpected token at end of DELETE: {:?}",
-                next_token
-            ))
-        } else {
-            Ok(SQLStatement::SQLDelete {
-                relation,
-                selection,
-            })
-        }
+        Ok(SQLStatement::SQLDelete {
+            relation,
+            selection,
+        })
     }
 
     /// Parse a SELECT statement
@@ -1154,25 +1166,16 @@ impl Parser {
             None
         };
 
-        let _ = self.consume_token(&Token::SemiColon);
-
-        if let Some(next_token) = self.peek_token() {
-            parser_err!(format!(
-                "Unexpected token at end of SELECT: {:?}",
-                next_token
-            ))
-        } else {
-            Ok(SQLSelect {
-                projection,
-                selection,
-                relation,
-                joins,
-                limit,
-                order_by,
-                group_by,
-                having,
-            })
-        }
+        Ok(SQLSelect {
+            projection,
+            selection,
+            relation,
+            joins,
+            limit,
+            order_by,
+            group_by,
+            having,
+        })
     }
 
     /// A table name or a parenthesized subquery, followed by optional `[AS] alias`

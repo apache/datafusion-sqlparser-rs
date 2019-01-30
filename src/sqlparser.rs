@@ -774,7 +774,7 @@ impl Parser {
                     //TODO: parse the timestamp here (see parse_timestamp_value())
                     Token::Number(ref n) if n.contains(".") => match n.parse::<f64>() {
                         Ok(n) => Ok(Value::Double(n)),
-                        Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
+                        Err(e) => parser_err!(format!("Could not parse '{}' as f64: {}", n, e)),
                     },
                     Token::Number(ref n) => match n.parse::<i64>() {
                         Ok(n) => Ok(Value::Long(n)),

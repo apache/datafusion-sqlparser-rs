@@ -31,7 +31,7 @@ fn parse_simple_insert() {
             values,
             ..
         } => {
-            assert_eq!(table_name, "customer");
+            assert_eq!(table_name.to_string(), "customer");
             assert!(columns.is_empty());
             assert_eq!(
                 vec![vec![
@@ -56,7 +56,7 @@ fn parse_common_insert() {
             values,
             ..
         } => {
-            assert_eq!(table_name, "public.customer");
+            assert_eq!(table_name.to_string(), "public.customer");
             assert!(columns.is_empty());
             assert_eq!(
                 vec![vec![
@@ -81,7 +81,7 @@ fn parse_complex_insert() {
             values,
             ..
         } => {
-            assert_eq!(table_name, "db.public.customer");
+            assert_eq!(table_name.to_string(), "db.public.customer");
             assert!(columns.is_empty());
             assert_eq!(
                 vec![vec![
@@ -120,7 +120,7 @@ fn parse_insert_with_columns() {
             values,
             ..
         } => {
-            assert_eq!(table_name, "public.customer");
+            assert_eq!(table_name.to_string(), "public.customer");
             assert_eq!(
                 columns,
                 vec!["id".to_string(), "name".to_string(), "active".to_string()]
@@ -164,7 +164,7 @@ fn parse_create_table_with_defaults() {
     );
     match one_statement_parses_to(&sql, "") {
         SQLStatement::SQLCreateTable { name, columns } => {
-            assert_eq!("public.customer", name);
+            assert_eq!("public.customer", name.to_string());
             assert_eq!(10, columns.len());
 
             let c_name = &columns[0];
@@ -205,7 +205,7 @@ fn parse_create_table_from_pg_dump() {
         )");
     match one_statement_parses_to(&sql, "") {
         SQLStatement::SQLCreateTable { name, columns } => {
-            assert_eq!("public.customer", name);
+            assert_eq!("public.customer", name.to_string());
 
             let c_customer_id = &columns[0];
             assert_eq!("customer_id", c_customer_id.name);
@@ -238,7 +238,10 @@ fn parse_create_table_from_pg_dump() {
 
             let c_release_year = &columns[10];
             assert_eq!(
-                SQLType::Custom("public.year".to_string()),
+                SQLType::Custom(SQLObjectName(vec![
+                    "public".to_string(),
+                    "year".to_string()
+                ])),
                 c_release_year.data_type
             );
         }
@@ -259,7 +262,7 @@ fn parse_create_table_with_inherit() {
     );
     match verified_stmt(&sql) {
         SQLStatement::SQLCreateTable { name, columns } => {
-            assert_eq!("bazaar.settings", name);
+            assert_eq!("bazaar.settings", name.to_string());
 
             let c_name = &columns[0];
             assert_eq!("settings_id", c_name.name);
@@ -288,7 +291,7 @@ fn parse_alter_table_constraint_primary_key() {
     );
     match verified_stmt(&sql) {
         SQLStatement::SQLAlterTable { name, .. } => {
-            assert_eq!(name, "bazaar.address");
+            assert_eq!(name.to_string(), "bazaar.address");
         }
         _ => assert!(false),
     }
@@ -301,7 +304,7 @@ fn parse_alter_table_constraint_foreign_key() {
         ADD CONSTRAINT customer_address_id_fkey FOREIGN KEY (address_id) REFERENCES public.address(address_id)");
     match verified_stmt(&sql) {
         SQLStatement::SQLAlterTable { name, .. } => {
-            assert_eq!(name, "public.customer");
+            assert_eq!(name.to_string(), "public.customer");
         }
         _ => assert!(false),
     }

@@ -153,7 +153,7 @@ pub enum SQLStatement {
     /// INSERT
     SQLInsert {
         /// TABLE
-        table_name: String,
+        table_name: SQLObjectName,
         /// COLUMNS
         columns: Vec<SQLIdent>,
         /// VALUES (vector of rows to insert)
@@ -161,7 +161,7 @@ pub enum SQLStatement {
     },
     SQLCopy {
         /// TABLE
-        table_name: String,
+        table_name: SQLObjectName,
         /// COLUMNS
         columns: Vec<SQLIdent>,
         /// VALUES a vector of values to be copied
@@ -170,7 +170,7 @@ pub enum SQLStatement {
     /// UPDATE
     SQLUpdate {
         /// TABLE
-        table_name: String,
+        table_name: SQLObjectName,
         /// Column assignments
         assignments: Vec<SQLAssignment>,
         /// WHERE
@@ -186,14 +186,14 @@ pub enum SQLStatement {
     /// CREATE TABLE
     SQLCreateTable {
         /// Table name
-        name: String,
+        name: SQLObjectName,
         /// Optional schema
         columns: Vec<SQLColumnDef>,
     },
     /// ALTER TABLE
     SQLAlterTable {
         /// Table name
-        name: String,
+        name: SQLObjectName,
         operation: AlterOperation,
     },
 }
@@ -207,7 +207,7 @@ impl ToString for SQLStatement {
                 columns,
                 values,
             } => {
-                let mut s = format!("INSERT INTO {}", table_name);
+                let mut s = format!("INSERT INTO {}", table_name.to_string());
                 if columns.len() > 0 {
                     s += &format!(" ({})", columns.join(", "));
                 }
@@ -232,7 +232,7 @@ impl ToString for SQLStatement {
                 columns,
                 values,
             } => {
-                let mut s = format!("COPY {}", table_name);
+                let mut s = format!("COPY {}", table_name.to_string());
                 if columns.len() > 0 {
                     s += &format!(
                         " ({})",
@@ -262,7 +262,7 @@ impl ToString for SQLStatement {
                 assignments,
                 selection,
             } => {
-                let mut s = format!("UPDATE {}", table_name);
+                let mut s = format!("UPDATE {}", table_name.to_string());
                 if assignments.len() > 0 {
                     s += &format!(
                         "{}",
@@ -293,7 +293,7 @@ impl ToString for SQLStatement {
             }
             SQLStatement::SQLCreateTable { name, columns } => format!(
                 "CREATE TABLE {} ({})",
-                name,
+                name.to_string(),
                 columns
                     .iter()
                     .map(|c| c.to_string())
@@ -301,9 +301,19 @@ impl ToString for SQLStatement {
                     .join(", ")
             ),
             SQLStatement::SQLAlterTable { name, operation } => {
-                format!("ALTER TABLE {} {}", name, operation.to_string())
+                format!("ALTER TABLE {} {}", name.to_string(), operation.to_string())
             }
         }
+    }
+}
+
+/// A name of a table, view, custom type, etc., possibly multi-part, i.e. db.schema.obj
+#[derive(Debug, Clone, PartialEq)]
+pub struct SQLObjectName(pub Vec<SQLIdent>);
+
+impl ToString for SQLObjectName {
+    fn to_string(&self) -> String {
+        self.0.join(".")
     }
 }
 

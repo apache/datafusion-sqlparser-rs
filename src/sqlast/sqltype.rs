@@ -1,3 +1,5 @@
+use super::SQLObjectName;
+
 /// SQL datatypes for literals in SQL statements
 #[derive(Debug, Clone, PartialEq)]
 pub enum SQLType {
@@ -44,7 +46,7 @@ pub enum SQLType {
     /// Bytea
     Bytea,
     /// Custom type such as enums
-    Custom(String),
+    Custom(SQLObjectName),
     /// Arrays
     Array(Box<SQLType>),
 }

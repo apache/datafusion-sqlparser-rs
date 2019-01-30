@@ -1060,11 +1060,11 @@ impl Parser {
         }
     }
 
-    pub fn parse_tablename(&mut self) -> Result<String, ParserError> {
+    pub fn parse_tablename(&mut self) -> Result<SQLObjectName, ParserError> {
         let identifier = self.parse_compound_identifier(&Token::Period)?;
         match identifier {
             // TODO: should store the compound identifier itself
-            ASTNode::SQLCompoundIdentifier(idents) => Ok(idents.join(".")),
+            ASTNode::SQLCompoundIdentifier(idents) => Ok(SQLObjectName(idents)),
             other => parser_err!(format!("Expecting compound identifier, found: {:?}", other)),
         }
     }

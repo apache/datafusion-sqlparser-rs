@@ -1,4 +1,4 @@
-use super::SQLIdent;
+use super::{SQLIdent, SQLObjectName};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum AlterOperation {
@@ -30,7 +30,7 @@ pub enum TableKey {
     Key(Key),
     ForeignKey {
         key: Key,
-        foreign_table: String,
+        foreign_table: SQLObjectName,
         referred_columns: Vec<SQLIdent>,
     },
 }
@@ -53,7 +53,7 @@ impl ToString for TableKey {
                 "{} FOREIGN KEY ({}) REFERENCES {}({})",
                 key.name,
                 key.columns.join(", "),
-                foreign_table,
+                foreign_table.to_string(),
                 referred_columns.join(", ")
             ),
         }

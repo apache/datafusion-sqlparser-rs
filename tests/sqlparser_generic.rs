@@ -364,7 +364,7 @@ fn parse_create_table() {
     );
     match ast {
         SQLStatement::SQLCreateTable { name, columns } => {
-            assert_eq!("uk_cities", name);
+            assert_eq!("uk_cities", name.to_string());
             assert_eq!(3, columns.len());
 
             let c_name = &columns[0];

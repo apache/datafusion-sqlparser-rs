@@ -545,7 +545,7 @@ impl Parser {
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<SQLStatement, ParserError> {
         if self.parse_keywords(vec!["TABLE"]) {
-            let table_name = self.parse_tablename()?;
+            let table_name = self.parse_object_name()?;
             // parse optional column list (schema)
             let mut columns = vec![];
             if self.consume_token(&Token::LParen) {
@@ -639,7 +639,7 @@ impl Parser {
             Ok(TableKey::UniqueKey(key))
         } else if is_foreign_key {
             self.expect_keyword("REFERENCES")?;
-            let foreign_table = self.parse_tablename()?;
+            let foreign_table = self.parse_object_name()?;
             self.expect_token(&Token::LParen)?;
             let referred_columns = self.parse_column_names()?;
             self.expect_token(&Token::RParen)?;
@@ -659,7 +659,7 @@ impl Parser {
     pub fn parse_alter(&mut self) -> Result<SQLStatement, ParserError> {
         self.expect_keyword("TABLE")?;
         let _ = self.parse_keyword("ONLY");
-        let table_name = self.parse_tablename()?;
+        let table_name = self.parse_object_name()?;
         let operation: Result<AlterOperation, ParserError> =
             if self.parse_keywords(vec!["ADD", "CONSTRAINT"]) {
                 match self.next_token() {
@@ -688,7 +688,7 @@ impl Parser {
 
     /// Parse a copy statement
     pub fn parse_copy(&mut self) -> Result<SQLStatement, ParserError> {
-        let table_name = self.parse_tablename()?;
+        let table_name = self.parse_object_name()?;
         let columns = if self.consume_token(&Token::LParen) {
             let column_names = self.parse_column_names()?;
             self.expect_token(&Token::RParen)?;
@@ -986,7 +986,7 @@ impl Parser {
                 }
                 _ => {
                     self.prev_token();
-                    let type_name = self.parse_tablename()?; // TODO: this actually reads a possibly schema-qualified name of a (custom) type
+                    let type_name = self.parse_object_name()?;
                     Ok(SQLType::Custom(type_name))
                 }
             },
@@ -1060,7 +1060,9 @@ impl Parser {
         }
     }
 
-    pub fn parse_tablename(&mut self) -> Result<SQLObjectName, ParserError> {
+    /// Parse a possibly qualified, possibly quoted identifier, e.g.
+    /// `foo` or `myschema."table"`
+    pub fn parse_object_name(&mut self) -> Result<SQLObjectName, ParserError> {
         let identifier = self.parse_compound_identifier(&Token::Period)?;
         match identifier {
             // TODO: should store the compound identifier itself
@@ -1323,7 +1325,7 @@ impl Parser {
     /// Parse an INSERT statement
     pub fn parse_insert(&mut self) -> Result<SQLStatement, ParserError> {
         self.expect_keyword("INTO")?;
-        let table_name = self.parse_tablename()?;
+        let table_name = self.parse_object_name()?;
         let columns = if self.consume_token(&Token::LParen) {
             let column_names = self.parse_column_names()?;
             self.expect_token(&Token::RParen)?;

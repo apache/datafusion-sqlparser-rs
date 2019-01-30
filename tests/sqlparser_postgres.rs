@@ -99,14 +99,14 @@ fn parse_complex_insert() {
 #[test]
 fn parse_invalid_table_name() {
     let mut parser = parser("db.public..customer");
-    let ast = parser.parse_tablename();
+    let ast = parser.parse_object_name();
     assert!(ast.is_err());
 }
 
 #[test]
 fn parse_no_table_name() {
     let mut parser = parser("");
-    let ast = parser.parse_tablename();
+    let ast = parser.parse_object_name();
     assert!(ast.is_err());
 }
 

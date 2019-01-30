@@ -27,7 +27,7 @@ pub use self::value::Value;
 
 pub use self::sql_operator::SQLOperator;
 
-// This could be enhanced to remember the way the identifier was quoted
+/// Identifier name, in the originally quoted form (e.g. `"id"`)
 pub type SQLIdent = String;
 
 /// SQL Abstract Syntax Tree (AST)
@@ -64,7 +64,8 @@ pub enum ASTNode {
     /// SQLValue
     SQLValue(Value),
     /// Scalar function call e.g. `LEFT(foo, 5)`
-    SQLFunction { id: String, args: Vec<ASTNode> },
+    /// TODO: this can be a compound SQLObjectName as well (for UDFs)
+    SQLFunction { id: SQLIdent, args: Vec<ASTNode> },
     /// CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END
     SQLCase {
         // TODO: support optional operand for "simple case"
@@ -317,7 +318,7 @@ impl ToString for SQLObjectName {
 /// SQL assignment `foo = expr` as used in SQLUpdate
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLAssignment {
-    id: String,
+    id: SQLIdent,
     value: Box<ASTNode>,
 }
 

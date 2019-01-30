@@ -428,6 +428,34 @@ fn parse_select_version() {
 }
 
 #[test]
+fn parse_delimited_identifiers() {
+    // check that quoted identifiers in any position remain quoted after serialization
+    let sql = r#"SELECT "alias"."bar baz", "myfun"(), "simple id" FROM "a table" AS "alias""#;
+    let select = verified_only_select(sql);
+    // check SELECT
+    assert_eq!(3, select.projection.len());
+    assert_eq!(
+        &ASTNode::SQLCompoundIdentifier(vec![r#""alias""#.to_string(), r#""bar baz""#.to_string()]),
+        expr_from_projection(&select.projection[0]),
+    );
+    assert_eq!(
+        &ASTNode::SQLFunction {
+            id: r#""myfun""#.to_string(),
+            args: vec![]
+        },
+        expr_from_projection(&select.projection[1]),
+    );
+    assert_eq!(
+        &ASTNode::SQLIdentifier(r#""simple id""#.to_string()),
+        expr_from_projection(&select.projection[2]),
+    );
+
+    verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
+    verified_stmt(r#"ALTER TABLE foo ADD CONSTRAINT "bar" PRIMARY KEY (baz)"#);
+    //TODO verified_stmt(r#"UPDATE foo SET "bar" = 5"#);
+}
+
+#[test]
 fn parse_parens() {
     use self::ASTNode::*;
     use self::SQLOperator::*;

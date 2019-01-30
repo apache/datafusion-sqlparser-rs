@@ -172,12 +172,12 @@ impl Parser {
                         })
                     }
                     _ => match self.peek_token() {
-                        Some(Token::LParen) => self.parse_function(&w.value),
+                        Some(Token::LParen) => self.parse_function(w.as_sql_ident()),
                         Some(Token::Period) => {
-                            let mut id_parts: Vec<String> = vec![w.value];
+                            let mut id_parts: Vec<SQLIdent> = vec![w.as_sql_ident()];
                             while self.consume_token(&Token::Period) {
                                 match self.next_token() {
-                                    Some(Token::SQLWord(w)) => id_parts.push(w.value),
+                                    Some(Token::SQLWord(w)) => id_parts.push(w.as_sql_ident()),
                                     _ => {
                                         return parser_err!(format!(
                                             "Error parsing compound identifier"
@@ -187,7 +187,7 @@ impl Parser {
                             }
                             Ok(ASTNode::SQLCompoundIdentifier(id_parts))
                         }
-                        _ => Ok(ASTNode::SQLIdentifier(w.value)),
+                        _ => Ok(ASTNode::SQLIdentifier(w.as_sql_ident())),
                     },
                 },
                 Token::Mult => Ok(ASTNode::SQLWildcard),
@@ -213,20 +213,17 @@ impl Parser {
         }
     }
 
-    pub fn parse_function(&mut self, id: &str) -> Result<ASTNode, ParserError> {
+    pub fn parse_function(&mut self, id: SQLIdent) -> Result<ASTNode, ParserError> {
         self.expect_token(&Token::LParen)?;
         if self.consume_token(&Token::RParen) {
             Ok(ASTNode::SQLFunction {
-                id: id.to_string(),
+                id: id,
                 args: vec![],
             })
         } else {
             let args = self.parse_expr_list()?;
             self.expect_token(&Token::RParen)?;
-            Ok(ASTNode::SQLFunction {
-                id: id.to_string(),
-                args,
-            })
+            Ok(ASTNode::SQLFunction { id, args })
         }
     }
 
@@ -573,7 +570,7 @@ impl Parser {
                                 Some(Token::Comma) => {
                                     self.next_token();
                                     columns.push(SQLColumnDef {
-                                        name: column_name.value,
+                                        name: column_name.as_sql_ident(),
                                         data_type: data_type,
                                         allow_null,
                                         is_primary,
@@ -584,7 +581,7 @@ impl Parser {
                                 Some(Token::RParen) => {
                                     self.next_token();
                                     columns.push(SQLColumnDef {
-                                        name: column_name.value,
+                                        name: column_name.as_sql_ident(),
                                         data_type: data_type,
                                         allow_null,
                                         is_primary,
@@ -622,7 +619,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_table_key(&mut self, constraint_name: &str) -> Result<TableKey, ParserError> {
+    pub fn parse_table_key(&mut self, constraint_name: SQLIdent) -> Result<TableKey, ParserError> {
         let is_primary_key = self.parse_keywords(vec!["PRIMARY", "KEY"]);
         let is_unique_key = self.parse_keywords(vec!["UNIQUE", "KEY"]);
         let is_foreign_key = self.parse_keywords(vec!["FOREIGN", "KEY"]);
@@ -630,7 +627,7 @@ impl Parser {
         let column_names = self.parse_column_names()?;
         self.expect_token(&Token::RParen)?;
         let key = Key {
-            name: constraint_name.to_string(),
+            name: constraint_name,
             columns: column_names,
         };
         if is_primary_key {
@@ -664,7 +661,7 @@ impl Parser {
             if self.parse_keywords(vec!["ADD", "CONSTRAINT"]) {
                 match self.next_token() {
                     Some(Token::SQLWord(ref id)) => {
-                        let table_key = self.parse_table_key(&id.value)?;
+                        let table_key = self.parse_table_key(id.as_sql_ident())?;
                         Ok(AlterOperation::AddConstraint(table_key))
                     }
                     _ => {
@@ -1012,8 +1009,7 @@ impl Parser {
             Some(Token::SQLWord(ref w))
                 if after_as || !reserved_kwds.contains(&w.keyword.as_str()) =>
             {
-                // have to clone here until #![feature(bind_by_move_pattern_guards)] is enabled by default
-                Ok(Some(w.value.clone()))
+                Ok(Some(w.as_sql_ident()))
             }
             ref not_an_ident if after_as => parser_err!(format!(
                 "Expected an identifier after AS, got {:?}",
@@ -1036,7 +1032,7 @@ impl Parser {
             match token {
                 Some(Token::SQLWord(s)) if expect_identifier => {
                     expect_identifier = false;
-                    idents.push(s.to_string());
+                    idents.push(s.as_sql_ident());
                 }
                 Some(token) if token == separator && !expect_identifier => {
                     expect_identifier = true;
@@ -1384,5 +1380,11 @@ impl Parser {
             self.parse_literal_int()
                 .map(|n| Some(Box::new(ASTNode::SQLValue(Value::Long(n)))))
         }
+    }
+}
+
+impl SQLWord {
+    pub fn as_sql_ident(&self) -> SQLIdent {
+        self.to_string()
     }
 }

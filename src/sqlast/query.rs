@@ -134,7 +134,7 @@ pub enum JoinOperator {
 #[derive(Debug, Clone, PartialEq)]
 pub enum JoinConstraint {
     On(ASTNode),
-    Using(Vec<String>),
+    Using(Vec<SQLIdent>),
     Natural,
 }
 

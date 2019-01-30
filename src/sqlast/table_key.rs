@@ -3,7 +3,7 @@ use super::{SQLIdent, SQLObjectName};
 #[derive(Debug, PartialEq, Clone)]
 pub enum AlterOperation {
     AddConstraint(TableKey),
-    RemoveConstraint { name: String },
+    RemoveConstraint { name: SQLIdent },
 }
 
 impl ToString for AlterOperation {

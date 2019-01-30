@@ -77,8 +77,9 @@ pub enum ASTNode {
         relation: Box<ASTNode>, // SQLNested or SQLCompoundIdentifier
         alias: Option<SQLIdent>,
     },
-    /// SELECT
-    SQLSelect(SQLSelect),
+    /// A parenthesized subquery `(SELECT ...)`, used in expression like
+    /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
+    SQLSubquery(SQLSelect),
 }
 
 impl ToString for ASTNode {
@@ -139,7 +140,7 @@ impl ToString for ASTNode {
                     relation.to_string()
                 }
             }
-            ASTNode::SQLSelect(s) => s.to_string(),
+            ASTNode::SQLSubquery(s) => format!("({})", s.to_string()),
         }
     }
 }

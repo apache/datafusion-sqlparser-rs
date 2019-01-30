@@ -4,25 +4,16 @@ extern crate sqlparser;
 use sqlparser::dialect::AnsiSqlDialect;
 use sqlparser::sqlast::*;
 use sqlparser::sqlparser::*;
-use sqlparser::sqltokenizer::*;
 
 #[test]
 fn parse_simple_select() {
     let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1");
-    let ast = parse_sql_expr(&sql);
-    match ast {
-        ASTNode::SQLSelect(SQLSelect { projection, .. }) => {
+    let ast = Parser::parse_sql(&AnsiSqlDialect {}, sql).unwrap();
+    assert_eq!(1, ast.len());
+    match ast.first().unwrap() {
+        SQLStatement::SQLSelect(SQLSelect { projection, .. }) => {
             assert_eq!(3, projection.len());
         }
         _ => assert!(false),
     }
-}
-
-fn parse_sql_expr(sql: &str) -> ASTNode {
-    let dialect = AnsiSqlDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, &sql);
-    let tokens = tokenizer.tokenize().unwrap();
-    let mut parser = Parser::new(tokens);
-    let ast = parser.parse_expr().unwrap();
-    ast
 }

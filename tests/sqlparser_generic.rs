@@ -665,6 +665,13 @@ fn parse_join_syntax_variants() {
 }
 
 #[test]
+fn parse_derived_tables() {
+    let sql = "SELECT a.x, b.y FROM (SELECT x FROM foo) AS a CROSS JOIN (SELECT y FROM bar) AS b";
+    let _ = verified_only_select(sql);
+    //TODO: add assertions
+}
+
+#[test]
 fn parse_multiple_statements() {
     fn test_with(sql1: &str, sql2_kw: &str, sql2_rest: &str) {
         // Check that a string consisting of two statements delimited by a semicolon
@@ -693,6 +700,29 @@ fn parse_multiple_statements() {
     // Make sure that empty statements do not cause an error:
     let res = parse_sql_statements(";;");
     assert_eq!(0, res.unwrap().len());
+}
+
+#[test]
+fn parse_scalar_subqueries() {
+    use self::ASTNode::*;
+    let sql = "(SELECT 1) + (SELECT 2)";
+    match verified_expr(sql) {
+        SQLBinaryExpr {
+            op: SQLOperator::Plus, ..
+            //left: box SQLSubquery { .. },
+            //right: box SQLSubquery { .. },
+        } => assert!(true),
+        _ => assert!(false),
+    };
+}
+
+#[test]
+fn parse_invalid_subquery_without_parens() {
+    let res = parse_sql_statements("SELECT SELECT 1 FROM bar WHERE 1=1 FROM baz");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: 1".to_string()),
+        res.unwrap_err()
+    );
 }
 
 fn only<'a, T>(v: &'a Vec<T>) -> &'a T {

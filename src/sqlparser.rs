@@ -158,7 +158,6 @@ impl Parser {
         match self.next_token() {
             Some(t) => match t {
                 Token::SQLWord(w) => match w.keyword.as_ref() {
-                    "SELECT" => Ok(ASTNode::SQLSelect(self.parse_select()?)),
                     "TRUE" | "FALSE" | "NULL" => {
                         self.prev_token();
                         self.parse_sql_value()
@@ -197,9 +196,13 @@ impl Parser {
                     self.parse_sql_value()
                 }
                 Token::LParen => {
-                    let expr = self.parse_expr()?;
+                    let expr = if self.parse_keyword("SELECT") {
+                        ASTNode::SQLSubquery(self.parse_select()?)
+                    } else {
+                        ASTNode::SQLNested(Box::new(self.parse_expr()?))
+                    };
                     self.expect_token(&Token::RParen)?;
-                    Ok(ASTNode::SQLNested(Box::new(expr)))
+                    Ok(expr)
                 }
                 _ => parser_err!(format!(
                     "Prefix parser expected a keyword but found {:?}",
@@ -1184,8 +1187,10 @@ impl Parser {
     /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
     pub fn parse_table_factor(&mut self) -> Result<ASTNode, ParserError> {
         let relation = if self.consume_token(&Token::LParen) {
-            self.prev_token();
-            self.parse_subexpr(0)? /* TBD (3) */
+            self.expect_keyword("SELECT")?;
+            let subquery = self.parse_select()?;
+            self.expect_token(&Token::RParen)?;
+            ASTNode::SQLSubquery(subquery)
         } else {
             self.parse_compound_identifier(&Token::Period)?
         };

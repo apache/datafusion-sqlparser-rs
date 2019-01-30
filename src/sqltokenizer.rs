@@ -21,6 +21,7 @@
 use std::iter::Peekable;
 use std::str::Chars;
 
+use super::dialect::keywords::ALL_KEYWORDS;
 use super::dialect::Dialect;
 
 /// SQL Token enumeration
@@ -124,17 +125,22 @@ impl ToString for Token {
 
 impl Token {
     pub fn make_keyword(keyword: &str) -> Self {
-        Token::SQLWord(SQLWord {
-            value: keyword.to_string(),
-            quote_style: None,
-            keyword: keyword.to_uppercase().to_string(),
-        })
+        Token::make_word(keyword, None)
     }
     pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
+        let word_uppercase = word.to_uppercase();
+        //TODO: need to reintroduce FnvHashSet at some point .. iterating over keywords is
+        // not fast but I want the simplicity for now while I experiment with pluggable
+        // dialects
+        let is_keyword = quote_style == None && ALL_KEYWORDS.contains(&word_uppercase.as_str());
         Token::SQLWord(SQLWord {
             value: word.to_string(),
             quote_style: quote_style,
-            keyword: "".to_string(),
+            keyword: if is_keyword {
+                word_uppercase.to_string()
+            } else {
+                "".to_string()
+            },
         })
     }
 }
@@ -205,13 +211,6 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn is_keyword(&self, s: &str) -> bool {
-        //TODO: need to reintroduce FnvHashSet at some point .. iterating over keywords is
-        // not fast but I want the simplicity for now while I experiment with pluggable
-        // dialects
-        return self.dialect.keywords().contains(&s);
-    }
-
     /// Tokenize the statement and produce a vector of tokens
     pub fn tokenize(&mut self) -> Result<Vec<Token>, TokenizerError> {
         let mut peekable = self.query.chars().peekable();
@@ -268,16 +267,7 @@ impl<'a> Tokenizer<'a> {
                             break;
                         }
                     }
-                    let upper_str = s.to_uppercase();
-                    if self.is_keyword(upper_str.as_str()) {
-                        Ok(Some(Token::SQLWord(SQLWord {
-                            value: s,
-                            quote_style: None,
-                            keyword: upper_str,
-                        })))
-                    } else {
-                        Ok(Some(Token::make_word(&s, None)))
-                    }
+                    Ok(Some(Token::make_word(&s, None)))
                 }
                 // string
                 '\'' => {

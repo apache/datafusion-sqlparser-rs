@@ -194,9 +194,9 @@ impl Parser {
                     self.parse_sql_value()
                 }
                 Token::LParen => {
-                    let expr = self.parse_expr(); // TBD (1)
+                    let expr = self.parse_expr()?;
                     self.expect_token(&Token::RParen)?;
-                    expr
+                    Ok(ASTNode::SQLNested(Box::new(expr)))
                 }
                 _ => parser_err!(format!(
                     "Prefix parser expected a keyword but found {:?}",

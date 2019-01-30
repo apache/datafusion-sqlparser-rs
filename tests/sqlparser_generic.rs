@@ -420,22 +420,21 @@ fn parse_parens() {
     use self::ASTNode::*;
     use self::SQLOperator::*;
     let sql = "(a + b) - (c + d)";
-    let ast = parse_sql_expr(&sql);
     assert_eq!(
         SQLBinaryExpr {
-            left: Box::new(SQLBinaryExpr {
+            left: Box::new(SQLNested(Box::new(SQLBinaryExpr {
                 left: Box::new(SQLIdentifier("a".to_string())),
                 op: Plus,
                 right: Box::new(SQLIdentifier("b".to_string()))
-            }),
+            }))),
             op: Minus,
-            right: Box::new(SQLBinaryExpr {
+            right: Box::new(SQLNested(Box::new(SQLBinaryExpr {
                 left: Box::new(SQLIdentifier("c".to_string())),
                 op: Plus,
                 right: Box::new(SQLIdentifier("d".to_string()))
-            })
+            })))
         },
-        ast
+        verified_expr(sql)
     );
 }
 

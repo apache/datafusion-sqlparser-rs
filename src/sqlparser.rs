@@ -165,10 +165,13 @@ impl Parser {
                     }
                     "CASE" => self.parse_case_expression(),
                     "CAST" => self.parse_cast_expression(),
-                    "NOT" => Ok(ASTNode::SQLUnary {
-                        operator: SQLOperator::Not,
-                        expr: Box::new(self.parse_subexpr(0)?), // TBD (2)
-                    }),
+                    "NOT" => {
+                        let p = self.get_precedence(&Token::make_keyword("NOT"))?;
+                        Ok(ASTNode::SQLUnary {
+                            operator: SQLOperator::Not,
+                            expr: Box::new(self.parse_subexpr(p)?),
+                        })
+                    }
                     _ => match self.peek_token() {
                         Some(Token::LParen) => self.parse_function(&w.value),
                         Some(Token::Period) => {
@@ -371,7 +374,7 @@ impl Parser {
             &Token::SQLWord(ref k) if k.keyword == "OR" => Ok(5),
             &Token::SQLWord(ref k) if k.keyword == "AND" => Ok(10),
             &Token::SQLWord(ref k) if k.keyword == "NOT" => Ok(15),
-            &Token::SQLWord(ref k) if k.keyword == "IS" => Ok(15),
+            &Token::SQLWord(ref k) if k.keyword == "IS" => Ok(17),
             &Token::SQLWord(ref k) if k.keyword == "LIKE" => Ok(20),
             &Token::Eq | &Token::Lt | &Token::LtEq | &Token::Neq | &Token::Gt | &Token::GtEq => {
                 Ok(20)

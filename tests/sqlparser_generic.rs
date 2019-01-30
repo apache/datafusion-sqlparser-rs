@@ -183,6 +183,30 @@ fn parse_is_not_null() {
 }
 
 #[test]
+fn parse_not_precedence() {
+    use self::ASTNode::*;
+    // NOT has higher precedence than OR/AND, so the following must parse as (NOT true) OR true
+    let sql = "NOT true OR true";
+    match verified_expr(sql) {
+        SQLBinaryExpr {
+            op: SQLOperator::Or,
+            ..
+        } => assert!(true),
+        _ => assert!(false),
+    };
+
+    // But NOT has lower precedence than comparison operators, so the following parses as NOT (a IS NULL)
+    let sql = "NOT a IS NULL";
+    match verified_expr(sql) {
+        SQLUnary {
+            operator: SQLOperator::Not,
+            ..
+        } => assert!(true),
+        _ => assert!(false),
+    };
+}
+
+#[test]
 fn parse_like() {
     let sql = String::from("SELECT * FROM customers WHERE name LIKE '%a'");
     match verified_stmt(&sql) {

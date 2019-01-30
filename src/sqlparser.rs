@@ -1201,17 +1201,7 @@ impl Parser {
             Ok(JoinConstraint::On(constraint))
         } else if self.parse_keyword("USING") {
             self.expect_token(&Token::LParen)?;
-            let attributes = self
-                .parse_expr_list()?
-                .into_iter()
-                .map(|ast_node| match ast_node {
-                    ASTNode::SQLIdentifier(ident) => Ok(ident),
-                    unexpected => {
-                        parser_err!(format!("Expected identifier, found {:?}", unexpected))
-                    }
-                })
-                .collect::<Result<Vec<String>, ParserError>>()?;
-
+            let attributes = self.parse_column_names()?;
             self.expect_token(&Token::RParen)?;
             Ok(JoinConstraint::Using(attributes))
         } else {

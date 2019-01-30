@@ -1028,7 +1028,7 @@ impl Parser {
     }
 
     /// Parse one or more identifiers with the specified separator between them
-    pub fn parse_compound_identifier(&mut self, separator: &Token) -> Result<ASTNode, ParserError> {
+    pub fn parse_list_of_ids(&mut self, separator: &Token) -> Result<Vec<SQLIdent>, ParserError> {
         let mut idents = vec![];
         let mut expect_identifier = true;
         loop {
@@ -1056,27 +1056,19 @@ impl Parser {
                 self.peek_token()
             ))
         } else {
-            Ok(ASTNode::SQLCompoundIdentifier(idents))
+            Ok(idents)
         }
     }
 
     /// Parse a possibly qualified, possibly quoted identifier, e.g.
     /// `foo` or `myschema."table"`
     pub fn parse_object_name(&mut self) -> Result<SQLObjectName, ParserError> {
-        let identifier = self.parse_compound_identifier(&Token::Period)?;
-        match identifier {
-            // TODO: should store the compound identifier itself
-            ASTNode::SQLCompoundIdentifier(idents) => Ok(SQLObjectName(idents)),
-            other => parser_err!(format!("Expecting compound identifier, found: {:?}", other)),
-        }
+        Ok(SQLObjectName(self.parse_list_of_ids(&Token::Period)?))
     }
 
+    /// Parse a comma-separated list of unqualified, possibly quoted identifiers
     pub fn parse_column_names(&mut self) -> Result<Vec<SQLIdent>, ParserError> {
-        let identifier = self.parse_compound_identifier(&Token::Comma)?;
-        match identifier {
-            ASTNode::SQLCompoundIdentifier(idents) => Ok(idents),
-            other => parser_err!(format!("Expecting compound identifier, found: {:?}", other)),
-        }
+        Ok(self.parse_list_of_ids(&Token::Comma)?)
     }
 
     pub fn parse_precision(&mut self) -> Result<usize, ParserError> {
@@ -1194,7 +1186,7 @@ impl Parser {
             self.expect_token(&Token::RParen)?;
             ASTNode::SQLSubquery(subquery)
         } else {
-            self.parse_compound_identifier(&Token::Period)?
+            ASTNode::SQLCompoundIdentifier(self.parse_object_name()?.0)
         };
         let alias = self.parse_optional_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
         Ok(ASTNode::TableFactor {

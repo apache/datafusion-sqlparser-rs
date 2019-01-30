@@ -21,3 +21,6 @@ path = "src/lib.rs"
 log = "0.4.5"
 chrono = "0.4.6"
 uuid = "0.7.1"
+
+[dev-dependencies]
+simple_logger = "1.0.1"

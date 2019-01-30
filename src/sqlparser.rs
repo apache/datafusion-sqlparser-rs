@@ -1105,12 +1105,8 @@ impl Parser {
     }
 
     pub fn parse_delete(&mut self) -> Result<SQLStatement, ParserError> {
-        let relation: Option<Box<ASTNode>> = if self.parse_keyword("FROM") {
-            Some(Box::new(self.parse_subexpr(0)?)) /* TBD (4) */
-        } else {
-            None
-        };
-
+        self.expect_keyword("FROM")?;
+        let table_name = self.parse_object_name()?;
         let selection = if self.parse_keyword("WHERE") {
             Some(Box::new(self.parse_expr()?))
         } else {
@@ -1118,7 +1114,7 @@ impl Parser {
         };
 
         Ok(SQLStatement::SQLDelete {
-            relation,
+            table_name,
             selection,
         })
     }

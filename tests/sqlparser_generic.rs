@@ -8,16 +8,10 @@ use sqlparser::sqltokenizer::*;
 
 #[test]
 fn parse_delete_statement() {
-    let sql: &str = "DELETE FROM 'table'";
-
-    match verified_stmt(&sql) {
-        SQLStatement::SQLDelete { relation, .. } => {
-            assert_eq!(
-                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
-                    "table".to_string()
-                )))),
-                relation
-            );
+    let sql = "DELETE FROM \"table\"";
+    match verified_stmt(sql) {
+        SQLStatement::SQLDelete { table_name, .. } => {
+            assert_eq!(SQLObjectName(vec!["\"table\"".to_string()]), table_name);
         }
 
         _ => assert!(false),
@@ -26,23 +20,17 @@ fn parse_delete_statement() {
 
 #[test]
 fn parse_where_delete_statement() {
-    let sql: &str = "DELETE FROM 'table' WHERE name = 5";
-
     use self::ASTNode::*;
     use self::SQLOperator::*;
 
-    match verified_stmt(&sql) {
+    let sql = "DELETE FROM foo WHERE name = 5";
+    match verified_stmt(sql) {
         SQLStatement::SQLDelete {
-            relation,
+            table_name,
             selection,
             ..
         } => {
-            assert_eq!(
-                Some(Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
-                    "table".to_string()
-                )))),
-                relation
-            );
+            assert_eq!(SQLObjectName(vec!["foo".to_string()]), table_name);
 
             assert_eq!(
                 SQLBinaryExpr {

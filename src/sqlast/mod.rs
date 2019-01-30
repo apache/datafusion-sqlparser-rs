@@ -179,7 +179,7 @@ pub enum SQLStatement {
     /// DELETE
     SQLDelete {
         /// FROM
-        relation: Option<Box<ASTNode>>,
+        table_name: SQLObjectName,
         /// WHERE
         selection: Option<Box<ASTNode>>,
     },
@@ -279,13 +279,10 @@ impl ToString for SQLStatement {
                 s
             }
             SQLStatement::SQLDelete {
-                relation,
+                table_name,
                 selection,
             } => {
-                let mut s = String::from("DELETE");
-                if let Some(relation) = relation {
-                    s += &format!(" FROM {}", relation.as_ref().to_string());
-                }
+                let mut s = format!("DELETE FROM {}", table_name.to_string());
                 if let Some(selection) = selection {
                     s += &format!(" WHERE {}", selection.as_ref().to_string());
                 }

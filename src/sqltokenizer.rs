@@ -163,10 +163,21 @@ pub struct SQLWord {
 impl ToString for SQLWord {
     fn to_string(&self) -> String {
         match self.quote_style {
-            Some('"') => format!("\"{}\"", self.value),
-            Some('[') => format!("[{}]", self.value),
+            Some(s) if s == '"' || s == '[' || s == '`' => {
+                format!("{}{}{}", s, self.value, SQLWord::matching_end_quote(s))
+            }
             None => self.value.clone(),
             _ => panic!("Unexpected quote_style!"),
+        }
+    }
+}
+impl SQLWord {
+    fn matching_end_quote(ch: char) -> char {
+        match ch {
+            '"' => '"', // ANSI and most dialects
+            '[' => ']', // MS SQL
+            '`' => '`', // MySQL
+            _ => panic!("unexpected quoting style!"),
         }
     }
 }
@@ -291,12 +302,13 @@ impl<'a> Tokenizer<'a> {
                     Ok(Some(Token::SingleQuotedString(s)))
                 }
                 // delimited (quoted) identifier
-                '"' => {
+                quote_start if self.dialect.is_delimited_identifier_start(quote_start) => {
                     let mut s = String::new();
-                    let quote_start = chars.next().unwrap(); // consumes the opening quote
+                    chars.next(); // consume the opening quote
+                    let quote_end = SQLWord::matching_end_quote(quote_start);
                     while let Some(ch) = chars.next() {
                         match ch {
-                            '"' => break,
+                            c if c == quote_end => break,
                             _ => s.push(ch),
                         }
                     }

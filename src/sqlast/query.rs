@@ -6,18 +6,18 @@ pub struct SQLSelect {
     pub projection: Vec<ASTNode>,
     /// FROM
     pub relation: Option<TableFactor>,
-    // JOIN
+    /// JOIN
     pub joins: Vec<Join>,
     /// WHERE
-    pub selection: Option<Box<ASTNode>>,
+    pub selection: Option<ASTNode>,
     /// ORDER BY
     pub order_by: Option<Vec<SQLOrderByExpr>>,
     /// GROUP BY
     pub group_by: Option<Vec<ASTNode>>,
     /// HAVING
-    pub having: Option<Box<ASTNode>>,
+    pub having: Option<ASTNode>,
     /// LIMIT
-    pub limit: Option<Box<ASTNode>>,
+    pub limit: Option<ASTNode>,
 }
 
 impl ToString for SQLSelect {
@@ -37,7 +37,7 @@ impl ToString for SQLSelect {
             s += &join.to_string();
         }
         if let Some(ref selection) = self.selection {
-            s += &format!(" WHERE {}", selection.as_ref().to_string());
+            s += &format!(" WHERE {}", selection.to_string());
         }
         if let Some(ref group_by) = self.group_by {
             s += &format!(
@@ -50,7 +50,7 @@ impl ToString for SQLSelect {
             );
         }
         if let Some(ref having) = self.having {
-            s += &format!(" HAVING {}", having.as_ref().to_string());
+            s += &format!(" HAVING {}", having.to_string());
         }
         if let Some(ref order_by) = self.order_by {
             s += &format!(
@@ -63,7 +63,7 @@ impl ToString for SQLSelect {
             );
         }
         if let Some(ref limit) = self.limit {
-            s += &format!(" LIMIT {}", limit.as_ref().to_string());
+            s += &format!(" LIMIT {}", limit.to_string());
         }
         s
     }

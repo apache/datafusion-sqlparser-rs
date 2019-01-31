@@ -197,7 +197,7 @@ impl Parser {
                 }
                 Token::LParen => {
                     let expr = if self.parse_keyword("SELECT") {
-                        ASTNode::SQLSubquery(self.parse_select()?)
+                        ASTNode::SQLSubquery(Box::new(self.parse_select()?))
                     } else {
                         ASTNode::SQLNested(Box::new(self.parse_expr()?))
                     };
@@ -1129,7 +1129,7 @@ impl Parser {
 
         let selection = if self.parse_keyword("WHERE") {
             let expr = self.parse_expr()?;
-            Some(Box::new(expr))
+            Some(expr)
         } else {
             None
         };
@@ -1141,7 +1141,7 @@ impl Parser {
         };
 
         let having = if self.parse_keyword("HAVING") {
-            Some(Box::new(self.parse_expr()?))
+            Some(self.parse_expr()?)
         } else {
             None
         };
@@ -1374,12 +1374,12 @@ impl Parser {
     }
 
     /// Parse a LIMIT clause
-    pub fn parse_limit(&mut self) -> Result<Option<Box<ASTNode>>, ParserError> {
+    pub fn parse_limit(&mut self) -> Result<Option<ASTNode>, ParserError> {
         if self.parse_keyword("ALL") {
             Ok(None)
         } else {
             self.parse_literal_int()
-                .map(|n| Some(Box::new(ASTNode::SQLValue(Value::Long(n)))))
+                .map(|n| Some(ASTNode::SQLValue(Value::Long(n))))
         }
     }
 }

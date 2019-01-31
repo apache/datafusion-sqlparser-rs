@@ -54,7 +54,7 @@ fn parse_simple_select() {
             projection, limit, ..
         }) => {
             assert_eq!(3, projection.len());
-            assert_eq!(Some(Box::new(ASTNode::SQLValue(Value::Long(5)))), limit);
+            assert_eq!(Some(ASTNode::SQLValue(Value::Long(5))), limit);
         }
         _ => assert!(false),
     }
@@ -207,7 +207,7 @@ fn parse_like() {
                         "%a".to_string()
                     ))),
                 },
-                *selection.unwrap()
+                selection.unwrap()
             );
         }
         _ => assert!(false),
@@ -227,7 +227,7 @@ fn parse_not_like() {
                         "%a".to_string()
                     ))),
                 },
-                *selection.unwrap()
+                selection.unwrap()
             );
         }
         _ => assert!(false),
@@ -287,7 +287,7 @@ fn parse_select_order_by_limit() {
                 ]),
                 order_by
             );
-            assert_eq!(Some(Box::new(ASTNode::SQLValue(Value::Long(2)))), limit);
+            assert_eq!(Some(ASTNode::SQLValue(Value::Long(2))), limit);
         }
         _ => assert!(false),
     }

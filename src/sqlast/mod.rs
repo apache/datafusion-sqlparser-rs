@@ -76,7 +76,7 @@ pub enum ASTNode {
     },
     /// A parenthesized subquery `(SELECT ...)`, used in expression like
     /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
-    SQLSubquery(SQLSelect),
+    SQLSubquery(Box<SQLSelect>),
 }
 
 impl ToString for ASTNode {

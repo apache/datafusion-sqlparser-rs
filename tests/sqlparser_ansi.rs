@@ -9,7 +9,7 @@ use sqlparser::sqltokenizer::*;
 #[test]
 fn parse_simple_select() {
     let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1");
-    let ast = parse_sql(&sql);
+    let ast = parse_sql_expr(&sql);
     match ast {
         ASTNode::SQLSelect(SQLSelect { projection, .. }) => {
             assert_eq!(3, projection.len());
@@ -18,7 +18,7 @@ fn parse_simple_select() {
     }
 }
 
-fn parse_sql(sql: &str) -> ASTNode {
+fn parse_sql_expr(sql: &str) -> ASTNode {
     let dialect = AnsiSqlDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, &sql);
     let tokens = tokenizer.tokenize().unwrap();

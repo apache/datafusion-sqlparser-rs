@@ -24,8 +24,8 @@ fn test_prev_index() {
 #[test]
 fn parse_simple_insert() {
     let sql = String::from("INSERT INTO customer VALUES(1, 2, 3)");
-    match verified(&sql) {
-        ASTNode::SQLInsert {
+    match verified_stmt(&sql) {
+        SQLStatement::SQLInsert {
             table_name,
             columns,
             values,
@@ -49,8 +49,8 @@ fn parse_simple_insert() {
 #[test]
 fn parse_common_insert() {
     let sql = String::from("INSERT INTO public.customer VALUES(1, 2, 3)");
-    match verified(&sql) {
-        ASTNode::SQLInsert {
+    match verified_stmt(&sql) {
+        SQLStatement::SQLInsert {
             table_name,
             columns,
             values,
@@ -74,8 +74,8 @@ fn parse_common_insert() {
 #[test]
 fn parse_complex_insert() {
     let sql = String::from("INSERT INTO db.public.customer VALUES(1, 2, 3)");
-    match verified(&sql) {
-        ASTNode::SQLInsert {
+    match verified_stmt(&sql) {
+        SQLStatement::SQLInsert {
             table_name,
             columns,
             values,
@@ -113,8 +113,8 @@ fn parse_no_table_name() {
 #[test]
 fn parse_insert_with_columns() {
     let sql = String::from("INSERT INTO public.customer (id, name, active) VALUES(1, 2, 3)");
-    match verified(&sql) {
-        ASTNode::SQLInsert {
+    match verified_stmt(&sql) {
+        SQLStatement::SQLInsert {
             table_name,
             columns,
             values,
@@ -141,8 +141,7 @@ fn parse_insert_with_columns() {
 #[test]
 fn parse_insert_invalid() {
     let sql = String::from("INSERT public.customer (id, name, active) VALUES (1, 2, 3)");
-    let mut parser = parser(&sql);
-    match parser.parse() {
+    match Parser::parse_sql(&PostgreSqlDialect {}, sql) {
         Err(_) => {}
         _ => assert!(false),
     }
@@ -163,8 +162,8 @@ fn parse_create_table_with_defaults() {
             last_update timestamp without time zone DEFAULT now() NOT NULL,
             active integer NOT NULL)",
     );
-    match parse_sql(&sql) {
-        ASTNode::SQLCreateTable { name, columns } => {
+    match one_statement_parses_to(&sql, "") {
+        SQLStatement::SQLCreateTable { name, columns } => {
             assert_eq!("public.customer", name);
             assert_eq!(10, columns.len());
 
@@ -204,9 +203,8 @@ fn parse_create_table_from_pg_dump() {
             release_year public.year,
             active integer
         )");
-    let ast = parse_sql(&sql);
-    match ast {
-        ASTNode::SQLCreateTable { name, columns } => {
+    match one_statement_parses_to(&sql, "") {
+        SQLStatement::SQLCreateTable { name, columns } => {
             assert_eq!("public.customer", name);
 
             let c_customer_id = &columns[0];
@@ -259,8 +257,8 @@ fn parse_create_table_with_inherit() {
          use_metric boolean DEFAULT true\
          )",
     );
-    match verified(&sql) {
-        ASTNode::SQLCreateTable { name, columns } => {
+    match verified_stmt(&sql) {
+        SQLStatement::SQLCreateTable { name, columns } => {
             assert_eq!("bazaar.settings", name);
 
             let c_name = &columns[0];
@@ -288,8 +286,8 @@ fn parse_alter_table_constraint_primary_key() {
          ALTER TABLE bazaar.address \
          ADD CONSTRAINT address_pkey PRIMARY KEY (address_id)",
     );
-    match verified(&sql) {
-        ASTNode::SQLAlterTable { name, .. } => {
+    match verified_stmt(&sql) {
+        SQLStatement::SQLAlterTable { name, .. } => {
             assert_eq!(name, "bazaar.address");
         }
         _ => assert!(false),
@@ -301,8 +299,8 @@ fn parse_alter_table_constraint_foreign_key() {
     let sql = String::from("\
     ALTER TABLE public.customer \
         ADD CONSTRAINT customer_address_id_fkey FOREIGN KEY (address_id) REFERENCES public.address(address_id)");
-    match verified(&sql) {
-        ASTNode::SQLAlterTable { name, .. } => {
+    match verified_stmt(&sql) {
+        SQLStatement::SQLAlterTable { name, .. } => {
             assert_eq!(name, "public.customer");
         }
         _ => assert!(false),
@@ -331,7 +329,7 @@ Kwara & Kogi
 PHP	₱ USD $
 \N  Some other value
 \\."#);
-    let ast = parse_sql(&sql);
+    let ast = one_statement_parses_to(&sql, "");
     println!("{:#?}", ast);
     //assert_eq!(sql, ast.to_string());
 }
@@ -339,7 +337,7 @@ PHP	₱ USD $
 #[test]
 fn parse_timestamps_example() {
     let sql = "2016-02-15 09:43:33";
-    let _ = parse_sql(sql);
+    let _ = parse_sql_expr(sql);
     //TODO add assertion
     //assert_eq!(sql, ast.to_string());
 }
@@ -347,7 +345,7 @@ fn parse_timestamps_example() {
 #[test]
 fn parse_timestamps_with_millis_example() {
     let sql = "2017-11-02 19:15:42.308637";
-    let _ = parse_sql(sql);
+    let _ = parse_sql_expr(sql);
     //TODO add assertion
     //assert_eq!(sql, ast.to_string());
 }
@@ -355,24 +353,33 @@ fn parse_timestamps_with_millis_example() {
 #[test]
 fn parse_example_value() {
     let sql = "SARAH.LEWIS@sakilacustomer.org";
-    let ast = parse_sql(sql);
+    let ast = parse_sql_expr(sql);
     assert_eq!(sql, ast.to_string());
 }
 
 #[test]
 fn parse_function_now() {
     let sql = "now()";
-    let ast = parse_sql(sql);
+    let ast = parse_sql_expr(sql);
     assert_eq!(sql, ast.to_string());
 }
 
-fn verified(query: &str) -> ASTNode {
-    let ast = parse_sql(query);
-    assert_eq!(query, &ast.to_string());
-    ast
+fn verified_stmt(query: &str) -> SQLStatement {
+    one_statement_parses_to(query, query)
 }
 
-fn parse_sql(sql: &str) -> ASTNode {
+/// Ensures that `sql` parses as a single statement, optionally checking that
+/// converting AST back to string equals to `canonical` (unless an empty string
+/// is provided).
+fn one_statement_parses_to(sql: &str, canonical: &str) -> SQLStatement {
+    let only_statement = Parser::parse_sql(&PostgreSqlDialect {}, sql.to_string()).unwrap();
+    if !canonical.is_empty() {
+        assert_eq!(canonical, only_statement.to_string())
+    }
+    only_statement
+}
+
+fn parse_sql_expr(sql: &str) -> ASTNode {
     debug!("sql: {}", sql);
     let mut parser = parser(sql);
     let ast = parser.parse().unwrap();

@@ -79,52 +79,6 @@ pub enum ASTNode {
     },
     /// SELECT
     SQLSelect(SQLSelect),
-    /// INSERT
-    SQLInsert {
-        /// TABLE
-        table_name: String,
-        /// COLUMNS
-        columns: Vec<SQLIdent>,
-        /// VALUES (vector of rows to insert)
-        values: Vec<Vec<ASTNode>>,
-    },
-    SQLCopy {
-        /// TABLE
-        table_name: String,
-        /// COLUMNS
-        columns: Vec<SQLIdent>,
-        /// VALUES a vector of values to be copied
-        values: Vec<Option<String>>,
-    },
-    /// UPDATE
-    SQLUpdate {
-        /// TABLE
-        table_name: String,
-        /// Column assignments
-        assignments: Vec<SQLAssignment>,
-        /// WHERE
-        selection: Option<Box<ASTNode>>,
-    },
-    /// DELETE
-    SQLDelete {
-        /// FROM
-        relation: Option<Box<ASTNode>>,
-        /// WHERE
-        selection: Option<Box<ASTNode>>,
-    },
-    /// CREATE TABLE
-    SQLCreateTable {
-        /// Table name
-        name: String,
-        /// Optional schema
-        columns: Vec<SQLColumnDef>,
-    },
-    /// ALTER TABLE
-    SQLAlterTable {
-        /// Table name
-        name: String,
-        operation: AlterOperation,
-    },
 }
 
 impl ToString for ASTNode {
@@ -186,7 +140,68 @@ impl ToString for ASTNode {
                 }
             }
             ASTNode::SQLSelect(s) => s.to_string(),
-            ASTNode::SQLInsert {
+        }
+    }
+}
+
+/// A top-level statement (SELECT, INSERT, CREATE, etc.)
+#[derive(Debug, Clone, PartialEq)]
+pub enum SQLStatement {
+    /// SELECT
+    SQLSelect(SQLSelect),
+    /// INSERT
+    SQLInsert {
+        /// TABLE
+        table_name: String,
+        /// COLUMNS
+        columns: Vec<SQLIdent>,
+        /// VALUES (vector of rows to insert)
+        values: Vec<Vec<ASTNode>>,
+    },
+    SQLCopy {
+        /// TABLE
+        table_name: String,
+        /// COLUMNS
+        columns: Vec<SQLIdent>,
+        /// VALUES a vector of values to be copied
+        values: Vec<Option<String>>,
+    },
+    /// UPDATE
+    SQLUpdate {
+        /// TABLE
+        table_name: String,
+        /// Column assignments
+        assignments: Vec<SQLAssignment>,
+        /// WHERE
+        selection: Option<Box<ASTNode>>,
+    },
+    /// DELETE
+    SQLDelete {
+        /// FROM
+        relation: Option<Box<ASTNode>>,
+        /// WHERE
+        selection: Option<Box<ASTNode>>,
+    },
+    /// CREATE TABLE
+    SQLCreateTable {
+        /// Table name
+        name: String,
+        /// Optional schema
+        columns: Vec<SQLColumnDef>,
+    },
+    /// ALTER TABLE
+    SQLAlterTable {
+        /// Table name
+        name: String,
+        operation: AlterOperation,
+    },
+}
+
+impl ToString for SQLStatement {
+    fn to_string(&self) -> String {
+        match self {
+            SQLStatement::SQLSelect(s) => s.to_string(),
+            SQLStatement::SQLInsert {
                 table_name,
                 columns,
                 values,
@@ -211,7 +226,7 @@ impl ToString for ASTNode {
                 }
                 s
             }
-            ASTNode::SQLCopy {
+            SQLStatement::SQLCopy {
                 table_name,
                 columns,
                 values,
@@ -241,7 +256,7 @@ impl ToString for ASTNode {
                 s += "\n\\.";
                 s
             }
-            ASTNode::SQLUpdate {
+            SQLStatement::SQLUpdate {
                 table_name,
                 assignments,
                 selection,
@@ -262,7 +277,7 @@ impl ToString for ASTNode {
                 }
                 s
             }
-            ASTNode::SQLDelete {
+            SQLStatement::SQLDelete {
                 relation,
                 selection,
             } => {
@@ -275,7 +290,7 @@ impl ToString for ASTNode {
                 }
                 s
             }
-            ASTNode::SQLCreateTable { name, columns } => format!(
+            SQLStatement::SQLCreateTable { name, columns } => format!(
                 "CREATE TABLE {} ({})",
                 name,
                 columns
@@ -284,7 +299,7 @@ impl ToString for ASTNode {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-            ASTNode::SQLAlterTable { name, operation } => {
+            SQLStatement::SQLAlterTable { name, operation } => {
                 format!("ALTER TABLE {} {}", name, operation.to_string())
             }
         }

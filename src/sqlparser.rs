@@ -54,11 +54,36 @@ impl Parser {
     }
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
-    pub fn parse_sql(dialect: &Dialect, sql: String) -> Result<ASTNode, ParserError> {
+    pub fn parse_sql(dialect: &Dialect, sql: String) -> Result<SQLStatement, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, &sql);
         let tokens = tokenizer.tokenize()?;
         let mut parser = Parser::new(tokens);
-        parser.parse()
+        parser.parse_statement()
+    }
+
+    /// Parse a single top-level statement (such as SELECT, INSERT, CREATE, etc.)
+    pub fn parse_statement(&mut self) -> Result<SQLStatement, ParserError> {
+        match self.next_token() {
+            Some(t) => match t {
+                Token::SQLWord(ref w) if w.keyword != "" => match w.keyword.as_ref() {
+                    "SELECT" => Ok(SQLStatement::SQLSelect(self.parse_select()?)),
+                    "CREATE" => Ok(self.parse_create()?),
+                    "DELETE" => Ok(self.parse_delete()?),
+                    "INSERT" => Ok(self.parse_insert()?),
+                    "ALTER" => Ok(self.parse_alter()?),
+                    "COPY" => Ok(self.parse_copy()?),
+                    _ => parser_err!(format!(
+                        "Unexpected keyword {:?} at the beginning of a statement",
+                        w.to_string()
+                    )),
+                },
+                unexpected => parser_err!(format!(
+                    "Unexpected {:?} at the beginning of a statement",
+                    unexpected
+                )),
+            },
+            _ => parser_err!("Unexpected end of file"),
+        }
     }
 
     /// Parse a new expression
@@ -111,12 +136,7 @@ impl Parser {
         match self.next_token() {
             Some(t) => match t {
                 Token::SQLWord(w) => match w.keyword.as_ref() {
-                    "SELECT" => Ok(self.parse_select()?),
-                    "CREATE" => Ok(self.parse_create()?),
-                    "DELETE" => Ok(self.parse_delete()?),
-                    "INSERT" => Ok(self.parse_insert()?),
-                    "ALTER" => Ok(self.parse_alter()?),
-                    "COPY" => Ok(self.parse_copy()?),
+                    "SELECT" => Ok(ASTNode::SQLSelect(self.parse_select()?)),
                     "TRUE" | "FALSE" | "NULL" => {
                         self.prev_token();
                         self.parse_sql_value()
@@ -495,7 +515,7 @@ impl Parser {
     }
 
     /// Parse a SQL CREATE statement
-    pub fn parse_create(&mut self) -> Result<ASTNode, ParserError> {
+    pub fn parse_create(&mut self) -> Result<SQLStatement, ParserError> {
         if self.parse_keywords(vec!["TABLE"]) {
             let table_name = self.parse_tablename()?;
             // parse optional column list (schema)
@@ -562,7 +582,7 @@ impl Parser {
                     }
                 }
             }
-            Ok(ASTNode::SQLCreateTable {
+            Ok(SQLStatement::SQLCreateTable {
                 name: table_name,
                 columns,
             })
@@ -608,7 +628,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_alter(&mut self) -> Result<ASTNode, ParserError> {
+    pub fn parse_alter(&mut self) -> Result<SQLStatement, ParserError> {
         self.expect_keyword("TABLE")?;
         let _ = self.parse_keyword("ONLY");
         let table_name = self.parse_tablename()?;
@@ -632,14 +652,14 @@ impl Parser {
                     self.peek_token()
                 ));
             };
-        Ok(ASTNode::SQLAlterTable {
+        Ok(SQLStatement::SQLAlterTable {
             name: table_name,
             operation: operation?,
         })
     }
 
     /// Parse a copy statement
-    pub fn parse_copy(&mut self) -> Result<ASTNode, ParserError> {
+    pub fn parse_copy(&mut self) -> Result<SQLStatement, ParserError> {
         let table_name = self.parse_tablename()?;
         let columns = if self.consume_token(&Token::LParen) {
             let column_names = self.parse_column_names()?;
@@ -652,7 +672,7 @@ impl Parser {
         self.expect_keyword("STDIN")?;
         self.expect_token(&Token::SemiColon)?;
         let values = self.parse_tsv()?;
-        Ok(ASTNode::SQLCopy {
+        Ok(SQLStatement::SQLCopy {
             table_name,
             columns,
             values,
@@ -1062,7 +1082,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_delete(&mut self) -> Result<ASTNode, ParserError> {
+    pub fn parse_delete(&mut self) -> Result<SQLStatement, ParserError> {
         let relation: Option<Box<ASTNode>> = if self.parse_keyword("FROM") {
             Some(Box::new(self.parse_expr(0)?))
         } else {
@@ -1084,7 +1104,7 @@ impl Parser {
                 next_token
             ))
         } else {
-            Ok(ASTNode::SQLDelete {
+            Ok(SQLStatement::SQLDelete {
                 relation,
                 selection,
             })
@@ -1092,7 +1112,7 @@ impl Parser {
     }
 
     /// Parse a SELECT statement
-    pub fn parse_select(&mut self) -> Result<ASTNode, ParserError> {
+    pub fn parse_select(&mut self) -> Result<SQLSelect, ParserError> {
         let projection = self.parse_expr_list()?;
 
         let (relation, joins): (Option<Box<ASTNode>>, Vec<Join>) = if self.parse_keyword("FROM") {
@@ -1142,7 +1162,7 @@ impl Parser {
                 next_token
             ))
         } else {
-            Ok(ASTNode::SQLSelect(SQLSelect {
+            Ok(SQLSelect {
                 projection,
                 selection,
                 relation,
@@ -1151,7 +1171,7 @@ impl Parser {
                 order_by,
                 group_by,
                 having,
-            }))
+            })
         }
     }
 
@@ -1290,7 +1310,7 @@ impl Parser {
     }
 
     /// Parse an INSERT statement
-    pub fn parse_insert(&mut self) -> Result<ASTNode, ParserError> {
+    pub fn parse_insert(&mut self) -> Result<SQLStatement, ParserError> {
         self.expect_keyword("INTO")?;
         let table_name = self.parse_tablename()?;
         let columns = if self.consume_token(&Token::LParen) {
@@ -1304,7 +1324,7 @@ impl Parser {
         self.expect_token(&Token::LParen)?;
         let values = self.parse_expr_list()?;
         self.expect_token(&Token::RParen)?;
-        Ok(ASTNode::SQLInsert {
+        Ok(SQLStatement::SQLInsert {
             table_name,
             columns,
             values: vec![values],

@@ -242,15 +242,15 @@ fn parse_select_order_by() {
                 assert_eq!(
                     Some(vec![
                         SQLOrderByExpr {
-                            expr: Box::new(ASTNode::SQLIdentifier("lname".to_string())),
+                            expr: ASTNode::SQLIdentifier("lname".to_string()),
                             asc: Some(true),
                         },
                         SQLOrderByExpr {
-                            expr: Box::new(ASTNode::SQLIdentifier("fname".to_string())),
+                            expr: ASTNode::SQLIdentifier("fname".to_string()),
                             asc: Some(false),
                         },
                         SQLOrderByExpr {
-                            expr: Box::new(ASTNode::SQLIdentifier("id".to_string())),
+                            expr: ASTNode::SQLIdentifier("id".to_string()),
                             asc: None,
                         },
                     ]),
@@ -277,11 +277,11 @@ fn parse_select_order_by_limit() {
             assert_eq!(
                 Some(vec![
                     SQLOrderByExpr {
-                        expr: Box::new(ASTNode::SQLIdentifier("lname".to_string())),
+                        expr: ASTNode::SQLIdentifier("lname".to_string()),
                         asc: Some(true),
                     },
                     SQLOrderByExpr {
-                        expr: Box::new(ASTNode::SQLIdentifier("fname".to_string())),
+                        expr: ASTNode::SQLIdentifier("fname".to_string()),
                         asc: Some(false),
                     },
                 ]),

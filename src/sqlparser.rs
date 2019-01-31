@@ -1362,7 +1362,7 @@ impl Parser {
                 None
             };
 
-            expr_list.push(SQLOrderByExpr::new(Box::new(expr), asc));
+            expr_list.push(SQLOrderByExpr { expr, asc });
 
             if let Some(Token::Comma) = self.peek_token() {
                 self.next_token();

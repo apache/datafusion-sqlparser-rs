@@ -170,14 +170,8 @@ pub enum JoinConstraint {
 /// SQL ORDER BY expression
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLOrderByExpr {
-    pub expr: Box<ASTNode>,
+    pub expr: ASTNode,
     pub asc: Option<bool>,
-}
-
-impl SQLOrderByExpr {
-    pub fn new(expr: Box<ASTNode>, asc: Option<bool>) -> Self {
-        SQLOrderByExpr { expr, asc }
-    }
 }
 
 impl ToString for SQLOrderByExpr {

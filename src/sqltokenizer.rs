@@ -290,23 +290,17 @@ impl<'a> Tokenizer<'a> {
                     }
                     Ok(Some(Token::SingleQuotedString(s)))
                 }
-                // string
+                // delimited (quoted) identifier
                 '"' => {
                     let mut s = String::new();
-                    chars.next(); // consume
-                    while let Some(&ch) = chars.peek() {
+                    let quote_start = chars.next().unwrap(); // consumes the opening quote
+                    while let Some(ch) = chars.next() {
                         match ch {
-                            '"' => {
-                                chars.next(); // consume
-                                break;
-                            }
-                            _ => {
-                                chars.next(); // consume
-                                s.push(ch);
-                            }
+                            '"' => break,
+                            _ => s.push(ch),
                         }
                     }
-                    Ok(Some(Token::make_word(&s, Some('"'))))
+                    Ok(Some(Token::make_word(&s, Some(quote_start))))
                 }
                 // numbers
                 '0'...'9' => {

@@ -224,7 +224,7 @@ fn parse_create_table_from_pg_dump() {
 
             let c_create_date1 = &columns[8];
             assert_eq!(
-                Some(Box::new(ASTNode::SQLCast {
+                Some(ASTNode::SQLCast {
                     expr: Box::new(ASTNode::SQLCast {
                         expr: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
                             "now".to_string()
@@ -232,7 +232,7 @@ fn parse_create_table_from_pg_dump() {
                         data_type: SQLType::Text
                     }),
                     data_type: SQLType::Date
-                })),
+                }),
                 c_create_date1.default
             );
 

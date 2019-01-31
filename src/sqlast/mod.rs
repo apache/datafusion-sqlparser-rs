@@ -164,14 +164,14 @@ pub enum SQLStatement {
         /// Column assignments
         assignments: Vec<SQLAssignment>,
         /// WHERE
-        selection: Option<Box<ASTNode>>,
+        selection: Option<ASTNode>,
     },
     /// DELETE
     SQLDelete {
         /// FROM
         table_name: SQLObjectName,
         /// WHERE
-        selection: Option<Box<ASTNode>>,
+        selection: Option<ASTNode>,
     },
     /// CREATE TABLE
     SQLCreateTable {
@@ -264,7 +264,7 @@ impl ToString for SQLStatement {
                     );
                 }
                 if let Some(selection) = selection {
-                    s += &format!(" WHERE {}", selection.as_ref().to_string());
+                    s += &format!(" WHERE {}", selection.to_string());
                 }
                 s
             }
@@ -274,7 +274,7 @@ impl ToString for SQLStatement {
             } => {
                 let mut s = format!("DELETE FROM {}", table_name.to_string());
                 if let Some(selection) = selection {
-                    s += &format!(" WHERE {}", selection.as_ref().to_string());
+                    s += &format!(" WHERE {}", selection.to_string());
                 }
                 s
             }
@@ -308,12 +308,12 @@ impl ToString for SQLObjectName {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLAssignment {
     id: SQLIdent,
-    value: Box<ASTNode>,
+    value: ASTNode,
 }
 
 impl ToString for SQLAssignment {
     fn to_string(&self) -> String {
-        format!("SET {} = {}", self.id, self.value.as_ref().to_string())
+        format!("SET {} = {}", self.id, self.value.to_string())
     }
 }
 
@@ -324,7 +324,7 @@ pub struct SQLColumnDef {
     pub data_type: SQLType,
     pub is_primary: bool,
     pub is_unique: bool,
-    pub default: Option<Box<ASTNode>>,
+    pub default: Option<ASTNode>,
     pub allow_null: bool,
 }
 
@@ -338,7 +338,7 @@ impl ToString for SQLColumnDef {
             s += " UNIQUE";
         }
         if let Some(ref default) = self.default {
-            s += &format!(" DEFAULT {}", default.as_ref().to_string());
+            s += &format!(" DEFAULT {}", default.to_string());
         }
         if !self.allow_null {
             s += " NOT NULL";

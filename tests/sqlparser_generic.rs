@@ -38,7 +38,7 @@ fn parse_where_delete_statement() {
                     op: Eq,
                     right: Box::new(SQLValue(Value::Long(5))),
                 },
-                *selection.unwrap(),
+                selection.unwrap(),
             );
         }
 

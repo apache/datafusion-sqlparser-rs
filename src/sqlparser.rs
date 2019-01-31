@@ -553,7 +553,7 @@ impl Parser {
                             let is_unique = self.parse_keyword("UNIQUE");
                             let default = if self.parse_keyword("DEFAULT") {
                                 let expr = self.parse_default_expr(0)?;
-                                Some(Box::new(expr))
+                                Some(expr)
                             } else {
                                 None
                             };
@@ -1104,7 +1104,7 @@ impl Parser {
         self.expect_keyword("FROM")?;
         let table_name = self.parse_object_name()?;
         let selection = if self.parse_keyword("WHERE") {
-            Some(Box::new(self.parse_expr()?))
+            Some(self.parse_expr()?)
         } else {
             None
         };

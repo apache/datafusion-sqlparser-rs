@@ -552,8 +552,9 @@ impl Parser {
             let mut columns = vec![];
             if self.consume_token(&Token::LParen) {
                 loop {
-                    if let Some(Token::SQLWord(column_name)) = self.next_token() {
-                        if let Ok(data_type) = self.parse_data_type() {
+                    match self.next_token() {
+                        Some(Token::SQLWord(column_name)) => {
+                            let data_type = self.parse_data_type()?;
                             let is_primary = self.parse_keywords(vec!["PRIMARY", "KEY"]);
                             let is_unique = self.parse_keyword("UNIQUE");
                             let default = if self.parse_keyword("DEFAULT") {
@@ -586,18 +587,17 @@ impl Parser {
                                 }
                                 other => {
                                     return parser_err!(
-                                        format!("Expected ',' or ')' after column definition but found {:?}", other)
-                                    );
+                                    format!("Expected ',' or ')' after column definition but found {:?}", other)
+                                );
                                 }
                             }
-                        } else {
+                        }
+                        unexpected => {
                             return parser_err!(format!(
-                                "Error parsing data type in column definition near: {:?}",
-                                self.peek_token()
+                                "Expected column name, got {:?}",
+                                unexpected
                             ));
                         }
-                    } else {
-                        return parser_err!("Error parsing column name");
                     }
                 }
             }

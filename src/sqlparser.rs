@@ -571,28 +571,17 @@ impl Parser {
                             };
                             debug!("default: {:?}", default);
 
-                            match self.peek_token() {
-                                Some(Token::Comma) => {
-                                    self.next_token();
-                                    columns.push(SQLColumnDef {
-                                        name: column_name.as_sql_ident(),
-                                        data_type: data_type,
-                                        allow_null,
-                                        is_primary,
-                                        is_unique,
-                                        default,
-                                    });
-                                }
+                            columns.push(SQLColumnDef {
+                                name: column_name.as_sql_ident(),
+                                data_type: data_type,
+                                allow_null,
+                                is_primary,
+                                is_unique,
+                                default,
+                            });
+                            match self.next_token() {
+                                Some(Token::Comma) => {}
                                 Some(Token::RParen) => {
-                                    self.next_token();
-                                    columns.push(SQLColumnDef {
-                                        name: column_name.as_sql_ident(),
-                                        data_type: data_type,
-                                        allow_null,
-                                        is_primary,
-                                        is_unique,
-                                        default,
-                                    });
                                     break;
                                 }
                                 other => {

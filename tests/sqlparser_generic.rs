@@ -104,28 +104,23 @@ fn parse_select_count_wildcard() {
 
 #[test]
 fn parse_not() {
-    let sql = String::from(
-        "SELECT id FROM customer \
-         WHERE NOT salary = ''",
-    );
-    let _ast = verified_stmt(&sql);
+    let sql = "SELECT id FROM customer WHERE NOT salary = ''";
+    let _ast = verified_only_select(sql);
     //TODO: add assertions
 }
 
 #[test]
 fn parse_select_string_predicate() {
-    let sql = String::from(
-        "SELECT id, fname, lname FROM customer \
-         WHERE salary != 'Not Provided' AND salary != ''",
-    );
-    let _ast = verified_stmt(&sql);
+    let sql = "SELECT id, fname, lname FROM customer \
+               WHERE salary != 'Not Provided' AND salary != ''";
+    let _ast = verified_only_select(sql);
     //TODO: add assertions
 }
 
 #[test]
 fn parse_projection_nested_type() {
-    let sql = String::from("SELECT customer.address.state FROM foo");
-    let _ast = verified_stmt(&sql);
+    let sql = "SELECT customer.address.state FROM foo";
+    let _ast = verified_only_select(sql);
     //TODO: add assertions
 }
 
@@ -133,7 +128,7 @@ fn parse_projection_nested_type() {
 fn parse_compound_expr_1() {
     use self::ASTNode::*;
     use self::SQLOperator::*;
-    let sql = String::from("a + b * c");
+    let sql = "a + b * c";
     assert_eq!(
         SQLBinaryExpr {
             left: Box::new(SQLIdentifier("a".to_string())),
@@ -144,7 +139,7 @@ fn parse_compound_expr_1() {
                 right: Box::new(SQLIdentifier("c".to_string()))
             })
         },
-        verified_expr(&sql)
+        verified_expr(sql)
     );
 }
 
@@ -152,7 +147,7 @@ fn parse_compound_expr_1() {
 fn parse_compound_expr_2() {
     use self::ASTNode::*;
     use self::SQLOperator::*;
-    let sql = String::from("a * b + c");
+    let sql = "a * b + c";
     assert_eq!(
         SQLBinaryExpr {
             left: Box::new(SQLBinaryExpr {
@@ -163,27 +158,27 @@ fn parse_compound_expr_2() {
             op: Plus,
             right: Box::new(SQLIdentifier("c".to_string()))
         },
-        verified_expr(&sql)
+        verified_expr(sql)
     );
 }
 
 #[test]
 fn parse_is_null() {
     use self::ASTNode::*;
-    let sql = String::from("a IS NULL");
+    let sql = "a IS NULL";
     assert_eq!(
         SQLIsNull(Box::new(SQLIdentifier("a".to_string()))),
-        verified_expr(&sql)
+        verified_expr(sql)
     );
 }
 
 #[test]
 fn parse_is_not_null() {
     use self::ASTNode::*;
-    let sql = String::from("a IS NOT NULL");
+    let sql = "a IS NOT NULL";
     assert_eq!(
         SQLIsNotNull(Box::new(SQLIdentifier("a".to_string()))),
-        verified_expr(&sql)
+        verified_expr(sql)
     );
 }
 
@@ -313,20 +308,15 @@ fn parse_limit_accepts_all() {
 
 #[test]
 fn parse_cast() {
-    let sql = String::from("SELECT CAST(id AS bigint) FROM customer");
-    match verified_stmt(&sql) {
-        SQLStatement::SQLSelect(SQLSelect { projection, .. }) => {
-            assert_eq!(1, projection.len());
-            assert_eq!(
-                ASTNode::SQLCast {
-                    expr: Box::new(ASTNode::SQLIdentifier("id".to_string())),
-                    data_type: SQLType::BigInt
-                },
-                projection[0]
-            );
-        }
-        _ => assert!(false),
-    }
+    let sql = "SELECT CAST(id AS bigint) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &ASTNode::SQLCast {
+            expr: Box::new(ASTNode::SQLIdentifier("id".to_string())),
+            data_type: SQLType::BigInt
+        },
+        expr_from_projection(only(&select.projection))
+    );
     one_statement_parses_to(
         "SELECT CAST(id AS BIGINT) FROM customer",
         "SELECT CAST(id AS bigint) FROM customer",
@@ -374,66 +364,55 @@ fn parse_create_table() {
 
 #[test]
 fn parse_scalar_function_in_projection() {
-    let sql = String::from("SELECT sqrt(id) FROM foo");
-    match verified_stmt(&sql) {
-        SQLStatement::SQLSelect(SQLSelect { projection, .. }) => {
-            assert_eq!(
-                vec![ASTNode::SQLFunction {
-                    id: String::from("sqrt"),
-                    args: vec![ASTNode::SQLIdentifier(String::from("id"))],
-                }],
-                projection
-            );
-        }
-        _ => assert!(false),
-    }
+    let sql = "SELECT sqrt(id) FROM foo";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &ASTNode::SQLFunction {
+            id: String::from("sqrt"),
+            args: vec![ASTNode::SQLIdentifier(String::from("id"))],
+        },
+        expr_from_projection(only(&select.projection))
+    );
 }
 
 #[test]
 fn parse_aggregate_with_group_by() {
-    let sql = String::from("SELECT a, COUNT(1), MIN(b), MAX(b) FROM foo GROUP BY a");
-    let _ast = verified_stmt(&sql);
+    let sql = "SELECT a, COUNT(1), MIN(b), MAX(b) FROM foo GROUP BY a";
+    let _ast = verified_only_select(sql);
     //TODO: assertions
 }
 
 #[test]
 fn parse_literal_string() {
     let sql = "SELECT 'one'";
-    match verified_stmt(&sql) {
-        SQLStatement::SQLSelect(SQLSelect { ref projection, .. }) => {
-            assert_eq!(
-                projection[0],
-                ASTNode::SQLValue(Value::SingleQuotedString("one".to_string()))
-            );
-        }
-        _ => panic!(),
-    }
+    let select = verified_only_select(sql);
+    assert_eq!(1, select.projection.len());
+    assert_eq!(
+        &ASTNode::SQLValue(Value::SingleQuotedString("one".to_string())),
+        expr_from_projection(&select.projection[0])
+    );
 }
 
 #[test]
 fn parse_simple_math_expr_plus() {
     let sql = "SELECT a + b, 2 + a, 2.5 + a, a_f + b_f, 2 + a_f, 2.5 + a_f FROM c";
-    verified_stmt(&sql);
+    verified_only_select(sql);
 }
 
 #[test]
 fn parse_simple_math_expr_minus() {
     let sql = "SELECT a - b, 2 - a, 2.5 - a, a_f - b_f, 2 - a_f, 2.5 - a_f FROM c";
-    verified_stmt(&sql);
+    verified_only_select(sql);
 }
 
 #[test]
 fn parse_select_version() {
     let sql = "SELECT @@version";
-    match verified_stmt(&sql) {
-        SQLStatement::SQLSelect(SQLSelect { ref projection, .. }) => {
-            assert_eq!(
-                projection[0],
-                ASTNode::SQLIdentifier("@@version".to_string())
-            );
-        }
-        _ => panic!(),
-    }
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &ASTNode::SQLIdentifier("@@version".to_string()),
+        expr_from_projection(only(&select.projection)),
+    );
 }
 
 #[test]
@@ -465,38 +444,33 @@ fn parse_case_expression() {
     let sql = "SELECT CASE WHEN bar IS NULL THEN 'null' WHEN bar = 0 THEN '=0' WHEN bar >= 0 THEN '>=0' ELSE '<0' END FROM foo";
     use self::ASTNode::{SQLBinaryExpr, SQLCase, SQLIdentifier, SQLIsNull, SQLValue};
     use self::SQLOperator::*;
-    match verified_stmt(&sql) {
-        SQLStatement::SQLSelect(SQLSelect { projection, .. }) => {
-            assert_eq!(1, projection.len());
-            assert_eq!(
-                SQLCase {
-                    conditions: vec![
-                        SQLIsNull(Box::new(SQLIdentifier("bar".to_string()))),
-                        SQLBinaryExpr {
-                            left: Box::new(SQLIdentifier("bar".to_string())),
-                            op: Eq,
-                            right: Box::new(SQLValue(Value::Long(0)))
-                        },
-                        SQLBinaryExpr {
-                            left: Box::new(SQLIdentifier("bar".to_string())),
-                            op: GtEq,
-                            right: Box::new(SQLValue(Value::Long(0)))
-                        }
-                    ],
-                    results: vec![
-                        SQLValue(Value::SingleQuotedString("null".to_string())),
-                        SQLValue(Value::SingleQuotedString("=0".to_string())),
-                        SQLValue(Value::SingleQuotedString(">=0".to_string()))
-                    ],
-                    else_result: Some(Box::new(SQLValue(Value::SingleQuotedString(
-                        "<0".to_string()
-                    ))))
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &SQLCase {
+            conditions: vec![
+                SQLIsNull(Box::new(SQLIdentifier("bar".to_string()))),
+                SQLBinaryExpr {
+                    left: Box::new(SQLIdentifier("bar".to_string())),
+                    op: Eq,
+                    right: Box::new(SQLValue(Value::Long(0)))
                 },
-                projection[0]
-            );
-        }
-        _ => assert!(false),
-    }
+                SQLBinaryExpr {
+                    left: Box::new(SQLIdentifier("bar".to_string())),
+                    op: GtEq,
+                    right: Box::new(SQLValue(Value::Long(0)))
+                }
+            ],
+            results: vec![
+                SQLValue(Value::SingleQuotedString("null".to_string())),
+                SQLValue(Value::SingleQuotedString("=0".to_string())),
+                SQLValue(Value::SingleQuotedString(">=0".to_string()))
+            ],
+            else_result: Some(Box::new(SQLValue(Value::SingleQuotedString(
+                "<0".to_string()
+            ))))
+        },
+        expr_from_projection(only(&select.projection)),
+    );
 }
 
 #[test]
@@ -592,7 +566,7 @@ fn parse_joins_on() {
     }
     // Test parsing of aliases
     assert_eq!(
-        joins_from(verified_stmt("SELECT * FROM t1 JOIN t2 AS foo ON c1 = c2")),
+        verified_only_select("SELECT * FROM t1 JOIN t2 AS foo ON c1 = c2").joins,
         vec![join_with_constraint(
             "t2",
             Some("foo".to_string()),
@@ -605,19 +579,19 @@ fn parse_joins_on() {
     );
     // Test parsing of different join operators
     assert_eq!(
-        joins_from(verified_stmt("SELECT * FROM t1 JOIN t2 ON c1 = c2")),
+        verified_only_select("SELECT * FROM t1 JOIN t2 ON c1 = c2").joins,
         vec![join_with_constraint("t2", None, JoinOperator::Inner)]
     );
     assert_eq!(
-        joins_from(verified_stmt("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2")),
+        verified_only_select("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2").joins,
         vec![join_with_constraint("t2", None, JoinOperator::LeftOuter)]
     );
     assert_eq!(
-        joins_from(verified_stmt("SELECT * FROM t1 RIGHT JOIN t2 ON c1 = c2")),
+        verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 ON c1 = c2").joins,
         vec![join_with_constraint("t2", None, JoinOperator::RightOuter)]
     );
     assert_eq!(
-        joins_from(verified_stmt("SELECT * FROM t1 FULL JOIN t2 ON c1 = c2")),
+        verified_only_select("SELECT * FROM t1 FULL JOIN t2 ON c1 = c2").joins,
         vec![join_with_constraint("t2", None, JoinOperator::FullOuter)]
     );
 }
@@ -639,7 +613,7 @@ fn parse_joins_using() {
     }
     // Test parsing of aliases
     assert_eq!(
-        joins_from(verified_stmt("SELECT * FROM t1 JOIN t2 AS foo USING(c1)")),
+        verified_only_select("SELECT * FROM t1 JOIN t2 AS foo USING(c1)").joins,
         vec![join_with_constraint(
             "t2",
             Some("foo".to_string()),
@@ -652,19 +626,19 @@ fn parse_joins_using() {
     );
     // Test parsing of different join operators
     assert_eq!(
-        joins_from(verified_stmt("SELECT * FROM t1 JOIN t2 USING(c1)")),
+        verified_only_select("SELECT * FROM t1 JOIN t2 USING(c1)").joins,
         vec![join_with_constraint("t2", None, JoinOperator::Inner)]
     );
     assert_eq!(
-        joins_from(verified_stmt("SELECT * FROM t1 LEFT JOIN t2 USING(c1)")),
+        verified_only_select("SELECT * FROM t1 LEFT JOIN t2 USING(c1)").joins,
         vec![join_with_constraint("t2", None, JoinOperator::LeftOuter)]
     );
     assert_eq!(
-        joins_from(verified_stmt("SELECT * FROM t1 RIGHT JOIN t2 USING(c1)")),
+        verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 USING(c1)").joins,
         vec![join_with_constraint("t2", None, JoinOperator::RightOuter)]
     );
     assert_eq!(
-        joins_from(verified_stmt("SELECT * FROM t1 FULL JOIN t2 USING(c1)")),
+        verified_only_select("SELECT * FROM t1 FULL JOIN t2 USING(c1)").joins,
         vec![join_with_constraint("t2", None, JoinOperator::FullOuter)]
     );
 }
@@ -672,7 +646,7 @@ fn parse_joins_using() {
 #[test]
 fn parse_complex_join() {
     let sql = "SELECT c1, c2 FROM t1, t4 JOIN t2 ON t2.c = t1.c LEFT JOIN t3 USING(q, c) WHERE t4.c = t1.c";
-    verified_stmt(sql);
+    verified_only_select(sql);
 }
 
 #[test]
@@ -695,6 +669,26 @@ fn parse_join_syntax_variants() {
     );
 }
 
+fn only<'a, T>(v: &'a Vec<T>) -> &'a T {
+    assert_eq!(1, v.len());
+    v.first().unwrap()
+}
+
+fn verified_query(query: &str) -> SQLSelect {
+    match verified_stmt(query) {
+        SQLStatement::SQLSelect(select) => select,
+        _ => panic!("Expected SELECT"),
+    }
+}
+
+fn expr_from_projection(item: &ASTNode) -> &ASTNode {
+    item // Will be changed later to extract expression from `expr AS alias` struct
+}
+
+fn verified_only_select(query: &str) -> SQLSelect {
+    verified_query(query)
+}
+
 fn verified_stmt(query: &str) -> SQLStatement {
     one_statement_parses_to(query, query)
 }
@@ -703,13 +697,6 @@ fn verified_expr(query: &str) -> ASTNode {
     let ast = parse_sql_expr(query);
     assert_eq!(query, &ast.to_string());
     ast
-}
-
-fn joins_from(ast: SQLStatement) -> Vec<Join> {
-    match ast {
-        SQLStatement::SQLSelect(SQLSelect { joins, .. }) => joins,
-        _ => panic!("Expected SELECT"),
-    }
 }
 
 /// Ensures that `sql` parses as a statement, optionally checking that

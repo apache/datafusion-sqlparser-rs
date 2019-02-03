@@ -473,6 +473,11 @@ impl Parser {
     /// Look for an expected keyword and consume it if it exists
     #[must_use]
     pub fn parse_keyword(&mut self, expected: &'static str) -> bool {
+        // Ideally, we'd accept a enum variant, not a string, but since
+        // it's not trivial to maintain the enum without duplicating all
+        // the keywords three times, we'll settle for a run-time check that
+        // the string actually represents a known keyword...
+        assert!(keywords::ALL_KEYWORDS.contains(&expected));
         match self.peek_token() {
             Some(Token::SQLWord(ref k)) if expected.eq_ignore_ascii_case(&k.keyword) => {
                 self.next_token();

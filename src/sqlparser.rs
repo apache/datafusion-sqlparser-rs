@@ -546,71 +546,89 @@ impl Parser {
 
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<SQLStatement, ParserError> {
-        if self.parse_keywords(vec!["TABLE"]) {
-            let table_name = self.parse_object_name()?;
-            // parse optional column list (schema)
-            let mut columns = vec![];
-            if self.consume_token(&Token::LParen) {
-                loop {
-                    match self.next_token() {
-                        Some(Token::SQLWord(column_name)) => {
-                            let data_type = self.parse_data_type()?;
-                            let is_primary = self.parse_keywords(vec!["PRIMARY", "KEY"]);
-                            let is_unique = self.parse_keyword("UNIQUE");
-                            let default = if self.parse_keyword("DEFAULT") {
-                                let expr = self.parse_default_expr(0)?;
-                                Some(expr)
-                            } else {
-                                None
-                            };
-                            let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
-                                false
-                            } else if self.parse_keyword("NULL") {
-                                true
-                            } else {
-                                true
-                            };
-                            debug!("default: {:?}", default);
-
-                            columns.push(SQLColumnDef {
-                                name: column_name.as_sql_ident(),
-                                data_type: data_type,
-                                allow_null,
-                                is_primary,
-                                is_unique,
-                                default,
-                            });
-                            match self.next_token() {
-                                Some(Token::Comma) => {}
-                                Some(Token::RParen) => {
-                                    break;
-                                }
-                                other => {
-                                    return parser_err!(
-                                    format!("Expected ',' or ')' after column definition but found {:?}", other)
-                                );
-                                }
-                            }
-                        }
-                        unexpected => {
-                            return parser_err!(format!(
-                                "Expected column name, got {:?}",
-                                unexpected
-                            ));
-                        }
-                    }
-                }
-            }
-            Ok(SQLStatement::SQLCreateTable {
-                name: table_name,
-                columns,
-            })
+        if self.parse_keyword("TABLE") {
+            self.parse_create_table()
+        } else if self.parse_keyword("VIEW") {
+            self.parse_create_view()
         } else {
             parser_err!(format!(
                 "Unexpected token after CREATE: {:?}",
                 self.peek_token()
             ))
         }
+    }
+
+    pub fn parse_create_view(&mut self) -> Result<SQLStatement, ParserError> {
+        // Many dialects support `OR REPLACE` | `OR ALTER` right after `CREATE`, but we don't (yet).
+        // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
+        let name = self.parse_object_name()?;
+        // Parenthesized "output" columns list could be handled here.
+        // Some dialects allow WITH here, followed by some keywords (e.g. MS SQL)
+        // or `(k1=v1, k2=v2, ...)` (Postgres)
+        self.expect_keyword("AS")?;
+        self.expect_keyword("SELECT")?;
+        let query = self.parse_select()?;
+        // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
+        Ok(SQLStatement::SQLCreateView { name, query })
+    }
+
+    pub fn parse_create_table(&mut self) -> Result<SQLStatement, ParserError> {
+        let table_name = self.parse_object_name()?;
+        // parse optional column list (schema)
+        let mut columns = vec![];
+        if self.consume_token(&Token::LParen) {
+            loop {
+                match self.next_token() {
+                    Some(Token::SQLWord(column_name)) => {
+                        let data_type = self.parse_data_type()?;
+                        let is_primary = self.parse_keywords(vec!["PRIMARY", "KEY"]);
+                        let is_unique = self.parse_keyword("UNIQUE");
+                        let default = if self.parse_keyword("DEFAULT") {
+                            let expr = self.parse_default_expr(0)?;
+                            Some(expr)
+                        } else {
+                            None
+                        };
+                        let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
+                            false
+                        } else if self.parse_keyword("NULL") {
+                            true
+                        } else {
+                            true
+                        };
+                        debug!("default: {:?}", default);
+
+                        columns.push(SQLColumnDef {
+                            name: column_name.as_sql_ident(),
+                            data_type: data_type,
+                            allow_null,
+                            is_primary,
+                            is_unique,
+                            default,
+                        });
+                        match self.next_token() {
+                            Some(Token::Comma) => {}
+                            Some(Token::RParen) => {
+                                break;
+                            }
+                            other => {
+                                return parser_err!(format!(
+                                    "Expected ',' or ')' after column definition but found {:?}",
+                                    other
+                                ));
+                            }
+                        }
+                    }
+                    unexpected => {
+                        return parser_err!(format!("Expected column name, got {:?}", unexpected));
+                    }
+                }
+            }
+        }
+        Ok(SQLStatement::SQLCreateTable {
+            name: table_name,
+            columns,
+        })
     }
 
     pub fn parse_table_key(&mut self, constraint_name: SQLIdent) -> Result<TableKey, ParserError> {

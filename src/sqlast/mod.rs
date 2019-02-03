@@ -173,6 +173,12 @@ pub enum SQLStatement {
         /// WHERE
         selection: Option<ASTNode>,
     },
+    /// CREATE VIEW
+    SQLCreateView {
+        /// View name
+        name: SQLObjectName,
+        query: SQLSelect,
+    },
     /// CREATE TABLE
     SQLCreateTable {
         /// Table name
@@ -277,6 +283,9 @@ impl ToString for SQLStatement {
                     s += &format!(" WHERE {}", selection.to_string());
                 }
                 s
+            }
+            SQLStatement::SQLCreateView { name, query } => {
+                format!("CREATE VIEW {} AS {}", name.to_string(), query.to_string())
             }
             SQLStatement::SQLCreateTable { name, columns } => format!(
                 "CREATE TABLE {} ({})",

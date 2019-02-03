@@ -35,6 +35,8 @@ pub enum Token {
     Char(char),
     /// Single quoted string: i.e: 'string'
     SingleQuotedString(String),
+    /// "National" string literal: i.e: N'string'
+    NationalStringLiteral(String),
     /// Comma
     Comma,
     /// Whitespace (space, tab, etc)
@@ -94,6 +96,7 @@ impl ToString for Token {
             Token::Number(ref n) => n.to_string(),
             Token::Char(ref c) => c.to_string(),
             Token::SingleQuotedString(ref s) => format!("'{}'", s),
+            Token::NationalStringLiteral(ref s) => format!("N'{}'", s),
             Token::Comma => ",".to_string(),
             Token::Whitespace(ws) => ws.to_string(),
             Token::Eq => "=".to_string(),
@@ -265,40 +268,30 @@ impl<'a> Tokenizer<'a> {
                     chars.next();
                     Ok(Some(Token::Whitespace(Whitespace::Newline)))
                 }
-                // identifier or keyword
-                ch if self.dialect.is_identifier_start(ch) => {
-                    let mut s = String::new();
-                    chars.next(); // consume
-                    s.push(ch);
-                    while let Some(&ch) = chars.peek() {
-                        if self.dialect.is_identifier_part(ch) {
-                            chars.next(); // consume
-                            s.push(ch);
-                        } else {
-                            break;
+                'N' => {
+                    chars.next(); // consume, to check the next char
+                    match chars.peek() {
+                        Some('\'') => {
+                            // N'...' - a <national character string literal>
+                            let s = self.tokenize_single_quoted_string(chars);
+                            Ok(Some(Token::NationalStringLiteral(s)))
+                        }
+                        _ => {
+                            // regular identifier starting with an "N"
+                            let s = self.tokenize_word('N', chars);
+                            Ok(Some(Token::make_word(&s, None)))
                         }
                     }
+                }
+                // identifier or keyword
+                ch if self.dialect.is_identifier_start(ch) => {
+                    chars.next(); // consume the first char
+                    let s = self.tokenize_word(ch, chars);
                     Ok(Some(Token::make_word(&s, None)))
                 }
                 // string
                 '\'' => {
-                    //TODO: handle escaped quotes in string
-                    //TODO: handle newlines in string
-                    //TODO: handle EOF before terminating quote
-                    let mut s = String::new();
-                    chars.next(); // consume
-                    while let Some(&ch) = chars.peek() {
-                        match ch {
-                            '\'' => {
-                                chars.next(); // consume
-                                break;
-                            }
-                            _ => {
-                                chars.next(); // consume
-                                s.push(ch);
-                            }
-                        }
-                    }
+                    let s = self.tokenize_single_quoted_string(chars);
                     Ok(Some(Token::SingleQuotedString(s)))
                 }
                 // delimited (quoted) identifier
@@ -401,6 +394,44 @@ impl<'a> Tokenizer<'a> {
             },
             None => Ok(None),
         }
+    }
+
+    /// Tokenize an identifier or keyword, after the first char is already consumed.
+    fn tokenize_word(&self, first_char: char, chars: &mut Peekable<Chars>) -> String {
+        let mut s = String::new();
+        s.push(first_char);
+        while let Some(&ch) = chars.peek() {
+            if self.dialect.is_identifier_part(ch) {
+                chars.next(); // consume
+                s.push(ch);
+            } else {
+                break;
+            }
+        }
+        s
+    }
+
+    /// Read a single quoted string, starting with the opening quote.
+    fn tokenize_single_quoted_string(&self, chars: &mut Peekable<Chars>) -> String {
+        //TODO: handle escaped quotes in string
+        //TODO: handle newlines in string
+        //TODO: handle EOF before terminating quote
+        //TODO: handle 'string' <white space> 'string continuation'
+        let mut s = String::new();
+        chars.next(); // consume the opening quote
+        while let Some(&ch) = chars.peek() {
+            match ch {
+                '\'' => {
+                    chars.next(); // consume
+                    break;
+                }
+                _ => {
+                    chars.next(); // consume
+                    s.push(ch);
+                }
+            }
+        }
+        s
     }
 
     fn consume_and_return(

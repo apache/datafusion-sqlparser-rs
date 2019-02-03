@@ -191,7 +191,9 @@ impl Parser {
                     },
                 },
                 Token::Mult => Ok(ASTNode::SQLWildcard),
-                Token::Number(_) | Token::SingleQuotedString(_) => {
+                Token::Number(_)
+                | Token::SingleQuotedString(_)
+                | Token::NationalStringLiteral(_) => {
                     self.prev_token();
                     self.parse_sql_value()
                 }
@@ -205,7 +207,7 @@ impl Parser {
                     Ok(expr)
                 }
                 _ => parser_err!(format!(
-                    "Prefix parser expected a keyword but found {:?}",
+                    "Did not expect {:?} at the beginning of an expression",
                     t
                 )),
             },
@@ -790,7 +792,10 @@ impl Parser {
                     Token::SingleQuotedString(ref s) => {
                         Ok(Value::SingleQuotedString(s.to_string()))
                     }
-                    _ => parser_err!(format!("Unsupported value: {:?}", self.peek_token())),
+                    Token::NationalStringLiteral(ref s) => {
+                        Ok(Value::NationalStringLiteral(s.to_string()))
+                    }
+                    _ => parser_err!(format!("Unsupported value: {:?}", t)),
                 }
             }
             None => parser_err!("Expecting a value, but found EOF"),

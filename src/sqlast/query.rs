@@ -51,7 +51,7 @@ impl ToString for SQLQuery {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLSelect {
     /// projection expressions
-    pub projection: Vec<ASTNode>,
+    pub projection: Vec<SQLSelectItem>,
     /// FROM
     pub relation: Option<TableFactor>,
     /// JOIN
@@ -105,6 +105,32 @@ impl ToString for SQLSelect {
 pub struct Cte {
     pub alias: SQLIdent,
     pub query: SQLQuery,
+}
+
+/// One item of the comma-separated list following `SELECT`
+#[derive(Debug, Clone, PartialEq)]
+pub enum SQLSelectItem {
+    /// Any expression, not followed by `[ AS ] alias`
+    UnnamedExpression(ASTNode),
+    /// An expression, followed by `[ AS ] alias`
+    ExpressionWithAlias(ASTNode, SQLIdent),
+    /// `alias.*` or even `schema.table.*`
+    QualifiedWildcard(SQLObjectName),
+    /// An unqualified `*`
+    Wildcard,
+}
+
+impl ToString for SQLSelectItem {
+    fn to_string(&self) -> String {
+        match &self {
+            SQLSelectItem::UnnamedExpression(expr) => expr.to_string(),
+            SQLSelectItem::ExpressionWithAlias(expr, alias) => {
+                format!("{} AS {}", expr.to_string(), alias)
+            }
+            SQLSelectItem::QualifiedWildcard(prefix) => format!("{}.*", prefix.to_string()),
+            SQLSelectItem::Wildcard => "*".to_string(),
+        }
+    }
 }
 
 /// A table name or a parenthesized subquery with an optional alias

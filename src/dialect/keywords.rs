@@ -715,8 +715,19 @@ pub const ALL_KEYWORDS: &'static [&'static str] = &[
 /// These keywords can't be used as a table alias, so that `FROM table_name alias`
 /// can be parsed unambiguously without looking ahead.
 pub const RESERVED_FOR_TABLE_ALIAS: &'static [&'static str] = &[
-    WHERE, GROUP, ON, // keyword is 'reserved' in most dialects
-    JOIN, INNER, CROSS, FULL, LEFT, RIGHT, // not reserved in Oracle
-    NATURAL, USING, // not reserved in Oracle & MSSQL
-    ORDER, // UNION, EXCEPT, INTERSECT,  // TODO add these with tests.
+    // Reserved as both a table and a column alias:
+    WITH, SELECT, WHERE, GROUP, ORDER,
+    // TODO add these with tests: UNION, EXCEPT, INTERSECT,
+    // Reserved only as a table alias in the `FROM`/`JOIN` clauses:
+    ON, JOIN, INNER, CROSS, FULL, LEFT, RIGHT, NATURAL, USING,
+];
+
+/// Can't be used as a column alias, so that `SELECT <expr> alias`
+/// can be parsed unambiguously without looking ahead.
+pub const RESERVED_FOR_COLUMN_ALIAS: &'static [&'static str] = &[
+    // Reserved as both a table and a column alias:
+    WITH, SELECT, WHERE, GROUP, ORDER,
+    // TODO add these with tests: UNION, EXCEPT, INTERSECT,
+    // Reserved only as a column alias in the `SELECT` clause:
+    FROM,
 ];

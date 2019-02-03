@@ -59,7 +59,46 @@ fn parse_simple_select() {
 fn parse_select_wildcard() {
     let sql = "SELECT * FROM foo";
     let select = verified_only_select(sql);
-    assert_eq!(&ASTNode::SQLWildcard, only(&select.projection));
+    assert_eq!(&SQLSelectItem::Wildcard, only(&select.projection));
+
+    let sql = "SELECT foo.* FROM foo";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &SQLSelectItem::QualifiedWildcard(SQLObjectName(vec!["foo".to_string()])),
+        only(&select.projection)
+    );
+
+    let sql = "SELECT myschema.mytable.* FROM myschema.mytable";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &SQLSelectItem::QualifiedWildcard(SQLObjectName(vec![
+            "myschema".to_string(),
+            "mytable".to_string(),
+        ])),
+        only(&select.projection)
+    );
+}
+
+#[test]
+fn parse_column_aliases() {
+    let sql = "SELECT a.col + 1 AS newname FROM foo AS a";
+    let select = verified_only_select(sql);
+    if let SQLSelectItem::ExpressionWithAlias(
+        ASTNode::SQLBinaryExpr {
+            ref op, ref right, ..
+        },
+        ref alias,
+    ) = only(&select.projection)
+    {
+        assert_eq!(&SQLOperator::Plus, op);
+        assert_eq!(&ASTNode::SQLValue(Value::Long(1)), right.as_ref());
+        assert_eq!("newname", alias);
+    } else {
+        panic!("Expected ExpressionWithAlias")
+    }
+
+    // alias without AS is parsed correctly:
+    one_statement_parses_to("SELECT a.col + 1 newname FROM foo AS a", &sql);
 }
 
 #[test]
@@ -236,6 +275,7 @@ fn parse_select_order_by() {
     chk("SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC, id");
     // make sure ORDER is not treated as an alias
     chk("SELECT id, fname, lname FROM customer ORDER BY lname ASC, fname DESC, id");
+    chk("SELECT 1 AS lname, 2 AS fname, 3 AS id, 4 ORDER BY lname ASC, fname DESC, id");
 }
 
 #[test]
@@ -396,8 +436,9 @@ fn parse_select_version() {
 #[test]
 fn parse_delimited_identifiers() {
     // check that quoted identifiers in any position remain quoted after serialization
-    let sql = r#"SELECT "alias"."bar baz", "myfun"(), "simple id" FROM "a table" AS "alias""#;
-    let select = verified_only_select(sql);
+    let select = verified_only_select(
+        r#"SELECT "alias"."bar baz", "myfun"(), "simple id" AS "column alias" FROM "a table" AS "alias""#
+    );
     // check FROM
     match select.relation.unwrap() {
         TableFactor::Table { name, alias } => {
@@ -419,10 +460,13 @@ fn parse_delimited_identifiers() {
         },
         expr_from_projection(&select.projection[1]),
     );
-    assert_eq!(
-        &ASTNode::SQLIdentifier(r#""simple id""#.to_string()),
-        expr_from_projection(&select.projection[2]),
-    );
+    match &select.projection[2] {
+        &SQLSelectItem::ExpressionWithAlias(ref expr, ref alias) => {
+            assert_eq!(&ASTNode::SQLIdentifier(r#""simple id""#.to_string()), expr);
+            assert_eq!(r#""column alias""#, alias);
+        }
+        _ => panic!("Expected ExpressionWithAlias"),
+    }
 
     verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
     verified_stmt(r#"ALTER TABLE foo ADD CONSTRAINT "bar" PRIMARY KEY (baz)"#);
@@ -644,9 +688,7 @@ fn parse_join_syntax_variants() {
 
 #[test]
 fn parse_ctes() {
-    // To be valid SQL this needs aliases for the derived columns, but
-    // we don't support them yet in the context of a SELECT's projection.
-    let cte_sqls = vec!["SELECT 1", "SELECT 2"];
+    let cte_sqls = vec!["SELECT 1 AS foo", "SELECT 2 AS bar"];
     let with = &format!(
         "WITH a AS ({}), b AS ({}) SELECT foo + bar FROM a, b",
         cte_sqls[0], cte_sqls[1]
@@ -725,6 +767,15 @@ fn parse_multiple_statements() {
         );
     }
     test_with("SELECT foo", "SELECT", " bar");
+    // ensure that SELECT/WITH is not parsed as a table or column alias if ';'
+    // separating the statements is omitted:
+    test_with("SELECT foo FROM baz", "SELECT", " bar");
+    test_with("SELECT foo", "WITH", " cte AS (SELECT 1 AS s) SELECT bar");
+    test_with(
+        "SELECT foo FROM baz",
+        "WITH",
+        " cte AS (SELECT 1 AS s) SELECT bar",
+    );
     test_with("DELETE FROM foo", "SELECT", " bar");
     test_with("INSERT INTO foo VALUES(1)", "SELECT", " bar");
     test_with("CREATE TABLE foo (baz int)", "SELECT", " bar");
@@ -780,8 +831,11 @@ fn verified_query(query: &str) -> SQLQuery {
     }
 }
 
-fn expr_from_projection(item: &ASTNode) -> &ASTNode {
-    item // Will be changed later to extract expression from `expr AS alias` struct
+fn expr_from_projection(item: &SQLSelectItem) -> &ASTNode {
+    match item {
+        SQLSelectItem::UnnamedExpression(expr) => expr,
+        _ => panic!("Expected UnnamedExpression"),
+    }
 }
 
 fn verified_only_select(query: &str) -> SQLSelect {

@@ -178,9 +178,14 @@ impl Parser {
                         Some(Token::LParen) => self.parse_function(w.as_sql_ident()),
                         Some(Token::Period) => {
                             let mut id_parts: Vec<SQLIdent> = vec![w.as_sql_ident()];
+                            let mut ends_with_wildcard = false;
                             while self.consume_token(&Token::Period) {
                                 match self.next_token() {
                                     Some(Token::SQLWord(w)) => id_parts.push(w.as_sql_ident()),
+                                    Some(Token::Mult) => {
+                                        ends_with_wildcard = true;
+                                        break;
+                                    }
                                     _ => {
                                         return parser_err!(format!(
                                             "Error parsing compound identifier"
@@ -188,7 +193,11 @@ impl Parser {
                                     }
                                 }
                             }
-                            Ok(ASTNode::SQLCompoundIdentifier(id_parts))
+                            if ends_with_wildcard {
+                                Ok(ASTNode::SQLQualifiedWildcard(id_parts))
+                            } else {
+                                Ok(ASTNode::SQLCompoundIdentifier(id_parts))
+                            }
                         }
                         _ => Ok(ASTNode::SQLIdentifier(w.as_sql_ident())),
                     },
@@ -1193,7 +1202,7 @@ impl Parser {
     /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`),
     /// assuming the initial `SELECT` was already consumed
     pub fn parse_select(&mut self) -> Result<SQLSelect, ParserError> {
-        let projection = self.parse_expr_list()?;
+        let projection = self.parse_select_list()?;
 
         let (relation, joins) = if self.parse_keyword("FROM") {
             let relation = Some(self.parse_table_factor()?);
@@ -1381,18 +1390,40 @@ impl Parser {
         let mut expr_list: Vec<ASTNode> = vec![];
         loop {
             expr_list.push(self.parse_expr()?);
-            if let Some(t) = self.peek_token() {
-                if t == Token::Comma {
-                    self.next_token();
-                } else {
-                    break;
-                }
-            } else {
-                //EOF
-                break;
-            }
+            match self.peek_token() {
+                Some(Token::Comma) => self.next_token(),
+                _ => break,
+            };
         }
         Ok(expr_list)
+    }
+
+    /// Parse a comma-delimited list of projections after SELECT
+    pub fn parse_select_list(&mut self) -> Result<Vec<SQLSelectItem>, ParserError> {
+        let mut projections: Vec<SQLSelectItem> = vec![];
+        loop {
+            let expr = self.parse_expr()?;
+            if let ASTNode::SQLWildcard = expr {
+                projections.push(SQLSelectItem::Wildcard);
+            } else if let ASTNode::SQLQualifiedWildcard(prefix) = expr {
+                projections.push(SQLSelectItem::QualifiedWildcard(SQLObjectName(prefix)));
+            } else {
+                // `expr` is a regular SQL expression and can be followed by an alias
+                if let Some(alias) =
+                    self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)?
+                {
+                    projections.push(SQLSelectItem::ExpressionWithAlias(expr, alias));
+                } else {
+                    projections.push(SQLSelectItem::UnnamedExpression(expr));
+                }
+            }
+
+            match self.peek_token() {
+                Some(Token::Comma) => self.next_token(),
+                _ => break,
+            };
+        }
+        Ok(projections)
     }
 
     /// Parse a comma-delimited list of SQL ORDER BY expressions

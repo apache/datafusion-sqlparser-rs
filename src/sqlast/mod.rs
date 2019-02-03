@@ -21,7 +21,8 @@ mod table_key;
 mod value;
 
 pub use self::query::{
-    Cte, Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLQuery, SQLSelect, TableFactor,
+    Cte, Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLQuery, SQLSelect, SQLSelectItem,
+    TableFactor,
 };
 pub use self::sqltype::SQLType;
 pub use self::table_key::{AlterOperation, Key, TableKey};
@@ -38,8 +39,13 @@ pub type SQLIdent = String;
 pub enum ASTNode {
     /// Identifier e.g. table name or column name
     SQLIdentifier(SQLIdent),
-    /// Wildcard e.g. `*`
+    /// Unqualified wildcard (`*`). SQL allows this in limited contexts (such as right
+    /// after `SELECT` or as part of an aggregate function, e.g. `COUNT(*)`, but we
+    /// currently accept it in contexts where it doesn't make sense, such as `* + *`
     SQLWildcard,
+    /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
+    /// (Same caveats apply to SQLQualifiedWildcard as to SQLWildcard.)
+    SQLQualifiedWildcard(Vec<SQLIdent>),
     /// Multi part identifier e.g. `myschema.dbo.mytable`
     SQLCompoundIdentifier(Vec<SQLIdent>),
     /// `IS NULL` expression
@@ -86,6 +92,7 @@ impl ToString for ASTNode {
         match self {
             ASTNode::SQLIdentifier(s) => s.to_string(),
             ASTNode::SQLWildcard => "*".to_string(),
+            ASTNode::SQLQualifiedWildcard(q) => q.join(".") + "*",
             ASTNode::SQLCompoundIdentifier(s) => s.join("."),
             ASTNode::SQLIsNull(ast) => format!("{} IS NULL", ast.as_ref().to_string()),
             ASTNode::SQLIsNotNull(ast) => format!("{} IS NOT NULL", ast.as_ref().to_string()),

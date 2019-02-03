@@ -190,6 +190,8 @@ pub enum Whitespace {
     Space,
     Newline,
     Tab,
+    SingleLineComment(String),
+    MultiLineComment(String),
 }
 
 impl ToString for Whitespace {
@@ -198,6 +200,8 @@ impl ToString for Whitespace {
             Whitespace::Space => " ".to_string(),
             Whitespace::Newline => "\n".to_string(),
             Whitespace::Tab => "\t".to_string(),
+            Whitespace::SingleLineComment(s) => format!("--{}", s),
+            Whitespace::MultiLineComment(s) => format!("/*{}*/", s),
         }
     }
 }
@@ -326,10 +330,45 @@ impl<'a> Tokenizer<'a> {
                 ')' => self.consume_and_return(chars, Token::RParen),
                 ',' => self.consume_and_return(chars, Token::Comma),
                 // operators
+                '-' => {
+                    chars.next(); // consume the '-'
+                    match chars.peek() {
+                        Some('-') => {
+                            chars.next(); // consume the second '-', starting a single-line comment
+                            let mut s = String::new();
+                            loop {
+                                match chars.next() {
+                                    Some(ch) if ch != '\n' => {
+                                        s.push(ch);
+                                    }
+                                    other => {
+                                        if other.is_some() {
+                                            s.push('\n');
+                                        }
+                                        break Ok(Some(Token::Whitespace(
+                                            Whitespace::SingleLineComment(s),
+                                        )));
+                                    }
+                                }
+                            }
+                        }
+                        // a regular '-' operator
+                        _ => Ok(Some(Token::Minus)),
+                    }
+                }
+                '/' => {
+                    chars.next(); // consume the '/'
+                    match chars.peek() {
+                        Some('*') => {
+                            chars.next(); // consume the '*', starting a multi-line comment
+                            self.tokenize_multiline_comment(chars)
+                        }
+                        // a regular '/' operator
+                        _ => Ok(Some(Token::Div)),
+                    }
+                }
                 '+' => self.consume_and_return(chars, Token::Plus),
-                '-' => self.consume_and_return(chars, Token::Minus),
                 '*' => self.consume_and_return(chars, Token::Mult),
-                '/' => self.consume_and_return(chars, Token::Div),
                 '%' => self.consume_and_return(chars, Token::Mod),
                 '=' => self.consume_and_return(chars, Token::Eq),
                 '.' => self.consume_and_return(chars, Token::Period),
@@ -432,6 +471,36 @@ impl<'a> Tokenizer<'a> {
             }
         }
         s
+    }
+
+    fn tokenize_multiline_comment(
+        &self,
+        chars: &mut Peekable<Chars>,
+    ) -> Result<Option<Token>, TokenizerError> {
+        let mut s = String::new();
+        let mut maybe_closing_comment = false;
+        // TODO: deal with nested comments
+        loop {
+            match chars.next() {
+                Some(ch) if maybe_closing_comment && ch == '/' => {
+                    break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
+                }
+                Some(ch) if maybe_closing_comment && ch != '/' => {
+                    maybe_closing_comment = false;
+                    s.push('*');
+                    s.push(ch);
+                }
+                Some(ch) if !maybe_closing_comment && ch == '*' => {
+                    maybe_closing_comment = true;
+                }
+                Some(ch) => s.push(ch),
+                None => {
+                    break Err(TokenizerError(
+                        "Unexpected EOF while in a multi-line comment".to_string(),
+                    ));
+                }
+            }
+        }
     }
 
     fn consume_and_return(
@@ -608,6 +677,53 @@ mod tests {
             Token::make_keyword("NULL"),
         ];
 
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_comment() {
+        let sql = String::from("0--this is a comment\n1");
+
+        let dialect = GenericSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::Number("0".to_string()),
+            Token::Whitespace(Whitespace::SingleLineComment(
+                "this is a comment\n".to_string(),
+            )),
+            Token::Number("1".to_string()),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_comment_at_eof() {
+        let sql = String::from("--this is a comment");
+
+        let dialect = GenericSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![Token::Whitespace(Whitespace::SingleLineComment(
+            "this is a comment".to_string(),
+        ))];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_multiline_comment() {
+        let sql = String::from("0/*multi-line\n* /comment*/1");
+
+        let dialect = GenericSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::Number("0".to_string()),
+            Token::Whitespace(Whitespace::MultiLineComment(
+                "multi-line\n* /comment".to_string(),
+            )),
+            Token::Number("1".to_string()),
+        ];
         compare(expected, tokens);
     }
 

@@ -57,32 +57,22 @@ fn parse_simple_select() {
 
 #[test]
 fn parse_select_wildcard() {
-    let sql = String::from("SELECT * FROM customer");
-    match verified_stmt(&sql) {
-        SQLStatement::SQLSelect(SQLSelect { projection, .. }) => {
-            assert_eq!(1, projection.len());
-            assert_eq!(ASTNode::SQLWildcard, projection[0]);
-        }
-        _ => assert!(false),
-    }
+    let sql = "SELECT * FROM foo";
+    let select = verified_only_select(sql);
+    assert_eq!(&ASTNode::SQLWildcard, only(&select.projection));
 }
 
 #[test]
 fn parse_select_count_wildcard() {
-    let sql = String::from("SELECT COUNT(*) FROM customer");
-    match verified_stmt(&sql) {
-        SQLStatement::SQLSelect(SQLSelect { projection, .. }) => {
-            assert_eq!(1, projection.len());
-            assert_eq!(
-                ASTNode::SQLFunction {
-                    id: "COUNT".to_string(),
-                    args: vec![ASTNode::SQLWildcard],
-                },
-                projection[0]
-            );
-        }
-        _ => assert!(false),
-    }
+    let sql = "SELECT COUNT(*) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &ASTNode::SQLFunction {
+            id: "COUNT".to_string(),
+            args: vec![ASTNode::SQLWildcard],
+        },
+        expr_from_projection(only(&select.projection))
+    );
 }
 
 #[test]
@@ -653,6 +643,59 @@ fn parse_join_syntax_variants() {
 }
 
 #[test]
+fn parse_ctes() {
+    // To be valid SQL this needs aliases for the derived columns, but
+    // we don't support them yet in the context of a SELECT's projection.
+    let cte_sqls = vec!["SELECT 1", "SELECT 2"];
+    let with = &format!(
+        "WITH a AS ({}), b AS ({}) SELECT foo + bar FROM a, b",
+        cte_sqls[0], cte_sqls[1]
+    );
+
+    fn assert_ctes_in_select(expected: &Vec<&str>, sel: &SQLQuery) {
+        for i in 0..1 {
+            let Cte {
+                ref query,
+                ref alias,
+            } = sel.ctes[i];
+            assert_eq!(expected[i], query.to_string());
+            assert_eq!(if i == 0 { "a" } else { "b" }, alias);
+        }
+    }
+
+    // Top-level CTE
+    assert_ctes_in_select(&cte_sqls, &verified_query(with));
+    // CTE in a subquery
+    let sql = &format!("SELECT ({})", with);
+    let select = verified_only_select(sql);
+    match expr_from_projection(only(&select.projection)) {
+        &ASTNode::SQLSubquery(ref subquery) => {
+            assert_ctes_in_select(&cte_sqls, subquery.as_ref());
+        }
+        _ => panic!("Expected subquery"),
+    }
+    // CTE in a derived table
+    let sql = &format!("SELECT * FROM ({})", with);
+    let select = verified_only_select(sql);
+    match select.relation {
+        Some(TableFactor::Derived { subquery, .. }) => {
+            assert_ctes_in_select(&cte_sqls, subquery.as_ref())
+        }
+        _ => panic!("Expected derived table"),
+    }
+    // CTE in a view
+    let sql = &format!("CREATE VIEW v AS {}", with);
+    match verified_stmt(sql) {
+        SQLStatement::SQLCreateView { query, .. } => assert_ctes_in_select(&cte_sqls, &query),
+        _ => panic!("Expected CREATE VIEW"),
+    }
+    // CTE in a CTE...
+    let sql = &format!("WITH outer_cte AS ({}) SELECT * FROM outer_cte", with);
+    let select = verified_query(sql);
+    assert_ctes_in_select(&cte_sqls, &only(&select.ctes).query);
+}
+
+#[test]
 fn parse_derived_tables() {
     let sql = "SELECT a.x, b.y FROM (SELECT x FROM foo) AS a CROSS JOIN (SELECT y FROM bar) AS b";
     let _ = verified_only_select(sql);
@@ -730,7 +773,7 @@ fn only<'a, T>(v: &'a Vec<T>) -> &'a T {
     v.first().unwrap()
 }
 
-fn verified_query(query: &str) -> SQLSelect {
+fn verified_query(query: &str) -> SQLQuery {
     match verified_stmt(query) {
         SQLStatement::SQLSelect(select) => select,
         _ => panic!("Expected SELECT"),
@@ -742,7 +785,7 @@ fn expr_from_projection(item: &ASTNode) -> &ASTNode {
 }
 
 fn verified_only_select(query: &str) -> SQLSelect {
-    verified_query(query)
+    verified_query(query).body
 }
 
 fn verified_stmt(query: &str) -> SQLStatement {

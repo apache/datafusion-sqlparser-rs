@@ -1,5 +1,53 @@
 use super::*;
 
+/// The most complete variant of a `SELECT` query expression, optionally
+/// including `WITH`, `UNION` / other set operations, and `ORDER BY`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SQLQuery {
+    /// WITH (common table expressions, or CTEs)
+    pub ctes: Vec<Cte>,
+    /// SELECT or UNION / EXCEPT / INTECEPT
+    pub body: SQLSelect,
+    /// ORDER BY
+    pub order_by: Option<Vec<SQLOrderByExpr>>,
+    /// LIMIT
+    pub limit: Option<ASTNode>,
+}
+
+impl ToString for SQLQuery {
+    fn to_string(&self) -> String {
+        let mut s = String::new();
+        if !self.ctes.is_empty() {
+            s += &format!(
+                "WITH {} ",
+                self.ctes
+                    .iter()
+                    .map(|cte| format!("{} AS ({})", cte.alias, cte.query.to_string()))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+        }
+        s += &self.body.to_string();
+        if let Some(ref order_by) = self.order_by {
+            s += &format!(
+                " ORDER BY {}",
+                order_by
+                    .iter()
+                    .map(|o| o.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            );
+        }
+        if let Some(ref limit) = self.limit {
+            s += &format!(" LIMIT {}", limit.to_string());
+        }
+        s
+    }
+}
+
+/// A restricted variant of `SELECT` (without CTEs/`ORDER BY`), which may
+/// appear either as the only body item of an `SQLQuery`, or as an operand
+/// to a set operation like `UNION`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLSelect {
     /// projection expressions
@@ -10,14 +58,10 @@ pub struct SQLSelect {
     pub joins: Vec<Join>,
     /// WHERE
     pub selection: Option<ASTNode>,
-    /// ORDER BY
-    pub order_by: Option<Vec<SQLOrderByExpr>>,
     /// GROUP BY
     pub group_by: Option<Vec<ASTNode>>,
     /// HAVING
     pub having: Option<ASTNode>,
-    /// LIMIT
-    pub limit: Option<ASTNode>,
 }
 
 impl ToString for SQLSelect {
@@ -52,21 +96,15 @@ impl ToString for SQLSelect {
         if let Some(ref having) = self.having {
             s += &format!(" HAVING {}", having.to_string());
         }
-        if let Some(ref order_by) = self.order_by {
-            s += &format!(
-                " ORDER BY {}",
-                order_by
-                    .iter()
-                    .map(|o| o.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            );
-        }
-        if let Some(ref limit) = self.limit {
-            s += &format!(" LIMIT {}", limit.to_string());
-        }
         s
     }
+}
+
+/// A single CTE (used after `WITH`): `alias AS ( query )`
+#[derive(Debug, Clone, PartialEq)]
+pub struct Cte {
+    pub alias: SQLIdent,
+    pub query: SQLQuery,
 }
 
 /// A table name or a parenthesized subquery with an optional alias
@@ -77,7 +115,7 @@ pub enum TableFactor {
         alias: Option<SQLIdent>,
     },
     Derived {
-        subquery: Box<SQLSelect>,
+        subquery: Box<SQLQuery>,
         alias: Option<SQLIdent>,
     },
 }

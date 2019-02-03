@@ -88,7 +88,10 @@ impl Parser {
         match self.next_token() {
             Some(t) => match t {
                 Token::SQLWord(ref w) if w.keyword != "" => match w.keyword.as_ref() {
-                    "SELECT" => Ok(SQLStatement::SQLSelect(self.parse_select()?)),
+                    "SELECT" | "WITH" => {
+                        self.prev_token();
+                        Ok(SQLStatement::SQLSelect(self.parse_query()?))
+                    }
                     "CREATE" => Ok(self.parse_create()?),
                     "DELETE" => Ok(self.parse_delete()?),
                     "INSERT" => Ok(self.parse_insert()?),
@@ -198,8 +201,9 @@ impl Parser {
                     self.parse_sql_value()
                 }
                 Token::LParen => {
-                    let expr = if self.parse_keyword("SELECT") {
-                        ASTNode::SQLSubquery(Box::new(self.parse_select()?))
+                    let expr = if self.parse_keyword("SELECT") || self.parse_keyword("WITH") {
+                        self.prev_token();
+                        ASTNode::SQLSubquery(Box::new(self.parse_query()?))
                     } else {
                         ASTNode::SQLNested(Box::new(self.parse_expr()?))
                     };
@@ -568,8 +572,7 @@ impl Parser {
         // Some dialects allow WITH here, followed by some keywords (e.g. MS SQL)
         // or `(k1=v1, k2=v2, ...)` (Postgres)
         self.expect_keyword("AS")?;
-        self.expect_keyword("SELECT")?;
-        let query = self.parse_select()?;
+        let query = self.parse_query()?;
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
         Ok(SQLStatement::SQLCreateView { name, query })
     }
@@ -673,18 +676,9 @@ impl Parser {
         let table_name = self.parse_object_name()?;
         let operation: Result<AlterOperation, ParserError> =
             if self.parse_keywords(vec!["ADD", "CONSTRAINT"]) {
-                match self.next_token() {
-                    Some(Token::SQLWord(ref id)) => {
-                        let table_key = self.parse_table_key(id.as_sql_ident())?;
-                        Ok(AlterOperation::AddConstraint(table_key))
-                    }
-                    _ => {
-                        return parser_err!(format!(
-                            "Expecting identifier, found : {:?}",
-                            self.peek_token()
-                        ));
-                    }
-                }
+                let constraint_name = self.parse_identifier()?;
+                let table_key = self.parse_table_key(constraint_name)?;
+                Ok(AlterOperation::AddConstraint(table_key))
             } else {
                 return parser_err!(format!(
                     "Expecting ADD CONSTRAINT, found :{:?}",
@@ -1079,6 +1073,14 @@ impl Parser {
         Ok(SQLObjectName(self.parse_list_of_ids(&Token::Period)?))
     }
 
+    /// Parse a simple one-word identifier (possibly quoted, possibly a keyword)
+    pub fn parse_identifier(&mut self) -> Result<SQLIdent, ParserError> {
+        match self.next_token() {
+            Some(Token::SQLWord(w)) => Ok(w.as_sql_ident()),
+            unexpected => parser_err!(format!("Expected identifier, found {:?}", unexpected)),
+        }
+    }
+
     /// Parse a comma-separated list of unqualified, possibly quoted identifiers
     pub fn parse_column_names(&mut self) -> Result<Vec<SQLIdent>, ParserError> {
         Ok(self.parse_list_of_ids(&Token::Comma)?)
@@ -1132,7 +1134,64 @@ impl Parser {
         })
     }
 
-    /// Parse a SELECT statement
+    /// Parse a query expression, i.e. a `SELECT` statement optionally
+    /// preceeded with some `WITH` CTE declarations and optionally followed
+    /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
+    /// expect the initial keyword to be already consumed
+    pub fn parse_query(&mut self) -> Result<SQLQuery, ParserError> {
+        let ctes = if self.parse_keyword("WITH") {
+            // TODO: optional RECURSIVE
+            self.parse_cte_list()?
+        } else {
+            vec![]
+        };
+
+        self.expect_keyword("SELECT")?;
+        let body = self.parse_select()?;
+
+        let order_by = if self.parse_keywords(vec!["ORDER", "BY"]) {
+            Some(self.parse_order_by_expr_list()?)
+        } else {
+            None
+        };
+
+        let limit = if self.parse_keyword("LIMIT") {
+            self.parse_limit()?
+        } else {
+            None
+        };
+
+        Ok(SQLQuery {
+            ctes,
+            body,
+            limit,
+            order_by,
+        })
+    }
+
+    /// Parse one or more (comma-separated) `alias AS (subquery)` CTEs,
+    /// assuming the initial `WITH` was already consumed.
+    fn parse_cte_list(&mut self) -> Result<Vec<Cte>, ParserError> {
+        let mut cte = vec![];
+        loop {
+            let alias = self.parse_identifier()?;
+            // TODO: Optional `( <column list> )`
+            self.expect_keyword("AS")?;
+            self.expect_token(&Token::LParen)?;
+            cte.push(Cte {
+                alias,
+                query: self.parse_query()?,
+            });
+            self.expect_token(&Token::RParen)?;
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+        return Ok(cte);
+    }
+
+    /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`),
+    /// assuming the initial `SELECT` was already consumed
     pub fn parse_select(&mut self) -> Result<SQLSelect, ParserError> {
         let projection = self.parse_expr_list()?;
 
@@ -1145,8 +1204,7 @@ impl Parser {
         };
 
         let selection = if self.parse_keyword("WHERE") {
-            let expr = self.parse_expr()?;
-            Some(expr)
+            Some(self.parse_expr()?)
         } else {
             None
         };
@@ -1163,25 +1221,11 @@ impl Parser {
             None
         };
 
-        let order_by = if self.parse_keywords(vec!["ORDER", "BY"]) {
-            Some(self.parse_order_by_expr_list()?)
-        } else {
-            None
-        };
-
-        let limit = if self.parse_keyword("LIMIT") {
-            self.parse_limit()?
-        } else {
-            None
-        };
-
         Ok(SQLSelect {
             projection,
             selection,
             relation,
             joins,
-            limit,
-            order_by,
             group_by,
             having,
         })
@@ -1190,18 +1234,14 @@ impl Parser {
     /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
     pub fn parse_table_factor(&mut self) -> Result<TableFactor, ParserError> {
         if self.consume_token(&Token::LParen) {
-            self.expect_keyword("SELECT")?;
-            let subquery = self.parse_select()?;
+            let subquery = Box::new(self.parse_query()?);
             self.expect_token(&Token::RParen)?;
-            Ok(TableFactor::Derived {
-                subquery: Box::new(subquery),
-                alias: self.parse_optional_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?,
-            })
+            let alias = self.parse_optional_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+            Ok(TableFactor::Derived { subquery, alias })
         } else {
-            Ok(TableFactor::Table {
-                name: self.parse_object_name()?,
-                alias: self.parse_optional_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?,
-            })
+            let name = self.parse_object_name()?;
+            let alias = self.parse_optional_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+            Ok(TableFactor::Table { name, alias })
         }
     }
 

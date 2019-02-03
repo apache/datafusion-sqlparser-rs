@@ -11,7 +11,10 @@ fn parse_simple_select() {
     let ast = Parser::parse_sql(&AnsiSqlDialect {}, sql).unwrap();
     assert_eq!(1, ast.len());
     match ast.first().unwrap() {
-        SQLStatement::SQLSelect(SQLSelect { projection, .. }) => {
+        SQLStatement::SQLSelect(SQLQuery {
+            body: SQLSelect { projection, .. },
+            ..
+        }) => {
             assert_eq!(3, projection.len());
         }
         _ => assert!(false),

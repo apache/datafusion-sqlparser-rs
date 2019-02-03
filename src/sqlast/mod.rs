@@ -20,7 +20,9 @@ mod sqltype;
 mod table_key;
 mod value;
 
-pub use self::query::{Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLSelect, TableFactor};
+pub use self::query::{
+    Cte, Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLQuery, SQLSelect, TableFactor,
+};
 pub use self::sqltype::SQLType;
 pub use self::table_key::{AlterOperation, Key, TableKey};
 pub use self::value::Value;
@@ -76,7 +78,7 @@ pub enum ASTNode {
     },
     /// A parenthesized subquery `(SELECT ...)`, used in expression like
     /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
-    SQLSubquery(Box<SQLSelect>),
+    SQLSubquery(Box<SQLQuery>),
 }
 
 impl ToString for ASTNode {
@@ -139,7 +141,7 @@ impl ToString for ASTNode {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SQLStatement {
     /// SELECT
-    SQLSelect(SQLSelect),
+    SQLSelect(SQLQuery),
     /// INSERT
     SQLInsert {
         /// TABLE
@@ -177,7 +179,7 @@ pub enum SQLStatement {
     SQLCreateView {
         /// View name
         name: SQLObjectName,
-        query: SQLSelect,
+        query: SQLQuery,
     },
     /// CREATE TABLE
     SQLCreateTable {

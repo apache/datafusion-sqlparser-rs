@@ -5,7 +5,7 @@ pub struct SQLSelect {
     /// projection expressions
     pub projection: Vec<ASTNode>,
     /// FROM
-    pub relation: Option<Box<ASTNode>>, // TableFactor
+    pub relation: Option<TableFactor>,
     // JOIN
     pub joins: Vec<Join>,
     /// WHERE
@@ -31,7 +31,7 @@ impl ToString for SQLSelect {
                 .join(", ")
         );
         if let Some(ref relation) = self.relation {
-            s += &format!(" FROM {}", relation.as_ref().to_string());
+            s += &format!(" FROM {}", relation.to_string());
         }
         for join in &self.joins {
             s += &join.to_string();
@@ -69,9 +69,38 @@ impl ToString for SQLSelect {
     }
 }
 
+/// A table name or a parenthesized subquery with an optional alias
+#[derive(Debug, Clone, PartialEq)]
+pub enum TableFactor {
+    Table {
+        name: SQLObjectName,
+        alias: Option<SQLIdent>,
+    },
+    Derived {
+        subquery: Box<SQLSelect>,
+        alias: Option<SQLIdent>,
+    },
+}
+
+impl ToString for TableFactor {
+    fn to_string(&self) -> String {
+        let (base, alias) = match self {
+            TableFactor::Table { name, alias } => (name.to_string(), alias),
+            TableFactor::Derived { subquery, alias } => {
+                (format!("({})", subquery.to_string()), alias)
+            }
+        };
+        if let Some(alias) = alias {
+            format!("{} AS {}", base, alias)
+        } else {
+            base
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Join {
-    pub relation: ASTNode, // TableFactor
+    pub relation: TableFactor,
     pub join_operator: JoinOperator,
 }
 

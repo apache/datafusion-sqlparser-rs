@@ -20,7 +20,7 @@ mod sqltype;
 mod table_key;
 mod value;
 
-pub use self::query::{Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLSelect};
+pub use self::query::{Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLSelect, TableFactor};
 pub use self::sqltype::SQLType;
 pub use self::table_key::{AlterOperation, Key, TableKey};
 pub use self::value::Value;
@@ -30,7 +30,8 @@ pub use self::sql_operator::SQLOperator;
 /// Identifier name, in the originally quoted form (e.g. `"id"`)
 pub type SQLIdent = String;
 
-/// SQL Abstract Syntax Tree (AST)
+/// Represents a parsed SQL expression, which is a common building
+/// block of SQL statements (the part after SELECT, WHERE, etc.)
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASTNode {
     /// Identifier e.g. table name or column name
@@ -72,11 +73,6 @@ pub enum ASTNode {
         conditions: Vec<ASTNode>,
         results: Vec<ASTNode>,
         else_result: Option<Box<ASTNode>>,
-    },
-    /// A table name or a parenthesized subquery with an optional alias
-    TableFactor {
-        relation: Box<ASTNode>, // SQLNested or SQLCompoundIdentifier
-        alias: Option<SQLIdent>,
     },
     /// A parenthesized subquery `(SELECT ...)`, used in expression like
     /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
@@ -133,13 +129,6 @@ impl ToString for ASTNode {
                     s += &format!(" ELSE {}", else_result.to_string())
                 }
                 s + " END"
-            }
-            ASTNode::TableFactor { relation, alias } => {
-                if let Some(alias) = alias {
-                    format!("{} AS {}", relation.to_string(), alias)
-                } else {
-                    relation.to_string()
-                }
             }
             ASTNode::SQLSubquery(s) => format!("({})", s.to_string()),
         }

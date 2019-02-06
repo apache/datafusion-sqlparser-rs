@@ -1119,8 +1119,8 @@ impl Parser {
     pub fn parse_select(&mut self) -> Result<SQLSelect, ParserError> {
         let projection = self.parse_expr_list()?;
 
-        let (relation, joins): (Option<Box<ASTNode>>, Vec<Join>) = if self.parse_keyword("FROM") {
-            let relation = Some(Box::new(self.parse_table_factor()?));
+        let (relation, joins) = if self.parse_keyword("FROM") {
+            let relation = Some(self.parse_table_factor()?);
             let joins = self.parse_joins()?;
             (relation, joins)
         } else {
@@ -1171,20 +1171,21 @@ impl Parser {
     }
 
     /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
-    pub fn parse_table_factor(&mut self) -> Result<ASTNode, ParserError> {
-        let relation = if self.consume_token(&Token::LParen) {
+    pub fn parse_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        if self.consume_token(&Token::LParen) {
             self.expect_keyword("SELECT")?;
             let subquery = self.parse_select()?;
             self.expect_token(&Token::RParen)?;
-            ASTNode::SQLSubquery(subquery)
+            Ok(TableFactor::Derived {
+                subquery: Box::new(subquery),
+                alias: self.parse_optional_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?,
+            })
         } else {
-            ASTNode::SQLCompoundIdentifier(self.parse_object_name()?.0)
-        };
-        let alias = self.parse_optional_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
-        Ok(ASTNode::TableFactor {
-            relation: Box::new(relation),
-            alias,
-        })
+            Ok(TableFactor::Table {
+                name: self.parse_object_name()?,
+                alias: self.parse_optional_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?,
+            })
+        }
     }
 
     fn parse_join_constraint(&mut self, natural: bool) -> Result<JoinConstraint, ParserError> {

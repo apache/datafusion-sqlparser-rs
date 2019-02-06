@@ -432,6 +432,14 @@ fn parse_delimited_identifiers() {
     // check that quoted identifiers in any position remain quoted after serialization
     let sql = r#"SELECT "alias"."bar baz", "myfun"(), "simple id" FROM "a table" AS "alias""#;
     let select = verified_only_select(sql);
+    // check FROM
+    match select.relation.unwrap() {
+        TableFactor::Table { name, alias } => {
+            assert_eq!(vec![r#""a table""#.to_string()], name.0);
+            assert_eq!(r#""alias""#, alias.unwrap());
+        }
+        _ => panic!("Expecting TableFactor::Table"),
+    }
     // check SELECT
     assert_eq!(3, select.projection.len());
     assert_eq!(
@@ -515,45 +523,33 @@ fn parse_case_expression() {
 #[test]
 fn parse_implicit_join() {
     let sql = "SELECT * FROM t1, t2";
-
-    match verified_stmt(sql) {
-        SQLStatement::SQLSelect(SQLSelect { joins, .. }) => {
-            assert_eq!(joins.len(), 1);
-            assert_eq!(
-                joins[0],
-                Join {
-                    relation: ASTNode::TableFactor {
-                        relation: Box::new(ASTNode::SQLCompoundIdentifier(vec!["t2".to_string()])),
-                        alias: None,
-                    },
-                    join_operator: JoinOperator::Implicit
-                }
-            )
-        }
-        _ => assert!(false),
-    }
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Join {
+            relation: TableFactor::Table {
+                name: SQLObjectName(vec!["t2".to_string()]),
+                alias: None,
+            },
+            join_operator: JoinOperator::Implicit
+        },
+        only(&select.joins),
+    );
 }
 
 #[test]
 fn parse_cross_join() {
     let sql = "SELECT * FROM t1 CROSS JOIN t2";
-
-    match verified_stmt(sql) {
-        SQLStatement::SQLSelect(SQLSelect { joins, .. }) => {
-            assert_eq!(joins.len(), 1);
-            assert_eq!(
-                joins[0],
-                Join {
-                    relation: ASTNode::TableFactor {
-                        relation: Box::new(ASTNode::SQLCompoundIdentifier(vec!["t2".to_string()])),
-                        alias: None,
-                    },
-                    join_operator: JoinOperator::Cross
-                }
-            )
-        }
-        _ => assert!(false),
-    }
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Join {
+            relation: TableFactor::Table {
+                name: SQLObjectName(vec!["t2".to_string()]),
+                alias: None,
+            },
+            join_operator: JoinOperator::Cross
+        },
+        only(&select.joins),
+    );
 }
 
 #[test]
@@ -564,8 +560,8 @@ fn parse_joins_on() {
         f: impl Fn(JoinConstraint) -> JoinOperator,
     ) -> Join {
         Join {
-            relation: ASTNode::TableFactor {
-                relation: Box::new(ASTNode::SQLCompoundIdentifier(vec![relation.into()])),
+            relation: TableFactor::Table {
+                name: SQLObjectName(vec![relation.into()]),
                 alias,
             },
             join_operator: f(JoinConstraint::On(ASTNode::SQLBinaryExpr {
@@ -615,8 +611,8 @@ fn parse_joins_using() {
         f: impl Fn(JoinConstraint) -> JoinOperator,
     ) -> Join {
         Join {
-            relation: ASTNode::TableFactor {
-                relation: Box::new(ASTNode::SQLCompoundIdentifier(vec![relation.into()])),
+            relation: TableFactor::Table {
+                name: SQLObjectName(vec![relation.into()]),
                 alias,
             },
             join_operator: f(JoinConstraint::Using(vec!["c1".into()])),

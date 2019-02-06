@@ -48,16 +48,11 @@ fn parse_where_delete_statement() {
 
 #[test]
 fn parse_simple_select() {
-    let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5");
-    match verified_stmt(&sql) {
-        SQLStatement::SQLSelect(SQLSelect {
-            projection, limit, ..
-        }) => {
-            assert_eq!(3, projection.len());
-            assert_eq!(Some(ASTNode::SQLValue(Value::Long(5))), limit);
-        }
-        _ => assert!(false),
-    }
+    let sql = "SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5";
+    let select = verified_only_select(sql);
+    assert_eq!(3, select.projection.len());
+    let select = verified_query(sql);
+    assert_eq!(Some(ASTNode::SQLValue(Value::Long(5))), select.limit);
 }
 
 #[test]
@@ -196,69 +191,57 @@ fn parse_not_precedence() {
 
 #[test]
 fn parse_like() {
-    let sql = String::from("SELECT * FROM customers WHERE name LIKE '%a'");
-    match verified_stmt(&sql) {
-        SQLStatement::SQLSelect(SQLSelect { selection, .. }) => {
-            assert_eq!(
-                ASTNode::SQLBinaryExpr {
-                    left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
-                    op: SQLOperator::Like,
-                    right: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
-                        "%a".to_string()
-                    ))),
-                },
-                selection.unwrap()
-            );
-        }
-        _ => assert!(false),
-    }
+    let sql = "SELECT * FROM customers WHERE name LIKE '%a'";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        ASTNode::SQLBinaryExpr {
+            left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
+            op: SQLOperator::Like,
+            right: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                "%a".to_string()
+            ))),
+        },
+        select.selection.unwrap()
+    );
 }
 
 #[test]
 fn parse_not_like() {
-    let sql = String::from("SELECT * FROM customers WHERE name NOT LIKE '%a'");
-    match verified_stmt(&sql) {
-        SQLStatement::SQLSelect(SQLSelect { selection, .. }) => {
-            assert_eq!(
-                ASTNode::SQLBinaryExpr {
-                    left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
-                    op: SQLOperator::NotLike,
-                    right: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
-                        "%a".to_string()
-                    ))),
-                },
-                selection.unwrap()
-            );
-        }
-        _ => assert!(false),
-    }
+    let sql = "SELECT * FROM customers WHERE name NOT LIKE '%a'";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        ASTNode::SQLBinaryExpr {
+            left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
+            op: SQLOperator::NotLike,
+            right: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                "%a".to_string()
+            ))),
+        },
+        select.selection.unwrap()
+    );
 }
 
 #[test]
 fn parse_select_order_by() {
     fn chk(sql: &str) {
-        match verified_stmt(&sql) {
-            SQLStatement::SQLSelect(SQLSelect { order_by, .. }) => {
-                assert_eq!(
-                    Some(vec![
-                        SQLOrderByExpr {
-                            expr: ASTNode::SQLIdentifier("lname".to_string()),
-                            asc: Some(true),
-                        },
-                        SQLOrderByExpr {
-                            expr: ASTNode::SQLIdentifier("fname".to_string()),
-                            asc: Some(false),
-                        },
-                        SQLOrderByExpr {
-                            expr: ASTNode::SQLIdentifier("id".to_string()),
-                            asc: None,
-                        },
-                    ]),
-                    order_by
-                );
-            }
-            _ => assert!(false),
-        }
+        let select = verified_query(sql);
+        assert_eq!(
+            Some(vec![
+                SQLOrderByExpr {
+                    expr: ASTNode::SQLIdentifier("lname".to_string()),
+                    asc: Some(true),
+                },
+                SQLOrderByExpr {
+                    expr: ASTNode::SQLIdentifier("fname".to_string()),
+                    asc: Some(false),
+                },
+                SQLOrderByExpr {
+                    expr: ASTNode::SQLIdentifier("id".to_string()),
+                    asc: None,
+                },
+            ]),
+            select.order_by
+        );
     }
     chk("SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC, id");
     // make sure ORDER is not treated as an alias
@@ -267,47 +250,36 @@ fn parse_select_order_by() {
 
 #[test]
 fn parse_select_order_by_limit() {
-    let sql = String::from(
-        "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC LIMIT 2",
+    let sql = "SELECT id, fname, lname FROM customer WHERE id < 5 \
+               ORDER BY lname ASC, fname DESC LIMIT 2";
+    let select = verified_query(sql);
+    assert_eq!(
+        Some(vec![
+            SQLOrderByExpr {
+                expr: ASTNode::SQLIdentifier("lname".to_string()),
+                asc: Some(true),
+            },
+            SQLOrderByExpr {
+                expr: ASTNode::SQLIdentifier("fname".to_string()),
+                asc: Some(false),
+            },
+        ]),
+        select.order_by
     );
-    match verified_stmt(&sql) {
-        SQLStatement::SQLSelect(SQLSelect {
-            order_by, limit, ..
-        }) => {
-            assert_eq!(
-                Some(vec![
-                    SQLOrderByExpr {
-                        expr: ASTNode::SQLIdentifier("lname".to_string()),
-                        asc: Some(true),
-                    },
-                    SQLOrderByExpr {
-                        expr: ASTNode::SQLIdentifier("fname".to_string()),
-                        asc: Some(false),
-                    },
-                ]),
-                order_by
-            );
-            assert_eq!(Some(ASTNode::SQLValue(Value::Long(2))), limit);
-        }
-        _ => assert!(false),
-    }
+    assert_eq!(Some(ASTNode::SQLValue(Value::Long(2))), select.limit);
 }
 
 #[test]
 fn parse_select_group_by() {
-    let sql = String::from("SELECT id, fname, lname FROM customer GROUP BY lname, fname");
-    match verified_stmt(&sql) {
-        SQLStatement::SQLSelect(SQLSelect { group_by, .. }) => {
-            assert_eq!(
-                Some(vec![
-                    ASTNode::SQLIdentifier("lname".to_string()),
-                    ASTNode::SQLIdentifier("fname".to_string()),
-                ]),
-                group_by
-            );
-        }
-        _ => assert!(false),
-    }
+    let sql = "SELECT id, fname, lname FROM customer GROUP BY lname, fname";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        Some(vec![
+            ASTNode::SQLIdentifier("lname".to_string()),
+            ASTNode::SQLIdentifier("fname".to_string()),
+        ]),
+        select.group_by
+    );
 }
 
 #[test]

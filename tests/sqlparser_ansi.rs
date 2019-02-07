@@ -12,7 +12,7 @@ fn parse_simple_select() {
     assert_eq!(1, ast.len());
     match ast.first().unwrap() {
         SQLStatement::SQLSelect(SQLQuery {
-            body: SQLSelect { projection, .. },
+            body: SQLSetExpr::Select(SQLSelect { projection, .. }),
             ..
         }) => {
             assert_eq!(3, projection.len());

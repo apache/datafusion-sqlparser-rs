@@ -7,7 +7,7 @@ pub struct SQLQuery {
     /// WITH (common table expressions, or CTEs)
     pub ctes: Vec<Cte>,
     /// SELECT or UNION / EXCEPT / INTECEPT
-    pub body: SQLSelect,
+    pub body: SQLSetExpr,
     /// ORDER BY
     pub order_by: Option<Vec<SQLOrderByExpr>>,
     /// LIMIT
@@ -42,6 +42,66 @@ impl ToString for SQLQuery {
             s += &format!(" LIMIT {}", limit.to_string());
         }
         s
+    }
+}
+
+/// A node in a tree, representing a "query body" expression, roughly:
+/// `SELECT ... [ {UNION|EXCEPT|INTERSECT} SELECT ...]`
+#[derive(Debug, Clone, PartialEq)]
+pub enum SQLSetExpr {
+    /// Restricted SELECT .. FROM .. HAVING (no ORDER BY or set operations)
+    Select(SQLSelect),
+    /// Parenthesized SELECT subquery, which may include more set operations
+    /// in its body and an optional ORDER BY / LIMIT.
+    Query(Box<SQLQuery>),
+    /// UNION/EXCEPT/INTERSECT of two queries
+    SetOperation {
+        op: SQLSetOperator,
+        all: bool,
+        left: Box<SQLSetExpr>,
+        right: Box<SQLSetExpr>,
+    },
+    // TODO: ANSI SQL supports `TABLE` and `VALUES` here.
+}
+
+impl ToString for SQLSetExpr {
+    fn to_string(&self) -> String {
+        match self {
+            SQLSetExpr::Select(s) => s.to_string(),
+            SQLSetExpr::Query(q) => format!("({})", q.to_string()),
+            SQLSetExpr::SetOperation {
+                left,
+                right,
+                op,
+                all,
+            } => {
+                let all_str = if *all { " ALL" } else { "" };
+                format!(
+                    "{} {}{} {}",
+                    left.to_string(),
+                    op.to_string(),
+                    all_str,
+                    right.to_string()
+                )
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SQLSetOperator {
+    Union,
+    Except,
+    Intersect,
+}
+
+impl ToString for SQLSetOperator {
+    fn to_string(&self) -> String {
+        match self {
+            SQLSetOperator::Union => "UNION".to_string(),
+            SQLSetOperator::Except => "EXCEPT".to_string(),
+            SQLSetOperator::Intersect => "INTERSECT".to_string(),
+        }
     }
 }
 

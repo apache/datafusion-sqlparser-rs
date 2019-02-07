@@ -60,6 +60,7 @@ impl Parser {
         let mut parser = Parser::new(tokens);
         let mut stmts = Vec::new();
         let mut expecting_statement_delimiter = false;
+        debug!("Parsing sql '{}'...", sql);
         loop {
             // ignore empty statements (between successive statement delimiters)
             while parser.consume_token(&Token::SemiColon) {
@@ -1208,8 +1209,7 @@ impl Parser {
             vec![]
         };
 
-        self.expect_keyword("SELECT")?;
-        let body = self.parse_select()?;
+        let body = self.parse_query_body(0)?;
 
         let order_by = if self.parse_keywords(vec!["ORDER", "BY"]) {
             Some(self.parse_order_by_expr_list()?)
@@ -1250,6 +1250,64 @@ impl Parser {
             }
         }
         return Ok(cte);
+    }
+
+    /// Parse a "query body", which is an expression with roughly the
+    /// following grammar:
+    /// ```text
+    ///   query_body ::= restricted_select | '(' subquery ')' | set_operation
+    ///   restricted_select ::= 'SELECT' [expr_list] [ from ] [ where ] [ groupby_having ]
+    ///   subquery ::= query_body [ order_by_limit ]
+    ///   set_operation ::= query_body { 'UNION' | 'EXCEPT' | 'INTERSECT' } [ 'ALL' ] query_body
+    /// ```
+    fn parse_query_body(&mut self, precedence: u8) -> Result<SQLSetExpr, ParserError> {
+        // We parse the expression using a Pratt parser, as in `parse_expr()`.
+        // Start by parsing a restricted SELECT or a `(subquery)`:
+        let mut expr = if self.parse_keyword("SELECT") {
+            SQLSetExpr::Select(self.parse_select()?)
+        } else if self.consume_token(&Token::LParen) {
+            // CTEs are not allowed here, but the parser currently accepts them
+            let subquery = self.parse_query()?;
+            self.expect_token(&Token::RParen)?;
+            SQLSetExpr::Query(Box::new(subquery))
+        } else {
+            parser_err!("Expected SELECT or a subquery in the query body!")?
+        };
+
+        loop {
+            // The query can be optionally followed by a set operator:
+            let next_token = self.peek_token();
+            let op = self.parse_set_operator(&next_token);
+            let next_precedence = match op {
+                // UNION and EXCEPT have the same binding power and evaluate left-to-right
+                Some(SQLSetOperator::Union) | Some(SQLSetOperator::Except) => 10,
+                // INTERSECT has higher precedence than UNION/EXCEPT
+                Some(SQLSetOperator::Intersect) => 20,
+                // Unexpected token or EOF => stop parsing the query body
+                None => break,
+            };
+            if precedence >= next_precedence {
+                break;
+            }
+            self.next_token(); // skip past the set operator
+            expr = SQLSetExpr::SetOperation {
+                left: Box::new(expr),
+                op: op.unwrap(),
+                all: self.parse_keyword("ALL"),
+                right: Box::new(self.parse_query_body(next_precedence)?),
+            };
+        }
+
+        Ok(expr)
+    }
+
+    fn parse_set_operator(&mut self, token: &Option<Token>) -> Option<SQLSetOperator> {
+        match token {
+            Some(Token::SQLWord(w)) if w.keyword == "UNION" => Some(SQLSetOperator::Union),
+            Some(Token::SQLWord(w)) if w.keyword == "EXCEPT" => Some(SQLSetOperator::Except),
+            Some(Token::SQLWord(w)) if w.keyword == "INTERSECT" => Some(SQLSetOperator::Intersect),
+            _ => None,
+        }
     }
 
     /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`),

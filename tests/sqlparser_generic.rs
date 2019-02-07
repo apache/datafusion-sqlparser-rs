@@ -826,6 +826,24 @@ fn parse_derived_tables() {
 }
 
 #[test]
+fn parse_union() {
+    // TODO: add assertions
+    verified_stmt("SELECT 1 UNION SELECT 2");
+    verified_stmt("SELECT 1 UNION ALL SELECT 2");
+    verified_stmt("SELECT 1 EXCEPT SELECT 2");
+    verified_stmt("SELECT 1 EXCEPT ALL SELECT 2");
+    verified_stmt("SELECT 1 INTERSECT SELECT 2");
+    verified_stmt("SELECT 1 INTERSECT ALL SELECT 2");
+    verified_stmt("SELECT 1 UNION SELECT 2 UNION SELECT 3");
+    verified_stmt("SELECT 1 EXCEPT SELECT 2 UNION SELECT 3"); // Union[Except[1,2], 3]
+    verified_stmt("SELECT 1 INTERSECT (SELECT 2 EXCEPT SELECT 3)");
+    verified_stmt("WITH cte AS (SELECT 1 AS foo) (SELECT foo FROM cte ORDER BY 1 LIMIT 1)");
+    verified_stmt("SELECT 1 UNION (SELECT 2 ORDER BY 1 LIMIT 1)");
+    verified_stmt("SELECT 1 UNION SELECT 2 INTERSECT SELECT 3"); // Union[1, Intersect[2,3]]
+    verified_stmt("SELECT foo FROM tab UNION SELECT bar FROM TAB");
+}
+
+#[test]
 fn parse_multiple_statements() {
     fn test_with(sql1: &str, sql2_kw: &str, sql2_rest: &str) {
         // Check that a string consisting of two statements delimited by a semicolon
@@ -920,7 +938,10 @@ fn expr_from_projection(item: &SQLSelectItem) -> &ASTNode {
 }
 
 fn verified_only_select(query: &str) -> SQLSelect {
-    verified_query(query).body
+    match verified_query(query).body {
+        SQLSetExpr::Select(s) => s,
+        _ => panic!("Expected SQLSetExpr::Select"),
+    }
 }
 
 fn verified_stmt(query: &str) -> SQLStatement {

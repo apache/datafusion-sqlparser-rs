@@ -716,8 +716,7 @@ pub const ALL_KEYWORDS: &'static [&'static str] = &[
 /// can be parsed unambiguously without looking ahead.
 pub const RESERVED_FOR_TABLE_ALIAS: &'static [&'static str] = &[
     // Reserved as both a table and a column alias:
-    WITH, SELECT, WHERE, GROUP, ORDER,
-    // TODO add these with tests: UNION, EXCEPT, INTERSECT,
+    WITH, SELECT, WHERE, GROUP, ORDER, UNION, EXCEPT, INTERSECT,
     // Reserved only as a table alias in the `FROM`/`JOIN` clauses:
     ON, JOIN, INNER, CROSS, FULL, LEFT, RIGHT, NATURAL, USING,
 ];
@@ -726,8 +725,7 @@ pub const RESERVED_FOR_TABLE_ALIAS: &'static [&'static str] = &[
 /// can be parsed unambiguously without looking ahead.
 pub const RESERVED_FOR_COLUMN_ALIAS: &'static [&'static str] = &[
     // Reserved as both a table and a column alias:
-    WITH, SELECT, WHERE, GROUP, ORDER,
-    // TODO add these with tests: UNION, EXCEPT, INTERSECT,
+    WITH, SELECT, WHERE, GROUP, ORDER, UNION, EXCEPT, INTERSECT,
     // Reserved only as a column alias in the `SELECT` clause:
     FROM,
 ];

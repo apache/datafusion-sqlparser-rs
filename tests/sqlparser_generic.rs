@@ -289,6 +289,28 @@ fn parse_in_subquery() {
 }
 
 #[test]
+fn parse_between() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE age {}BETWEEN 25 AND 32",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            ASTNode::SQLBetween {
+                expr: Box::new(ASTNode::SQLIdentifier("age".to_string())),
+                low: Box::new(ASTNode::SQLValue(Value::Long(25))),
+                high: Box::new(ASTNode::SQLValue(Value::Long(32))),
+                negated,
+            },
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
+}
+
+#[test]
 fn parse_select_order_by() {
     fn chk(sql: &str) {
         let select = verified_query(sql);

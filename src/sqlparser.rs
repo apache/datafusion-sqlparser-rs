@@ -309,6 +309,8 @@ impl Parser {
                 Token::SQLWord(ref k) if k.keyword == "NOT" => {
                     if self.parse_keyword("IN") {
                         self.parse_in(expr, true)
+                    } else if self.parse_keyword("BETWEEN") {
+                        self.parse_between(expr, true)
                     } else if self.parse_keyword("LIKE") {
                         Ok(ASTNode::SQLBinaryExpr {
                             left: Box::new(expr),
@@ -323,6 +325,7 @@ impl Parser {
                     }
                 }
                 Token::SQLWord(ref k) if k.keyword == "IN" => self.parse_in(expr, false),
+                Token::SQLWord(ref k) if k.keyword == "BETWEEN" => self.parse_between(expr, false),
                 Token::DoubleColon => self.parse_pg_cast(expr),
                 Token::SQLWord(_)
                 | Token::Eq
@@ -367,6 +370,19 @@ impl Parser {
         };
         self.expect_token(&Token::RParen)?;
         Ok(in_op)
+    }
+
+    /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed
+    pub fn parse_between(&mut self, expr: ASTNode, negated: bool) -> Result<ASTNode, ParserError> {
+        let low = self.parse_prefix()?;
+        self.expect_keyword("AND")?;
+        let high = self.parse_prefix()?;
+        Ok(ASTNode::SQLBetween {
+            expr: Box::new(expr),
+            negated,
+            low: Box::new(low),
+            high: Box::new(high),
+        })
     }
 
     /// Parse a postgresql casting style which is in the form of `expr::datatype`
@@ -418,6 +434,7 @@ impl Parser {
             &Token::SQLWord(ref k) if k.keyword == "NOT" => Ok(15),
             &Token::SQLWord(ref k) if k.keyword == "IS" => Ok(17),
             &Token::SQLWord(ref k) if k.keyword == "IN" => Ok(20),
+            &Token::SQLWord(ref k) if k.keyword == "BETWEEN" => Ok(20),
             &Token::SQLWord(ref k) if k.keyword == "LIKE" => Ok(20),
             &Token::Eq | &Token::Lt | &Token::LtEq | &Token::Neq | &Token::Gt | &Token::GtEq => {
                 Ok(20)

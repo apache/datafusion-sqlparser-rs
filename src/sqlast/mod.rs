@@ -64,6 +64,13 @@ pub enum ASTNode {
         subquery: Box<SQLQuery>,
         negated: bool,
     },
+    /// <expr> [ NOT ] BETWEEN <low> AND <high>
+    SQLBetween {
+        expr: Box<ASTNode>,
+        negated: bool,
+        low: Box<ASTNode>,
+        high: Box<ASTNode>,
+    },
     /// Binary expression e.g. `1 + 1` or `foo > bar`
     SQLBinaryExpr {
         left: Box<ASTNode>,
@@ -130,6 +137,18 @@ impl ToString for ASTNode {
                 expr.as_ref().to_string(),
                 if *negated { "NOT " } else { "" },
                 subquery.to_string()
+            ),
+            ASTNode::SQLBetween {
+                expr,
+                negated,
+                low,
+                high,
+            } => format!(
+                "{} {}BETWEEN {} AND {}",
+                expr.to_string(),
+                if *negated { "NOT " } else { "" },
+                low.to_string(),
+                high.to_string()
             ),
             ASTNode::SQLBinaryExpr { left, op, right } => format!(
                 "{} {} {}",

@@ -174,6 +174,7 @@ impl Parser {
                             expr: Box::new(self.parse_subexpr(p)?),
                         })
                     }
+                    // another SQLWord:
                     _ => match self.peek_token() {
                         Some(Token::LParen) => self.parse_function(w.as_sql_ident()),
                         Some(Token::Period) => {
@@ -201,8 +202,15 @@ impl Parser {
                         }
                         _ => Ok(ASTNode::SQLIdentifier(w.as_sql_ident())),
                     },
-                },
+                }, // End of Token::SQLWord
                 Token::Mult => Ok(ASTNode::SQLWildcard),
+                tok @ Token::Minus | tok @ Token::Plus => {
+                    let p = self.get_precedence(&tok)?;
+                    Ok(ASTNode::SQLUnary {
+                        operator: self.to_sql_operator(&tok)?,
+                        expr: Box::new(self.parse_subexpr(p)?),
+                    })
+                }
                 Token::Number(_)
                 | Token::SingleQuotedString(_)
                 | Token::NationalStringLiteral(_) => {

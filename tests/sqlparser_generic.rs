@@ -175,6 +175,27 @@ fn parse_compound_expr_2() {
 }
 
 #[test]
+fn parse_unary_math() {
+    use self::ASTNode::*;
+    use self::SQLOperator::*;
+    let sql = "- a + - b";
+    assert_eq!(
+        SQLBinaryExpr {
+            left: Box::new(SQLUnary {
+                operator: Minus,
+                expr: Box::new(SQLIdentifier("a".to_string())),
+            }),
+            op: Plus,
+            right: Box::new(SQLUnary {
+                operator: Minus,
+                expr: Box::new(SQLIdentifier("b".to_string())),
+            }),
+        },
+        verified_expr(sql)
+    );
+}
+
+#[test]
 fn parse_is_null() {
     use self::ASTNode::*;
     let sql = "a IS NULL";

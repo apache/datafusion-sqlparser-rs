@@ -1166,7 +1166,7 @@ impl Parser {
 
     pub fn parse_optional_precision_scale(
         &mut self,
-    ) -> Result<(usize, Option<usize>), ParserError> {
+    ) -> Result<(Option<usize>, Option<usize>), ParserError> {
         if self.consume_token(&Token::LParen) {
             let n = self.parse_literal_int()?;
             let scale = if self.consume_token(&Token::Comma) {
@@ -1175,9 +1175,9 @@ impl Parser {
                 None
             };
             self.expect_token(&Token::RParen)?;
-            Ok((n as usize, scale))
+            Ok((Some(n as usize), scale))
         } else {
-            parser_err!("Expecting `(`")
+            Ok((None, None))
         }
     }
 

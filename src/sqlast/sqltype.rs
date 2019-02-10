@@ -17,8 +17,8 @@ pub enum SQLType {
     Varbinary(usize),
     /// Large binary object e.g. BLOB(1000)
     Blob(usize),
-    /// Decimal type with precision and optional scale e.g. DECIMAL(10,2)
-    Decimal(usize, Option<usize>),
+    /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
+    Decimal(Option<usize>, Option<usize>),
     /// Small integer
     SmallInt,
     /// Integer
@@ -75,9 +75,13 @@ impl ToString for SQLType {
             SQLType::Blob(size) => format!("blob({})", size),
             SQLType::Decimal(precision, scale) => {
                 if let Some(scale) = scale {
-                    format!("numeric({},{})", precision, scale)
+                    format!("numeric({},{})", precision.unwrap(), scale)
                 } else {
-                    format!("numeric({})", precision)
+                    if let Some(precision) = precision {
+                        format!("numeric({})", precision)
+                    } else {
+                        format!("numeric")
+                    }
                 }
             }
             SQLType::SmallInt => "smallint".to_string(),

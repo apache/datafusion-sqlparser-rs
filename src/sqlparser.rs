@@ -289,14 +289,6 @@ impl Parser {
         })
     }
 
-    /// Parse a postgresql casting style which is in the form of `expr::datatype`
-    pub fn parse_pg_cast(&mut self, expr: ASTNode) -> Result<ASTNode, ParserError> {
-        Ok(ASTNode::SQLCast {
-            expr: Box::new(expr),
-            data_type: self.parse_data_type()?,
-        })
-    }
-
     /// Parse an expression infix (typically an operator)
     pub fn parse_infix(&mut self, expr: ASTNode, precedence: u8) -> Result<ASTNode, ParserError> {
         debug!("parsing infix");
@@ -308,24 +300,30 @@ impl Parser {
                     } else if self.parse_keywords(vec!["NOT", "NULL"]) {
                         Ok(ASTNode::SQLIsNotNull(Box::new(expr)))
                     } else {
-                        parser_err!("Invalid tokens after IS")
+                        parser_err!(format!(
+                            "Expected NULL or NOT NULL after IS, found {:?}",
+                            self.peek_token()
+                        ))
                     }
                 }
                 Token::SQLWord(ref k) if k.keyword == "NOT" => {
-                    if self.parse_keywords(vec!["LIKE"]) {
+                    if self.parse_keyword("IN") {
+                        self.parse_in(expr, true)
+                    } else if self.parse_keyword("LIKE") {
                         Ok(ASTNode::SQLBinaryExpr {
                             left: Box::new(expr),
                             op: SQLOperator::NotLike,
                             right: Box::new(self.parse_subexpr(precedence)?),
                         })
                     } else {
-                        parser_err!("Invalid tokens after NOT")
+                        parser_err!(format!(
+                            "Expected IN or LIKE after NOT, found {:?}",
+                            self.peek_token()
+                        ))
                     }
                 }
-                Token::DoubleColon => {
-                    let pg_cast = self.parse_pg_cast(expr)?;
-                    Ok(pg_cast)
-                }
+                Token::SQLWord(ref k) if k.keyword == "IN" => self.parse_in(expr, false),
+                Token::DoubleColon => self.parse_pg_cast(expr),
                 Token::SQLWord(_)
                 | Token::Eq
                 | Token::Neq
@@ -348,6 +346,35 @@ impl Parser {
             // in parse_subexpr.
             None => parser_err!("Unexpected EOF in parse_infix"),
         }
+    }
+
+    /// Parses the parens following the `[ NOT ] IN` operator
+    pub fn parse_in(&mut self, expr: ASTNode, negated: bool) -> Result<ASTNode, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let in_op = if self.parse_keyword("SELECT") || self.parse_keyword("WITH") {
+            self.prev_token();
+            ASTNode::SQLInSubquery {
+                expr: Box::new(expr),
+                subquery: Box::new(self.parse_query()?),
+                negated,
+            }
+        } else {
+            ASTNode::SQLInList {
+                expr: Box::new(expr),
+                list: self.parse_expr_list()?,
+                negated,
+            }
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(in_op)
+    }
+
+    /// Parse a postgresql casting style which is in the form of `expr::datatype`
+    pub fn parse_pg_cast(&mut self, expr: ASTNode) -> Result<ASTNode, ParserError> {
+        Ok(ASTNode::SQLCast {
+            expr: Box::new(expr),
+            data_type: self.parse_data_type()?,
+        })
     }
 
     /// Convert a token operator to an AST operator
@@ -390,6 +417,7 @@ impl Parser {
             &Token::SQLWord(ref k) if k.keyword == "AND" => Ok(10),
             &Token::SQLWord(ref k) if k.keyword == "NOT" => Ok(15),
             &Token::SQLWord(ref k) if k.keyword == "IS" => Ok(17),
+            &Token::SQLWord(ref k) if k.keyword == "IN" => Ok(20),
             &Token::SQLWord(ref k) if k.keyword == "LIKE" => Ok(20),
             &Token::Eq | &Token::Lt | &Token::LtEq | &Token::Neq | &Token::Gt | &Token::GtEq => {
                 Ok(20)

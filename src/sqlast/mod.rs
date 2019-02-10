@@ -52,6 +52,18 @@ pub enum ASTNode {
     SQLIsNull(Box<ASTNode>),
     /// `IS NOT NULL` expression
     SQLIsNotNull(Box<ASTNode>),
+    /// `[ NOT ] IN (val1, val2, ...)`
+    SQLInList {
+        expr: Box<ASTNode>,
+        list: Vec<ASTNode>,
+        negated: bool,
+    },
+    /// `[ NOT ] IN (SELECT ...)`
+    SQLInSubquery {
+        expr: Box<ASTNode>,
+        subquery: Box<SQLQuery>,
+        negated: bool,
+    },
     /// Binary expression e.g. `1 + 1` or `foo > bar`
     SQLBinaryExpr {
         left: Box<ASTNode>,
@@ -96,6 +108,29 @@ impl ToString for ASTNode {
             ASTNode::SQLCompoundIdentifier(s) => s.join("."),
             ASTNode::SQLIsNull(ast) => format!("{} IS NULL", ast.as_ref().to_string()),
             ASTNode::SQLIsNotNull(ast) => format!("{} IS NOT NULL", ast.as_ref().to_string()),
+            ASTNode::SQLInList {
+                expr,
+                list,
+                negated,
+            } => format!(
+                "{} {}IN ({})",
+                expr.as_ref().to_string(),
+                if *negated { "NOT " } else { "" },
+                list.iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+            ASTNode::SQLInSubquery {
+                expr,
+                subquery,
+                negated,
+            } => format!(
+                "{} {}IN ({})",
+                expr.as_ref().to_string(),
+                if *negated { "NOT " } else { "" },
+                subquery.to_string()
+            ),
             ASTNode::SQLBinaryExpr { left, op, right } => format!(
                 "{} {} {}",
                 left.as_ref().to_string(),

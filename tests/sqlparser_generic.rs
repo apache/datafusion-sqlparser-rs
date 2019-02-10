@@ -251,6 +251,44 @@ fn parse_not_like() {
 }
 
 #[test]
+fn parse_in_list() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE segment {}IN ('HIGH', 'MED')",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            ASTNode::SQLInList {
+                expr: Box::new(ASTNode::SQLIdentifier("segment".to_string())),
+                list: vec![
+                    ASTNode::SQLValue(Value::SingleQuotedString("HIGH".to_string())),
+                    ASTNode::SQLValue(Value::SingleQuotedString("MED".to_string())),
+                ],
+                negated,
+            },
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
+}
+
+#[test]
+fn parse_in_subquery() {
+    let sql = "SELECT * FROM customers WHERE segment IN (SELECT segm FROM bar)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        ASTNode::SQLInSubquery {
+            expr: Box::new(ASTNode::SQLIdentifier("segment".to_string())),
+            subquery: Box::new(verified_query("SELECT segm FROM bar")),
+            negated: false,
+        },
+        select.selection.unwrap()
+    );
+}
+
+#[test]
 fn parse_select_order_by() {
     fn chk(sql: &str) {
         let select = verified_query(sql);

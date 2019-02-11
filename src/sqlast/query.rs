@@ -18,14 +18,7 @@ impl ToString for SQLQuery {
     fn to_string(&self) -> String {
         let mut s = String::new();
         if !self.ctes.is_empty() {
-            s += &format!(
-                "WITH {} ",
-                self.ctes
-                    .iter()
-                    .map(|cte| format!("{} AS ({})", cte.alias, cte.query.to_string()))
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            )
+            s += &format!("WITH {} ", comma_separated_string(&self.ctes))
         }
         s += &self.body.to_string();
         if let Some(ref order_by) = self.order_by {
@@ -144,11 +137,25 @@ impl ToString for SQLSelect {
     }
 }
 
-/// A single CTE (used after `WITH`): `alias AS ( query )`
+/// A single CTE (used after `WITH`): `alias [(col1, col2, ...)] AS ( query )`
+/// The names in the column list before `AS`, when specified, replace the names
+/// of the columns returned by the query. The parser does not validate that the
+/// number of columns in the query matches the number of columns in the query.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Cte {
     pub alias: SQLIdent,
     pub query: SQLQuery,
+    pub renamed_columns: Vec<SQLIdent>,
+}
+
+impl ToString for Cte {
+    fn to_string(&self) -> String {
+        let mut s = self.alias.clone();
+        if !self.renamed_columns.is_empty() {
+            s += &format!(" ({})", comma_separated_string(&self.renamed_columns));
+        }
+        s + &format!(" AS ({})", self.query.to_string())
+    }
 }
 
 /// One item of the comma-separated list following `SELECT`

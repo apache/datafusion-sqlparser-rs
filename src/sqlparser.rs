@@ -1215,12 +1215,19 @@ impl Parser {
         let mut cte = vec![];
         loop {
             let alias = self.parse_identifier()?;
-            // TODO: Optional `( <column list> )`
+            let renamed_columns = if self.consume_token(&Token::LParen) {
+                let cols = self.parse_column_names()?;
+                self.expect_token(&Token::RParen)?;
+                cols
+            } else {
+                vec![]
+            };
             self.expect_keyword("AS")?;
             self.expect_token(&Token::LParen)?;
             cte.push(Cte {
                 alias,
                 query: self.parse_query()?,
+                renamed_columns,
             });
             self.expect_token(&Token::RParen)?;
             if !self.consume_token(&Token::Comma) {

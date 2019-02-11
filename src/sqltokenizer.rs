@@ -272,6 +272,14 @@ impl<'a> Tokenizer<'a> {
                     chars.next();
                     Ok(Some(Token::Whitespace(Whitespace::Newline)))
                 }
+                '\r' => {
+                    // Emit a single Whitespace::Newline token for \r and \r\n
+                    chars.next();
+                    if let Some('\n') = chars.peek() {
+                        chars.next();
+                    }
+                    Ok(Some(Token::Whitespace(Whitespace::Newline)))
+                }
                 'N' => {
                     chars.next(); // consume, to check the next char
                     match chars.peek() {
@@ -738,6 +746,26 @@ mod tests {
         let expected = vec![
             Token::Whitespace(Whitespace::Newline),
             Token::Whitespace(Whitespace::MultiLineComment("* Comment *".to_string())),
+            Token::Whitespace(Whitespace::Newline),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_newlines() {
+        let sql = String::from("line1\nline2\rline3\r\nline4\r");
+
+        let dialect = GenericSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::make_word("line1", None),
+            Token::Whitespace(Whitespace::Newline),
+            Token::make_word("line2", None),
+            Token::Whitespace(Whitespace::Newline),
+            Token::make_word("line3", None),
+            Token::Whitespace(Whitespace::Newline),
+            Token::make_word("line4", None),
             Token::Whitespace(Whitespace::Newline),
         ];
         compare(expected, tokens);

@@ -984,7 +984,7 @@ impl Parser {
                 "INT" | "INTEGER" => Ok(SQLType::Int),
                 "BIGINT" => Ok(SQLType::BigInt),
                 "VARCHAR" => Ok(SQLType::Varchar(self.parse_optional_precision()?)),
-                "CHARACTER" => {
+                "CHAR" | "CHARACTER" => {
                     if self.parse_keyword("VARYING") {
                         Ok(SQLType::Varchar(self.parse_optional_precision()?))
                     } else {

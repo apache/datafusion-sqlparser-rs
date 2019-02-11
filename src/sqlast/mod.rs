@@ -101,7 +101,11 @@ pub enum ASTNode {
     SQLValue(Value),
     /// Scalar function call e.g. `LEFT(foo, 5)`
     /// TODO: this can be a compound SQLObjectName as well (for UDFs)
-    SQLFunction { id: SQLIdent, args: Vec<ASTNode> },
+    SQLFunction {
+        name: SQLIdent,
+        args: Vec<ASTNode>,
+        over: Option<SQLWindowSpec>,
+    },
     /// CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END
     SQLCase {
         // TODO: support optional operand for "simple case"
@@ -171,14 +175,13 @@ impl ToString for ASTNode {
                 format!("{} {}", operator.to_string(), expr.as_ref().to_string())
             }
             ASTNode::SQLValue(v) => v.to_string(),
-            ASTNode::SQLFunction { id, args } => format!(
-                "{}({})",
-                id,
-                args.iter()
-                    .map(|a| a.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            ),
+            ASTNode::SQLFunction { name, args, over } => {
+                let mut s = format!("{}({})", name, comma_separated_string(args));
+                if let Some(o) = over {
+                    s += &format!(" OVER ({})", o.to_string())
+                }
+                s
+            }
             ASTNode::SQLCase {
                 conditions,
                 results,
@@ -199,6 +202,116 @@ impl ToString for ASTNode {
                 s + " END"
             }
             ASTNode::SQLSubquery(s) => format!("({})", s.to_string()),
+        }
+    }
+}
+
+/// A window specification (i.e. `OVER (PARTITION BY .. ORDER BY .. etc.)`)
+#[derive(Debug, Clone, PartialEq)]
+pub struct SQLWindowSpec {
+    pub partition_by: Vec<ASTNode>,
+    pub order_by: Vec<SQLOrderByExpr>,
+    pub window_frame: Option<SQLWindowFrame>,
+}
+
+impl ToString for SQLWindowSpec {
+    fn to_string(&self) -> String {
+        let mut clauses = vec![];
+        if !self.partition_by.is_empty() {
+            clauses.push(format!(
+                "PARTITION BY {}",
+                comma_separated_string(&self.partition_by)
+            ))
+        };
+        if !self.order_by.is_empty() {
+            clauses.push(format!(
+                "ORDER BY {}",
+                comma_separated_string(&self.order_by)
+            ))
+        };
+        if let Some(window_frame) = &self.window_frame {
+            if let Some(end_bound) = &window_frame.end_bound {
+                clauses.push(format!(
+                    "{} BETWEEN {} AND {}",
+                    window_frame.units.to_string(),
+                    window_frame.start_bound.to_string(),
+                    end_bound.to_string()
+                ));
+            } else {
+                clauses.push(format!(
+                    "{} {}",
+                    window_frame.units.to_string(),
+                    window_frame.start_bound.to_string()
+                ));
+            }
+        }
+        clauses.join(" ")
+    }
+}
+
+/// Specifies the data processed by a window function, e.g.
+/// `RANGE UNBOUNDED PRECEDING` or `ROWS BETWEEN 5 PRECEDING AND CURRENT ROW`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SQLWindowFrame {
+    pub units: SQLWindowFrameUnits,
+    pub start_bound: SQLWindowFrameBound,
+    /// The right bound of the `BETWEEN .. AND` clause.
+    pub end_bound: Option<SQLWindowFrameBound>,
+    // TBD: EXCLUDE
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SQLWindowFrameUnits {
+    Rows,
+    Range,
+    Groups,
+}
+
+impl ToString for SQLWindowFrameUnits {
+    fn to_string(&self) -> String {
+        match self {
+            SQLWindowFrameUnits::Rows => "ROWS".to_string(),
+            SQLWindowFrameUnits::Range => "RANGE".to_string(),
+            SQLWindowFrameUnits::Groups => "GROUPS".to_string(),
+        }
+    }
+}
+
+impl FromStr for SQLWindowFrameUnits {
+    type Err = ParserError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "ROWS" => Ok(SQLWindowFrameUnits::Rows),
+            "RANGE" => Ok(SQLWindowFrameUnits::Range),
+            "GROUPS" => Ok(SQLWindowFrameUnits::Groups),
+            _ => Err(ParserError::ParserError(format!(
+                "Expected ROWS, RANGE, or GROUPS, found: {}",
+                s
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SQLWindowFrameBound {
+    /// "CURRENT ROW"
+    CurrentRow,
+    /// "<N> PRECEDING" or "UNBOUNDED PRECEDING"
+    Preceding(Option<u64>),
+    /// "<N> FOLLOWING" or "UNBOUNDED FOLLOWING". This can only appear in
+    /// SQLWindowFrame::end_bound.
+    Following(Option<u64>),
+}
+
+impl ToString for SQLWindowFrameBound {
+    fn to_string(&self) -> String {
+        match self {
+            SQLWindowFrameBound::CurrentRow => "CURRENT ROW".to_string(),
+            SQLWindowFrameBound::Preceding(None) => "UNBOUNDED PRECEDING".to_string(),
+            SQLWindowFrameBound::Following(None) => "UNBOUNDED FOLLOWING".to_string(),
+            SQLWindowFrameBound::Preceding(Some(n)) => format!("{} PRECEDING", n),
+            SQLWindowFrameBound::Following(Some(n)) => format!("{} FOLLOWING", n),
         }
     }
 }

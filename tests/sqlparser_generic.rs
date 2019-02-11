@@ -119,8 +119,9 @@ fn parse_select_count_wildcard() {
     let select = verified_only_select(sql);
     assert_eq!(
         &ASTNode::SQLFunction {
-            id: "COUNT".to_string(),
+            name: "COUNT".to_string(),
             args: vec![ASTNode::SQLWildcard],
+            over: None,
         },
         expr_from_projection(only(&select.projection))
     );
@@ -532,10 +533,40 @@ fn parse_scalar_function_in_projection() {
     let select = verified_only_select(sql);
     assert_eq!(
         &ASTNode::SQLFunction {
-            id: String::from("sqrt"),
+            name: String::from("sqrt"),
             args: vec![ASTNode::SQLIdentifier(String::from("id"))],
+            over: None,
         },
         expr_from_projection(only(&select.projection))
+    );
+}
+
+#[test]
+fn parse_window_functions() {
+    let sql = "SELECT row_number() OVER (ORDER BY dt DESC), \
+               sum(foo) OVER (PARTITION BY a, b ORDER BY c, d \
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), \
+               avg(bar) OVER (ORDER BY a \
+               RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING), \
+               max(baz) OVER (ORDER BY a \
+               ROWS UNBOUNDED PRECEDING) \
+               FROM foo";
+    let select = verified_only_select(sql);
+    assert_eq!(4, select.projection.len());
+    assert_eq!(
+        &ASTNode::SQLFunction {
+            name: "row_number".to_string(),
+            args: vec![],
+            over: Some(SQLWindowSpec {
+                partition_by: vec![],
+                order_by: vec![SQLOrderByExpr {
+                    expr: ASTNode::SQLIdentifier("dt".to_string()),
+                    asc: Some(false)
+                }],
+                window_frame: None,
+            })
+        },
+        expr_from_projection(&select.projection[0])
     );
 }
 
@@ -605,8 +636,9 @@ fn parse_delimited_identifiers() {
     );
     assert_eq!(
         &ASTNode::SQLFunction {
-            id: r#""myfun""#.to_string(),
-            args: vec![]
+            name: r#""myfun""#.to_string(),
+            args: vec![],
+            over: None,
         },
         expr_from_projection(&select.projection[1]),
     );

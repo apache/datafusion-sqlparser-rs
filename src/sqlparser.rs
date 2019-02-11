@@ -239,16 +239,14 @@ impl Parser {
 
     pub fn parse_function(&mut self, id: SQLIdent) -> Result<ASTNode, ParserError> {
         self.expect_token(&Token::LParen)?;
-        if self.consume_token(&Token::RParen) {
-            Ok(ASTNode::SQLFunction {
-                id: id,
-                args: vec![],
-            })
+        let args = if self.consume_token(&Token::RParen) {
+            vec![]
         } else {
             let args = self.parse_expr_list()?;
             self.expect_token(&Token::RParen)?;
-            Ok(ASTNode::SQLFunction { id, args })
-        }
+            args
+        };
+        Ok(ASTNode::SQLFunction { id, args })
     }
 
     pub fn parse_case_expression(&mut self) -> Result<ASTNode, ParserError> {

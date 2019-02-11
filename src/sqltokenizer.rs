@@ -482,18 +482,19 @@ impl<'a> Tokenizer<'a> {
         // TODO: deal with nested comments
         loop {
             match chars.next() {
-                Some(ch) if maybe_closing_comment && ch == '/' => {
-                    break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
+                Some(ch) => {
+                    if maybe_closing_comment {
+                        if ch == '/' {
+                            break Ok(Some(Token::Whitespace(Whitespace::MultiLineComment(s))));
+                        } else {
+                            s.push('*');
+                        }
+                    }
+                    maybe_closing_comment = ch == '*';
+                    if !maybe_closing_comment {
+                        s.push(ch);
+                    }
                 }
-                Some(ch) if maybe_closing_comment && ch != '/' => {
-                    maybe_closing_comment = false;
-                    s.push('*');
-                    s.push(ch);
-                }
-                Some(ch) if !maybe_closing_comment && ch == '*' => {
-                    maybe_closing_comment = true;
-                }
-                Some(ch) => s.push(ch),
                 None => {
                     break Err(TokenizerError(
                         "Unexpected EOF while in a multi-line comment".to_string(),
@@ -723,6 +724,21 @@ mod tests {
                 "multi-line\n* /comment".to_string(),
             )),
             Token::Number("1".to_string()),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_multiline_comment_with_even_asterisks() {
+        let sql = String::from("\n/** Comment **/\n");
+
+        let dialect = GenericSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::Whitespace(Whitespace::Newline),
+            Token::Whitespace(Whitespace::MultiLineComment("* Comment *".to_string())),
+            Token::Whitespace(Whitespace::Newline),
         ];
         compare(expected, tokens);
     }

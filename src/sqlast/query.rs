@@ -183,6 +183,12 @@ pub enum TableFactor {
     Table {
         name: SQLObjectName,
         alias: Option<SQLIdent>,
+        /// Arguments of a table-valued function, as supported by Postgres
+        /// and MSSQL. Note that deprecated MSSQL `FROM foo (NOLOCK)` syntax
+        /// will also be parsed as `args`.
+        args: Option<Vec<ASTNode>>,
+        /// MSSQL-specific `WITH (...)` hints such as NOLOCK.
+        with_hints: Vec<ASTNode>,
     },
     Derived {
         subquery: Box<SQLQuery>,
@@ -192,16 +198,32 @@ pub enum TableFactor {
 
 impl ToString for TableFactor {
     fn to_string(&self) -> String {
-        let (base, alias) = match self {
-            TableFactor::Table { name, alias } => (name.to_string(), alias),
-            TableFactor::Derived { subquery, alias } => {
-                (format!("({})", subquery.to_string()), alias)
+        match self {
+            TableFactor::Table {
+                name,
+                alias,
+                args,
+                with_hints,
+            } => {
+                let mut s = name.to_string();
+                if let Some(args) = args {
+                    s += &format!("({})", comma_separated_string(args))
+                };
+                if let Some(alias) = alias {
+                    s += &format!(" AS {}", alias);
+                }
+                if !with_hints.is_empty() {
+                    s += &format!(" WITH ({})", comma_separated_string(with_hints));
+                }
+                s
             }
-        };
-        if let Some(alias) = alias {
-            format!("{} AS {}", base, alias)
-        } else {
-            base
+            TableFactor::Derived { subquery, alias } => {
+                let mut s = format!("({})", subquery.to_string());
+                if let Some(alias) = alias {
+                    s += &format!(" AS {}", alias);
+                }
+                s
+            }
         }
     }
 }

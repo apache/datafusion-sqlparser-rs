@@ -641,9 +641,16 @@ fn parse_delimited_identifiers() {
     );
     // check FROM
     match select.relation.unwrap() {
-        TableFactor::Table { name, alias } => {
+        TableFactor::Table {
+            name,
+            alias,
+            args,
+            with_hints,
+        } => {
             assert_eq!(vec![r#""a table""#.to_string()], name.0);
             assert_eq!(r#""alias""#, alias.unwrap());
+            assert!(args.is_none());
+            assert!(with_hints.is_empty());
         }
         _ => panic!("Expecting TableFactor::Table"),
     }
@@ -752,6 +759,12 @@ fn parse_simple_case_expression() {
 }
 
 #[test]
+fn parse_from_advanced() {
+    let sql = "SELECT * FROM fn(1, 2) AS foo, schema.bar AS bar WITH (NOLOCK)";
+    let _select = verified_only_select(sql);
+}
+
+#[test]
 fn parse_implicit_join() {
     let sql = "SELECT * FROM t1, t2";
     let select = verified_only_select(sql);
@@ -760,6 +773,8 @@ fn parse_implicit_join() {
             relation: TableFactor::Table {
                 name: SQLObjectName(vec!["t2".to_string()]),
                 alias: None,
+                args: None,
+                with_hints: vec![],
             },
             join_operator: JoinOperator::Implicit
         },
@@ -776,6 +791,8 @@ fn parse_cross_join() {
             relation: TableFactor::Table {
                 name: SQLObjectName(vec!["t2".to_string()]),
                 alias: None,
+                args: None,
+                with_hints: vec![],
             },
             join_operator: JoinOperator::Cross
         },
@@ -794,6 +811,8 @@ fn parse_joins_on() {
             relation: TableFactor::Table {
                 name: SQLObjectName(vec![relation.into()]),
                 alias,
+                args: None,
+                with_hints: vec![],
             },
             join_operator: f(JoinConstraint::On(ASTNode::SQLBinaryExpr {
                 left: Box::new(ASTNode::SQLIdentifier("c1".into())),
@@ -845,6 +864,8 @@ fn parse_joins_using() {
             relation: TableFactor::Table {
                 name: SQLObjectName(vec![relation.into()]),
                 alias,
+                args: None,
+                with_hints: vec![],
             },
             join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
         }

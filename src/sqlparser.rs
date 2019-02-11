@@ -242,13 +242,7 @@ impl Parser {
 
     pub fn parse_function(&mut self, name: SQLObjectName) -> Result<ASTNode, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let args = if self.consume_token(&Token::RParen) {
-            vec![]
-        } else {
-            let args = self.parse_expr_list()?;
-            self.expect_token(&Token::RParen)?;
-            args
-        };
+        let args = self.parse_optional_args()?;
         let over = if self.parse_keyword("OVER") {
             // TBD: support window names (`OVER mywin`) in place of inline specification
             self.expect_token(&Token::LParen)?;
@@ -1430,8 +1424,30 @@ impl Parser {
             Ok(TableFactor::Derived { subquery, alias })
         } else {
             let name = self.parse_object_name()?;
+            // Postgres, MSSQL: table-valued functions:
+            let args = if self.consume_token(&Token::LParen) {
+                Some(self.parse_optional_args()?)
+            } else {
+                None
+            };
             let alias = self.parse_optional_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
-            Ok(TableFactor::Table { name, alias })
+            // MSSQL-specific table hints:
+            let mut with_hints = vec![];
+            if self.parse_keyword("WITH") {
+                if self.consume_token(&Token::LParen) {
+                    with_hints = self.parse_expr_list()?;
+                    self.expect_token(&Token::RParen)?;
+                } else {
+                    // rewind, as WITH may belong to the next statement's CTE
+                    self.prev_token();
+                }
+            };
+            Ok(TableFactor::Table {
+                name,
+                alias,
+                args,
+                with_hints,
+            })
         }
     }
 
@@ -1574,6 +1590,16 @@ impl Parser {
             };
         }
         Ok(expr_list)
+    }
+
+    pub fn parse_optional_args(&mut self) -> Result<Vec<ASTNode>, ParserError> {
+        if self.consume_token(&Token::RParen) {
+            Ok(vec![])
+        } else {
+            let args = self.parse_expr_list()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(args)
+        }
     }
 
     /// Parse a comma-delimited list of projections after SELECT

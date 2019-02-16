@@ -106,6 +106,16 @@ fn parse_select_count_wildcard() {
 }
 
 #[test]
+fn parse_as() {
+    let sql = String::from(
+        "SELECT id as ID FROM customer",
+    );
+    let _ast = parse_sql(&sql);
+
+    //TODO: add assertions
+}
+
+#[test]
 fn parse_not() {
     let sql = String::from(
         "SELECT id FROM customer \
@@ -385,7 +395,10 @@ fn parse_select_version() {
         ASTNode::SQLSelect { ref projection, .. } => {
             assert_eq!(
                 projection[0],
-                ASTNode::SQLIdentifier("@@version".to_string())
+                ASTNode::SQLProjectionExpr {
+                    column_name: Box::new(ASTNode::SQLIdentifier("@@version".to_string())),
+                    alias: None
+                }
             );
         }
         _ => panic!(),

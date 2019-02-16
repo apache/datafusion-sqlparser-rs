@@ -40,6 +40,11 @@ pub enum ASTNode {
     SQLIsNull(Box<ASTNode>),
     /// `IS NOT NULL` expression
     SQLIsNotNull(Box<ASTNode>),
+    /// Column projection with alias.
+    SQLProjectionExpr {
+        column_name: Box<ASTNode>,
+        alias: Option<String>
+    },
     /// Binary expression e.g. `1 + 1` or `foo > bar`
     SQLBinaryExpr {
         left: Box<ASTNode>,
@@ -145,6 +150,12 @@ impl ToString for ASTNode {
             ASTNode::SQLAssignment(ass) => ass.to_string(),
             ASTNode::SQLIsNull(ast) => format!("{} IS NULL", ast.as_ref().to_string()),
             ASTNode::SQLIsNotNull(ast) => format!("{} IS NOT NULL", ast.as_ref().to_string()),
+            ASTNode::SQLProjectionExpr { column_name, alias} => {
+                match alias {
+                    Some(alias) => format!("{} AS {}", column_name.to_string(), alias),
+                    None => column_name.to_string()
+                }
+            }
             ASTNode::SQLBinaryExpr { left, op, right } => format!(
                 "{} {} {}",
                 left.as_ref().to_string(),

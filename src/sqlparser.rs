@@ -41,6 +41,7 @@ impl From<TokenizerError> for ParserError {
 pub struct Parser {
     tokens: Vec<Token>,
     index: usize,
+    state: ParseState,
 }
 
 impl Parser {
@@ -49,6 +50,7 @@ impl Parser {
         Parser {
             tokens: tokens,
             index: 0,
+            state: ParseState::Start,
         }
     }
 
@@ -136,7 +138,7 @@ impl Parser {
                     if "CAST" == id.to_uppercase() {
                         self.parse_cast_expression()
                     } else {
-                        match self.peek_token() {
+                        let x = match self.peek_token() {
                             Some(Token::LParen) => self.parse_function(&id),
                             Some(Token::Period) => {
                                 let mut id_parts: Vec<String> = vec![id];
@@ -154,6 +156,23 @@ impl Parser {
                                 Ok(ASTNode::SQLCompoundIdentifier(id_parts))
                             }
                             _ => Ok(ASTNode::SQLIdentifier(id)),
+                        }?;
+
+                        if self.state != ParseState::Select {
+                            return Ok(x);
+                        }
+
+                        match self.peek_token() {
+                            Some(Token::Keyword(ref s)) if s == "AS" => {
+                                println!("keyword: {}", s);
+                                Ok(ASTNode::SQLProjectionExpr {
+                                    column_name: Box::new(x),
+                                    alias: Some(self.parse_alias()?),
+                                })},
+                            _ => Ok(ASTNode::SQLProjectionExpr {
+                                column_name: Box::new(x),
+                                alias: None,
+                            }),
                         }
                     }
                 }
@@ -178,7 +197,20 @@ impl Parser {
         }
     }
 
+    pub fn parse_alias(&mut self) -> Result<String, ParserError> {
+        self.expect_token(&Token::Keyword("AS".to_string()))?;
+        let alias = self.next_token();
+        match alias {
+            Some(Token::Identifier(s)) => Ok(s),
+            _ => {
+                self.prev_token();
+                parser_err!(format!("Unexpected token found after AS."))
+            },
+        }
+    }
+
     pub fn parse_function(&mut self, id: &str) -> Result<ASTNode, ParserError> {
+        self.state = ParseState::Function;
         self.expect_token(&Token::LParen)?;
         if self.consume_token(&Token::RParen) {
             Ok(ASTNode::SQLFunction {
@@ -196,6 +228,7 @@ impl Parser {
     }
 
     pub fn parse_case_expression(&mut self) -> Result<ASTNode, ParserError> {
+        self.state = ParseState::CaseWhen;
         if self.parse_keywords(vec!["WHEN"]) {
             let mut conditions = vec![];
             let mut results = vec![];
@@ -231,6 +264,7 @@ impl Parser {
 
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
     pub fn parse_cast_expression(&mut self) -> Result<ASTNode, ParserError> {
+        self.state = ParseState::Cast;
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr(0)?;
         self.expect_keyword("AS")?;
@@ -1096,6 +1130,7 @@ impl Parser {
 
     /// Parse a SELECT statement
     pub fn parse_select(&mut self) -> Result<ASTNode, ParserError> {
+        self.state = ParseState::Select;
         let projection = self.parse_expr_list()?;
 
         let (relation, joins): (Option<Box<ASTNode>>, Vec<Join>) = if self.parse_keyword("FROM") {
@@ -1194,6 +1229,7 @@ impl Parser {
     }
 
     fn parse_joins(&mut self) -> Result<Vec<Join>, ParserError> {
+        self.state = ParseState::Join;
         let mut joins = vec![];
         loop {
             let natural = match &self.peek_token() {
@@ -1372,4 +1408,15 @@ impl Parser {
                 .map(|n| Some(Box::new(ASTNode::SQLValue(Value::Long(n)))))
         }
     }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum ParseState {
+    Start,
+    Select,
+    From,
+    CaseWhen,
+    Cast,
+    Join,
+    Function,
 }

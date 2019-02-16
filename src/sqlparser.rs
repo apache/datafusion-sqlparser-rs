@@ -158,18 +158,18 @@ impl Parser {
                             _ => Ok(ASTNode::SQLIdentifier(id)),
                         }?;
 
-                        if self.state != ParseState::Select {
+                        if self.state != ParseState::Select
+                          && self.state != ParseState::From {
                             return Ok(x);
                         }
 
                         match self.peek_token() {
-                            Some(Token::Keyword(ref s)) if s == "AS" => {
-                                println!("keyword: {}", s);
-                                Ok(ASTNode::SQLProjectionExpr {
+                            Some(Token::Keyword(ref s)) if s.to_uppercase() == "AS" => {
+                                Ok(ASTNode::SQLNameAliasExpr {
                                     column_name: Box::new(x),
                                     alias: Some(self.parse_alias()?),
                                 })},
-                            _ => Ok(ASTNode::SQLProjectionExpr {
+                            _ => Ok(ASTNode::SQLNameAliasExpr {
                                 column_name: Box::new(x),
                                 alias: None,
                             }),
@@ -1134,6 +1134,7 @@ impl Parser {
         let projection = self.parse_expr_list()?;
 
         let (relation, joins): (Option<Box<ASTNode>>, Vec<Join>) = if self.parse_keyword("FROM") {
+            self.state = ParseState::From;
             let relation = Some(Box::new(self.parse_expr(0)?));
             let joins = self.parse_joins()?;
             (relation, joins)
@@ -1142,6 +1143,7 @@ impl Parser {
         };
 
         let selection = if self.parse_keyword("WHERE") {
+            self.state = ParseState::Where;
             let expr = self.parse_expr(0)?;
             Some(Box::new(expr))
         } else {
@@ -1415,6 +1417,7 @@ enum ParseState {
     Start,
     Select,
     From,
+    Where,
     CaseWhen,
     Cast,
     Join,

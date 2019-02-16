@@ -735,7 +735,7 @@ fn parse_select_version() {
         ASTNode::SQLSelect { ref projection, .. } => {
             assert_eq!(
                 projection[0],
-                ASTNode::SQLProjectionExpr {
+                ASTNode::SQLNameAliasExpr {
                     column_name: Box::new(ASTNode::SQLIdentifier("@@version".to_string())),
                     alias: None
                 }

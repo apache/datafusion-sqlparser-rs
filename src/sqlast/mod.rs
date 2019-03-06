@@ -241,6 +241,7 @@ pub enum SQLStatement {
         /// View name
         name: SQLObjectName,
         query: SQLQuery,
+        materialized: bool,
     },
     /// CREATE TABLE
     SQLCreateTable {
@@ -347,8 +348,9 @@ impl ToString for SQLStatement {
                 }
                 s
             }
-            SQLStatement::SQLCreateView { name, query } => {
-                format!("CREATE VIEW {} AS {}", name.to_string(), query.to_string())
+            SQLStatement::SQLCreateView { name, query, materialized } => {
+                let modifier = if *materialized { " MATERIALIZED" } else { "" };
+                format!("CREATE{} VIEW {} AS {}", modifier, name.to_string(), query.to_string())
             }
             SQLStatement::SQLCreateTable { name, columns } => format!(
                 "CREATE TABLE {} ({})",

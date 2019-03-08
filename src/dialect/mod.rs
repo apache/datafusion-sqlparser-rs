@@ -8,6 +8,8 @@ pub use self::generic_sql::GenericSqlDialect;
 pub use self::postgresql::PostgreSqlDialect;
 
 pub trait Dialect {
+    /// Get a list of keywords for this dialect
+    fn keywords(&self) -> Vec<&'static str>;
     /// Determine if a character is a valid identifier start character
     fn is_identifier_start(&self, ch: char) -> bool;
     /// Determine if a character is a valid identifier character

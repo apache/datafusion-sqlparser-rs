@@ -326,7 +326,7 @@ impl Parser {
                         })
                     } else {
                         parser_err!(format!(
-                            "Expected IN or LIKE after NOT, found {:?}",
+                            "Expected BETWEEN, IN or LIKE after NOT, found {:?}",
                             self.peek_token()
                         ))
                     }

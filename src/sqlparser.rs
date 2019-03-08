@@ -617,7 +617,8 @@ impl Parser {
     pub fn parse_create(&mut self) -> Result<SQLStatement, ParserError> {
         if self.parse_keyword("TABLE") {
             self.parse_create_table()
-        } else if self.parse_keyword("VIEW") {
+        } else if self.parse_keyword("MATERIALIZED") || self.parse_keyword("VIEW") {
+            self.prev_token();
             self.parse_create_view()
         } else {
             parser_err!(format!(
@@ -628,6 +629,8 @@ impl Parser {
     }
 
     pub fn parse_create_view(&mut self) -> Result<SQLStatement, ParserError> {
+        let materialized = self.parse_keyword("MATERIALIZED");
+        self.expect_keyword("VIEW")?;
         // Many dialects support `OR REPLACE` | `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let name = self.parse_object_name()?;
@@ -637,7 +640,11 @@ impl Parser {
         self.expect_keyword("AS")?;
         let query = self.parse_query()?;
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
-        Ok(SQLStatement::SQLCreateView { name, query })
+        Ok(SQLStatement::SQLCreateView {
+            name,
+            query,
+            materialized,
+        })
     }
 
     pub fn parse_create_table(&mut self) -> Result<SQLStatement, ParserError> {

@@ -76,12 +76,10 @@ impl ToString for SQLType {
             SQLType::Decimal(precision, scale) => {
                 if let Some(scale) = scale {
                     format!("numeric({},{})", precision.unwrap(), scale)
+                } else if let Some(precision) = precision {
+                    format!("numeric({})", precision)
                 } else {
-                    if let Some(precision) = precision {
-                        format!("numeric({})", precision)
-                    } else {
-                        format!("numeric")
-                    }
+                    format!("numeric")
                 }
             }
             SQLType::SmallInt => "smallint".to_string(),

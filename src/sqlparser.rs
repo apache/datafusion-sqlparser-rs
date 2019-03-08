@@ -640,7 +640,11 @@ impl Parser {
         self.expect_keyword("AS")?;
         let query = self.parse_query()?;
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
-        Ok(SQLStatement::SQLCreateView { name, query, materialized })
+        Ok(SQLStatement::SQLCreateView {
+            name,
+            query,
+            materialized,
+        })
     }
 
     pub fn parse_create_table(&mut self) -> Result<SQLStatement, ParserError> {

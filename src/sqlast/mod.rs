@@ -25,18 +25,15 @@ pub use self::value::Value;
 
 pub use self::sql_operator::SQLOperator;
 
-// This could be enhanced to remember the way the identifier was quoted
-pub type SQLIdent = String;
-
 /// SQL Abstract Syntax Tree (AST)
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASTNode {
     /// Identifier e.g. table name or column name
-    SQLIdentifier(SQLIdent),
+    SQLIdentifier(String),
     /// Wildcard e.g. `*`
     SQLWildcard,
     /// Multi part identifier e.g. `myschema.dbo.mytable`
-    SQLCompoundIdentifier(Vec<SQLIdent>),
+    SQLCompoundIdentifier(Vec<String>),
     /// Assigment e.g. `name = 'Fred'` in an UPDATE statement
     SQLAssignment(SQLAssignment),
     /// `IS NULL` expression
@@ -72,17 +69,12 @@ pub enum ASTNode {
         results: Vec<ASTNode>,
         else_result: Option<Box<ASTNode>>,
     },
-    /// A table name or a parenthesized subquery with an optional alias
-    TableFactor {
-        relation: Box<ASTNode>, // SQLNested or SQLCompoundIdentifier
-        alias: Option<SQLIdent>,
-    },
     /// SELECT
     SQLSelect {
         /// projection expressions
         projection: Vec<ASTNode>,
         /// FROM
-        relation: Option<Box<ASTNode>>, // TableFactor
+        relation: Option<Box<ASTNode>>,
         // JOIN
         joins: Vec<Join>,
         /// WHERE
@@ -101,7 +93,7 @@ pub enum ASTNode {
         /// TABLE
         table_name: String,
         /// COLUMNS
-        columns: Vec<SQLIdent>,
+        columns: Vec<String>,
         /// VALUES (vector of rows to insert)
         values: Vec<Vec<ASTNode>>,
     },
@@ -109,7 +101,7 @@ pub enum ASTNode {
         /// TABLE
         table_name: String,
         /// COLUMNS
-        columns: Vec<SQLIdent>,
+        columns: Vec<String>,
         /// VALUES a vector of values to be copied
         values: Vec<Option<String>>,
     },
@@ -195,13 +187,6 @@ impl ToString for ASTNode {
                     s += &format!(" ELSE {}", else_result.to_string())
                 }
                 s + " END"
-            }
-            ASTNode::TableFactor { relation, alias } => {
-                if let Some(alias) = alias {
-                    format!("{} AS {}", relation.to_string(), alias)
-                } else {
-                    relation.to_string()
-                }
             }
             ASTNode::SQLSelect {
                 projection,
@@ -381,21 +366,21 @@ impl ToString for SQLAssignment {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLOrderByExpr {
     pub expr: Box<ASTNode>,
-    pub asc: Option<bool>,
+    pub asc: bool,
 }
 
 impl SQLOrderByExpr {
-    pub fn new(expr: Box<ASTNode>, asc: Option<bool>) -> Self {
+    pub fn new(expr: Box<ASTNode>, asc: bool) -> Self {
         SQLOrderByExpr { expr, asc }
     }
 }
 
 impl ToString for SQLOrderByExpr {
     fn to_string(&self) -> String {
-        match self.asc {
-            Some(true) => format!("{} ASC", self.expr.to_string()),
-            Some(false) => format!("{} DESC", self.expr.to_string()),
-            None => self.expr.to_string(),
+        if self.asc {
+            format!("{} ASC", self.expr.as_ref().to_string())
+        } else {
+            format!("{} DESC", self.expr.as_ref().to_string())
         }
     }
 }
@@ -403,7 +388,7 @@ impl ToString for SQLOrderByExpr {
 /// SQL column definition
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLColumnDef {
-    pub name: SQLIdent,
+    pub name: String,
     pub data_type: SQLType,
     pub is_primary: bool,
     pub is_unique: bool,
@@ -432,7 +417,7 @@ impl ToString for SQLColumnDef {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Join {
-    pub relation: ASTNode, // TableFactor
+    pub relation: ASTNode,
     pub join_operator: JoinOperator,
 }
 

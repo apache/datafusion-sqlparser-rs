@@ -103,7 +103,7 @@ pub enum ASTNode {
         /// COLUMNS
         columns: Vec<String>,
         /// VALUES a vector of values to be copied
-        values: Vec<Value>,
+        values: Vec<Option<String>>,
     },
     /// UPDATE
     SQLUpdate {
@@ -290,7 +290,7 @@ impl ToString for ASTNode {
                         "\n{}",
                         values
                             .iter()
-                            .map(|v| v.to_string())
+                            .map(|v| v.clone().unwrap_or("\\N".to_string()))
                             .collect::<Vec<String>>()
                             .join("\t")
                     );

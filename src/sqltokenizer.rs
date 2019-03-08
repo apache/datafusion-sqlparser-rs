@@ -32,8 +32,7 @@ pub enum Token {
     Keyword(String),
     /// Numeric literal
     Number(String),
-    /// String literal
-    String(String),
+    /// A character that could not be tokenized
     Char(char),
     /// Single quoted string: i.e: 'string'
     SingleQuotedString(String),
@@ -97,7 +96,6 @@ impl ToString for Token {
             Token::Identifier(ref id) => id.to_string(),
             Token::Keyword(ref k) => k.to_string(),
             Token::Number(ref n) => n.to_string(),
-            Token::String(ref s) => s.to_string(),
             Token::Char(ref c) => c.to_string(),
             Token::SingleQuotedString(ref s) => format!("'{}'", s),
             Token::DoubleQuotedString(ref s) => format!("\"{}\"", s),
@@ -194,7 +192,6 @@ impl<'a> Tokenizer<'a> {
                 Token::Identifier(s) => self.col += s.len() as u64,
                 Token::Keyword(s) => self.col += s.len() as u64,
                 Token::Number(s) => self.col += s.len() as u64,
-                Token::String(s) => self.col += s.len() as u64,
                 Token::SingleQuotedString(s) => self.col += s.len() as u64,
                 Token::DoubleQuotedString(s) => self.col += s.len() as u64,
                 _ => self.col += 1,

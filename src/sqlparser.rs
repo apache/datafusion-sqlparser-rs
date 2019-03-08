@@ -157,10 +157,7 @@ impl Parser {
                         }
                     }
                 }
-                Token::Number(_)
-                | Token::String(_)
-                | Token::SingleQuotedString(_)
-                | Token::DoubleQuotedString(_) => {
+                Token::Number(_) | Token::SingleQuotedString(_) => {
                     self.prev_token();
                     self.parse_sql_value()
                 }
@@ -693,7 +690,7 @@ impl Parser {
 
     /// Parse a tab separated values in
     /// COPY payload
-    fn parse_tsv(&mut self) -> Result<Vec<Value>, ParserError> {
+    fn parse_tsv(&mut self) -> Result<Vec<Option<String>>, ParserError> {
         let values = self.parse_tab_value()?;
         Ok(values)
     }
@@ -702,17 +699,17 @@ impl Parser {
         Ok(ASTNode::SQLValue(self.parse_value()?))
     }
 
-    fn parse_tab_value(&mut self) -> Result<Vec<Value>, ParserError> {
+    fn parse_tab_value(&mut self) -> Result<Vec<Option<String>>, ParserError> {
         let mut values = vec![];
         let mut content = String::from("");
         while let Some(t) = self.next_token_no_skip() {
             match t {
                 Token::Whitespace(Whitespace::Tab) => {
-                    values.push(Value::String(content.to_string()));
+                    values.push(Some(content.to_string()));
                     content.clear();
                 }
                 Token::Whitespace(Whitespace::Newline) => {
-                    values.push(Value::String(content.to_string()));
+                    values.push(Some(content.to_string()));
                     content.clear();
                 }
                 Token::Backslash => {
@@ -721,7 +718,7 @@ impl Parser {
                     }
                     if let Some(token) = self.next_token() {
                         if token == Token::Identifier("N".to_string()) {
-                            values.push(Value::Null);
+                            values.push(None);
                         }
                     } else {
                         continue;
@@ -735,6 +732,7 @@ impl Parser {
         Ok(values)
     }
 
+    /// Parse a literal value (numbers, strings, date/time, booleans)
     fn parse_value(&mut self) -> Result<Value, ParserError> {
         match self.next_token() {
             Some(t) => {
@@ -754,13 +752,8 @@ impl Parser {
                         Ok(n) => Ok(Value::Long(n)),
                         Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
                     },
-                    Token::Identifier(id) => Ok(Value::String(id.to_string())),
-                    Token::String(ref s) => Ok(Value::String(s.to_string())),
                     Token::SingleQuotedString(ref s) => {
                         Ok(Value::SingleQuotedString(s.to_string()))
-                    }
-                    Token::DoubleQuotedString(ref s) => {
-                        Ok(Value::DoubleQuotedString(s.to_string()))
                     }
                     _ => parser_err!(format!("Unsupported value: {:?}", self.peek_token())),
                 }
@@ -792,9 +785,7 @@ impl Parser {
     /// Parse a literal string
     pub fn parse_literal_string(&mut self) -> Result<String, ParserError> {
         match self.next_token() {
-            Some(Token::String(ref s)) => Ok(s.clone()),
             Some(Token::SingleQuotedString(ref s)) => Ok(s.clone()),
-            Some(Token::DoubleQuotedString(ref s)) => Ok(s.clone()),
             other => parser_err!(format!("Expected literal string, found {:?}", other)),
         }
     }

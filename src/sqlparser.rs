@@ -14,6 +14,7 @@
 
 //! SQL Parser
 
+use super::dialect::keywords;
 use super::dialect::Dialect;
 use super::sqlast::*;
 use super::sqltokenizer::*;
@@ -77,9 +78,7 @@ impl Parser {
                 break;
             }
 
-            if let Some(infix_expr) = self.parse_infix(expr.clone(), next_precedence)? {
-                expr = infix_expr;
-            }
+            expr = self.parse_infix(expr, next_precedence)?;
         }
         Ok(expr)
     }
@@ -92,7 +91,7 @@ impl Parser {
         loop {
             // stop parsing on `NULL` | `NOT NULL`
             match self.peek_token() {
-                Some(Token::Keyword(ref k)) if k == "NOT" || k == "NULL" => break,
+                Some(Token::SQLWord(ref k)) if k.keyword == "NOT" || k.keyword == "NULL" => break,
                 _ => {}
             }
 
@@ -102,9 +101,7 @@ impl Parser {
                 break;
             }
 
-            if let Some(infix_expr) = self.parse_infix(expr.clone(), next_precedence)? {
-                expr = infix_expr;
-            }
+            expr = self.parse_infix(expr, next_precedence)?;
         }
         Ok(expr)
     }
@@ -113,7 +110,7 @@ impl Parser {
     pub fn parse_prefix(&mut self) -> Result<ASTNode, ParserError> {
         match self.next_token() {
             Some(t) => match t {
-                Token::Keyword(k) => match k.to_uppercase().as_ref() {
+                Token::SQLWord(w) => match w.keyword.as_ref() {
                     "SELECT" => Ok(self.parse_select()?),
                     "CREATE" => Ok(self.parse_create()?),
                     "DELETE" => Ok(self.parse_delete()?),
@@ -125,38 +122,31 @@ impl Parser {
                         self.parse_sql_value()
                     }
                     "CASE" => self.parse_case_expression(),
+                    "CAST" => self.parse_cast_expression(),
                     "NOT" => Ok(ASTNode::SQLUnary {
                         operator: SQLOperator::Not,
                         expr: Box::new(self.parse_expr(0)?),
                     }),
-                    _ => return parser_err!(format!("No prefix parser for keyword {}", k)),
-                },
-                Token::Mult => Ok(ASTNode::SQLWildcard),
-                Token::Identifier(id) => {
-                    if "CAST" == id.to_uppercase() {
-                        self.parse_cast_expression()
-                    } else {
-                        match self.peek_token() {
-                            Some(Token::LParen) => self.parse_function(&id),
-                            Some(Token::Period) => {
-                                let mut id_parts: Vec<String> = vec![id];
-                                while self.peek_token() == Some(Token::Period) {
-                                    self.expect_token(&Token::Period)?;
-                                    match self.next_token() {
-                                        Some(Token::Identifier(id)) => id_parts.push(id),
-                                        _ => {
-                                            return parser_err!(format!(
-                                                "Error parsing compound identifier"
-                                            ))
-                                        }
+                    _ => match self.peek_token() {
+                        Some(Token::LParen) => self.parse_function(&w.value),
+                        Some(Token::Period) => {
+                            let mut id_parts: Vec<String> = vec![w.value];
+                            while self.consume_token(&Token::Period) {
+                                match self.next_token() {
+                                    Some(Token::SQLWord(w)) => id_parts.push(w.value),
+                                    _ => {
+                                        return parser_err!(format!(
+                                            "Error parsing compound identifier"
+                                        ));
                                     }
                                 }
-                                Ok(ASTNode::SQLCompoundIdentifier(id_parts))
                             }
-                            _ => Ok(ASTNode::SQLIdentifier(id)),
+                            Ok(ASTNode::SQLCompoundIdentifier(id_parts))
                         }
-                    }
-                }
+                        _ => Ok(ASTNode::SQLIdentifier(w.value)),
+                    },
+                },
+                Token::Mult => Ok(ASTNode::SQLWildcard),
                 Token::Number(_) | Token::SingleQuotedString(_) => {
                     self.prev_token();
                     self.parse_sql_value()
@@ -248,40 +238,36 @@ impl Parser {
     }
 
     /// Parse an expression infix (typically an operator)
-    pub fn parse_infix(
-        &mut self,
-        expr: ASTNode,
-        precedence: u8,
-    ) -> Result<Option<ASTNode>, ParserError> {
+    pub fn parse_infix(&mut self, expr: ASTNode, precedence: u8) -> Result<ASTNode, ParserError> {
         debug!("parsing infix");
         match self.next_token() {
             Some(tok) => match tok {
-                Token::Keyword(ref k) if k == "IS" => {
+                Token::SQLWord(ref k) if k.keyword == "IS" => {
                     if self.parse_keywords(vec!["NULL"]) {
-                        Ok(Some(ASTNode::SQLIsNull(Box::new(expr))))
+                        Ok(ASTNode::SQLIsNull(Box::new(expr)))
                     } else if self.parse_keywords(vec!["NOT", "NULL"]) {
-                        Ok(Some(ASTNode::SQLIsNotNull(Box::new(expr))))
+                        Ok(ASTNode::SQLIsNotNull(Box::new(expr)))
                     } else {
                         parser_err!("Invalid tokens after IS")
                     }
                 }
-                Token::Keyword(ref k) if k == "NOT" => {
+                Token::SQLWord(ref k) if k.keyword == "NOT" => {
                     if self.parse_keywords(vec!["LIKE"]) {
-                        Ok(Some(ASTNode::SQLBinaryExpr {
+                        Ok(ASTNode::SQLBinaryExpr {
                             left: Box::new(expr),
                             op: SQLOperator::NotLike,
                             right: Box::new(self.parse_expr(precedence)?),
-                        }))
+                        })
                     } else {
                         parser_err!("Invalid tokens after NOT")
                     }
                 }
-                Token::Keyword(_) => Ok(Some(ASTNode::SQLBinaryExpr {
-                    left: Box::new(expr),
-                    op: self.to_sql_operator(&tok)?,
-                    right: Box::new(self.parse_expr(precedence)?),
-                })),
-                Token::Eq
+                Token::DoubleColon => {
+                    let pg_cast = self.parse_pg_cast(expr)?;
+                    Ok(pg_cast)
+                }
+                Token::SQLWord(_)
+                | Token::Eq
                 | Token::Neq
                 | Token::Gt
                 | Token::GtEq
@@ -291,18 +277,16 @@ impl Parser {
                 | Token::Minus
                 | Token::Mult
                 | Token::Mod
-                | Token::Div => Ok(Some(ASTNode::SQLBinaryExpr {
+                | Token::Div => Ok(ASTNode::SQLBinaryExpr {
                     left: Box::new(expr),
                     op: self.to_sql_operator(&tok)?,
                     right: Box::new(self.parse_expr(precedence)?),
-                })),
-                Token::DoubleColon => {
-                    let pg_cast = self.parse_pg_cast(expr)?;
-                    Ok(Some(pg_cast))
-                }
+                }),
                 _ => parser_err!(format!("No infix parser for token {:?}", tok)),
             },
-            None => Ok(None),
+            // This is not supposed to happen, because of the precedence check
+            // in parse_expr.
+            None => parser_err!("Unexpected EOF in parse_infix"),
         }
     }
 
@@ -320,10 +304,10 @@ impl Parser {
             &Token::Mult => Ok(SQLOperator::Multiply),
             &Token::Div => Ok(SQLOperator::Divide),
             &Token::Mod => Ok(SQLOperator::Modulus),
-            &Token::Keyword(ref k) if k == "AND" => Ok(SQLOperator::And),
-            &Token::Keyword(ref k) if k == "OR" => Ok(SQLOperator::Or),
-            //&Token::Keyword(ref k) if k == "NOT" => Ok(SQLOperator::Not),
-            &Token::Keyword(ref k) if k == "LIKE" => Ok(SQLOperator::Like),
+            &Token::SQLWord(ref k) if k.keyword == "AND" => Ok(SQLOperator::And),
+            &Token::SQLWord(ref k) if k.keyword == "OR" => Ok(SQLOperator::Or),
+            //&Token::SQLWord(ref k) if k.keyword == "NOT" => Ok(SQLOperator::Not),
+            &Token::SQLWord(ref k) if k.keyword == "LIKE" => Ok(SQLOperator::Like),
             _ => parser_err!(format!("Unsupported SQL operator {:?}", tok)),
         }
     }
@@ -342,11 +326,11 @@ impl Parser {
         debug!("get_precedence() {:?}", tok);
 
         match tok {
-            &Token::Keyword(ref k) if k == "OR" => Ok(5),
-            &Token::Keyword(ref k) if k == "AND" => Ok(10),
-            &Token::Keyword(ref k) if k == "NOT" => Ok(15),
-            &Token::Keyword(ref k) if k == "IS" => Ok(15),
-            &Token::Keyword(ref k) if k == "LIKE" => Ok(20),
+            &Token::SQLWord(ref k) if k.keyword == "OR" => Ok(5),
+            &Token::SQLWord(ref k) if k.keyword == "AND" => Ok(10),
+            &Token::SQLWord(ref k) if k.keyword == "NOT" => Ok(15),
+            &Token::SQLWord(ref k) if k.keyword == "IS" => Ok(15),
+            &Token::SQLWord(ref k) if k.keyword == "LIKE" => Ok(20),
             &Token::Eq | &Token::Lt | &Token::LtEq | &Token::Neq | &Token::Gt | &Token::GtEq => {
                 Ok(20)
             }
@@ -445,13 +429,9 @@ impl Parser {
     #[must_use]
     pub fn parse_keyword(&mut self, expected: &'static str) -> bool {
         match self.peek_token() {
-            Some(Token::Keyword(k)) => {
-                if expected.eq_ignore_ascii_case(k.as_str()) {
-                    self.next_token();
-                    true
-                } else {
-                    false
-                }
+            Some(Token::SQLWord(ref k)) if expected.eq_ignore_ascii_case(&k.keyword) => {
+                self.next_token();
+                true
             }
             _ => false,
         }
@@ -522,7 +502,7 @@ impl Parser {
             let mut columns = vec![];
             if self.consume_token(&Token::LParen) {
                 loop {
-                    if let Some(Token::Identifier(column_name)) = self.next_token() {
+                    if let Some(Token::SQLWord(column_name)) = self.next_token() {
                         if let Ok(data_type) = self.parse_data_type() {
                             let is_primary = self.parse_keywords(vec!["PRIMARY", "KEY"]);
                             let is_unique = self.parse_keyword("UNIQUE");
@@ -545,7 +525,7 @@ impl Parser {
                                 Some(Token::Comma) => {
                                     self.next_token();
                                     columns.push(SQLColumnDef {
-                                        name: column_name,
+                                        name: column_name.value,
                                         data_type: data_type,
                                         allow_null,
                                         is_primary,
@@ -556,7 +536,7 @@ impl Parser {
                                 Some(Token::RParen) => {
                                     self.next_token();
                                     columns.push(SQLColumnDef {
-                                        name: column_name,
+                                        name: column_name.value,
                                         data_type: data_type,
                                         allow_null,
                                         is_primary,
@@ -610,19 +590,16 @@ impl Parser {
         } else if is_unique_key {
             Ok(TableKey::UniqueKey(key))
         } else if is_foreign_key {
-            if self.parse_keyword("REFERENCES") {
-                let foreign_table = self.parse_tablename()?;
-                self.expect_token(&Token::LParen)?;
-                let referred_columns = self.parse_column_names()?;
-                self.expect_token(&Token::RParen)?;
-                Ok(TableKey::ForeignKey {
-                    key,
-                    foreign_table,
-                    referred_columns,
-                })
-            } else {
-                parser_err!("Expecting references")
-            }
+            self.expect_keyword("REFERENCES")?;
+            let foreign_table = self.parse_tablename()?;
+            self.expect_token(&Token::LParen)?;
+            let referred_columns = self.parse_column_names()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(TableKey::ForeignKey {
+                key,
+                foreign_table,
+                referred_columns,
+            })
         } else {
             parser_err!(format!(
                 "Expecting primary key, unique key, or foreign key, found: {:?}",
@@ -632,39 +609,33 @@ impl Parser {
     }
 
     pub fn parse_alter(&mut self) -> Result<ASTNode, ParserError> {
-        if self.parse_keyword("TABLE") {
-            let _ = self.parse_keyword("ONLY");
-            let table_name = self.parse_tablename()?;
-            let operation: Result<AlterOperation, ParserError> =
-                if self.parse_keywords(vec!["ADD", "CONSTRAINT"]) {
-                    match self.next_token() {
-                        Some(Token::Identifier(ref id)) => {
-                            let table_key = self.parse_table_key(id)?;
-                            Ok(AlterOperation::AddConstraint(table_key))
-                        }
-                        _ => {
-                            return parser_err!(format!(
-                                "Expecting identifier, found : {:?}",
-                                self.peek_token()
-                            ));
-                        }
+        self.expect_keyword("TABLE")?;
+        let _ = self.parse_keyword("ONLY");
+        let table_name = self.parse_tablename()?;
+        let operation: Result<AlterOperation, ParserError> =
+            if self.parse_keywords(vec!["ADD", "CONSTRAINT"]) {
+                match self.next_token() {
+                    Some(Token::SQLWord(ref id)) => {
+                        let table_key = self.parse_table_key(&id.value)?;
+                        Ok(AlterOperation::AddConstraint(table_key))
                     }
-                } else {
-                    return parser_err!(format!(
-                        "Expecting ADD CONSTRAINT, found :{:?}",
-                        self.peek_token()
-                    ));
-                };
-            Ok(ASTNode::SQLAlterTable {
-                name: table_name,
-                operation: operation?,
-            })
-        } else {
-            parser_err!(format!(
-                "Expecting TABLE after ALTER, found {:?}",
-                self.peek_token()
-            ))
-        }
+                    _ => {
+                        return parser_err!(format!(
+                            "Expecting identifier, found : {:?}",
+                            self.peek_token()
+                        ));
+                    }
+                }
+            } else {
+                return parser_err!(format!(
+                    "Expecting ADD CONSTRAINT, found :{:?}",
+                    self.peek_token()
+                ));
+            };
+        Ok(ASTNode::SQLAlterTable {
+            name: table_name,
+            operation: operation?,
+        })
     }
 
     /// Parse a copy statement
@@ -717,8 +688,10 @@ impl Parser {
                         return Ok(values);
                     }
                     if let Some(token) = self.next_token() {
-                        if token == Token::Identifier("N".to_string()) {
-                            values.push(None);
+                        if let Token::SQLWord(SQLWord { value: v, .. }) = token {
+                            if v == "N" {
+                                values.push(None);
+                            }
                         }
                     } else {
                         continue;
@@ -737,11 +710,16 @@ impl Parser {
         match self.next_token() {
             Some(t) => {
                 match t {
-                    Token::Keyword(k) => match k.to_uppercase().as_ref() {
+                    Token::SQLWord(k) => match k.keyword.as_ref() {
                         "TRUE" => Ok(Value::Boolean(true)),
                         "FALSE" => Ok(Value::Boolean(false)),
                         "NULL" => Ok(Value::Null),
-                        _ => return parser_err!(format!("No value parser for keyword {}", k)),
+                        _ => {
+                            return parser_err!(format!(
+                                "No value parser for keyword {}",
+                                k.keyword
+                            ));
+                        }
                     },
                     //TODO: parse the timestamp here (see parse_timestamp_value())
                     Token::Number(ref n) if n.contains(".") => match n.parse::<f64>() {
@@ -873,7 +851,7 @@ impl Parser {
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)
     pub fn parse_data_type(&mut self) -> Result<SQLType, ParserError> {
         match self.next_token() {
-            Some(Token::Keyword(k)) => match k.to_uppercase().as_ref() {
+            Some(Token::SQLWord(k)) => match k.keyword.as_ref() {
                 "BOOLEAN" => Ok(SQLType::Boolean),
                 "FLOAT" => Ok(SQLType::Float(self.parse_optional_precision()?)),
                 "REAL" => Ok(SQLType::Real),
@@ -958,64 +936,92 @@ impl Parser {
                     let (precision, scale) = self.parse_optional_precision_scale()?;
                     Ok(SQLType::Decimal(precision, scale))
                 }
-                _ => parser_err!(format!("Invalid data type '{:?}'", k)),
+                _ => {
+                    self.prev_token();
+                    let type_name = self.parse_tablename()?; // TODO: this actually reads a possibly schema-qualified name of a (custom) type
+                    Ok(SQLType::Custom(type_name))
+                }
             },
-            Some(Token::Identifier(_)) => {
-                self.prev_token();
-                let type_name = self.parse_tablename()?; // TODO: this actually reads a possibly schema-qualified name of a (custom) type
-                Ok(SQLType::Custom(type_name))
-            }
             other => parser_err!(format!("Invalid data type: '{:?}'", other)),
         }
     }
 
+    /// Parse `AS identifier` (or simply `identifier` if it's not a reserved keyword)
+    /// Some examples with aliases: `SELECT 1 foo`, `SELECT COUNT(*) AS cnt`,
+    /// `SELECT ... FROM t1 foo, t2 bar`, `SELECT ... FROM (...) AS bar`
+    pub fn parse_optional_alias(
+        &mut self,
+        reserved_kwds: &[&str],
+    ) -> Result<Option<SQLIdent>, ParserError> {
+        let after_as = self.parse_keyword("AS");
+        let maybe_alias = self.next_token();
+        match maybe_alias {
+            // Accept any identifier after `AS` (though many dialects have restrictions on
+            // keywords that may appear here). If there's no `AS`: don't parse keywords,
+            // which may start a construct allowed in this position, to be parsed as aliases.
+            // (For example, in `FROM t1 JOIN` the `JOIN` will always be parsed as a keyword,
+            // not an alias.)
+            Some(Token::SQLWord(ref w))
+                if after_as || !reserved_kwds.contains(&w.keyword.as_str()) =>
+            {
+                // have to clone here until #![feature(bind_by_move_pattern_guards)] is enabled by default
+                Ok(Some(w.value.clone()))
+            }
+            ref not_an_ident if after_as => parser_err!(format!(
+                "Expected an identifier after AS, got {:?}",
+                not_an_ident
+            )),
+            Some(_not_an_ident) => {
+                self.prev_token();
+                Ok(None) // no alias found
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Parse one or more identifiers with the specified separator between them
     pub fn parse_compound_identifier(&mut self, separator: &Token) -> Result<ASTNode, ParserError> {
         let mut idents = vec![];
         let mut expect_identifier = true;
         loop {
             let token = &self.next_token();
             match token {
-                Some(token) => match token {
-                    Token::Identifier(s) => {
-                        if expect_identifier {
-                            expect_identifier = false;
-                            idents.push(s.to_string());
-                        } else {
-                            self.prev_token();
-                            break;
-                        }
-                    }
-                    token if token == separator => {
-                        if expect_identifier {
-                            return parser_err!(format!("Expecting identifier, found {:?}", token));
-                        } else {
-                            expect_identifier = true;
-                            continue;
-                        }
-                    }
-                    _ => {
+                Some(Token::SQLWord(s)) if expect_identifier => {
+                    expect_identifier = false;
+                    idents.push(s.to_string());
+                }
+                Some(token) if token == separator && !expect_identifier => {
+                    expect_identifier = true;
+                    continue;
+                }
+                _ => {
+                    if token.is_some() {
                         self.prev_token();
-                        break;
                     }
-                },
-                None => {
-                    self.prev_token();
                     break;
                 }
             }
         }
-        Ok(ASTNode::SQLCompoundIdentifier(idents))
+        if expect_identifier {
+            parser_err!(format!(
+                "Expecting identifier, found {:?}",
+                self.peek_token()
+            ))
+        } else {
+            Ok(ASTNode::SQLCompoundIdentifier(idents))
+        }
     }
 
     pub fn parse_tablename(&mut self) -> Result<String, ParserError> {
         let identifier = self.parse_compound_identifier(&Token::Period)?;
         match identifier {
+            // TODO: should store the compound identifier itself
             ASTNode::SQLCompoundIdentifier(idents) => Ok(idents.join(".")),
             other => parser_err!(format!("Expecting compound identifier, found: {:?}", other)),
         }
     }
 
-    pub fn parse_column_names(&mut self) -> Result<Vec<String>, ParserError> {
+    pub fn parse_column_names(&mut self) -> Result<Vec<SQLIdent>, ParserError> {
         let identifier = self.parse_compound_identifier(&Token::Comma)?;
         match identifier {
             ASTNode::SQLCompoundIdentifier(idents) => Ok(idents),
@@ -1090,7 +1096,7 @@ impl Parser {
         let projection = self.parse_expr_list()?;
 
         let (relation, joins): (Option<Box<ASTNode>>, Vec<Join>) = if self.parse_keyword("FROM") {
-            let relation = Some(Box::new(self.parse_expr(0)?));
+            let relation = Some(Box::new(self.parse_table_factor()?));
             let joins = self.parse_joins()?;
             (relation, joins)
         } else {
@@ -1149,6 +1155,21 @@ impl Parser {
         }
     }
 
+    /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
+    pub fn parse_table_factor(&mut self) -> Result<ASTNode, ParserError> {
+        let relation = if self.consume_token(&Token::LParen) {
+            self.prev_token();
+            self.parse_expr(0)?
+        } else {
+            self.parse_compound_identifier(&Token::Period)?
+        };
+        let alias = self.parse_optional_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        Ok(ASTNode::TableFactor {
+            relation: Box::new(relation),
+            alias,
+        })
+    }
+
     fn parse_join_constraint(&mut self, natural: bool) -> Result<JoinConstraint, ParserError> {
         if natural {
             Ok(JoinConstraint::Natural)
@@ -1156,26 +1177,20 @@ impl Parser {
             let constraint = self.parse_expr(0)?;
             Ok(JoinConstraint::On(constraint))
         } else if self.parse_keyword("USING") {
-            if self.consume_token(&Token::LParen) {
-                let attributes = self
-                    .parse_expr_list()?
-                    .into_iter()
-                    .map(|ast_node| match ast_node {
-                        ASTNode::SQLIdentifier(ident) => Ok(ident),
-                        unexpected => {
-                            parser_err!(format!("Expected identifier, found {:?}", unexpected))
-                        }
-                    })
-                    .collect::<Result<Vec<String>, ParserError>>()?;
+            self.expect_token(&Token::LParen)?;
+            let attributes = self
+                .parse_expr_list()?
+                .into_iter()
+                .map(|ast_node| match ast_node {
+                    ASTNode::SQLIdentifier(ident) => Ok(ident),
+                    unexpected => {
+                        parser_err!(format!("Expected identifier, found {:?}", unexpected))
+                    }
+                })
+                .collect::<Result<Vec<String>, ParserError>>()?;
 
-                if self.consume_token(&Token::RParen) {
-                    Ok(JoinConstraint::Using(attributes))
-                } else {
-                    parser_err!(format!("Expected token ')', found {:?}", self.peek_token()))
-                }
-            } else {
-                parser_err!(format!("Expected token '(', found {:?}", self.peek_token()))
-            }
+            self.expect_token(&Token::RParen)?;
+            Ok(JoinConstraint::Using(attributes))
         } else {
             parser_err!(format!(
                 "Unexpected token after JOIN: {:?}",
@@ -1190,7 +1205,7 @@ impl Parser {
             let natural = match &self.peek_token() {
                 Some(Token::Comma) => {
                     self.next_token();
-                    let relation = self.parse_expr(0)?;
+                    let relation = self.parse_table_factor()?;
                     let join = Join {
                         relation,
                         join_operator: JoinOperator::Implicit,
@@ -1198,10 +1213,10 @@ impl Parser {
                     joins.push(join);
                     continue;
                 }
-                Some(Token::Keyword(kw)) if kw == "CROSS" => {
+                Some(Token::SQLWord(kw)) if kw.keyword == "CROSS" => {
                     self.next_token();
                     self.expect_keyword("JOIN")?;
-                    let relation = self.parse_expr(0)?;
+                    let relation = self.parse_table_factor()?;
                     let join = Join {
                         relation,
                         join_operator: JoinOperator::Cross,
@@ -1209,7 +1224,7 @@ impl Parser {
                     joins.push(join);
                     continue;
                 }
-                Some(Token::Keyword(kw)) if kw == "NATURAL" => {
+                Some(Token::SQLWord(kw)) if kw.keyword == "NATURAL" => {
                     self.next_token();
                     true
                 }
@@ -1218,49 +1233,49 @@ impl Parser {
             };
 
             let join = match &self.peek_token() {
-                Some(Token::Keyword(kw)) if kw == "INNER" => {
+                Some(Token::SQLWord(kw)) if kw.keyword == "INNER" => {
                     self.next_token();
                     self.expect_keyword("JOIN")?;
                     Join {
-                        relation: self.parse_expr(0)?,
+                        relation: self.parse_table_factor()?,
                         join_operator: JoinOperator::Inner(self.parse_join_constraint(natural)?),
                     }
                 }
-                Some(Token::Keyword(kw)) if kw == "JOIN" => {
+                Some(Token::SQLWord(kw)) if kw.keyword == "JOIN" => {
                     self.next_token();
                     Join {
-                        relation: self.parse_expr(0)?,
+                        relation: self.parse_table_factor()?,
                         join_operator: JoinOperator::Inner(self.parse_join_constraint(natural)?),
                     }
                 }
-                Some(Token::Keyword(kw)) if kw == "LEFT" => {
+                Some(Token::SQLWord(kw)) if kw.keyword == "LEFT" => {
                     self.next_token();
                     let _ = self.parse_keyword("OUTER");
                     self.expect_keyword("JOIN")?;
                     Join {
-                        relation: self.parse_expr(0)?,
+                        relation: self.parse_table_factor()?,
                         join_operator: JoinOperator::LeftOuter(
                             self.parse_join_constraint(natural)?,
                         ),
                     }
                 }
-                Some(Token::Keyword(kw)) if kw == "RIGHT" => {
+                Some(Token::SQLWord(kw)) if kw.keyword == "RIGHT" => {
                     self.next_token();
                     let _ = self.parse_keyword("OUTER");
                     self.expect_keyword("JOIN")?;
                     Join {
-                        relation: self.parse_expr(0)?,
+                        relation: self.parse_table_factor()?,
                         join_operator: JoinOperator::RightOuter(
                             self.parse_join_constraint(natural)?,
                         ),
                     }
                 }
-                Some(Token::Keyword(kw)) if kw == "FULL" => {
+                Some(Token::SQLWord(kw)) if kw.keyword == "FULL" => {
                     self.next_token();
                     let _ = self.parse_keyword("OUTER");
                     self.expect_keyword("JOIN")?;
                     Join {
-                        relation: self.parse_expr(0)?,
+                        relation: self.parse_table_factor()?,
                         join_operator: JoinOperator::FullOuter(
                             self.parse_join_constraint(natural)?,
                         ),
@@ -1321,33 +1336,19 @@ impl Parser {
         loop {
             let expr = self.parse_expr(0)?;
 
-            // look for optional ASC / DESC specifier
-            let asc = match self.peek_token() {
-                Some(Token::Keyword(k)) => match k.to_uppercase().as_ref() {
-                    "ASC" => {
-                        self.next_token();
-                        true
-                    }
-                    "DESC" => {
-                        self.next_token();
-                        false
-                    }
-                    _ => true,
-                },
-                Some(Token::Comma) => true,
-                _ => true,
+            let asc = if self.parse_keyword("ASC") {
+                Some(true)
+            } else if self.parse_keyword("DESC") {
+                Some(false)
+            } else {
+                None
             };
 
             expr_list.push(SQLOrderByExpr::new(Box::new(expr), asc));
 
-            if let Some(t) = self.peek_token() {
-                if t == Token::Comma {
-                    self.next_token();
-                } else {
-                    break;
-                }
+            if let Some(Token::Comma) = self.peek_token() {
+                self.next_token();
             } else {
-                // EOF
                 break;
             }
         }

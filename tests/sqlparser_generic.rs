@@ -229,27 +229,33 @@ fn parse_not_like() {
 
 #[test]
 fn parse_select_order_by() {
-    let sql = String::from(
-        "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC",
-    );
-    match verified(&sql) {
-        ASTNode::SQLSelect { order_by, .. } => {
-            assert_eq!(
-                Some(vec![
-                    SQLOrderByExpr {
-                        expr: Box::new(ASTNode::SQLIdentifier("lname".to_string())),
-                        asc: true,
-                    },
-                    SQLOrderByExpr {
-                        expr: Box::new(ASTNode::SQLIdentifier("fname".to_string())),
-                        asc: false,
-                    },
-                ]),
-                order_by
-            );
+    fn chk(sql: &str) {
+        match verified(&sql) {
+            ASTNode::SQLSelect { order_by, .. } => {
+                assert_eq!(
+                    Some(vec![
+                        SQLOrderByExpr {
+                            expr: Box::new(ASTNode::SQLIdentifier("lname".to_string())),
+                            asc: Some(true),
+                        },
+                        SQLOrderByExpr {
+                            expr: Box::new(ASTNode::SQLIdentifier("fname".to_string())),
+                            asc: Some(false),
+                        },
+                        SQLOrderByExpr {
+                            expr: Box::new(ASTNode::SQLIdentifier("id".to_string())),
+                            asc: None,
+                        },
+                    ]),
+                    order_by
+                );
+            }
+            _ => assert!(false),
         }
-        _ => assert!(false),
     }
+    chk("SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC, id");
+    // make sure ORDER is not treated as an alias
+    chk("SELECT id, fname, lname FROM customer ORDER BY lname ASC, fname DESC, id");
 }
 
 #[test]
@@ -266,11 +272,11 @@ fn parse_select_order_by_limit() {
                 Some(vec![
                     SQLOrderByExpr {
                         expr: Box::new(ASTNode::SQLIdentifier("lname".to_string())),
-                        asc: true,
+                        asc: Some(true),
                     },
                     SQLOrderByExpr {
                         expr: Box::new(ASTNode::SQLIdentifier("fname".to_string())),
-                        asc: false,
+                        asc: Some(false),
                     },
                 ]),
                 order_by
@@ -535,7 +541,10 @@ fn parse_implicit_join() {
             assert_eq!(
                 joins[0],
                 Join {
-                    relation: ASTNode::SQLIdentifier("t2".to_string()),
+                    relation: ASTNode::TableFactor {
+                        relation: Box::new(ASTNode::SQLCompoundIdentifier(vec!["t2".to_string()])),
+                        alias: None,
+                    },
                     join_operator: JoinOperator::Implicit
                 }
             )
@@ -554,7 +563,10 @@ fn parse_cross_join() {
             assert_eq!(
                 joins[0],
                 Join {
-                    relation: ASTNode::SQLIdentifier("t2".to_string()),
+                    relation: ASTNode::TableFactor {
+                        relation: Box::new(ASTNode::SQLCompoundIdentifier(vec!["t2".to_string()])),
+                        alias: None,
+                    },
                     join_operator: JoinOperator::Cross
                 }
             )
@@ -567,10 +579,14 @@ fn parse_cross_join() {
 fn parse_joins_on() {
     fn join_with_constraint(
         relation: impl Into<String>,
+        alias: Option<SQLIdent>,
         f: impl Fn(JoinConstraint) -> JoinOperator,
     ) -> Join {
         Join {
-            relation: ASTNode::SQLIdentifier(relation.into()),
+            relation: ASTNode::TableFactor {
+                relation: Box::new(ASTNode::SQLCompoundIdentifier(vec![relation.into()])),
+                alias,
+            },
             join_operator: f(JoinConstraint::On(ASTNode::SQLBinaryExpr {
                 left: Box::new(ASTNode::SQLIdentifier("c1".into())),
                 op: SQLOperator::Eq,
@@ -578,21 +594,35 @@ fn parse_joins_on() {
             })),
         }
     }
+    // Test parsing of aliases
+    assert_eq!(
+        joins_from(verified("SELECT * FROM t1 JOIN t2 AS foo ON c1 = c2")),
+        vec![join_with_constraint(
+            "t2",
+            Some("foo".to_string()),
+            JoinOperator::Inner
+        )]
+    );
+    parses_to(
+        "SELECT * FROM t1 JOIN t2 foo ON c1 = c2",
+        "SELECT * FROM t1 JOIN t2 AS foo ON c1 = c2",
+    );
+    // Test parsing of different join operators
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 JOIN t2 ON c1 = c2")),
-        vec![join_with_constraint("t2", JoinOperator::Inner)]
+        vec![join_with_constraint("t2", None, JoinOperator::Inner)]
     );
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2")),
-        vec![join_with_constraint("t2", JoinOperator::LeftOuter)]
+        vec![join_with_constraint("t2", None, JoinOperator::LeftOuter)]
     );
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 RIGHT JOIN t2 ON c1 = c2")),
-        vec![join_with_constraint("t2", JoinOperator::RightOuter)]
+        vec![join_with_constraint("t2", None, JoinOperator::RightOuter)]
     );
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 FULL JOIN t2 ON c1 = c2")),
-        vec![join_with_constraint("t2", JoinOperator::FullOuter)]
+        vec![join_with_constraint("t2", None, JoinOperator::FullOuter)]
     );
 }
 
@@ -600,29 +630,46 @@ fn parse_joins_on() {
 fn parse_joins_using() {
     fn join_with_constraint(
         relation: impl Into<String>,
+        alias: Option<SQLIdent>,
         f: impl Fn(JoinConstraint) -> JoinOperator,
     ) -> Join {
         Join {
-            relation: ASTNode::SQLIdentifier(relation.into()),
+            relation: ASTNode::TableFactor {
+                relation: Box::new(ASTNode::SQLCompoundIdentifier(vec![relation.into()])),
+                alias,
+            },
             join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
         }
     }
-
+    // Test parsing of aliases
+    assert_eq!(
+        joins_from(verified("SELECT * FROM t1 JOIN t2 AS foo USING(c1)")),
+        vec![join_with_constraint(
+            "t2",
+            Some("foo".to_string()),
+            JoinOperator::Inner
+        )]
+    );
+    parses_to(
+        "SELECT * FROM t1 JOIN t2 foo USING(c1)",
+        "SELECT * FROM t1 JOIN t2 AS foo USING(c1)",
+    );
+    // Test parsing of different join operators
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 JOIN t2 USING(c1)")),
-        vec![join_with_constraint("t2", JoinOperator::Inner)]
+        vec![join_with_constraint("t2", None, JoinOperator::Inner)]
     );
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 LEFT JOIN t2 USING(c1)")),
-        vec![join_with_constraint("t2", JoinOperator::LeftOuter)]
+        vec![join_with_constraint("t2", None, JoinOperator::LeftOuter)]
     );
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 RIGHT JOIN t2 USING(c1)")),
-        vec![join_with_constraint("t2", JoinOperator::RightOuter)]
+        vec![join_with_constraint("t2", None, JoinOperator::RightOuter)]
     );
     assert_eq!(
         joins_from(verified("SELECT * FROM t1 FULL JOIN t2 USING(c1)")),
-        vec![join_with_constraint("t2", JoinOperator::FullOuter)]
+        vec![join_with_constraint("t2", None, JoinOperator::FullOuter)]
     );
 }
 

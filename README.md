@@ -4,7 +4,7 @@
 [![Version](https://img.shields.io/crates/v/sqlparser.svg)](https://crates.io/crates/sqlparser)
 [![Build Status](https://travis-ci.org/andygrove/sqlparser-rs.svg?branch=master)](https://travis-ci.org/andygrove/sqlparser-rs)
 [![Coverage Status](https://coveralls.io/repos/github/andygrove/sqlparser-rs/badge.svg?branch=master)](https://coveralls.io/github/andygrove/sqlparser-rs?branch=master)
-[![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/datafusion-rs)
+[![Gitter Chat](https://badges.gitter.im/sqlparser-rs/community.svg)](https://gitter.im/sqlparser-rs/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 The goal of this project is to build a SQL lexer and parser capable of parsing SQL that conforms with the [ANSI SQL:2011](https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#_5_1_sql_terminal_character) standard but also making it easy to support custom dialects so that this crate can be used as a foundation for vendor-specific parsers.
 

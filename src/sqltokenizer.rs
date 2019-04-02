@@ -21,23 +21,20 @@
 use std::iter::Peekable;
 use std::str::Chars;
 
+use super::dialect::keywords::ALL_KEYWORDS;
 use super::dialect::Dialect;
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
-    /// SQL identifier e.g. table or column name
-    Identifier(String),
-    /// SQL keyword  e.g. Keyword("SELECT")
-    Keyword(String),
+    /// A keyword (like SELECT) or an optionally quoted SQL identifier
+    SQLWord(SQLWord),
     /// Numeric literal
     Number(String),
     /// A character that could not be tokenized
     Char(char),
     /// Single quoted string: i.e: 'string'
     SingleQuotedString(String),
-    /// Double quoted string: i.e: "string"
-    DoubleQuotedString(String),
     /// Comma
     Comma,
     /// Whitespace (space, tab, etc)
@@ -93,12 +90,10 @@ pub enum Token {
 impl ToString for Token {
     fn to_string(&self) -> String {
         match self {
-            Token::Identifier(ref id) => id.to_string(),
-            Token::Keyword(ref k) => k.to_string(),
+            Token::SQLWord(ref w) => w.to_string(),
             Token::Number(ref n) => n.to_string(),
             Token::Char(ref c) => c.to_string(),
             Token::SingleQuotedString(ref s) => format!("'{}'", s),
-            Token::DoubleQuotedString(ref s) => format!("\"{}\"", s),
             Token::Comma => ",".to_string(),
             Token::Whitespace(ws) => ws.to_string(),
             Token::Eq => "=".to_string(),
@@ -124,6 +119,54 @@ impl ToString for Token {
             Token::Ampersand => "&".to_string(),
             Token::LBrace => "{".to_string(),
             Token::RBrace => "}".to_string(),
+        }
+    }
+}
+
+impl Token {
+    pub fn make_keyword(keyword: &str) -> Self {
+        Token::make_word(keyword, None)
+    }
+    pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
+        let word_uppercase = word.to_uppercase();
+        //TODO: need to reintroduce FnvHashSet at some point .. iterating over keywords is
+        // not fast but I want the simplicity for now while I experiment with pluggable
+        // dialects
+        let is_keyword = quote_style == None && ALL_KEYWORDS.contains(&word_uppercase.as_str());
+        Token::SQLWord(SQLWord {
+            value: word.to_string(),
+            quote_style: quote_style,
+            keyword: if is_keyword {
+                word_uppercase.to_string()
+            } else {
+                "".to_string()
+            },
+        })
+    }
+}
+
+/// A keyword (like SELECT) or an optionally quoted SQL identifier
+#[derive(Debug, Clone, PartialEq)]
+pub struct SQLWord {
+    /// The value of the token, without the enclosing quotes, and with the
+    /// escape sequences (if any) processed (TODO: escapes are not handled)
+    pub value: String,
+    /// An identifier can be "quoted" (&lt;delimited identifier> in ANSI parlance).
+    /// The standard and most implementations allow using double quotes for this,
+    /// but some implementations support other quoting styles as well (e.g. \[MS SQL])
+    pub quote_style: Option<char>,
+    /// If the word was not quoted and it matched one of the known keywords,
+    /// this will have one of the values from dialect::keywords, otherwise empty
+    pub keyword: String,
+}
+
+impl ToString for SQLWord {
+    fn to_string(&self) -> String {
+        match self.quote_style {
+            Some('"') => format!("\"{}\"", self.value),
+            Some('[') => format!("[{}]", self.value),
+            None => self.value.clone(),
+            _ => panic!("Unexpected quote_style!"),
         }
     }
 }
@@ -168,13 +211,6 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn is_keyword(&self, s: &str) -> bool {
-        //TODO: need to reintroduce FnvHashSet at some point .. iterating over keywords is
-        // not fast but I want the simplicity for now while I experiment with pluggable
-        // dialects
-        return self.dialect.keywords().contains(&s);
-    }
-
     /// Tokenize the statement and produce a vector of tokens
     pub fn tokenize(&mut self) -> Result<Vec<Token>, TokenizerError> {
         let mut peekable = self.query.chars().peekable();
@@ -189,11 +225,10 @@ impl<'a> Tokenizer<'a> {
                 }
 
                 Token::Whitespace(Whitespace::Tab) => self.col += 4,
-                Token::Identifier(s) => self.col += s.len() as u64,
-                Token::Keyword(s) => self.col += s.len() as u64,
+                Token::SQLWord(w) if w.quote_style == None => self.col += w.value.len() as u64,
+                Token::SQLWord(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
                 Token::Number(s) => self.col += s.len() as u64,
                 Token::SingleQuotedString(s) => self.col += s.len() as u64,
-                Token::DoubleQuotedString(s) => self.col += s.len() as u64,
                 _ => self.col += 1,
             }
 
@@ -232,16 +267,12 @@ impl<'a> Tokenizer<'a> {
                             break;
                         }
                     }
-                    let upper_str = s.to_uppercase();
-                    if self.is_keyword(upper_str.as_str()) {
-                        Ok(Some(Token::Keyword(upper_str)))
-                    } else {
-                        Ok(Some(Token::Identifier(s)))
-                    }
+                    Ok(Some(Token::make_word(&s, None)))
                 }
                 // string
                 '\'' => {
                     //TODO: handle escaped quotes in string
+                    //TODO: handle newlines in string
                     //TODO: handle EOF before terminating quote
                     let mut s = String::new();
                     chars.next(); // consume
@@ -275,7 +306,7 @@ impl<'a> Tokenizer<'a> {
                             }
                         }
                     }
-                    Ok(Some(Token::DoubleQuotedString(s)))
+                    Ok(Some(Token::make_word(&s, Some('"'))))
                 }
                 // numbers
                 '0'...'9' => {
@@ -389,7 +420,7 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
-            Token::Keyword(String::from("SELECT")),
+            Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1")),
         ];
@@ -405,9 +436,9 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
-            Token::Keyword(String::from("SELECT")),
+            Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Identifier(String::from("sqrt")),
+            Token::make_word("sqrt", None),
             Token::LParen,
             Token::Number(String::from("1")),
             Token::RParen,
@@ -424,23 +455,23 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
-            Token::Keyword(String::from("SELECT")),
+            Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
             Token::Mult,
             Token::Whitespace(Whitespace::Space),
-            Token::Keyword(String::from("FROM")),
+            Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
-            Token::Identifier(String::from("customer")),
+            Token::make_word("customer", None),
             Token::Whitespace(Whitespace::Space),
-            Token::Keyword(String::from("WHERE")),
+            Token::make_keyword("WHERE"),
             Token::Whitespace(Whitespace::Space),
-            Token::Identifier(String::from("id")),
+            Token::make_word("id", None),
             Token::Whitespace(Whitespace::Space),
             Token::Eq,
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1")),
             Token::Whitespace(Whitespace::Space),
-            Token::Keyword(String::from("LIMIT")),
+            Token::make_keyword("LIMIT"),
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("5")),
         ];
@@ -456,17 +487,17 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
-            Token::Keyword(String::from("SELECT")),
+            Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
             Token::Mult,
             Token::Whitespace(Whitespace::Space),
-            Token::Keyword(String::from("FROM")),
+            Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
-            Token::Identifier(String::from("customer")),
+            Token::make_word("customer", None),
             Token::Whitespace(Whitespace::Space),
-            Token::Keyword(String::from("WHERE")),
+            Token::make_keyword("WHERE"),
             Token::Whitespace(Whitespace::Space),
-            Token::Identifier(String::from("salary")),
+            Token::make_word("salary", None),
             Token::Whitespace(Whitespace::Space),
             Token::Neq,
             Token::Whitespace(Whitespace::Space),
@@ -491,7 +522,7 @@ mod tests {
             Token::Char('ط'),
             Token::Char('ف'),
             Token::Char('ى'),
-            Token::Identifier("h".to_string()),
+            Token::make_word("h", None),
         ];
         compare(expected, tokens);
     }
@@ -507,20 +538,20 @@ mod tests {
         let expected = vec![
             Token::Whitespace(Whitespace::Newline),
             Token::Whitespace(Whitespace::Newline),
-            Token::Keyword("SELECT".into()),
+            Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
             Token::Mult,
             Token::Whitespace(Whitespace::Space),
-            Token::Keyword("FROM".into()),
+            Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
-            Token::Keyword("TABLE".into()),
+            Token::make_keyword("table"),
             Token::Whitespace(Whitespace::Tab),
             Token::Char('م'),
             Token::Char('ص'),
             Token::Char('ط'),
             Token::Char('ف'),
             Token::Char('ى'),
-            Token::Identifier("h".to_string()),
+            Token::make_word("h", None),
         ];
         compare(expected, tokens);
     }
@@ -533,11 +564,11 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
-            Token::Identifier(String::from("a")),
+            Token::make_word("a", None),
             Token::Whitespace(Whitespace::Space),
-            Token::Keyword("IS".to_string()),
+            Token::make_keyword("IS"),
             Token::Whitespace(Whitespace::Space),
-            Token::Keyword("NULL".to_string()),
+            Token::make_keyword("NULL"),
         ];
 
         compare(expected, tokens);

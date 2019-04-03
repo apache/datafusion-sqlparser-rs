@@ -13,34 +13,25 @@ fn test_prev_index() {
     let sql: &str = "SELECT version()";
     let mut parser = parser(sql);
     assert_eq!(parser.prev_token(), None);
-    assert_eq!(parser.next_token(), Some(Token::Keyword("SELECT".into())));
-    assert_eq!(
-        parser.next_token(),
-        Some(Token::Identifier("version".into()))
-    );
-    assert_eq!(
-        parser.prev_token(),
-        Some(Token::Identifier("version".into()))
-    );
-    assert_eq!(
-        parser.peek_token(),
-        Some(Token::Identifier("version".into()))
-    );
-    assert_eq!(parser.prev_token(), Some(Token::Keyword("SELECT".into())));
+    assert_eq!(parser.next_token(), Some(Token::make_keyword("SELECT")));
+    assert_eq!(parser.next_token(), Some(Token::make_word("version", None)));
+    assert_eq!(parser.prev_token(), Some(Token::make_word("version", None)));
+    assert_eq!(parser.peek_token(), Some(Token::make_word("version", None)));
+    assert_eq!(parser.prev_token(), Some(Token::make_keyword("SELECT")));
     assert_eq!(parser.prev_token(), None);
 }
 
 #[test]
 fn parse_simple_insert() {
     let sql = String::from("INSERT INTO customer VALUES(1, 2, 3)");
-    match verified(&sql) {
-        ASTNode::SQLInsert {
+    match verified_stmt(&sql) {
+        SQLStatement::SQLInsert {
             table_name,
             columns,
             values,
             ..
         } => {
-            assert_eq!(table_name, "customer");
+            assert_eq!(table_name.to_string(), "customer");
             assert!(columns.is_empty());
             assert_eq!(
                 vec![vec![
@@ -58,14 +49,14 @@ fn parse_simple_insert() {
 #[test]
 fn parse_common_insert() {
     let sql = String::from("INSERT INTO public.customer VALUES(1, 2, 3)");
-    match verified(&sql) {
-        ASTNode::SQLInsert {
+    match verified_stmt(&sql) {
+        SQLStatement::SQLInsert {
             table_name,
             columns,
             values,
             ..
         } => {
-            assert_eq!(table_name, "public.customer");
+            assert_eq!(table_name.to_string(), "public.customer");
             assert!(columns.is_empty());
             assert_eq!(
                 vec![vec![
@@ -83,14 +74,14 @@ fn parse_common_insert() {
 #[test]
 fn parse_complex_insert() {
     let sql = String::from("INSERT INTO db.public.customer VALUES(1, 2, 3)");
-    match verified(&sql) {
-        ASTNode::SQLInsert {
+    match verified_stmt(&sql) {
+        SQLStatement::SQLInsert {
             table_name,
             columns,
             values,
             ..
         } => {
-            assert_eq!(table_name, "db.public.customer");
+            assert_eq!(table_name.to_string(), "db.public.customer");
             assert!(columns.is_empty());
             assert_eq!(
                 vec![vec![
@@ -108,21 +99,28 @@ fn parse_complex_insert() {
 #[test]
 fn parse_invalid_table_name() {
     let mut parser = parser("db.public..customer");
-    let ast = parser.parse_tablename();
+    let ast = parser.parse_object_name();
+    assert!(ast.is_err());
+}
+
+#[test]
+fn parse_no_table_name() {
+    let mut parser = parser("");
+    let ast = parser.parse_object_name();
     assert!(ast.is_err());
 }
 
 #[test]
 fn parse_insert_with_columns() {
     let sql = String::from("INSERT INTO public.customer (id, name, active) VALUES(1, 2, 3)");
-    match verified(&sql) {
-        ASTNode::SQLInsert {
+    match verified_stmt(&sql) {
+        SQLStatement::SQLInsert {
             table_name,
             columns,
             values,
             ..
         } => {
-            assert_eq!(table_name, "public.customer");
+            assert_eq!(table_name.to_string(), "public.customer");
             assert_eq!(
                 columns,
                 vec!["id".to_string(), "name".to_string(), "active".to_string()]
@@ -143,8 +141,7 @@ fn parse_insert_with_columns() {
 #[test]
 fn parse_insert_invalid() {
     let sql = String::from("INSERT public.customer (id, name, active) VALUES (1, 2, 3)");
-    let mut parser = parser(&sql);
-    match parser.parse() {
+    match Parser::parse_sql(&PostgreSqlDialect {}, sql) {
         Err(_) => {}
         _ => assert!(false),
     }
@@ -165,9 +162,9 @@ fn parse_create_table_with_defaults() {
             last_update timestamp without time zone DEFAULT now() NOT NULL,
             active integer NOT NULL)",
     );
-    match parse_sql(&sql) {
-        ASTNode::SQLCreateTable { name, columns } => {
-            assert_eq!("public.customer", name);
+    match one_statement_parses_to(&sql, "") {
+        SQLStatement::SQLCreateTable { name, columns } => {
+            assert_eq!("public.customer", name.to_string());
             assert_eq!(10, columns.len());
 
             let c_name = &columns[0];
@@ -206,10 +203,9 @@ fn parse_create_table_from_pg_dump() {
             release_year public.year,
             active integer
         )");
-    let ast = parse_sql(&sql);
-    match ast {
-        ASTNode::SQLCreateTable { name, columns } => {
-            assert_eq!("public.customer", name);
+    match one_statement_parses_to(&sql, "") {
+        SQLStatement::SQLCreateTable { name, columns } => {
+            assert_eq!("public.customer", name.to_string());
 
             let c_customer_id = &columns[0];
             assert_eq!("customer_id", c_customer_id.name);
@@ -228,7 +224,7 @@ fn parse_create_table_from_pg_dump() {
 
             let c_create_date1 = &columns[8];
             assert_eq!(
-                Some(Box::new(ASTNode::SQLCast {
+                Some(ASTNode::SQLCast {
                     expr: Box::new(ASTNode::SQLCast {
                         expr: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
                             "now".to_string()
@@ -236,13 +232,16 @@ fn parse_create_table_from_pg_dump() {
                         data_type: SQLType::Text
                     }),
                     data_type: SQLType::Date
-                })),
+                }),
                 c_create_date1.default
             );
 
             let c_release_year = &columns[10];
             assert_eq!(
-                SQLType::Custom("public.year".to_string()),
+                SQLType::Custom(SQLObjectName(vec![
+                    "public".to_string(),
+                    "year".to_string()
+                ])),
                 c_release_year.data_type
             );
         }
@@ -261,9 +260,9 @@ fn parse_create_table_with_inherit() {
          use_metric boolean DEFAULT true\
          )",
     );
-    match verified(&sql) {
-        ASTNode::SQLCreateTable { name, columns } => {
-            assert_eq!("bazaar.settings", name);
+    match verified_stmt(&sql) {
+        SQLStatement::SQLCreateTable { name, columns } => {
+            assert_eq!("bazaar.settings", name.to_string());
 
             let c_name = &columns[0];
             assert_eq!("settings_id", c_name.name);
@@ -290,9 +289,9 @@ fn parse_alter_table_constraint_primary_key() {
          ALTER TABLE bazaar.address \
          ADD CONSTRAINT address_pkey PRIMARY KEY (address_id)",
     );
-    match verified(&sql) {
-        ASTNode::SQLAlterTable { name, .. } => {
-            assert_eq!(name, "bazaar.address");
+    match verified_stmt(&sql) {
+        SQLStatement::SQLAlterTable { name, .. } => {
+            assert_eq!(name.to_string(), "bazaar.address");
         }
         _ => assert!(false),
     }
@@ -303,9 +302,9 @@ fn parse_alter_table_constraint_foreign_key() {
     let sql = String::from("\
     ALTER TABLE public.customer \
         ADD CONSTRAINT customer_address_id_fkey FOREIGN KEY (address_id) REFERENCES public.address(address_id)");
-    match verified(&sql) {
-        ASTNode::SQLAlterTable { name, .. } => {
-            assert_eq!(name, "public.customer");
+    match verified_stmt(&sql) {
+        SQLStatement::SQLAlterTable { name, .. } => {
+            assert_eq!(name.to_string(), "public.customer");
         }
         _ => assert!(false),
     }
@@ -333,7 +332,7 @@ Kwara & Kogi
 PHP	₱ USD $
 \N  Some other value
 \\."#);
-    let ast = parse_sql(&sql);
+    let ast = one_statement_parses_to(&sql, "");
     println!("{:#?}", ast);
     //assert_eq!(sql, ast.to_string());
 }
@@ -341,7 +340,7 @@ PHP	₱ USD $
 #[test]
 fn parse_timestamps_example() {
     let sql = "2016-02-15 09:43:33";
-    let _ = parse_sql(sql);
+    let _ = parse_sql_expr(sql);
     //TODO add assertion
     //assert_eq!(sql, ast.to_string());
 }
@@ -349,7 +348,7 @@ fn parse_timestamps_example() {
 #[test]
 fn parse_timestamps_with_millis_example() {
     let sql = "2017-11-02 19:15:42.308637";
-    let _ = parse_sql(sql);
+    let _ = parse_sql_expr(sql);
     //TODO add assertion
     //assert_eq!(sql, ast.to_string());
 }
@@ -357,27 +356,43 @@ fn parse_timestamps_with_millis_example() {
 #[test]
 fn parse_example_value() {
     let sql = "SARAH.LEWIS@sakilacustomer.org";
-    let ast = parse_sql(sql);
+    let ast = parse_sql_expr(sql);
     assert_eq!(sql, ast.to_string());
 }
 
 #[test]
 fn parse_function_now() {
     let sql = "now()";
-    let ast = parse_sql(sql);
+    let ast = parse_sql_expr(sql);
     assert_eq!(sql, ast.to_string());
 }
 
-fn verified(query: &str) -> ASTNode {
-    let ast = parse_sql(query);
-    assert_eq!(query, &ast.to_string());
-    ast
+fn verified_stmt(query: &str) -> SQLStatement {
+    one_statement_parses_to(query, query)
 }
 
-fn parse_sql(sql: &str) -> ASTNode {
+/// Ensures that `sql` parses as a single statement, optionally checking that
+/// converting AST back to string equals to `canonical` (unless an empty string
+/// is provided).
+fn one_statement_parses_to(sql: &str, canonical: &str) -> SQLStatement {
+    let mut statements = parse_sql_statements(&sql).unwrap();
+    assert_eq!(statements.len(), 1);
+
+    let only_statement = statements.pop().unwrap();
+    if !canonical.is_empty() {
+        assert_eq!(canonical, only_statement.to_string())
+    }
+    only_statement
+}
+
+fn parse_sql_statements(sql: &str) -> Result<Vec<SQLStatement>, ParserError> {
+    Parser::parse_sql(&PostgreSqlDialect {}, sql.to_string())
+}
+
+fn parse_sql_expr(sql: &str) -> ASTNode {
     debug!("sql: {}", sql);
     let mut parser = parser(sql);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse_expr().unwrap();
     ast
 }
 

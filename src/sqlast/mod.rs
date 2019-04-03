@@ -14,32 +14,63 @@
 
 //! SQL Abstract Syntax Tree (AST) types
 
+mod query;
 mod sql_operator;
 mod sqltype;
 mod table_key;
 mod value;
 
+pub use self::query::{
+    Cte, Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLQuery, SQLSelect, SQLSelectItem,
+    SQLSetExpr, SQLSetOperator, TableFactor,
+};
 pub use self::sqltype::SQLType;
 pub use self::table_key::{AlterOperation, Key, TableKey};
 pub use self::value::Value;
 
 pub use self::sql_operator::SQLOperator;
 
-/// SQL Abstract Syntax Tree (AST)
+/// Identifier name, in the originally quoted form (e.g. `"id"`)
+pub type SQLIdent = String;
+
+/// Represents a parsed SQL expression, which is a common building
+/// block of SQL statements (the part after SELECT, WHERE, etc.)
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASTNode {
     /// Identifier e.g. table name or column name
-    SQLIdentifier(String),
-    /// Wildcard e.g. `*`
+    SQLIdentifier(SQLIdent),
+    /// Unqualified wildcard (`*`). SQL allows this in limited contexts (such as right
+    /// after `SELECT` or as part of an aggregate function, e.g. `COUNT(*)`, but we
+    /// currently accept it in contexts where it doesn't make sense, such as `* + *`
     SQLWildcard,
+    /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
+    /// (Same caveats apply to SQLQualifiedWildcard as to SQLWildcard.)
+    SQLQualifiedWildcard(Vec<SQLIdent>),
     /// Multi part identifier e.g. `myschema.dbo.mytable`
-    SQLCompoundIdentifier(Vec<String>),
-    /// Assigment e.g. `name = 'Fred'` in an UPDATE statement
-    SQLAssignment(SQLAssignment),
+    SQLCompoundIdentifier(Vec<SQLIdent>),
     /// `IS NULL` expression
     SQLIsNull(Box<ASTNode>),
     /// `IS NOT NULL` expression
     SQLIsNotNull(Box<ASTNode>),
+    /// `[ NOT ] IN (val1, val2, ...)`
+    SQLInList {
+        expr: Box<ASTNode>,
+        list: Vec<ASTNode>,
+        negated: bool,
+    },
+    /// `[ NOT ] IN (SELECT ...)`
+    SQLInSubquery {
+        expr: Box<ASTNode>,
+        subquery: Box<SQLQuery>,
+        negated: bool,
+    },
+    /// <expr> [ NOT ] BETWEEN <low> AND <high>
+    SQLBetween {
+        expr: Box<ASTNode>,
+        negated: bool,
+        low: Box<ASTNode>,
+        high: Box<ASTNode>,
+    },
     /// Binary expression e.g. `1 + 1` or `foo > bar`
     SQLBinaryExpr {
         left: Box<ASTNode>,
@@ -61,7 +92,8 @@ pub enum ASTNode {
     /// SQLValue
     SQLValue(Value),
     /// Scalar function call e.g. `LEFT(foo, 5)`
-    SQLFunction { id: String, args: Vec<ASTNode> },
+    /// TODO: this can be a compound SQLObjectName as well (for UDFs)
+    SQLFunction { id: SQLIdent, args: Vec<ASTNode> },
     /// CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END
     SQLCase {
         // TODO: support optional operand for "simple case"
@@ -69,71 +101,9 @@ pub enum ASTNode {
         results: Vec<ASTNode>,
         else_result: Option<Box<ASTNode>>,
     },
-    /// SELECT
-    SQLSelect {
-        /// projection expressions
-        projection: Vec<ASTNode>,
-        /// FROM
-        relation: Option<Box<ASTNode>>,
-        // JOIN
-        joins: Vec<Join>,
-        /// WHERE
-        selection: Option<Box<ASTNode>>,
-        /// ORDER BY
-        order_by: Option<Vec<SQLOrderByExpr>>,
-        /// GROUP BY
-        group_by: Option<Vec<ASTNode>>,
-        /// HAVING
-        having: Option<Box<ASTNode>>,
-        /// LIMIT
-        limit: Option<Box<ASTNode>>,
-    },
-    /// INSERT
-    SQLInsert {
-        /// TABLE
-        table_name: String,
-        /// COLUMNS
-        columns: Vec<String>,
-        /// VALUES (vector of rows to insert)
-        values: Vec<Vec<ASTNode>>,
-    },
-    SQLCopy {
-        /// TABLE
-        table_name: String,
-        /// COLUMNS
-        columns: Vec<String>,
-        /// VALUES a vector of values to be copied
-        values: Vec<Option<String>>,
-    },
-    /// UPDATE
-    SQLUpdate {
-        /// TABLE
-        table_name: String,
-        /// Column assignments
-        assignments: Vec<SQLAssignment>,
-        /// WHERE
-        selection: Option<Box<ASTNode>>,
-    },
-    /// DELETE
-    SQLDelete {
-        /// FROM
-        relation: Option<Box<ASTNode>>,
-        /// WHERE
-        selection: Option<Box<ASTNode>>,
-    },
-    /// CREATE TABLE
-    SQLCreateTable {
-        /// Table name
-        name: String,
-        /// Optional schema
-        columns: Vec<SQLColumnDef>,
-    },
-    /// ALTER TABLE
-    SQLAlterTable {
-        /// Table name
-        name: String,
-        operation: AlterOperation,
-    },
+    /// A parenthesized subquery `(SELECT ...)`, used in expression like
+    /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
+    SQLSubquery(Box<SQLQuery>),
 }
 
 impl ToString for ASTNode {
@@ -141,10 +111,45 @@ impl ToString for ASTNode {
         match self {
             ASTNode::SQLIdentifier(s) => s.to_string(),
             ASTNode::SQLWildcard => "*".to_string(),
+            ASTNode::SQLQualifiedWildcard(q) => q.join(".") + "*",
             ASTNode::SQLCompoundIdentifier(s) => s.join("."),
-            ASTNode::SQLAssignment(ass) => ass.to_string(),
             ASTNode::SQLIsNull(ast) => format!("{} IS NULL", ast.as_ref().to_string()),
             ASTNode::SQLIsNotNull(ast) => format!("{} IS NOT NULL", ast.as_ref().to_string()),
+            ASTNode::SQLInList {
+                expr,
+                list,
+                negated,
+            } => format!(
+                "{} {}IN ({})",
+                expr.as_ref().to_string(),
+                if *negated { "NOT " } else { "" },
+                list.iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+            ASTNode::SQLInSubquery {
+                expr,
+                subquery,
+                negated,
+            } => format!(
+                "{} {}IN ({})",
+                expr.as_ref().to_string(),
+                if *negated { "NOT " } else { "" },
+                subquery.to_string()
+            ),
+            ASTNode::SQLBetween {
+                expr,
+                negated,
+                low,
+                high,
+            } => format!(
+                "{} {}BETWEEN {} AND {}",
+                expr.to_string(),
+                if *negated { "NOT " } else { "" },
+                low.to_string(),
+                high.to_string()
+            ),
             ASTNode::SQLBinaryExpr { left, op, right } => format!(
                 "{} {} {}",
                 left.as_ref().to_string(),
@@ -188,67 +193,81 @@ impl ToString for ASTNode {
                 }
                 s + " END"
             }
-            ASTNode::SQLSelect {
-                projection,
-                relation,
-                joins,
-                selection,
-                order_by,
-                group_by,
-                having,
-                limit,
-            } => {
-                let mut s = format!(
-                    "SELECT {}",
-                    projection
-                        .iter()
-                        .map(|p| p.to_string())
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                );
-                if let Some(relation) = relation {
-                    s += &format!(" FROM {}", relation.as_ref().to_string());
-                }
-                for join in joins {
-                    s += &join.to_string();
-                }
-                if let Some(selection) = selection {
-                    s += &format!(" WHERE {}", selection.as_ref().to_string());
-                }
-                if let Some(group_by) = group_by {
-                    s += &format!(
-                        " GROUP BY {}",
-                        group_by
-                            .iter()
-                            .map(|g| g.to_string())
-                            .collect::<Vec<String>>()
-                            .join(", ")
-                    );
-                }
-                if let Some(having) = having {
-                    s += &format!(" HAVING {}", having.as_ref().to_string());
-                }
-                if let Some(order_by) = order_by {
-                    s += &format!(
-                        " ORDER BY {}",
-                        order_by
-                            .iter()
-                            .map(|o| o.to_string())
-                            .collect::<Vec<String>>()
-                            .join(", ")
-                    );
-                }
-                if let Some(limit) = limit {
-                    s += &format!(" LIMIT {}", limit.as_ref().to_string());
-                }
-                s
-            }
-            ASTNode::SQLInsert {
+            ASTNode::SQLSubquery(s) => format!("({})", s.to_string()),
+        }
+    }
+}
+
+/// A top-level statement (SELECT, INSERT, CREATE, etc.)
+#[derive(Debug, Clone, PartialEq)]
+pub enum SQLStatement {
+    /// SELECT
+    SQLSelect(SQLQuery),
+    /// INSERT
+    SQLInsert {
+        /// TABLE
+        table_name: SQLObjectName,
+        /// COLUMNS
+        columns: Vec<SQLIdent>,
+        /// VALUES (vector of rows to insert)
+        values: Vec<Vec<ASTNode>>,
+    },
+    SQLCopy {
+        /// TABLE
+        table_name: SQLObjectName,
+        /// COLUMNS
+        columns: Vec<SQLIdent>,
+        /// VALUES a vector of values to be copied
+        values: Vec<Option<String>>,
+    },
+    /// UPDATE
+    SQLUpdate {
+        /// TABLE
+        table_name: SQLObjectName,
+        /// Column assignments
+        assignments: Vec<SQLAssignment>,
+        /// WHERE
+        selection: Option<ASTNode>,
+    },
+    /// DELETE
+    SQLDelete {
+        /// FROM
+        table_name: SQLObjectName,
+        /// WHERE
+        selection: Option<ASTNode>,
+    },
+    /// CREATE VIEW
+    SQLCreateView {
+        /// View name
+        name: SQLObjectName,
+        query: SQLQuery,
+        materialized: bool,
+    },
+    /// CREATE TABLE
+    SQLCreateTable {
+        /// Table name
+        name: SQLObjectName,
+        /// Optional schema
+        columns: Vec<SQLColumnDef>,
+    },
+    /// ALTER TABLE
+    SQLAlterTable {
+        /// Table name
+        name: SQLObjectName,
+        operation: AlterOperation,
+    },
+}
+
+impl ToString for SQLStatement {
+    fn to_string(&self) -> String {
+        match self {
+            SQLStatement::SQLSelect(s) => s.to_string(),
+            SQLStatement::SQLInsert {
                 table_name,
                 columns,
                 values,
             } => {
-                let mut s = format!("INSERT INTO {}", table_name);
+                let mut s = format!("INSERT INTO {}", table_name.to_string());
                 if columns.len() > 0 {
                     s += &format!(" ({})", columns.join(", "));
                 }
@@ -268,12 +287,12 @@ impl ToString for ASTNode {
                 }
                 s
             }
-            ASTNode::SQLCopy {
+            SQLStatement::SQLCopy {
                 table_name,
                 columns,
                 values,
             } => {
-                let mut s = format!("COPY {}", table_name);
+                let mut s = format!("COPY {}", table_name.to_string());
                 if columns.len() > 0 {
                     s += &format!(
                         " ({})",
@@ -298,12 +317,12 @@ impl ToString for ASTNode {
                 s += "\n\\.";
                 s
             }
-            ASTNode::SQLUpdate {
+            SQLStatement::SQLUpdate {
                 table_name,
                 assignments,
                 selection,
             } => {
-                let mut s = format!("UPDATE {}", table_name);
+                let mut s = format!("UPDATE {}", table_name.to_string());
                 if assignments.len() > 0 {
                     s += &format!(
                         "{}",
@@ -315,84 +334,80 @@ impl ToString for ASTNode {
                     );
                 }
                 if let Some(selection) = selection {
-                    s += &format!(" WHERE {}", selection.as_ref().to_string());
+                    s += &format!(" WHERE {}", selection.to_string());
                 }
                 s
             }
-            ASTNode::SQLDelete {
-                relation,
+            SQLStatement::SQLDelete {
+                table_name,
                 selection,
             } => {
-                let mut s = String::from("DELETE");
-                if let Some(relation) = relation {
-                    s += &format!(" FROM {}", relation.as_ref().to_string());
-                }
+                let mut s = format!("DELETE FROM {}", table_name.to_string());
                 if let Some(selection) = selection {
-                    s += &format!(" WHERE {}", selection.as_ref().to_string());
+                    s += &format!(" WHERE {}", selection.to_string());
                 }
                 s
             }
-            ASTNode::SQLCreateTable { name, columns } => format!(
-                "CREATE TABLE {} ({})",
+            SQLStatement::SQLCreateView {
                 name,
+                query,
+                materialized,
+            } => {
+                let modifier = if *materialized { " MATERIALIZED" } else { "" };
+                format!(
+                    "CREATE{} VIEW {} AS {}",
+                    modifier,
+                    name.to_string(),
+                    query.to_string()
+                )
+            }
+            SQLStatement::SQLCreateTable { name, columns } => format!(
+                "CREATE TABLE {} ({})",
+                name.to_string(),
                 columns
                     .iter()
                     .map(|c| c.to_string())
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-            ASTNode::SQLAlterTable { name, operation } => {
-                format!("ALTER TABLE {} {}", name, operation.to_string())
+            SQLStatement::SQLAlterTable { name, operation } => {
+                format!("ALTER TABLE {} {}", name.to_string(), operation.to_string())
             }
         }
     }
 }
 
+/// A name of a table, view, custom type, etc., possibly multi-part, i.e. db.schema.obj
+#[derive(Debug, Clone, PartialEq)]
+pub struct SQLObjectName(pub Vec<SQLIdent>);
+
+impl ToString for SQLObjectName {
+    fn to_string(&self) -> String {
+        self.0.join(".")
+    }
+}
+
 /// SQL assignment `foo = expr` as used in SQLUpdate
-/// TODO: unify this with the ASTNode SQLAssignment
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLAssignment {
-    id: String,
-    value: Box<ASTNode>,
+    id: SQLIdent,
+    value: ASTNode,
 }
 
 impl ToString for SQLAssignment {
     fn to_string(&self) -> String {
-        format!("SET {} = {}", self.id, self.value.as_ref().to_string())
-    }
-}
-
-/// SQL ORDER BY expression
-#[derive(Debug, Clone, PartialEq)]
-pub struct SQLOrderByExpr {
-    pub expr: Box<ASTNode>,
-    pub asc: bool,
-}
-
-impl SQLOrderByExpr {
-    pub fn new(expr: Box<ASTNode>, asc: bool) -> Self {
-        SQLOrderByExpr { expr, asc }
-    }
-}
-
-impl ToString for SQLOrderByExpr {
-    fn to_string(&self) -> String {
-        if self.asc {
-            format!("{} ASC", self.expr.as_ref().to_string())
-        } else {
-            format!("{} DESC", self.expr.as_ref().to_string())
-        }
+        format!("SET {} = {}", self.id, self.value.to_string())
     }
 }
 
 /// SQL column definition
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLColumnDef {
-    pub name: String,
+    pub name: SQLIdent,
     pub data_type: SQLType,
     pub is_primary: bool,
     pub is_unique: bool,
-    pub default: Option<Box<ASTNode>>,
+    pub default: Option<ASTNode>,
     pub allow_null: bool,
 }
 
@@ -406,80 +421,11 @@ impl ToString for SQLColumnDef {
             s += " UNIQUE";
         }
         if let Some(ref default) = self.default {
-            s += &format!(" DEFAULT {}", default.as_ref().to_string());
+            s += &format!(" DEFAULT {}", default.to_string());
         }
         if !self.allow_null {
             s += " NOT NULL";
         }
         s
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Join {
-    pub relation: ASTNode,
-    pub join_operator: JoinOperator,
-}
-
-impl ToString for Join {
-    fn to_string(&self) -> String {
-        fn prefix(constraint: &JoinConstraint) -> String {
-            match constraint {
-                JoinConstraint::Natural => "NATURAL ".to_string(),
-                _ => "".to_string(),
-            }
-        }
-        fn suffix(constraint: &JoinConstraint) -> String {
-            match constraint {
-                JoinConstraint::On(expr) => format!("ON {}", expr.to_string()),
-                JoinConstraint::Using(attrs) => format!("USING({})", attrs.join(", ")),
-                _ => "".to_string(),
-            }
-        }
-        match &self.join_operator {
-            JoinOperator::Inner(constraint) => format!(
-                " {}JOIN {} {}",
-                prefix(constraint),
-                self.relation.to_string(),
-                suffix(constraint)
-            ),
-            JoinOperator::Cross => format!(" CROSS JOIN {}", self.relation.to_string()),
-            JoinOperator::Implicit => format!(", {}", self.relation.to_string()),
-            JoinOperator::LeftOuter(constraint) => format!(
-                " {}LEFT JOIN {} {}",
-                prefix(constraint),
-                self.relation.to_string(),
-                suffix(constraint)
-            ),
-            JoinOperator::RightOuter(constraint) => format!(
-                " {}RIGHT JOIN {} {}",
-                prefix(constraint),
-                self.relation.to_string(),
-                suffix(constraint)
-            ),
-            JoinOperator::FullOuter(constraint) => format!(
-                " {}FULL JOIN {} {}",
-                prefix(constraint),
-                self.relation.to_string(),
-                suffix(constraint)
-            ),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum JoinOperator {
-    Inner(JoinConstraint),
-    LeftOuter(JoinConstraint),
-    RightOuter(JoinConstraint),
-    FullOuter(JoinConstraint),
-    Implicit,
-    Cross,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum JoinConstraint {
-    On(ASTNode),
-    Using(Vec<String>),
-    Natural,
 }

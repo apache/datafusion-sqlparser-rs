@@ -1,7 +1,9 @@
+use super::{SQLIdent, SQLObjectName};
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum AlterOperation {
     AddConstraint(TableKey),
-    RemoveConstraint { name: String },
+    RemoveConstraint { name: SQLIdent },
 }
 
 impl ToString for AlterOperation {
@@ -17,8 +19,8 @@ impl ToString for AlterOperation {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Key {
-    pub name: String,
-    pub columns: Vec<String>,
+    pub name: SQLIdent,
+    pub columns: Vec<SQLIdent>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -28,8 +30,8 @@ pub enum TableKey {
     Key(Key),
     ForeignKey {
         key: Key,
-        foreign_table: String,
-        referred_columns: Vec<String>,
+        foreign_table: SQLObjectName,
+        referred_columns: Vec<SQLIdent>,
     },
 }
 
@@ -51,7 +53,7 @@ impl ToString for TableKey {
                 "{} FOREIGN KEY ({}) REFERENCES {}({})",
                 key.name,
                 key.columns.join(", "),
-                foreign_table,
+                foreign_table.to_string(),
                 referred_columns.join(", ")
             ),
         }

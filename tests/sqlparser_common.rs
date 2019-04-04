@@ -1201,6 +1201,76 @@ fn parse_create_materialized_view() {
 }
 
 #[test]
+fn parse_drop_table() {
+    let sql = "DROP TABLE foo";
+    match verified_stmt(sql) {
+        SQLStatement::SQLDrop {
+            object_type,
+            if_exists,
+            names,
+            cascade,
+        } => {
+            assert_eq!(false, if_exists);
+            assert_eq!(SQLObjectType::Table, object_type);
+            assert_eq!(
+                vec!["foo"],
+                names.iter().map(|n| n.to_string()).collect::<Vec<_>>()
+            );
+            assert_eq!(false, cascade);
+        }
+        _ => assert!(false),
+    }
+
+    let sql = "DROP TABLE IF EXISTS foo, bar CASCADE";
+    match verified_stmt(sql) {
+        SQLStatement::SQLDrop {
+            object_type,
+            if_exists,
+            names,
+            cascade,
+        } => {
+            assert_eq!(true, if_exists);
+            assert_eq!(SQLObjectType::Table, object_type);
+            assert_eq!(
+                vec!["foo", "bar"],
+                names.iter().map(|n| n.to_string()).collect::<Vec<_>>()
+            );
+            assert_eq!(true, cascade);
+        }
+        _ => assert!(false),
+    }
+
+    let sql = "DROP TABLE";
+    assert_eq!(
+        ParserError::ParserError("Expected identifier, found: EOF".to_string()),
+        parse_sql_statements(sql).unwrap_err(),
+    );
+
+    let sql = "DROP TABLE IF EXISTS foo, bar CASCADE RESTRICT";
+    assert_eq!(
+        ParserError::ParserError("Cannot specify both CASCADE and RESTRICT in DROP".to_string()),
+        parse_sql_statements(sql).unwrap_err(),
+    );
+}
+
+#[test]
+fn parse_drop_view() {
+    let sql = "DROP VIEW myschema.myview";
+    match verified_stmt(sql) {
+        SQLStatement::SQLDrop {
+            names, object_type, ..
+        } => {
+            assert_eq!(
+                vec!["myschema.myview"],
+                names.iter().map(|n| n.to_string()).collect::<Vec<_>>()
+            );
+            assert_eq!(SQLObjectType::View, object_type);
+        }
+        _ => assert!(false),
+    }
+}
+
+#[test]
 fn parse_invalid_subquery_without_parens() {
     let res = parse_sql_statements("SELECT SELECT 1 FROM bar WHERE 1=1 FROM baz");
     assert_eq!(

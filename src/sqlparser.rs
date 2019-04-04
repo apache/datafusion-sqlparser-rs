@@ -97,6 +97,7 @@ impl Parser {
                         Ok(SQLStatement::SQLQuery(Box::new(self.parse_query()?)))
                     }
                     "CREATE" => Ok(self.parse_create()?),
+                    "DROP" => Ok(self.parse_drop()?),
                     "DELETE" => Ok(self.parse_delete()?),
                     "INSERT" => Ok(self.parse_insert()?),
                     "ALTER" => Ok(self.parse_alter()?),
@@ -735,6 +736,43 @@ impl Parser {
             name,
             query,
             materialized,
+        })
+    }
+
+    pub fn parse_drop(&mut self) -> Result<SQLStatement, ParserError> {
+        let object_type = if self.parse_keyword("TABLE") {
+            SQLObjectType::Table
+        } else if self.parse_keyword("VIEW") {
+            SQLObjectType::View
+        } else {
+            return parser_err!(format!(
+                "Unexpected token after DROP: {:?}",
+                self.peek_token()
+            ));
+        };
+        let if_exists = self.parse_keywords(vec!["IF", "EXISTS"]);
+        let mut names = vec![self.parse_object_name()?];
+        loop {
+            let token = &self.next_token();
+            if let Some(Token::Comma) = token {
+                names.push(self.parse_object_name()?)
+            } else {
+                if token.is_some() {
+                    self.prev_token();
+                }
+                break;
+            }
+        }
+        let cascade = self.parse_keyword("CASCADE");
+        let restrict = self.parse_keyword("RESTRICT");
+        if cascade && restrict {
+            return parser_err!("Cannot specify both CASCADE and RESTRICT in DROP");
+        }
+        Ok(SQLStatement::SQLDrop {
+            object_type,
+            if_exists,
+            names,
+            cascade,
         })
     }
 

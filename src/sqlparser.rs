@@ -620,12 +620,33 @@ impl Parser {
         } else if self.parse_keyword("MATERIALIZED") || self.parse_keyword("VIEW") {
             self.prev_token();
             self.parse_create_view()
+        } else if self.parse_keyword("EXTERNAL") {
+            self.parse_create_external_table()
         } else {
             parser_err!(format!(
                 "Unexpected token after CREATE: {:?}",
                 self.peek_token()
             ))
         }
+    }
+
+    pub fn parse_create_external_table(&mut self) -> Result<SQLStatement, ParserError> {
+        self.expect_keyword("TABLE")?;
+        let table_name = self.parse_object_name()?;
+        let columns = self.parse_columns()?;
+        self.expect_keyword("STORED")?;
+        self.expect_keyword("AS")?;
+        let file_format = self.parse_identifier()?.parse::<FileFormat>()?;
+
+        self.expect_keyword("LOCATION")?;
+        let location = self.parse_literal_string()?;
+
+        Ok(SQLStatement::SQLCreateExternalTable {
+            name: table_name,
+            columns,
+            file_format,
+            location
+        })
     }
 
     pub fn parse_create_view(&mut self) -> Result<SQLStatement, ParserError> {
@@ -650,60 +671,69 @@ impl Parser {
     pub fn parse_create_table(&mut self) -> Result<SQLStatement, ParserError> {
         let table_name = self.parse_object_name()?;
         // parse optional column list (schema)
-        let mut columns = vec![];
-        if self.consume_token(&Token::LParen) {
-            loop {
-                match self.next_token() {
-                    Some(Token::SQLWord(column_name)) => {
-                        let data_type = self.parse_data_type()?;
-                        let is_primary = self.parse_keywords(vec!["PRIMARY", "KEY"]);
-                        let is_unique = self.parse_keyword("UNIQUE");
-                        let default = if self.parse_keyword("DEFAULT") {
-                            let expr = self.parse_default_expr(0)?;
-                            Some(expr)
-                        } else {
-                            None
-                        };
-                        let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
-                            false
-                        } else if self.parse_keyword("NULL") {
-                            true
-                        } else {
-                            true
-                        };
-                        debug!("default: {:?}", default);
+        let columns = self.parse_columns()?;
 
-                        columns.push(SQLColumnDef {
-                            name: column_name.as_sql_ident(),
-                            data_type: data_type,
-                            allow_null,
-                            is_primary,
-                            is_unique,
-                            default,
-                        });
-                        match self.next_token() {
-                            Some(Token::Comma) => {}
-                            Some(Token::RParen) => {
-                                break;
-                            }
-                            other => {
-                                return parser_err!(format!(
-                                    "Expected ',' or ')' after column definition but found {:?}",
-                                    other
-                                ));
-                            }
-                        }
-                    }
-                    unexpected => {
-                        return parser_err!(format!("Expected column name, got {:?}", unexpected));
-                    }
-                }
-            }
-        }
         Ok(SQLStatement::SQLCreateTable {
             name: table_name,
             columns,
         })
+    }
+
+    fn parse_columns(&mut self) -> Result<Vec<SQLColumnDef>, ParserError> {
+        let mut columns = vec![];
+        if !self.consume_token(&Token::LParen) {
+            return Ok(columns);
+        }
+
+        loop {
+            match self.next_token() {
+                Some(Token::SQLWord(column_name)) => {
+                    let data_type = self.parse_data_type()?;
+                    let is_primary = self.parse_keywords(vec!["PRIMARY", "KEY"]);
+                    let is_unique = self.parse_keyword("UNIQUE");
+                    let default = if self.parse_keyword("DEFAULT") {
+                        let expr = self.parse_default_expr(0)?;
+                        Some(expr)
+                    } else {
+                        None
+                    };
+                    let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
+                        false
+                    } else if self.parse_keyword("NULL") {
+                        true
+                    } else {
+                        true
+                    };
+                    debug!("default: {:?}", default);
+
+                    columns.push(SQLColumnDef {
+                        name: column_name.as_sql_ident(),
+                        data_type,
+                        allow_null,
+                        is_primary,
+                        is_unique,
+                        default,
+                    });
+                    match self.next_token() {
+                        Some(Token::Comma) => {}
+                        Some(Token::RParen) => {
+                            break;
+                        }
+                        other => {
+                            return parser_err!(format!(
+                                    "Expected ',' or ')' after column definition but found {:?}",
+                                    other
+                                ));
+                        }
+                    }
+                }
+                unexpected => {
+                    return parser_err!(format!("Expected column name, got {:?}", unexpected));
+                }
+            }
+        }
+
+        Ok(columns)
     }
 
     pub fn parse_table_key(&mut self, constraint_name: SQLIdent) -> Result<TableKey, ParserError> {

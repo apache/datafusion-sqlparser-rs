@@ -379,8 +379,13 @@ impl ToString for SQLStatement {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-            SQLStatement::SQLCreateExternalTable { name, columns, file_format, location } => format!(
-                "CREATE TABLE {} ({}) STORED AS {} LOCATION {}",
+            SQLStatement::SQLCreateExternalTable {
+                name,
+                columns,
+                file_format,
+                location,
+            } => format!(
+                "CREATE EXTERNAL TABLE {} ({}) STORED AS {} LOCATION '{}'",
                 name.to_string(),
                 columns
                     .iter()
@@ -477,8 +482,8 @@ impl ToString for FileFormat {
     }
 }
 
-use std::str::FromStr;
 use sqlparser::ParserError;
+use std::str::FromStr;
 impl FromStr for FileFormat {
     type Err = ParserError;
 
@@ -493,9 +498,9 @@ impl FromStr for FileFormat {
             "RCFILE" => Ok(RCFILE),
             "JSONFILE" => Ok(JSONFILE),
             _ => Err(ParserError::ParserError(format!(
-                "Unexpected token for file format: {}",
+                "Unexpected file format: {}",
                 s
-            )))
+            ))),
         }
     }
 }

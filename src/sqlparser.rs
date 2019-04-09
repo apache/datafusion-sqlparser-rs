@@ -645,7 +645,7 @@ impl Parser {
             name: table_name,
             columns,
             file_format,
-            location
+            location,
         })
     }
 
@@ -721,9 +721,9 @@ impl Parser {
                         }
                         other => {
                             return parser_err!(format!(
-                                    "Expected ',' or ')' after column definition but found {:?}",
-                                    other
-                                ));
+                                "Expected ',' or ')' after column definition but found {:?}",
+                                other
+                            ));
                         }
                     }
                 }

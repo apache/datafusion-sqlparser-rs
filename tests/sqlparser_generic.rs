@@ -434,7 +434,13 @@ fn parse_create_table() {
          lng double)",
     );
     match ast {
-        SQLStatement::SQLCreateTable { name, columns } => {
+        SQLStatement::SQLCreateTable {
+            name,
+            columns,
+            external: _,
+            file_format: _,
+            location: _,
+        } => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(3, columns.len());
 
@@ -475,9 +481,10 @@ fn parse_create_external_table() {
          STORED AS TEXTFILE LOCATION '/tmp/example.csv'",
     );
     match ast {
-        SQLStatement::SQLCreateExternalTable {
+        SQLStatement::SQLCreateTable {
             name,
             columns,
+            external,
             file_format,
             location,
         } => {
@@ -499,58 +506,9 @@ fn parse_create_external_table() {
             assert_eq!(SQLType::Double, c_lng.data_type);
             assert_eq!(true, c_lng.allow_null);
 
-            assert_eq!(FileFormat::TEXTFILE, file_format);
-            assert_eq!("/tmp/example.csv", location);
-        }
-        _ => assert!(false),
-    }
-}
-
-#[test]
-fn parse_create_external_table_newline() {
-    let sql = String::from(
-        "CREATE EXTERNAL TABLE uk_cities (\
-         name VARCHAR(100) NOT NULL,\
-         lat DOUBLE NULL,\
-         lng DOUBLE NULL)\
-         STORED AS TEXTFILE
-         LOCATION '/tmp/example.csv",
-    );
-    let ast = one_statement_parses_to(
-        &sql,
-        "CREATE EXTERNAL TABLE uk_cities (\
-         name character varying(100) NOT NULL, \
-         lat double, \
-         lng double) \
-         STORED AS TEXTFILE LOCATION '/tmp/example.csv'",
-    );
-    match ast {
-        SQLStatement::SQLCreateExternalTable {
-            name,
-            columns,
-            file_format,
-            location,
-        } => {
-            assert_eq!("uk_cities", name.to_string());
-            assert_eq!(3, columns.len());
-
-            let c_name = &columns[0];
-            assert_eq!("name", c_name.name);
-            assert_eq!(SQLType::Varchar(Some(100)), c_name.data_type);
-            assert_eq!(false, c_name.allow_null);
-
-            let c_lat = &columns[1];
-            assert_eq!("lat", c_lat.name);
-            assert_eq!(SQLType::Double, c_lat.data_type);
-            assert_eq!(true, c_lat.allow_null);
-
-            let c_lng = &columns[2];
-            assert_eq!("lng", c_lng.name);
-            assert_eq!(SQLType::Double, c_lng.data_type);
-            assert_eq!(true, c_lng.allow_null);
-
-            assert_eq!(FileFormat::TEXTFILE, file_format);
-            assert_eq!("/tmp/example.csv", location);
+            assert!(external);
+            assert_eq!(FileFormat::TEXTFILE, file_format.unwrap());
+            assert_eq!("/tmp/example.csv", location.unwrap());
         }
         _ => assert!(false),
     }

@@ -641,11 +641,12 @@ impl Parser {
         self.expect_keyword("LOCATION")?;
         let location = self.parse_literal_string()?;
 
-        Ok(SQLStatement::SQLCreateExternalTable {
+        Ok(SQLStatement::SQLCreateTable {
             name: table_name,
             columns,
-            file_format,
-            location,
+            external: true,
+            file_format: Some(file_format),
+            location: Some(location),
         })
     }
 
@@ -676,6 +677,9 @@ impl Parser {
         Ok(SQLStatement::SQLCreateTable {
             name: table_name,
             columns,
+            external: false,
+            file_format: None,
+            location: None,
         })
     }
 

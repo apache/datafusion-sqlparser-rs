@@ -163,7 +163,13 @@ fn parse_create_table_with_defaults() {
             active integer NOT NULL)",
     );
     match one_statement_parses_to(&sql, "") {
-        SQLStatement::SQLCreateTable { name, columns } => {
+        SQLStatement::SQLCreateTable {
+            name,
+            columns,
+            external: _,
+            file_format: _,
+            location: _,
+        } => {
             assert_eq!("public.customer", name.to_string());
             assert_eq!(10, columns.len());
 
@@ -204,7 +210,13 @@ fn parse_create_table_from_pg_dump() {
             active integer
         )");
     match one_statement_parses_to(&sql, "") {
-        SQLStatement::SQLCreateTable { name, columns } => {
+        SQLStatement::SQLCreateTable {
+            name,
+            columns,
+            external: _,
+            file_format: _,
+            location: _,
+        } => {
             assert_eq!("public.customer", name.to_string());
 
             let c_customer_id = &columns[0];
@@ -261,7 +273,13 @@ fn parse_create_table_with_inherit() {
          )",
     );
     match verified_stmt(&sql) {
-        SQLStatement::SQLCreateTable { name, columns } => {
+        SQLStatement::SQLCreateTable {
+            name,
+            columns,
+            external: _,
+            file_format: _,
+            location: _,
+        } => {
             assert_eq!("bazaar.settings", name.to_string());
 
             let c_name = &columns[0];

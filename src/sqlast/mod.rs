@@ -249,15 +249,9 @@ pub enum SQLStatement {
         name: SQLObjectName,
         /// Optional schema
         columns: Vec<SQLColumnDef>,
-    },
-    /// CREATE EXTERNAL TABLE
-    SQLCreateExternalTable {
-        /// Table name
-        name: SQLObjectName,
-        /// Optional schema
-        columns: Vec<SQLColumnDef>,
-        file_format: FileFormat,
-        location: String,
+        external: bool,
+        file_format: Option<FileFormat>,
+        location: Option<String>,
     },
     /// ALTER TABLE
     SQLAlterTable {
@@ -370,21 +364,13 @@ impl ToString for SQLStatement {
                     query.to_string()
                 )
             }
-            SQLStatement::SQLCreateTable { name, columns } => format!(
-                "CREATE TABLE {} ({})",
-                name.to_string(),
-                columns
-                    .iter()
-                    .map(|c| c.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            ),
-            SQLStatement::SQLCreateExternalTable {
+            SQLStatement::SQLCreateTable {
                 name,
                 columns,
+                external,
                 file_format,
                 location,
-            } => format!(
+            } if *external => format!(
                 "CREATE EXTERNAL TABLE {} ({}) STORED AS {} LOCATION '{}'",
                 name.to_string(),
                 columns
@@ -392,8 +378,23 @@ impl ToString for SQLStatement {
                     .map(|c| c.to_string())
                     .collect::<Vec<String>>()
                     .join(", "),
-                file_format.to_string(),
-                location
+                file_format.as_ref().map(|f| f.to_string()).unwrap(),
+                location.as_ref().unwrap()
+            ),
+            SQLStatement::SQLCreateTable {
+                name,
+                columns,
+                external: _,
+                file_format: _,
+                location: _,
+            } => format!(
+                "CREATE TABLE {} ({})",
+                name.to_string(),
+                columns
+                    .iter()
+                    .map(|c| c.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
             ),
             SQLStatement::SQLAlterTable { name, operation } => {
                 format!("ALTER TABLE {} {}", name.to_string(), operation.to_string())

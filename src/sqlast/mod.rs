@@ -249,6 +249,9 @@ pub enum SQLStatement {
         name: SQLObjectName,
         /// Optional schema
         columns: Vec<SQLColumnDef>,
+        external: bool,
+        file_format: Option<FileFormat>,
+        location: Option<String>,
     },
     /// ALTER TABLE
     SQLAlterTable {
@@ -361,7 +364,30 @@ impl ToString for SQLStatement {
                     query.to_string()
                 )
             }
-            SQLStatement::SQLCreateTable { name, columns } => format!(
+            SQLStatement::SQLCreateTable {
+                name,
+                columns,
+                external,
+                file_format,
+                location,
+            } if *external => format!(
+                "CREATE EXTERNAL TABLE {} ({}) STORED AS {} LOCATION '{}'",
+                name.to_string(),
+                columns
+                    .iter()
+                    .map(|c| c.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", "),
+                file_format.as_ref().map(|f| f.to_string()).unwrap(),
+                location.as_ref().unwrap()
+            ),
+            SQLStatement::SQLCreateTable {
+                name,
+                columns,
+                external: _,
+                file_format: _,
+                location: _,
+            } => format!(
                 "CREATE TABLE {} ({})",
                 name.to_string(),
                 columns
@@ -427,5 +453,55 @@ impl ToString for SQLColumnDef {
             s += " NOT NULL";
         }
         s
+    }
+}
+
+/// External table's available file format
+#[derive(Debug, Clone, PartialEq)]
+pub enum FileFormat {
+    TEXTFILE,
+    SEQUENCEFILE,
+    ORC,
+    PARQUET,
+    AVRO,
+    RCFILE,
+    JSONFILE,
+}
+
+impl ToString for FileFormat {
+    fn to_string(&self) -> String {
+        use self::FileFormat::*;
+        match self {
+            TEXTFILE => "TEXTFILE".to_string(),
+            SEQUENCEFILE => "SEQUENCEFILE".to_string(),
+            ORC => "ORC".to_string(),
+            PARQUET => "PARQUET".to_string(),
+            AVRO => "AVRO".to_string(),
+            RCFILE => "RCFILE".to_string(),
+            JSONFILE => "TEXTFILE".to_string(),
+        }
+    }
+}
+
+use sqlparser::ParserError;
+use std::str::FromStr;
+impl FromStr for FileFormat {
+    type Err = ParserError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use self::FileFormat::*;
+        match s {
+            "TEXTFILE" => Ok(TEXTFILE),
+            "SEQUENCEFILE" => Ok(SEQUENCEFILE),
+            "ORC" => Ok(ORC),
+            "PARQUET" => Ok(PARQUET),
+            "AVRO" => Ok(AVRO),
+            "RCFILE" => Ok(RCFILE),
+            "JSONFILE" => Ok(JSONFILE),
+            _ => Err(ParserError::ParserError(format!(
+                "Unexpected file format: {}",
+                s
+            ))),
+        }
     }
 }

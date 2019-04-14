@@ -20,11 +20,11 @@ pub enum SQLType {
     /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
     Decimal(Option<usize>, Option<usize>),
     /// Small integer
-    SmallInt,
+    SmallInt { signed: bool },
     /// Integer
-    Int,
+    Int { signed: bool },
     /// Big integer
-    BigInt,
+    BigInt { signed: bool },
     /// Floating point with optional precision e.g. FLOAT(8)
     Float(Option<usize>),
     /// Floating point e.g. REAL
@@ -84,9 +84,12 @@ impl ToString for SQLType {
                     }
                 }
             }
-            SQLType::SmallInt => "smallint".to_string(),
-            SQLType::Int => "int".to_string(),
-            SQLType::BigInt => "bigint".to_string(),
+            SQLType::SmallInt { signed } if !*signed => "unsigned smallint".to_string(),
+            SQLType::SmallInt { .. } => "smallint".to_string(),
+            SQLType::Int { signed } if !*signed => "unsigned int".to_string(),
+            SQLType::Int { .. } => "int".to_string(),
+            SQLType::BigInt { signed } if !*signed => "unsigned bigint".to_string(),
+            SQLType::BigInt { .. } => "bigint".to_string(),
             SQLType::Float(size) => {
                 if let Some(size) = size {
                     format!("float({})", size)

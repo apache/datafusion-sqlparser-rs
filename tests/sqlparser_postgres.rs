@@ -175,12 +175,12 @@ fn parse_create_table_with_defaults() {
 
             let c_name = &columns[0];
             assert_eq!("customer_id", c_name.name);
-            assert_eq!(SQLType::Int, c_name.data_type);
+            assert_eq!(SQLType::Int { signed: true }, c_name.data_type);
             assert_eq!(false, c_name.allow_null);
 
             let c_lat = &columns[1];
             assert_eq!("store_id", c_lat.name);
-            assert_eq!(SQLType::SmallInt, c_lat.data_type);
+            assert_eq!(SQLType::SmallInt { signed: true }, c_lat.data_type);
             assert_eq!(false, c_lat.allow_null);
 
             let c_lng = &columns[2];
@@ -221,12 +221,12 @@ fn parse_create_table_from_pg_dump() {
 
             let c_customer_id = &columns[0];
             assert_eq!("customer_id", c_customer_id.name);
-            assert_eq!(SQLType::Int, c_customer_id.data_type);
+            assert_eq!(SQLType::Int { signed: true }, c_customer_id.data_type);
             assert_eq!(false, c_customer_id.allow_null);
 
             let c_store_id = &columns[1];
             assert_eq!("store_id", c_store_id.name);
-            assert_eq!(SQLType::SmallInt, c_store_id.data_type);
+            assert_eq!(SQLType::SmallInt { signed: true }, c_store_id.data_type);
             assert_eq!(false, c_store_id.allow_null);
 
             let c_first_name = &columns[2];

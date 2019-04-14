@@ -1022,9 +1022,16 @@ impl Parser {
                         Ok(SQLType::Double)
                     }
                 }
-                "SMALLINT" => Ok(SQLType::SmallInt),
-                "INT" | "INTEGER" => Ok(SQLType::Int),
-                "BIGINT" => Ok(SQLType::BigInt),
+                "SMALLINT" => Ok(SQLType::SmallInt { signed: true }),
+                "INT" | "INTEGER" => Ok(SQLType::Int { signed: true }),
+                "BIGINT" => Ok(SQLType::BigInt { signed: true }),
+                "UNSIGNED" => match self.parse_data_type() {
+                    Ok(SQLType::BigInt { .. }) => Ok(SQLType::BigInt { signed: false }),
+                    Ok(SQLType::Int { .. }) => Ok(SQLType::Int { signed: false }),
+                    Ok(SQLType::SmallInt { .. }) => Ok(SQLType::SmallInt { signed: false }),
+                    Ok(t) => parser_err!(format!("Unexpected unsigned data type: {:?}.", t)),
+                    err => err,
+                },
                 "VARCHAR" => Ok(SQLType::Varchar(self.parse_optional_precision()?)),
                 "CHAR" | "CHARACTER" => {
                     if self.parse_keyword("VARYING") {

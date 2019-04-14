@@ -408,7 +408,7 @@ fn parse_cast() {
     assert_eq!(
         &ASTNode::SQLCast {
             expr: Box::new(ASTNode::SQLIdentifier("id".to_string())),
-            data_type: SQLType::BigInt
+            data_type: SQLType::BigInt { signed: true }
         },
         expr_from_projection(only(&select.projection))
     );
@@ -458,6 +458,57 @@ fn parse_create_table() {
             assert_eq!("lng", c_lng.name);
             assert_eq!(SQLType::Double, c_lng.data_type);
             assert_eq!(true, c_lng.allow_null);
+        }
+        _ => assert!(false),
+    }
+}
+
+#[test]
+fn parse_create_unsigned_table() {
+    let sql = String::from(
+        "CREATE TABLE numbers (\
+         c1 UNSIGNED SMALLINT NULL,\
+         c2 UNSIGNED INTEGER NULL,\
+         c3 UNSIGNED BIGINT NULL\
+         )",
+    );
+    let ast = one_statement_parses_to(
+        &sql,
+        "CREATE TABLE numbers (\
+         c1 unsigned smallint, \
+         c2 unsigned int, \
+         c3 unsigned bigint\
+         )",
+    );
+    match ast {
+        SQLStatement::SQLCreateTable {
+            name,
+            columns,
+            external,
+            file_format,
+            location,
+        } => {
+            assert_eq!("numbers", name.to_string());
+            assert_eq!(3, columns.len());
+
+            let c1 = &columns[0];
+            assert_eq!("c1", c1.name);
+            assert_eq!(SQLType::SmallInt { signed: false }, c1.data_type);
+            assert_eq!(true, c1.allow_null);
+
+            let c2 = &columns[1];
+            assert_eq!("c2", c2.name);
+            assert_eq!(SQLType::Int { signed: false }, c2.data_type);
+            assert_eq!(true, c2.allow_null);
+
+            let c3 = &columns[2];
+            assert_eq!("c3", c3.name);
+            assert_eq!(SQLType::BigInt { signed: false }, c3.data_type);
+            assert_eq!(true, c3.allow_null);
+
+            assert!(!external);
+            assert_eq!(None, file_format);
+            assert_eq!(None, location);
         }
         _ => assert!(false),
     }

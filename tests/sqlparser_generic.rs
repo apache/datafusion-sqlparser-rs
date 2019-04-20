@@ -1070,7 +1070,7 @@ fn parse_sql_expr(sql: &str) -> ASTNode {
     generic_ast
 }
 
-fn parse_sql_expr_with(dialect: &Dialect, sql: &str) -> ASTNode {
+fn parse_sql_expr_with(dialect: &dyn Dialect, sql: &str) -> ASTNode {
     let mut tokenizer = Tokenizer::new(dialect, &sql);
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(tokens);

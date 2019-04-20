@@ -1,5 +1,3 @@
-extern crate sqlparser;
-
 use sqlparser::dialect::GenericSqlDialect;
 use sqlparser::sqlparser::*;
 

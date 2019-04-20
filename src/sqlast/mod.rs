@@ -483,7 +483,7 @@ impl ToString for FileFormat {
     }
 }
 
-use sqlparser::ParserError;
+use crate::sqlparser::ParserError;
 use std::str::FromStr;
 impl FromStr for FileFormat {
     type Err = ParserError;

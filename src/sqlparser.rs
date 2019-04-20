@@ -14,6 +14,8 @@
 
 //! SQL Parser
 
+use log::debug;
+
 use super::dialect::keywords;
 use super::dialect::Dialect;
 use super::sqlast::*;

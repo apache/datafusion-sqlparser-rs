@@ -1,5 +1,5 @@
-extern crate simple_logger;
-extern crate sqlparser;
+use simple_logger;
+
 ///! A small command-line app to run the parser.
 /// Run with `cargo run --example cli`
 use std::fs;

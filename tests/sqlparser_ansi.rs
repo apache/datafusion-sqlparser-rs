@@ -1,6 +1,3 @@
-extern crate log;
-extern crate sqlparser;
-
 use sqlparser::dialect::AnsiSqlDialect;
 use sqlparser::sqlast::*;
 use sqlparser::sqlparser::*;

@@ -29,14 +29,7 @@ impl ToString for SQLQuery {
         }
         s += &self.body.to_string();
         if let Some(ref order_by) = self.order_by {
-            s += &format!(
-                " ORDER BY {}",
-                order_by
-                    .iter()
-                    .map(|o| o.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            );
+            s += &format!(" ORDER BY {}", comma_separated_string(order_by));
         }
         if let Some(ref limit) = self.limit {
             s += &format!(" LIMIT {}", limit.to_string());
@@ -130,11 +123,7 @@ impl ToString for SQLSelect {
         let mut s = format!(
             "SELECT{} {}",
             if self.distinct { " DISTINCT" } else { "" },
-            self.projection
-                .iter()
-                .map(|p| p.to_string())
-                .collect::<Vec<String>>()
-                .join(", ")
+            comma_separated_string(&self.projection)
         );
         if let Some(ref relation) = self.relation {
             s += &format!(" FROM {}", relation.to_string());
@@ -146,14 +135,7 @@ impl ToString for SQLSelect {
             s += &format!(" WHERE {}", selection.to_string());
         }
         if let Some(ref group_by) = self.group_by {
-            s += &format!(
-                " GROUP BY {}",
-                group_by
-                    .iter()
-                    .map(|g| g.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            );
+            s += &format!(" GROUP BY {}", comma_separated_string(group_by));
         }
         if let Some(ref having) = self.having {
             s += &format!(" HAVING {}", having.to_string());

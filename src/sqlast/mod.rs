@@ -30,6 +30,14 @@ pub use self::value::Value;
 
 pub use self::sql_operator::SQLOperator;
 
+/// Like `vec.join(", ")`, but for any types implementing ToString.
+fn comma_separated_string<T: ToString>(vec: &Vec<T>) -> String {
+    vec.iter()
+        .map(|a| a.to_string())
+        .collect::<Vec<String>>()
+        .join(", ")
+}
+
 /// Identifier name, in the originally quoted form (e.g. `"id"`)
 pub type SQLIdent = String;
 
@@ -123,10 +131,7 @@ impl ToString for ASTNode {
                 "{} {}IN ({})",
                 expr.as_ref().to_string(),
                 if *negated { "NOT " } else { "" },
-                list.iter()
-                    .map(|a| a.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
+                comma_separated_string(list)
             ),
             ASTNode::SQLInSubquery {
                 expr,
@@ -279,11 +284,7 @@ impl ToString for SQLStatement {
                         " VALUES({})",
                         values
                             .iter()
-                            .map(|row| row
-                                .iter()
-                                .map(|c| c.to_string())
-                                .collect::<Vec<String>>()
-                                .join(", "))
+                            .map(|row| comma_separated_string(row))
                             .collect::<Vec<String>>()
                             .join(", ")
                     );
@@ -297,14 +298,7 @@ impl ToString for SQLStatement {
             } => {
                 let mut s = format!("COPY {}", table_name.to_string());
                 if columns.len() > 0 {
-                    s += &format!(
-                        " ({})",
-                        columns
-                            .iter()
-                            .map(|c| c.to_string())
-                            .collect::<Vec<String>>()
-                            .join(", ")
-                    );
+                    s += &format!(" ({})", comma_separated_string(columns));
                 }
                 s += " FROM stdin; ";
                 if values.len() > 0 {
@@ -327,14 +321,7 @@ impl ToString for SQLStatement {
             } => {
                 let mut s = format!("UPDATE {}", table_name.to_string());
                 if assignments.len() > 0 {
-                    s += &format!(
-                        "{}",
-                        assignments
-                            .iter()
-                            .map(|ass| ass.to_string())
-                            .collect::<Vec<String>>()
-                            .join(", ")
-                    );
+                    s += &format!("{}", comma_separated_string(assignments));
                 }
                 if let Some(selection) = selection {
                     s += &format!(" WHERE {}", selection.to_string());
@@ -373,11 +360,7 @@ impl ToString for SQLStatement {
             } if *external => format!(
                 "CREATE EXTERNAL TABLE {} ({}) STORED AS {} LOCATION '{}'",
                 name.to_string(),
-                columns
-                    .iter()
-                    .map(|c| c.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", "),
+                comma_separated_string(columns),
                 file_format.as_ref().map(|f| f.to_string()).unwrap(),
                 location.as_ref().unwrap()
             ),
@@ -390,11 +373,7 @@ impl ToString for SQLStatement {
             } => format!(
                 "CREATE TABLE {} ({})",
                 name.to_string(),
-                columns
-                    .iter()
-                    .map(|c| c.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
+                comma_separated_string(columns)
             ),
             SQLStatement::SQLAlterTable { name, operation } => {
                 format!("ALTER TABLE {} {}", name.to_string(), operation.to_string())

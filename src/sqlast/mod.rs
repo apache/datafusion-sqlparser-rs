@@ -31,9 +31,9 @@ pub use self::value::Value;
 pub use self::sql_operator::SQLOperator;
 
 /// Like `vec.join(", ")`, but for any types implementing ToString.
-fn comma_separated_string<T: ToString>(vec: &Vec<T>) -> String {
+fn comma_separated_string<T: ToString>(vec: &[T]) -> String {
     vec.iter()
-        .map(|a| a.to_string())
+        .map(T::to_string)
         .collect::<Vec<String>>()
         .join(", ")
 }
@@ -409,7 +409,7 @@ impl ToString for SQLStatement {
                 values,
             } => {
                 let mut s = format!("COPY {}", table_name.to_string());
-                if columns.len() > 0 {
+                if !columns.is_empty() {
                     s += &format!(" ({})", comma_separated_string(columns));
                 }
                 s += " FROM stdin; ";
@@ -432,8 +432,8 @@ impl ToString for SQLStatement {
                 selection,
             } => {
                 let mut s = format!("UPDATE {}", table_name.to_string());
-                if assignments.len() > 0 {
-                    s += &format!("{}", comma_separated_string(assignments));
+                if !assignments.is_empty() {
+                    s += &comma_separated_string(assignments);
                 }
                 if let Some(selection) = selection {
                     s += &format!(" WHERE {}", selection.to_string());
@@ -473,7 +473,7 @@ impl ToString for SQLStatement {
                 "CREATE EXTERNAL TABLE {} ({}) STORED AS {} LOCATION '{}'",
                 name.to_string(),
                 comma_separated_string(columns),
-                file_format.as_ref().map(|f| f.to_string()).unwrap(),
+                file_format.as_ref().unwrap().to_string(),
                 location.as_ref().unwrap()
             ),
             SQLStatement::SQLCreateTable {

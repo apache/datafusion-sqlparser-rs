@@ -188,22 +188,21 @@ impl Parser {
                                         ends_with_wildcard = true;
                                         break;
                                     }
-                                    _ => {
+                                    unexpected => {
                                         return parser_err!(format!(
-                                            "Error parsing compound identifier"
+                                            "Expected an identifier or a '*' after '.', got: {:?}",
+                                            unexpected
                                         ));
                                     }
                                 }
                             }
                             if ends_with_wildcard {
                                 Ok(ASTNode::SQLQualifiedWildcard(id_parts))
+                            } else if self.consume_token(&Token::LParen) {
+                                self.prev_token();
+                                self.parse_function(SQLObjectName(id_parts))
                             } else {
-                                if self.consume_token(&Token::LParen) {
-                                    self.prev_token();
-                                    self.parse_function(SQLObjectName(id_parts))
-                                } else {
-                                    Ok(ASTNode::SQLCompoundIdentifier(id_parts))
-                                }
+                                Ok(ASTNode::SQLCompoundIdentifier(id_parts))
                             }
                         }
                         _ => Ok(ASTNode::SQLIdentifier(w.as_sql_ident())),

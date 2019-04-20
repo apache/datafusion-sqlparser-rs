@@ -1352,6 +1352,7 @@ impl Parser {
     /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`),
     /// assuming the initial `SELECT` was already consumed
     pub fn parse_select(&mut self) -> Result<SQLSelect, ParserError> {
+        let distinct = self.parse_keyword("DISTINCT");
         let projection = self.parse_select_list()?;
 
         let (relation, joins) = if self.parse_keyword("FROM") {
@@ -1381,6 +1382,7 @@ impl Parser {
         };
 
         Ok(SQLSelect {
+            distinct,
             projection,
             selection,
             relation,

@@ -90,7 +90,7 @@ impl Parser {
                 Token::SQLWord(ref w) if w.keyword != "" => match w.keyword.as_ref() {
                     "SELECT" | "WITH" => {
                         self.prev_token();
-                        Ok(SQLStatement::SQLSelect(self.parse_query()?))
+                        Ok(SQLStatement::SQLQuery(Box::new(self.parse_query()?)))
                     }
                     "CREATE" => Ok(self.parse_create()?),
                     "DELETE" => Ok(self.parse_delete()?),
@@ -655,7 +655,7 @@ impl Parser {
         // Some dialects allow WITH here, followed by some keywords (e.g. MS SQL)
         // or `(k1=v1, k2=v2, ...)` (Postgres)
         self.expect_keyword("AS")?;
-        let query = self.parse_query()?;
+        let query = Box::new(self.parse_query()?);
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
         Ok(SQLStatement::SQLCreateView {
             name,
@@ -1266,7 +1266,7 @@ impl Parser {
         // We parse the expression using a Pratt parser, as in `parse_expr()`.
         // Start by parsing a restricted SELECT or a `(subquery)`:
         let mut expr = if self.parse_keyword("SELECT") {
-            SQLSetExpr::Select(self.parse_select()?)
+            SQLSetExpr::Select(Box::new(self.parse_select()?))
         } else if self.consume_token(&Token::LParen) {
             // CTEs are not allowed here, but the parser currently accepts them
             let subquery = self.parse_query()?;

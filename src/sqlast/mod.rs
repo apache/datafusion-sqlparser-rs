@@ -202,7 +202,7 @@ impl ToString for ASTNode {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SQLStatement {
     /// SELECT
-    SQLSelect(SQLQuery),
+    SQLQuery(Box<SQLQuery>),
     /// INSERT
     SQLInsert {
         /// TABLE
@@ -240,7 +240,7 @@ pub enum SQLStatement {
     SQLCreateView {
         /// View name
         name: SQLObjectName,
-        query: SQLQuery,
+        query: Box<SQLQuery>,
         materialized: bool,
     },
     /// CREATE TABLE
@@ -264,7 +264,7 @@ pub enum SQLStatement {
 impl ToString for SQLStatement {
     fn to_string(&self) -> String {
         match self {
-            SQLStatement::SQLSelect(s) => s.to_string(),
+            SQLStatement::SQLQuery(s) => s.to_string(),
             SQLStatement::SQLInsert {
                 table_name,
                 columns,

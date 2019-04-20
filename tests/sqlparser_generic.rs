@@ -1003,8 +1003,8 @@ fn only<T>(v: &[T]) -> &T {
 
 fn verified_query(query: &str) -> SQLQuery {
     match verified_stmt(query) {
-        SQLStatement::SQLSelect(select) => select,
-        _ => panic!("Expected SELECT"),
+        SQLStatement::SQLQuery(query) => *query,
+        _ => panic!("Expected SQLQuery"),
     }
 }
 
@@ -1017,7 +1017,7 @@ fn expr_from_projection(item: &SQLSelectItem) -> &ASTNode {
 
 fn verified_only_select(query: &str) -> SQLSelect {
     match verified_query(query).body {
-        SQLSetExpr::Select(s) => s,
+        SQLSetExpr::Select(s) => *s,
         _ => panic!("Expected SQLSetExpr::Select"),
     }
 }

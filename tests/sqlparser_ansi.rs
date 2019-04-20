@@ -5,15 +5,18 @@ use sqlparser::sqlparser::*;
 #[test]
 fn parse_simple_select() {
     let sql = String::from("SELECT id, fname, lname FROM customer WHERE id = 1");
-    let ast = Parser::parse_sql(&AnsiSqlDialect {}, sql).unwrap();
+    let mut ast = Parser::parse_sql(&AnsiSqlDialect {}, sql).unwrap();
     assert_eq!(1, ast.len());
-    match ast.first().unwrap() {
-        SQLStatement::SQLSelect(SQLQuery {
-            body: SQLSetExpr::Select(SQLSelect { projection, .. }),
-            ..
-        }) => {
-            assert_eq!(3, projection.len());
-        }
+    match ast.pop().unwrap() {
+        SQLStatement::SQLQuery(q) => match *q {
+            SQLQuery {
+                body: SQLSetExpr::Select(select),
+                ..
+            } => {
+                assert_eq!(3, select.projection.len());
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     }
 }

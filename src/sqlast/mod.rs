@@ -54,7 +54,7 @@ pub enum ASTNode {
     /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
     /// (Same caveats apply to SQLQualifiedWildcard as to SQLWildcard.)
     SQLQualifiedWildcard(Vec<SQLIdent>),
-    /// Multi part identifier e.g. `myschema.dbo.mytable`
+    /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     SQLCompoundIdentifier(Vec<SQLIdent>),
     /// `IS NULL` expression
     SQLIsNull(Box<ASTNode>),
@@ -100,9 +100,8 @@ pub enum ASTNode {
     /// SQLValue
     SQLValue(Value),
     /// Scalar function call e.g. `LEFT(foo, 5)`
-    /// TODO: this can be a compound SQLObjectName as well (for UDFs)
     SQLFunction {
-        name: SQLIdent,
+        name: SQLObjectName,
         args: Vec<ASTNode>,
         over: Option<SQLWindowSpec>,
     },
@@ -176,7 +175,7 @@ impl ToString for ASTNode {
             }
             ASTNode::SQLValue(v) => v.to_string(),
             ASTNode::SQLFunction { name, args, over } => {
-                let mut s = format!("{}({})", name, comma_separated_string(args));
+                let mut s = format!("{}({})", name.to_string(), comma_separated_string(args));
                 if let Some(o) = over {
                     s += &format!(" OVER ({})", o.to_string())
                 }

@@ -119,7 +119,7 @@ fn parse_select_count_wildcard() {
     let select = verified_only_select(sql);
     assert_eq!(
         &ASTNode::SQLFunction {
-            name: "COUNT".to_string(),
+            name: SQLObjectName(vec!["COUNT".to_string()]),
             args: vec![ASTNode::SQLWildcard],
             over: None,
         },
@@ -533,7 +533,7 @@ fn parse_scalar_function_in_projection() {
     let select = verified_only_select(sql);
     assert_eq!(
         &ASTNode::SQLFunction {
-            name: String::from("sqrt"),
+            name: SQLObjectName(vec![String::from("sqrt")]),
             args: vec![ASTNode::SQLIdentifier(String::from("id"))],
             over: None,
         },
@@ -555,7 +555,7 @@ fn parse_window_functions() {
     assert_eq!(4, select.projection.len());
     assert_eq!(
         &ASTNode::SQLFunction {
-            name: "row_number".to_string(),
+            name: SQLObjectName(vec!["row_number".to_string()]),
             args: vec![],
             over: Some(SQLWindowSpec {
                 partition_by: vec![],
@@ -636,7 +636,7 @@ fn parse_delimited_identifiers() {
     );
     assert_eq!(
         &ASTNode::SQLFunction {
-            name: r#""myfun""#.to_string(),
+            name: SQLObjectName(vec![r#""myfun""#.to_string()]),
             args: vec![],
             over: None,
         },

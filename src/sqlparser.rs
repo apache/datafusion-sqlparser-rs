@@ -175,10 +175,10 @@ impl Parser {
                             expr: Box::new(self.parse_subexpr(p)?),
                         })
                     }
-                    // another SQLWord:
+                    // Here `w` is a word, check if it's a part of a multi-part
+                    // identifier, a function call, or a simple identifier:
                     _ => match self.peek_token() {
-                        Some(Token::LParen) => self.parse_function(w.as_sql_ident()),
-                        Some(Token::Period) => {
+                        Some(Token::LParen) | Some(Token::Period) => {
                             let mut id_parts: Vec<SQLIdent> = vec![w.as_sql_ident()];
                             let mut ends_with_wildcard = false;
                             while self.consume_token(&Token::Period) {
@@ -198,7 +198,12 @@ impl Parser {
                             if ends_with_wildcard {
                                 Ok(ASTNode::SQLQualifiedWildcard(id_parts))
                             } else {
-                                Ok(ASTNode::SQLCompoundIdentifier(id_parts))
+                                if self.consume_token(&Token::LParen) {
+                                    self.prev_token();
+                                    self.parse_function(SQLObjectName(id_parts))
+                                } else {
+                                    Ok(ASTNode::SQLCompoundIdentifier(id_parts))
+                                }
                             }
                         }
                         _ => Ok(ASTNode::SQLIdentifier(w.as_sql_ident())),
@@ -237,7 +242,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_function(&mut self, name: SQLIdent) -> Result<ASTNode, ParserError> {
+    pub fn parse_function(&mut self, name: SQLObjectName) -> Result<ASTNode, ParserError> {
         self.expect_token(&Token::LParen)?;
         let args = if self.consume_token(&Token::RParen) {
             vec![]

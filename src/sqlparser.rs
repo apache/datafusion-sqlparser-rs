@@ -1660,7 +1660,7 @@ impl Parser {
                 if let Some(alias) =
                     self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)?
                 {
-                    projections.push(SQLSelectItem::ExpressionWithAlias(expr, alias));
+                    projections.push(SQLSelectItem::ExpressionWithAlias { expr, alias });
                 } else {
                     projections.push(SQLSelectItem::UnnamedExpression(expr));
                 }

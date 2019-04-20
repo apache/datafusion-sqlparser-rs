@@ -95,12 +95,12 @@ fn parse_select_wildcard() {
 fn parse_column_aliases() {
     let sql = "SELECT a.col + 1 AS newname FROM foo AS a";
     let select = verified_only_select(sql);
-    if let SQLSelectItem::ExpressionWithAlias(
-        ASTNode::SQLBinaryExpr {
+    if let SQLSelectItem::ExpressionWithAlias {
+        expr: ASTNode::SQLBinaryExpr {
             ref op, ref right, ..
         },
         ref alias,
-    ) = only(&select.projection)
+    } = only(&select.projection)
     {
         assert_eq!(&SQLOperator::Plus, op);
         assert_eq!(&ASTNode::SQLValue(Value::Long(1)), right.as_ref());
@@ -643,7 +643,7 @@ fn parse_delimited_identifiers() {
         expr_from_projection(&select.projection[1]),
     );
     match &select.projection[2] {
-        &SQLSelectItem::ExpressionWithAlias(ref expr, ref alias) => {
+        SQLSelectItem::ExpressionWithAlias { expr, alias } => {
             assert_eq!(&ASTNode::SQLIdentifier(r#""simple id""#.to_string()), expr);
             assert_eq!(r#""column alias""#, alias);
         }

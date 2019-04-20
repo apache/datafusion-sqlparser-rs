@@ -157,7 +157,7 @@ pub enum SQLSelectItem {
     /// Any expression, not followed by `[ AS ] alias`
     UnnamedExpression(ASTNode),
     /// An expression, followed by `[ AS ] alias`
-    ExpressionWithAlias(ASTNode, SQLIdent),
+    ExpressionWithAlias { expr: ASTNode, alias: SQLIdent },
     /// `alias.*` or even `schema.table.*`
     QualifiedWildcard(SQLObjectName),
     /// An unqualified `*`
@@ -168,7 +168,7 @@ impl ToString for SQLSelectItem {
     fn to_string(&self) -> String {
         match &self {
             SQLSelectItem::UnnamedExpression(expr) => expr.to_string(),
-            SQLSelectItem::ExpressionWithAlias(expr, alias) => {
+            SQLSelectItem::ExpressionWithAlias { expr, alias } => {
                 format!("{} AS {}", expr.to_string(), alias)
             }
             SQLSelectItem::QualifiedWildcard(prefix) => format!("{}.*", prefix.to_string()),

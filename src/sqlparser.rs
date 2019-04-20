@@ -703,9 +703,8 @@ impl Parser {
                     };
                     let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
                         false
-                    } else if self.parse_keyword("NULL") {
-                        true
                     } else {
+                        let _ = self.parse_keyword("NULL");
                         true
                     };
                     debug!("default: {:?}", default);
@@ -1016,11 +1015,8 @@ impl Parser {
                 "FLOAT" => Ok(SQLType::Float(self.parse_optional_precision()?)),
                 "REAL" => Ok(SQLType::Real),
                 "DOUBLE" => {
-                    if self.parse_keyword("PRECISION") {
-                        Ok(SQLType::Double)
-                    } else {
-                        Ok(SQLType::Double)
-                    }
+                    let _ = self.parse_keyword("PRECISION");
+                    Ok(SQLType::Double)
                 }
                 "SMALLINT" => Ok(SQLType::SmallInt),
                 "INT" | "INTEGER" => Ok(SQLType::Int),
@@ -1036,50 +1032,20 @@ impl Parser {
                 "UUID" => Ok(SQLType::Uuid),
                 "DATE" => Ok(SQLType::Date),
                 "TIMESTAMP" => {
-                    if self.parse_keyword("WITH") {
-                        if self.parse_keywords(vec!["TIME", "ZONE"]) {
-                            Ok(SQLType::Timestamp)
-                        } else {
-                            parser_err!(format!(
-                                "Expecting 'time zone', found: {:?}",
-                                self.peek_token()
-                            ))
-                        }
-                    } else if self.parse_keyword("WITHOUT") {
-                        if self.parse_keywords(vec!["TIME", "ZONE"]) {
-                            Ok(SQLType::Timestamp)
-                        } else {
-                            parser_err!(format!(
-                                "Expecting 'time zone', found: {:?}",
-                                self.peek_token()
-                            ))
-                        }
-                    } else {
-                        Ok(SQLType::Timestamp)
+                    // TBD: we throw away "with/without timezone" information
+                    if self.parse_keyword("WITH") || self.parse_keyword("WITHOUT") {
+                        self.expect_keyword("TIME")?;
+                        self.expect_keyword("ZONE")?;
                     }
+                    Ok(SQLType::Timestamp)
                 }
                 "TIME" => {
-                    if self.parse_keyword("WITH") {
-                        if self.parse_keywords(vec!["TIME", "ZONE"]) {
-                            Ok(SQLType::Time)
-                        } else {
-                            parser_err!(format!(
-                                "Expecting 'time zone', found: {:?}",
-                                self.peek_token()
-                            ))
-                        }
-                    } else if self.parse_keyword("WITHOUT") {
-                        if self.parse_keywords(vec!["TIME", "ZONE"]) {
-                            Ok(SQLType::Time)
-                        } else {
-                            parser_err!(format!(
-                                "Expecting 'time zone', found: {:?}",
-                                self.peek_token()
-                            ))
-                        }
-                    } else {
-                        Ok(SQLType::Timestamp)
+                    // TBD: we throw away "with/without timezone" information
+                    if self.parse_keyword("WITH") || self.parse_keyword("WITHOUT") {
+                        self.expect_keyword("TIME")?;
+                        self.expect_keyword("ZONE")?;
                     }
+                    Ok(SQLType::Time)
                 }
                 "REGCLASS" => Ok(SQLType::Regclass),
                 "TEXT" => {

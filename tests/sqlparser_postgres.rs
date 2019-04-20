@@ -39,7 +39,7 @@ fn parse_simple_insert() {
                 values
             );
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -64,7 +64,7 @@ fn parse_common_insert() {
                 values
             );
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -89,7 +89,7 @@ fn parse_complex_insert() {
                 values
             );
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -131,7 +131,7 @@ fn parse_insert_with_columns() {
                 values
             );
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -140,7 +140,7 @@ fn parse_insert_invalid() {
     let sql = String::from("INSERT public.customer (id, name, active) VALUES (1, 2, 3)");
     match Parser::parse_sql(&PostgreSqlDialect {}, sql) {
         Err(_) => {}
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -185,7 +185,7 @@ fn parse_create_table_with_defaults() {
             assert_eq!(SQLType::Varchar(Some(45)), c_lng.data_type);
             assert_eq!(false, c_lng.allow_null);
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -254,7 +254,7 @@ fn parse_create_table_from_pg_dump() {
                 c_release_year.data_type
             );
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -293,7 +293,7 @@ fn parse_create_table_with_inherit() {
             assert_eq!(false, c_name.is_primary);
             assert_eq!(true, c_name.is_unique);
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -308,7 +308,7 @@ fn parse_alter_table_constraint_primary_key() {
         SQLStatement::SQLAlterTable { name, .. } => {
             assert_eq!(name.to_string(), "bazaar.address");
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -321,7 +321,7 @@ fn parse_alter_table_constraint_foreign_key() {
         SQLStatement::SQLAlterTable { name, .. } => {
             assert_eq!(name.to_string(), "public.customer");
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 

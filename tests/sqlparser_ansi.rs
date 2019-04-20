@@ -14,6 +14,6 @@ fn parse_simple_select() {
         }) => {
             assert_eq!(3, projection.len());
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }

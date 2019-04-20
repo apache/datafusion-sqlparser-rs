@@ -10,8 +10,7 @@ fn parse_delete_statement() {
         SQLStatement::SQLDelete { table_name, .. } => {
             assert_eq!(SQLObjectName(vec!["\"table\"".to_string()]), table_name);
         }
-
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -38,8 +37,7 @@ fn parse_where_delete_statement() {
                 selection.unwrap(),
             );
         }
-
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -468,7 +466,7 @@ fn parse_create_table() {
             assert_eq!(SQLType::Double, c_lng.data_type);
             assert_eq!(true, c_lng.allow_null);
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -519,7 +517,7 @@ fn parse_create_external_table() {
             assert_eq!(FileFormat::TEXTFILE, file_format.unwrap());
             assert_eq!("/tmp/example.csv", location.unwrap());
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -975,7 +973,7 @@ fn parse_create_view() {
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(!materialized);
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -992,7 +990,7 @@ fn parse_create_materialized_view() {
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(materialized);
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 

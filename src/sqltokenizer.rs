@@ -138,9 +138,9 @@ impl Token {
         let is_keyword = quote_style == None && ALL_KEYWORDS.contains(&word_uppercase.as_str());
         Token::SQLWord(SQLWord {
             value: word.to_string(),
-            quote_style: quote_style,
+            quote_style,
             keyword: if is_keyword {
-                word_uppercase.to_string()
+                word_uppercase
             } else {
                 "".to_string()
             },

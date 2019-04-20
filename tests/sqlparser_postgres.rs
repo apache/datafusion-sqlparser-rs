@@ -163,9 +163,9 @@ fn parse_create_table_with_defaults() {
         SQLStatement::SQLCreateTable {
             name,
             columns,
-            external: _,
-            file_format: _,
-            location: _,
+            external: false,
+            file_format: None,
+            location: None,
         } => {
             assert_eq!("public.customer", name.to_string());
             assert_eq!(10, columns.len());
@@ -210,9 +210,9 @@ fn parse_create_table_from_pg_dump() {
         SQLStatement::SQLCreateTable {
             name,
             columns,
-            external: _,
-            file_format: _,
-            location: _,
+            external: false,
+            file_format: None,
+            location: None,
         } => {
             assert_eq!("public.customer", name.to_string());
 
@@ -273,9 +273,9 @@ fn parse_create_table_with_inherit() {
         SQLStatement::SQLCreateTable {
             name,
             columns,
-            external: _,
-            file_format: _,
-            location: _,
+            external: false,
+            file_format: None,
+            location: None,
         } => {
             assert_eq!("bazaar.settings", name.to_string());
 
@@ -407,8 +407,7 @@ fn parse_sql_statements(sql: &str) -> Result<Vec<SQLStatement>, ParserError> {
 fn parse_sql_expr(sql: &str) -> ASTNode {
     debug!("sql: {}", sql);
     let mut parser = parser(sql);
-    let ast = parser.parse_expr().unwrap();
-    ast
+    parser.parse_expr().unwrap()
 }
 
 fn parser(sql: &str) -> Parser {

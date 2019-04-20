@@ -14,8 +14,8 @@ fn main() {
         .nth(1)
         .expect("No arguments provided!\n\nUsage: cargo run --example cli FILENAME.sql");
 
-    let contents =
-        fs::read_to_string(&filename).expect(&format!("Unable to read the file {}", &filename));
+    let contents = fs::read_to_string(&filename)
+        .unwrap_or_else(|_| panic!("Unable to read the file {}", &filename));
     let without_bom = if contents.chars().nth(0).unwrap() as u64 != 0xfeff {
         contents.as_str()
     } else {
@@ -31,7 +31,7 @@ fn main() {
                 "Round-trip:\n'{}'",
                 statements
                     .iter()
-                    .map(|s| s.to_string())
+                    .map(std::string::ToString::to_string)
                     .collect::<Vec<_>>()
                     .join("\n")
             );

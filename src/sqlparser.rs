@@ -49,10 +49,7 @@ pub struct Parser {
 impl Parser {
     /// Parse the specified tokens
     pub fn new(tokens: Vec<Token>) -> Self {
-        Parser {
-            tokens: tokens,
-            index: 0,
-        }
+        Parser { tokens, index: 0 }
     }
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
@@ -235,7 +232,7 @@ impl Parser {
                     t
                 )),
             },
-            None => parser_err!(format!("Prefix parser expected a keyword but hit EOF")),
+            None => parser_err!("Prefix parser expected a keyword but hit EOF"),
         }
     }
 
@@ -405,21 +402,21 @@ impl Parser {
     /// Convert a token operator to an AST operator
     pub fn to_sql_operator(&self, tok: &Token) -> Result<SQLOperator, ParserError> {
         match tok {
-            &Token::Eq => Ok(SQLOperator::Eq),
-            &Token::Neq => Ok(SQLOperator::NotEq),
-            &Token::Lt => Ok(SQLOperator::Lt),
-            &Token::LtEq => Ok(SQLOperator::LtEq),
-            &Token::Gt => Ok(SQLOperator::Gt),
-            &Token::GtEq => Ok(SQLOperator::GtEq),
-            &Token::Plus => Ok(SQLOperator::Plus),
-            &Token::Minus => Ok(SQLOperator::Minus),
-            &Token::Mult => Ok(SQLOperator::Multiply),
-            &Token::Div => Ok(SQLOperator::Divide),
-            &Token::Mod => Ok(SQLOperator::Modulus),
-            &Token::SQLWord(ref k) if k.keyword == "AND" => Ok(SQLOperator::And),
-            &Token::SQLWord(ref k) if k.keyword == "OR" => Ok(SQLOperator::Or),
-            //&Token::SQLWord(ref k) if k.keyword == "NOT" => Ok(SQLOperator::Not),
-            &Token::SQLWord(ref k) if k.keyword == "LIKE" => Ok(SQLOperator::Like),
+            Token::Eq => Ok(SQLOperator::Eq),
+            Token::Neq => Ok(SQLOperator::NotEq),
+            Token::Lt => Ok(SQLOperator::Lt),
+            Token::LtEq => Ok(SQLOperator::LtEq),
+            Token::Gt => Ok(SQLOperator::Gt),
+            Token::GtEq => Ok(SQLOperator::GtEq),
+            Token::Plus => Ok(SQLOperator::Plus),
+            Token::Minus => Ok(SQLOperator::Minus),
+            Token::Mult => Ok(SQLOperator::Multiply),
+            Token::Div => Ok(SQLOperator::Divide),
+            Token::Mod => Ok(SQLOperator::Modulus),
+            Token::SQLWord(ref k) if k.keyword == "AND" => Ok(SQLOperator::And),
+            Token::SQLWord(ref k) if k.keyword == "OR" => Ok(SQLOperator::Or),
+            //Token::SQLWord(ref k) if k.keyword == "NOT" => Ok(SQLOperator::Not),
+            Token::SQLWord(ref k) if k.keyword == "LIKE" => Ok(SQLOperator::Like),
             _ => parser_err!(format!("Unsupported SQL operator {:?}", tok)),
         }
     }
@@ -438,19 +435,17 @@ impl Parser {
         debug!("get_precedence() {:?}", tok);
 
         match tok {
-            &Token::SQLWord(ref k) if k.keyword == "OR" => Ok(5),
-            &Token::SQLWord(ref k) if k.keyword == "AND" => Ok(10),
-            &Token::SQLWord(ref k) if k.keyword == "NOT" => Ok(15),
-            &Token::SQLWord(ref k) if k.keyword == "IS" => Ok(17),
-            &Token::SQLWord(ref k) if k.keyword == "IN" => Ok(20),
-            &Token::SQLWord(ref k) if k.keyword == "BETWEEN" => Ok(20),
-            &Token::SQLWord(ref k) if k.keyword == "LIKE" => Ok(20),
-            &Token::Eq | &Token::Lt | &Token::LtEq | &Token::Neq | &Token::Gt | &Token::GtEq => {
-                Ok(20)
-            }
-            &Token::Plus | &Token::Minus => Ok(30),
-            &Token::Mult | &Token::Div | &Token::Mod => Ok(40),
-            &Token::DoubleColon => Ok(50),
+            Token::SQLWord(k) if k.keyword == "OR" => Ok(5),
+            Token::SQLWord(k) if k.keyword == "AND" => Ok(10),
+            Token::SQLWord(k) if k.keyword == "NOT" => Ok(15),
+            Token::SQLWord(k) if k.keyword == "IS" => Ok(17),
+            Token::SQLWord(k) if k.keyword == "IN" => Ok(20),
+            Token::SQLWord(k) if k.keyword == "BETWEEN" => Ok(20),
+            Token::SQLWord(k) if k.keyword == "LIKE" => Ok(20),
+            Token::Eq | Token::Lt | Token::LtEq | Token::Neq | Token::Gt | Token::GtEq => Ok(20),
+            Token::Plus | Token::Minus => Ok(30),
+            Token::Mult | Token::Div | Token::Mod => Ok(40),
+            Token::DoubleColon => Ok(50),
             _ => Ok(0),
         }
     }
@@ -484,7 +479,7 @@ impl Parser {
         loop {
             match self.token_at(index) {
                 Some(Token::Whitespace(_)) => {
-                    index = index + 1;
+                    index += 1;
                 }
                 Some(_) => {
                     return Some(index);
@@ -507,7 +502,7 @@ impl Parser {
 
     pub fn next_token_no_skip(&mut self) -> Option<Token> {
         if self.index < self.tokens.len() {
-            self.index = self.index + 1;
+            self.index += 1;
             Some(self.tokens[self.index - 1].clone())
         } else {
             None
@@ -532,7 +527,7 @@ impl Parser {
     /// Get the previous token and decrement the token index
     fn prev_token_no_skip(&mut self) -> Option<Token> {
         if self.index > 0 {
-            self.index = self.index - 1;
+            self.index -= 1;
             Some(self.tokens[self.index].clone())
         } else {
             None
@@ -878,7 +873,7 @@ impl Parser {
                         }
                     },
                     //TODO: parse the timestamp here (see parse_timestamp_value())
-                    Token::Number(ref n) if n.contains(".") => match n.parse::<f64>() {
+                    Token::Number(ref n) if n.contains('.') => match n.parse::<f64>() {
                         Ok(n) => Ok(Value::Double(n)),
                         Err(e) => parser_err!(format!("Could not parse '{}' as f64: {}", n, e)),
                     },
@@ -953,7 +948,7 @@ impl Parser {
                 Some(token) => match token {
                     Token::Plus | Token::Minus => {
                         let tz = self.parse_timezone_offset()?;
-                        let offset = FixedOffset::east(tz as i32 * 3600);
+                        let offset = FixedOffset::east(i32::from(tz) * 3600);
                         Ok(Value::Timestamp(DateTime::from_utc(date_time, offset)))
                     }
                     _ => Ok(Value::DateTime(date_time)),
@@ -1256,7 +1251,7 @@ impl Parser {
                 break;
             }
         }
-        return Ok(cte);
+        Ok(cte)
     }
 
     /// Parse a "query body", which is an expression with roughly the

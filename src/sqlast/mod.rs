@@ -271,10 +271,10 @@ impl ToString for SQLStatement {
                 values,
             } => {
                 let mut s = format!("INSERT INTO {}", table_name.to_string());
-                if columns.len() > 0 {
+                if !columns.is_empty() {
                     s += &format!(" ({})", columns.join(", "));
                 }
-                if values.len() > 0 {
+                if !values.is_empty() {
                     s += &format!(
                         " VALUES({})",
                         values
@@ -307,12 +307,12 @@ impl ToString for SQLStatement {
                     );
                 }
                 s += " FROM stdin; ";
-                if values.len() > 0 {
+                if !values.is_empty() {
                     s += &format!(
                         "\n{}",
                         values
                             .iter()
-                            .map(|v| v.clone().unwrap_or("\\N".to_string()))
+                            .map(|v| v.clone().unwrap_or_else(|| "\\N".to_string()))
                             .collect::<Vec<String>>()
                             .join("\t")
                     );
@@ -381,13 +381,7 @@ impl ToString for SQLStatement {
                 file_format.as_ref().map(|f| f.to_string()).unwrap(),
                 location.as_ref().unwrap()
             ),
-            SQLStatement::SQLCreateTable {
-                name,
-                columns,
-                external: _,
-                file_format: _,
-                location: _,
-            } => format!(
+            SQLStatement::SQLCreateTable { name, columns, .. } => format!(
                 "CREATE TABLE {} ({})",
                 name.to_string(),
                 columns

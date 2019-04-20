@@ -446,9 +446,9 @@ fn parse_create_table() {
         SQLStatement::SQLCreateTable {
             name,
             columns,
-            external: _,
-            file_format: _,
-            location: _,
+            external: false,
+            file_format: None,
+            location: None,
         } => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(3, columns.len());
@@ -841,14 +841,13 @@ fn parse_ctes() {
         cte_sqls[0], cte_sqls[1]
     );
 
-    fn assert_ctes_in_select(expected: &Vec<&str>, sel: &SQLQuery) {
-        for i in 0..1 {
-            let Cte {
-                ref query,
-                ref alias,
-            } = sel.ctes[i];
-            assert_eq!(expected[i], query.to_string());
+    fn assert_ctes_in_select(expected: &[&str], sel: &SQLQuery) {
+        let mut i = 0;
+        for exp in expected {
+            let Cte { query, alias } = &sel.ctes[i];
+            assert_eq!(*exp, query.to_string());
             assert_eq!(if i == 0 { "a" } else { "b" }, alias);
+            i += 1;
         }
     }
 
@@ -858,7 +857,7 @@ fn parse_ctes() {
     let sql = &format!("SELECT ({})", with);
     let select = verified_only_select(sql);
     match expr_from_projection(only(&select.projection)) {
-        &ASTNode::SQLSubquery(ref subquery) => {
+        ASTNode::SQLSubquery(ref subquery) => {
             assert_ctes_in_select(&cte_sqls, subquery.as_ref());
         }
         _ => panic!("Expected subquery"),
@@ -1006,7 +1005,7 @@ fn parse_invalid_subquery_without_parens() {
     );
 }
 
-fn only<'a, T>(v: &'a Vec<T>) -> &'a T {
+fn only<T>(v: &[T]) -> &T {
     assert_eq!(1, v.len());
     v.first().unwrap()
 }
@@ -1074,6 +1073,5 @@ fn parse_sql_expr_with(dialect: &dyn Dialect, sql: &str) -> ASTNode {
     let mut tokenizer = Tokenizer::new(dialect, &sql);
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(tokens);
-    let ast = parser.parse_expr().unwrap();
-    ast
+    parser.parse_expr().unwrap()
 }

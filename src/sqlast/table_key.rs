@@ -1,6 +1,6 @@
 use super::{SQLIdent, SQLObjectName};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AlterOperation {
     AddConstraint(TableKey),
     RemoveConstraint { name: SQLIdent },
@@ -17,13 +17,13 @@ impl ToString for AlterOperation {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Key {
     pub name: SQLIdent,
     pub columns: Vec<SQLIdent>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TableKey {
     PrimaryKey(Key),
     UniqueKey(Key),

@@ -50,9 +50,21 @@ fn parse_where_delete_statement() {
 fn parse_simple_select() {
     let sql = "SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5";
     let select = verified_only_select(sql);
+    assert_eq!(false, select.distinct);
     assert_eq!(3, select.projection.len());
     let select = verified_query(sql);
     assert_eq!(Some(ASTNode::SQLValue(Value::Long(5))), select.limit);
+}
+
+#[test]
+fn parse_select_distinct() {
+    let sql = "SELECT DISTINCT name FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(true, select.distinct);
+    assert_eq!(
+        &SQLSelectItem::UnnamedExpression(ASTNode::SQLIdentifier("name".to_string())),
+        only(&select.projection)
+    );
 }
 
 #[test]

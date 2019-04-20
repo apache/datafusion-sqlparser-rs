@@ -239,16 +239,14 @@ impl Parser {
 
     pub fn parse_function(&mut self, id: SQLIdent) -> Result<ASTNode, ParserError> {
         self.expect_token(&Token::LParen)?;
-        if self.consume_token(&Token::RParen) {
-            Ok(ASTNode::SQLFunction {
-                id: id,
-                args: vec![],
-            })
+        let args = if self.consume_token(&Token::RParen) {
+            vec![]
         } else {
             let args = self.parse_expr_list()?;
             self.expect_token(&Token::RParen)?;
-            Ok(ASTNode::SQLFunction { id, args })
-        }
+            args
+        };
+        Ok(ASTNode::SQLFunction { id, args })
     }
 
     pub fn parse_case_expression(&mut self) -> Result<ASTNode, ParserError> {
@@ -328,7 +326,7 @@ impl Parser {
                         })
                     } else {
                         parser_err!(format!(
-                            "Expected IN or LIKE after NOT, found {:?}",
+                            "Expected BETWEEN, IN or LIKE after NOT, found {:?}",
                             self.peek_token()
                         ))
                     }
@@ -1354,6 +1352,7 @@ impl Parser {
     /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`),
     /// assuming the initial `SELECT` was already consumed
     pub fn parse_select(&mut self) -> Result<SQLSelect, ParserError> {
+        let distinct = self.parse_keyword("DISTINCT");
         let projection = self.parse_select_list()?;
 
         let (relation, joins) = if self.parse_keyword("FROM") {
@@ -1383,6 +1382,7 @@ impl Parser {
         };
 
         Ok(SQLSelect {
+            distinct,
             projection,
             selection,
             relation,

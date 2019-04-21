@@ -1,3 +1,5 @@
+use matches::assert_matches;
+
 use sqlparser::dialect::*;
 use sqlparser::sqlast::*;
 use sqlparser::sqlparser::*;
@@ -227,23 +229,17 @@ fn parse_not_precedence() {
     use self::ASTNode::*;
     // NOT has higher precedence than OR/AND, so the following must parse as (NOT true) OR true
     let sql = "NOT true OR true";
-    match verified_expr(sql) {
-        SQLBinaryExpr {
-            op: SQLOperator::Or,
-            ..
-        } => assert!(true),
-        _ => assert!(false),
-    };
+    assert_matches!(verified_expr(sql), SQLBinaryExpr {
+        op: SQLOperator::Or,
+        ..
+    });
 
     // But NOT has lower precedence than comparison operators, so the following parses as NOT (a IS NULL)
     let sql = "NOT a IS NULL";
-    match verified_expr(sql) {
-        SQLUnary {
-            operator: SQLOperator::Not,
-            ..
-        } => assert!(true),
-        _ => assert!(false),
-    };
+    assert_matches!(verified_expr(sql), SQLUnary {
+        operator: SQLOperator::Not,
+        ..
+    });
 }
 
 #[test]
@@ -950,14 +946,11 @@ fn parse_multiple_statements() {
 fn parse_scalar_subqueries() {
     use self::ASTNode::*;
     let sql = "(SELECT 1) + (SELECT 2)";
-    match verified_expr(sql) {
-        SQLBinaryExpr {
-            op: SQLOperator::Plus, ..
-            //left: box SQLSubquery { .. },
-            //right: box SQLSubquery { .. },
-        } => assert!(true),
-        _ => assert!(false),
-    };
+    assert_matches!(verified_expr(sql), SQLBinaryExpr {
+        op: SQLOperator::Plus, ..
+        //left: box SQLSubquery { .. },
+        //right: box SQLSubquery { .. },
+    });
 }
 
 #[test]

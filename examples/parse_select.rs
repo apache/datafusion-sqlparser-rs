@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 use sqlparser::dialect::GenericSqlDialect;
 use sqlparser::sqlparser::*;
 

@@ -34,6 +34,7 @@
 //!
 //! println!("AST: {:?}", ast);
 //! ```
+#![warn(clippy::all)]
 
 pub mod dialect;
 pub mod sqlast;

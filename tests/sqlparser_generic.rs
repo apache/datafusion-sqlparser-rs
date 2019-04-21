@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 use matches::assert_matches;
 
 use sqlparser::dialect::*;

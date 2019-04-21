@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 use simple_logger;
 
 ///! A small command-line app to run the parser.

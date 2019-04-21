@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 use log::debug;
 
 use sqlparser::dialect::PostgreSqlDialect;

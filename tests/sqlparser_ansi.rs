@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 use sqlparser::dialect::AnsiSqlDialect;
 use sqlparser::sqlast::*;
 use sqlparser::sqlparser::*;

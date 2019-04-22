@@ -111,7 +111,7 @@ impl ToString for ASTNode {
         match self {
             ASTNode::SQLIdentifier(s) => s.to_string(),
             ASTNode::SQLWildcard => "*".to_string(),
-            ASTNode::SQLQualifiedWildcard(q) => q.join(".") + "*",
+            ASTNode::SQLQualifiedWildcard(q) => q.join(".") + ".*",
             ASTNode::SQLCompoundIdentifier(s) => s.join("."),
             ASTNode::SQLIsNull(ast) => format!("{} IS NULL", ast.as_ref().to_string()),
             ASTNode::SQLIsNotNull(ast) => format!("{} IS NOT NULL", ast.as_ref().to_string()),

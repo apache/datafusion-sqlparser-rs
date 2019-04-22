@@ -20,16 +20,3 @@ fn parse_simple_select() {
         _ => assert!(false),
     }
 }
-
-#[test]
-fn roundtrip_qualified_wildcard() {
-    let sql = String::from("SELECT COUNT(Employee.*) FROM northwind.Order JOIN northwind.Employee ON Order.employee = Employee.id");
-    let ast = Parser::parse_sql(&AnsiSqlDialect {}, sql.clone()).unwrap();
-    assert_eq!(1, ast.len());
-    match ast.first().unwrap() {
-        SQLStatement::SQLSelect(ref query) => {
-            assert_eq!(sql, query.to_string());
-        }
-        _ => assert!(false),
-    }
-}

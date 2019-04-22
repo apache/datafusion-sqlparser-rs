@@ -92,6 +92,11 @@ fn parse_select_wildcard() {
 }
 
 #[test]
+fn parse_count_wildcard() {
+    verified_only_select("SELECT COUNT(Employee.*) FROM Order JOIN Employee ON Order.employee = Employee.id");
+}
+
+#[test]
 fn parse_column_aliases() {
     let sql = "SELECT a.col + 1 AS newname FROM foo AS a";
     let select = verified_only_select(sql);

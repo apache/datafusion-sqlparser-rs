@@ -159,7 +159,9 @@ fn parse_escaped_single_quote_string_predicate() {
         Some(SQLBinaryExpr {
             left: Box::new(SQLIdentifier("salary".to_string())),
             op: NotEq,
-            right: Box::new(SQLValue(Value::SingleQuotedString("Jim's salary".to_string())))
+            right: Box::new(SQLValue(Value::SingleQuotedString(
+                "Jim's salary".to_string()
+            )))
         }),
         ast.selection,
     );

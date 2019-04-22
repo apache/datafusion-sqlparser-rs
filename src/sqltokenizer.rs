@@ -462,7 +462,15 @@ impl<'a> Tokenizer<'a> {
             match ch {
                 '\'' => {
                     chars.next(); // consume
-                    break;
+                    let escaped_quote = chars.peek()
+                        .map(|c| *c == '\'')
+                        .unwrap_or(false);
+                    if escaped_quote {
+                        s.push('\'');
+                        chars.next();
+                    } else {
+                        break;
+                    }
                 }
                 _ => {
                     chars.next(); // consume

@@ -149,6 +149,23 @@ fn parse_projection_nested_type() {
 }
 
 #[test]
+fn parse_escaped_single_quote_string_predicate() {
+    use self::ASTNode::*;
+    use self::SQLOperator::*;
+    let sql = "SELECT id, fname, lname FROM customer \
+               WHERE salary != 'Jim''s salary'";
+    let ast = verified_only_select(sql);
+    assert_eq!(
+        Some(SQLBinaryExpr {
+            left: Box::new(SQLIdentifier("salary".to_string())),
+            op: NotEq,
+            right: Box::new(SQLValue(Value::SingleQuotedString("Jim's salary".to_string())))
+        }),
+        ast.selection,
+    );
+}
+
+#[test]
 fn parse_compound_expr_1() {
     use self::ASTNode::*;
     use self::SQLOperator::*;

@@ -51,3 +51,5 @@ This is a work in progress but I started some notes on [writing a custom SQL par
 ## Contributing
 
 Contributors are welcome! Please see the [current issues](https://github.com/andygrove/sqlparser-rs/issues) and feel free to file more!
+
+Please run [cargo fmt](https://github.com/rust-lang/rustfmt#on-the-stable-toolchain) to ensure the code is properly formatted.

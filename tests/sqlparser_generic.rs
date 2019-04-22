@@ -93,7 +93,9 @@ fn parse_select_wildcard() {
 
 #[test]
 fn parse_count_wildcard() {
-    verified_only_select("SELECT COUNT(Employee.*) FROM Order JOIN Employee ON Order.employee = Employee.id");
+    verified_only_select(
+        "SELECT COUNT(Employee.*) FROM Order JOIN Employee ON Order.employee = Employee.id",
+    );
 }
 
 #[test]

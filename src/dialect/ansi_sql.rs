@@ -13,4 +13,8 @@ impl Dialect for AnsiSqlDialect {
             || (ch >= '0' && ch <= '9')
             || ch == '_'
     }
+
+    fn is_identifier_start_prepare(&self, ch: char) -> bool {
+        (ch == ':' || ch == '$')
+    }
 }

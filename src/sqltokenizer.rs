@@ -87,6 +87,8 @@ pub enum Token {
     LBrace,
     /// Right brace `}`
     RBrace,
+    /// Prepare literal `$`,`:`
+    Prepare(String),
 }
 
 impl ToString for Token {
@@ -122,6 +124,7 @@ impl ToString for Token {
             Token::Ampersand => "&".to_string(),
             Token::LBrace => "{".to_string(),
             Token::RBrace => "}".to_string(),
+            Token::Prepare(ref p) => p.to_string(),
         }
     }
 }
@@ -206,6 +209,17 @@ impl ToString for Whitespace {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Prepare(String);
+
+impl ToString for Prepare {
+    fn to_string(&self) -> String {
+        match self {
+            Prepare(s) => format!("{}", s),
+        }
+    }
+}
+
 /// Tokenizer error
 #[derive(Debug, PartialEq)]
 pub struct TokenizerError(String);
@@ -241,7 +255,7 @@ impl<'a> Tokenizer<'a> {
                     self.line += 1;
                     self.col = 1;
                 }
-
+                Token::Prepare(p) => self.col += p.len() as u64,
                 Token::Whitespace(Whitespace::Tab) => self.col += 4,
                 Token::SQLWord(w) if w.quote_style == None => self.col += w.value.len() as u64,
                 Token::SQLWord(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
@@ -292,6 +306,11 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume the first char
                     let s = self.tokenize_word(ch, chars);
                     Ok(Some(Token::make_word(&s, None)))
+                }
+                ch if self.dialect.is_identifier_start_prepare(ch) => {
+                    chars.next(); // consume the first char
+                    let s = self.tokenize_word(ch, chars);
+                    Ok(Some(Token::Prepare(s)))
                 }
                 // string
                 '\'' => {

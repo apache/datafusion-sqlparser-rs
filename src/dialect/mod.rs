@@ -20,4 +20,7 @@ pub trait Dialect {
     fn is_identifier_start(&self, ch: char) -> bool;
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
+    /// Determine whether the character is a valid starting character for the identifier
+    /// without quotes in the prepared query
+    fn is_identifier_start_prepare(&self, ch: char) -> bool;
 }

@@ -228,6 +228,10 @@ impl Parser {
                     self.expect_token(&Token::RParen)?;
                     Ok(expr)
                 }
+                Token::Prepare(p)
+                => {
+                    Ok(ASTNode::SQLValue(Value::SingleQuotedString(p.to_string())))
+                }
                 _ => parser_err!(format!(
                     "Did not expect {:?} at the beginning of an expression",
                     t

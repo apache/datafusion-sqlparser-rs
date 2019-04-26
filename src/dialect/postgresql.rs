@@ -16,6 +16,6 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn is_identifier_start_prepare(&self, ch: char) -> bool {
-        (ch == ':' || ch == '$')
+        ch == '$'
     }
 }

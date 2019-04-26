@@ -87,7 +87,7 @@ pub enum Token {
     LBrace,
     /// Right brace `}`
     RBrace,
-    /// Prepare literal `$`,`:`
+    /// Prepare literal `$`
     Prepare(String),
 }
 

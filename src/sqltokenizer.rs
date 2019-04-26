@@ -260,18 +260,9 @@ impl<'a> Tokenizer<'a> {
         //println!("next_token: {:?}", chars.peek());
         match chars.peek() {
             Some(&ch) => match ch {
-                ' ' => {
-                    chars.next();
-                    Ok(Some(Token::Whitespace(Whitespace::Space)))
-                }
-                '\t' => {
-                    chars.next();
-                    Ok(Some(Token::Whitespace(Whitespace::Tab)))
-                }
-                '\n' => {
-                    chars.next();
-                    Ok(Some(Token::Whitespace(Whitespace::Newline)))
-                }
+                ' ' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Space)),
+                '\t' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Tab)),
+                '\n' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Newline)),
                 '\r' => {
                     // Emit a single Whitespace::Newline token for \r and \r\n
                     chars.next();

@@ -155,87 +155,83 @@ impl Parser {
 
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<ASTNode, ParserError> {
-        match self.next_token() {
-            Some(t) => match t {
-                Token::SQLWord(w) => match w.keyword.as_ref() {
-                    "TRUE" | "FALSE" | "NULL" => {
-                        self.prev_token();
-                        self.parse_sql_value()
-                    }
-                    "CASE" => self.parse_case_expression(),
-                    "CAST" => self.parse_cast_expression(),
-                    "NOT" => {
-                        let p = self.get_precedence(&Token::make_keyword("NOT"))?;
-                        Ok(ASTNode::SQLUnary {
-                            operator: SQLOperator::Not,
-                            expr: Box::new(self.parse_subexpr(p)?),
-                        })
-                    }
-                    // Here `w` is a word, check if it's a part of a multi-part
-                    // identifier, a function call, or a simple identifier:
-                    _ => match self.peek_token() {
-                        Some(Token::LParen) | Some(Token::Period) => {
-                            let mut id_parts: Vec<SQLIdent> = vec![w.as_sql_ident()];
-                            let mut ends_with_wildcard = false;
-                            while self.consume_token(&Token::Period) {
-                                match self.next_token() {
-                                    Some(Token::SQLWord(w)) => id_parts.push(w.as_sql_ident()),
-                                    Some(Token::Mult) => {
-                                        ends_with_wildcard = true;
-                                        break;
-                                    }
-                                    unexpected => {
-                                        return self.expected(
-                                            "an identifier or a '*' after '.'",
-                                            unexpected,
-                                        );
-                                    }
-                                }
-                            }
-                            if ends_with_wildcard {
-                                Ok(ASTNode::SQLQualifiedWildcard(id_parts))
-                            } else if self.consume_token(&Token::LParen) {
-                                self.prev_token();
-                                self.parse_function(SQLObjectName(id_parts))
-                            } else {
-                                Ok(ASTNode::SQLCompoundIdentifier(id_parts))
-                            }
-                        }
-                        _ => Ok(ASTNode::SQLIdentifier(w.as_sql_ident())),
-                    },
-                }, // End of Token::SQLWord
-                Token::Mult => Ok(ASTNode::SQLWildcard),
-                tok @ Token::Minus | tok @ Token::Plus => {
-                    let p = self.get_precedence(&tok)?;
-                    let operator = if tok == Token::Plus {
-                        SQLOperator::Plus
-                    } else {
-                        SQLOperator::Minus
-                    };
-                    Ok(ASTNode::SQLUnary {
-                        operator,
-                        expr: Box::new(self.parse_subexpr(p)?),
-                    })
-                }
-                Token::Number(_)
-                | Token::SingleQuotedString(_)
-                | Token::NationalStringLiteral(_) => {
+        let tok = self
+            .next_token()
+            .ok_or_else(|| ParserError::ParserError("Unexpected EOF".to_string()))?;
+        match tok {
+            Token::SQLWord(w) => match w.keyword.as_ref() {
+                "TRUE" | "FALSE" | "NULL" => {
                     self.prev_token();
                     self.parse_sql_value()
                 }
-                Token::LParen => {
-                    let expr = if self.parse_keyword("SELECT") || self.parse_keyword("WITH") {
-                        self.prev_token();
-                        ASTNode::SQLSubquery(Box::new(self.parse_query()?))
-                    } else {
-                        ASTNode::SQLNested(Box::new(self.parse_expr()?))
-                    };
-                    self.expect_token(&Token::RParen)?;
-                    Ok(expr)
+                "CASE" => self.parse_case_expression(),
+                "CAST" => self.parse_cast_expression(),
+                "NOT" => {
+                    let p = self.get_precedence(&Token::make_keyword("NOT"))?;
+                    Ok(ASTNode::SQLUnary {
+                        operator: SQLOperator::Not,
+                        expr: Box::new(self.parse_subexpr(p)?),
+                    })
                 }
-                _ => self.expected("an expression", Some(t)),
-            },
-            None => parser_err!("Prefix parser expected a keyword but hit EOF"),
+                // Here `w` is a word, check if it's a part of a multi-part
+                // identifier, a function call, or a simple identifier:
+                _ => match self.peek_token() {
+                    Some(Token::LParen) | Some(Token::Period) => {
+                        let mut id_parts: Vec<SQLIdent> = vec![w.as_sql_ident()];
+                        let mut ends_with_wildcard = false;
+                        while self.consume_token(&Token::Period) {
+                            match self.next_token() {
+                                Some(Token::SQLWord(w)) => id_parts.push(w.as_sql_ident()),
+                                Some(Token::Mult) => {
+                                    ends_with_wildcard = true;
+                                    break;
+                                }
+                                unexpected => {
+                                    return self
+                                        .expected("an identifier or a '*' after '.'", unexpected);
+                                }
+                            }
+                        }
+                        if ends_with_wildcard {
+                            Ok(ASTNode::SQLQualifiedWildcard(id_parts))
+                        } else if self.consume_token(&Token::LParen) {
+                            self.prev_token();
+                            self.parse_function(SQLObjectName(id_parts))
+                        } else {
+                            Ok(ASTNode::SQLCompoundIdentifier(id_parts))
+                        }
+                    }
+                    _ => Ok(ASTNode::SQLIdentifier(w.as_sql_ident())),
+                },
+            }, // End of Token::SQLWord
+            Token::Mult => Ok(ASTNode::SQLWildcard),
+            tok @ Token::Minus | tok @ Token::Plus => {
+                let p = self.get_precedence(&tok)?;
+                let operator = if tok == Token::Plus {
+                    SQLOperator::Plus
+                } else {
+                    SQLOperator::Minus
+                };
+                Ok(ASTNode::SQLUnary {
+                    operator,
+                    expr: Box::new(self.parse_subexpr(p)?),
+                })
+            }
+            Token::Number(_) | Token::SingleQuotedString(_) | Token::NationalStringLiteral(_) => {
+                self.prev_token();
+                self.parse_sql_value()
+            }
+            Token::LParen => {
+                let expr = if self.parse_keyword("SELECT") || self.parse_keyword("WITH") {
+                    self.prev_token();
+                    ASTNode::SQLSubquery(Box::new(self.parse_query()?))
+                } else {
+                    ASTNode::SQLNested(Box::new(self.parse_expr()?))
+                };
+                self.expect_token(&Token::RParen)?;
+                Ok(expr)
+            }
+            unexpected => self.expected("an expression", Some(unexpected)),
         }
     }
 

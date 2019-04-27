@@ -1,7 +1,5 @@
 use chrono::{offset::FixedOffset, DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 
-use uuid::Uuid;
-
 /// SQL values such as int, double, string, timestamp
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -9,8 +7,6 @@ pub enum Value {
     Long(i64),
     /// Literal floating point value
     Double(f64),
-    /// Uuid value
-    Uuid(Uuid),
     /// 'string value'
     SingleQuotedString(String),
     /// N'string value'
@@ -34,7 +30,6 @@ impl ToString for Value {
         match self {
             Value::Long(v) => v.to_string(),
             Value::Double(v) => v.to_string(),
-            Value::Uuid(v) => v.to_string(),
             Value::SingleQuotedString(v) => format!("'{}'", escape_single_quote_string(v)),
             Value::NationalStringLiteral(v) => format!("N'{}'", v),
             Value::Boolean(v) => v.to_string(),

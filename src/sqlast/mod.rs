@@ -106,8 +106,11 @@ pub enum ASTNode {
         over: Option<SQLWindowSpec>,
     },
     /// CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END
+    /// Note we only recognize a complete single expression as <condition>, not
+    /// `< 0` nor `1, 2, 3` as allowed in a <simple when clause> per
+    /// https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-when-clause
     SQLCase {
-        // TODO: support optional operand for "simple case"
+        operand: Option<Box<ASTNode>>,
         conditions: Vec<ASTNode>,
         results: Vec<ASTNode>,
         else_result: Option<Box<ASTNode>>,
@@ -182,19 +185,21 @@ impl ToString for ASTNode {
                 s
             }
             ASTNode::SQLCase {
+                operand,
                 conditions,
                 results,
                 else_result,
             } => {
-                let mut s = format!(
-                    "CASE {}",
-                    conditions
-                        .iter()
-                        .zip(results)
-                        .map(|(c, r)| format!("WHEN {} THEN {}", c.to_string(), r.to_string()))
-                        .collect::<Vec<String>>()
-                        .join(" ")
-                );
+                let mut s = "CASE".to_string();
+                if let Some(operand) = operand {
+                    s += &format!(" {}", operand.to_string());
+                }
+                s += &conditions
+                    .iter()
+                    .zip(results)
+                    .map(|(c, r)| format!(" WHEN {} THEN {}", c.to_string(), r.to_string()))
+                    .collect::<Vec<String>>()
+                    .join("");
                 if let Some(else_result) = else_result {
                     s += &format!(" ELSE {}", else_result.to_string())
                 }

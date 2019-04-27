@@ -641,9 +641,16 @@ fn parse_delimited_identifiers() {
     );
     // check FROM
     match select.relation.unwrap() {
-        TableFactor::Table { name, alias } => {
+        TableFactor::Table {
+            name,
+            alias,
+            args,
+            with_hints,
+        } => {
             assert_eq!(vec![r#""a table""#.to_string()], name.0);
             assert_eq!(r#""alias""#, alias.unwrap());
+            assert!(args.is_none());
+            assert!(with_hints.is_empty());
         }
         _ => panic!("Expecting TableFactor::Table"),
     }
@@ -698,13 +705,14 @@ fn parse_parens() {
 }
 
 #[test]
-fn parse_case_expression() {
+fn parse_searched_case_expression() {
     let sql = "SELECT CASE WHEN bar IS NULL THEN 'null' WHEN bar = 0 THEN '=0' WHEN bar >= 0 THEN '>=0' ELSE '<0' END FROM foo";
     use self::ASTNode::{SQLBinaryExpr, SQLCase, SQLIdentifier, SQLIsNull, SQLValue};
     use self::SQLOperator::*;
     let select = verified_only_select(sql);
     assert_eq!(
         &SQLCase {
+            operand: None,
             conditions: vec![
                 SQLIsNull(Box::new(SQLIdentifier("bar".to_string()))),
                 SQLBinaryExpr {
@@ -732,6 +740,31 @@ fn parse_case_expression() {
 }
 
 #[test]
+fn parse_simple_case_expression() {
+    // ANSI calls a CASE expression with an operand "<simple case>"
+    let sql = "SELECT CASE foo WHEN 1 THEN 'Y' ELSE 'N' END";
+    let select = verified_only_select(sql);
+    use self::ASTNode::{SQLCase, SQLIdentifier, SQLValue};
+    assert_eq!(
+        &SQLCase {
+            operand: Some(Box::new(SQLIdentifier("foo".to_string()))),
+            conditions: vec![SQLValue(Value::Long(1))],
+            results: vec![SQLValue(Value::SingleQuotedString("Y".to_string())),],
+            else_result: Some(Box::new(SQLValue(Value::SingleQuotedString(
+                "N".to_string()
+            ))))
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
+fn parse_from_advanced() {
+    let sql = "SELECT * FROM fn(1, 2) AS foo, schema.bar AS bar WITH (NOLOCK)";
+    let _select = verified_only_select(sql);
+}
+
+#[test]
 fn parse_implicit_join() {
     let sql = "SELECT * FROM t1, t2";
     let select = verified_only_select(sql);
@@ -740,6 +773,8 @@ fn parse_implicit_join() {
             relation: TableFactor::Table {
                 name: SQLObjectName(vec!["t2".to_string()]),
                 alias: None,
+                args: None,
+                with_hints: vec![],
             },
             join_operator: JoinOperator::Implicit
         },
@@ -756,6 +791,8 @@ fn parse_cross_join() {
             relation: TableFactor::Table {
                 name: SQLObjectName(vec!["t2".to_string()]),
                 alias: None,
+                args: None,
+                with_hints: vec![],
             },
             join_operator: JoinOperator::Cross
         },
@@ -774,6 +811,8 @@ fn parse_joins_on() {
             relation: TableFactor::Table {
                 name: SQLObjectName(vec![relation.into()]),
                 alias,
+                args: None,
+                with_hints: vec![],
             },
             join_operator: f(JoinConstraint::On(ASTNode::SQLBinaryExpr {
                 left: Box::new(ASTNode::SQLIdentifier("c1".into())),
@@ -825,6 +864,8 @@ fn parse_joins_using() {
             relation: TableFactor::Table {
                 name: SQLObjectName(vec![relation.into()]),
                 alias,
+                args: None,
+                with_hints: vec![],
             },
             join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
         }

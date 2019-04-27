@@ -846,20 +846,20 @@ impl Parser {
         self.expect_keyword("TABLE")?;
         let _ = self.parse_keyword("ONLY");
         let table_name = self.parse_object_name()?;
-        let operation: Result<AlterOperation, ParserError> =
-            if self.parse_keywords(vec!["ADD", "CONSTRAINT"]) {
+        let operation = if self.parse_keyword("ADD") {
+            if self.parse_keyword("CONSTRAINT") {
                 let constraint_name = self.parse_identifier()?;
                 let table_key = self.parse_table_key(constraint_name)?;
-                Ok(AlterOperation::AddConstraint(table_key))
+                AlterOperation::AddConstraint(table_key)
             } else {
-                return parser_err!(format!(
-                    "Expecting ADD CONSTRAINT, found :{:?}",
-                    self.peek_token()
-                ));
-            };
+                return self.expected("CONSTRAINT after ADD", self.peek_token());
+            }
+        } else {
+            return self.expected("ADD after ALTER TABLE", self.peek_token());
+        };
         Ok(SQLStatement::SQLAlterTable {
             name: table_name,
-            operation: operation?,
+            operation,
         })
     }
 

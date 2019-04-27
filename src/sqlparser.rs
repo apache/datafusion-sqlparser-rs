@@ -336,27 +336,23 @@ impl Parser {
     }
 
     pub fn parse_case_expression(&mut self) -> Result<ASTNode, ParserError> {
-        if self.parse_keywords(vec!["WHEN"]) {
+        if self.parse_keyword("WHEN") {
             let mut conditions = vec![];
             let mut results = vec![];
-            let mut else_result = None;
             loop {
                 conditions.push(self.parse_expr()?);
                 self.expect_keyword("THEN")?;
                 results.push(self.parse_expr()?);
-                if self.parse_keywords(vec!["ELSE"]) {
-                    else_result = Some(Box::new(self.parse_expr()?));
-                    if self.parse_keywords(vec!["END"]) {
-                        break;
-                    } else {
-                        return parser_err!("Expecting END after a CASE..ELSE");
-                    }
-                }
-                if self.parse_keywords(vec!["END"]) {
+                if !self.parse_keyword("WHEN") {
                     break;
                 }
-                self.expect_keyword("WHEN")?;
             }
+            let else_result = if self.parse_keyword("ELSE") {
+                Some(Box::new(self.parse_expr()?))
+            } else {
+                None
+            };
+            self.expect_keyword("END")?;
             Ok(ASTNode::SQLCase {
                 conditions,
                 results,

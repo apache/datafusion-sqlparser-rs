@@ -28,6 +28,7 @@ pub enum ParserError {
     ParserError(String),
 }
 
+// Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
     ($MSG:expr) => {
         Err(ParserError::ParserError($MSG.to_string()))
@@ -69,10 +70,7 @@ impl Parser {
             if parser.peek_token().is_none() {
                 break;
             } else if expecting_statement_delimiter {
-                return parser_err!(format!(
-                    "Expected end of statement, found: {}",
-                    parser.peek_token().unwrap().to_string()
-                ));
+                return parser.expected("end of statement", parser.peek_token());
             }
 
             let statement = parser.parse_statement()?;
@@ -102,12 +100,12 @@ impl Parser {
                         w.to_string()
                     )),
                 },
-                unexpected => parser_err!(format!(
-                    "Unexpected {:?} at the beginning of a statement",
-                    unexpected
-                )),
+                unexpected => self.expected(
+                    "a keyword at the beginning of a statement",
+                    Some(unexpected),
+                ),
             },
-            _ => parser_err!("Unexpected end of file"),
+            None => self.expected("SQL statement", None),
         }
     }
 
@@ -188,10 +186,10 @@ impl Parser {
                                         break;
                                     }
                                     unexpected => {
-                                        return parser_err!(format!(
-                                            "Expected an identifier or a '*' after '.', got: {:?}",
-                                            unexpected
-                                        ));
+                                        return self.expected(
+                                            "an identifier or a '*' after '.'",
+                                            unexpected,
+                                        );
                                     }
                                 }
                             }
@@ -231,10 +229,7 @@ impl Parser {
                     self.expect_token(&Token::RParen)?;
                     Ok(expr)
                 }
-                _ => parser_err!(format!(
-                    "Did not expect {:?} at the beginning of an expression",
-                    t
-                )),
+                _ => self.expected("an expression", Some(t)),
             },
             None => parser_err!("Prefix parser expected a keyword but hit EOF"),
         }
@@ -302,12 +297,7 @@ impl Parser {
                 }
             }
             Some(Token::RParen) => None,
-            unexpected => {
-                return parser_err!(format!(
-                    "Expected 'ROWS', 'RANGE', 'GROUPS', or ')', got {:?}",
-                    unexpected
-                ));
-            }
+            unexpected => return self.expected("'ROWS', 'RANGE', 'GROUPS', or ')'", unexpected),
         };
         self.expect_token(&Token::RParen)?;
         Ok(window_frame)
@@ -335,10 +325,7 @@ impl Parser {
             } else if self.parse_keyword("FOLLOWING") {
                 Ok(SQLWindowFrameBound::Following(rows))
             } else {
-                parser_err!(format!(
-                    "Expected PRECEDING or FOLLOWING, found {:?}",
-                    self.peek_token()
-                ))
+                self.expected("PRECEDING or FOLLOWING", self.peek_token())
             }
         }
     }
@@ -401,10 +388,7 @@ impl Parser {
                     } else if self.parse_keywords(vec!["NOT", "NULL"]) {
                         Ok(ASTNode::SQLIsNotNull(Box::new(expr)))
                     } else {
-                        parser_err!(format!(
-                            "Expected NULL or NOT NULL after IS, found {:?}",
-                            self.peek_token()
-                        ))
+                        self.expected("NULL or NOT NULL after IS", self.peek_token())
                     }
                 }
                 Token::SQLWord(ref k) if k.keyword == "NOT" => {
@@ -419,10 +403,7 @@ impl Parser {
                             right: Box::new(self.parse_subexpr(precedence)?),
                         })
                     } else {
-                        parser_err!(format!(
-                            "Expected BETWEEN, IN or LIKE after NOT, found {:?}",
-                            self.peek_token()
-                        ))
+                        self.expected("BETWEEN, IN or LIKE after NOT", self.peek_token())
                     }
                 }
                 Token::SQLWord(ref k) if k.keyword == "IN" => self.parse_in(expr, false),
@@ -629,6 +610,15 @@ impl Parser {
         }
     }
 
+    /// Report unexpected token
+    fn expected<T>(&self, expected: &str, found: Option<Token>) -> Result<T, ParserError> {
+        parser_err!(format!(
+            "Expected {}, found: {}",
+            expected,
+            found.map_or("EOF".to_string(), |t| t.to_string())
+        ))
+    }
+
     /// Look for an expected keyword and consume it if it exists
     #[must_use]
     pub fn parse_keyword(&mut self, expected: &'static str) -> bool {
@@ -666,11 +656,7 @@ impl Parser {
         if self.parse_keyword(expected) {
             Ok(())
         } else {
-            parser_err!(format!(
-                "Expected keyword {}, found {:?}",
-                expected,
-                self.peek_token()
-            ))
+            self.expected(expected, self.peek_token())
         }
     }
 
@@ -695,11 +681,7 @@ impl Parser {
         if self.consume_token(expected) {
             Ok(())
         } else {
-            parser_err!(format!(
-                "Expected token {:?}, found {:?}",
-                expected,
-                self.peek_token()
-            ))
+            self.expected(&expected.to_string(), self.peek_token())
         }
     }
 
@@ -713,10 +695,7 @@ impl Parser {
         } else if self.parse_keyword("EXTERNAL") {
             self.parse_create_external_table()
         } else {
-            parser_err!(format!(
-                "Unexpected token after CREATE: {:?}",
-                self.peek_token()
-            ))
+            self.expected("TABLE or VIEW after CREATE", self.peek_token())
         }
     }
 
@@ -1158,7 +1137,7 @@ impl Parser {
                     Ok(SQLType::Custom(type_name))
                 }
             },
-            other => parser_err!(format!("Invalid data type: '{:?}'", other)),
+            other => self.expected("a data type name", other),
         }
     }
 
@@ -1218,10 +1197,7 @@ impl Parser {
             }
         }
         if expect_identifier {
-            parser_err!(format!(
-                "Expecting identifier, found {:?}",
-                self.peek_token()
-            ))
+            self.expected("identifier", self.peek_token())
         } else {
             Ok(idents)
         }
@@ -1237,7 +1213,7 @@ impl Parser {
     pub fn parse_identifier(&mut self) -> Result<SQLIdent, ParserError> {
         match self.next_token() {
             Some(Token::SQLWord(w)) => Ok(w.as_sql_ident()),
-            unexpected => parser_err!(format!("Expected identifier, found {:?}", unexpected)),
+            unexpected => self.expected("identifier", unexpected),
         }
     }
 
@@ -1368,7 +1344,7 @@ impl Parser {
             self.expect_token(&Token::RParen)?;
             SQLSetExpr::Query(Box::new(subquery))
         } else {
-            parser_err!("Expected SELECT or a subquery in the query body!")?
+            return self.expected("SELECT or a subquery in the query body", self.peek_token());
         };
 
         loop {
@@ -1476,10 +1452,7 @@ impl Parser {
             self.expect_token(&Token::RParen)?;
             Ok(JoinConstraint::Using(attributes))
         } else {
-            parser_err!(format!(
-                "Unexpected token after JOIN: {:?}",
-                self.peek_token()
-            ))
+            self.expected("ON, or USING after JOIN", self.peek_token())
         }
     }
 

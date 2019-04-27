@@ -91,6 +91,13 @@ fn parse_select_wildcard() {
 }
 
 #[test]
+fn parse_count_wildcard() {
+    verified_only_select(
+        "SELECT COUNT(Employee.*) FROM Order JOIN Employee ON Order.employee = Employee.id",
+    );
+}
+
+#[test]
 fn parse_column_aliases() {
     let sql = "SELECT a.col + 1 AS newname FROM foo AS a";
     let select = verified_only_select(sql);
@@ -145,6 +152,25 @@ fn parse_projection_nested_type() {
     let sql = "SELECT customer.address.state FROM foo";
     let _ast = verified_only_select(sql);
     //TODO: add assertions
+}
+
+#[test]
+fn parse_escaped_single_quote_string_predicate() {
+    use self::ASTNode::*;
+    use self::SQLOperator::*;
+    let sql = "SELECT id, fname, lname FROM customer \
+               WHERE salary != 'Jim''s salary'";
+    let ast = verified_only_select(sql);
+    assert_eq!(
+        Some(SQLBinaryExpr {
+            left: Box::new(SQLIdentifier("salary".to_string())),
+            op: NotEq,
+            right: Box::new(SQLValue(Value::SingleQuotedString(
+                "Jim's salary".to_string()
+            )))
+        }),
+        ast.selection,
+    );
 }
 
 #[test]

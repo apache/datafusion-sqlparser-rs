@@ -336,33 +336,33 @@ impl Parser {
     }
 
     pub fn parse_case_expression(&mut self) -> Result<ASTNode, ParserError> {
-        if self.parse_keyword("WHEN") {
-            let mut conditions = vec![];
-            let mut results = vec![];
-            loop {
-                conditions.push(self.parse_expr()?);
-                self.expect_keyword("THEN")?;
-                results.push(self.parse_expr()?);
-                if !self.parse_keyword("WHEN") {
-                    break;
-                }
-            }
-            let else_result = if self.parse_keyword("ELSE") {
-                Some(Box::new(self.parse_expr()?))
-            } else {
-                None
-            };
-            self.expect_keyword("END")?;
-            Ok(ASTNode::SQLCase {
-                conditions,
-                results,
-                else_result,
-            })
-        } else {
-            // TODO: implement "simple" case
-            // https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-case
-            parser_err!("Simple case not implemented")
+        let mut operand = None;
+        if !self.parse_keyword("WHEN") {
+            operand = Some(Box::new(self.parse_expr()?));
+            self.expect_keyword("WHEN")?;
         }
+        let mut conditions = vec![];
+        let mut results = vec![];
+        loop {
+            conditions.push(self.parse_expr()?);
+            self.expect_keyword("THEN")?;
+            results.push(self.parse_expr()?);
+            if !self.parse_keyword("WHEN") {
+                break;
+            }
+        }
+        let else_result = if self.parse_keyword("ELSE") {
+            Some(Box::new(self.parse_expr()?))
+        } else {
+            None
+        };
+        self.expect_keyword("END")?;
+        Ok(ASTNode::SQLCase {
+            operand,
+            conditions,
+            results,
+            else_result,
+        })
     }
 
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`

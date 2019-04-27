@@ -698,13 +698,14 @@ fn parse_parens() {
 }
 
 #[test]
-fn parse_case_expression() {
+fn parse_searched_case_expression() {
     let sql = "SELECT CASE WHEN bar IS NULL THEN 'null' WHEN bar = 0 THEN '=0' WHEN bar >= 0 THEN '>=0' ELSE '<0' END FROM foo";
     use self::ASTNode::{SQLBinaryExpr, SQLCase, SQLIdentifier, SQLIsNull, SQLValue};
     use self::SQLOperator::*;
     let select = verified_only_select(sql);
     assert_eq!(
         &SQLCase {
+            operand: None,
             conditions: vec![
                 SQLIsNull(Box::new(SQLIdentifier("bar".to_string()))),
                 SQLBinaryExpr {
@@ -725,6 +726,25 @@ fn parse_case_expression() {
             ],
             else_result: Some(Box::new(SQLValue(Value::SingleQuotedString(
                 "<0".to_string()
+            ))))
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
+fn parse_simple_case_expression() {
+    // ANSI calls a CASE expression with an operand "<simple case>"
+    let sql = "SELECT CASE foo WHEN 1 THEN 'Y' ELSE 'N' END";
+    let select = verified_only_select(sql);
+    use self::ASTNode::{SQLCase, SQLIdentifier, SQLValue};
+    assert_eq!(
+        &SQLCase {
+            operand: Some(Box::new(SQLIdentifier("foo".to_string()))),
+            conditions: vec![SQLValue(Value::Long(1))],
+            results: vec![SQLValue(Value::SingleQuotedString("Y".to_string())),],
+            else_result: Some(Box::new(SQLValue(Value::SingleQuotedString(
+                "N".to_string()
             ))))
         },
         expr_from_projection(only(&select.projection)),

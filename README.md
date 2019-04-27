@@ -30,7 +30,7 @@ println!("AST: {:?}", ast);
 This outputs
 
 ```rust
-AST: [SQLSelect(SQLSelect { projection: [SQLIdentifier("a"), SQLIdentifier("b"), SQLValue(Long(123)), SQLFunction { id: "myfunc", args: [SQLIdentifier("b")] }], relation: Some(Table { name: SQLObjectName(["table_1"]), alias: None }), joins: [], selection: Some(SQLBinaryExpr { left: SQLBinaryExpr { left: SQLIdentifier("a"), op: Gt, right: SQLIdentifier("b") }, op: And, right: SQLBinaryExpr { left: SQLIdentifier("b"), op: Lt, right: SQLValue(Long(100)) } }), order_by: Some([SQLOrderByExpr { expr: SQLIdentifier("a"), asc: Some(false) }, SQLOrderByExpr { expr: SQLIdentifier("b"), asc: None }]), group_by: None, having: None, limit: None })]
+AST: [SQLSelect(SQLQuery { ctes: [], body: Select(SQLSelect { distinct: false, projection: [UnnamedExpression(SQLIdentifier("a")), UnnamedExpression(SQLIdentifier("b")), UnnamedExpression(SQLValue(Long(123))), UnnamedExpression(SQLFunction { name: SQLObjectName(["myfunc"]), args: [SQLIdentifier("b")], over: None })], relation: Some(Table { name: SQLObjectName(["table_1"]), alias: None }), joins: [], selection: Some(SQLBinaryExpr { left: SQLBinaryExpr { left: SQLIdentifier("a"), op: Gt, right: SQLIdentifier("b") }, op: And, right: SQLBinaryExpr { left: SQLIdentifier("b"), op: Lt, right: SQLValue(Long(100)) } }), group_by: None, having: None }), order_by: Some([SQLOrderByExpr { expr: SQLIdentifier("a"), asc: Some(false) }, SQLOrderByExpr { expr: SQLIdentifier("b"), asc: None }]), limit: None })]
 ```
 
 ## Design

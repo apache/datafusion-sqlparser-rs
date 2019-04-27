@@ -174,10 +174,10 @@ impl Parser {
                             expr: Box::new(self.parse_subexpr(p)?),
                         })
                     }
-                    // another SQLWord:
+                    // Here `w` is a word, check if it's a part of a multi-part
+                    // identifier, a function call, or a simple identifier:
                     _ => match self.peek_token() {
-                        Some(Token::LParen) => self.parse_function(w.as_sql_ident()),
-                        Some(Token::Period) => {
+                        Some(Token::LParen) | Some(Token::Period) => {
                             let mut id_parts: Vec<SQLIdent> = vec![w.as_sql_ident()];
                             let mut ends_with_wildcard = false;
                             while self.consume_token(&Token::Period) {
@@ -187,15 +187,19 @@ impl Parser {
                                         ends_with_wildcard = true;
                                         break;
                                     }
-                                    _ => {
+                                    unexpected => {
                                         return parser_err!(format!(
-                                            "Error parsing compound identifier"
+                                            "Expected an identifier or a '*' after '.', got: {:?}",
+                                            unexpected
                                         ));
                                     }
                                 }
                             }
                             if ends_with_wildcard {
                                 Ok(ASTNode::SQLQualifiedWildcard(id_parts))
+                            } else if self.consume_token(&Token::LParen) {
+                                self.prev_token();
+                                self.parse_function(SQLObjectName(id_parts))
                             } else {
                                 Ok(ASTNode::SQLCompoundIdentifier(id_parts))
                             }
@@ -236,7 +240,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_function(&mut self, id: SQLIdent) -> Result<ASTNode, ParserError> {
+    pub fn parse_function(&mut self, name: SQLObjectName) -> Result<ASTNode, ParserError> {
         self.expect_token(&Token::LParen)?;
         let args = if self.consume_token(&Token::RParen) {
             vec![]
@@ -245,7 +249,98 @@ impl Parser {
             self.expect_token(&Token::RParen)?;
             args
         };
-        Ok(ASTNode::SQLFunction { id, args })
+        let over = if self.parse_keyword("OVER") {
+            // TBD: support window names (`OVER mywin`) in place of inline specification
+            self.expect_token(&Token::LParen)?;
+            let partition_by = if self.parse_keywords(vec!["PARTITION", "BY"]) {
+                // a list of possibly-qualified column names
+                self.parse_expr_list()?
+            } else {
+                vec![]
+            };
+            let order_by = if self.parse_keywords(vec!["ORDER", "BY"]) {
+                self.parse_order_by_expr_list()?
+            } else {
+                vec![]
+            };
+            let window_frame = self.parse_window_frame()?;
+
+            Some(SQLWindowSpec {
+                partition_by,
+                order_by,
+                window_frame,
+            })
+        } else {
+            None
+        };
+
+        Ok(ASTNode::SQLFunction { name, args, over })
+    }
+
+    pub fn parse_window_frame(&mut self) -> Result<Option<SQLWindowFrame>, ParserError> {
+        let window_frame = match self.peek_token() {
+            Some(Token::SQLWord(w)) => {
+                let units = w.keyword.parse::<SQLWindowFrameUnits>()?;
+                self.next_token();
+                if self.parse_keyword("BETWEEN") {
+                    let start_bound = self.parse_window_frame_bound()?;
+                    self.expect_keyword("AND")?;
+                    let end_bound = Some(self.parse_window_frame_bound()?);
+                    Some(SQLWindowFrame {
+                        units,
+                        start_bound,
+                        end_bound,
+                    })
+                } else {
+                    let start_bound = self.parse_window_frame_bound()?;
+                    let end_bound = None;
+                    Some(SQLWindowFrame {
+                        units,
+                        start_bound,
+                        end_bound,
+                    })
+                }
+            }
+            Some(Token::RParen) => None,
+            unexpected => {
+                return parser_err!(format!(
+                    "Expected 'ROWS', 'RANGE', 'GROUPS', or ')', got {:?}",
+                    unexpected
+                ));
+            }
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(window_frame)
+    }
+
+    /// "CURRENT ROW" | ( (<positive number> | "UNBOUNDED") ("PRECEDING" | FOLLOWING) )
+    pub fn parse_window_frame_bound(&mut self) -> Result<SQLWindowFrameBound, ParserError> {
+        if self.parse_keywords(vec!["CURRENT", "ROW"]) {
+            Ok(SQLWindowFrameBound::CurrentRow)
+        } else {
+            let rows = if self.parse_keyword("UNBOUNDED") {
+                None
+            } else {
+                let rows = self.parse_literal_int()?;
+                if rows < 0 {
+                    parser_err!(format!(
+                        "The number of rows must be non-negative, got {}",
+                        rows
+                    ))?;
+                }
+                Some(rows as u64)
+            };
+            if self.parse_keyword("PRECEDING") {
+                Ok(SQLWindowFrameBound::Preceding(rows))
+            } else if self.parse_keyword("FOLLOWING") {
+                Ok(SQLWindowFrameBound::Following(rows))
+            } else {
+                parser_err!(format!(
+                    "Expected PRECEDING or FOLLOWING, found {:?}",
+                    self.peek_token()
+                ))
+            }
+        }
     }
 
     pub fn parse_case_expression(&mut self) -> Result<ASTNode, ParserError> {
@@ -1527,7 +1622,7 @@ impl Parser {
                 if let Some(alias) =
                     self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)?
                 {
-                    projections.push(SQLSelectItem::ExpressionWithAlias(expr, alias));
+                    projections.push(SQLSelectItem::ExpressionWithAlias { expr, alias });
                 } else {
                     projections.push(SQLSelectItem::UnnamedExpression(expr));
                 }

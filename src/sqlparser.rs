@@ -208,8 +208,13 @@ impl Parser {
                 Token::Mult => Ok(ASTNode::SQLWildcard),
                 tok @ Token::Minus | tok @ Token::Plus => {
                     let p = self.get_precedence(&tok)?;
+                    let operator = if tok == Token::Plus {
+                        SQLOperator::Plus
+                    } else {
+                        SQLOperator::Minus
+                    };
                     Ok(ASTNode::SQLUnary {
-                        operator: self.to_sql_operator(&tok)?,
+                        operator,
                         expr: Box::new(self.parse_subexpr(p)?),
                     })
                 }
@@ -377,13 +382,49 @@ impl Parser {
         })
     }
 
-    /// Parse an expression infix (typically an operator)
+    /// Parse an operator following an expression
     pub fn parse_infix(&mut self, expr: ASTNode, precedence: u8) -> Result<ASTNode, ParserError> {
         debug!("parsing infix");
-        match self.next_token() {
-            Some(tok) => match tok {
-                Token::SQLWord(ref k) if k.keyword == "IS" => {
-                    if self.parse_keywords(vec!["NULL"]) {
+        let tok = self.next_token().unwrap(); // safe as EOF's precedence is the lowest
+
+        let regular_binary_operator = match tok {
+            Token::Eq => Some(SQLOperator::Eq),
+            Token::Neq => Some(SQLOperator::NotEq),
+            Token::Gt => Some(SQLOperator::Gt),
+            Token::GtEq => Some(SQLOperator::GtEq),
+            Token::Lt => Some(SQLOperator::Lt),
+            Token::LtEq => Some(SQLOperator::LtEq),
+            Token::Plus => Some(SQLOperator::Plus),
+            Token::Minus => Some(SQLOperator::Minus),
+            Token::Mult => Some(SQLOperator::Multiply),
+            Token::Mod => Some(SQLOperator::Modulus),
+            Token::Div => Some(SQLOperator::Divide),
+            Token::SQLWord(ref k) => match k.keyword.as_ref() {
+                "AND" => Some(SQLOperator::And),
+                "OR" => Some(SQLOperator::Or),
+                "LIKE" => Some(SQLOperator::Like),
+                "NOT" => {
+                    if self.parse_keyword("LIKE") {
+                        Some(SQLOperator::NotLike)
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            },
+            _ => None,
+        };
+
+        if let Some(op) = regular_binary_operator {
+            Ok(ASTNode::SQLBinaryExpr {
+                left: Box::new(expr),
+                op,
+                right: Box::new(self.parse_subexpr(precedence)?),
+            })
+        } else if let Token::SQLWord(ref k) = tok {
+            match k.keyword.as_ref() {
+                "IS" => {
+                    if self.parse_keyword("NULL") {
                         Ok(ASTNode::SQLIsNull(Box::new(expr)))
                     } else if self.parse_keywords(vec!["NOT", "NULL"]) {
                         Ok(ASTNode::SQLIsNotNull(Box::new(expr)))
@@ -391,45 +432,25 @@ impl Parser {
                         self.expected("NULL or NOT NULL after IS", self.peek_token())
                     }
                 }
-                Token::SQLWord(ref k) if k.keyword == "NOT" => {
+                "NOT" | "IN" | "BETWEEN" => {
+                    self.prev_token();
+                    let negated = self.parse_keyword("NOT");
                     if self.parse_keyword("IN") {
-                        self.parse_in(expr, true)
+                        self.parse_in(expr, negated)
                     } else if self.parse_keyword("BETWEEN") {
-                        self.parse_between(expr, true)
-                    } else if self.parse_keyword("LIKE") {
-                        Ok(ASTNode::SQLBinaryExpr {
-                            left: Box::new(expr),
-                            op: SQLOperator::NotLike,
-                            right: Box::new(self.parse_subexpr(precedence)?),
-                        })
+                        self.parse_between(expr, negated)
                     } else {
-                        self.expected("BETWEEN, IN or LIKE after NOT", self.peek_token())
+                        panic!()
                     }
                 }
-                Token::SQLWord(ref k) if k.keyword == "IN" => self.parse_in(expr, false),
-                Token::SQLWord(ref k) if k.keyword == "BETWEEN" => self.parse_between(expr, false),
-                Token::DoubleColon => self.parse_pg_cast(expr),
-                Token::SQLWord(_)
-                | Token::Eq
-                | Token::Neq
-                | Token::Gt
-                | Token::GtEq
-                | Token::Lt
-                | Token::LtEq
-                | Token::Plus
-                | Token::Minus
-                | Token::Mult
-                | Token::Mod
-                | Token::Div => Ok(ASTNode::SQLBinaryExpr {
-                    left: Box::new(expr),
-                    op: self.to_sql_operator(&tok)?,
-                    right: Box::new(self.parse_subexpr(precedence)?),
-                }),
-                _ => parser_err!(format!("No infix parser for token {:?}", tok)),
-            },
-            // This is not supposed to happen, because of the precedence check
-            // in parse_subexpr.
-            None => parser_err!("Unexpected EOF in parse_infix"),
+                // Can only happen if `get_precedence` got out of sync with this function
+                _ => panic!("No infix parser for token {:?}", tok),
+            }
+        } else if Token::DoubleColon == tok {
+            self.parse_pg_cast(expr)
+        } else {
+            // Can only happen if `get_precedence` got out of sync with this function
+            panic!("No infix parser for token {:?}", tok)
         }
     }
 
@@ -473,28 +494,6 @@ impl Parser {
             expr: Box::new(expr),
             data_type: self.parse_data_type()?,
         })
-    }
-
-    /// Convert a token operator to an AST operator
-    pub fn to_sql_operator(&self, tok: &Token) -> Result<SQLOperator, ParserError> {
-        match tok {
-            Token::Eq => Ok(SQLOperator::Eq),
-            Token::Neq => Ok(SQLOperator::NotEq),
-            Token::Lt => Ok(SQLOperator::Lt),
-            Token::LtEq => Ok(SQLOperator::LtEq),
-            Token::Gt => Ok(SQLOperator::Gt),
-            Token::GtEq => Ok(SQLOperator::GtEq),
-            Token::Plus => Ok(SQLOperator::Plus),
-            Token::Minus => Ok(SQLOperator::Minus),
-            Token::Mult => Ok(SQLOperator::Multiply),
-            Token::Div => Ok(SQLOperator::Divide),
-            Token::Mod => Ok(SQLOperator::Modulus),
-            Token::SQLWord(ref k) if k.keyword == "AND" => Ok(SQLOperator::And),
-            Token::SQLWord(ref k) if k.keyword == "OR" => Ok(SQLOperator::Or),
-            //Token::SQLWord(ref k) if k.keyword == "NOT" => Ok(SQLOperator::Not),
-            Token::SQLWord(ref k) if k.keyword == "LIKE" => Ok(SQLOperator::Like),
-            _ => parser_err!(format!("Unsupported SQL operator {:?}", tok)),
-        }
     }
 
     /// Get the precedence of the next token

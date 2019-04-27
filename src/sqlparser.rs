@@ -14,6 +14,8 @@
 
 //! SQL Parser
 
+use log::debug;
+
 use super::dialect::keywords;
 use super::dialect::Dialect;
 use super::sqlast::*;
@@ -47,14 +49,11 @@ pub struct Parser {
 impl Parser {
     /// Parse the specified tokens
     pub fn new(tokens: Vec<Token>) -> Self {
-        Parser {
-            tokens: tokens,
-            index: 0,
-        }
+        Parser { tokens, index: 0 }
     }
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
-    pub fn parse_sql(dialect: &Dialect, sql: String) -> Result<Vec<SQLStatement>, ParserError> {
+    pub fn parse_sql(dialect: &dyn Dialect, sql: String) -> Result<Vec<SQLStatement>, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, &sql);
         let tokens = tokenizer.tokenize()?;
         let mut parser = Parser::new(tokens);
@@ -91,7 +90,7 @@ impl Parser {
                 Token::SQLWord(ref w) if w.keyword != "" => match w.keyword.as_ref() {
                     "SELECT" | "WITH" => {
                         self.prev_token();
-                        Ok(SQLStatement::SQLSelect(self.parse_query()?))
+                        Ok(SQLStatement::SQLQuery(Box::new(self.parse_query()?)))
                     }
                     "CREATE" => Ok(self.parse_create()?),
                     "DELETE" => Ok(self.parse_delete()?),
@@ -233,7 +232,7 @@ impl Parser {
                     t
                 )),
             },
-            None => parser_err!(format!("Prefix parser expected a keyword but hit EOF")),
+            None => parser_err!("Prefix parser expected a keyword but hit EOF"),
         }
     }
 
@@ -403,21 +402,21 @@ impl Parser {
     /// Convert a token operator to an AST operator
     pub fn to_sql_operator(&self, tok: &Token) -> Result<SQLOperator, ParserError> {
         match tok {
-            &Token::Eq => Ok(SQLOperator::Eq),
-            &Token::Neq => Ok(SQLOperator::NotEq),
-            &Token::Lt => Ok(SQLOperator::Lt),
-            &Token::LtEq => Ok(SQLOperator::LtEq),
-            &Token::Gt => Ok(SQLOperator::Gt),
-            &Token::GtEq => Ok(SQLOperator::GtEq),
-            &Token::Plus => Ok(SQLOperator::Plus),
-            &Token::Minus => Ok(SQLOperator::Minus),
-            &Token::Mult => Ok(SQLOperator::Multiply),
-            &Token::Div => Ok(SQLOperator::Divide),
-            &Token::Mod => Ok(SQLOperator::Modulus),
-            &Token::SQLWord(ref k) if k.keyword == "AND" => Ok(SQLOperator::And),
-            &Token::SQLWord(ref k) if k.keyword == "OR" => Ok(SQLOperator::Or),
-            //&Token::SQLWord(ref k) if k.keyword == "NOT" => Ok(SQLOperator::Not),
-            &Token::SQLWord(ref k) if k.keyword == "LIKE" => Ok(SQLOperator::Like),
+            Token::Eq => Ok(SQLOperator::Eq),
+            Token::Neq => Ok(SQLOperator::NotEq),
+            Token::Lt => Ok(SQLOperator::Lt),
+            Token::LtEq => Ok(SQLOperator::LtEq),
+            Token::Gt => Ok(SQLOperator::Gt),
+            Token::GtEq => Ok(SQLOperator::GtEq),
+            Token::Plus => Ok(SQLOperator::Plus),
+            Token::Minus => Ok(SQLOperator::Minus),
+            Token::Mult => Ok(SQLOperator::Multiply),
+            Token::Div => Ok(SQLOperator::Divide),
+            Token::Mod => Ok(SQLOperator::Modulus),
+            Token::SQLWord(ref k) if k.keyword == "AND" => Ok(SQLOperator::And),
+            Token::SQLWord(ref k) if k.keyword == "OR" => Ok(SQLOperator::Or),
+            //Token::SQLWord(ref k) if k.keyword == "NOT" => Ok(SQLOperator::Not),
+            Token::SQLWord(ref k) if k.keyword == "LIKE" => Ok(SQLOperator::Like),
             _ => parser_err!(format!("Unsupported SQL operator {:?}", tok)),
         }
     }
@@ -436,19 +435,17 @@ impl Parser {
         debug!("get_precedence() {:?}", tok);
 
         match tok {
-            &Token::SQLWord(ref k) if k.keyword == "OR" => Ok(5),
-            &Token::SQLWord(ref k) if k.keyword == "AND" => Ok(10),
-            &Token::SQLWord(ref k) if k.keyword == "NOT" => Ok(15),
-            &Token::SQLWord(ref k) if k.keyword == "IS" => Ok(17),
-            &Token::SQLWord(ref k) if k.keyword == "IN" => Ok(20),
-            &Token::SQLWord(ref k) if k.keyword == "BETWEEN" => Ok(20),
-            &Token::SQLWord(ref k) if k.keyword == "LIKE" => Ok(20),
-            &Token::Eq | &Token::Lt | &Token::LtEq | &Token::Neq | &Token::Gt | &Token::GtEq => {
-                Ok(20)
-            }
-            &Token::Plus | &Token::Minus => Ok(30),
-            &Token::Mult | &Token::Div | &Token::Mod => Ok(40),
-            &Token::DoubleColon => Ok(50),
+            Token::SQLWord(k) if k.keyword == "OR" => Ok(5),
+            Token::SQLWord(k) if k.keyword == "AND" => Ok(10),
+            Token::SQLWord(k) if k.keyword == "NOT" => Ok(15),
+            Token::SQLWord(k) if k.keyword == "IS" => Ok(17),
+            Token::SQLWord(k) if k.keyword == "IN" => Ok(20),
+            Token::SQLWord(k) if k.keyword == "BETWEEN" => Ok(20),
+            Token::SQLWord(k) if k.keyword == "LIKE" => Ok(20),
+            Token::Eq | Token::Lt | Token::LtEq | Token::Neq | Token::Gt | Token::GtEq => Ok(20),
+            Token::Plus | Token::Minus => Ok(30),
+            Token::Mult | Token::Div | Token::Mod => Ok(40),
+            Token::DoubleColon => Ok(50),
             _ => Ok(0),
         }
     }
@@ -482,7 +479,7 @@ impl Parser {
         loop {
             match self.token_at(index) {
                 Some(Token::Whitespace(_)) => {
-                    index = index + 1;
+                    index += 1;
                 }
                 Some(_) => {
                     return Some(index);
@@ -505,7 +502,7 @@ impl Parser {
 
     pub fn next_token_no_skip(&mut self) -> Option<Token> {
         if self.index < self.tokens.len() {
-            self.index = self.index + 1;
+            self.index += 1;
             Some(self.tokens[self.index - 1].clone())
         } else {
             None
@@ -530,7 +527,7 @@ impl Parser {
     /// Get the previous token and decrement the token index
     fn prev_token_no_skip(&mut self) -> Option<Token> {
         if self.index > 0 {
-            self.index = self.index - 1;
+            self.index -= 1;
             Some(self.tokens[self.index].clone())
         } else {
             None
@@ -658,7 +655,7 @@ impl Parser {
         // Some dialects allow WITH here, followed by some keywords (e.g. MS SQL)
         // or `(k1=v1, k2=v2, ...)` (Postgres)
         self.expect_keyword("AS")?;
-        let query = self.parse_query()?;
+        let query = Box::new(self.parse_query()?);
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
         Ok(SQLStatement::SQLCreateView {
             name,
@@ -701,9 +698,8 @@ impl Parser {
                     };
                     let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
                         false
-                    } else if self.parse_keyword("NULL") {
-                        true
                     } else {
+                        let _ = self.parse_keyword("NULL");
                         true
                     };
                     debug!("default: {:?}", default);
@@ -877,7 +873,7 @@ impl Parser {
                         }
                     },
                     //TODO: parse the timestamp here (see parse_timestamp_value())
-                    Token::Number(ref n) if n.contains(".") => match n.parse::<f64>() {
+                    Token::Number(ref n) if n.contains('.') => match n.parse::<f64>() {
                         Ok(n) => Ok(Value::Double(n)),
                         Err(e) => parser_err!(format!("Could not parse '{}' as f64: {}", n, e)),
                     },
@@ -952,7 +948,7 @@ impl Parser {
                 Some(token) => match token {
                     Token::Plus | Token::Minus => {
                         let tz = self.parse_timezone_offset()?;
-                        let offset = FixedOffset::east(tz as i32 * 3600);
+                        let offset = FixedOffset::east(i32::from(tz) * 3600);
                         Ok(Value::Timestamp(DateTime::from_utc(date_time, offset)))
                     }
                     _ => Ok(Value::DateTime(date_time)),
@@ -1014,11 +1010,8 @@ impl Parser {
                 "FLOAT" => Ok(SQLType::Float(self.parse_optional_precision()?)),
                 "REAL" => Ok(SQLType::Real),
                 "DOUBLE" => {
-                    if self.parse_keyword("PRECISION") {
-                        Ok(SQLType::Double)
-                    } else {
-                        Ok(SQLType::Double)
-                    }
+                    let _ = self.parse_keyword("PRECISION");
+                    Ok(SQLType::Double)
                 }
                 "SMALLINT" => Ok(SQLType::SmallInt),
                 "INT" | "INTEGER" => Ok(SQLType::Int),
@@ -1034,50 +1027,20 @@ impl Parser {
                 "UUID" => Ok(SQLType::Uuid),
                 "DATE" => Ok(SQLType::Date),
                 "TIMESTAMP" => {
-                    if self.parse_keyword("WITH") {
-                        if self.parse_keywords(vec!["TIME", "ZONE"]) {
-                            Ok(SQLType::Timestamp)
-                        } else {
-                            parser_err!(format!(
-                                "Expecting 'time zone', found: {:?}",
-                                self.peek_token()
-                            ))
-                        }
-                    } else if self.parse_keyword("WITHOUT") {
-                        if self.parse_keywords(vec!["TIME", "ZONE"]) {
-                            Ok(SQLType::Timestamp)
-                        } else {
-                            parser_err!(format!(
-                                "Expecting 'time zone', found: {:?}",
-                                self.peek_token()
-                            ))
-                        }
-                    } else {
-                        Ok(SQLType::Timestamp)
+                    // TBD: we throw away "with/without timezone" information
+                    if self.parse_keyword("WITH") || self.parse_keyword("WITHOUT") {
+                        self.expect_keyword("TIME")?;
+                        self.expect_keyword("ZONE")?;
                     }
+                    Ok(SQLType::Timestamp)
                 }
                 "TIME" => {
-                    if self.parse_keyword("WITH") {
-                        if self.parse_keywords(vec!["TIME", "ZONE"]) {
-                            Ok(SQLType::Time)
-                        } else {
-                            parser_err!(format!(
-                                "Expecting 'time zone', found: {:?}",
-                                self.peek_token()
-                            ))
-                        }
-                    } else if self.parse_keyword("WITHOUT") {
-                        if self.parse_keywords(vec!["TIME", "ZONE"]) {
-                            Ok(SQLType::Time)
-                        } else {
-                            parser_err!(format!(
-                                "Expecting 'time zone', found: {:?}",
-                                self.peek_token()
-                            ))
-                        }
-                    } else {
-                        Ok(SQLType::Timestamp)
+                    // TBD: we throw away "with/without timezone" information
+                    if self.parse_keyword("WITH") || self.parse_keyword("WITHOUT") {
+                        self.expect_keyword("TIME")?;
+                        self.expect_keyword("ZONE")?;
                     }
+                    Ok(SQLType::Time)
                 }
                 "REGCLASS" => Ok(SQLType::Regclass),
                 "TEXT" => {
@@ -1288,7 +1251,7 @@ impl Parser {
                 break;
             }
         }
-        return Ok(cte);
+        Ok(cte)
     }
 
     /// Parse a "query body", which is an expression with roughly the
@@ -1303,7 +1266,7 @@ impl Parser {
         // We parse the expression using a Pratt parser, as in `parse_expr()`.
         // Start by parsing a restricted SELECT or a `(subquery)`:
         let mut expr = if self.parse_keyword("SELECT") {
-            SQLSetExpr::Select(self.parse_select()?)
+            SQLSetExpr::Select(Box::new(self.parse_select()?))
         } else if self.consume_token(&Token::LParen) {
             // CTEs are not allowed here, but the parser currently accepts them
             let subquery = self.parse_query()?;

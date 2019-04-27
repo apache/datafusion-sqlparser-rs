@@ -12,6 +12,7 @@ include = [
     "src/**/*.rs",
     "Cargo.toml",
 ]
+edition = "2018"
 
 [lib]
 name = "sqlparser"
@@ -24,3 +25,4 @@ uuid = "0.7.1"
 
 [dev-dependencies]
 simple_logger = "1.0.1"
+matches = "0.1"

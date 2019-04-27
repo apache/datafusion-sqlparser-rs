@@ -1,12 +1,11 @@
-extern crate log;
-extern crate sqlparser;
+#![warn(clippy::all)]
+
+use log::debug;
 
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::sqlast::*;
 use sqlparser::sqlparser::*;
 use sqlparser::sqltokenizer::*;
-
-use log::*;
 
 #[test]
 fn test_prev_index() {
@@ -42,7 +41,7 @@ fn parse_simple_insert() {
                 values
             );
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -67,7 +66,7 @@ fn parse_common_insert() {
                 values
             );
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -92,7 +91,7 @@ fn parse_complex_insert() {
                 values
             );
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -134,7 +133,7 @@ fn parse_insert_with_columns() {
                 values
             );
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -143,7 +142,7 @@ fn parse_insert_invalid() {
     let sql = String::from("INSERT public.customer (id, name, active) VALUES (1, 2, 3)");
     match Parser::parse_sql(&PostgreSqlDialect {}, sql) {
         Err(_) => {}
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -166,9 +165,9 @@ fn parse_create_table_with_defaults() {
         SQLStatement::SQLCreateTable {
             name,
             columns,
-            external: _,
-            file_format: _,
-            location: _,
+            external: false,
+            file_format: None,
+            location: None,
         } => {
             assert_eq!("public.customer", name.to_string());
             assert_eq!(10, columns.len());
@@ -188,7 +187,7 @@ fn parse_create_table_with_defaults() {
             assert_eq!(SQLType::Varchar(Some(45)), c_lng.data_type);
             assert_eq!(false, c_lng.allow_null);
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -213,9 +212,9 @@ fn parse_create_table_from_pg_dump() {
         SQLStatement::SQLCreateTable {
             name,
             columns,
-            external: _,
-            file_format: _,
-            location: _,
+            external: false,
+            file_format: None,
+            location: None,
         } => {
             assert_eq!("public.customer", name.to_string());
 
@@ -257,7 +256,7 @@ fn parse_create_table_from_pg_dump() {
                 c_release_year.data_type
             );
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -276,9 +275,9 @@ fn parse_create_table_with_inherit() {
         SQLStatement::SQLCreateTable {
             name,
             columns,
-            external: _,
-            file_format: _,
-            location: _,
+            external: false,
+            file_format: None,
+            location: None,
         } => {
             assert_eq!("bazaar.settings", name.to_string());
 
@@ -296,7 +295,7 @@ fn parse_create_table_with_inherit() {
             assert_eq!(false, c_name.is_primary);
             assert_eq!(true, c_name.is_unique);
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -311,7 +310,7 @@ fn parse_alter_table_constraint_primary_key() {
         SQLStatement::SQLAlterTable { name, .. } => {
             assert_eq!(name.to_string(), "bazaar.address");
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -324,7 +323,7 @@ fn parse_alter_table_constraint_foreign_key() {
         SQLStatement::SQLAlterTable { name, .. } => {
             assert_eq!(name.to_string(), "public.customer");
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 
@@ -410,8 +409,7 @@ fn parse_sql_statements(sql: &str) -> Result<Vec<SQLStatement>, ParserError> {
 fn parse_sql_expr(sql: &str) -> ASTNode {
     debug!("sql: {}", sql);
     let mut parser = parser(sql);
-    let ast = parser.parse_expr().unwrap();
-    ast
+    parser.parse_expr().unwrap()
 }
 
 fn parser(sql: &str) -> Parser {

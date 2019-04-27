@@ -19,14 +19,14 @@ pub enum SQLType {
     Blob(usize),
     /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
     Decimal(Option<usize>, Option<usize>),
+    /// Floating point with optional precision e.g. FLOAT(8)
+    Float(Option<usize>),
     /// Small integer
     SmallInt,
     /// Integer
     Int,
     /// Big integer
     BigInt,
-    /// Floating point with optional precision e.g. FLOAT(8)
-    Float(Option<usize>),
     /// Floating point e.g. REAL
     Real,
     /// Double e.g. DOUBLE PRECISION
@@ -54,20 +54,8 @@ pub enum SQLType {
 impl ToString for SQLType {
     fn to_string(&self) -> String {
         match self {
-            SQLType::Char(size) => {
-                if let Some(size) = size {
-                    format!("char({})", size)
-                } else {
-                    "char".to_string()
-                }
-            }
-            SQLType::Varchar(size) => {
-                if let Some(size) = size {
-                    format!("character varying({})", size)
-                } else {
-                    "character varying".to_string()
-                }
-            }
+            SQLType::Char(size) => format_type_with_optional_length("char", size),
+            SQLType::Varchar(size) => format_type_with_optional_length("character varying", size),
             SQLType::Uuid => "uuid".to_string(),
             SQLType::Clob(size) => format!("clob({})", size),
             SQLType::Binary(size) => format!("binary({})", size),
@@ -76,22 +64,14 @@ impl ToString for SQLType {
             SQLType::Decimal(precision, scale) => {
                 if let Some(scale) = scale {
                     format!("numeric({},{})", precision.unwrap(), scale)
-                } else if let Some(precision) = precision {
-                    format!("numeric({})", precision)
                 } else {
-                    format!("numeric")
+                    format_type_with_optional_length("numeric", precision)
                 }
             }
+            SQLType::Float(size) => format_type_with_optional_length("float", size),
             SQLType::SmallInt => "smallint".to_string(),
             SQLType::Int => "int".to_string(),
             SQLType::BigInt => "bigint".to_string(),
-            SQLType::Float(size) => {
-                if let Some(size) = size {
-                    format!("float({})", size)
-                } else {
-                    "float".to_string()
-                }
-            }
             SQLType::Real => "real".to_string(),
             SQLType::Double => "double".to_string(),
             SQLType::Boolean => "boolean".to_string(),
@@ -105,4 +85,12 @@ impl ToString for SQLType {
             SQLType::Custom(ty) => ty.to_string(),
         }
     }
+}
+
+fn format_type_with_optional_length(sql_type: &str, len: &Option<usize>) -> String {
+    let mut s = sql_type.to_string();
+    if let Some(len) = len {
+        s += &format!("({})", len);
+    }
+    s
 }

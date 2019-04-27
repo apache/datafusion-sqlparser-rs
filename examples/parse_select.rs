@@ -1,4 +1,4 @@
-extern crate sqlparser;
+#![warn(clippy::all)]
 
 use sqlparser::dialect::GenericSqlDialect;
 use sqlparser::sqlparser::*;

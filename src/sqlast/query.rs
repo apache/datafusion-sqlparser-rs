@@ -50,7 +50,7 @@ impl ToString for SQLQuery {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SQLSetExpr {
     /// Restricted SELECT .. FROM .. HAVING (no ORDER BY or set operations)
-    Select(SQLSelect),
+    Select(Box<SQLSelect>),
     /// Parenthesized SELECT subquery, which may include more set operations
     /// in its body and an optional ORDER BY / LIMIT.
     Query(Box<SQLQuery>),

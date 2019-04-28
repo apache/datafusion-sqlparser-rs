@@ -1,4 +1,6 @@
 use crate::dialect::Dialect;
+
+#[derive(Debug)]
 pub struct GenericSqlDialect {}
 
 impl Dialect for GenericSqlDialect {

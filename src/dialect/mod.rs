@@ -3,11 +3,13 @@ mod generic_sql;
 pub mod keywords;
 mod postgresql;
 
+use std::fmt::Debug;
+
 pub use self::ansi_sql::AnsiSqlDialect;
 pub use self::generic_sql::GenericSqlDialect;
 pub use self::postgresql::PostgreSqlDialect;
 
-pub trait Dialect {
+pub trait Dialect: Debug {
     /// Determine if a character starts a quoted identifier. The default
     /// implementation, accepting "double quoted" ids is both ANSI-compliant
     /// and appropriate for most dialects (with the notable exception of

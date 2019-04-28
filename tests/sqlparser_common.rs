@@ -2,10 +2,9 @@
 
 use matches::assert_matches;
 
-use sqlparser::dialect::*;
 use sqlparser::sqlast::*;
-use sqlparser::sqlparser::*;
-use sqlparser::sqltokenizer::*;
+use sqlparser::sqlparser::ParserError;
+use sqlparser::test_utils::{all_dialects, expr_from_projection, only};
 
 #[test]
 fn parse_insert_values() {
@@ -696,16 +695,6 @@ fn parse_simple_math_expr_minus() {
 }
 
 #[test]
-fn parse_select_version() {
-    let sql = "SELECT @@version";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        &ASTNode::SQLIdentifier("@@version".to_string()),
-        expr_from_projection(only(&select.projection)),
-    );
-}
-
-#[test]
 fn parse_delimited_identifiers() {
     // check that quoted identifiers in any position remain quoted after serialization
     let select = verified_only_select(
@@ -1169,73 +1158,35 @@ fn parse_invalid_subquery_without_parens() {
     );
 }
 
-fn only<T>(v: &[T]) -> &T {
-    assert_eq!(1, v.len());
-    v.first().unwrap()
-}
-
-fn verified_query(query: &str) -> SQLQuery {
-    match verified_stmt(query) {
-        SQLStatement::SQLQuery(query) => *query,
-        _ => panic!("Expected SQLQuery"),
-    }
-}
-
-fn expr_from_projection(item: &SQLSelectItem) -> &ASTNode {
-    match item {
-        SQLSelectItem::UnnamedExpression(expr) => expr,
-        _ => panic!("Expected UnnamedExpression"),
-    }
-}
-
-fn verified_only_select(query: &str) -> SQLSelect {
-    match verified_query(query).body {
-        SQLSetExpr::Select(s) => *s,
-        _ => panic!("Expected SQLSetExpr::Select"),
-    }
-}
-
-fn verified_stmt(query: &str) -> SQLStatement {
-    one_statement_parses_to(query, query)
-}
-
-fn verified_expr(query: &str) -> ASTNode {
-    let ast = parse_sql_expr(query);
-    assert_eq!(query, &ast.to_string());
-    ast
-}
-
-/// Ensures that `sql` parses as a single statement, optionally checking that
-/// converting AST back to string equals to `canonical` (unless an empty string
-/// is provided).
-fn one_statement_parses_to(sql: &str, canonical: &str) -> SQLStatement {
-    let mut statements = parse_sql_statements(&sql).unwrap();
-    assert_eq!(statements.len(), 1);
-
-    let only_statement = statements.pop().unwrap();
-    if !canonical.is_empty() {
-        assert_eq!(canonical, only_statement.to_string())
-    }
-    only_statement
+#[test]
+#[should_panic(expected = "Parse results with PostgreSqlDialect are different from AnsiSqlDialect")]
+fn ensure_multiple_dialects_are_tested() {
+    // The SQL here must be parsed differently by different dialects.
+    // At the time of writing, `@foo` is accepted as a valid identifier
+    // by the generic and the postgresql dialect, but not by the ANSI one.
+    let _ = parse_sql_statements("SELECT @foo");
 }
 
 fn parse_sql_statements(sql: &str) -> Result<Vec<SQLStatement>, ParserError> {
-    let generic_ast = Parser::parse_sql(&GenericSqlDialect {}, sql.to_string());
-    let pg_ast = Parser::parse_sql(&PostgreSqlDialect {}, sql.to_string());
-    assert_eq!(generic_ast, pg_ast);
-    generic_ast
+    all_dialects().parse_sql_statements(sql)
 }
 
-fn parse_sql_expr(sql: &str) -> ASTNode {
-    let generic_ast = parse_sql_expr_with(&GenericSqlDialect {}, &sql.to_string());
-    let pg_ast = parse_sql_expr_with(&PostgreSqlDialect {}, &sql.to_string());
-    assert_eq!(generic_ast, pg_ast);
-    generic_ast
+fn one_statement_parses_to(sql: &str, canonical: &str) -> SQLStatement {
+    all_dialects().one_statement_parses_to(sql, canonical)
 }
 
-fn parse_sql_expr_with(dialect: &dyn Dialect, sql: &str) -> ASTNode {
-    let mut tokenizer = Tokenizer::new(dialect, &sql);
-    let tokens = tokenizer.tokenize().unwrap();
-    let mut parser = Parser::new(tokens);
-    parser.parse_expr().unwrap()
+fn verified_stmt(query: &str) -> SQLStatement {
+    all_dialects().verified_stmt(query)
+}
+
+fn verified_query(query: &str) -> SQLQuery {
+    all_dialects().verified_query(query)
+}
+
+fn verified_only_select(query: &str) -> SQLSelect {
+    all_dialects().verified_only_select(query)
+}
+
+fn verified_expr(query: &str) -> ASTNode {
+    all_dialects().verified_expr(query)
 }

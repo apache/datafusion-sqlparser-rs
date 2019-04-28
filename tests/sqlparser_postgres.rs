@@ -1,37 +1,45 @@
 #![warn(clippy::all)]
 
-use log::debug;
-
-use sqlparser::dialect::PostgreSqlDialect;
+use sqlparser::dialect::{GenericSqlDialect, PostgreSqlDialect};
 use sqlparser::sqlast::*;
 use sqlparser::sqlparser::*;
 use sqlparser::sqltokenizer::*;
+use sqlparser::test_utils::*;
 
 #[test]
 fn test_prev_index() {
     let sql = "SELECT version()";
-    let mut parser = parser(sql);
-    assert_eq!(parser.prev_token(), None);
-    assert_eq!(parser.next_token(), Some(Token::make_keyword("SELECT")));
-    assert_eq!(parser.next_token(), Some(Token::make_word("version", None)));
-    assert_eq!(parser.prev_token(), Some(Token::make_word("version", None)));
-    assert_eq!(parser.peek_token(), Some(Token::make_word("version", None)));
-    assert_eq!(parser.prev_token(), Some(Token::make_keyword("SELECT")));
-    assert_eq!(parser.prev_token(), None);
+    all_dialects().run_parser_method(sql, |parser| {
+        assert_eq!(parser.prev_token(), None);
+        assert_eq!(parser.next_token(), Some(Token::make_keyword("SELECT")));
+        assert_eq!(parser.next_token(), Some(Token::make_word("version", None)));
+        assert_eq!(parser.prev_token(), Some(Token::make_word("version", None)));
+        assert_eq!(parser.peek_token(), Some(Token::make_word("version", None)));
+        assert_eq!(parser.prev_token(), Some(Token::make_keyword("SELECT")));
+        assert_eq!(parser.prev_token(), None);
+    });
 }
 
 #[test]
 fn parse_invalid_table_name() {
-    let mut parser = parser("db.public..customer");
-    let ast = parser.parse_object_name();
+    let ast = all_dialects().run_parser_method("db.public..customer", Parser::parse_object_name);
     assert!(ast.is_err());
 }
 
 #[test]
 fn parse_no_table_name() {
-    let mut parser = parser("");
-    let ast = parser.parse_object_name();
+    let ast = all_dialects().run_parser_method("", Parser::parse_object_name);
     assert!(ast.is_err());
+}
+
+#[test]
+fn parse_select_version() {
+    let sql = "SELECT @@version";
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &ASTNode::SQLIdentifier("@@version".to_string()),
+        expr_from_projection(only(&select.projection)),
+    );
 }
 
 #[test]
@@ -209,32 +217,24 @@ PHP	₱ USD $
     //assert_eq!(sql, ast.to_string());
 }
 
-fn verified_stmt(query: &str) -> SQLStatement {
-    one_statement_parses_to(query, query)
-}
-
-/// Ensures that `sql` parses as a single statement, optionally checking that
-/// converting AST back to string equals to `canonical` (unless an empty string
-/// is provided).
 fn one_statement_parses_to(sql: &str, canonical: &str) -> SQLStatement {
-    let mut statements = parse_sql_statements(&sql).unwrap();
-    assert_eq!(statements.len(), 1);
+    pg().one_statement_parses_to(sql, canonical)
+}
+fn verified_stmt(query: &str) -> SQLStatement {
+    pg().verified_stmt(query)
+}
 
-    let only_statement = statements.pop().unwrap();
-    if !canonical.is_empty() {
-        assert_eq!(canonical, only_statement.to_string())
+fn pg() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {})],
     }
-    only_statement
 }
 
-fn parse_sql_statements(sql: &str) -> Result<Vec<SQLStatement>, ParserError> {
-    Parser::parse_sql(&PostgreSqlDialect {}, sql.to_string())
-}
-
-fn parser(sql: &str) -> Parser {
-    let dialect = PostgreSqlDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, &sql);
-    let tokens = tokenizer.tokenize().unwrap();
-    debug!("tokens: {:#?}", tokens);
-    Parser::new(tokens)
+fn pg_and_generic() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![
+            Box::new(PostgreSqlDialect {}),
+            Box::new(GenericSqlDialect {}),
+        ],
+    }
 }

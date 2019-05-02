@@ -2,7 +2,6 @@
 
 use sqlparser::dialect::{GenericSqlDialect, PostgreSqlDialect};
 use sqlparser::sqlast::*;
-use sqlparser::sqlparser::*;
 use sqlparser::test_utils::*;
 
 #[test]
@@ -28,7 +27,7 @@ fn parse_create_table_with_defaults() {
             create_date date DEFAULT now()::text NOT NULL,
             last_update timestamp without time zone DEFAULT now() NOT NULL,
             active integer NOT NULL)";
-    match one_statement_parses_to(sql, "") {
+    match pg_and_generic().one_statement_parses_to(sql, "") {
         SQLStatement::SQLCreateTable {
             name,
             columns,
@@ -74,7 +73,7 @@ fn parse_create_table_from_pg_dump() {
             release_year public.year,
             active integer
         )";
-    match one_statement_parses_to(sql, "") {
+    match pg().one_statement_parses_to(sql, "") {
         SQLStatement::SQLCreateTable {
             name,
             columns,
@@ -135,7 +134,7 @@ fn parse_create_table_with_inherit() {
                value text[], \
                use_metric boolean DEFAULT true\
                )";
-    match verified_stmt(sql) {
+    match pg().verified_stmt(sql) {
         SQLStatement::SQLCreateTable {
             name,
             columns,
@@ -185,16 +184,9 @@ Kwara & Kogi
 PHP	₱ USD $
 \N  Some other value
 \\."#;
-    let ast = one_statement_parses_to(sql, "");
+    let ast = pg_and_generic().one_statement_parses_to(sql, "");
     println!("{:#?}", ast);
     //assert_eq!(sql, ast.to_string());
-}
-
-fn one_statement_parses_to(sql: &str, canonical: &str) -> SQLStatement {
-    pg().one_statement_parses_to(sql, canonical)
-}
-fn verified_stmt(query: &str) -> SQLStatement {
-    pg().verified_stmt(query)
 }
 
 fn pg() -> TestedDialects {

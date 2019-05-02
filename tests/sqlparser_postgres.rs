@@ -21,77 +21,44 @@ fn test_prev_index() {
 }
 
 #[test]
-fn parse_simple_insert() {
-    let sql = String::from("INSERT INTO customer VALUES(1, 2, 3)");
-    match verified_stmt(&sql) {
-        SQLStatement::SQLInsert {
-            table_name,
-            columns,
-            values,
-            ..
-        } => {
-            assert_eq!(table_name.to_string(), "customer");
-            assert!(columns.is_empty());
-            assert_eq!(
-                vec![vec![
-                    ASTNode::SQLValue(Value::Long(1)),
-                    ASTNode::SQLValue(Value::Long(2)),
-                    ASTNode::SQLValue(Value::Long(3))
-                ]],
-                values
-            );
-        }
-        _ => unreachable!(),
-    }
-}
+fn parse_insert_values() {
+    let sql = "INSERT INTO customer VALUES(1, 2, 3)";
+    check_one(sql, "customer", vec![]);
 
-#[test]
-fn parse_common_insert() {
-    let sql = String::from("INSERT INTO public.customer VALUES(1, 2, 3)");
-    match verified_stmt(&sql) {
-        SQLStatement::SQLInsert {
-            table_name,
-            columns,
-            values,
-            ..
-        } => {
-            assert_eq!(table_name.to_string(), "public.customer");
-            assert!(columns.is_empty());
-            assert_eq!(
-                vec![vec![
-                    ASTNode::SQLValue(Value::Long(1)),
-                    ASTNode::SQLValue(Value::Long(2)),
-                    ASTNode::SQLValue(Value::Long(3))
-                ]],
-                values
-            );
-        }
-        _ => unreachable!(),
-    }
-}
+    let sql = "INSERT INTO public.customer VALUES(1, 2, 3)";
+    check_one(sql, "public.customer", vec![]);
 
-#[test]
-fn parse_complex_insert() {
-    let sql = String::from("INSERT INTO db.public.customer VALUES(1, 2, 3)");
-    match verified_stmt(&sql) {
-        SQLStatement::SQLInsert {
-            table_name,
-            columns,
-            values,
-            ..
-        } => {
-            assert_eq!(table_name.to_string(), "db.public.customer");
-            assert!(columns.is_empty());
-            assert_eq!(
-                vec![vec![
-                    ASTNode::SQLValue(Value::Long(1)),
-                    ASTNode::SQLValue(Value::Long(2)),
-                    ASTNode::SQLValue(Value::Long(3))
-                ]],
-                values
-            );
+    let sql = "INSERT INTO db.public.customer VALUES(1, 2, 3)";
+    check_one(sql, "db.public.customer", vec![]);
+
+    let sql = "INSERT INTO public.customer (id, name, active) VALUES(1, 2, 3)";
+    check_one(
+        sql,
+        "public.customer",
+        vec!["id".to_string(), "name".to_string(), "active".to_string()],
+    );
+
+    fn check_one(sql: &str, expected_table_name: &str, expected_columns: Vec<String>) {
+        match verified_stmt(sql) {
+            SQLStatement::SQLInsert {
+                table_name,
+                columns,
+                values,
+                ..
+            } => {
+                assert_eq!(table_name.to_string(), expected_table_name);
+                assert_eq!(columns, expected_columns);
+                assert_eq!(
+                    vec![vec![
+                        ASTNode::SQLValue(Value::Long(1)),
+                        ASTNode::SQLValue(Value::Long(2)),
+                        ASTNode::SQLValue(Value::Long(3))
+                    ]],
+                    values
+                );
+            }
+            _ => unreachable!(),
         }
-        _ => unreachable!(),
     }
 }
 
@@ -110,40 +77,13 @@ fn parse_no_table_name() {
 }
 
 #[test]
-fn parse_insert_with_columns() {
-    let sql = String::from("INSERT INTO public.customer (id, name, active) VALUES(1, 2, 3)");
-    match verified_stmt(&sql) {
-        SQLStatement::SQLInsert {
-            table_name,
-            columns,
-            values,
-            ..
-        } => {
-            assert_eq!(table_name.to_string(), "public.customer");
-            assert_eq!(
-                columns,
-                vec!["id".to_string(), "name".to_string(), "active".to_string()]
-            );
-            assert_eq!(
-                vec![vec![
-                    ASTNode::SQLValue(Value::Long(1)),
-                    ASTNode::SQLValue(Value::Long(2)),
-                    ASTNode::SQLValue(Value::Long(3))
-                ]],
-                values
-            );
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
 fn parse_insert_invalid() {
-    let sql = String::from("INSERT public.customer (id, name, active) VALUES (1, 2, 3)");
-    match Parser::parse_sql(&PostgreSqlDialect {}, sql) {
-        Err(_) => {}
-        _ => unreachable!(),
-    }
+    let sql = "INSERT public.customer (id, name, active) VALUES (1, 2, 3)";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected INTO, found: public".to_string()),
+        res.unwrap_err()
+    );
 }
 
 #[test]

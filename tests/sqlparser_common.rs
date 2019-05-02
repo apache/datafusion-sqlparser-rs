@@ -3,7 +3,7 @@
 use matches::assert_matches;
 
 use sqlparser::sqlast::*;
-use sqlparser::sqlparser::ParserError;
+use sqlparser::sqlparser::*;
 use sqlparser::test_utils::{all_dialects, expr_from_projection, only};
 
 #[test]
@@ -56,6 +56,18 @@ fn parse_insert_invalid() {
         ParserError::ParserError("Expected INTO, found: public".to_string()),
         res.unwrap_err()
     );
+}
+
+#[test]
+fn parse_invalid_table_name() {
+    let ast = all_dialects().run_parser_method("db.public..customer", Parser::parse_object_name);
+    assert!(ast.is_err());
+}
+
+#[test]
+fn parse_no_table_name() {
+    let ast = all_dialects().run_parser_method("", Parser::parse_object_name);
+    assert!(ast.is_err());
 }
 
 #[test]

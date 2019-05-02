@@ -1582,3 +1582,23 @@ impl SQLWord {
         self.to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::all_dialects;
+
+    #[test]
+    fn test_prev_index() {
+        let sql = "SELECT version()";
+        all_dialects().run_parser_method(sql, |parser| {
+            assert_eq!(parser.prev_token(), None);
+            assert_eq!(parser.next_token(), Some(Token::make_keyword("SELECT")));
+            assert_eq!(parser.next_token(), Some(Token::make_word("version", None)));
+            assert_eq!(parser.prev_token(), Some(Token::make_word("version", None)));
+            assert_eq!(parser.peek_token(), Some(Token::make_word("version", None)));
+            assert_eq!(parser.prev_token(), Some(Token::make_keyword("SELECT")));
+            assert_eq!(parser.prev_token(), None);
+        });
+    }
+}

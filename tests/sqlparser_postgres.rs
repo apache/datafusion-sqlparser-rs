@@ -3,34 +3,7 @@
 use sqlparser::dialect::{GenericSqlDialect, PostgreSqlDialect};
 use sqlparser::sqlast::*;
 use sqlparser::sqlparser::*;
-use sqlparser::sqltokenizer::*;
 use sqlparser::test_utils::*;
-
-#[test]
-fn test_prev_index() {
-    let sql = "SELECT version()";
-    all_dialects().run_parser_method(sql, |parser| {
-        assert_eq!(parser.prev_token(), None);
-        assert_eq!(parser.next_token(), Some(Token::make_keyword("SELECT")));
-        assert_eq!(parser.next_token(), Some(Token::make_word("version", None)));
-        assert_eq!(parser.prev_token(), Some(Token::make_word("version", None)));
-        assert_eq!(parser.peek_token(), Some(Token::make_word("version", None)));
-        assert_eq!(parser.prev_token(), Some(Token::make_keyword("SELECT")));
-        assert_eq!(parser.prev_token(), None);
-    });
-}
-
-#[test]
-fn parse_invalid_table_name() {
-    let ast = all_dialects().run_parser_method("db.public..customer", Parser::parse_object_name);
-    assert!(ast.is_err());
-}
-
-#[test]
-fn parse_no_table_name() {
-    let ast = all_dialects().run_parser_method("", Parser::parse_object_name);
-    assert!(ast.is_err());
-}
 
 #[test]
 fn parse_select_version() {

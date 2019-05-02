@@ -8,6 +8,58 @@ use sqlparser::sqlparser::*;
 use sqlparser::sqltokenizer::*;
 
 #[test]
+fn parse_insert_values() {
+    let sql = "INSERT INTO customer VALUES(1, 2, 3)";
+    check_one(sql, "customer", vec![]);
+
+    let sql = "INSERT INTO public.customer VALUES(1, 2, 3)";
+    check_one(sql, "public.customer", vec![]);
+
+    let sql = "INSERT INTO db.public.customer VALUES(1, 2, 3)";
+    check_one(sql, "db.public.customer", vec![]);
+
+    let sql = "INSERT INTO public.customer (id, name, active) VALUES(1, 2, 3)";
+    check_one(
+        sql,
+        "public.customer",
+        vec!["id".to_string(), "name".to_string(), "active".to_string()],
+    );
+
+    fn check_one(sql: &str, expected_table_name: &str, expected_columns: Vec<String>) {
+        match verified_stmt(sql) {
+            SQLStatement::SQLInsert {
+                table_name,
+                columns,
+                values,
+                ..
+            } => {
+                assert_eq!(table_name.to_string(), expected_table_name);
+                assert_eq!(columns, expected_columns);
+                assert_eq!(
+                    vec![vec![
+                        ASTNode::SQLValue(Value::Long(1)),
+                        ASTNode::SQLValue(Value::Long(2)),
+                        ASTNode::SQLValue(Value::Long(3))
+                    ]],
+                    values
+                );
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
+fn parse_insert_invalid() {
+    let sql = "INSERT public.customer (id, name, active) VALUES (1, 2, 3)";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected INTO, found: public".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_delete_statement() {
     let sql = "DELETE FROM \"table\"";
     match verified_stmt(sql) {
@@ -537,6 +589,30 @@ fn parse_create_external_table() {
             assert!(external);
             assert_eq!(FileFormat::TEXTFILE, file_format.unwrap());
             assert_eq!("/tmp/example.csv", location.unwrap());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_constraint_primary_key() {
+    let sql = "ALTER TABLE bazaar.address \
+               ADD CONSTRAINT address_pkey PRIMARY KEY (address_id)";
+    match verified_stmt(sql) {
+        SQLStatement::SQLAlterTable { name, .. } => {
+            assert_eq!(name.to_string(), "bazaar.address");
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_constraint_foreign_key() {
+    let sql = "ALTER TABLE public.customer \
+        ADD CONSTRAINT customer_address_id_fkey FOREIGN KEY (address_id) REFERENCES public.address(address_id)";
+    match verified_stmt(sql) {
+        SQLStatement::SQLAlterTable { name, .. } => {
+            assert_eq!(name.to_string(), "public.customer");
         }
         _ => unreachable!(),
     }

@@ -310,20 +310,6 @@ fn parse_timestamps_with_millis_example() {
     //assert_eq!(sql, ast.to_string());
 }
 
-#[test]
-fn parse_example_value() {
-    let sql = "SARAH.LEWIS@sakilacustomer.org";
-    let ast = parse_sql_expr(sql);
-    assert_eq!(sql, ast.to_string());
-}
-
-#[test]
-fn parse_function_now() {
-    let sql = "now()";
-    let ast = parse_sql_expr(sql);
-    assert_eq!(sql, ast.to_string());
-}
-
 fn verified_stmt(query: &str) -> SQLStatement {
     one_statement_parses_to(query, query)
 }

@@ -9,7 +9,7 @@ use sqlparser::sqltokenizer::*;
 
 #[test]
 fn test_prev_index() {
-    let sql: &str = "SELECT version()";
+    let sql = "SELECT version()";
     let mut parser = parser(sql);
     assert_eq!(parser.prev_token(), None);
     assert_eq!(parser.next_token(), Some(Token::make_keyword("SELECT")));
@@ -88,8 +88,7 @@ fn parse_insert_invalid() {
 
 #[test]
 fn parse_create_table_with_defaults() {
-    let sql = String::from(
-        "CREATE TABLE public.customer (
+    let sql = "CREATE TABLE public.customer (
             customer_id integer DEFAULT nextval(public.customer_customer_id_seq) NOT NULL,
             store_id smallint NOT NULL,
             first_name character varying(45) NOT NULL,
@@ -99,9 +98,8 @@ fn parse_create_table_with_defaults() {
             activebool boolean DEFAULT true NOT NULL,
             create_date date DEFAULT now()::text NOT NULL,
             last_update timestamp without time zone DEFAULT now() NOT NULL,
-            active integer NOT NULL)",
-    );
-    match one_statement_parses_to(&sql, "") {
+            active integer NOT NULL)";
+    match one_statement_parses_to(sql, "") {
         SQLStatement::SQLCreateTable {
             name,
             columns,
@@ -133,8 +131,7 @@ fn parse_create_table_with_defaults() {
 
 #[test]
 fn parse_create_table_from_pg_dump() {
-    let sql = String::from("
-        CREATE TABLE public.customer (
+    let sql = "CREATE TABLE public.customer (
             customer_id integer DEFAULT nextval('public.customer_customer_id_seq'::regclass) NOT NULL,
             store_id smallint NOT NULL,
             first_name character varying(45) NOT NULL,
@@ -147,8 +144,8 @@ fn parse_create_table_from_pg_dump() {
             last_update timestamp without time zone DEFAULT now(),
             release_year public.year,
             active integer
-        )");
-    match one_statement_parses_to(&sql, "") {
+        )";
+    match one_statement_parses_to(sql, "") {
         SQLStatement::SQLCreateTable {
             name,
             columns,
@@ -202,16 +199,14 @@ fn parse_create_table_from_pg_dump() {
 
 #[test]
 fn parse_create_table_with_inherit() {
-    let sql = String::from(
-        "\
-         CREATE TABLE bazaar.settings (\
-         settings_id uuid PRIMARY KEY DEFAULT uuid_generate_v4() NOT NULL, \
-         user_id uuid UNIQUE, \
-         value text[], \
-         use_metric boolean DEFAULT true\
-         )",
-    );
-    match verified_stmt(&sql) {
+    let sql = "\
+               CREATE TABLE bazaar.settings (\
+               settings_id uuid PRIMARY KEY DEFAULT uuid_generate_v4() NOT NULL, \
+               user_id uuid UNIQUE, \
+               value text[], \
+               use_metric boolean DEFAULT true\
+               )";
+    match verified_stmt(sql) {
         SQLStatement::SQLCreateTable {
             name,
             columns,
@@ -241,12 +236,9 @@ fn parse_create_table_with_inherit() {
 
 #[test]
 fn parse_alter_table_constraint_primary_key() {
-    let sql = String::from(
-        "\
-         ALTER TABLE bazaar.address \
-         ADD CONSTRAINT address_pkey PRIMARY KEY (address_id)",
-    );
-    match verified_stmt(&sql) {
+    let sql = "ALTER TABLE bazaar.address \
+               ADD CONSTRAINT address_pkey PRIMARY KEY (address_id)";
+    match verified_stmt(sql) {
         SQLStatement::SQLAlterTable { name, .. } => {
             assert_eq!(name.to_string(), "bazaar.address");
         }
@@ -256,10 +248,9 @@ fn parse_alter_table_constraint_primary_key() {
 
 #[test]
 fn parse_alter_table_constraint_foreign_key() {
-    let sql = String::from("\
-    ALTER TABLE public.customer \
-        ADD CONSTRAINT customer_address_id_fkey FOREIGN KEY (address_id) REFERENCES public.address(address_id)");
-    match verified_stmt(&sql) {
+    let sql = "ALTER TABLE public.customer \
+        ADD CONSTRAINT customer_address_id_fkey FOREIGN KEY (address_id) REFERENCES public.address(address_id)";
+    match verified_stmt(sql) {
         SQLStatement::SQLAlterTable { name, .. } => {
             assert_eq!(name.to_string(), "public.customer");
         }
@@ -269,7 +260,7 @@ fn parse_alter_table_constraint_foreign_key() {
 
 #[test]
 fn parse_copy_example() {
-    let sql = String::from(r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM stdin;
+    let sql = r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM stdin;
 1	PENELOPE	GUINESS	2006-02-15 09:34:33 0.11111
 2	NICK	WAHLBERG	2006-02-15 09:34:33 0.22222
 3	ED	CHASE	2006-02-15 09:34:33 0.312323
@@ -288,8 +279,8 @@ Kwara & Kogi
 'awe':5 'awe-inspir':4 'barbarella':1 'cat':13 'conquer':16 'dog':18 'feminist':10 'inspir':6 'monasteri':21 'must':15 'stori':7 'streetcar':2
 PHP	₱ USD $
 \N  Some other value
-\\."#);
-    let ast = one_statement_parses_to(&sql, "");
+\\."#;
+    let ast = one_statement_parses_to(sql, "");
     println!("{:#?}", ast);
     //assert_eq!(sql, ast.to_string());
 }

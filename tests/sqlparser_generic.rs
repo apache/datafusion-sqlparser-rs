@@ -452,14 +452,12 @@ fn parse_cast() {
 
 #[test]
 fn parse_create_table() {
-    let sql = String::from(
-        "CREATE TABLE uk_cities (\
-         name VARCHAR(100) NOT NULL,\
-         lat DOUBLE NULL,\
-         lng DOUBLE NULL)",
-    );
+    let sql = "CREATE TABLE uk_cities (\
+               name VARCHAR(100) NOT NULL,\
+               lat DOUBLE NULL,\
+               lng DOUBLE NULL)";
     let ast = one_statement_parses_to(
-        &sql,
+        sql,
         "CREATE TABLE uk_cities (\
          name character varying(100) NOT NULL, \
          lat double, \
@@ -497,15 +495,13 @@ fn parse_create_table() {
 
 #[test]
 fn parse_create_external_table() {
-    let sql = String::from(
-        "CREATE EXTERNAL TABLE uk_cities (\
-         name VARCHAR(100) NOT NULL,\
-         lat DOUBLE NULL,\
-         lng DOUBLE NULL)\
-         STORED AS TEXTFILE LOCATION '/tmp/example.csv",
-    );
+    let sql = "CREATE EXTERNAL TABLE uk_cities (\
+               name VARCHAR(100) NOT NULL,\
+               lat DOUBLE NULL,\
+               lng DOUBLE NULL)\
+               STORED AS TEXTFILE LOCATION '/tmp/example.csv";
     let ast = one_statement_parses_to(
-        &sql,
+        sql,
         "CREATE EXTERNAL TABLE uk_cities (\
          name character varying(100) NOT NULL, \
          lat double, \
@@ -552,8 +548,8 @@ fn parse_scalar_function_in_projection() {
     let select = verified_only_select(sql);
     assert_eq!(
         &ASTNode::SQLFunction {
-            name: SQLObjectName(vec![String::from("sqrt")]),
-            args: vec![ASTNode::SQLIdentifier(String::from("id"))],
+            name: SQLObjectName(vec!["sqrt".to_string()]),
+            args: vec![ASTNode::SQLIdentifier("id".to_string())],
             over: None,
         },
         expr_from_projection(only(&select.projection))

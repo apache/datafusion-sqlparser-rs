@@ -1,5 +1,3 @@
-use chrono::{offset::FixedOffset, DateTime, NaiveDate, NaiveDateTime, NaiveTime};
-
 /// SQL values such as int, double, string, timestamp
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -13,14 +11,6 @@ pub enum Value {
     NationalStringLiteral(String),
     /// Boolean value true or false,
     Boolean(bool),
-    /// Date value
-    Date(NaiveDate),
-    // Time
-    Time(NaiveTime),
-    /// Date and time
-    DateTime(NaiveDateTime),
-    /// Timstamp with time zone
-    Timestamp(DateTime<FixedOffset>),
     /// NULL value in insert statements,
     Null,
 }
@@ -33,10 +23,6 @@ impl ToString for Value {
             Value::SingleQuotedString(v) => format!("'{}'", escape_single_quote_string(v)),
             Value::NationalStringLiteral(v) => format!("N'{}'", v),
             Value::Boolean(v) => v.to_string(),
-            Value::Date(v) => v.to_string(),
-            Value::Time(v) => v.to_string(),
-            Value::DateTime(v) => v.to_string(),
-            Value::Timestamp(v) => format!("{}", v),
             Value::Null => "NULL".to_string(),
         }
     }

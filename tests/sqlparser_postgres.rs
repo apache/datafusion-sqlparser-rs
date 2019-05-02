@@ -209,22 +209,6 @@ PHP	₱ USD $
     //assert_eq!(sql, ast.to_string());
 }
 
-#[test]
-fn parse_timestamps_example() {
-    let sql = "2016-02-15 09:43:33";
-    let _ = parse_sql_expr(sql);
-    //TODO add assertion
-    //assert_eq!(sql, ast.to_string());
-}
-
-#[test]
-fn parse_timestamps_with_millis_example() {
-    let sql = "2017-11-02 19:15:42.308637";
-    let _ = parse_sql_expr(sql);
-    //TODO add assertion
-    //assert_eq!(sql, ast.to_string());
-}
-
 fn verified_stmt(query: &str) -> SQLStatement {
     one_statement_parses_to(query, query)
 }
@@ -245,12 +229,6 @@ fn one_statement_parses_to(sql: &str, canonical: &str) -> SQLStatement {
 
 fn parse_sql_statements(sql: &str) -> Result<Vec<SQLStatement>, ParserError> {
     Parser::parse_sql(&PostgreSqlDialect {}, sql.to_string())
-}
-
-fn parse_sql_expr(sql: &str) -> ASTNode {
-    debug!("sql: {}", sql);
-    let mut parser = parser(sql);
-    parser.parse_expr().unwrap()
 }
 
 fn parser(sql: &str) -> Parser {

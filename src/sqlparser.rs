@@ -20,7 +20,6 @@ use super::dialect::keywords;
 use super::dialect::Dialect;
 use super::sqlast::*;
 use super::sqltokenizer::*;
-use chrono::{offset::FixedOffset, DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParserError {
@@ -922,37 +921,29 @@ impl Parser {
     /// Parse a literal value (numbers, strings, date/time, booleans)
     fn parse_value(&mut self) -> Result<Value, ParserError> {
         match self.next_token() {
-            Some(t) => {
-                match t {
-                    Token::SQLWord(k) => match k.keyword.as_ref() {
-                        "TRUE" => Ok(Value::Boolean(true)),
-                        "FALSE" => Ok(Value::Boolean(false)),
-                        "NULL" => Ok(Value::Null),
-                        _ => {
-                            return parser_err!(format!(
-                                "No value parser for keyword {}",
-                                k.keyword
-                            ));
-                        }
-                    },
-                    //TODO: parse the timestamp here (see parse_timestamp_value())
-                    Token::Number(ref n) if n.contains('.') => match n.parse::<f64>() {
-                        Ok(n) => Ok(Value::Double(n)),
-                        Err(e) => parser_err!(format!("Could not parse '{}' as f64: {}", n, e)),
-                    },
-                    Token::Number(ref n) => match n.parse::<i64>() {
-                        Ok(n) => Ok(Value::Long(n)),
-                        Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
-                    },
-                    Token::SingleQuotedString(ref s) => {
-                        Ok(Value::SingleQuotedString(s.to_string()))
+            Some(t) => match t {
+                Token::SQLWord(k) => match k.keyword.as_ref() {
+                    "TRUE" => Ok(Value::Boolean(true)),
+                    "FALSE" => Ok(Value::Boolean(false)),
+                    "NULL" => Ok(Value::Null),
+                    _ => {
+                        return parser_err!(format!("No value parser for keyword {}", k.keyword));
                     }
-                    Token::NationalStringLiteral(ref s) => {
-                        Ok(Value::NationalStringLiteral(s.to_string()))
-                    }
-                    _ => parser_err!(format!("Unsupported value: {:?}", t)),
+                },
+                Token::Number(ref n) if n.contains('.') => match n.parse::<f64>() {
+                    Ok(n) => Ok(Value::Double(n)),
+                    Err(e) => parser_err!(format!("Could not parse '{}' as f64: {}", n, e)),
+                },
+                Token::Number(ref n) => match n.parse::<i64>() {
+                    Ok(n) => Ok(Value::Long(n)),
+                    Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
+                },
+                Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
+                Token::NationalStringLiteral(ref s) => {
+                    Ok(Value::NationalStringLiteral(s.to_string()))
                 }
-            }
+                _ => parser_err!(format!("Unsupported value: {:?}", t)),
+            },
             None => parser_err!("Expecting a value, but found EOF"),
         }
     }
@@ -983,86 +974,6 @@ impl Parser {
             Some(Token::SingleQuotedString(ref s)) => Ok(s.clone()),
             other => parser_err!(format!("Expected literal string, found {:?}", other)),
         }
-    }
-
-    pub fn parse_timezone_offset(&mut self) -> Result<i8, ParserError> {
-        match self.next_token() {
-            Some(Token::Plus) => {
-                let n = self.parse_literal_int()?;
-                Ok(n as i8)
-            }
-            Some(Token::Minus) => {
-                let n = self.parse_literal_int()?;
-                Ok(-n as i8)
-            }
-            other => parser_err!(format!(
-                "Expecting `+` or `-` in timezone, but found {:?}",
-                other
-            )),
-        }
-    }
-
-    pub fn parse_timestamp_value(&mut self) -> Result<Value, ParserError> {
-        let year = self.parse_literal_int()?;
-        let date = self.parse_date(year)?;
-        if let Ok(time) = self.parse_time() {
-            let date_time = NaiveDateTime::new(date, time);
-            match self.peek_token() {
-                Some(token) => match token {
-                    Token::Plus | Token::Minus => {
-                        let tz = self.parse_timezone_offset()?;
-                        let offset = FixedOffset::east(i32::from(tz) * 3600);
-                        Ok(Value::Timestamp(DateTime::from_utc(date_time, offset)))
-                    }
-                    _ => Ok(Value::DateTime(date_time)),
-                },
-                _ => Ok(Value::DateTime(date_time)),
-            }
-        } else {
-            parser_err!(format!(
-                "Expecting time after date, but found {:?}",
-                self.peek_token()
-            ))
-        }
-    }
-
-    pub fn parse_date(&mut self, year: i64) -> Result<NaiveDate, ParserError> {
-        if self.consume_token(&Token::Minus) {
-            let month = self.parse_literal_int()?;
-            if self.consume_token(&Token::Minus) {
-                let day = self.parse_literal_int()?;
-                let date = NaiveDate::from_ymd(year as i32, month as u32, day as u32);
-                Ok(date)
-            } else {
-                parser_err!(format!(
-                    "Expecting `-` for date separator, found {:?}",
-                    self.peek_token()
-                ))
-            }
-        } else {
-            parser_err!(format!(
-                "Expecting `-` for date separator, found {:?}",
-                self.peek_token()
-            ))
-        }
-    }
-
-    pub fn parse_time(&mut self) -> Result<NaiveTime, ParserError> {
-        let hour = self.parse_literal_int()?;
-        self.expect_token(&Token::Colon)?;
-        let min = self.parse_literal_int()?;
-        self.expect_token(&Token::Colon)?;
-        // On one hand, the SQL specs defines <seconds fraction> ::= <unsigned integer>,
-        // so it would be more correct to parse it as such
-        let sec = self.parse_literal_double()?;
-        // On the other, chrono only supports nanoseconds, which should(?) fit in seconds-as-f64...
-        let nanos = (sec.fract() * 1_000_000_000.0).round();
-        Ok(NaiveTime::from_hms_nano(
-            hour as u32,
-            min as u32,
-            sec as u32,
-            nanos as u32,
-        ))
     }
 
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)

@@ -1171,11 +1171,13 @@ fn parse_invalid_subquery_without_parens() {
 }
 
 #[test]
-#[should_panic(expected = "Parse results with PostgreSqlDialect are different from AnsiSqlDialect")]
+#[should_panic(
+    expected = "Parse results with GenericSqlDialect are different from PostgreSqlDialect"
+)]
 fn ensure_multiple_dialects_are_tested() {
     // The SQL here must be parsed differently by different dialects.
     // At the time of writing, `@foo` is accepted as a valid identifier
-    // by the generic and the postgresql dialect, but not by the ANSI one.
+    // by the Generic and the MSSQL dialect, but not by Postgres and ANSI.
     let _ = parse_sql_statements("SELECT @foo");
 }
 

@@ -5,16 +5,6 @@ use sqlparser::sqlast::*;
 use sqlparser::test_utils::*;
 
 #[test]
-fn parse_select_version() {
-    let sql = "SELECT @@version";
-    let select = pg_and_generic().verified_only_select(sql);
-    assert_eq!(
-        &ASTNode::SQLIdentifier("@@version".to_string()),
-        expr_from_projection(only(&select.projection)),
-    );
-}
-
-#[test]
 fn parse_create_table_with_defaults() {
     let sql = "CREATE TABLE public.customer (
             customer_id integer DEFAULT nextval(public.customer_customer_id_seq) NOT NULL,

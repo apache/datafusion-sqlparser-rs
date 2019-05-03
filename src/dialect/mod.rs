@@ -1,12 +1,14 @@
 mod ansi_sql;
 mod generic_sql;
 pub mod keywords;
+mod mssql;
 mod postgresql;
 
 use std::fmt::Debug;
 
 pub use self::ansi_sql::AnsiSqlDialect;
 pub use self::generic_sql::GenericSqlDialect;
+pub use self::mssql::MsSqlDialect;
 pub use self::postgresql::PostgreSqlDialect;
 
 pub trait Dialect: Debug {

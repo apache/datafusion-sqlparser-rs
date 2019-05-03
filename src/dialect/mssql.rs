@@ -4,6 +4,10 @@ use crate::dialect::Dialect;
 pub struct MsSqlDialect {}
 
 impl Dialect for MsSqlDialect {
+    fn is_delimited_identifier_start(&self, ch: char) -> bool {
+        ch == '"' || ch == '['
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
         // See https://docs.microsoft.com/en-us/sql/relational-databases/databases/database-identifiers?view=sql-server-2017#rules-for-regular-identifiers
         // We don't support non-latin "letters" currently.

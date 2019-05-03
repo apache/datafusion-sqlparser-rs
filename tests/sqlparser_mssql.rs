@@ -1,4 +1,6 @@
 #![warn(clippy::all)]
+//! Test SQL syntax specific to Microsoft's T-SQL. The parser based on the
+//! generic dialect is also tested (on the inputs it can handle).
 
 use sqlparser::dialect::{GenericSqlDialect, MsSqlDialect};
 use sqlparser::sqlast::*;

@@ -1,4 +1,10 @@
 #![warn(clippy::all)]
+//! Test SQL syntax, which all sqlparser dialects must parse in the same way.
+//!
+//! Note that it does not mean all SQL here is valid in all the dialects, only
+//! that 1) it's either standard or widely supported and 2) it can be parsed by
+//! sqlparser regardless of the chosen dialect (i.e. it doesn't conflict with
+//! dialect-specific parsing rules).
 
 use matches::assert_matches;
 

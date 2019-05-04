@@ -805,9 +805,7 @@ impl Parser {
         let is_primary_key = self.parse_keywords(vec!["PRIMARY", "KEY"]);
         let is_unique_key = self.parse_keywords(vec!["UNIQUE", "KEY"]);
         let is_foreign_key = self.parse_keywords(vec!["FOREIGN", "KEY"]);
-        self.expect_token(&Token::LParen)?;
-        let column_names = self.parse_column_names()?;
-        self.expect_token(&Token::RParen)?;
+        let column_names = self.parse_parenthesized_column_list(false)?;
         let key = Key {
             name: constraint_name,
             columns: column_names,
@@ -819,9 +817,7 @@ impl Parser {
         } else if is_foreign_key {
             self.expect_keyword("REFERENCES")?;
             let foreign_table = self.parse_object_name()?;
-            self.expect_token(&Token::LParen)?;
-            let referred_columns = self.parse_column_names()?;
-            self.expect_token(&Token::RParen)?;
+            let referred_columns = self.parse_parenthesized_column_list(false)?;
             Ok(TableKey::ForeignKey {
                 key,
                 foreign_table,
@@ -859,13 +855,7 @@ impl Parser {
     /// Parse a copy statement
     pub fn parse_copy(&mut self) -> Result<SQLStatement, ParserError> {
         let table_name = self.parse_object_name()?;
-        let columns = if self.consume_token(&Token::LParen) {
-            let column_names = self.parse_column_names()?;
-            self.expect_token(&Token::RParen)?;
-            column_names
-        } else {
-            vec![]
-        };
+        let columns = self.parse_parenthesized_column_list(true)?;
         self.expect_keyword("FROM")?;
         self.expect_keyword("STDIN")?;
         self.expect_token(&Token::SemiColon)?;
@@ -1122,9 +1112,20 @@ impl Parser {
         }
     }
 
-    /// Parse a comma-separated list of unqualified, possibly quoted identifiers
-    pub fn parse_column_names(&mut self) -> Result<Vec<SQLIdent>, ParserError> {
-        Ok(self.parse_list_of_ids(&Token::Comma)?)
+    /// Parse a parenthesized comma-separated list of unqualified, possibly quoted identifiers
+    pub fn parse_parenthesized_column_list(
+        &mut self,
+        optional: bool,
+    ) -> Result<Vec<SQLIdent>, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let cols = self.parse_list_of_ids(&Token::Comma)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(cols)
+        } else if optional {
+            Ok(vec![])
+        } else {
+            self.expected("a list of columns in parentheses", self.peek_token())
+        }
     }
 
     pub fn parse_precision(&mut self) -> Result<usize, ParserError> {
@@ -1215,13 +1216,7 @@ impl Parser {
         let mut cte = vec![];
         loop {
             let alias = self.parse_identifier()?;
-            let renamed_columns = if self.consume_token(&Token::LParen) {
-                let cols = self.parse_column_names()?;
-                self.expect_token(&Token::RParen)?;
-                cols
-            } else {
-                vec![]
-            };
+            let renamed_columns = self.parse_parenthesized_column_list(true)?;
             self.expect_keyword("AS")?;
             self.expect_token(&Token::LParen)?;
             cte.push(Cte {
@@ -1381,10 +1376,8 @@ impl Parser {
             let constraint = self.parse_expr()?;
             Ok(JoinConstraint::On(constraint))
         } else if self.parse_keyword("USING") {
-            self.expect_token(&Token::LParen)?;
-            let attributes = self.parse_column_names()?;
-            self.expect_token(&Token::RParen)?;
-            Ok(JoinConstraint::Using(attributes))
+            let columns = self.parse_parenthesized_column_list(false)?;
+            Ok(JoinConstraint::Using(columns))
         } else {
             self.expected("ON, or USING after JOIN", self.peek_token())
         }
@@ -1484,13 +1477,7 @@ impl Parser {
     pub fn parse_insert(&mut self) -> Result<SQLStatement, ParserError> {
         self.expect_keyword("INTO")?;
         let table_name = self.parse_object_name()?;
-        let columns = if self.consume_token(&Token::LParen) {
-            let column_names = self.parse_column_names()?;
-            self.expect_token(&Token::RParen)?;
-            column_names
-        } else {
-            vec![]
-        };
+        let columns = self.parse_parenthesized_column_list(true)?;
         self.expect_keyword("VALUES")?;
         self.expect_token(&Token::LParen)?;
         let values = self.parse_expr_list()?;

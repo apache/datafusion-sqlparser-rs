@@ -158,7 +158,7 @@ impl Parser {
         let tok = self
             .next_token()
             .ok_or_else(|| ParserError::ParserError("Unexpected EOF".to_string()))?;
-        match tok {
+        let expr = match tok {
             Token::SQLWord(w) => match w.keyword.as_ref() {
                 "TRUE" | "FALSE" | "NULL" => {
                     self.prev_token();
@@ -232,6 +232,15 @@ impl Parser {
                 Ok(expr)
             }
             unexpected => self.expected("an expression", Some(unexpected)),
+        }?;
+
+        if self.parse_keyword("COLLATE") {
+            Ok(ASTNode::SQLCollate {
+                expr: Box::new(expr),
+                collation: self.parse_object_name()?,
+            })
+        } else {
+            Ok(expr)
         }
     }
 

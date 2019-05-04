@@ -210,6 +210,15 @@ fn parse_not() {
 }
 
 #[test]
+fn parse_collate() {
+    let sql = "SELECT name COLLATE \"de_DE\" FROM customer";
+    assert_matches!(
+        only(&all_dialects().verified_only_select(sql).projection),
+        SQLSelectItem::UnnamedExpression(ASTNode::SQLCollate { .. })
+    );
+}
+
+#[test]
 fn parse_select_string_predicate() {
     let sql = "SELECT id, fname, lname FROM customer \
                WHERE salary != 'Not Provided' AND salary != ''";

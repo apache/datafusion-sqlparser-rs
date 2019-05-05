@@ -898,17 +898,12 @@ impl Parser {
             } else {
                 return self.expected("column name or constraint definition", self.peek_token());
             }
-            match self.next_token() {
-                Some(Token::Comma) => {}
-                Some(Token::RParen) => {
-                    break;
-                }
-                other => {
-                    return parser_err!(format!(
-                        "Expected ',' or ')' after column definition but found {:?}",
-                        other
-                    ));
-                }
+            let comma = self.consume_token(&Token::Comma);
+            if self.consume_token(&Token::RParen) {
+                // allow a trailing comma, even though it's not in standard
+                break;
+            } else if !comma {
+                return self.expected("',' or ')' after column definition", self.peek_token());
             }
         }
 

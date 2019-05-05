@@ -689,6 +689,12 @@ fn parse_create_table() {
 }
 
 #[test]
+fn parse_create_table_trailing_comma() {
+    let sql = "CREATE TABLE foo (bar int,)";
+    all_dialects().one_statement_parses_to(sql, "CREATE TABLE foo (bar int)");
+}
+
+#[test]
 fn parse_create_external_table() {
     let sql = "CREATE EXTERNAL TABLE uk_cities (\
                name VARCHAR(100) NOT NULL,\

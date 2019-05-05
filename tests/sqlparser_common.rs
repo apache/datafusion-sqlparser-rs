@@ -221,7 +221,7 @@ fn parse_collate() {
 #[test]
 fn parse_select_string_predicate() {
     let sql = "SELECT id, fname, lname FROM customer \
-               WHERE salary != 'Not Provided' AND salary != ''";
+               WHERE salary <> 'Not Provided' AND salary <> ''";
     let _ast = verified_only_select(sql);
     //TODO: add assertions
 }
@@ -238,7 +238,7 @@ fn parse_escaped_single_quote_string_predicate() {
     use self::ASTNode::*;
     use self::SQLOperator::*;
     let sql = "SELECT id, fname, lname FROM customer \
-               WHERE salary != 'Jim''s salary'";
+               WHERE salary <> 'Jim''s salary'";
     let ast = verified_only_select(sql);
     assert_eq!(
         Some(SQLBinaryExpr {

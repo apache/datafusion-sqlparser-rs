@@ -43,7 +43,7 @@ pub enum Token {
     Whitespace(Whitespace),
     /// Equality operator `=`
     Eq,
-    /// Not Equals operator `!=` or `<>`
+    /// Not Equals operator `<>` (or `!=` in some dialects)
     Neq,
     /// Less Than operator `<`
     Lt,
@@ -100,7 +100,7 @@ impl ToString for Token {
             Token::Comma => ",".to_string(),
             Token::Whitespace(ws) => ws.to_string(),
             Token::Eq => "=".to_string(),
-            Token::Neq => "-".to_string(),
+            Token::Neq => "<>".to_string(),
             Token::Lt => "<".to_string(),
             Token::Gt => ">".to_string(),
             Token::LtEq => "<=".to_string(),

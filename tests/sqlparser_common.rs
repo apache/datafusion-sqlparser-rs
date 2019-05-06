@@ -1,11 +1,80 @@
 #![warn(clippy::all)]
+//! Test SQL syntax, which all sqlparser dialects must parse in the same way.
+//!
+//! Note that it does not mean all SQL here is valid in all the dialects, only
+//! that 1) it's either standard or widely supported and 2) it can be parsed by
+//! sqlparser regardless of the chosen dialect (i.e. it doesn't conflict with
+//! dialect-specific parsing rules).
 
 use matches::assert_matches;
 
-use sqlparser::dialect::*;
 use sqlparser::sqlast::*;
 use sqlparser::sqlparser::*;
-use sqlparser::sqltokenizer::*;
+use sqlparser::test_utils::{all_dialects, expr_from_projection, only};
+
+#[test]
+fn parse_insert_values() {
+    let sql = "INSERT INTO customer VALUES(1, 2, 3)";
+    check_one(sql, "customer", vec![]);
+
+    let sql = "INSERT INTO public.customer VALUES(1, 2, 3)";
+    check_one(sql, "public.customer", vec![]);
+
+    let sql = "INSERT INTO db.public.customer VALUES(1, 2, 3)";
+    check_one(sql, "db.public.customer", vec![]);
+
+    let sql = "INSERT INTO public.customer (id, name, active) VALUES(1, 2, 3)";
+    check_one(
+        sql,
+        "public.customer",
+        vec!["id".to_string(), "name".to_string(), "active".to_string()],
+    );
+
+    fn check_one(sql: &str, expected_table_name: &str, expected_columns: Vec<String>) {
+        match verified_stmt(sql) {
+            SQLStatement::SQLInsert {
+                table_name,
+                columns,
+                values,
+                ..
+            } => {
+                assert_eq!(table_name.to_string(), expected_table_name);
+                assert_eq!(columns, expected_columns);
+                assert_eq!(
+                    vec![vec![
+                        ASTNode::SQLValue(Value::Long(1)),
+                        ASTNode::SQLValue(Value::Long(2)),
+                        ASTNode::SQLValue(Value::Long(3))
+                    ]],
+                    values
+                );
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
+fn parse_insert_invalid() {
+    let sql = "INSERT public.customer (id, name, active) VALUES (1, 2, 3)";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected INTO, found: public".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
+fn parse_invalid_table_name() {
+    let ast = all_dialects().run_parser_method("db.public..customer", Parser::parse_object_name);
+    assert!(ast.is_err());
+}
+
+#[test]
+fn parse_no_table_name() {
+    let ast = all_dialects().run_parser_method("", Parser::parse_object_name);
+    assert!(ast.is_err());
+}
 
 #[test]
 fn parse_delete_statement() {
@@ -452,14 +521,12 @@ fn parse_cast() {
 
 #[test]
 fn parse_create_table() {
-    let sql = String::from(
-        "CREATE TABLE uk_cities (\
-         name VARCHAR(100) NOT NULL,\
-         lat DOUBLE NULL,\
-         lng DOUBLE NULL)",
-    );
+    let sql = "CREATE TABLE uk_cities (\
+               name VARCHAR(100) NOT NULL,\
+               lat DOUBLE NULL,\
+               lng DOUBLE NULL)";
     let ast = one_statement_parses_to(
-        &sql,
+        sql,
         "CREATE TABLE uk_cities (\
          name character varying(100) NOT NULL, \
          lat double, \
@@ -497,15 +564,13 @@ fn parse_create_table() {
 
 #[test]
 fn parse_create_external_table() {
-    let sql = String::from(
-        "CREATE EXTERNAL TABLE uk_cities (\
-         name VARCHAR(100) NOT NULL,\
-         lat DOUBLE NULL,\
-         lng DOUBLE NULL)\
-         STORED AS TEXTFILE LOCATION '/tmp/example.csv",
-    );
+    let sql = "CREATE EXTERNAL TABLE uk_cities (\
+               name VARCHAR(100) NOT NULL,\
+               lat DOUBLE NULL,\
+               lng DOUBLE NULL)\
+               STORED AS TEXTFILE LOCATION '/tmp/example.csv";
     let ast = one_statement_parses_to(
-        &sql,
+        sql,
         "CREATE EXTERNAL TABLE uk_cities (\
          name character varying(100) NOT NULL, \
          lat double, \
@@ -547,13 +612,37 @@ fn parse_create_external_table() {
 }
 
 #[test]
+fn parse_alter_table_constraint_primary_key() {
+    let sql = "ALTER TABLE bazaar.address \
+               ADD CONSTRAINT address_pkey PRIMARY KEY (address_id)";
+    match verified_stmt(sql) {
+        SQLStatement::SQLAlterTable { name, .. } => {
+            assert_eq!(name.to_string(), "bazaar.address");
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_constraint_foreign_key() {
+    let sql = "ALTER TABLE public.customer \
+        ADD CONSTRAINT customer_address_id_fkey FOREIGN KEY (address_id) REFERENCES public.address(address_id)";
+    match verified_stmt(sql) {
+        SQLStatement::SQLAlterTable { name, .. } => {
+            assert_eq!(name.to_string(), "public.customer");
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_scalar_function_in_projection() {
     let sql = "SELECT sqrt(id) FROM foo";
     let select = verified_only_select(sql);
     assert_eq!(
         &ASTNode::SQLFunction {
-            name: SQLObjectName(vec![String::from("sqrt")]),
-            args: vec![ASTNode::SQLIdentifier(String::from("id"))],
+            name: SQLObjectName(vec!["sqrt".to_string()]),
+            args: vec![ASTNode::SQLIdentifier("id".to_string())],
             over: None,
         },
         expr_from_projection(only(&select.projection))
@@ -621,16 +710,6 @@ fn parse_simple_math_expr_plus() {
 fn parse_simple_math_expr_minus() {
     let sql = "SELECT a - b, 2 - a, 2.5 - a, a_f - b_f, 2 - a_f, 2.5 - a_f FROM c";
     verified_only_select(sql);
-}
-
-#[test]
-fn parse_select_version() {
-    let sql = "SELECT @@version";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        &ASTNode::SQLIdentifier("@@version".to_string()),
-        expr_from_projection(only(&select.projection)),
-    );
 }
 
 #[test]
@@ -1097,73 +1176,37 @@ fn parse_invalid_subquery_without_parens() {
     );
 }
 
-fn only<T>(v: &[T]) -> &T {
-    assert_eq!(1, v.len());
-    v.first().unwrap()
-}
-
-fn verified_query(query: &str) -> SQLQuery {
-    match verified_stmt(query) {
-        SQLStatement::SQLQuery(query) => *query,
-        _ => panic!("Expected SQLQuery"),
-    }
-}
-
-fn expr_from_projection(item: &SQLSelectItem) -> &ASTNode {
-    match item {
-        SQLSelectItem::UnnamedExpression(expr) => expr,
-        _ => panic!("Expected UnnamedExpression"),
-    }
-}
-
-fn verified_only_select(query: &str) -> SQLSelect {
-    match verified_query(query).body {
-        SQLSetExpr::Select(s) => *s,
-        _ => panic!("Expected SQLSetExpr::Select"),
-    }
-}
-
-fn verified_stmt(query: &str) -> SQLStatement {
-    one_statement_parses_to(query, query)
-}
-
-fn verified_expr(query: &str) -> ASTNode {
-    let ast = parse_sql_expr(query);
-    assert_eq!(query, &ast.to_string());
-    ast
-}
-
-/// Ensures that `sql` parses as a single statement, optionally checking that
-/// converting AST back to string equals to `canonical` (unless an empty string
-/// is provided).
-fn one_statement_parses_to(sql: &str, canonical: &str) -> SQLStatement {
-    let mut statements = parse_sql_statements(&sql).unwrap();
-    assert_eq!(statements.len(), 1);
-
-    let only_statement = statements.pop().unwrap();
-    if !canonical.is_empty() {
-        assert_eq!(canonical, only_statement.to_string())
-    }
-    only_statement
+#[test]
+#[should_panic(
+    expected = "Parse results with GenericSqlDialect are different from PostgreSqlDialect"
+)]
+fn ensure_multiple_dialects_are_tested() {
+    // The SQL here must be parsed differently by different dialects.
+    // At the time of writing, `@foo` is accepted as a valid identifier
+    // by the Generic and the MSSQL dialect, but not by Postgres and ANSI.
+    let _ = parse_sql_statements("SELECT @foo");
 }
 
 fn parse_sql_statements(sql: &str) -> Result<Vec<SQLStatement>, ParserError> {
-    let generic_ast = Parser::parse_sql(&GenericSqlDialect {}, sql.to_string());
-    let pg_ast = Parser::parse_sql(&PostgreSqlDialect {}, sql.to_string());
-    assert_eq!(generic_ast, pg_ast);
-    generic_ast
+    all_dialects().parse_sql_statements(sql)
 }
 
-fn parse_sql_expr(sql: &str) -> ASTNode {
-    let generic_ast = parse_sql_expr_with(&GenericSqlDialect {}, &sql.to_string());
-    let pg_ast = parse_sql_expr_with(&PostgreSqlDialect {}, &sql.to_string());
-    assert_eq!(generic_ast, pg_ast);
-    generic_ast
+fn one_statement_parses_to(sql: &str, canonical: &str) -> SQLStatement {
+    all_dialects().one_statement_parses_to(sql, canonical)
 }
 
-fn parse_sql_expr_with(dialect: &dyn Dialect, sql: &str) -> ASTNode {
-    let mut tokenizer = Tokenizer::new(dialect, &sql);
-    let tokens = tokenizer.tokenize().unwrap();
-    let mut parser = Parser::new(tokens);
-    parser.parse_expr().unwrap()
+fn verified_stmt(query: &str) -> SQLStatement {
+    all_dialects().verified_stmt(query)
+}
+
+fn verified_query(query: &str) -> SQLQuery {
+    all_dialects().verified_query(query)
+}
+
+fn verified_only_select(query: &str) -> SQLSelect {
+    all_dialects().verified_only_select(query)
+}
+
+fn verified_expr(query: &str) -> ASTNode {
+    all_dialects().verified_expr(query)
 }

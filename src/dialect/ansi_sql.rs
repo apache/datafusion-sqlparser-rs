@@ -1,5 +1,6 @@
 use crate::dialect::Dialect;
 
+#[derive(Debug)]
 pub struct AnsiSqlDialect {}
 
 impl Dialect for AnsiSqlDialect {

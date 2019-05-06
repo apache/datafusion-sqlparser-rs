@@ -351,14 +351,8 @@ impl Parser {
             let rows = if self.parse_keyword("UNBOUNDED") {
                 None
             } else {
-                let rows = self.parse_literal_int()?;
-                if rows < 0 {
-                    parser_err!(format!(
-                        "The number of rows must be non-negative, got {}",
-                        rows
-                    ))?;
-                }
-                Some(rows as u64)
+                let rows = self.parse_literal_uint()?;
+                Some(rows)
             };
             if self.parse_keyword("PRECEDING") {
                 Ok(SQLWindowFrameBound::Preceding(rows))
@@ -1059,9 +1053,9 @@ impl Parser {
                     Ok(n) => Ok(Value::Double(n)),
                     Err(e) => parser_err!(format!("Could not parse '{}' as f64: {}", n, e)),
                 },
-                Token::Number(ref n) => match n.parse::<i64>() {
+                Token::Number(ref n) => match n.parse::<u64>() {
                     Ok(n) => Ok(Value::Long(n)),
-                    Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
+                    Err(e) => parser_err!(format!("Could not parse '{}' as u64: {}", n, e)),
                 },
                 Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
                 Token::NationalStringLiteral(ref s) => {
@@ -1073,13 +1067,13 @@ impl Parser {
         }
     }
 
-    /// Parse a literal integer/long
-    pub fn parse_literal_int(&mut self) -> Result<i64, ParserError> {
+    /// Parse an unsigned literal integer/long
+    pub fn parse_literal_uint(&mut self) -> Result<u64, ParserError> {
         match self.next_token() {
-            Some(Token::Number(s)) => s.parse::<i64>().map_err(|e| {
-                ParserError::ParserError(format!("Could not parse '{}' as i64: {}", s, e))
+            Some(Token::Number(s)) => s.parse::<u64>().map_err(|e| {
+                ParserError::ParserError(format!("Could not parse '{}' as u64: {}", s, e))
             }),
-            other => parser_err!(format!("Expected literal int, found {:?}", other)),
+            other => self.expected("literal int", other),
         }
     }
 
@@ -1258,17 +1252,11 @@ impl Parser {
         }
     }
 
-    pub fn parse_precision(&mut self) -> Result<usize, ParserError> {
-        //TODO: error handling
-        Ok(self.parse_optional_precision()?.unwrap())
-    }
-
-    pub fn parse_optional_precision(&mut self) -> Result<Option<usize>, ParserError> {
+    pub fn parse_optional_precision(&mut self) -> Result<Option<u64>, ParserError> {
         if self.consume_token(&Token::LParen) {
-            let n = self.parse_literal_int()?;
-            //TODO: check return value of reading rparen
+            let n = self.parse_literal_uint()?;
             self.expect_token(&Token::RParen)?;
-            Ok(Some(n as usize))
+            Ok(Some(n))
         } else {
             Ok(None)
         }
@@ -1276,16 +1264,16 @@ impl Parser {
 
     pub fn parse_optional_precision_scale(
         &mut self,
-    ) -> Result<(Option<usize>, Option<usize>), ParserError> {
+    ) -> Result<(Option<u64>, Option<u64>), ParserError> {
         if self.consume_token(&Token::LParen) {
-            let n = self.parse_literal_int()?;
+            let n = self.parse_literal_uint()?;
             let scale = if self.consume_token(&Token::Comma) {
-                Some(self.parse_literal_int()? as usize)
+                Some(self.parse_literal_uint()?)
             } else {
                 None
             };
             self.expect_token(&Token::RParen)?;
-            Ok((Some(n as usize), scale))
+            Ok((Some(n), scale))
         } else {
             Ok((None, None))
         }
@@ -1725,7 +1713,7 @@ impl Parser {
         if self.parse_keyword("ALL") {
             Ok(None)
         } else {
-            self.parse_literal_int()
+            self.parse_literal_uint()
                 .map(|n| Some(ASTNode::SQLValue(Value::Long(n))))
         }
     }
@@ -1733,7 +1721,7 @@ impl Parser {
     /// Parse an OFFSET clause
     pub fn parse_offset(&mut self) -> Result<ASTNode, ParserError> {
         let value = self
-            .parse_literal_int()
+            .parse_literal_uint()
             .map(|n| ASTNode::SQLValue(Value::Long(n)))?;
         self.expect_one_of_keywords(&["ROW", "ROWS"])?;
         Ok(value)

@@ -1,15 +1,15 @@
-/// SQL values such as int, double, string, timestamp
+/// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
-    /// Literal signed long
-    Long(i64),
-    /// Literal floating point value
+    /// Unsigned integer value
+    Long(u64),
+    /// Unsigned floating point value
     Double(f64),
     /// 'string value'
     SingleQuotedString(String),
     /// N'string value'
     NationalStringLiteral(String),
-    /// Boolean value true or false,
+    /// Boolean value true or false
     Boolean(bool),
     /// NULL value in insert statements,
     Null,

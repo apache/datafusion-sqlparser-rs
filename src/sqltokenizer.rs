@@ -29,7 +29,7 @@ use super::dialect::Dialect;
 pub enum Token {
     /// A keyword (like SELECT) or an optionally quoted SQL identifier
     SQLWord(SQLWord),
-    /// Numeric literal
+    /// An unsigned numeric literal
     Number(String),
     /// A character that could not be tokenized
     Char(char),

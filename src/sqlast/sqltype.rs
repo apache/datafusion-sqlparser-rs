@@ -1,26 +1,26 @@
 use super::SQLObjectName;
 
-/// SQL datatypes for literals in SQL statements
+/// SQL data types
 #[derive(Debug, Clone, PartialEq)]
 pub enum SQLType {
     /// Fixed-length character type e.g. CHAR(10)
-    Char(Option<usize>),
+    Char(Option<u64>),
     /// Variable-length character type e.g. VARCHAR(10)
-    Varchar(Option<usize>),
+    Varchar(Option<u64>),
     /// Uuid type
     Uuid,
     /// Large character object e.g. CLOB(1000)
-    Clob(usize),
+    Clob(u64),
     /// Fixed-length binary type e.g. BINARY(10)
-    Binary(usize),
+    Binary(u64),
     /// Variable-length binary type e.g. VARBINARY(10)
-    Varbinary(usize),
+    Varbinary(u64),
     /// Large binary object e.g. BLOB(1000)
-    Blob(usize),
+    Blob(u64),
     /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
-    Decimal(Option<usize>, Option<usize>),
+    Decimal(Option<u64>, Option<u64>),
     /// Floating point with optional precision e.g. FLOAT(8)
-    Float(Option<usize>),
+    Float(Option<u64>),
     /// Small integer
     SmallInt,
     /// Integer
@@ -87,7 +87,7 @@ impl ToString for SQLType {
     }
 }
 
-fn format_type_with_optional_length(sql_type: &str, len: &Option<usize>) -> String {
+fn format_type_with_optional_length(sql_type: &str, len: &Option<u64>) -> String {
     let mut s = sql_type.to_string();
     if let Some(len) = len {
         s += &format!("({})", len);

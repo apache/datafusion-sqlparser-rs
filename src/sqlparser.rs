@@ -34,6 +34,13 @@ macro_rules! parser_err {
     };
 }
 
+#[derive(PartialEq)]
+pub enum IsOptional {
+    Optional,
+    Mandatory,
+}
+use IsOptional::*;
+
 impl From<TokenizerError> for ParserError {
     fn from(e: TokenizerError) -> Self {
         ParserError::TokenizerError(format!("{:?}", e))
@@ -805,7 +812,7 @@ impl Parser {
         let is_primary_key = self.parse_keywords(vec!["PRIMARY", "KEY"]);
         let is_unique_key = self.parse_keywords(vec!["UNIQUE", "KEY"]);
         let is_foreign_key = self.parse_keywords(vec!["FOREIGN", "KEY"]);
-        let column_names = self.parse_parenthesized_column_list(false)?;
+        let column_names = self.parse_parenthesized_column_list(Mandatory)?;
         let key = Key {
             name: constraint_name,
             columns: column_names,
@@ -817,7 +824,7 @@ impl Parser {
         } else if is_foreign_key {
             self.expect_keyword("REFERENCES")?;
             let foreign_table = self.parse_object_name()?;
-            let referred_columns = self.parse_parenthesized_column_list(false)?;
+            let referred_columns = self.parse_parenthesized_column_list(Mandatory)?;
             Ok(TableKey::ForeignKey {
                 key,
                 foreign_table,
@@ -855,7 +862,7 @@ impl Parser {
     /// Parse a copy statement
     pub fn parse_copy(&mut self) -> Result<SQLStatement, ParserError> {
         let table_name = self.parse_object_name()?;
-        let columns = self.parse_parenthesized_column_list(true)?;
+        let columns = self.parse_parenthesized_column_list(Optional)?;
         self.expect_keyword("FROM")?;
         self.expect_keyword("STDIN")?;
         self.expect_token(&Token::SemiColon)?;
@@ -1115,13 +1122,13 @@ impl Parser {
     /// Parse a parenthesized comma-separated list of unqualified, possibly quoted identifiers
     pub fn parse_parenthesized_column_list(
         &mut self,
-        optional: bool,
+        optional: IsOptional,
     ) -> Result<Vec<SQLIdent>, ParserError> {
         if self.consume_token(&Token::LParen) {
             let cols = self.parse_list_of_ids(&Token::Comma)?;
             self.expect_token(&Token::RParen)?;
             Ok(cols)
-        } else if optional {
+        } else if optional == Optional {
             Ok(vec![])
         } else {
             self.expected("a list of columns in parentheses", self.peek_token())
@@ -1216,7 +1223,7 @@ impl Parser {
         let mut cte = vec![];
         loop {
             let alias = self.parse_identifier()?;
-            let renamed_columns = self.parse_parenthesized_column_list(true)?;
+            let renamed_columns = self.parse_parenthesized_column_list(Optional)?;
             self.expect_keyword("AS")?;
             self.expect_token(&Token::LParen)?;
             cte.push(Cte {
@@ -1376,7 +1383,7 @@ impl Parser {
             let constraint = self.parse_expr()?;
             Ok(JoinConstraint::On(constraint))
         } else if self.parse_keyword("USING") {
-            let columns = self.parse_parenthesized_column_list(false)?;
+            let columns = self.parse_parenthesized_column_list(Mandatory)?;
             Ok(JoinConstraint::Using(columns))
         } else {
             self.expected("ON, or USING after JOIN", self.peek_token())
@@ -1477,7 +1484,7 @@ impl Parser {
     pub fn parse_insert(&mut self) -> Result<SQLStatement, ParserError> {
         self.expect_keyword("INTO")?;
         let table_name = self.parse_object_name()?;
-        let columns = self.parse_parenthesized_column_list(true)?;
+        let columns = self.parse_parenthesized_column_list(Optional)?;
         self.expect_keyword("VALUES")?;
         self.expect_token(&Token::LParen)?;
         let values = self.parse_expr_list()?;

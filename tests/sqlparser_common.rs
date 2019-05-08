@@ -758,7 +758,7 @@ fn parse_alter_table_constraints() {
         match verified_stmt(&format!("ALTER TABLE tab ADD {}", constraint_text)) {
             SQLStatement::SQLAlterTable {
                 name,
-                operation: AlterOperation::AddConstraint(constraint),
+                operation: AlterTableOperation::AddConstraint(constraint),
             } => {
                 assert_eq!("tab", name.to_string());
                 assert_eq!(constraint_text, constraint.to_string());

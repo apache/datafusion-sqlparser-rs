@@ -20,7 +20,7 @@ mod sql_operator;
 mod sqltype;
 mod value;
 
-pub use self::ddl::{AlterOperation, TableConstraint};
+pub use self::ddl::{AlterTableOperation, TableConstraint};
 pub use self::query::{
     Cte, Fetch, Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLQuery, SQLSelect,
     SQLSelectItem, SQLSetExpr, SQLSetOperator, TableFactor,
@@ -405,7 +405,7 @@ pub enum SQLStatement {
     SQLAlterTable {
         /// Table name
         name: SQLObjectName,
-        operation: AlterOperation,
+        operation: AlterTableOperation,
     },
     /// DROP TABLE
     SQLDrop {

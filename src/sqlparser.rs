@@ -974,7 +974,7 @@ impl Parser {
         let table_name = self.parse_object_name()?;
         let operation = if self.parse_keyword("ADD") {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
-                AlterOperation::AddConstraint(constraint)
+                AlterTableOperation::AddConstraint(constraint)
             } else {
                 return self.expected("a constraint in ALTER TABLE .. ADD", self.peek_token());
             }

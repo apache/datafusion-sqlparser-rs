@@ -4,18 +4,18 @@ use super::{ASTNode, SQLIdent, SQLObjectName};
 
 /// An `ALTER TABLE` (`SQLStatement::SQLAlterTable`) operation
 #[derive(Debug, Clone, PartialEq)]
-pub enum AlterOperation {
+pub enum AlterTableOperation {
     /// `ADD <table_constraint>`
     AddConstraint(TableConstraint),
-    /// TODO: implement `DROP CONSTRAINT name`
+    /// TODO: implement `DROP CONSTRAINT <name>`
     DropConstraint { name: SQLIdent },
 }
 
-impl ToString for AlterOperation {
+impl ToString for AlterTableOperation {
     fn to_string(&self) -> String {
         match self {
-            AlterOperation::AddConstraint(constraint) => format!("ADD {}", constraint.to_string()),
-            AlterOperation::DropConstraint { name } => format!("DROP CONSTRAINT {}", name),
+            AlterTableOperation::AddConstraint(c) => format!("ADD {}", c.to_string()),
+            AlterTableOperation::DropConstraint { name } => format!("DROP CONSTRAINT {}", name),
         }
     }
 }

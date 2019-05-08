@@ -736,26 +736,31 @@ fn parse_create_external_table() {
 }
 
 #[test]
-fn parse_alter_table_constraint_primary_key() {
-    let sql = "ALTER TABLE bazaar.address \
-               ADD CONSTRAINT address_pkey PRIMARY KEY (address_id)";
-    match verified_stmt(sql) {
-        SQLStatement::SQLAlterTable { name, .. } => {
-            assert_eq!(name.to_string(), "bazaar.address");
-        }
-        _ => unreachable!(),
-    }
-}
+fn parse_alter_table_constraints() {
+    check_one("CONSTRAINT address_pkey PRIMARY KEY (address_id)");
+    check_one("CONSTRAINT uk_task UNIQUE (report_date, task_id)");
+    check_one(
+        "CONSTRAINT customer_address_id_fkey FOREIGN KEY (address_id) \
+         REFERENCES public.address(address_id)",
+    );
+    check_one("CONSTRAINT ck CHECK (rtrim(ltrim(REF_CODE)) <> '')");
 
-#[test]
-fn parse_alter_table_constraint_foreign_key() {
-    let sql = "ALTER TABLE public.customer \
-        ADD CONSTRAINT customer_address_id_fkey FOREIGN KEY (address_id) REFERENCES public.address(address_id)";
-    match verified_stmt(sql) {
-        SQLStatement::SQLAlterTable { name, .. } => {
-            assert_eq!(name.to_string(), "public.customer");
+    check_one("PRIMARY KEY (foo, bar)");
+    check_one("UNIQUE (id)");
+    check_one("FOREIGN KEY (foo, bar) REFERENCES AnotherTable(foo, bar)");
+    check_one("CHECK (end_date > start_date OR end_date IS NULL)");
+
+    fn check_one(constraint_text: &str) {
+        match verified_stmt(&format!("ALTER TABLE tab ADD {}", constraint_text)) {
+            SQLStatement::SQLAlterTable {
+                name,
+                operation: AlterOperation::AddConstraint(constraint),
+            } => {
+                assert_eq!("tab", name.to_string());
+                assert_eq!(constraint_text, constraint.to_string());
+            }
+            _ => unreachable!(),
         }
-        _ => unreachable!(),
     }
 }
 

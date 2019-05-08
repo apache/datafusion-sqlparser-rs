@@ -912,33 +912,45 @@ impl Parser {
         Ok(columns)
     }
 
-    pub fn parse_table_key(&mut self, constraint_name: SQLIdent) -> Result<TableKey, ParserError> {
-        let is_primary_key = self.parse_keywords(vec!["PRIMARY", "KEY"]);
-        let is_unique_key = self.parse_keywords(vec!["UNIQUE", "KEY"]);
-        let is_foreign_key = self.parse_keywords(vec!["FOREIGN", "KEY"]);
-        let column_names = self.parse_parenthesized_column_list(Mandatory)?;
-        let key = Key {
-            name: constraint_name,
-            columns: column_names,
-        };
-        if is_primary_key {
-            Ok(TableKey::PrimaryKey(key))
-        } else if is_unique_key {
-            Ok(TableKey::UniqueKey(key))
-        } else if is_foreign_key {
-            self.expect_keyword("REFERENCES")?;
-            let foreign_table = self.parse_object_name()?;
-            let referred_columns = self.parse_parenthesized_column_list(Mandatory)?;
-            Ok(TableKey::ForeignKey {
-                key,
-                foreign_table,
-                referred_columns,
-            })
+    pub fn parse_table_constraint(&mut self) -> Result<TableConstraint, ParserError> {
+        let name = if self.parse_keyword("CONSTRAINT") {
+            Some(self.parse_identifier()?)
         } else {
-            parser_err!(format!(
-                "Expecting primary key, unique key, or foreign key, found: {:?}",
-                self.peek_token()
-            ))
+            None
+        };
+        match self.next_token() {
+            Some(Token::SQLWord(ref k)) if k.keyword == "PRIMARY" || k.keyword == "UNIQUE" => {
+                let is_primary = k.keyword == "PRIMARY";
+                if is_primary {
+                    self.expect_keyword("KEY")?;
+                }
+                let columns = self.parse_parenthesized_column_list(Mandatory)?;
+                Ok(TableConstraint::Unique {
+                    name,
+                    columns,
+                    is_primary,
+                })
+            }
+            Some(Token::SQLWord(ref k)) if k.keyword == "FOREIGN" => {
+                self.expect_keyword("KEY")?;
+                let columns = self.parse_parenthesized_column_list(Mandatory)?;
+                self.expect_keyword("REFERENCES")?;
+                let foreign_table = self.parse_object_name()?;
+                let referred_columns = self.parse_parenthesized_column_list(Mandatory)?;
+                Ok(TableConstraint::ForeignKey {
+                    name,
+                    columns,
+                    foreign_table,
+                    referred_columns,
+                })
+            }
+            Some(Token::SQLWord(ref k)) if k.keyword == "CHECK" => {
+                self.expect_token(&Token::LParen)?;
+                let expr = Box::new(self.parse_expr()?);
+                self.expect_token(&Token::RParen)?;
+                Ok(TableConstraint::Check { name, expr })
+            }
+            _ => self.expected("PRIMARY, UNIQUE, or FOREIGN", self.peek_token()),
         }
     }
 
@@ -947,13 +959,7 @@ impl Parser {
         let _ = self.parse_keyword("ONLY");
         let table_name = self.parse_object_name()?;
         let operation = if self.parse_keyword("ADD") {
-            if self.parse_keyword("CONSTRAINT") {
-                let constraint_name = self.parse_identifier()?;
-                let table_key = self.parse_table_key(constraint_name)?;
-                AlterOperation::AddConstraint(table_key)
-            } else {
-                return self.expected("CONSTRAINT after ADD", self.peek_token());
-            }
+            AlterOperation::AddConstraint(self.parse_table_constraint()?)
         } else {
             return self.expected("ADD after ALTER TABLE", self.peek_token());
         };

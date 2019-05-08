@@ -14,18 +14,18 @@
 
 //! SQL Abstract Syntax Tree (AST) types
 
+mod ddl;
 mod query;
 mod sql_operator;
 mod sqltype;
-mod table_key;
 mod value;
 
+pub use self::ddl::{AlterOperation, TableConstraint};
 pub use self::query::{
     Cte, Fetch, Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLQuery, SQLSelect,
     SQLSelectItem, SQLSetExpr, SQLSetOperator, TableFactor,
 };
 pub use self::sqltype::SQLType;
-pub use self::table_key::{AlterOperation, Key, TableKey};
 pub use self::value::Value;
 
 pub use self::sql_operator::SQLOperator;

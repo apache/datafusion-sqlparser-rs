@@ -567,13 +567,13 @@ impl Parser {
     pub fn peek_nth_token(&self, mut n: usize) -> Option<Token> {
         let mut index = self.index;
         loop {
-            match self.token_at(index) {
+            match self.tokens.get(index) {
                 Some(Token::Whitespace(_)) => {
                     index += 1;
                 }
                 Some(token) => {
                     if n == 0 {
-                        return Some(token);
+                        return Some(token.clone());
                     }
                     index += 1;
                     n -= 1;
@@ -589,56 +589,32 @@ impl Parser {
     pub fn next_token(&mut self) -> Option<Token> {
         loop {
             match self.next_token_no_skip() {
-                Some(Token::Whitespace(_)) => {
-                    continue;
-                }
-                token => {
-                    return token;
-                }
+                Some(Token::Whitespace(_)) => continue,
+                token => return token.cloned(),
             }
         }
     }
 
-    /// see the token at this index
-    fn token_at(&self, n: usize) -> Option<Token> {
-        if let Some(token) = self.tokens.get(n) {
-            Some(token.clone())
-        } else {
-            None
-        }
-    }
-
-    pub fn next_token_no_skip(&mut self) -> Option<Token> {
+    pub fn next_token_no_skip(&mut self) -> Option<&Token> {
         if self.index < self.tokens.len() {
             self.index += 1;
-            Some(self.tokens[self.index - 1].clone())
+            Some(&self.tokens[self.index - 1])
         } else {
             None
         }
     }
 
     /// Push back the last one non-whitespace token
-    pub fn prev_token(&mut self) -> Option<Token> {
-        // TODO: returned value is unused (available via peek_token)
+    pub fn prev_token(&mut self) {
         loop {
-            match self.prev_token_no_skip() {
-                Some(Token::Whitespace(_)) => {
+            assert!(self.index > 0);
+            if self.index > 0 {
+                self.index -= 1;
+                if let Token::Whitespace(_) = &self.tokens[self.index] {
                     continue;
                 }
-                token => {
-                    return token;
-                }
-            }
-        }
-    }
-
-    /// Get the previous token and decrement the token index
-    fn prev_token_no_skip(&mut self) -> Option<Token> {
-        if self.index > 0 {
-            self.index -= 1;
-            Some(self.tokens[self.index].clone())
-        } else {
-            None
+            };
+            return;
         }
     }
 
@@ -1776,13 +1752,12 @@ mod tests {
     fn test_prev_index() {
         let sql = "SELECT version()";
         all_dialects().run_parser_method(sql, |parser| {
-            assert_eq!(parser.prev_token(), None);
             assert_eq!(parser.next_token(), Some(Token::make_keyword("SELECT")));
             assert_eq!(parser.next_token(), Some(Token::make_word("version", None)));
-            assert_eq!(parser.prev_token(), Some(Token::make_word("version", None)));
+            parser.prev_token();
             assert_eq!(parser.peek_token(), Some(Token::make_word("version", None)));
-            assert_eq!(parser.prev_token(), Some(Token::make_keyword("SELECT")));
-            assert_eq!(parser.prev_token(), None);
+            parser.prev_token();
+            assert_eq!(parser.peek_token(), Some(Token::make_keyword("SELECT")));
         });
     }
 }

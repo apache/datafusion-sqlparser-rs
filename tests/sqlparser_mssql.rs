@@ -28,6 +28,11 @@ fn parse_mssql_identifiers() {
 }
 
 #[test]
+fn parse_mssql_single_quoted_aliases() {
+    let _ = ms_and_generic().one_statement_parses_to("SELECT foo 'alias'", "SELECT foo AS 'alias'");
+}
+
+#[test]
 fn parse_mssql_delimited_identifiers() {
     let _ = ms().one_statement_parses_to(
         "SELECT [a.b!] [FROM] FROM foo [WHERE]",

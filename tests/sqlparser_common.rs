@@ -213,6 +213,21 @@ fn parse_column_aliases() {
 }
 
 #[test]
+fn test_eof_after_as() {
+    let res = parse_sql_statements("SELECT foo AS");
+    assert_eq!(
+        ParserError::ParserError("Expected an identifier after AS, found: EOF".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("SELECT 1 FROM foo AS");
+    assert_eq!(
+        ParserError::ParserError("Expected an identifier after AS, found: EOF".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_select_count_wildcard() {
     let sql = "SELECT COUNT(*) FROM customer";
     let select = verified_only_select(sql);

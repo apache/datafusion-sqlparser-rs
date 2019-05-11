@@ -23,12 +23,14 @@ fn parse_create_table_with_defaults() {
         SQLStatement::SQLCreateTable {
             name,
             columns,
+            constraints,
             external: false,
             file_format: None,
             location: None,
         } => {
             assert_eq!("public.customer", name.to_string());
             assert_eq!(10, columns.len());
+            assert!(constraints.is_empty());
 
             let c_name = &columns[0];
             assert_eq!("customer_id", c_name.name);
@@ -69,11 +71,13 @@ fn parse_create_table_from_pg_dump() {
         SQLStatement::SQLCreateTable {
             name,
             columns,
+            constraints,
             external: false,
             file_format: None,
             location: None,
         } => {
             assert_eq!("public.customer", name.to_string());
+            assert!(constraints.is_empty());
 
             let c_customer_id = &columns[0];
             assert_eq!("customer_id", c_customer_id.name);
@@ -130,11 +134,13 @@ fn parse_create_table_with_inherit() {
         SQLStatement::SQLCreateTable {
             name,
             columns,
+            constraints,
             external: false,
             file_format: None,
             location: None,
         } => {
             assert_eq!("bazaar.settings", name.to_string());
+            assert!(constraints.is_empty());
 
             let c_name = &columns[0];
             assert_eq!("settings_id", c_name.name);

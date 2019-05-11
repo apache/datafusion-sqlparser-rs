@@ -396,6 +396,7 @@ pub enum SQLStatement {
         name: SQLObjectName,
         /// Optional schema
         columns: Vec<SQLColumnDef>,
+        constraints: Vec<TableConstraint>,
         external: bool,
         file_format: Option<FileFormat>,
         location: Option<String>,
@@ -503,21 +504,30 @@ impl ToString for SQLStatement {
             SQLStatement::SQLCreateTable {
                 name,
                 columns,
+                constraints,
                 external,
                 file_format,
                 location,
-            } if *external => format!(
-                "CREATE EXTERNAL TABLE {} ({}) STORED AS {} LOCATION '{}'",
-                name.to_string(),
-                comma_separated_string(columns),
-                file_format.as_ref().unwrap().to_string(),
-                location.as_ref().unwrap()
-            ),
-            SQLStatement::SQLCreateTable { name, columns, .. } => format!(
-                "CREATE TABLE {} ({})",
-                name.to_string(),
-                comma_separated_string(columns)
-            ),
+            } => {
+                let mut s = format!(
+                    "CREATE {}TABLE {} ({}",
+                    if *external { "EXTERNAL " } else { "" },
+                    name.to_string(),
+                    comma_separated_string(columns)
+                );
+                if !constraints.is_empty() {
+                    s += &format!(", {}", comma_separated_string(constraints));
+                }
+                s += ")";
+                if *external {
+                    s += &format!(
+                        " STORED AS {} LOCATION '{}'",
+                        file_format.as_ref().unwrap().to_string(),
+                        location.as_ref().unwrap()
+                    );
+                }
+                s
+            }
             SQLStatement::SQLAlterTable { name, operation } => {
                 format!("ALTER TABLE {} {}", name.to_string(), operation.to_string())
             }

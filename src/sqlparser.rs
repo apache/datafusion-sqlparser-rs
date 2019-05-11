@@ -769,7 +769,7 @@ impl Parser {
     pub fn parse_create_external_table(&mut self) -> Result<SQLStatement, ParserError> {
         self.expect_keyword("TABLE")?;
         let table_name = self.parse_object_name()?;
-        let columns = self.parse_columns()?;
+        let (columns, constraints) = self.parse_columns()?;
         self.expect_keyword("STORED")?;
         self.expect_keyword("AS")?;
         let file_format = self.parse_identifier()?.parse::<FileFormat>()?;
@@ -780,6 +780,7 @@ impl Parser {
         Ok(SQLStatement::SQLCreateTable {
             name: table_name,
             columns,
+            constraints,
             external: true,
             file_format: Some(file_format),
             location: Some(location),
@@ -845,74 +846,78 @@ impl Parser {
     pub fn parse_create_table(&mut self) -> Result<SQLStatement, ParserError> {
         let table_name = self.parse_object_name()?;
         // parse optional column list (schema)
-        let columns = self.parse_columns()?;
+        let (columns, constraints) = self.parse_columns()?;
 
         Ok(SQLStatement::SQLCreateTable {
             name: table_name,
             columns,
+            constraints,
             external: false,
             file_format: None,
             location: None,
         })
     }
 
-    fn parse_columns(&mut self) -> Result<Vec<SQLColumnDef>, ParserError> {
+    fn parse_columns(&mut self) -> Result<(Vec<SQLColumnDef>, Vec<TableConstraint>), ParserError> {
         let mut columns = vec![];
+        let mut constraints = vec![];
         if !self.consume_token(&Token::LParen) {
-            return Ok(columns);
+            return Ok((columns, constraints));
         }
 
         loop {
-            match self.next_token() {
-                Some(Token::SQLWord(column_name)) => {
-                    let data_type = self.parse_data_type()?;
-                    let is_primary = self.parse_keywords(vec!["PRIMARY", "KEY"]);
-                    let is_unique = self.parse_keyword("UNIQUE");
-                    let default = if self.parse_keyword("DEFAULT") {
-                        let expr = self.parse_default_expr(0)?;
-                        Some(expr)
-                    } else {
-                        None
-                    };
-                    let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
-                        false
-                    } else {
-                        let _ = self.parse_keyword("NULL");
-                        true
-                    };
-                    debug!("default: {:?}", default);
+            if let Some(constraint) = self.parse_optional_table_constraint()? {
+                constraints.push(constraint);
+            } else if let Some(Token::SQLWord(column_name)) = self.peek_token() {
+                self.next_token();
+                let data_type = self.parse_data_type()?;
+                let is_primary = self.parse_keywords(vec!["PRIMARY", "KEY"]);
+                let is_unique = self.parse_keyword("UNIQUE");
+                let default = if self.parse_keyword("DEFAULT") {
+                    let expr = self.parse_default_expr(0)?;
+                    Some(expr)
+                } else {
+                    None
+                };
+                let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
+                    false
+                } else {
+                    let _ = self.parse_keyword("NULL");
+                    true
+                };
+                debug!("default: {:?}", default);
 
-                    columns.push(SQLColumnDef {
-                        name: column_name.as_sql_ident(),
-                        data_type,
-                        allow_null,
-                        is_primary,
-                        is_unique,
-                        default,
-                    });
-                    match self.next_token() {
-                        Some(Token::Comma) => {}
-                        Some(Token::RParen) => {
-                            break;
-                        }
-                        other => {
-                            return parser_err!(format!(
-                                "Expected ',' or ')' after column definition but found {:?}",
-                                other
-                            ));
-                        }
-                    }
+                columns.push(SQLColumnDef {
+                    name: column_name.as_sql_ident(),
+                    data_type,
+                    allow_null,
+                    is_primary,
+                    is_unique,
+                    default,
+                });
+            } else {
+                return self.expected("column name or constraint definition", self.peek_token());
+            }
+            match self.next_token() {
+                Some(Token::Comma) => {}
+                Some(Token::RParen) => {
+                    break;
                 }
-                unexpected => {
-                    return parser_err!(format!("Expected column name, got {:?}", unexpected));
+                other => {
+                    return parser_err!(format!(
+                        "Expected ',' or ')' after column definition but found {:?}",
+                        other
+                    ));
                 }
             }
         }
 
-        Ok(columns)
+        Ok((columns, constraints))
     }
 
-    pub fn parse_table_constraint(&mut self) -> Result<TableConstraint, ParserError> {
+    pub fn parse_optional_table_constraint(
+        &mut self,
+    ) -> Result<Option<TableConstraint>, ParserError> {
         let name = if self.parse_keyword("CONSTRAINT") {
             Some(self.parse_identifier()?)
         } else {
@@ -925,11 +930,11 @@ impl Parser {
                     self.expect_keyword("KEY")?;
                 }
                 let columns = self.parse_parenthesized_column_list(Mandatory)?;
-                Ok(TableConstraint::Unique {
+                Ok(Some(TableConstraint::Unique {
                     name,
                     columns,
                     is_primary,
-                })
+                }))
             }
             Some(Token::SQLWord(ref k)) if k.keyword == "FOREIGN" => {
                 self.expect_keyword("KEY")?;
@@ -937,20 +942,29 @@ impl Parser {
                 self.expect_keyword("REFERENCES")?;
                 let foreign_table = self.parse_object_name()?;
                 let referred_columns = self.parse_parenthesized_column_list(Mandatory)?;
-                Ok(TableConstraint::ForeignKey {
+                Ok(Some(TableConstraint::ForeignKey {
                     name,
                     columns,
                     foreign_table,
                     referred_columns,
-                })
+                }))
             }
             Some(Token::SQLWord(ref k)) if k.keyword == "CHECK" => {
                 self.expect_token(&Token::LParen)?;
                 let expr = Box::new(self.parse_expr()?);
                 self.expect_token(&Token::RParen)?;
-                Ok(TableConstraint::Check { name, expr })
+                Ok(Some(TableConstraint::Check { name, expr }))
             }
-            _ => self.expected("PRIMARY, UNIQUE, or FOREIGN", self.peek_token()),
+            unexpected => {
+                if name.is_some() {
+                    self.expected("PRIMARY, UNIQUE, FOREIGN, or CHECK", unexpected)
+                } else {
+                    if unexpected.is_some() {
+                        self.prev_token();
+                    }
+                    Ok(None)
+                }
+            }
         }
     }
 
@@ -959,7 +973,11 @@ impl Parser {
         let _ = self.parse_keyword("ONLY");
         let table_name = self.parse_object_name()?;
         let operation = if self.parse_keyword("ADD") {
-            AlterOperation::AddConstraint(self.parse_table_constraint()?)
+            if let Some(constraint) = self.parse_optional_table_constraint()? {
+                AlterOperation::AddConstraint(constraint)
+            } else {
+                return self.expected("a constraint in ALTER TABLE .. ADD", self.peek_token());
+            }
         } else {
             return self.expected("ADD after ALTER TABLE", self.peek_token());
         };

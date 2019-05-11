@@ -660,12 +660,14 @@ fn parse_create_table() {
         SQLStatement::SQLCreateTable {
             name,
             columns,
+            constraints,
             external: false,
             file_format: None,
             location: None,
         } => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(3, columns.len());
+            assert!(constraints.is_empty());
 
             let c_name = &columns[0];
             assert_eq!("name", c_name.name);
@@ -705,12 +707,14 @@ fn parse_create_external_table() {
         SQLStatement::SQLCreateTable {
             name,
             columns,
+            constraints,
             external,
             file_format,
             location,
         } => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(3, columns.len());
+            assert!(constraints.is_empty());
 
             let c_name = &columns[0];
             assert_eq!("name", c_name.name);
@@ -761,7 +765,27 @@ fn parse_alter_table_constraints() {
             }
             _ => unreachable!(),
         }
+        verified_stmt(&format!("CREATE TABLE foo (id int, {})", constraint_text));
     }
+}
+
+#[test]
+fn parse_bad_constraint() {
+    let res = parse_sql_statements("ALTER TABLE tab ADD");
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected a constraint in ALTER TABLE .. ADD, found: EOF".to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("CREATE TABLE tab (foo int,");
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected column name or constraint definition, found: EOF".to_string()
+        ),
+        res.unwrap_err()
+    );
 }
 
 #[test]

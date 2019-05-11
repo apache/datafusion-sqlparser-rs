@@ -93,6 +93,11 @@ pub enum ASTNode {
         expr: Box<ASTNode>,
         data_type: SQLType,
     },
+    /// `expr COLLATE collation`
+    SQLCollate {
+        expr: Box<ASTNode>,
+        collation: SQLObjectName,
+    },
     /// Nested expression e.g. `(foo > bar)` or `(1)`
     SQLNested(Box<ASTNode>),
     /// Unary expression
@@ -174,6 +179,11 @@ impl ToString for ASTNode {
                 "CAST({} AS {})",
                 expr.as_ref().to_string(),
                 data_type.to_string()
+            ),
+            ASTNode::SQLCollate { expr, collation } => format!(
+                "{} COLLATE {}",
+                expr.as_ref().to_string(),
+                collation.to_string()
             ),
             ASTNode::SQLNested(ast) => format!("({})", ast.as_ref().to_string()),
             ASTNode::SQLUnary { operator, expr } => {

@@ -210,9 +210,18 @@ fn parse_not() {
 }
 
 #[test]
+fn parse_collate() {
+    let sql = "SELECT name COLLATE \"de_DE\" FROM customer";
+    assert_matches!(
+        only(&all_dialects().verified_only_select(sql).projection),
+        SQLSelectItem::UnnamedExpression(ASTNode::SQLCollate { .. })
+    );
+}
+
+#[test]
 fn parse_select_string_predicate() {
     let sql = "SELECT id, fname, lname FROM customer \
-               WHERE salary != 'Not Provided' AND salary != ''";
+               WHERE salary <> 'Not Provided' AND salary <> ''";
     let _ast = verified_only_select(sql);
     //TODO: add assertions
 }
@@ -229,7 +238,7 @@ fn parse_escaped_single_quote_string_predicate() {
     use self::ASTNode::*;
     use self::SQLOperator::*;
     let sql = "SELECT id, fname, lname FROM customer \
-               WHERE salary != 'Jim''s salary'";
+               WHERE salary <> 'Jim''s salary'";
     let ast = verified_only_select(sql);
     assert_eq!(
         Some(SQLBinaryExpr {
@@ -1018,9 +1027,14 @@ fn parse_ctes() {
     fn assert_ctes_in_select(expected: &[&str], sel: &SQLQuery) {
         let mut i = 0;
         for exp in expected {
-            let Cte { query, alias } = &sel.ctes[i];
+            let Cte {
+                query,
+                alias,
+                renamed_columns,
+            } = &sel.ctes[i];
             assert_eq!(*exp, query.to_string());
             assert_eq!(if i == 0 { "a" } else { "b" }, alias);
+            assert!(renamed_columns.is_empty());
             i += 1;
         }
     }
@@ -1055,6 +1069,16 @@ fn parse_ctes() {
     let sql = &format!("WITH outer_cte AS ({}) SELECT * FROM outer_cte", with);
     let select = verified_query(sql);
     assert_ctes_in_select(&cte_sqls, &only(&select.ctes).query);
+}
+
+#[test]
+fn parse_cte_renamed_columns() {
+    let sql = "WITH cte (col1, col2) AS (SELECT foo, bar FROM baz) SELECT * FROM cte";
+    let query = all_dialects().verified_query(sql);
+    assert_eq!(
+        vec!["col1", "col2"],
+        query.ctes.first().unwrap().renamed_columns
+    );
 }
 
 #[test]

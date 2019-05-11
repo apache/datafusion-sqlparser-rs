@@ -32,7 +32,7 @@ impl ToString for SQLOperator {
             SQLOperator::GtEq => ">=".to_string(),
             SQLOperator::LtEq => "<=".to_string(),
             SQLOperator::Eq => "=".to_string(),
-            SQLOperator::NotEq => "!=".to_string(),
+            SQLOperator::NotEq => "<>".to_string(),
             SQLOperator::And => "AND".to_string(),
             SQLOperator::Or => "OR".to_string(),
             SQLOperator::Not => "NOT".to_string(),

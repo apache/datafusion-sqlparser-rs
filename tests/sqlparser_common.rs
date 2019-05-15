@@ -210,6 +210,15 @@ fn parse_not() {
 }
 
 #[test]
+fn parse_invalid_infix_not() {
+    let res = parse_sql_statements("SELECT c FROM t WHERE c NOT (");
+    assert_eq!(
+        ParserError::ParserError("Expected IN or BETWEEN after NOT, found: (".to_string()),
+        res.unwrap_err(),
+    );
+}
+
+#[test]
 fn parse_collate() {
     let sql = "SELECT name COLLATE \"de_DE\" FROM customer";
     assert_matches!(

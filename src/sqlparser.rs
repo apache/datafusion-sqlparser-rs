@@ -441,7 +441,7 @@ impl Parser {
                     } else if self.parse_keyword("BETWEEN") {
                         self.parse_between(expr, negated)
                     } else {
-                        panic!()
+                        self.expected("IN or BETWEEN after NOT", self.peek_token())
                     }
                 }
                 // Can only happen if `get_precedence` got out of sync with this function

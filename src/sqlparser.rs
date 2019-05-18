@@ -1202,6 +1202,7 @@ impl Parser {
         } else {
             None
         };
+
         let limit = if self.parse_keyword("LIMIT") {
             self.parse_limit()?
         } else {

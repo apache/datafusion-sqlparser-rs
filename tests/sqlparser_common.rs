@@ -1389,6 +1389,187 @@ fn parse_invalid_subquery_without_parens() {
 }
 
 #[test]
+fn parse_offset() {
+    let ast = verified_query("SELECT foo FROM bar OFFSET 2 ROWS");
+    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+    let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 OFFSET 2 ROWS");
+    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+    let ast = verified_query("SELECT foo FROM bar ORDER BY baz OFFSET 2 ROWS");
+    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+    let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS");
+    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+    let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS) OFFSET 2 ROWS");
+    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+    match ast.body {
+        SQLSetExpr::Select(s) => match s.relation {
+            Some(TableFactor::Derived { subquery, .. }) => {
+                assert_eq!(subquery.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+            }
+            _ => panic!("Test broke"),
+        },
+        _ => panic!("Test broke"),
+    }
+}
+
+#[test]
+fn parse_singular_row_offset() {
+    one_statement_parses_to(
+        "SELECT foo FROM bar OFFSET 1 ROW",
+        "SELECT foo FROM bar OFFSET 1 ROWS",
+    );
+}
+
+#[test]
+fn parse_fetch() {
+    let ast = verified_query("SELECT foo FROM bar FETCH FIRST 2 ROWS ONLY");
+    assert_eq!(
+        ast.fetch,
+        Some(Fetch {
+            with_ties: false,
+            percent: false,
+            quantity: Some(ASTNode::SQLValue(Value::Long(2))),
+        })
+    );
+    let ast = verified_query("SELECT foo FROM bar FETCH FIRST ROWS ONLY");
+    assert_eq!(
+        ast.fetch,
+        Some(Fetch {
+            with_ties: false,
+            percent: false,
+            quantity: None,
+        })
+    );
+    let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 FETCH FIRST 2 ROWS ONLY");
+    assert_eq!(
+        ast.fetch,
+        Some(Fetch {
+            with_ties: false,
+            percent: false,
+            quantity: Some(ASTNode::SQLValue(Value::Long(2))),
+        })
+    );
+    let ast = verified_query("SELECT foo FROM bar ORDER BY baz FETCH FIRST 2 ROWS ONLY");
+    assert_eq!(
+        ast.fetch,
+        Some(Fetch {
+            with_ties: false,
+            percent: false,
+            quantity: Some(ASTNode::SQLValue(Value::Long(2))),
+        })
+    );
+    let ast = verified_query(
+        "SELECT foo FROM bar WHERE foo = 4 ORDER BY baz FETCH FIRST 2 ROWS WITH TIES",
+    );
+    assert_eq!(
+        ast.fetch,
+        Some(Fetch {
+            with_ties: true,
+            percent: false,
+            quantity: Some(ASTNode::SQLValue(Value::Long(2))),
+        })
+    );
+    let ast = verified_query("SELECT foo FROM bar FETCH FIRST 50 PERCENT ROWS ONLY");
+    assert_eq!(
+        ast.fetch,
+        Some(Fetch {
+            with_ties: false,
+            percent: true,
+            quantity: Some(ASTNode::SQLValue(Value::Long(50))),
+        })
+    );
+    let ast = verified_query(
+        "SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY",
+    );
+    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+    assert_eq!(
+        ast.fetch,
+        Some(Fetch {
+            with_ties: false,
+            percent: false,
+            quantity: Some(ASTNode::SQLValue(Value::Long(2))),
+        })
+    );
+    let ast = verified_query(
+        "SELECT foo FROM (SELECT * FROM bar FETCH FIRST 2 ROWS ONLY) FETCH FIRST 2 ROWS ONLY",
+    );
+    assert_eq!(
+        ast.fetch,
+        Some(Fetch {
+            with_ties: false,
+            percent: false,
+            quantity: Some(ASTNode::SQLValue(Value::Long(2))),
+        })
+    );
+    match ast.body {
+        SQLSetExpr::Select(s) => match s.relation {
+            Some(TableFactor::Derived { subquery, .. }) => {
+                assert_eq!(
+                    subquery.fetch,
+                    Some(Fetch {
+                        with_ties: false,
+                        percent: false,
+                        quantity: Some(ASTNode::SQLValue(Value::Long(2))),
+                    })
+                );
+            }
+            _ => panic!("Test broke"),
+        },
+        _ => panic!("Test broke"),
+    }
+    let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY) OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY");
+    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+    assert_eq!(
+        ast.fetch,
+        Some(Fetch {
+            with_ties: false,
+            percent: false,
+            quantity: Some(ASTNode::SQLValue(Value::Long(2))),
+        })
+    );
+    match ast.body {
+        SQLSetExpr::Select(s) => match s.relation {
+            Some(TableFactor::Derived { subquery, .. }) => {
+                assert_eq!(subquery.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+                assert_eq!(
+                    subquery.fetch,
+                    Some(Fetch {
+                        with_ties: false,
+                        percent: false,
+                        quantity: Some(ASTNode::SQLValue(Value::Long(2))),
+                    })
+                );
+            }
+            _ => panic!("Test broke"),
+        },
+        _ => panic!("Test broke"),
+    }
+}
+
+#[test]
+fn parse_fetch_variations() {
+    one_statement_parses_to(
+        "SELECT foo FROM bar FETCH FIRST 10 ROW ONLY",
+        "SELECT foo FROM bar FETCH FIRST 10 ROWS ONLY",
+    );
+    one_statement_parses_to(
+        "SELECT foo FROM bar FETCH NEXT 10 ROW ONLY",
+        "SELECT foo FROM bar FETCH FIRST 10 ROWS ONLY",
+    );
+    one_statement_parses_to(
+        "SELECT foo FROM bar FETCH NEXT 10 ROWS WITH TIES",
+        "SELECT foo FROM bar FETCH FIRST 10 ROWS WITH TIES",
+    );
+    one_statement_parses_to(
+        "SELECT foo FROM bar FETCH NEXT ROWS WITH TIES",
+        "SELECT foo FROM bar FETCH FIRST ROWS WITH TIES",
+    );
+    one_statement_parses_to(
+        "SELECT foo FROM bar FETCH FIRST ROWS ONLY",
+        "SELECT foo FROM bar FETCH FIRST ROWS ONLY",
+    );
+}
+
+#[test]
 #[should_panic(
     expected = "Parse results with GenericSqlDialect are different from PostgreSqlDialect"
 )]

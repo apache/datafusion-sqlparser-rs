@@ -684,6 +684,40 @@ impl Parser {
         true
     }
 
+    /// Look for one of the given keywords and return the one that matches.
+    #[must_use]
+    pub fn parse_one_of_keywords(&mut self, keywords: &[&'static str]) -> Option<&'static str> {
+        for keyword in keywords {
+            assert!(keywords::ALL_KEYWORDS.contains(keyword));
+        }
+        match self.peek_token() {
+            Some(Token::SQLWord(ref k)) => keywords
+                .iter()
+                .find(|keyword| keyword.eq_ignore_ascii_case(&k.keyword))
+                .map(|keyword| {
+                    self.next_token();
+                    *keyword
+                }),
+            _ => None,
+        }
+    }
+
+    /// Bail out if the current token is not one of the expected keywords, or consume it if it is
+    #[must_use]
+    pub fn expect_one_of_keywords(
+        &mut self,
+        keywords: &[&'static str],
+    ) -> Result<&'static str, ParserError> {
+        if let Some(keyword) = self.parse_one_of_keywords(keywords) {
+            Ok(keyword)
+        } else {
+            self.expected(
+                &format!("one of {}", keywords.join(" or ")),
+                self.peek_token(),
+            )
+        }
+    }
+
     /// Bail out if the current token is not an expected keyword, or consume it if it is
     pub fn expect_keyword(&mut self, expected: &'static str) -> Result<(), ParserError> {
         if self.parse_keyword(expected) {
@@ -1279,11 +1313,25 @@ impl Parser {
             None
         };
 
+        let offset = if self.parse_keyword("OFFSET") {
+            Some(self.parse_offset()?)
+        } else {
+            None
+        };
+
+        let fetch = if self.parse_keyword("FETCH") {
+            Some(self.parse_fetch()?)
+        } else {
+            None
+        };
+
         Ok(SQLQuery {
             ctes,
             body,
             limit,
             order_by,
+            offset,
+            fetch,
         })
     }
 
@@ -1654,6 +1702,40 @@ impl Parser {
             self.parse_literal_int()
                 .map(|n| Some(ASTNode::SQLValue(Value::Long(n))))
         }
+    }
+
+    /// Parse an OFFSET clause
+    pub fn parse_offset(&mut self) -> Result<ASTNode, ParserError> {
+        let value = self
+            .parse_literal_int()
+            .map(|n| ASTNode::SQLValue(Value::Long(n)))?;
+        self.expect_one_of_keywords(&["ROW", "ROWS"])?;
+        Ok(value)
+    }
+
+    /// Parse a FETCH clause
+    pub fn parse_fetch(&mut self) -> Result<Fetch, ParserError> {
+        self.expect_one_of_keywords(&["FIRST", "NEXT"])?;
+        let (quantity, percent) = if self.parse_one_of_keywords(&["ROW", "ROWS"]).is_some() {
+            (None, false)
+        } else {
+            let quantity = self.parse_sql_value()?;
+            let percent = self.parse_keyword("PERCENT");
+            self.expect_one_of_keywords(&["ROW", "ROWS"])?;
+            (Some(quantity), percent)
+        };
+        let with_ties = if self.parse_keyword("ONLY") {
+            false
+        } else if self.parse_keywords(vec!["WITH", "TIES"]) {
+            true
+        } else {
+            return self.expected("one of ONLY or WITH TIES", self.peek_token());
+        };
+        Ok(Fetch {
+            with_ties,
+            percent,
+            quantity,
+        })
     }
 }
 

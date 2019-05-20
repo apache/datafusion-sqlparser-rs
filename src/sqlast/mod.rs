@@ -21,8 +21,8 @@ mod table_key;
 mod value;
 
 pub use self::query::{
-    Cte, Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLQuery, SQLSelect, SQLSelectItem,
-    SQLSetExpr, SQLSetOperator, TableFactor,
+    Cte, Fetch, Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLQuery, SQLSelect,
+    SQLSelectItem, SQLSetExpr, SQLSetOperator, TableFactor,
 };
 pub use self::sqltype::SQLType;
 pub use self::table_key::{AlterOperation, Key, TableKey};

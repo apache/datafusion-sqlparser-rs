@@ -761,6 +761,7 @@ impl Parser {
             name: table_name,
             columns,
             constraints,
+            with_options: vec![],
             external: true,
             file_format: Some(file_format),
             location: Some(location),
@@ -774,8 +775,11 @@ impl Parser {
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let name = self.parse_object_name()?;
         // Parenthesized "output" columns list could be handled here.
-        // Some dialects allow WITH here, followed by some keywords (e.g. MS SQL)
-        // or `(k1=v1, k2=v2, ...)` (Postgres)
+        let with_options = if self.parse_keyword("WITH") {
+            self.parse_with_options()?
+        } else {
+            vec![]
+        };
         self.expect_keyword("AS")?;
         let query = Box::new(self.parse_query()?);
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
@@ -783,6 +787,7 @@ impl Parser {
             name,
             query,
             materialized,
+            with_options,
         })
     }
 
@@ -828,10 +833,17 @@ impl Parser {
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
 
+        let with_options = if self.parse_keyword("WITH") {
+            self.parse_with_options()?
+        } else {
+            vec![]
+        };
+
         Ok(SQLStatement::SQLCreateTable {
             name: table_name,
             columns,
             constraints,
+            with_options,
             external: false,
             file_format: None,
             location: None,
@@ -939,6 +951,23 @@ impl Parser {
                 }
             }
         }
+    }
+
+    pub fn parse_with_options(&mut self) -> Result<Vec<SQLOption>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let mut options = vec![];
+        loop {
+            let name = self.parse_identifier()?;
+            self.expect_token(&Token::Eq)?;
+            let value = self.parse_value()?;
+            options.push(SQLOption { name, value });
+            match self.peek_token() {
+                Some(Token::Comma) => self.next_token(),
+                _ => break,
+            };
+        }
+        self.expect_token(&Token::RParen)?;
+        Ok(options)
     }
 
     pub fn parse_alter(&mut self) -> Result<SQLStatement, ParserError> {

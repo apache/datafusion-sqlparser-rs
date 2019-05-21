@@ -765,6 +765,7 @@ fn parse_create_table() {
             name,
             columns,
             constraints,
+            with_options,
             external: false,
             file_format: None,
             location: None,
@@ -787,6 +788,31 @@ fn parse_create_table() {
             assert_eq!("lng", c_lng.name);
             assert_eq!(SQLType::Double, c_lng.data_type);
             assert_eq!(true, c_lng.allow_null);
+
+            assert_eq!(with_options, vec![]);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_with_options() {
+    let sql = "CREATE TABLE t (c int) WITH (foo = 'bar', a = 123)";
+    match verified_stmt(sql) {
+        SQLStatement::SQLCreateTable { with_options, .. } => {
+            assert_eq!(
+                vec![
+                    SQLOption {
+                        name: "foo".into(),
+                        value: Value::SingleQuotedString("bar".into())
+                    },
+                    SQLOption {
+                        name: "a".into(),
+                        value: Value::Long(123)
+                    },
+                ],
+                with_options
+            );
         }
         _ => unreachable!(),
     }
@@ -818,6 +844,7 @@ fn parse_create_external_table() {
             name,
             columns,
             constraints,
+            with_options,
             external,
             file_format,
             location,
@@ -844,6 +871,8 @@ fn parse_create_external_table() {
             assert!(external);
             assert_eq!(FileFormat::TEXTFILE, file_format.unwrap());
             assert_eq!("/tmp/example.csv", location.unwrap());
+
+            assert_eq!(with_options, vec![]);
         }
         _ => unreachable!(),
     }
@@ -1512,10 +1541,35 @@ fn parse_create_view() {
             name,
             query,
             materialized,
+            with_options,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(!materialized);
+            assert_eq!(with_options, vec![]);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_view_with_options() {
+    let sql = "CREATE VIEW v WITH (foo = 'bar', a = 123) AS SELECT 1";
+    match verified_stmt(sql) {
+        SQLStatement::SQLCreateView { with_options, .. } => {
+            assert_eq!(
+                vec![
+                    SQLOption {
+                        name: "foo".into(),
+                        value: Value::SingleQuotedString("bar".into())
+                    },
+                    SQLOption {
+                        name: "a".into(),
+                        value: Value::Long(123)
+                    },
+                ],
+                with_options
+            );
         }
         _ => unreachable!(),
     }
@@ -1529,10 +1583,12 @@ fn parse_create_materialized_view() {
             name,
             query,
             materialized,
+            with_options,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(materialized);
+            assert_eq!(with_options, vec![]);
         }
         _ => unreachable!(),
     }

@@ -1198,9 +1198,9 @@ impl Parser {
         let body = self.parse_query_body(0)?;
 
         let order_by = if self.parse_keywords(vec!["ORDER", "BY"]) {
-            Some(self.parse_order_by_expr_list()?)
+            self.parse_order_by_expr_list()?
         } else {
-            None
+            vec![]
         };
 
         let limit = if self.parse_keyword("LIMIT") {
@@ -1318,9 +1318,9 @@ impl Parser {
         };
 
         let group_by = if self.parse_keywords(vec!["GROUP", "BY"]) {
-            Some(self.parse_expr_list()?)
+            self.parse_expr_list()?
         } else {
-            None
+            vec![]
         };
 
         let having = if self.parse_keyword("HAVING") {
@@ -1351,9 +1351,9 @@ impl Parser {
             let name = self.parse_object_name()?;
             // Postgres, MSSQL: table-valued functions:
             let args = if self.consume_token(&Token::LParen) {
-                Some(self.parse_optional_args()?)
+                self.parse_optional_args()?
             } else {
-                None
+                vec![]
             };
             let alias = self.parse_optional_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
             // MSSQL-specific table hints:

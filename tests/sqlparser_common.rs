@@ -197,8 +197,41 @@ fn parse_select_count_wildcard() {
             name: SQLObjectName(vec!["COUNT".to_string()]),
             args: vec![ASTNode::SQLWildcard],
             over: None,
+            distinct: false,
         },
         expr_from_projection(only(&select.projection))
+    );
+}
+
+#[test]
+fn parse_select_count_distinct() {
+    let sql = "SELECT COUNT(DISTINCT + x) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &ASTNode::SQLFunction {
+            name: SQLObjectName(vec!["COUNT".to_string()]),
+            args: vec![ASTNode::SQLUnary {
+                operator: SQLOperator::Plus,
+                expr: Box::new(ASTNode::SQLIdentifier("x".to_string()))
+            }],
+            over: None,
+            distinct: true,
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    one_statement_parses_to(
+        "SELECT COUNT(ALL + x) FROM customer",
+        "SELECT COUNT(+ x) FROM customer",
+    );
+
+    let sql = "SELECT COUNT(ALL DISTINCT + x) FROM customer";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Cannot specify both ALL and DISTINCT in function: COUNT".to_string()
+        ),
+        res.unwrap_err()
     );
 }
 
@@ -662,6 +695,7 @@ fn parse_scalar_function_in_projection() {
             name: SQLObjectName(vec!["sqrt".to_string()]),
             args: vec![ASTNode::SQLIdentifier("id".to_string())],
             over: None,
+            distinct: false,
         },
         expr_from_projection(only(&select.projection))
     );
@@ -690,7 +724,8 @@ fn parse_window_functions() {
                     asc: Some(false)
                 }],
                 window_frame: None,
-            })
+            }),
+            distinct: false,
         },
         expr_from_projection(&select.projection[0])
     );
@@ -762,6 +797,7 @@ fn parse_delimited_identifiers() {
             name: SQLObjectName(vec![r#""myfun""#.to_string()]),
             args: vec![],
             over: None,
+            distinct: false,
         },
         expr_from_projection(&select.projection[1]),
     );

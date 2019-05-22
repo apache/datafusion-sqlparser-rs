@@ -17,6 +17,7 @@ mod ddl;
 mod operator;
 mod query;
 mod value;
+pub mod visit;
 
 use std::ops::Deref;
 

@@ -36,7 +36,10 @@ before_script:
   - cargo install cargo-update || echo "cargo-update already installed"
   - cargo install cargo-travis || echo "cargo-travis already installed"
   - cargo install-update -a  # updates cargo-travis, if the cached version is outdated
-  - rustup component add clippy rustfmt
+  - rustup component add clippy
+  # The license_template_path setting we use to verify copyright headers is
+  # only available on the nightly rustfmt.
+  - rustup toolchain install nightly && rustup component add --toolchain nightly rustfmt
 
 script:
   # Clippy must be run first, as its lints are only triggered during
@@ -46,7 +49,7 @@ script:
   - travis-cargo clippy -- --all-targets --all-features -- -D warnings
   - travis-cargo build
   - travis-cargo test
-  - travis-cargo fmt -- -- --check
+  - travis-cargo --only nightly fmt -- -- --check --config-path <(echo 'license_template_path = "HEADER"')
 
 after_success:
   - cargo coveralls --verbose

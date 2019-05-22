@@ -1300,7 +1300,11 @@ impl Parser {
     /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`),
     /// assuming the initial `SELECT` was already consumed
     pub fn parse_select(&mut self) -> Result<SQLSelect, ParserError> {
+        let all = self.parse_keyword("ALL");
         let distinct = self.parse_keyword("DISTINCT");
+        if all && distinct {
+            return parser_err!("Cannot specify both ALL and DISTINCT in SELECT");
+        }
         let projection = self.parse_select_list()?;
 
         let (relation, joins) = if self.parse_keyword("FROM") {

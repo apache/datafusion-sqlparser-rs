@@ -136,6 +136,20 @@ fn parse_select_distinct() {
 }
 
 #[test]
+fn parse_select_all() {
+    one_statement_parses_to("SELECT ALL name FROM customer", "SELECT name FROM customer");
+}
+
+#[test]
+fn parse_select_all_distinct() {
+    let result = parse_sql_statements("SELECT ALL DISTINCT name FROM customer");
+    assert_eq!(
+        ParserError::ParserError("Cannot specify both ALL and DISTINCT in SELECT".to_string()),
+        result.unwrap_err(),
+    );
+}
+
+#[test]
 fn parse_select_wildcard() {
     let sql = "SELECT * FROM foo";
     let select = verified_only_select(sql);

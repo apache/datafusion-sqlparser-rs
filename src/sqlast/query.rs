@@ -209,6 +209,7 @@ pub enum TableFactor {
         with_hints: Vec<ASTNode>,
     },
     Derived {
+        lateral: bool,
         subquery: Box<SQLQuery>,
         alias: Option<SQLIdent>,
     },
@@ -235,8 +236,16 @@ impl ToString for TableFactor {
                 }
                 s
             }
-            TableFactor::Derived { subquery, alias } => {
-                let mut s = format!("({})", subquery.to_string());
+            TableFactor::Derived {
+                lateral,
+                subquery,
+                alias,
+            } => {
+                let mut s = String::new();
+                if *lateral {
+                    s += "LATERAL ";
+                }
+                s += &format!("({})", subquery.to_string());
                 if let Some(alias) = alias {
                     s += &format!(" AS {}", alias);
                 }

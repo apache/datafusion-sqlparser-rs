@@ -1570,6 +1570,50 @@ fn parse_fetch_variations() {
 }
 
 #[test]
+fn lateral_derived() {
+    fn chk(lateral_in: bool) {
+        let lateral_str = if lateral_in { "LATERAL " } else { "" };
+        let sql = format!(
+            "SELECT * FROM customer LEFT JOIN {}\
+             (SELECT * FROM order WHERE order.customer = customer.id LIMIT 3) AS order ON true",
+            lateral_str
+        );
+        let select = verified_only_select(&sql);
+        assert_eq!(select.joins.len(), 1);
+        assert_eq!(
+            select.joins[0].join_operator,
+            JoinOperator::LeftOuter(JoinConstraint::On(ASTNode::SQLValue(Value::Boolean(true))))
+        );
+        if let TableFactor::Derived {
+            lateral,
+            ref subquery,
+            ref alias,
+        } = select.joins[0].relation
+        {
+            assert_eq!(lateral_in, lateral);
+            assert_eq!(Some("order".to_string()), *alias);
+            assert_eq!(
+                subquery.to_string(),
+                "SELECT * FROM order WHERE order.customer = customer.id LIMIT 3"
+            );
+        } else {
+            unreachable!()
+        }
+    }
+    chk(false);
+    chk(true);
+
+    let sql = "SELECT * FROM customer LEFT JOIN LATERAL generate_series(1, customer.id)";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected subquery after LATERAL, found: generate_series".to_string()
+        ),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 #[should_panic(
     expected = "Parse results with GenericSqlDialect are different from PostgreSqlDialect"
 )]

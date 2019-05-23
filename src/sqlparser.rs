@@ -1464,11 +1464,18 @@ impl Parser {
 
     /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
     pub fn parse_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        let lateral = self.parse_keyword("LATERAL");
         if self.consume_token(&Token::LParen) {
             let subquery = Box::new(self.parse_query()?);
             self.expect_token(&Token::RParen)?;
             let alias = self.parse_optional_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
-            Ok(TableFactor::Derived { subquery, alias })
+            Ok(TableFactor::Derived {
+                lateral,
+                subquery,
+                alias,
+            })
+        } else if lateral {
+            self.expected("subquery after LATERAL", self.peek_token())
         } else {
             let name = self.parse_object_name()?;
             // Postgres, MSSQL: table-valued functions:

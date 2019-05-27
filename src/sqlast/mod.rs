@@ -108,13 +108,7 @@ pub enum ASTNode {
     /// SQLValue
     SQLValue(Value),
     /// Scalar function call e.g. `LEFT(foo, 5)`
-    SQLFunction {
-        name: SQLObjectName,
-        args: Vec<ASTNode>,
-        over: Option<SQLWindowSpec>,
-        // aggregate functions may specify eg `COUNT(DISTINCT x)`
-        distinct: bool,
-    },
+    SQLFunction(SQLFunction),
     /// CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END
     /// Note we only recognize a complete single expression as <condition>, not
     /// `< 0` nor `1, 2, 3` as allowed in a <simple when clause> per
@@ -192,23 +186,7 @@ impl ToString for ASTNode {
                 format!("{} {}", operator.to_string(), expr.as_ref().to_string())
             }
             ASTNode::SQLValue(v) => v.to_string(),
-            ASTNode::SQLFunction {
-                name,
-                args,
-                over,
-                distinct,
-            } => {
-                let mut s = format!(
-                    "{}({}{})",
-                    name.to_string(),
-                    if *distinct { "DISTINCT " } else { "" },
-                    comma_separated_string(args)
-                );
-                if let Some(o) = over {
-                    s += &format!(" OVER ({})", o.to_string())
-                }
-                s
-            }
+            ASTNode::SQLFunction(f) => f.to_string(),
             ASTNode::SQLCase {
                 operand,
                 conditions,
@@ -346,6 +324,7 @@ impl ToString for SQLWindowFrameBound {
 }
 
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum SQLStatement {
     /// SELECT
@@ -595,6 +574,31 @@ impl ToString for SQLColumnDef {
         }
         if !self.allow_null {
             s += " NOT NULL";
+        }
+        s
+    }
+}
+
+/// SQL function
+#[derive(Debug, Clone, PartialEq)]
+pub struct SQLFunction {
+    pub name: SQLObjectName,
+    pub args: Vec<ASTNode>,
+    pub over: Option<SQLWindowSpec>,
+    // aggregate functions may specify eg `COUNT(DISTINCT x)`
+    pub distinct: bool,
+}
+
+impl ToString for SQLFunction {
+    fn to_string(&self) -> String {
+        let mut s = format!(
+            "{}({}{})",
+            self.name.to_string(),
+            if self.distinct { "DISTINCT " } else { "" },
+            comma_separated_string(&self.args),
+        );
+        if let Some(o) = &self.over {
+            s += &format!(" OVER ({})", o.to_string())
         }
         s
     }

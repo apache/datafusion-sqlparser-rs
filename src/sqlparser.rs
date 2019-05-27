@@ -301,12 +301,12 @@ impl Parser {
             None
         };
 
-        Ok(ASTNode::SQLFunction {
+        Ok(ASTNode::SQLFunction(SQLFunction {
             name,
             args,
             over,
             distinct,
-        })
+        }))
     }
 
     pub fn parse_window_frame(&mut self) -> Result<Option<SQLWindowFrame>, ParserError> {

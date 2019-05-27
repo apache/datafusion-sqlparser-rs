@@ -20,6 +20,7 @@ path = "src/lib.rs"
 
 [dependencies]
 log = "0.4.5"
+ordered-float = "1.0.2"
 
 [dev-dependencies]
 simple_logger = "1.0.1"

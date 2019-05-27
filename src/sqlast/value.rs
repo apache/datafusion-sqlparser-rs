@@ -1,10 +1,12 @@
+use ordered_float::OrderedFloat;
+
 /// Primitive SQL values such as number and string
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum Value {
     /// Unsigned integer value
     Long(u64),
     /// Unsigned floating point value
-    Double(f64),
+    Double(OrderedFloat<f64>),
     /// 'string value'
     SingleQuotedString(String),
     /// N'string value'

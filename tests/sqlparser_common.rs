@@ -14,23 +14,40 @@ use sqlparser::test_utils::{all_dialects, expr_from_projection, only};
 
 #[test]
 fn parse_insert_values() {
-    let sql = "INSERT INTO customer VALUES(1, 2, 3)";
-    check_one(sql, "customer", vec![]);
+    let row = vec![
+        ASTNode::SQLValue(Value::Long(1)),
+        ASTNode::SQLValue(Value::Long(2)),
+        ASTNode::SQLValue(Value::Long(3)),
+    ];
+    let rows1 = vec![row.clone()];
+    let rows2 = vec![row.clone(), row];
 
-    let sql = "INSERT INTO public.customer VALUES(1, 2, 3)";
-    check_one(sql, "public.customer", vec![]);
+    let sql = "INSERT INTO customer VALUES (1, 2, 3)";
+    check_one(sql, "customer", &[], &rows1);
 
-    let sql = "INSERT INTO db.public.customer VALUES(1, 2, 3)";
-    check_one(sql, "db.public.customer", vec![]);
+    let sql = "INSERT INTO customer VALUES (1, 2, 3), (1, 2, 3)";
+    check_one(sql, "customer", &[], &rows2);
 
-    let sql = "INSERT INTO public.customer (id, name, active) VALUES(1, 2, 3)";
+    let sql = "INSERT INTO public.customer VALUES (1, 2, 3)";
+    check_one(sql, "public.customer", &[], &rows1);
+
+    let sql = "INSERT INTO db.public.customer VALUES (1, 2, 3)";
+    check_one(sql, "db.public.customer", &[], &rows1);
+
+    let sql = "INSERT INTO public.customer (id, name, active) VALUES (1, 2, 3)";
     check_one(
         sql,
         "public.customer",
-        vec!["id".to_string(), "name".to_string(), "active".to_string()],
+        &["id".to_string(), "name".to_string(), "active".to_string()],
+        &rows1,
     );
 
-    fn check_one(sql: &str, expected_table_name: &str, expected_columns: Vec<String>) {
+    fn check_one(
+        sql: &str,
+        expected_table_name: &str,
+        expected_columns: &[String],
+        expected_rows: &[Vec<ASTNode>],
+    ) {
         match verified_stmt(sql) {
             SQLStatement::SQLInsert {
                 table_name,
@@ -40,14 +57,7 @@ fn parse_insert_values() {
             } => {
                 assert_eq!(table_name.to_string(), expected_table_name);
                 assert_eq!(columns, expected_columns);
-                assert_eq!(
-                    vec![vec![
-                        ASTNode::SQLValue(Value::Long(1)),
-                        ASTNode::SQLValue(Value::Long(2)),
-                        ASTNode::SQLValue(Value::Long(3))
-                    ]],
-                    values
-                );
+                assert_eq!(values.0.as_slice(), expected_rows);
             }
             _ => unreachable!(),
         }
@@ -1384,6 +1394,13 @@ fn parse_union() {
 }
 
 #[test]
+fn parse_values() {
+    verified_stmt("SELECT * FROM (VALUES (1), (2), (3))");
+    verified_stmt("SELECT * FROM (VALUES (1), (2), (3)), (VALUES (1, 2, 3))");
+    verified_stmt("SELECT * FROM (VALUES (1)) UNION VALUES (1)");
+}
+
+#[test]
 fn parse_multiple_statements() {
     fn test_with(sql1: &str, sql2_kw: &str, sql2_rest: &str) {
         // Check that a string consisting of two statements delimited by a semicolon
@@ -1416,7 +1433,7 @@ fn parse_multiple_statements() {
         " cte AS (SELECT 1 AS s) SELECT bar",
     );
     test_with("DELETE FROM foo", "SELECT", " bar");
-    test_with("INSERT INTO foo VALUES(1)", "SELECT", " bar");
+    test_with("INSERT INTO foo VALUES (1)", "SELECT", " bar");
     test_with("CREATE TABLE foo (baz int)", "SELECT", " bar");
     // Make sure that empty statements do not cause an error:
     let res = parse_sql_statements(";;");

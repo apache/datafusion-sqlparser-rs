@@ -1565,12 +1565,11 @@ impl Parser {
         self.expect_keyword("INTO")?;
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
-        self.expect_keyword("VALUES")?;
-        let values = self.parse_values()?;
+        let source = Box::new(self.parse_query()?);
         Ok(SQLStatement::SQLInsert {
             table_name,
             columns,
-            values,
+            source,
         })
     }
 

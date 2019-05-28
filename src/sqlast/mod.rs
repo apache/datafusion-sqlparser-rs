@@ -342,8 +342,8 @@ pub enum SQLStatement {
         table_name: SQLObjectName,
         /// COLUMNS
         columns: Vec<SQLIdent>,
-        /// VALUES (vector of rows to insert)
-        values: SQLValues,
+        /// A SQL query that specifies what to insert
+        source: Box<SQLQuery>,
     },
     SQLCopy {
         /// TABLE
@@ -409,13 +409,13 @@ impl ToString for SQLStatement {
             SQLStatement::SQLInsert {
                 table_name,
                 columns,
-                values,
+                source,
             } => {
-                let mut s = format!("INSERT INTO {}", table_name.to_string());
+                let mut s = format!("INSERT INTO {} ", table_name.to_string());
                 if !columns.is_empty() {
-                    s += &format!(" ({})", columns.join(", "));
+                    s += &format!("({}) ", columns.join(", "));
                 }
-                s += &format!(" {}", values.to_string());
+                s += &source.to_string();
                 s
             }
             SQLStatement::SQLCopy {

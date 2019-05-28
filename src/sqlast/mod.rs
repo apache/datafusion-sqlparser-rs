@@ -125,6 +125,9 @@ pub enum ASTNode {
         results: Vec<ASTNode>,
         else_result: Option<Box<ASTNode>>,
     },
+    /// An exists expression `EXISTS(SELECT ...)`, used in expressions like
+    /// `WHERE EXISTS (SELECT ...)`.
+    SQLExists(Box<SQLQuery>),
     /// A parenthesized subquery `(SELECT ...)`, used in expression like
     /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
     SQLSubquery(Box<SQLQuery>),
@@ -230,6 +233,7 @@ impl ToString for ASTNode {
                 }
                 s + " END"
             }
+            ASTNode::SQLExists(s) => format!("EXISTS ({})", s.to_string()),
             ASTNode::SQLSubquery(s) => format!("({})", s.to_string()),
         }
     }

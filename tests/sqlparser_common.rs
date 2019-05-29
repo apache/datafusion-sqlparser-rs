@@ -498,6 +498,55 @@ fn parse_between() {
 }
 
 #[test]
+fn parse_between_with_expr() {
+    use self::ASTNode::*;
+    use self::SQLOperator::*;
+    let sql = "SELECT * FROM t WHERE 1 BETWEEN 1 + 2 AND 3 + 4 IS NULL";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        ASTNode::SQLIsNull(Box::new(ASTNode::SQLBetween {
+            expr: Box::new(ASTNode::SQLValue(Value::Long(1))),
+            low: Box::new(SQLBinaryExpr {
+                left: Box::new(ASTNode::SQLValue(Value::Long(1))),
+                op: Plus,
+                right: Box::new(ASTNode::SQLValue(Value::Long(2))),
+            }),
+            high: Box::new(SQLBinaryExpr {
+                left: Box::new(ASTNode::SQLValue(Value::Long(3))),
+                op: Plus,
+                right: Box::new(ASTNode::SQLValue(Value::Long(4))),
+            }),
+            negated: false,
+        })),
+        select.selection.unwrap()
+    );
+
+    let sql = "SELECT * FROM t WHERE 1 = 1 AND 1 + x BETWEEN 1 AND 2";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        ASTNode::SQLBinaryExpr {
+            left: Box::new(ASTNode::SQLBinaryExpr {
+                left: Box::new(ASTNode::SQLValue(Value::Long(1))),
+                op: SQLOperator::Eq,
+                right: Box::new(ASTNode::SQLValue(Value::Long(1))),
+            }),
+            op: SQLOperator::And,
+            right: Box::new(ASTNode::SQLBetween {
+                expr: Box::new(ASTNode::SQLBinaryExpr {
+                    left: Box::new(ASTNode::SQLValue(Value::Long(1))),
+                    op: SQLOperator::Plus,
+                    right: Box::new(ASTNode::SQLIdentifier("x".to_string())),
+                }),
+                low: Box::new(ASTNode::SQLValue(Value::Long(1))),
+                high: Box::new(ASTNode::SQLValue(Value::Long(2))),
+                negated: false,
+            }),
+        },
+        select.selection.unwrap(),
+    )
+}
+
+#[test]
 fn parse_select_order_by() {
     fn chk(sql: &str) {
         let select = verified_query(sql);

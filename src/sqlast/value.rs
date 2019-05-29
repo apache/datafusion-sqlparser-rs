@@ -9,6 +9,8 @@ pub enum Value {
     SingleQuotedString(String),
     /// N'string value'
     NationalStringLiteral(String),
+    /// X'hex value'
+    HexStringLiteral(String),
     /// Boolean value true or false
     Boolean(bool),
     /// NULL value in insert statements,
@@ -22,6 +24,7 @@ impl ToString for Value {
             Value::Double(v) => v.to_string(),
             Value::SingleQuotedString(v) => format!("'{}'", escape_single_quote_string(v)),
             Value::NationalStringLiteral(v) => format!("N'{}'", v),
+            Value::HexStringLiteral(v) => format!("X'{}'", v),
             Value::Boolean(v) => v.to_string(),
             Value::Null => "NULL".to_string(),
         }

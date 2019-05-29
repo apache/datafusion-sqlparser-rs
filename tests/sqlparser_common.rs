@@ -716,6 +716,18 @@ fn parse_cast() {
         "SELECT CAST(id AS BIGINT) FROM customer",
         "SELECT CAST(id AS bigint) FROM customer",
     );
+
+    verified_stmt("SELECT CAST(id AS numeric) FROM customer");
+
+    one_statement_parses_to(
+        "SELECT CAST(id AS dec) FROM customer",
+        "SELECT CAST(id AS numeric) FROM customer",
+    );
+
+    one_statement_parses_to(
+        "SELECT CAST(id AS decimal) FROM customer",
+        "SELECT CAST(id AS numeric) FROM customer",
+    );
 }
 
 #[test]

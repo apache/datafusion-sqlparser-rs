@@ -833,7 +833,7 @@ impl Parser {
     fn parse_columns(&mut self) -> Result<(Vec<SQLColumnDef>, Vec<TableConstraint>), ParserError> {
         let mut columns = vec![];
         let mut constraints = vec![];
-        if !self.consume_token(&Token::LParen) {
+        if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
             return Ok((columns, constraints));
         }
 

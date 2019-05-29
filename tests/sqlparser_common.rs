@@ -455,7 +455,7 @@ fn parse_select_order_by() {
     fn chk(sql: &str) {
         let select = verified_query(sql);
         assert_eq!(
-            Some(vec![
+            vec![
                 SQLOrderByExpr {
                     expr: ASTNode::SQLIdentifier("lname".to_string()),
                     asc: Some(true),
@@ -468,7 +468,7 @@ fn parse_select_order_by() {
                     expr: ASTNode::SQLIdentifier("id".to_string()),
                     asc: None,
                 },
-            ]),
+            ],
             select.order_by
         );
     }
@@ -484,7 +484,7 @@ fn parse_select_order_by_limit() {
                ORDER BY lname ASC, fname DESC LIMIT 2";
     let select = verified_query(sql);
     assert_eq!(
-        Some(vec![
+        vec![
             SQLOrderByExpr {
                 expr: ASTNode::SQLIdentifier("lname".to_string()),
                 asc: Some(true),
@@ -493,7 +493,7 @@ fn parse_select_order_by_limit() {
                 expr: ASTNode::SQLIdentifier("fname".to_string()),
                 asc: Some(false),
             },
-        ]),
+        ],
         select.order_by
     );
     assert_eq!(Some(ASTNode::SQLValue(Value::Long(2))), select.limit);
@@ -504,10 +504,10 @@ fn parse_select_group_by() {
     let sql = "SELECT id, fname, lname FROM customer GROUP BY lname, fname";
     let select = verified_only_select(sql);
     assert_eq!(
-        Some(vec![
+        vec![
             ASTNode::SQLIdentifier("lname".to_string()),
             ASTNode::SQLIdentifier("fname".to_string()),
-        ]),
+        ],
         select.group_by
     );
 }
@@ -746,7 +746,7 @@ fn parse_delimited_identifiers() {
         } => {
             assert_eq!(vec![r#""a table""#.to_string()], name.0);
             assert_eq!(r#""alias""#, alias.unwrap());
-            assert!(args.is_none());
+            assert!(args.is_empty());
             assert!(with_hints.is_empty());
         }
         _ => panic!("Expecting TableFactor::Table"),
@@ -870,7 +870,7 @@ fn parse_implicit_join() {
             relation: TableFactor::Table {
                 name: SQLObjectName(vec!["t2".to_string()]),
                 alias: None,
-                args: None,
+                args: vec![],
                 with_hints: vec![],
             },
             join_operator: JoinOperator::Implicit
@@ -888,7 +888,7 @@ fn parse_cross_join() {
             relation: TableFactor::Table {
                 name: SQLObjectName(vec!["t2".to_string()]),
                 alias: None,
-                args: None,
+                args: vec![],
                 with_hints: vec![],
             },
             join_operator: JoinOperator::Cross
@@ -908,7 +908,7 @@ fn parse_joins_on() {
             relation: TableFactor::Table {
                 name: SQLObjectName(vec![relation.into()]),
                 alias,
-                args: None,
+                args: vec![],
                 with_hints: vec![],
             },
             join_operator: f(JoinConstraint::On(ASTNode::SQLBinaryExpr {
@@ -961,7 +961,7 @@ fn parse_joins_using() {
             relation: TableFactor::Table {
                 name: SQLObjectName(vec![relation.into()]),
                 alias,
-                args: None,
+                args: vec![],
                 with_hints: vec![],
             },
             join_operator: f(JoinConstraint::Using(vec!["c1".into()])),

@@ -394,6 +394,13 @@ pub enum SQLStatement {
         name: SQLObjectName,
         operation: AlterOperation,
     },
+    /// DROP TABLE
+    SQLDrop {
+        object_type: SQLObjectType,
+        if_exists: bool,
+        names: Vec<SQLObjectName>,
+        cascade: bool,
+    },
 }
 
 impl ToString for SQLStatement {
@@ -502,6 +509,18 @@ impl ToString for SQLStatement {
             SQLStatement::SQLAlterTable { name, operation } => {
                 format!("ALTER TABLE {} {}", name.to_string(), operation.to_string())
             }
+            SQLStatement::SQLDrop {
+                object_type,
+                if_exists,
+                names,
+                cascade,
+            } => format!(
+                "DROP {}{} {}{}",
+                object_type.to_string(),
+                if *if_exists { " IF EXISTS" } else { "" },
+                comma_separated_string(&names),
+                if *cascade { " CASCADE" } else { "" },
+            ),
         }
     }
 }
@@ -605,6 +624,21 @@ impl FromStr for FileFormat {
                 "Unexpected file format: {}",
                 s
             ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SQLObjectType {
+    Table,
+    View,
+}
+
+impl SQLObjectType {
+    fn to_string(&self) -> String {
+        match self {
+            SQLObjectType::Table => "TABLE".into(),
+            SQLObjectType::View => "VIEW".into(),
         }
     }
 }

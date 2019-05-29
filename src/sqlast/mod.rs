@@ -22,7 +22,9 @@ mod value;
 
 use std::ops::Deref;
 
-pub use self::ddl::{AlterTableOperation, TableConstraint};
+pub use self::ddl::{
+    AlterTableOperation, ColumnOption, ColumnOptionDef, SQLColumnDef, TableConstraint,
+};
 pub use self::query::{
     Cte, Fetch, Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLQuery, SQLSelect,
     SQLSelectItem, SQLSetExpr, SQLSetOperator, SQLValues, TableAlias, TableFactor,
@@ -577,36 +579,6 @@ pub struct SQLAssignment {
 impl ToString for SQLAssignment {
     fn to_string(&self) -> String {
         format!("{} = {}", self.id, self.value.to_string())
-    }
-}
-
-/// SQL column definition
-#[derive(Debug, Clone, PartialEq, Hash)]
-pub struct SQLColumnDef {
-    pub name: SQLIdent,
-    pub data_type: SQLType,
-    pub is_primary: bool,
-    pub is_unique: bool,
-    pub default: Option<ASTNode>,
-    pub allow_null: bool,
-}
-
-impl ToString for SQLColumnDef {
-    fn to_string(&self) -> String {
-        let mut s = format!("{} {}", self.name, self.data_type.to_string());
-        if self.is_primary {
-            s += " PRIMARY KEY";
-        }
-        if self.is_unique {
-            s += " UNIQUE";
-        }
-        if let Some(ref default) = self.default {
-            s += &format!(" DEFAULT {}", default.to_string());
-        }
-        if !self.allow_null {
-            s += " NOT NULL";
-        }
-        s
     }
 }
 

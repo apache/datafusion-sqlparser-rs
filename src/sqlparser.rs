@@ -156,29 +156,6 @@ impl Parser {
         Ok(expr)
     }
 
-    /// Parse expression for DEFAULT clause in CREATE TABLE
-    pub fn parse_default_expr(&mut self, precedence: u8) -> Result<ASTNode, ParserError> {
-        debug!("parsing expr");
-        let mut expr = self.parse_prefix()?;
-        debug!("prefix: {:?}", expr);
-        loop {
-            // stop parsing on `NULL` | `NOT NULL`
-            match self.peek_token() {
-                Some(Token::SQLWord(ref k)) if k.keyword == "NOT" || k.keyword == "NULL" => break,
-                _ => {}
-            }
-
-            let next_precedence = self.get_next_precedence()?;
-            debug!("next precedence: {:?}", next_precedence);
-            if precedence >= next_precedence {
-                break;
-            }
-
-            expr = self.parse_infix(expr, next_precedence)?;
-        }
-        Ok(expr)
-    }
-
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<ASTNode, ParserError> {
         let tok = self
@@ -897,29 +874,24 @@ impl Parser {
             } else if let Some(Token::SQLWord(column_name)) = self.peek_token() {
                 self.next_token();
                 let data_type = self.parse_data_type()?;
-                let is_primary = self.parse_keywords(vec!["PRIMARY", "KEY"]);
-                let is_unique = self.parse_keyword("UNIQUE");
-                let default = if self.parse_keyword("DEFAULT") {
-                    let expr = self.parse_default_expr(0)?;
-                    Some(expr)
+                let collation = if self.parse_keyword("COLLATE") {
+                    Some(self.parse_object_name()?)
                 } else {
                     None
                 };
-                let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
-                    false
-                } else {
-                    let _ = self.parse_keyword("NULL");
-                    true
-                };
-                debug!("default: {:?}", default);
+                let mut options = vec![];
+                loop {
+                    match self.peek_token() {
+                        None | Some(Token::Comma) | Some(Token::RParen) => break,
+                        _ => options.push(self.parse_column_option_def()?),
+                    }
+                }
 
                 columns.push(SQLColumnDef {
                     name: column_name.as_sql_ident(),
                     data_type,
-                    allow_null,
-                    is_primary,
-                    is_unique,
-                    default,
+                    collation,
+                    options,
                 });
             } else {
                 return self.expected("column name or constraint definition", self.peek_token());
@@ -934,6 +906,45 @@ impl Parser {
         }
 
         Ok((columns, constraints))
+    }
+
+    pub fn parse_column_option_def(&mut self) -> Result<ColumnOptionDef, ParserError> {
+        let name = if self.parse_keyword("CONSTRAINT") {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        let option = if self.parse_keywords(vec!["NOT", "NULL"]) {
+            ColumnOption::NotNull
+        } else if self.parse_keyword("NULL") {
+            ColumnOption::Null
+        } else if self.parse_keyword("DEFAULT") {
+            ColumnOption::Default(self.parse_expr()?)
+        } else if self.parse_keywords(vec!["PRIMARY", "KEY"]) {
+            ColumnOption::Unique { is_primary: true }
+        } else if self.parse_keyword("UNIQUE") {
+            ColumnOption::Unique { is_primary: false }
+        } else if self.parse_keyword("REFERENCES") {
+            let foreign_table = self.parse_object_name()?;
+            let referred_columns = self.parse_parenthesized_column_list(Mandatory)?;
+            ColumnOption::ForeignKey {
+                foreign_table,
+                referred_columns,
+            }
+        } else if self.parse_keyword("CHECK") {
+            self.expect_token(&Token::LParen)?;
+            let expr = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            ColumnOption::Check(expr)
+        } else {
+            return parser_err!(format!(
+                "Unexpected token in column definition: {:?}",
+                self.peek_token()
+            ));
+        };
+
+        Ok(ColumnOptionDef { name, option })
     }
 
     pub fn parse_optional_table_constraint(

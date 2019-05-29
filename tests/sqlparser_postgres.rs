@@ -9,10 +9,10 @@ use sqlparser::test_utils::*;
 #[test]
 fn parse_create_table_with_defaults() {
     let sql = "CREATE TABLE public.customer (
-            customer_id integer DEFAULT nextval(public.customer_customer_id_seq) NOT NULL,
+            customer_id integer DEFAULT nextval(public.customer_customer_id_seq),
             store_id smallint NOT NULL,
             first_name character varying(45) NOT NULL,
-            last_name character varying(45) NOT NULL,
+            last_name character varying(45) COLLATE \"es_ES\" NOT NULL,
             email character varying(50),
             address_id smallint NOT NULL,
             activebool boolean DEFAULT true NOT NULL,
@@ -31,24 +31,123 @@ fn parse_create_table_with_defaults() {
             location: None,
         } => {
             assert_eq!("public.customer", name.to_string());
-            assert_eq!(10, columns.len());
+            assert_eq!(
+                columns,
+                vec![
+                    SQLColumnDef {
+                        name: "customer_id".into(),
+                        data_type: SQLType::Int,
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Default(
+                                pg().verified_expr("nextval(public.customer_customer_id_seq)")
+                            )
+                        }],
+                    },
+                    SQLColumnDef {
+                        name: "store_id".into(),
+                        data_type: SQLType::SmallInt,
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull,
+                        }],
+                    },
+                    SQLColumnDef {
+                        name: "first_name".into(),
+                        data_type: SQLType::Varchar(Some(45)),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull,
+                        }],
+                    },
+                    SQLColumnDef {
+                        name: "last_name".into(),
+                        data_type: SQLType::Varchar(Some(45)),
+                        collation: Some(SQLObjectName(vec!["\"es_ES\"".into()])),
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull,
+                        }],
+                    },
+                    SQLColumnDef {
+                        name: "email".into(),
+                        data_type: SQLType::Varchar(Some(50)),
+                        collation: None,
+                        options: vec![],
+                    },
+                    SQLColumnDef {
+                        name: "address_id".into(),
+                        data_type: SQLType::SmallInt,
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull
+                        }],
+                    },
+                    SQLColumnDef {
+                        name: "activebool".into(),
+                        data_type: SQLType::Boolean,
+                        collation: None,
+                        options: vec![
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Default(ASTNode::SQLValue(Value::Boolean(
+                                    true
+                                ))),
+                            },
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::NotNull,
+                            }
+                        ],
+                    },
+                    SQLColumnDef {
+                        name: "create_date".into(),
+                        data_type: SQLType::Date,
+                        collation: None,
+                        options: vec![
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Default(
+                                    pg().verified_expr("CAST(now() AS text)")
+                                )
+                            },
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::NotNull,
+                            }
+                        ],
+                    },
+                    SQLColumnDef {
+                        name: "last_update".into(),
+                        data_type: SQLType::Timestamp,
+                        collation: None,
+                        options: vec![
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Default(pg().verified_expr("now()")),
+                            },
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::NotNull,
+                            }
+                        ],
+                    },
+                    SQLColumnDef {
+                        name: "active".into(),
+                        data_type: SQLType::Int,
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull
+                        }],
+                    },
+                ]
+            );
             assert!(constraints.is_empty());
-
-            let c_name = &columns[0];
-            assert_eq!("customer_id", c_name.name);
-            assert_eq!(SQLType::Int, c_name.data_type);
-            assert_eq!(false, c_name.allow_null);
-
-            let c_lat = &columns[1];
-            assert_eq!("store_id", c_lat.name);
-            assert_eq!(SQLType::SmallInt, c_lat.data_type);
-            assert_eq!(false, c_lat.allow_null);
-
-            let c_lng = &columns[2];
-            assert_eq!("first_name", c_lng.name);
-            assert_eq!(SQLType::Varchar(Some(45)), c_lng.data_type);
-            assert_eq!(false, c_lng.allow_null);
-
             assert_eq!(
                 with_options,
                 vec![
@@ -87,61 +186,20 @@ fn parse_create_table_from_pg_dump() {
             release_year public.year,
             active integer
         )";
-    match pg().one_statement_parses_to(sql, "") {
-        SQLStatement::SQLCreateTable {
-            name,
-            columns,
-            constraints,
-            with_options,
-            external: false,
-            file_format: None,
-            location: None,
-        } => {
-            assert_eq!("public.customer", name.to_string());
-            assert!(constraints.is_empty());
-
-            let c_customer_id = &columns[0];
-            assert_eq!("customer_id", c_customer_id.name);
-            assert_eq!(SQLType::Int, c_customer_id.data_type);
-            assert_eq!(false, c_customer_id.allow_null);
-
-            let c_store_id = &columns[1];
-            assert_eq!("store_id", c_store_id.name);
-            assert_eq!(SQLType::SmallInt, c_store_id.data_type);
-            assert_eq!(false, c_store_id.allow_null);
-
-            let c_first_name = &columns[2];
-            assert_eq!("first_name", c_first_name.name);
-            assert_eq!(SQLType::Varchar(Some(45)), c_first_name.data_type);
-            assert_eq!(false, c_first_name.allow_null);
-
-            let c_create_date1 = &columns[8];
-            assert_eq!(
-                Some(ASTNode::SQLCast {
-                    expr: Box::new(ASTNode::SQLCast {
-                        expr: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
-                            "now".to_string()
-                        ))),
-                        data_type: SQLType::Text
-                    }),
-                    data_type: SQLType::Date
-                }),
-                c_create_date1.default
-            );
-
-            let c_release_year = &columns[10];
-            assert_eq!(
-                SQLType::Custom(SQLObjectName(vec![
-                    "public".to_string(),
-                    "year".to_string()
-                ])),
-                c_release_year.data_type
-            );
-
-            assert_eq!(with_options, vec![]);
-        }
-        _ => unreachable!(),
-    }
+    pg().one_statement_parses_to(sql, "CREATE TABLE public.customer (\
+            customer_id int DEFAULT nextval(CAST('public.customer_customer_id_seq' AS regclass)) NOT NULL, \
+            store_id smallint NOT NULL, \
+            first_name character varying(45) NOT NULL, \
+            last_name character varying(45) NOT NULL, \
+            info text[], \
+            address_id smallint NOT NULL, \
+            activebool boolean DEFAULT true NOT NULL, \
+            create_date date DEFAULT CAST(now() AS date) NOT NULL, \
+            create_date1 date DEFAULT CAST(CAST('now' AS text) AS date) NOT NULL, \
+            last_update timestamp DEFAULT now(), \
+            release_year public.year, \
+            active int\
+        )");
 }
 
 #[test]
@@ -153,37 +211,7 @@ fn parse_create_table_with_inherit() {
                value text[], \
                use_metric boolean DEFAULT true\
                )";
-    match pg().verified_stmt(sql) {
-        SQLStatement::SQLCreateTable {
-            name,
-            columns,
-            constraints,
-            with_options,
-            external: false,
-            file_format: None,
-            location: None,
-        } => {
-            assert_eq!("bazaar.settings", name.to_string());
-            assert!(constraints.is_empty());
-
-            let c_name = &columns[0];
-            assert_eq!("settings_id", c_name.name);
-            assert_eq!(SQLType::Uuid, c_name.data_type);
-            assert_eq!(false, c_name.allow_null);
-            assert_eq!(true, c_name.is_primary);
-            assert_eq!(false, c_name.is_unique);
-
-            let c_name = &columns[1];
-            assert_eq!("user_id", c_name.name);
-            assert_eq!(SQLType::Uuid, c_name.data_type);
-            assert_eq!(true, c_name.allow_null);
-            assert_eq!(false, c_name.is_primary);
-            assert_eq!(true, c_name.is_unique);
-
-            assert_eq!(with_options, vec![]);
-        }
-        _ => unreachable!(),
-    }
+    pg().verified_stmt(sql);
 }
 
 #[test]

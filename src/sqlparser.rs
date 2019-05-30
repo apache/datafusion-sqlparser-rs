@@ -195,6 +195,7 @@ impl Parser {
                 "DATE" => Ok(ASTNode::SQLValue(Value::Date(self.parse_literal_string()?))),
                 "EXISTS" => self.parse_exists_expression(),
                 "EXTRACT" => self.parse_extract_expression(),
+                "INTERVAL" => self.parse_literal_interval(),
                 "NOT" => Ok(ASTNode::SQLUnary {
                     operator: SQLOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
@@ -425,20 +426,7 @@ impl Parser {
 
     pub fn parse_extract_expression(&mut self) -> Result<ASTNode, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let tok = self.next_token();
-        let field = if let Some(Token::SQLWord(ref k)) = tok {
-            match k.keyword.as_ref() {
-                "YEAR" => SQLDateTimeField::Year,
-                "MONTH" => SQLDateTimeField::Month,
-                "DAY" => SQLDateTimeField::Day,
-                "HOUR" => SQLDateTimeField::Hour,
-                "MINUTE" => SQLDateTimeField::Minute,
-                "SECOND" => SQLDateTimeField::Second,
-                _ => self.expected("Date/time field inside of EXTRACT function", tok)?,
-            }
-        } else {
-            self.expected("Date/time field inside of EXTRACT function", tok)?
-        };
+        let field = self.parse_date_time_field()?;
         self.expect_keyword("FROM")?;
         let expr = self.parse_expr()?;
         self.expect_token(&Token::RParen)?;
@@ -446,6 +434,90 @@ impl Parser {
             field,
             expr: Box::new(expr),
         })
+    }
+
+    // This function parses date/time fields for both the EXTRACT function-like
+    // operator and interval qualifiers. EXTRACT supports a wider set of
+    // date/time fields than interval qualifiers, so this function may need to
+    // be split in two.
+    pub fn parse_date_time_field(&mut self) -> Result<SQLDateTimeField, ParserError> {
+        let tok = self.next_token();
+        if let Some(Token::SQLWord(ref k)) = tok {
+            match k.keyword.as_ref() {
+                "YEAR" => Ok(SQLDateTimeField::Year),
+                "MONTH" => Ok(SQLDateTimeField::Month),
+                "DAY" => Ok(SQLDateTimeField::Day),
+                "HOUR" => Ok(SQLDateTimeField::Hour),
+                "MINUTE" => Ok(SQLDateTimeField::Minute),
+                "SECOND" => Ok(SQLDateTimeField::Second),
+                _ => self.expected("date/time field", tok)?,
+            }
+        } else {
+            self.expected("date/time field", tok)?
+        }
+    }
+
+    /// Parse an INTERVAL literal.
+    ///
+    /// Some syntactically valid intervals:
+    ///
+    ///   1. `INTERVAL '1' DAY`
+    ///   2. `INTERVAL '1-1' YEAR TO MONTH`
+    ///   3. `INTERVAL '1' SECOND`
+    ///   4. `INTERVAL '1:1:1.1' HOUR (5) TO SECOND (5)`
+    ///   5. `INTERVAL '1.1' SECOND (2, 2)`
+    ///   6. `INTERVAL '1:1' HOUR (5) TO MINUTE (5)`
+    ///
+    /// Note that we do not currently attempt to parse the quoted value.
+    pub fn parse_literal_interval(&mut self) -> Result<ASTNode, ParserError> {
+        // The SQL standard allows an optional sign before the value string, but
+        // it is not clear if any implementations support that syntax, so we
+        // don't currently try to parse it. (The sign can instead be included
+        // inside the value string.)
+
+        // The first token in an interval is a string literal which specifies
+        // the duration of the interval.
+        let value = self.parse_literal_string()?;
+
+        // Following the string literal is a qualifier which indicates the units
+        // of the duration specified in the string literal.
+        //
+        // Note that PostgreSQL allows omitting the qualifier, but we currently
+        // require at least the leading field, in accordance with the ANSI spec.
+        let leading_field = self.parse_date_time_field()?;
+
+        let (leading_precision, last_field, fsec_precision) =
+            if leading_field == SQLDateTimeField::Second {
+                // SQL mandates special syntax for `SECOND TO SECOND` literals.
+                // Instead of
+                //     `SECOND [(<leading precision>)] TO SECOND[(<fractional seconds precision>)]`
+                // one must use the special format:
+                //     `SECOND [( <leading precision> [ , <fractional seconds precision>] )]`
+                let last_field = None;
+                let (leading_precision, fsec_precision) = self.parse_optional_precision_scale()?;
+                (leading_precision, last_field, fsec_precision)
+            } else {
+                let leading_precision = self.parse_optional_precision()?;
+                if self.parse_keyword("TO") {
+                    let last_field = Some(self.parse_date_time_field()?);
+                    let fsec_precision = if last_field == Some(SQLDateTimeField::Second) {
+                        self.parse_optional_precision()?
+                    } else {
+                        None
+                    };
+                    (leading_precision, last_field, fsec_precision)
+                } else {
+                    (leading_precision, None, None)
+                }
+            };
+
+        Ok(ASTNode::SQLValue(Value::Interval {
+            value,
+            leading_field,
+            leading_precision,
+            last_field,
+            fractional_seconds_precision: fsec_precision,
+        }))
     }
 
     /// Parse an operator following an expression
@@ -1182,6 +1254,10 @@ impl Parser {
                     }
                     Ok(SQLType::Time)
                 }
+                // Interval types can be followed by a complicated interval
+                // qualifier that we don't currently support. See
+                // parse_interval_literal for a taste.
+                "INTERVAL" => Ok(SQLType::Interval),
                 "REGCLASS" => Ok(SQLType::Regclass),
                 "TEXT" => {
                     if self.consume_token(&Token::LBracket) {

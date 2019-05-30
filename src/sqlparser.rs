@@ -117,6 +117,7 @@ impl Parser {
                     "DROP" => Ok(self.parse_drop()?),
                     "DELETE" => Ok(self.parse_delete()?),
                     "INSERT" => Ok(self.parse_insert()?),
+                    "UPDATE" => Ok(self.parse_update()?),
                     "ALTER" => Ok(self.parse_alter()?),
                     "COPY" => Ok(self.parse_copy()?),
                     _ => parser_err!(format!(
@@ -1603,6 +1604,31 @@ impl Parser {
             table_name,
             columns,
             values: vec![values],
+        })
+    }
+
+    pub fn parse_update(&mut self) -> Result<SQLStatement, ParserError> {
+        let table_name = self.parse_object_name()?;
+        self.expect_keyword("SET")?;
+        let mut assignments = vec![];
+        loop {
+            let id = self.parse_identifier()?;
+            self.expect_token(&Token::Eq)?;
+            let value = self.parse_expr()?;
+            assignments.push(SQLAssignment { id, value });
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+        let selection = if self.parse_keyword("WHERE") {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+        Ok(SQLStatement::SQLUpdate {
+            table_name,
+            assignments,
+            selection,
         })
     }
 

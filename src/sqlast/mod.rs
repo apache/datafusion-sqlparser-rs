@@ -25,7 +25,7 @@ use std::ops::Deref;
 pub use self::ddl::{AlterTableOperation, TableConstraint};
 pub use self::query::{
     Cte, Fetch, Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLQuery, SQLSelect,
-    SQLSelectItem, SQLSetExpr, SQLSetOperator, SQLValues, TableFactor,
+    SQLSelectItem, SQLSetExpr, SQLSetOperator, SQLValues, TableAlias, TableFactor,
 };
 pub use self::sqltype::SQLType;
 pub use self::value::Value;

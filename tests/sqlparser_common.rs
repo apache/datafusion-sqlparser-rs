@@ -1589,11 +1589,13 @@ fn parse_create_view() {
     match verified_stmt(sql) {
         SQLStatement::SQLCreateView {
             name,
+            columns,
             query,
             materialized,
             with_options,
         } => {
             assert_eq!("myschema.myview", name.to_string());
+            assert_eq!(Vec::<SQLIdent>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(!materialized);
             assert_eq!(with_options, vec![]);
@@ -1626,16 +1628,39 @@ fn parse_create_view_with_options() {
 }
 
 #[test]
+fn parse_create_view_with_columns() {
+    let sql = "CREATE VIEW v (has, cols) AS SELECT 1, 2";
+    match verified_stmt(sql) {
+        SQLStatement::SQLCreateView {
+            name,
+            columns,
+            with_options,
+            query,
+            materialized,
+        } => {
+            assert_eq!("v", name.to_string());
+            assert_eq!(columns, vec!["has".to_string(), "cols".to_string()]);
+            assert_eq!(with_options, vec![]);
+            assert_eq!("SELECT 1, 2", query.to_string());
+            assert!(!materialized);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_materialized_view() {
     let sql = "CREATE MATERIALIZED VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
         SQLStatement::SQLCreateView {
             name,
+            columns,
             query,
             materialized,
             with_options,
         } => {
             assert_eq!("myschema.myview", name.to_string());
+            assert_eq!(Vec::<SQLIdent>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(materialized);
             assert_eq!(with_options, vec![]);

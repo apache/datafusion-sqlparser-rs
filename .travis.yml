@@ -19,10 +19,17 @@ rust:
 before_script:
   - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
   - cargo install --force cargo-travis && export PATH=$HOME/.cargo/bin:$PATH
+  - rustup component add clippy rustfmt
 
 script:
+  # Clippy must be run first, as its lints are only triggered during
+  # compilation. Put another way: after a successful `cargo build`, `cargo
+  # clippy` is guaranteed to produce no results. This bug is known upstream:
+  # https://github.com/rust-lang/rust-clippy/issues/2604.
+  - travis-cargo clippy -- --all-targets --all-features -- -D warnings
   - travis-cargo build
   - travis-cargo test
+  - travis-cargo fmt -- -- --check
 
 after_success:
   - cargo coveralls --verbose

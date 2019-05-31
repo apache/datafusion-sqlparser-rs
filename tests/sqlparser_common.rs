@@ -1317,7 +1317,7 @@ fn parse_drop_table() {
             );
             assert_eq!(false, cascade);
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 
     let sql = "DROP TABLE IF EXISTS foo, bar CASCADE";
@@ -1336,7 +1336,7 @@ fn parse_drop_table() {
             );
             assert_eq!(true, cascade);
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 
     let sql = "DROP TABLE";
@@ -1365,7 +1365,7 @@ fn parse_drop_view() {
             );
             assert_eq!(SQLObjectType::View, object_type);
         }
-        _ => assert!(false),
+        _ => unreachable!(),
     }
 }
 

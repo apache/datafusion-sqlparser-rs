@@ -1448,6 +1448,49 @@ fn parse_complex_join() {
 }
 
 #[test]
+fn parse_join_nesting() {
+    fn table(name: impl Into<String>) -> TableFactor {
+        TableFactor::Table {
+            name: SQLObjectName(vec![name.into()]),
+            alias: None,
+            args: vec![],
+            with_hints: vec![],
+        }
+    }
+
+    fn join(relation: TableFactor) -> Join {
+        Join {
+            relation,
+            join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+        }
+    }
+
+    macro_rules! nest {
+        ($base:expr, $($join:expr),*) => {
+            TableFactor::NestedJoin {
+                base: Box::new($base),
+                joins: vec![$(join($join)),*]
+            }
+        };
+    }
+
+    let sql = "SELECT * FROM a NATURAL JOIN (b NATURAL JOIN (c NATURAL JOIN d NATURAL JOIN e)) \
+               NATURAL JOIN (f NATURAL JOIN (g NATURAL JOIN h))";
+    assert_eq!(
+        verified_only_select(sql).joins,
+        vec![
+            join(nest!(table("b"), nest!(table("c"), table("d"), table("e")))),
+            join(nest!(table("f"), nest!(table("g"), table("h"))))
+        ],
+    );
+
+    let sql = "SELECT * FROM (a NATURAL JOIN b) NATURAL JOIN c";
+    let select = verified_only_select(sql);
+    assert_eq!(select.relation.unwrap(), nest!(table("a"), table("b")),);
+    assert_eq!(select.joins, vec![join(table("c"))],)
+}
+
+#[test]
 fn parse_join_syntax_variants() {
     one_statement_parses_to(
         "SELECT c1 FROM t1 INNER JOIN t2 USING(c1)",
@@ -2047,6 +2090,13 @@ fn lateral_derived() {
         ParserError::ParserError(
             "Expected subquery after LATERAL, found: generate_series".to_string()
         ),
+        res.unwrap_err()
+    );
+
+    let sql = "SELECT * FROM a LEFT JOIN LATERAL (b CROSS JOIN c)";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected subquery after LATERAL, found nested join".to_string()),
         res.unwrap_err()
     );
 }

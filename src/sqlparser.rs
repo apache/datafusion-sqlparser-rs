@@ -1537,14 +1537,27 @@ impl Parser {
     pub fn parse_table_factor(&mut self) -> Result<TableFactor, ParserError> {
         let lateral = self.parse_keyword("LATERAL");
         if self.consume_token(&Token::LParen) {
-            let subquery = Box::new(self.parse_query()?);
-            self.expect_token(&Token::RParen)?;
-            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
-            Ok(TableFactor::Derived {
-                lateral,
-                subquery,
-                alias,
-            })
+            if self.parse_keyword("SELECT")
+                || self.parse_keyword("WITH")
+                || self.parse_keyword("VALUES")
+            {
+                self.prev_token();
+                let subquery = Box::new(self.parse_query()?);
+                self.expect_token(&Token::RParen)?;
+                let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+                Ok(TableFactor::Derived {
+                    lateral,
+                    subquery,
+                    alias,
+                })
+            } else if lateral {
+                parser_err!("Expected subquery after LATERAL, found nested join".to_string())
+            } else {
+                let base = Box::new(self.parse_table_factor()?);
+                let joins = self.parse_joins()?;
+                self.expect_token(&Token::RParen)?;
+                Ok(TableFactor::NestedJoin { base, joins })
+            }
         } else if lateral {
             self.expected("subquery after LATERAL", self.peek_token())
         } else {

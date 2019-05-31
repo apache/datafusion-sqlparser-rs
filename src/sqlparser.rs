@@ -561,10 +561,28 @@ impl Parser {
 
     /// Return first non-whitespace token that has not yet been processed
     pub fn peek_token(&self) -> Option<Token> {
-        if let Some(n) = self.til_non_whitespace() {
-            self.token_at(n)
-        } else {
-            None
+        self.peek_nth_token(0)
+    }
+
+    /// Return nth non-whitespace token that has not yet been processed
+    pub fn peek_nth_token(&self, mut n: usize) -> Option<Token> {
+        let mut index = self.index;
+        loop {
+            match self.token_at(index) {
+                Some(Token::Whitespace(_)) => {
+                    index += 1;
+                }
+                Some(token) => {
+                    if n == 0 {
+                        return Some(token);
+                    }
+                    index += 1;
+                    n -= 1;
+                }
+                None => {
+                    return None;
+                }
+            }
         }
     }
 
@@ -577,24 +595,6 @@ impl Parser {
                 }
                 token => {
                     return token;
-                }
-            }
-        }
-    }
-
-    /// get the index for non whitepsace token
-    fn til_non_whitespace(&self) -> Option<usize> {
-        let mut index = self.index;
-        loop {
-            match self.token_at(index) {
-                Some(Token::Whitespace(_)) => {
-                    index += 1;
-                }
-                Some(_) => {
-                    return Some(index);
-                }
-                None => {
-                    return None;
                 }
             }
         }

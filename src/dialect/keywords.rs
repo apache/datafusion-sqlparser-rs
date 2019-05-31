@@ -396,7 +396,7 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[&str] = &[
     // Reserved as both a table and a column alias:
     WITH, SELECT, WHERE, GROUP, ORDER, UNION, EXCEPT, INTERSECT,
     // Reserved only as a table alias in the `FROM`/`JOIN` clauses:
-    ON, JOIN, INNER, CROSS, FULL, LEFT, RIGHT, NATURAL, USING,
+    ON, JOIN, INNER, CROSS, FULL, LEFT, RIGHT, NATURAL, USING, LIMIT,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`

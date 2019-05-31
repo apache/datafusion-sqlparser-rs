@@ -125,6 +125,16 @@ fn parse_simple_select() {
 }
 
 #[test]
+fn parse_select_with_limit_but_no_where() {
+    let sql = "SELECT id, fname, lname FROM customer LIMIT 5";
+    let select = verified_only_select(sql);
+    assert_eq!(false, select.distinct);
+    assert_eq!(3, select.projection.len());
+    let select = verified_query(sql);
+    assert_eq!(Some(ASTNode::SQLValue(Value::Long(5))), select.limit);
+}
+
+#[test]
 fn parse_select_distinct() {
     let sql = "SELECT DISTINCT name FROM customer";
     let select = verified_only_select(sql);

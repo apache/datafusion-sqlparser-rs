@@ -10,8 +10,12 @@ pub struct SQLQuery {
     pub body: SQLSetExpr,
     /// ORDER BY
     pub order_by: Vec<SQLOrderByExpr>,
-    /// LIMIT
+    /// LIMIT { <N> | ALL }
     pub limit: Option<ASTNode>,
+    /// OFFSET <N> { ROW | ROWS }
+    pub offset: Option<ASTNode>,
+    /// FETCH { FIRST | NEXT } <N> [ PERCENT ] { ROW | ROWS } | { ONLY | WITH TIES }
+    pub fetch: Option<Fetch>,
 }
 
 impl ToString for SQLQuery {
@@ -26,6 +30,13 @@ impl ToString for SQLQuery {
         }
         if let Some(ref limit) = self.limit {
             s += &format!(" LIMIT {}", limit.to_string());
+        }
+        if let Some(ref offset) = self.offset {
+            s += &format!(" OFFSET {} ROWS", offset.to_string());
+        }
+        if let Some(ref fetch) = self.fetch {
+            s.push(' ');
+            s += &fetch.to_string();
         }
         s
     }
@@ -198,6 +209,7 @@ pub enum TableFactor {
         with_hints: Vec<ASTNode>,
     },
     Derived {
+        lateral: bool,
         subquery: Box<SQLQuery>,
         alias: Option<SQLIdent>,
     },
@@ -224,8 +236,16 @@ impl ToString for TableFactor {
                 }
                 s
             }
-            TableFactor::Derived { subquery, alias } => {
-                let mut s = format!("({})", subquery.to_string());
+            TableFactor::Derived {
+                lateral,
+                subquery,
+                alias,
+            } => {
+                let mut s = String::new();
+                if *lateral {
+                    s += "LATERAL ";
+                }
+                s += &format!("({})", subquery.to_string());
                 if let Some(alias) = alias {
                     s += &format!(" AS {}", alias);
                 }
@@ -317,6 +337,30 @@ impl ToString for SQLOrderByExpr {
             Some(true) => format!("{} ASC", self.expr.to_string()),
             Some(false) => format!("{} DESC", self.expr.to_string()),
             None => self.expr.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Fetch {
+    pub with_ties: bool,
+    pub percent: bool,
+    pub quantity: Option<ASTNode>,
+}
+
+impl ToString for Fetch {
+    fn to_string(&self) -> String {
+        let extension = if self.with_ties { "WITH TIES" } else { "ONLY" };
+        if let Some(ref quantity) = self.quantity {
+            let percent = if self.percent { " PERCENT" } else { "" };
+            format!(
+                "FETCH FIRST {}{} ROWS {}",
+                quantity.to_string(),
+                percent,
+                extension
+            )
+        } else {
+            format!("FETCH FIRST ROWS {}", extension)
         }
     }
 }

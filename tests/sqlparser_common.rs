@@ -428,38 +428,98 @@ fn parse_not_precedence() {
         operator: SQLOperator::Not,
         ..
     });
+
+    // NOT has lower precedence than BETWEEN, so the following parses as NOT (1 NOT BETWEEN 1 AND 2)
+    let sql = "NOT 1 NOT BETWEEN 1 AND 2";
+    assert_eq!(
+        verified_expr(sql),
+        SQLUnary {
+            operator: SQLOperator::Not,
+            expr: Box::new(SQLBetween {
+                expr: Box::new(SQLValue(Value::Long(1))),
+                low: Box::new(SQLValue(Value::Long(1))),
+                high: Box::new(SQLValue(Value::Long(2))),
+                negated: true,
+            }),
+        },
+    );
+
+    // NOT has lower precedence than LIKE, so the following parses as NOT ('a' NOT LIKE 'b')
+    let sql = "NOT 'a' NOT LIKE 'b'";
+    assert_eq!(
+        verified_expr(sql),
+        SQLUnary {
+            operator: SQLOperator::Not,
+            expr: Box::new(SQLBinaryExpr {
+                left: Box::new(SQLValue(Value::SingleQuotedString("a".into()))),
+                op: SQLOperator::NotLike,
+                right: Box::new(SQLValue(Value::SingleQuotedString("b".into()))),
+            }),
+        },
+    );
+
+    // NOT has lower precedence than IN, so the following parses as NOT (a NOT IN 'a')
+    let sql = "NOT a NOT IN ('a')";
+    assert_eq!(
+        verified_expr(sql),
+        SQLUnary {
+            operator: SQLOperator::Not,
+            expr: Box::new(SQLInList {
+                expr: Box::new(SQLIdentifier("a".into())),
+                list: vec![SQLValue(Value::SingleQuotedString("a".into()))],
+                negated: true,
+            }),
+        },
+    );
 }
 
 #[test]
 fn parse_like() {
-    let sql = "SELECT * FROM customers WHERE name LIKE '%a'";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        ASTNode::SQLBinaryExpr {
-            left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
-            op: SQLOperator::Like,
-            right: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
-                "%a".to_string()
-            ))),
-        },
-        select.selection.unwrap()
-    );
-}
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}LIKE '%a'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            ASTNode::SQLBinaryExpr {
+                left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
+                op: if negated {
+                    SQLOperator::NotLike
+                } else {
+                    SQLOperator::Like
+                },
+                right: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                    "%a".to_string()
+                ))),
+            },
+            select.selection.unwrap()
+        );
 
-#[test]
-fn parse_not_like() {
-    let sql = "SELECT * FROM customers WHERE name NOT LIKE '%a'";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        ASTNode::SQLBinaryExpr {
-            left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
-            op: SQLOperator::NotLike,
-            right: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
-                "%a".to_string()
-            ))),
-        },
-        select.selection.unwrap()
-    );
+        // This statement tests that LIKE and NOT LIKE have the same precedence.
+        // This was previously mishandled (#81).
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}LIKE '%a' IS NULL",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            ASTNode::SQLIsNull(Box::new(ASTNode::SQLBinaryExpr {
+                left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
+                op: if negated {
+                    SQLOperator::NotLike
+                } else {
+                    SQLOperator::Like
+                },
+                right: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
+                    "%a".to_string()
+                ))),
+            })),
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
 }
 
 #[test]

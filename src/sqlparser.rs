@@ -1529,57 +1529,38 @@ impl Parser {
                 None => return Ok(joins),
             };
 
-            let join = match &self.peek_token() {
-                Some(Token::SQLWord(kw)) if kw.keyword == "INNER" => {
-                    self.next_token();
+            let peek_keyword = if let Some(Token::SQLWord(kw)) = self.peek_token() {
+                kw.keyword
+            } else {
+                String::default()
+            };
+
+            let join_operator_type = match peek_keyword.as_ref() {
+                "INNER" | "JOIN" => {
+                    let _ = self.parse_keyword("INNER");
                     self.expect_keyword("JOIN")?;
-                    Join {
-                        relation: self.parse_table_factor()?,
-                        join_operator: JoinOperator::Inner(self.parse_join_constraint(natural)?),
-                    }
+                    JoinOperator::Inner
                 }
-                Some(Token::SQLWord(kw)) if kw.keyword == "JOIN" => {
-                    self.next_token();
-                    Join {
-                        relation: self.parse_table_factor()?,
-                        join_operator: JoinOperator::Inner(self.parse_join_constraint(natural)?),
-                    }
-                }
-                Some(Token::SQLWord(kw)) if kw.keyword == "LEFT" => {
-                    self.next_token();
+                kw @ "LEFT" | kw @ "RIGHT" | kw @ "FULL" => {
+                    let _ = self.next_token();
                     let _ = self.parse_keyword("OUTER");
                     self.expect_keyword("JOIN")?;
-                    Join {
-                        relation: self.parse_table_factor()?,
-                        join_operator: JoinOperator::LeftOuter(
-                            self.parse_join_constraint(natural)?,
-                        ),
-                    }
-                }
-                Some(Token::SQLWord(kw)) if kw.keyword == "RIGHT" => {
-                    self.next_token();
-                    let _ = self.parse_keyword("OUTER");
-                    self.expect_keyword("JOIN")?;
-                    Join {
-                        relation: self.parse_table_factor()?,
-                        join_operator: JoinOperator::RightOuter(
-                            self.parse_join_constraint(natural)?,
-                        ),
-                    }
-                }
-                Some(Token::SQLWord(kw)) if kw.keyword == "FULL" => {
-                    self.next_token();
-                    let _ = self.parse_keyword("OUTER");
-                    self.expect_keyword("JOIN")?;
-                    Join {
-                        relation: self.parse_table_factor()?,
-                        join_operator: JoinOperator::FullOuter(
-                            self.parse_join_constraint(natural)?,
-                        ),
+                    match kw {
+                        "LEFT" => JoinOperator::LeftOuter,
+                        "RIGHT" => JoinOperator::RightOuter,
+                        "FULL" => JoinOperator::FullOuter,
+                        _ => unreachable!(),
                     }
                 }
                 _ => break,
             };
+            let relation = self.parse_table_factor()?;
+            let join_constraint = self.parse_join_constraint(natural)?;
+            let join = Join {
+                relation,
+                join_operator: join_operator_type(join_constraint),
+            };
+
             joins.push(join);
         }
 

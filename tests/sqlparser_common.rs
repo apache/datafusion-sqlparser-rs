@@ -735,12 +735,14 @@ fn parse_create_table() {
         SQLStatement::SQLCreateTable {
             name,
             columns,
+            constraints,
             external: false,
             file_format: None,
             location: None,
         } => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(3, columns.len());
+            assert!(constraints.is_empty());
 
             let c_name = &columns[0];
             assert_eq!("name", c_name.name);
@@ -762,6 +764,12 @@ fn parse_create_table() {
 }
 
 #[test]
+fn parse_create_table_trailing_comma() {
+    let sql = "CREATE TABLE foo (bar int,)";
+    all_dialects().one_statement_parses_to(sql, "CREATE TABLE foo (bar int)");
+}
+
+#[test]
 fn parse_create_external_table() {
     let sql = "CREATE EXTERNAL TABLE uk_cities (\
                name VARCHAR(100) NOT NULL,\
@@ -780,12 +788,14 @@ fn parse_create_external_table() {
         SQLStatement::SQLCreateTable {
             name,
             columns,
+            constraints,
             external,
             file_format,
             location,
         } => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(3, columns.len());
+            assert!(constraints.is_empty());
 
             let c_name = &columns[0];
             assert_eq!("name", c_name.name);
@@ -811,27 +821,52 @@ fn parse_create_external_table() {
 }
 
 #[test]
-fn parse_alter_table_constraint_primary_key() {
-    let sql = "ALTER TABLE bazaar.address \
-               ADD CONSTRAINT address_pkey PRIMARY KEY (address_id)";
-    match verified_stmt(sql) {
-        SQLStatement::SQLAlterTable { name, .. } => {
-            assert_eq!(name.to_string(), "bazaar.address");
+fn parse_alter_table_constraints() {
+    check_one("CONSTRAINT address_pkey PRIMARY KEY (address_id)");
+    check_one("CONSTRAINT uk_task UNIQUE (report_date, task_id)");
+    check_one(
+        "CONSTRAINT customer_address_id_fkey FOREIGN KEY (address_id) \
+         REFERENCES public.address(address_id)",
+    );
+    check_one("CONSTRAINT ck CHECK (rtrim(ltrim(REF_CODE)) <> '')");
+
+    check_one("PRIMARY KEY (foo, bar)");
+    check_one("UNIQUE (id)");
+    check_one("FOREIGN KEY (foo, bar) REFERENCES AnotherTable(foo, bar)");
+    check_one("CHECK (end_date > start_date OR end_date IS NULL)");
+
+    fn check_one(constraint_text: &str) {
+        match verified_stmt(&format!("ALTER TABLE tab ADD {}", constraint_text)) {
+            SQLStatement::SQLAlterTable {
+                name,
+                operation: AlterTableOperation::AddConstraint(constraint),
+            } => {
+                assert_eq!("tab", name.to_string());
+                assert_eq!(constraint_text, constraint.to_string());
+            }
+            _ => unreachable!(),
         }
-        _ => unreachable!(),
+        verified_stmt(&format!("CREATE TABLE foo (id int, {})", constraint_text));
     }
 }
 
 #[test]
-fn parse_alter_table_constraint_foreign_key() {
-    let sql = "ALTER TABLE public.customer \
-        ADD CONSTRAINT customer_address_id_fkey FOREIGN KEY (address_id) REFERENCES public.address(address_id)";
-    match verified_stmt(sql) {
-        SQLStatement::SQLAlterTable { name, .. } => {
-            assert_eq!(name.to_string(), "public.customer");
-        }
-        _ => unreachable!(),
-    }
+fn parse_bad_constraint() {
+    let res = parse_sql_statements("ALTER TABLE tab ADD");
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected a constraint in ALTER TABLE .. ADD, found: EOF".to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("CREATE TABLE tab (foo int,");
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected column name or constraint definition, found: EOF".to_string()
+        ),
+        res.unwrap_err()
+    );
 }
 
 #[test]

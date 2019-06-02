@@ -347,14 +347,8 @@ impl Parser {
             let rows = if self.parse_keyword("UNBOUNDED") {
                 None
             } else {
-                let rows = self.parse_literal_int()?;
-                if rows < 0 {
-                    parser_err!(format!(
-                        "The number of rows must be non-negative, got {}",
-                        rows
-                    ))?;
-                }
-                Some(rows as u64)
+                let rows = self.parse_literal_uint()?;
+                Some(rows)
             };
             if self.parse_keyword("PRECEDING") {
                 Ok(SQLWindowFrameBound::Preceding(rows))
@@ -774,7 +768,7 @@ impl Parser {
     pub fn parse_create_external_table(&mut self) -> Result<SQLStatement, ParserError> {
         self.expect_keyword("TABLE")?;
         let table_name = self.parse_object_name()?;
-        let columns = self.parse_columns()?;
+        let (columns, constraints) = self.parse_columns()?;
         self.expect_keyword("STORED")?;
         self.expect_keyword("AS")?;
         let file_format = self.parse_identifier()?.parse::<FileFormat>()?;
@@ -785,6 +779,7 @@ impl Parser {
         Ok(SQLStatement::SQLCreateTable {
             name: table_name,
             columns,
+            constraints,
             external: true,
             file_format: Some(file_format),
             location: Some(location),
@@ -850,100 +845,120 @@ impl Parser {
     pub fn parse_create_table(&mut self) -> Result<SQLStatement, ParserError> {
         let table_name = self.parse_object_name()?;
         // parse optional column list (schema)
-        let columns = self.parse_columns()?;
+        let (columns, constraints) = self.parse_columns()?;
 
         Ok(SQLStatement::SQLCreateTable {
             name: table_name,
             columns,
+            constraints,
             external: false,
             file_format: None,
             location: None,
         })
     }
 
-    fn parse_columns(&mut self) -> Result<Vec<SQLColumnDef>, ParserError> {
+    fn parse_columns(&mut self) -> Result<(Vec<SQLColumnDef>, Vec<TableConstraint>), ParserError> {
         let mut columns = vec![];
+        let mut constraints = vec![];
         if !self.consume_token(&Token::LParen) {
-            return Ok(columns);
+            return Ok((columns, constraints));
         }
 
         loop {
-            match self.next_token() {
-                Some(Token::SQLWord(column_name)) => {
-                    let data_type = self.parse_data_type()?;
-                    let is_primary = self.parse_keywords(vec!["PRIMARY", "KEY"]);
-                    let is_unique = self.parse_keyword("UNIQUE");
-                    let default = if self.parse_keyword("DEFAULT") {
-                        let expr = self.parse_default_expr(0)?;
-                        Some(expr)
-                    } else {
-                        None
-                    };
-                    let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
-                        false
-                    } else {
-                        let _ = self.parse_keyword("NULL");
-                        true
-                    };
-                    debug!("default: {:?}", default);
+            if let Some(constraint) = self.parse_optional_table_constraint()? {
+                constraints.push(constraint);
+            } else if let Some(Token::SQLWord(column_name)) = self.peek_token() {
+                self.next_token();
+                let data_type = self.parse_data_type()?;
+                let is_primary = self.parse_keywords(vec!["PRIMARY", "KEY"]);
+                let is_unique = self.parse_keyword("UNIQUE");
+                let default = if self.parse_keyword("DEFAULT") {
+                    let expr = self.parse_default_expr(0)?;
+                    Some(expr)
+                } else {
+                    None
+                };
+                let allow_null = if self.parse_keywords(vec!["NOT", "NULL"]) {
+                    false
+                } else {
+                    let _ = self.parse_keyword("NULL");
+                    true
+                };
+                debug!("default: {:?}", default);
 
-                    columns.push(SQLColumnDef {
-                        name: column_name.as_sql_ident(),
-                        data_type,
-                        allow_null,
-                        is_primary,
-                        is_unique,
-                        default,
-                    });
-                    match self.next_token() {
-                        Some(Token::Comma) => {}
-                        Some(Token::RParen) => {
-                            break;
-                        }
-                        other => {
-                            return parser_err!(format!(
-                                "Expected ',' or ')' after column definition but found {:?}",
-                                other
-                            ));
-                        }
-                    }
-                }
-                unexpected => {
-                    return parser_err!(format!("Expected column name, got {:?}", unexpected));
-                }
+                columns.push(SQLColumnDef {
+                    name: column_name.as_sql_ident(),
+                    data_type,
+                    allow_null,
+                    is_primary,
+                    is_unique,
+                    default,
+                });
+            } else {
+                return self.expected("column name or constraint definition", self.peek_token());
+            }
+            let comma = self.consume_token(&Token::Comma);
+            if self.consume_token(&Token::RParen) {
+                // allow a trailing comma, even though it's not in standard
+                break;
+            } else if !comma {
+                return self.expected("',' or ')' after column definition", self.peek_token());
             }
         }
 
-        Ok(columns)
+        Ok((columns, constraints))
     }
 
-    pub fn parse_table_key(&mut self, constraint_name: SQLIdent) -> Result<TableKey, ParserError> {
-        let is_primary_key = self.parse_keywords(vec!["PRIMARY", "KEY"]);
-        let is_unique_key = self.parse_keywords(vec!["UNIQUE", "KEY"]);
-        let is_foreign_key = self.parse_keywords(vec!["FOREIGN", "KEY"]);
-        let column_names = self.parse_parenthesized_column_list(Mandatory)?;
-        let key = Key {
-            name: constraint_name,
-            columns: column_names,
-        };
-        if is_primary_key {
-            Ok(TableKey::PrimaryKey(key))
-        } else if is_unique_key {
-            Ok(TableKey::UniqueKey(key))
-        } else if is_foreign_key {
-            self.expect_keyword("REFERENCES")?;
-            let foreign_table = self.parse_object_name()?;
-            let referred_columns = self.parse_parenthesized_column_list(Mandatory)?;
-            Ok(TableKey::ForeignKey {
-                key,
-                foreign_table,
-                referred_columns,
-            })
+    pub fn parse_optional_table_constraint(
+        &mut self,
+    ) -> Result<Option<TableConstraint>, ParserError> {
+        let name = if self.parse_keyword("CONSTRAINT") {
+            Some(self.parse_identifier()?)
         } else {
-            parser_err!(format!(
-                "Expecting primary key, unique key, or foreign key, found: {:?}",
-                self.peek_token()
-            ))
+            None
+        };
+        match self.next_token() {
+            Some(Token::SQLWord(ref k)) if k.keyword == "PRIMARY" || k.keyword == "UNIQUE" => {
+                let is_primary = k.keyword == "PRIMARY";
+                if is_primary {
+                    self.expect_keyword("KEY")?;
+                }
+                let columns = self.parse_parenthesized_column_list(Mandatory)?;
+                Ok(Some(TableConstraint::Unique {
+                    name,
+                    columns,
+                    is_primary,
+                }))
+            }
+            Some(Token::SQLWord(ref k)) if k.keyword == "FOREIGN" => {
+                self.expect_keyword("KEY")?;
+                let columns = self.parse_parenthesized_column_list(Mandatory)?;
+                self.expect_keyword("REFERENCES")?;
+                let foreign_table = self.parse_object_name()?;
+                let referred_columns = self.parse_parenthesized_column_list(Mandatory)?;
+                Ok(Some(TableConstraint::ForeignKey {
+                    name,
+                    columns,
+                    foreign_table,
+                    referred_columns,
+                }))
+            }
+            Some(Token::SQLWord(ref k)) if k.keyword == "CHECK" => {
+                self.expect_token(&Token::LParen)?;
+                let expr = Box::new(self.parse_expr()?);
+                self.expect_token(&Token::RParen)?;
+                Ok(Some(TableConstraint::Check { name, expr }))
+            }
+            unexpected => {
+                if name.is_some() {
+                    self.expected("PRIMARY, UNIQUE, FOREIGN, or CHECK", unexpected)
+                } else {
+                    if unexpected.is_some() {
+                        self.prev_token();
+                    }
+                    Ok(None)
+                }
+            }
         }
     }
 
@@ -952,12 +967,10 @@ impl Parser {
         let _ = self.parse_keyword("ONLY");
         let table_name = self.parse_object_name()?;
         let operation = if self.parse_keyword("ADD") {
-            if self.parse_keyword("CONSTRAINT") {
-                let constraint_name = self.parse_identifier()?;
-                let table_key = self.parse_table_key(constraint_name)?;
-                AlterOperation::AddConstraint(table_key)
+            if let Some(constraint) = self.parse_optional_table_constraint()? {
+                AlterTableOperation::AddConstraint(constraint)
             } else {
-                return self.expected("CONSTRAINT after ADD", self.peek_token());
+                return self.expected("a constraint in ALTER TABLE .. ADD", self.peek_token());
             }
         } else {
             return self.expected("ADD after ALTER TABLE", self.peek_token());
@@ -1045,9 +1058,9 @@ impl Parser {
                     Ok(n) => Ok(Value::Double(n)),
                     Err(e) => parser_err!(format!("Could not parse '{}' as f64: {}", n, e)),
                 },
-                Token::Number(ref n) => match n.parse::<i64>() {
+                Token::Number(ref n) => match n.parse::<u64>() {
                     Ok(n) => Ok(Value::Long(n)),
-                    Err(e) => parser_err!(format!("Could not parse '{}' as i64: {}", n, e)),
+                    Err(e) => parser_err!(format!("Could not parse '{}' as u64: {}", n, e)),
                 },
                 Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
                 Token::NationalStringLiteral(ref s) => {
@@ -1059,13 +1072,13 @@ impl Parser {
         }
     }
 
-    /// Parse a literal integer/long
-    pub fn parse_literal_int(&mut self) -> Result<i64, ParserError> {
+    /// Parse an unsigned literal integer/long
+    pub fn parse_literal_uint(&mut self) -> Result<u64, ParserError> {
         match self.next_token() {
-            Some(Token::Number(s)) => s.parse::<i64>().map_err(|e| {
-                ParserError::ParserError(format!("Could not parse '{}' as i64: {}", s, e))
+            Some(Token::Number(s)) => s.parse::<u64>().map_err(|e| {
+                ParserError::ParserError(format!("Could not parse '{}' as u64: {}", s, e))
             }),
-            other => parser_err!(format!("Expected literal int, found {:?}", other)),
+            other => self.expected("literal int", other),
         }
     }
 
@@ -1247,17 +1260,11 @@ impl Parser {
         }
     }
 
-    pub fn parse_precision(&mut self) -> Result<usize, ParserError> {
-        //TODO: error handling
-        Ok(self.parse_optional_precision()?.unwrap())
-    }
-
-    pub fn parse_optional_precision(&mut self) -> Result<Option<usize>, ParserError> {
+    pub fn parse_optional_precision(&mut self) -> Result<Option<u64>, ParserError> {
         if self.consume_token(&Token::LParen) {
-            let n = self.parse_literal_int()?;
-            //TODO: check return value of reading rparen
+            let n = self.parse_literal_uint()?;
             self.expect_token(&Token::RParen)?;
-            Ok(Some(n as usize))
+            Ok(Some(n))
         } else {
             Ok(None)
         }
@@ -1265,16 +1272,16 @@ impl Parser {
 
     pub fn parse_optional_precision_scale(
         &mut self,
-    ) -> Result<(Option<usize>, Option<usize>), ParserError> {
+    ) -> Result<(Option<u64>, Option<u64>), ParserError> {
         if self.consume_token(&Token::LParen) {
-            let n = self.parse_literal_int()?;
+            let n = self.parse_literal_uint()?;
             let scale = if self.consume_token(&Token::Comma) {
-                Some(self.parse_literal_int()? as usize)
+                Some(self.parse_literal_uint()?)
             } else {
                 None
             };
             self.expect_token(&Token::RParen)?;
-            Ok((Some(n as usize), scale))
+            Ok((Some(n), scale))
         } else {
             Ok((None, None))
         }
@@ -1714,7 +1721,7 @@ impl Parser {
         if self.parse_keyword("ALL") {
             Ok(None)
         } else {
-            self.parse_literal_int()
+            self.parse_literal_uint()
                 .map(|n| Some(ASTNode::SQLValue(Value::Long(n))))
         }
     }
@@ -1722,7 +1729,7 @@ impl Parser {
     /// Parse an OFFSET clause
     pub fn parse_offset(&mut self) -> Result<ASTNode, ParserError> {
         let value = self
-            .parse_literal_int()
+            .parse_literal_uint()
             .map(|n| ASTNode::SQLValue(Value::Long(n)))?;
         self.expect_one_of_keywords(&["ROW", "ROWS"])?;
         Ok(value)

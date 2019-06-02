@@ -1167,15 +1167,18 @@ impl Parser {
             {
                 Ok(Some(w.as_sql_ident()))
             }
-            ref not_an_ident if after_as => parser_err!(format!(
-                "Expected an identifier after AS, got {:?}",
-                not_an_ident
-            )),
-            Some(_not_an_ident) => {
-                self.prev_token();
+            // MSSQL supports single-quoted strings as aliases for columns
+            // We accept them as table aliases too, although MSSQL does not.
+            Some(Token::SingleQuotedString(ref s)) => Ok(Some(format!("'{}'", s))),
+            not_an_ident => {
+                if after_as {
+                    return self.expected("an identifier after AS", not_an_ident);
+                }
+                if not_an_ident.is_some() {
+                    self.prev_token();
+                }
                 Ok(None) // no alias found
             }
-            None => Ok(None),
         }
     }
 

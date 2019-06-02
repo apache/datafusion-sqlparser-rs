@@ -2102,6 +2102,126 @@ fn lateral_derived() {
 }
 
 #[test]
+fn parse_start_transaction() {
+    match verified_stmt("START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE") {
+        SQLStatement::SQLStartTransaction { modes } => assert_eq!(
+            modes,
+            vec![
+                TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
+                TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
+                TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable),
+            ]
+        ),
+        _ => unreachable!(),
+    }
+
+    // For historical reasons, PostgreSQL allows the commas between the modes to
+    // be omitted.
+    match one_statement_parses_to(
+        "START TRANSACTION READ ONLY READ WRITE ISOLATION LEVEL SERIALIZABLE",
+        "START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE",
+    ) {
+        SQLStatement::SQLStartTransaction { modes } => assert_eq!(
+            modes,
+            vec![
+                TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
+                TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
+                TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable),
+            ]
+        ),
+        _ => unreachable!(),
+    }
+
+    verified_stmt("START TRANSACTION");
+    one_statement_parses_to("BEGIN", "START TRANSACTION");
+    one_statement_parses_to("BEGIN WORK", "START TRANSACTION");
+    one_statement_parses_to("BEGIN TRANSACTION", "START TRANSACTION");
+
+    verified_stmt("START TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
+    verified_stmt("START TRANSACTION ISOLATION LEVEL READ COMMITTED");
+    verified_stmt("START TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+    verified_stmt("START TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+
+    let res = parse_sql_statements("START TRANSACTION ISOLATION LEVEL BAD");
+    assert_eq!(
+        ParserError::ParserError("Expected isolation level, found: BAD".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("START TRANSACTION BAD");
+    assert_eq!(
+        ParserError::ParserError("Expected transaction mode, found: BAD".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("START TRANSACTION READ ONLY,");
+    assert_eq!(
+        ParserError::ParserError("Expected transaction mode, found: EOF".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
+fn parse_set_transaction() {
+    // SET TRANSACTION shares transaction mode parsing code with START
+    // TRANSACTION, so no need to duplicate the tests here. We just do a quick
+    // sanity check.
+    match verified_stmt("SET TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE") {
+        SQLStatement::SQLSetTransaction { modes } => assert_eq!(
+            modes,
+            vec![
+                TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
+                TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
+                TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable),
+            ]
+        ),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_commit() {
+    match verified_stmt("COMMIT") {
+        SQLStatement::SQLCommit { chain: false } => (),
+        _ => unreachable!(),
+    }
+
+    match verified_stmt("COMMIT AND CHAIN") {
+        SQLStatement::SQLCommit { chain: true } => (),
+        _ => unreachable!(),
+    }
+
+    one_statement_parses_to("COMMIT AND NO CHAIN", "COMMIT");
+    one_statement_parses_to("COMMIT WORK AND NO CHAIN", "COMMIT");
+    one_statement_parses_to("COMMIT TRANSACTION AND NO CHAIN", "COMMIT");
+    one_statement_parses_to("COMMIT WORK AND CHAIN", "COMMIT AND CHAIN");
+    one_statement_parses_to("COMMIT TRANSACTION AND CHAIN", "COMMIT AND CHAIN");
+    one_statement_parses_to("COMMIT WORK", "COMMIT");
+    one_statement_parses_to("COMMIT TRANSACTION", "COMMIT");
+}
+
+#[test]
+fn parse_rollback() {
+    match verified_stmt("ROLLBACK") {
+        SQLStatement::SQLRollback { chain: false } => (),
+        _ => unreachable!(),
+    }
+
+    match verified_stmt("ROLLBACK AND CHAIN") {
+        SQLStatement::SQLRollback { chain: true } => (),
+        _ => unreachable!(),
+    }
+
+    one_statement_parses_to("ROLLBACK AND NO CHAIN", "ROLLBACK");
+    one_statement_parses_to("ROLLBACK WORK AND NO CHAIN", "ROLLBACK");
+    one_statement_parses_to("ROLLBACK TRANSACTION AND NO CHAIN", "ROLLBACK");
+    one_statement_parses_to("ROLLBACK WORK AND CHAIN", "ROLLBACK AND CHAIN");
+    one_statement_parses_to("ROLLBACK TRANSACTION AND CHAIN", "ROLLBACK AND CHAIN");
+    one_statement_parses_to("ROLLBACK WORK", "ROLLBACK");
+    one_statement_parses_to("ROLLBACK TRANSACTION", "ROLLBACK");
+}
+
+#[test]
 #[should_panic(
     expected = "Parse results with GenericSqlDialect are different from PostgreSqlDialect"
 )]

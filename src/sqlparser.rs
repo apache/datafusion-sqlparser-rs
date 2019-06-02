@@ -702,14 +702,10 @@ impl Parser {
     /// Consume the next token if it matches the expected token, otherwise return false
     #[must_use]
     pub fn consume_token(&mut self, expected: &Token) -> bool {
-        match self.peek_token() {
-            Some(ref t) => {
-                if *t == *expected {
-                    self.next_token();
-                    true
-                } else {
-                    false
-                }
+        match &self.peek_token() {
+            Some(t) if *t == *expected => {
+                self.next_token();
+                true
             }
             _ => false,
         }
@@ -1611,10 +1607,9 @@ impl Parser {
         let mut expr_list: Vec<ASTNode> = vec![];
         loop {
             expr_list.push(self.parse_expr()?);
-            match self.peek_token() {
-                Some(Token::Comma) => self.next_token(),
-                _ => break,
-            };
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
         }
         Ok(expr_list)
     }
@@ -1649,10 +1644,9 @@ impl Parser {
                 }
             }
 
-            match self.peek_token() {
-                Some(Token::Comma) => self.next_token(),
-                _ => break,
-            };
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
         }
         Ok(projections)
     }
@@ -1672,10 +1666,7 @@ impl Parser {
             };
 
             expr_list.push(SQLOrderByExpr { expr, asc });
-
-            if let Some(Token::Comma) = self.peek_token() {
-                self.next_token();
-            } else {
+            if !self.consume_token(&Token::Comma) {
                 break;
             }
         }

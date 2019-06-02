@@ -1219,6 +1219,43 @@ fn parse_joins_using() {
 }
 
 #[test]
+fn parse_natural_join() {
+    fn natural_join(f: impl Fn(JoinConstraint) -> JoinOperator) -> Join {
+        Join {
+            relation: TableFactor::Table {
+                name: SQLObjectName(vec!["t2".to_string()]),
+                alias: None,
+                args: vec![],
+                with_hints: vec![],
+            },
+            join_operator: f(JoinConstraint::Natural),
+        }
+    }
+    assert_eq!(
+        verified_only_select("SELECT * FROM t1 NATURAL JOIN t2").joins,
+        vec![natural_join(JoinOperator::Inner)]
+    );
+    assert_eq!(
+        verified_only_select("SELECT * FROM t1 NATURAL LEFT JOIN t2").joins,
+        vec![natural_join(JoinOperator::LeftOuter)]
+    );
+    assert_eq!(
+        verified_only_select("SELECT * FROM t1 NATURAL RIGHT JOIN t2").joins,
+        vec![natural_join(JoinOperator::RightOuter)]
+    );
+    assert_eq!(
+        verified_only_select("SELECT * FROM t1 NATURAL FULL JOIN t2").joins,
+        vec![natural_join(JoinOperator::FullOuter)]
+    );
+
+    let sql = "SELECT * FROM t1 natural";
+    assert_eq!(
+        ParserError::ParserError("Expected a join type after NATURAL, found: EOF".to_string()),
+        parse_sql_statements(sql).unwrap_err(),
+    );
+}
+
+#[test]
 fn parse_complex_join() {
     let sql = "SELECT c1, c2 FROM t1, t4 JOIN t2 ON t2.c = t1.c LEFT JOIN t3 USING(q, c) WHERE t4.c = t1.c";
     verified_only_select(sql);

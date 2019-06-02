@@ -1499,71 +1499,62 @@ impl Parser {
     fn parse_joins(&mut self) -> Result<Vec<Join>, ParserError> {
         let mut joins = vec![];
         loop {
-            let natural = match &self.peek_token() {
+            let join = match &self.peek_token() {
                 Some(Token::Comma) => {
                     self.next_token();
-                    let relation = self.parse_table_factor()?;
-                    let join = Join {
-                        relation,
+                    Join {
+                        relation: self.parse_table_factor()?,
                         join_operator: JoinOperator::Implicit,
-                    };
-                    joins.push(join);
-                    continue;
+                    }
                 }
                 Some(Token::SQLWord(kw)) if kw.keyword == "CROSS" => {
                     self.next_token();
                     self.expect_keyword("JOIN")?;
-                    let relation = self.parse_table_factor()?;
-                    let join = Join {
-                        relation,
+                    Join {
+                        relation: self.parse_table_factor()?,
                         join_operator: JoinOperator::Cross,
-                    };
-                    joins.push(join);
-                    continue;
-                }
-                Some(Token::SQLWord(kw)) if kw.keyword == "NATURAL" => {
-                    self.next_token();
-                    true
-                }
-                Some(_) => false,
-                None => return Ok(joins),
-            };
-
-            let peek_keyword = if let Some(Token::SQLWord(kw)) = self.peek_token() {
-                kw.keyword
-            } else {
-                String::default()
-            };
-
-            let join_operator_type = match peek_keyword.as_ref() {
-                "INNER" | "JOIN" => {
-                    let _ = self.parse_keyword("INNER");
-                    self.expect_keyword("JOIN")?;
-                    JoinOperator::Inner
-                }
-                kw @ "LEFT" | kw @ "RIGHT" | kw @ "FULL" => {
-                    let _ = self.next_token();
-                    let _ = self.parse_keyword("OUTER");
-                    self.expect_keyword("JOIN")?;
-                    match kw {
-                        "LEFT" => JoinOperator::LeftOuter,
-                        "RIGHT" => JoinOperator::RightOuter,
-                        "FULL" => JoinOperator::FullOuter,
-                        _ => unreachable!(),
                     }
                 }
-                _ => break,
-            };
-            let relation = self.parse_table_factor()?;
-            let join_constraint = self.parse_join_constraint(natural)?;
-            let join = Join {
-                relation,
-                join_operator: join_operator_type(join_constraint),
-            };
+                _ => {
+                    let natural = self.parse_keyword("NATURAL");
+                    let peek_keyword = if let Some(Token::SQLWord(kw)) = self.peek_token() {
+                        kw.keyword
+                    } else {
+                        String::default()
+                    };
 
+                    let join_operator_type = match peek_keyword.as_ref() {
+                        "INNER" | "JOIN" => {
+                            let _ = self.parse_keyword("INNER");
+                            self.expect_keyword("JOIN")?;
+                            JoinOperator::Inner
+                        }
+                        kw @ "LEFT" | kw @ "RIGHT" | kw @ "FULL" => {
+                            let _ = self.next_token();
+                            let _ = self.parse_keyword("OUTER");
+                            self.expect_keyword("JOIN")?;
+                            match kw {
+                                "LEFT" => JoinOperator::LeftOuter,
+                                "RIGHT" => JoinOperator::RightOuter,
+                                "FULL" => JoinOperator::FullOuter,
+                                _ => unreachable!(),
+                            }
+                        }
+                        _ if natural => {
+                            return self.expected("a join type after NATURAL", self.peek_token());
+                        }
+                        _ => break,
+                    };
+                    let relation = self.parse_table_factor()?;
+                    let join_constraint = self.parse_join_constraint(natural)?;
+                    Join {
+                        relation,
+                        join_operator: join_operator_type(join_constraint),
+                    }
+                }
+            };
             joins.push(join);
         }
-
         Ok(joins)
     }
 

@@ -66,6 +66,7 @@ impl Error for ParserError {}
 /// SQL Parser
 pub struct Parser {
     tokens: Vec<Token>,
+    /// The index of the first unprocessed token in `self.tokens`
     index: usize,
 }
 
@@ -558,7 +559,8 @@ impl Parser {
         }
     }
 
-    /// Return first non-whitespace token that has not yet been processed
+    /// Return the first non-whitespace token that has not yet been processed
+    /// (or None if reached end-of-file)
     pub fn peek_token(&self) -> Option<Token> {
         self.peek_nth_token(0)
     }
@@ -567,78 +569,49 @@ impl Parser {
     pub fn peek_nth_token(&self, mut n: usize) -> Option<Token> {
         let mut index = self.index;
         loop {
-            match self.token_at(index) {
-                Some(Token::Whitespace(_)) => {
-                    index += 1;
-                }
-                Some(token) => {
+            index += 1;
+            match self.tokens.get(index - 1) {
+                Some(Token::Whitespace(_)) => continue,
+                non_whitespace => {
                     if n == 0 {
-                        return Some(token);
+                        return non_whitespace.cloned();
                     }
-                    index += 1;
                     n -= 1;
                 }
-                None => {
-                    return None;
-                }
             }
         }
     }
 
-    /// Get the next token skipping whitespace and increment the token index
+    /// Return the first non-whitespace token that has not yet been processed
+    /// (or None if reached end-of-file) and mark it as processed. OK to call
+    /// repeatedly after reaching EOF.
     pub fn next_token(&mut self) -> Option<Token> {
         loop {
-            match self.next_token_no_skip() {
-                Some(Token::Whitespace(_)) => {
-                    continue;
-                }
-                token => {
-                    return token;
-                }
-            }
-        }
-    }
-
-    /// see the token at this index
-    fn token_at(&self, n: usize) -> Option<Token> {
-        if let Some(token) = self.tokens.get(n) {
-            Some(token.clone())
-        } else {
-            None
-        }
-    }
-
-    pub fn next_token_no_skip(&mut self) -> Option<Token> {
-        if self.index < self.tokens.len() {
             self.index += 1;
-            Some(self.tokens[self.index - 1].clone())
-        } else {
-            None
-        }
-    }
-
-    /// Push back the last one non-whitespace token
-    pub fn prev_token(&mut self) -> Option<Token> {
-        // TODO: returned value is unused (available via peek_token)
-        loop {
-            match self.prev_token_no_skip() {
-                Some(Token::Whitespace(_)) => {
-                    continue;
-                }
-                token => {
-                    return token;
-                }
+            match self.tokens.get(self.index - 1) {
+                Some(Token::Whitespace(_)) => continue,
+                token => return token.cloned(),
             }
         }
     }
 
-    /// Get the previous token and decrement the token index
-    fn prev_token_no_skip(&mut self) -> Option<Token> {
-        if self.index > 0 {
+    /// Return the first unprocessed token, possibly whitespace.
+    pub fn next_token_no_skip(&mut self) -> Option<&Token> {
+        self.index += 1;
+        self.tokens.get(self.index - 1)
+    }
+
+    /// Push back the last one non-whitespace token. Must be called after
+    /// `next_token()`, otherwise might panic. OK to call after
+    /// `next_token()` indicates an EOF.
+    pub fn prev_token(&mut self) {
+        loop {
+            assert!(self.index > 0);
             self.index -= 1;
-            Some(self.tokens[self.index].clone())
-        } else {
-            None
+            if let Some(Token::Whitespace(_)) = self.tokens.get(self.index) {
+                continue;
+            }
+            return;
         }
     }
 
@@ -953,9 +926,7 @@ impl Parser {
                 if name.is_some() {
                     self.expected("PRIMARY, UNIQUE, FOREIGN, or CHECK", unexpected)
                 } else {
-                    if unexpected.is_some() {
-                        self.prev_token();
-                    }
+                    self.prev_token();
                     Ok(None)
                 }
             }
@@ -1173,8 +1144,7 @@ impl Parser {
         reserved_kwds: &[&str],
     ) -> Result<Option<SQLIdent>, ParserError> {
         let after_as = self.parse_keyword("AS");
-        let maybe_alias = self.next_token();
-        match maybe_alias {
+        match self.next_token() {
             // Accept any identifier after `AS` (though many dialects have restrictions on
             // keywords that may appear here). If there's no `AS`: don't parse keywords,
             // which may start a construct allowed in this position, to be parsed as aliases.
@@ -1192,9 +1162,7 @@ impl Parser {
                 if after_as {
                     return self.expected("an identifier after AS", not_an_ident);
                 }
-                if not_an_ident.is_some() {
-                    self.prev_token();
-                }
+                self.prev_token();
                 Ok(None) // no alias found
             }
         }
@@ -1216,9 +1184,7 @@ impl Parser {
                     continue;
                 }
                 _ => {
-                    if token.is_some() {
-                        self.prev_token();
-                    }
+                    self.prev_token();
                     break;
                 }
             }
@@ -1774,15 +1740,22 @@ mod tests {
 
     #[test]
     fn test_prev_index() {
-        let sql = "SELECT version()";
+        let sql = "SELECT version";
         all_dialects().run_parser_method(sql, |parser| {
-            assert_eq!(parser.prev_token(), None);
+            assert_eq!(parser.peek_token(), Some(Token::make_keyword("SELECT")));
+            assert_eq!(parser.next_token(), Some(Token::make_keyword("SELECT")));
+            parser.prev_token();
             assert_eq!(parser.next_token(), Some(Token::make_keyword("SELECT")));
             assert_eq!(parser.next_token(), Some(Token::make_word("version", None)));
-            assert_eq!(parser.prev_token(), Some(Token::make_word("version", None)));
+            parser.prev_token();
             assert_eq!(parser.peek_token(), Some(Token::make_word("version", None)));
-            assert_eq!(parser.prev_token(), Some(Token::make_keyword("SELECT")));
-            assert_eq!(parser.prev_token(), None);
+            assert_eq!(parser.next_token(), Some(Token::make_word("version", None)));
+            assert_eq!(parser.peek_token(), None);
+            parser.prev_token();
+            assert_eq!(parser.next_token(), Some(Token::make_word("version", None)));
+            assert_eq!(parser.next_token(), None);
+            assert_eq!(parser.next_token(), None);
+            parser.prev_token();
         });
     }
 }

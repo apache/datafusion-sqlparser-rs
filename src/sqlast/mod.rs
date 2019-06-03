@@ -46,7 +46,7 @@ pub type SQLIdent = String;
 /// The parser does not distinguish between expressions of different types
 /// (e.g. boolean vs string), so the caller must handle expressions of
 /// inappropriate type, like `WHERE 1` or `SELECT 1=1`, as necessary.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum ASTNode {
     /// Identifier e.g. table name or column name
     SQLIdentifier(SQLIdent),
@@ -218,7 +218,7 @@ impl ToString for ASTNode {
 }
 
 /// A window specification (i.e. `OVER (PARTITION BY .. ORDER BY .. etc.)`)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct SQLWindowSpec {
     pub partition_by: Vec<ASTNode>,
     pub order_by: Vec<SQLOrderByExpr>,
@@ -262,7 +262,7 @@ impl ToString for SQLWindowSpec {
 
 /// Specifies the data processed by a window function, e.g.
 /// `RANGE UNBOUNDED PRECEDING` or `ROWS BETWEEN 5 PRECEDING AND CURRENT ROW`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct SQLWindowFrame {
     pub units: SQLWindowFrameUnits,
     pub start_bound: SQLWindowFrameBound,
@@ -271,7 +271,7 @@ pub struct SQLWindowFrame {
     // TBD: EXCLUDE
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum SQLWindowFrameUnits {
     Rows,
     Range,
@@ -304,7 +304,7 @@ impl FromStr for SQLWindowFrameUnits {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum SQLWindowFrameBound {
     /// "CURRENT ROW"
     CurrentRow,
@@ -329,7 +329,7 @@ impl ToString for SQLWindowFrameBound {
 
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum SQLStatement {
     /// SELECT
     SQLQuery(Box<SQLQuery>),
@@ -531,7 +531,7 @@ impl ToString for SQLStatement {
 }
 
 /// A name of a table, view, custom type, etc., possibly multi-part, i.e. db.schema.obj
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct SQLObjectName(pub Vec<SQLIdent>);
 
 impl ToString for SQLObjectName {
@@ -541,7 +541,7 @@ impl ToString for SQLObjectName {
 }
 
 /// SQL assignment `foo = expr` as used in SQLUpdate
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct SQLAssignment {
     id: SQLIdent,
     value: ASTNode,
@@ -554,7 +554,7 @@ impl ToString for SQLAssignment {
 }
 
 /// SQL column definition
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct SQLColumnDef {
     pub name: SQLIdent,
     pub data_type: SQLType,
@@ -584,7 +584,7 @@ impl ToString for SQLColumnDef {
 }
 
 /// SQL function
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct SQLFunction {
     pub name: SQLObjectName,
     pub args: Vec<ASTNode>,
@@ -609,7 +609,7 @@ impl ToString for SQLFunction {
 }
 
 /// External table's available file format
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum FileFormat {
     TEXTFILE,
     SEQUENCEFILE,
@@ -658,7 +658,7 @@ impl FromStr for FileFormat {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum SQLObjectType {
     Table,
     View,

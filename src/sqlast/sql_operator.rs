@@ -1,5 +1,5 @@
 /// SQL Operator
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum SQLOperator {
     Plus,
     Minus,

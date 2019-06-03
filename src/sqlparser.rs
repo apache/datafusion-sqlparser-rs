@@ -1031,7 +1031,7 @@ impl Parser {
                     }
                 },
                 Token::Number(ref n) if n.contains('.') => match n.parse::<f64>() {
-                    Ok(n) => Ok(Value::Double(n)),
+                    Ok(n) => Ok(Value::Double(n.into())),
                     Err(e) => parser_err!(format!("Could not parse '{}' as f64: {}", n, e)),
                 },
                 Token::Number(ref n) => match n.parse::<u64>() {

@@ -1118,7 +1118,7 @@ impl Parser {
                     }
                 }
                 "BYTEA" => Ok(SQLType::Bytea),
-                "NUMERIC" => {
+                "NUMERIC" | "DECIMAL" | "DEC" => {
                     let (precision, scale) = self.parse_optional_precision_scale()?;
                     Ok(SQLType::Decimal(precision, scale))
                 }

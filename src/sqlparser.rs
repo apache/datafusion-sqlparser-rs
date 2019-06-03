@@ -1361,6 +1361,8 @@ impl Parser {
             let subquery = self.parse_query()?;
             self.expect_token(&Token::RParen)?;
             SQLSetExpr::Query(Box::new(subquery))
+        } else if self.parse_keyword("VALUES") {
+            SQLSetExpr::Values(self.parse_values()?)
         } else {
             return self.expected("SELECT or a subquery in the query body", self.peek_token());
         };
@@ -1572,14 +1574,11 @@ impl Parser {
         self.expect_keyword("INTO")?;
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
-        self.expect_keyword("VALUES")?;
-        self.expect_token(&Token::LParen)?;
-        let values = self.parse_expr_list()?;
-        self.expect_token(&Token::RParen)?;
+        let source = Box::new(self.parse_query()?);
         Ok(SQLStatement::SQLInsert {
             table_name,
             columns,
-            values: vec![values],
+            source,
         })
     }
 
@@ -1696,6 +1695,20 @@ impl Parser {
             percent,
             quantity,
         })
+    }
+
+    pub fn parse_values(&mut self) -> Result<SQLValues, ParserError> {
+        let mut values = vec![];
+        loop {
+            self.expect_token(&Token::LParen)?;
+            values.push(self.parse_expr_list()?);
+            self.expect_token(&Token::RParen)?;
+            match self.peek_token() {
+                Some(Token::Comma) => self.next_token(),
+                _ => break,
+            };
+        }
+        Ok(SQLValues(values))
     }
 }
 

@@ -20,10 +20,12 @@ mod sql_operator;
 mod sqltype;
 mod value;
 
+use std::ops::Deref;
+
 pub use self::ddl::{AlterTableOperation, TableConstraint};
 pub use self::query::{
     Cte, Fetch, Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLQuery, SQLSelect,
-    SQLSelectItem, SQLSetExpr, SQLSetOperator, TableFactor,
+    SQLSelectItem, SQLSetExpr, SQLSetOperator, SQLValues, TableFactor,
 };
 pub use self::sqltype::SQLType;
 pub use self::value::Value;
@@ -31,9 +33,14 @@ pub use self::value::Value;
 pub use self::sql_operator::SQLOperator;
 
 /// Like `vec.join(", ")`, but for any types implementing ToString.
-fn comma_separated_string<T: ToString>(vec: &[T]) -> String {
-    vec.iter()
-        .map(T::to_string)
+fn comma_separated_string<I>(iter: I) -> String
+where
+    I: IntoIterator,
+    I::Item: Deref,
+    <I::Item as Deref>::Target: ToString,
+{
+    iter.into_iter()
+        .map(|t| t.deref().to_string())
         .collect::<Vec<String>>()
         .join(", ")
 }
@@ -339,8 +346,8 @@ pub enum SQLStatement {
         table_name: SQLObjectName,
         /// COLUMNS
         columns: Vec<SQLIdent>,
-        /// VALUES (vector of rows to insert)
-        values: Vec<Vec<ASTNode>>,
+        /// A SQL query that specifies what to insert
+        source: Box<SQLQuery>,
     },
     SQLCopy {
         /// TABLE
@@ -406,22 +413,13 @@ impl ToString for SQLStatement {
             SQLStatement::SQLInsert {
                 table_name,
                 columns,
-                values,
+                source,
             } => {
-                let mut s = format!("INSERT INTO {}", table_name.to_string());
+                let mut s = format!("INSERT INTO {} ", table_name.to_string());
                 if !columns.is_empty() {
-                    s += &format!(" ({})", columns.join(", "));
+                    s += &format!("({}) ", columns.join(", "));
                 }
-                if !values.is_empty() {
-                    s += &format!(
-                        " VALUES({})",
-                        values
-                            .iter()
-                            .map(|row| comma_separated_string(row))
-                            .collect::<Vec<String>>()
-                            .join(", ")
-                    );
-                }
+                s += &source.to_string();
                 s
             }
             SQLStatement::SQLCopy {
@@ -523,7 +521,7 @@ impl ToString for SQLStatement {
                 "DROP {}{} {}{}",
                 object_type.to_string(),
                 if *if_exists { " IF EXISTS" } else { "" },
-                comma_separated_string(&names),
+                comma_separated_string(names),
                 if *cascade { " CASCADE" } else { "" },
             ),
         }

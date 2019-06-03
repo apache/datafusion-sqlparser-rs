@@ -1435,6 +1435,46 @@ fn parse_scalar_subqueries() {
 }
 
 #[test]
+fn parse_exists_subquery() {
+    let expected_inner = verified_query("SELECT 1");
+    let sql = "SELECT * FROM t WHERE EXISTS (SELECT 1)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        ASTNode::SQLExists(Box::new(expected_inner.clone())),
+        select.selection.unwrap(),
+    );
+
+    let sql = "SELECT * FROM t WHERE NOT EXISTS (SELECT 1)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        ASTNode::SQLUnary {
+            operator: SQLOperator::Not,
+            expr: Box::new(ASTNode::SQLExists(Box::new(expected_inner))),
+        },
+        select.selection.unwrap(),
+    );
+
+    verified_stmt("SELECT * FROM t WHERE EXISTS (WITH u AS (SELECT 1) SELECT * FROM u)");
+    verified_stmt("SELECT EXISTS (SELECT 1)");
+
+    let res = parse_sql_statements("SELECT EXISTS (");
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected SELECT or a subquery in the query body, found: EOF".to_string()
+        ),
+        res.unwrap_err(),
+    );
+
+    let res = parse_sql_statements("SELECT EXISTS (NULL)");
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected SELECT or a subquery in the query body, found: NULL".to_string()
+        ),
+        res.unwrap_err(),
+    );
+}
+
+#[test]
 fn parse_create_view() {
     let sql = "CREATE VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {

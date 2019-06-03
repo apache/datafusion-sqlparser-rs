@@ -191,6 +191,7 @@ impl Parser {
                 }
                 "CASE" => self.parse_case_expression(),
                 "CAST" => self.parse_cast_expression(),
+                "EXISTS" => self.parse_exists_expression(),
                 "NOT" => Ok(ASTNode::SQLUnary {
                     operator: SQLOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
@@ -402,6 +403,14 @@ impl Parser {
             expr: Box::new(expr),
             data_type,
         })
+    }
+
+    /// Parse a SQL EXISTS expression e.g. `WHERE EXISTS(SELECT ...)`.
+    pub fn parse_exists_expression(&mut self) -> Result<ASTNode, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let exists_node = ASTNode::SQLExists(Box::new(self.parse_query()?));
+        self.expect_token(&Token::RParen)?;
+        Ok(exists_node)
     }
 
     /// Parse an operator following an expression

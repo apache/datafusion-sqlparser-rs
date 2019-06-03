@@ -5,6 +5,7 @@ language: rust
 addons:
   apt:
     packages:
+      - kcov
       - libcurl4-openssl-dev
       - libelf-dev
       - libdw-dev
@@ -12,6 +13,11 @@ addons:
       - cmake
     sources:
       - kalakris-cmake
+      # The version of kcov shipped with Xenial (v25) doesn't support the
+      # --verify option that `cargo coveralls` passes. This PPA has a more
+      # up-to-date version. It can be removed if Ubuntu ever ships a newer
+      # version, or replaced with another PPA if this one falls out of date.
+      - sourceline: ppa:sivakov512/kcov
 
 rust:
   - stable

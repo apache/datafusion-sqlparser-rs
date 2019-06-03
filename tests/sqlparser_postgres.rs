@@ -18,12 +18,14 @@ fn parse_create_table_with_defaults() {
             activebool boolean DEFAULT true NOT NULL,
             create_date date DEFAULT now()::text NOT NULL,
             last_update timestamp without time zone DEFAULT now() NOT NULL,
-            active integer NOT NULL)";
+            active integer NOT NULL
+    ) WITH (fillfactor = 20, user_catalog_table = true, autovacuum_vacuum_threshold = 100)";
     match pg_and_generic().one_statement_parses_to(sql, "") {
         SQLStatement::SQLCreateTable {
             name,
             columns,
             constraints,
+            with_options,
             external: false,
             file_format: None,
             location: None,
@@ -46,6 +48,24 @@ fn parse_create_table_with_defaults() {
             assert_eq!("first_name", c_lng.name);
             assert_eq!(SQLType::Varchar(Some(45)), c_lng.data_type);
             assert_eq!(false, c_lng.allow_null);
+
+            assert_eq!(
+                with_options,
+                vec![
+                    SQLOption {
+                        name: "fillfactor".into(),
+                        value: Value::Long(20)
+                    },
+                    SQLOption {
+                        name: "user_catalog_table".into(),
+                        value: Value::Boolean(true)
+                    },
+                    SQLOption {
+                        name: "autovacuum_vacuum_threshold".into(),
+                        value: Value::Long(100)
+                    },
+                ]
+            );
         }
         _ => unreachable!(),
     }
@@ -72,6 +92,7 @@ fn parse_create_table_from_pg_dump() {
             name,
             columns,
             constraints,
+            with_options,
             external: false,
             file_format: None,
             location: None,
@@ -116,6 +137,8 @@ fn parse_create_table_from_pg_dump() {
                 ])),
                 c_release_year.data_type
             );
+
+            assert_eq!(with_options, vec![]);
         }
         _ => unreachable!(),
     }
@@ -135,6 +158,7 @@ fn parse_create_table_with_inherit() {
             name,
             columns,
             constraints,
+            with_options,
             external: false,
             file_format: None,
             location: None,
@@ -155,6 +179,8 @@ fn parse_create_table_with_inherit() {
             assert_eq!(true, c_name.allow_null);
             assert_eq!(false, c_name.is_primary);
             assert_eq!(true, c_name.is_unique);
+
+            assert_eq!(with_options, vec![]);
         }
         _ => unreachable!(),
     }

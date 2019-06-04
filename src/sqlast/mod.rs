@@ -25,7 +25,7 @@ use std::ops::Deref;
 pub use self::ddl::{AlterTableOperation, TableConstraint};
 pub use self::query::{
     Cte, Fetch, Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLQuery, SQLSelect,
-    SQLSelectItem, SQLSetExpr, SQLSetOperator, SQLValues, TableFactor,
+    SQLSelectItem, SQLSetExpr, SQLSetOperator, SQLValues, TableAlias, TableFactor,
 };
 pub use self::sqltype::SQLType;
 pub use self::value::Value;
@@ -377,6 +377,7 @@ pub enum SQLStatement {
     SQLCreateView {
         /// View name
         name: SQLObjectName,
+        columns: Vec<SQLIdent>,
         query: Box<SQLQuery>,
         materialized: bool,
         with_options: Vec<SQLOption>,
@@ -474,6 +475,7 @@ impl ToString for SQLStatement {
             }
             SQLStatement::SQLCreateView {
                 name,
+                columns,
                 query,
                 materialized,
                 with_options,
@@ -484,12 +486,18 @@ impl ToString for SQLStatement {
                 } else {
                     "".into()
                 };
+                let columns = if !columns.is_empty() {
+                    format!(" ({})", comma_separated_string(columns))
+                } else {
+                    "".into()
+                };
                 format!(
-                    "CREATE{} VIEW {}{} AS {}",
+                    "CREATE{} VIEW {}{}{} AS {}",
                     modifier,
                     name.to_string(),
                     with_options,
-                    query.to_string()
+                    columns,
+                    query.to_string(),
                 )
             }
             SQLStatement::SQLCreateTable {

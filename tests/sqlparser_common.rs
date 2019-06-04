@@ -1083,7 +1083,7 @@ fn parse_delimited_identifiers() {
             with_hints,
         } => {
             assert_eq!(vec![r#""a table""#.to_string()], name.0);
-            assert_eq!(r#""alias""#, alias.unwrap());
+            assert_eq!(r#""alias""#, alias.unwrap().name);
             assert!(args.is_empty());
             assert!(with_hints.is_empty());
         }
@@ -1236,11 +1236,18 @@ fn parse_cross_join() {
     );
 }
 
+fn table_alias(name: impl Into<String>) -> Option<TableAlias> {
+    Some(TableAlias {
+        name: name.into(),
+        columns: vec![],
+    })
+}
+
 #[test]
 fn parse_joins_on() {
     fn join_with_constraint(
         relation: impl Into<String>,
-        alias: Option<SQLIdent>,
+        alias: Option<TableAlias>,
         f: impl Fn(JoinConstraint) -> JoinOperator,
     ) -> Join {
         Join {
@@ -1262,7 +1269,7 @@ fn parse_joins_on() {
         verified_only_select("SELECT * FROM t1 JOIN t2 AS foo ON c1 = c2").joins,
         vec![join_with_constraint(
             "t2",
-            Some("foo".to_string()),
+            table_alias("foo"),
             JoinOperator::Inner
         )]
     );
@@ -1293,7 +1300,7 @@ fn parse_joins_on() {
 fn parse_joins_using() {
     fn join_with_constraint(
         relation: impl Into<String>,
-        alias: Option<SQLIdent>,
+        alias: Option<TableAlias>,
         f: impl Fn(JoinConstraint) -> JoinOperator,
     ) -> Join {
         Join {
@@ -1311,7 +1318,7 @@ fn parse_joins_using() {
         verified_only_select("SELECT * FROM t1 JOIN t2 AS foo USING(c1)").joins,
         vec![join_with_constraint(
             "t2",
-            Some("foo".to_string()),
+            table_alias("foo"),
             JoinOperator::Inner
         )]
     );
@@ -1471,6 +1478,12 @@ fn parse_derived_tables() {
     let sql = "SELECT a.x, b.y FROM (SELECT x FROM foo) AS a CROSS JOIN (SELECT y FROM bar) AS b";
     let _ = verified_only_select(sql);
     //TODO: add assertions
+
+    let sql = "SELECT a.x, b.y \
+               FROM (SELECT x FROM foo) AS a (x) \
+               CROSS JOIN (SELECT y FROM bar) AS b (y)";
+    let _ = verified_only_select(sql);
+    //TODO: add assertions
 }
 
 #[test]
@@ -1595,11 +1608,13 @@ fn parse_create_view() {
     match verified_stmt(sql) {
         SQLStatement::SQLCreateView {
             name,
+            columns,
             query,
             materialized,
             with_options,
         } => {
             assert_eq!("myschema.myview", name.to_string());
+            assert_eq!(Vec::<SQLIdent>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(!materialized);
             assert_eq!(with_options, vec![]);
@@ -1632,16 +1647,39 @@ fn parse_create_view_with_options() {
 }
 
 #[test]
+fn parse_create_view_with_columns() {
+    let sql = "CREATE VIEW v (has, cols) AS SELECT 1, 2";
+    match verified_stmt(sql) {
+        SQLStatement::SQLCreateView {
+            name,
+            columns,
+            with_options,
+            query,
+            materialized,
+        } => {
+            assert_eq!("v", name.to_string());
+            assert_eq!(columns, vec!["has".to_string(), "cols".to_string()]);
+            assert_eq!(with_options, vec![]);
+            assert_eq!("SELECT 1, 2", query.to_string());
+            assert!(!materialized);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_materialized_view() {
     let sql = "CREATE MATERIALIZED VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
         SQLStatement::SQLCreateView {
             name,
+            columns,
             query,
             materialized,
             with_options,
         } => {
             assert_eq!("myschema.myview", name.to_string());
+            assert_eq!(Vec::<SQLIdent>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(materialized);
             assert_eq!(with_options, vec![]);
@@ -1928,11 +1966,11 @@ fn lateral_derived() {
         if let TableFactor::Derived {
             lateral,
             ref subquery,
-            ref alias,
+            alias: Some(ref alias),
         } = select.joins[0].relation
         {
             assert_eq!(lateral_in, lateral);
-            assert_eq!(Some("order".to_string()), *alias);
+            assert_eq!("order".to_string(), alias.name);
             assert_eq!(
                 subquery.to_string(),
                 "SELECT * FROM order WHERE order.customer = customer.id LIMIT 3"

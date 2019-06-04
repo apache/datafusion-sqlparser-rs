@@ -454,6 +454,7 @@ impl ToString for SQLStatement {
             } => {
                 let mut s = format!("UPDATE {}", table_name.to_string());
                 if !assignments.is_empty() {
+                    s += " SET ";
                     s += &comma_separated_string(assignments);
                 }
                 if let Some(selection) = selection {
@@ -554,13 +555,13 @@ impl ToString for SQLObjectName {
 /// SQL assignment `foo = expr` as used in SQLUpdate
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct SQLAssignment {
-    id: SQLIdent,
-    value: ASTNode,
+    pub id: SQLIdent,
+    pub value: ASTNode,
 }
 
 impl ToString for SQLAssignment {
     fn to_string(&self) -> String {
-        format!("SET {} = {}", self.id, self.value.to_string())
+        format!("{} = {}", self.id, self.value.to_string())
     }
 }
 

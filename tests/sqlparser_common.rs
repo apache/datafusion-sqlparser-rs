@@ -82,6 +82,56 @@ fn parse_insert_invalid() {
 }
 
 #[test]
+fn parse_update() {
+    let sql = "UPDATE t SET a = 1, b = 2, c = 3 WHERE d";
+    match verified_stmt(sql) {
+        SQLStatement::SQLUpdate {
+            table_name,
+            assignments,
+            selection,
+            ..
+        } => {
+            assert_eq!(table_name.to_string(), "t".to_string());
+            assert_eq!(
+                assignments,
+                vec![
+                    SQLAssignment {
+                        id: "a".into(),
+                        value: ASTNode::SQLValue(Value::Long(1)),
+                    },
+                    SQLAssignment {
+                        id: "b".into(),
+                        value: ASTNode::SQLValue(Value::Long(2)),
+                    },
+                    SQLAssignment {
+                        id: "c".into(),
+                        value: ASTNode::SQLValue(Value::Long(3)),
+                    },
+                ]
+            );
+            assert_eq!(selection.unwrap(), ASTNode::SQLIdentifier("d".into()));
+        }
+        _ => unreachable!(),
+    }
+
+    verified_stmt("UPDATE t SET a = 1, a = 2, a = 3");
+
+    let sql = "UPDATE t WHERE 1";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected SET, found: WHERE".to_string()),
+        res.unwrap_err()
+    );
+
+    let sql = "UPDATE t SET a = 1 extrabadstuff";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: extrabadstuff".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_invalid_table_name() {
     let ast = all_dialects().run_parser_method("db.public..customer", Parser::parse_object_name);
     assert!(ast.is_err());

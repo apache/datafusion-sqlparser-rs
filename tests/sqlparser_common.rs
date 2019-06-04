@@ -798,6 +798,35 @@ fn parse_cast() {
 }
 
 #[test]
+fn parse_extract() {
+    let sql = "SELECT EXTRACT(YEAR FROM d)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &ASTNode::SQLExtract {
+            field: SQLDateTimeField::Year,
+            expr: Box::new(ASTNode::SQLIdentifier("d".to_string())),
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
+    one_statement_parses_to("SELECT EXTRACT(year from d)", "SELECT EXTRACT(YEAR FROM d)");
+
+    verified_stmt("SELECT EXTRACT(MONTH FROM d)");
+    verified_stmt("SELECT EXTRACT(DAY FROM d)");
+    verified_stmt("SELECT EXTRACT(HOUR FROM d)");
+    verified_stmt("SELECT EXTRACT(MINUTE FROM d)");
+    verified_stmt("SELECT EXTRACT(SECOND FROM d)");
+
+    let res = parse_sql_statements("SELECT EXTRACT(MILLISECOND FROM d)");
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected Date/time field inside of EXTRACT function, found: MILLISECOND".to_string()
+        ),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_create_table() {
     let sql = "CREATE TABLE uk_cities (\
                name VARCHAR(100) NOT NULL,\

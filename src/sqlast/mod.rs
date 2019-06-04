@@ -100,6 +100,10 @@ pub enum ASTNode {
         expr: Box<ASTNode>,
         data_type: SQLType,
     },
+    SQLExtract {
+        field: SQLDateTimeField,
+        expr: Box<ASTNode>,
+    },
     /// `expr COLLATE collation`
     SQLCollate {
         expr: Box<ASTNode>,
@@ -186,6 +190,9 @@ impl ToString for ASTNode {
                 expr.as_ref().to_string(),
                 data_type.to_string()
             ),
+            ASTNode::SQLExtract { field, expr } => {
+                format!("EXTRACT({} FROM {})", field.to_string(), expr.to_string())
+            }
             ASTNode::SQLCollate { expr, collation } => format!(
                 "{} COLLATE {}",
                 expr.as_ref().to_string(),
@@ -625,6 +632,29 @@ impl ToString for SQLFunction {
             s += &format!(" OVER ({})", o.to_string())
         }
         s
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub enum SQLDateTimeField {
+    Year,
+    Month,
+    Day,
+    Hour,
+    Minute,
+    Second,
+}
+
+impl ToString for SQLDateTimeField {
+    fn to_string(&self) -> String {
+        match self {
+            SQLDateTimeField::Year => "YEAR".to_string(),
+            SQLDateTimeField::Month => "MONTH".to_string(),
+            SQLDateTimeField::Day => "DAY".to_string(),
+            SQLDateTimeField::Hour => "HOUR".to_string(),
+            SQLDateTimeField::Minute => "MINUTE".to_string(),
+            SQLDateTimeField::Second => "SECOND".to_string(),
+        }
     }
 }
 

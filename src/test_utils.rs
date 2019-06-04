@@ -103,7 +103,7 @@ impl TestedDialects {
 
     /// Ensures that `sql` parses as an expression, and is not modified
     /// after a serialization round-trip.
-    pub fn verified_expr(&self, sql: &str) -> ASTNode {
+    pub fn verified_expr(&self, sql: &str) -> Expr {
         let ast = self.run_parser_method(sql, Parser::parse_expr).unwrap();
         assert_eq!(sql, &ast.to_string(), "round-tripping without changes");
         ast
@@ -130,9 +130,9 @@ pub fn only<T>(v: impl IntoIterator<Item = T>) -> T {
     }
 }
 
-pub fn expr_from_projection(item: &SQLSelectItem) -> &ASTNode {
+pub fn expr_from_projection(item: &SQLSelectItem) -> &Expr {
     match item {
-        SQLSelectItem::UnnamedExpression(expr) => expr,
-        _ => panic!("Expected UnnamedExpression"),
+        SQLSelectItem::UnnamedExpr(expr) => expr,
+        _ => panic!("Expected UnnamedExpr"),
     }
 }

@@ -23,11 +23,11 @@ fn parse_mssql_identifiers() {
     let sql = "SELECT @@version, _foo$123 FROM ##temp";
     let select = ms_and_generic().verified_only_select(sql);
     assert_eq!(
-        &ASTNode::SQLIdentifier("@@version".to_string()),
+        &Expr::SQLIdentifier("@@version".to_string()),
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
-        &ASTNode::SQLIdentifier("_foo$123".to_string()),
+        &Expr::SQLIdentifier("_foo$123".to_string()),
         expr_from_projection(&select.projection[1]),
     );
     assert_eq!(2, select.projection.len());

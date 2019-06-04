@@ -1,10 +1,11 @@
-dist: trusty
+dist: xenial
 sudo: required
 cache: cargo
 language: rust
 addons:
   apt:
     packages:
+      - kcov
       - libcurl4-openssl-dev
       - libelf-dev
       - libdw-dev
@@ -12,13 +13,29 @@ addons:
       - cmake
     sources:
       - kalakris-cmake
+      # The version of kcov shipped with Xenial (v25) doesn't support the
+      # --verify option that `cargo coveralls` passes. This PPA has a more
+      # up-to-date version. It can be removed if Ubuntu ever ships a newer
+      # version, or replaced with another PPA if this one falls out of date.
+      - sourceline: ppa:sivakov512/kcov
 
 rust:
   - stable
 
 before_script:
   - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
-  - cargo install --force cargo-travis && export PATH=$HOME/.cargo/bin:$PATH
+  - export PATH=$HOME/.cargo/bin:$PATH
+  # `cargo install` fails if the specified binary is already installed, and
+  # doesn't yet support a `--if-not-installed` option [0], so for now assume
+  # failures mean the package is already installed. If installation truly
+  # failed, the build will fail later anyway, when we try to use the installed
+  # binary. Note that `cargo install --force` is not a solution, as it always
+  # rebuilds from scratch, ignoring the cache entirely.
+  #
+  # [0]: https://github.com/rust-lang/cargo/issues/2082
+  - cargo install cargo-update || echo "cargo-update already installed"
+  - cargo install cargo-travis || echo "cargo-travis already installed"
+  - cargo install-update -a  # updates cargo-travis, if the cached version is outdated
   - rustup component add clippy rustfmt
 
 script:

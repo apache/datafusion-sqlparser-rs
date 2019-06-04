@@ -1086,6 +1086,36 @@ fn parse_literal_string() {
 }
 
 #[test]
+fn parse_literal_date() {
+    let sql = "SELECT DATE '1999-01-01'";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &ASTNode::SQLValue(Value::Date("1999-01-01".into())),
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
+fn parse_literal_time() {
+    let sql = "SELECT TIME '01:23:34'";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &ASTNode::SQLValue(Value::Time("01:23:34".into())),
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
+fn parse_literal_timestamp() {
+    let sql = "SELECT TIMESTAMP '1999-01-01 01:23:34'";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &ASTNode::SQLValue(Value::Timestamp("1999-01-01 01:23:34".into())),
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn parse_simple_math_expr_plus() {
     let sql = "SELECT a + b, 2 + a, 2.5 + a, a_f + b_f, 2 + a_f, 2.5 + a_f FROM c";
     verified_only_select(sql);

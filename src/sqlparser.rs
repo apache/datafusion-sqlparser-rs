@@ -192,12 +192,17 @@ impl Parser {
                 }
                 "CASE" => self.parse_case_expression(),
                 "CAST" => self.parse_cast_expression(),
+                "DATE" => Ok(ASTNode::SQLValue(Value::Date(self.parse_literal_string()?))),
                 "EXISTS" => self.parse_exists_expression(),
                 "EXTRACT" => self.parse_extract_expression(),
                 "NOT" => Ok(ASTNode::SQLUnary {
                     operator: SQLOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
                 }),
+                "TIME" => Ok(ASTNode::SQLValue(Value::Time(self.parse_literal_string()?))),
+                "TIMESTAMP" => Ok(ASTNode::SQLValue(Value::Timestamp(
+                    self.parse_literal_string()?,
+                ))),
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {

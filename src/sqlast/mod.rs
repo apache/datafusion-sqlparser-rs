@@ -89,11 +89,16 @@ pub enum ASTNode {
         low: Box<ASTNode>,
         high: Box<ASTNode>,
     },
-    /// Binary expression e.g. `1 + 1` or `foo > bar`
-    SQLBinaryExpr {
+    /// Binary operation e.g. `1 + 1` or `foo > bar`
+    SQLBinaryOp {
         left: Box<ASTNode>,
         op: SQLOperator,
         right: Box<ASTNode>,
+    },
+    /// Unary operation e.g. `NOT foo`
+    SQLUnaryOp {
+        op: SQLOperator,
+        expr: Box<ASTNode>,
     },
     /// CAST an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
     SQLCast {
@@ -111,11 +116,6 @@ pub enum ASTNode {
     },
     /// Nested expression e.g. `(foo > bar)` or `(1)`
     SQLNested(Box<ASTNode>),
-    /// Unary expression
-    SQLUnary {
-        operator: SQLOperator,
-        expr: Box<ASTNode>,
-    },
     /// SQLValue
     SQLValue(Value),
     /// Scalar function call e.g. `LEFT(foo, 5)`
@@ -179,12 +179,15 @@ impl ToString for ASTNode {
                 low.to_string(),
                 high.to_string()
             ),
-            ASTNode::SQLBinaryExpr { left, op, right } => format!(
+            ASTNode::SQLBinaryOp { left, op, right } => format!(
                 "{} {} {}",
                 left.as_ref().to_string(),
                 op.to_string(),
                 right.as_ref().to_string()
             ),
+            ASTNode::SQLUnaryOp { op, expr } => {
+                format!("{} {}", op.to_string(), expr.as_ref().to_string())
+            }
             ASTNode::SQLCast { expr, data_type } => format!(
                 "CAST({} AS {})",
                 expr.as_ref().to_string(),
@@ -199,9 +202,6 @@ impl ToString for ASTNode {
                 collation.to_string()
             ),
             ASTNode::SQLNested(ast) => format!("({})", ast.as_ref().to_string()),
-            ASTNode::SQLUnary { operator, expr } => {
-                format!("{} {}", operator.to_string(), expr.as_ref().to_string())
-            }
             ASTNode::SQLValue(v) => v.to_string(),
             ASTNode::SQLFunction(f) => f.to_string(),
             ASTNode::SQLCase {

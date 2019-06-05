@@ -183,8 +183,8 @@ impl Parser {
                 "EXISTS" => self.parse_exists_expression(),
                 "EXTRACT" => self.parse_extract_expression(),
                 "INTERVAL" => self.parse_literal_interval(),
-                "NOT" => Ok(ASTNode::SQLUnary {
-                    operator: SQLOperator::Not,
+                "NOT" => Ok(ASTNode::SQLUnaryOp {
+                    op: SQLOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
                 }),
                 "TIME" => Ok(ASTNode::SQLValue(Value::Time(self.parse_literal_string()?))),
@@ -224,13 +224,13 @@ impl Parser {
             }, // End of Token::SQLWord
             Token::Mult => Ok(ASTNode::SQLWildcard),
             tok @ Token::Minus | tok @ Token::Plus => {
-                let operator = if tok == Token::Plus {
+                let op = if tok == Token::Plus {
                     SQLOperator::Plus
                 } else {
                     SQLOperator::Minus
                 };
-                Ok(ASTNode::SQLUnary {
-                    operator,
+                Ok(ASTNode::SQLUnaryOp {
+                    op,
                     expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
                 })
             }
@@ -541,7 +541,7 @@ impl Parser {
         };
 
         if let Some(op) = regular_binary_operator {
-            Ok(ASTNode::SQLBinaryExpr {
+            Ok(ASTNode::SQLBinaryOp {
                 left: Box::new(expr),
                 op,
                 right: Box::new(self.parse_subexpr(precedence)?),

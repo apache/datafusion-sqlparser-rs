@@ -181,7 +181,7 @@ fn parse_where_delete_statement() {
             assert_eq!(SQLObjectName(vec!["foo".to_string()]), table_name);
 
             assert_eq!(
-                SQLBinaryExpr {
+                SQLBinaryOp {
                     left: Box::new(SQLIdentifier("name".to_string())),
                     op: Eq,
                     right: Box::new(SQLValue(Value::Long(5))),
@@ -282,7 +282,7 @@ fn parse_column_aliases() {
     let sql = "SELECT a.col + 1 AS newname FROM foo AS a";
     let select = verified_only_select(sql);
     if let SQLSelectItem::ExpressionWithAlias {
-        expr: ASTNode::SQLBinaryExpr {
+        expr: ASTNode::SQLBinaryOp {
             ref op, ref right, ..
         },
         ref alias,
@@ -336,8 +336,8 @@ fn parse_select_count_distinct() {
     assert_eq!(
         &ASTNode::SQLFunction(SQLFunction {
             name: SQLObjectName(vec!["COUNT".to_string()]),
-            args: vec![ASTNode::SQLUnary {
-                operator: SQLOperator::Plus,
+            args: vec![ASTNode::SQLUnaryOp {
+                op: SQLOperator::Plus,
                 expr: Box::new(ASTNode::SQLIdentifier("x".to_string()))
             }],
             over: None,
@@ -409,7 +409,7 @@ fn parse_escaped_single_quote_string_predicate() {
                WHERE salary <> 'Jim''s salary'";
     let ast = verified_only_select(sql);
     assert_eq!(
-        Some(SQLBinaryExpr {
+        Some(SQLBinaryOp {
             left: Box::new(SQLIdentifier("salary".to_string())),
             op: NotEq,
             right: Box::new(SQLValue(Value::SingleQuotedString(
@@ -426,10 +426,10 @@ fn parse_compound_expr_1() {
     use self::SQLOperator::*;
     let sql = "a + b * c";
     assert_eq!(
-        SQLBinaryExpr {
+        SQLBinaryOp {
             left: Box::new(SQLIdentifier("a".to_string())),
             op: Plus,
-            right: Box::new(SQLBinaryExpr {
+            right: Box::new(SQLBinaryOp {
                 left: Box::new(SQLIdentifier("b".to_string())),
                 op: Multiply,
                 right: Box::new(SQLIdentifier("c".to_string()))
@@ -445,8 +445,8 @@ fn parse_compound_expr_2() {
     use self::SQLOperator::*;
     let sql = "a * b + c";
     assert_eq!(
-        SQLBinaryExpr {
-            left: Box::new(SQLBinaryExpr {
+        SQLBinaryOp {
+            left: Box::new(SQLBinaryOp {
                 left: Box::new(SQLIdentifier("a".to_string())),
                 op: Multiply,
                 right: Box::new(SQLIdentifier("b".to_string()))
@@ -464,14 +464,14 @@ fn parse_unary_math() {
     use self::SQLOperator::*;
     let sql = "- a + - b";
     assert_eq!(
-        SQLBinaryExpr {
-            left: Box::new(SQLUnary {
-                operator: Minus,
+        SQLBinaryOp {
+            left: Box::new(SQLUnaryOp {
+                op: Minus,
                 expr: Box::new(SQLIdentifier("a".to_string())),
             }),
             op: Plus,
-            right: Box::new(SQLUnary {
-                operator: Minus,
+            right: Box::new(SQLUnaryOp {
+                op: Minus,
                 expr: Box::new(SQLIdentifier("b".to_string())),
             }),
         },
@@ -504,15 +504,15 @@ fn parse_not_precedence() {
     use self::ASTNode::*;
     // NOT has higher precedence than OR/AND, so the following must parse as (NOT true) OR true
     let sql = "NOT true OR true";
-    assert_matches!(verified_expr(sql), SQLBinaryExpr {
+    assert_matches!(verified_expr(sql), SQLBinaryOp {
         op: SQLOperator::Or,
         ..
     });
 
     // But NOT has lower precedence than comparison operators, so the following parses as NOT (a IS NULL)
     let sql = "NOT a IS NULL";
-    assert_matches!(verified_expr(sql), SQLUnary {
-        operator: SQLOperator::Not,
+    assert_matches!(verified_expr(sql), SQLUnaryOp {
+        op: SQLOperator::Not,
         ..
     });
 
@@ -520,8 +520,8 @@ fn parse_not_precedence() {
     let sql = "NOT 1 NOT BETWEEN 1 AND 2";
     assert_eq!(
         verified_expr(sql),
-        SQLUnary {
-            operator: SQLOperator::Not,
+        SQLUnaryOp {
+            op: SQLOperator::Not,
             expr: Box::new(SQLBetween {
                 expr: Box::new(SQLValue(Value::Long(1))),
                 low: Box::new(SQLValue(Value::Long(1))),
@@ -535,9 +535,9 @@ fn parse_not_precedence() {
     let sql = "NOT 'a' NOT LIKE 'b'";
     assert_eq!(
         verified_expr(sql),
-        SQLUnary {
-            operator: SQLOperator::Not,
-            expr: Box::new(SQLBinaryExpr {
+        SQLUnaryOp {
+            op: SQLOperator::Not,
+            expr: Box::new(SQLBinaryOp {
                 left: Box::new(SQLValue(Value::SingleQuotedString("a".into()))),
                 op: SQLOperator::NotLike,
                 right: Box::new(SQLValue(Value::SingleQuotedString("b".into()))),
@@ -549,8 +549,8 @@ fn parse_not_precedence() {
     let sql = "NOT a NOT IN ('a')";
     assert_eq!(
         verified_expr(sql),
-        SQLUnary {
-            operator: SQLOperator::Not,
+        SQLUnaryOp {
+            op: SQLOperator::Not,
             expr: Box::new(SQLInList {
                 expr: Box::new(SQLIdentifier("a".into())),
                 list: vec![SQLValue(Value::SingleQuotedString("a".into()))],
@@ -569,7 +569,7 @@ fn parse_like() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            ASTNode::SQLBinaryExpr {
+            ASTNode::SQLBinaryOp {
                 left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
                 op: if negated {
                     SQLOperator::NotLike
@@ -591,7 +591,7 @@ fn parse_like() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            ASTNode::SQLIsNull(Box::new(ASTNode::SQLBinaryExpr {
+            ASTNode::SQLIsNull(Box::new(ASTNode::SQLBinaryOp {
                 left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
                 op: if negated {
                     SQLOperator::NotLike
@@ -678,12 +678,12 @@ fn parse_between_with_expr() {
     assert_eq!(
         ASTNode::SQLIsNull(Box::new(ASTNode::SQLBetween {
             expr: Box::new(ASTNode::SQLValue(Value::Long(1))),
-            low: Box::new(SQLBinaryExpr {
+            low: Box::new(SQLBinaryOp {
                 left: Box::new(ASTNode::SQLValue(Value::Long(1))),
                 op: Plus,
                 right: Box::new(ASTNode::SQLValue(Value::Long(2))),
             }),
-            high: Box::new(SQLBinaryExpr {
+            high: Box::new(SQLBinaryOp {
                 left: Box::new(ASTNode::SQLValue(Value::Long(3))),
                 op: Plus,
                 right: Box::new(ASTNode::SQLValue(Value::Long(4))),
@@ -696,15 +696,15 @@ fn parse_between_with_expr() {
     let sql = "SELECT * FROM t WHERE 1 = 1 AND 1 + x BETWEEN 1 AND 2";
     let select = verified_only_select(sql);
     assert_eq!(
-        ASTNode::SQLBinaryExpr {
-            left: Box::new(ASTNode::SQLBinaryExpr {
+        ASTNode::SQLBinaryOp {
+            left: Box::new(ASTNode::SQLBinaryOp {
                 left: Box::new(ASTNode::SQLValue(Value::Long(1))),
                 op: SQLOperator::Eq,
                 right: Box::new(ASTNode::SQLValue(Value::Long(1))),
             }),
             op: SQLOperator::And,
             right: Box::new(ASTNode::SQLBetween {
-                expr: Box::new(ASTNode::SQLBinaryExpr {
+                expr: Box::new(ASTNode::SQLBinaryOp {
                     left: Box::new(ASTNode::SQLValue(Value::Long(1))),
                     op: SQLOperator::Plus,
                     right: Box::new(ASTNode::SQLIdentifier("x".to_string())),
@@ -1368,14 +1368,14 @@ fn parse_parens() {
     use self::SQLOperator::*;
     let sql = "(a + b) - (c + d)";
     assert_eq!(
-        SQLBinaryExpr {
-            left: Box::new(SQLNested(Box::new(SQLBinaryExpr {
+        SQLBinaryOp {
+            left: Box::new(SQLNested(Box::new(SQLBinaryOp {
                 left: Box::new(SQLIdentifier("a".to_string())),
                 op: Plus,
                 right: Box::new(SQLIdentifier("b".to_string()))
             }))),
             op: Minus,
-            right: Box::new(SQLNested(Box::new(SQLBinaryExpr {
+            right: Box::new(SQLNested(Box::new(SQLBinaryOp {
                 left: Box::new(SQLIdentifier("c".to_string())),
                 op: Plus,
                 right: Box::new(SQLIdentifier("d".to_string()))
@@ -1388,7 +1388,7 @@ fn parse_parens() {
 #[test]
 fn parse_searched_case_expression() {
     let sql = "SELECT CASE WHEN bar IS NULL THEN 'null' WHEN bar = 0 THEN '=0' WHEN bar >= 0 THEN '>=0' ELSE '<0' END FROM foo";
-    use self::ASTNode::{SQLBinaryExpr, SQLCase, SQLIdentifier, SQLIsNull, SQLValue};
+    use self::ASTNode::{SQLBinaryOp, SQLCase, SQLIdentifier, SQLIsNull, SQLValue};
     use self::SQLOperator::*;
     let select = verified_only_select(sql);
     assert_eq!(
@@ -1396,12 +1396,12 @@ fn parse_searched_case_expression() {
             operand: None,
             conditions: vec![
                 SQLIsNull(Box::new(SQLIdentifier("bar".to_string()))),
-                SQLBinaryExpr {
+                SQLBinaryOp {
                     left: Box::new(SQLIdentifier("bar".to_string())),
                     op: Eq,
                     right: Box::new(SQLValue(Value::Long(0)))
                 },
-                SQLBinaryExpr {
+                SQLBinaryOp {
                     left: Box::new(SQLIdentifier("bar".to_string())),
                     op: GtEq,
                     right: Box::new(SQLValue(Value::Long(0)))
@@ -1555,7 +1555,7 @@ fn parse_joins_on() {
                 args: vec![],
                 with_hints: vec![],
             },
-            join_operator: f(JoinConstraint::On(ASTNode::SQLBinaryExpr {
+            join_operator: f(JoinConstraint::On(ASTNode::SQLBinaryOp {
                 left: Box::new(ASTNode::SQLIdentifier("c1".into())),
                 op: SQLOperator::Eq,
                 right: Box::new(ASTNode::SQLIdentifier("c2".into())),
@@ -1920,7 +1920,7 @@ fn parse_multiple_statements() {
 fn parse_scalar_subqueries() {
     use self::ASTNode::*;
     let sql = "(SELECT 1) + (SELECT 2)";
-    assert_matches!(verified_expr(sql), SQLBinaryExpr {
+    assert_matches!(verified_expr(sql), SQLBinaryOp {
         op: SQLOperator::Plus, ..
         //left: box SQLSubquery { .. },
         //right: box SQLSubquery { .. },
@@ -1940,8 +1940,8 @@ fn parse_exists_subquery() {
     let sql = "SELECT * FROM t WHERE NOT EXISTS (SELECT 1)";
     let select = verified_only_select(sql);
     assert_eq!(
-        ASTNode::SQLUnary {
-            operator: SQLOperator::Not,
+        ASTNode::SQLUnaryOp {
+            op: SQLOperator::Not,
             expr: Box::new(ASTNode::SQLExists(Box::new(expected_inner))),
         },
         select.selection.unwrap(),

@@ -184,7 +184,7 @@ impl Parser {
                 "EXTRACT" => self.parse_extract_expression(),
                 "INTERVAL" => self.parse_literal_interval(),
                 "NOT" => Ok(ASTNode::SQLUnaryOp {
-                    op: SQLOperator::Not,
+                    op: SQLUnaryOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
                 }),
                 "TIME" => Ok(ASTNode::SQLValue(Value::Time(self.parse_literal_string()?))),
@@ -225,9 +225,9 @@ impl Parser {
             Token::Mult => Ok(ASTNode::SQLWildcard),
             tok @ Token::Minus | tok @ Token::Plus => {
                 let op = if tok == Token::Plus {
-                    SQLOperator::Plus
+                    SQLUnaryOperator::Plus
                 } else {
-                    SQLOperator::Minus
+                    SQLUnaryOperator::Minus
                 };
                 Ok(ASTNode::SQLUnaryOp {
                     op,
@@ -513,24 +513,24 @@ impl Parser {
         let tok = self.next_token().unwrap(); // safe as EOF's precedence is the lowest
 
         let regular_binary_operator = match tok {
-            Token::Eq => Some(SQLOperator::Eq),
-            Token::Neq => Some(SQLOperator::NotEq),
-            Token::Gt => Some(SQLOperator::Gt),
-            Token::GtEq => Some(SQLOperator::GtEq),
-            Token::Lt => Some(SQLOperator::Lt),
-            Token::LtEq => Some(SQLOperator::LtEq),
-            Token::Plus => Some(SQLOperator::Plus),
-            Token::Minus => Some(SQLOperator::Minus),
-            Token::Mult => Some(SQLOperator::Multiply),
-            Token::Mod => Some(SQLOperator::Modulus),
-            Token::Div => Some(SQLOperator::Divide),
+            Token::Eq => Some(SQLBinaryOperator::Eq),
+            Token::Neq => Some(SQLBinaryOperator::NotEq),
+            Token::Gt => Some(SQLBinaryOperator::Gt),
+            Token::GtEq => Some(SQLBinaryOperator::GtEq),
+            Token::Lt => Some(SQLBinaryOperator::Lt),
+            Token::LtEq => Some(SQLBinaryOperator::LtEq),
+            Token::Plus => Some(SQLBinaryOperator::Plus),
+            Token::Minus => Some(SQLBinaryOperator::Minus),
+            Token::Mult => Some(SQLBinaryOperator::Multiply),
+            Token::Mod => Some(SQLBinaryOperator::Modulus),
+            Token::Div => Some(SQLBinaryOperator::Divide),
             Token::SQLWord(ref k) => match k.keyword.as_ref() {
-                "AND" => Some(SQLOperator::And),
-                "OR" => Some(SQLOperator::Or),
-                "LIKE" => Some(SQLOperator::Like),
+                "AND" => Some(SQLBinaryOperator::And),
+                "OR" => Some(SQLBinaryOperator::Or),
+                "LIKE" => Some(SQLBinaryOperator::Like),
                 "NOT" => {
                     if self.parse_keyword("LIKE") {
-                        Some(SQLOperator::NotLike)
+                        Some(SQLBinaryOperator::NotLike)
                     } else {
                         None
                     }

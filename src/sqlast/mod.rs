@@ -27,10 +27,9 @@ pub use self::query::{
     Cte, Fetch, Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLQuery, SQLSelect,
     SQLSelectItem, SQLSetExpr, SQLSetOperator, SQLValues, TableAlias, TableFactor, TableWithJoins,
 };
+pub use self::sql_operator::{SQLBinaryOperator, SQLUnaryOperator};
 pub use self::sqltype::SQLType;
 pub use self::value::{SQLDateTimeField, Value};
-
-pub use self::sql_operator::SQLOperator;
 
 /// Like `vec.join(", ")`, but for any types implementing ToString.
 fn comma_separated_string<I>(iter: I) -> String
@@ -92,12 +91,12 @@ pub enum ASTNode {
     /// Binary operation e.g. `1 + 1` or `foo > bar`
     SQLBinaryOp {
         left: Box<ASTNode>,
-        op: SQLOperator,
+        op: SQLBinaryOperator,
         right: Box<ASTNode>,
     },
     /// Unary operation e.g. `NOT foo`
     SQLUnaryOp {
-        op: SQLOperator,
+        op: SQLUnaryOperator,
         expr: Box<ASTNode>,
     },
     /// CAST an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`

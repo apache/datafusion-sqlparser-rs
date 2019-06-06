@@ -352,7 +352,7 @@ fn parse_not() {
 fn parse_invalid_infix_not() {
     let res = parse_sql_statements("SELECT c FROM t WHERE c NOT (");
     assert_eq!(
-        ParserError::ParserError("Expected IN or BETWEEN after NOT, found: (".to_string()),
+        ParserError::ParserError("Expected end of statement, found: NOT".to_string()),
         res.unwrap_err(),
     );
 }

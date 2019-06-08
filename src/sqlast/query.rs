@@ -215,6 +215,10 @@ pub enum TableFactor {
         subquery: Box<SQLQuery>,
         alias: Option<TableAlias>,
     },
+    NestedJoin {
+        base: Box<TableFactor>,
+        joins: Vec<Join>,
+    },
 }
 
 impl ToString for TableFactor {
@@ -252,6 +256,13 @@ impl ToString for TableFactor {
                     s += &format!(" AS {}", alias.to_string());
                 }
                 s
+            }
+            TableFactor::NestedJoin { base, joins } => {
+                let mut s = base.to_string();
+                for join in joins {
+                    s += &join.to_string();
+                }
+                format!("({})", s)
             }
         }
     }

@@ -1300,7 +1300,7 @@ fn parse_delimited_identifiers() {
         r#"SELECT "alias"."bar baz", "myfun"(), "simple id" AS "column alias" FROM "a table" AS "alias""#
     );
     // check FROM
-    match select.relation.unwrap() {
+    match only(select.from).relation {
         TableFactor::Table {
             name,
             alias,
@@ -1430,16 +1430,69 @@ fn parse_implicit_join() {
     let sql = "SELECT * FROM t1, t2";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Join {
-            relation: TableFactor::Table {
-                name: SQLObjectName(vec!["t2".to_string()]),
-                alias: None,
-                args: vec![],
-                with_hints: vec![],
+        vec![
+            TableWithJoins {
+                relation: TableFactor::Table {
+                    name: SQLObjectName(vec!["t1".into()]),
+                    alias: None,
+                    args: vec![],
+                    with_hints: vec![],
+                },
+                joins: vec![],
             },
-            join_operator: JoinOperator::Implicit
-        },
-        only(&select.joins),
+            TableWithJoins {
+                relation: TableFactor::Table {
+                    name: SQLObjectName(vec!["t2".into()]),
+                    alias: None,
+                    args: vec![],
+                    with_hints: vec![],
+                },
+                joins: vec![],
+            }
+        ],
+        select.from,
+    );
+
+    let sql = "SELECT * FROM t1a NATURAL JOIN t1b, t2a NATURAL JOIN t2b";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        vec![
+            TableWithJoins {
+                relation: TableFactor::Table {
+                    name: SQLObjectName(vec!["t1a".into()]),
+                    alias: None,
+                    args: vec![],
+                    with_hints: vec![],
+                },
+                joins: vec![Join {
+                    relation: TableFactor::Table {
+                        name: SQLObjectName(vec!["t1b".into()]),
+                        alias: None,
+                        args: vec![],
+                        with_hints: vec![],
+                    },
+                    join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+                }]
+            },
+            TableWithJoins {
+                relation: TableFactor::Table {
+                    name: SQLObjectName(vec!["t2a".into()]),
+                    alias: None,
+                    args: vec![],
+                    with_hints: vec![],
+                },
+                joins: vec![Join {
+                    relation: TableFactor::Table {
+                        name: SQLObjectName(vec!["t2b".into()]),
+                        alias: None,
+                        args: vec![],
+                        with_hints: vec![],
+                    },
+                    join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+                }]
+            }
+        ],
+        select.from,
     );
 }
 
@@ -1448,7 +1501,7 @@ fn parse_cross_join() {
     let sql = "SELECT * FROM t1 CROSS JOIN t2";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Join {
+        Join {
             relation: TableFactor::Table {
                 name: SQLObjectName(vec!["t2".to_string()]),
                 alias: None,
@@ -1457,7 +1510,7 @@ fn parse_cross_join() {
             },
             join_operator: JoinOperator::Cross
         },
-        only(&select.joins),
+        only(only(select.from).joins),
     );
 }
 
@@ -1491,7 +1544,7 @@ fn parse_joins_on() {
     }
     // Test parsing of aliases
     assert_eq!(
-        verified_only_select("SELECT * FROM t1 JOIN t2 AS foo ON c1 = c2").joins,
+        only(&verified_only_select("SELECT * FROM t1 JOIN t2 AS foo ON c1 = c2").from).joins,
         vec![join_with_constraint(
             "t2",
             table_alias("foo"),
@@ -1504,19 +1557,19 @@ fn parse_joins_on() {
     );
     // Test parsing of different join operators
     assert_eq!(
-        verified_only_select("SELECT * FROM t1 JOIN t2 ON c1 = c2").joins,
+        only(&verified_only_select("SELECT * FROM t1 JOIN t2 ON c1 = c2").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::Inner)]
     );
     assert_eq!(
-        verified_only_select("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2").joins,
+        only(&verified_only_select("SELECT * FROM t1 LEFT JOIN t2 ON c1 = c2").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::LeftOuter)]
     );
     assert_eq!(
-        verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 ON c1 = c2").joins,
+        only(&verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 ON c1 = c2").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::RightOuter)]
     );
     assert_eq!(
-        verified_only_select("SELECT * FROM t1 FULL JOIN t2 ON c1 = c2").joins,
+        only(&verified_only_select("SELECT * FROM t1 FULL JOIN t2 ON c1 = c2").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::FullOuter)]
     );
 }
@@ -1540,7 +1593,7 @@ fn parse_joins_using() {
     }
     // Test parsing of aliases
     assert_eq!(
-        verified_only_select("SELECT * FROM t1 JOIN t2 AS foo USING(c1)").joins,
+        only(&verified_only_select("SELECT * FROM t1 JOIN t2 AS foo USING(c1)").from).joins,
         vec![join_with_constraint(
             "t2",
             table_alias("foo"),
@@ -1553,19 +1606,19 @@ fn parse_joins_using() {
     );
     // Test parsing of different join operators
     assert_eq!(
-        verified_only_select("SELECT * FROM t1 JOIN t2 USING(c1)").joins,
+        only(&verified_only_select("SELECT * FROM t1 JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::Inner)]
     );
     assert_eq!(
-        verified_only_select("SELECT * FROM t1 LEFT JOIN t2 USING(c1)").joins,
+        only(&verified_only_select("SELECT * FROM t1 LEFT JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::LeftOuter)]
     );
     assert_eq!(
-        verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 USING(c1)").joins,
+        only(&verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::RightOuter)]
     );
     assert_eq!(
-        verified_only_select("SELECT * FROM t1 FULL JOIN t2 USING(c1)").joins,
+        only(&verified_only_select("SELECT * FROM t1 FULL JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::FullOuter)]
     );
 }
@@ -1584,19 +1637,19 @@ fn parse_natural_join() {
         }
     }
     assert_eq!(
-        verified_only_select("SELECT * FROM t1 NATURAL JOIN t2").joins,
+        only(&verified_only_select("SELECT * FROM t1 NATURAL JOIN t2").from).joins,
         vec![natural_join(JoinOperator::Inner)]
     );
     assert_eq!(
-        verified_only_select("SELECT * FROM t1 NATURAL LEFT JOIN t2").joins,
+        only(&verified_only_select("SELECT * FROM t1 NATURAL LEFT JOIN t2").from).joins,
         vec![natural_join(JoinOperator::LeftOuter)]
     );
     assert_eq!(
-        verified_only_select("SELECT * FROM t1 NATURAL RIGHT JOIN t2").joins,
+        only(&verified_only_select("SELECT * FROM t1 NATURAL RIGHT JOIN t2").from).joins,
         vec![natural_join(JoinOperator::RightOuter)]
     );
     assert_eq!(
-        verified_only_select("SELECT * FROM t1 NATURAL FULL JOIN t2").joins,
+        only(&verified_only_select("SELECT * FROM t1 NATURAL FULL JOIN t2").from).joins,
         vec![natural_join(JoinOperator::FullOuter)]
     );
 
@@ -1633,17 +1686,17 @@ fn parse_join_nesting() {
 
     macro_rules! nest {
         ($base:expr $(, $join:expr)*) => {
-            TableFactor::NestedJoin {
-                base: Box::new($base),
+            TableFactor::NestedJoin(Box::new(TableWithJoins {
+                relation: $base,
                 joins: vec![$(join($join)),*]
-            }
+            }))
         };
     }
 
     let sql = "SELECT * FROM a NATURAL JOIN (b NATURAL JOIN (c NATURAL JOIN d NATURAL JOIN e)) \
                NATURAL JOIN (f NATURAL JOIN (g NATURAL JOIN h))";
     assert_eq!(
-        verified_only_select(sql).joins,
+        only(&verified_only_select(sql).from).joins,
         vec![
             join(nest!(table("b"), nest!(table("c"), table("d"), table("e")))),
             join(nest!(table("f"), nest!(table("g"), table("h"))))
@@ -1652,22 +1705,22 @@ fn parse_join_nesting() {
 
     let sql = "SELECT * FROM (a NATURAL JOIN b) NATURAL JOIN c";
     let select = verified_only_select(sql);
-    assert_eq!(select.relation.unwrap(), nest!(table("a"), table("b")),);
-    assert_eq!(select.joins, vec![join(table("c"))]);
+    let from = only(select.from);
+    assert_eq!(from.relation, nest!(table("a"), table("b")));
+    assert_eq!(from.joins, vec![join(table("c"))]);
 
     let sql = "SELECT * FROM (((a NATURAL JOIN b)))";
     let select = verified_only_select(sql);
-    assert_eq!(
-        select.relation.unwrap(),
-        nest!(nest!(nest!(table("a"), table("b"))))
-    );
-    assert_eq!(select.joins, vec![]);
+    let from = only(select.from);
+    assert_eq!(from.relation, nest!(nest!(nest!(table("a"), table("b")))));
+    assert_eq!(from.joins, vec![]);
 
     let sql = "SELECT * FROM a NATURAL JOIN (((b NATURAL JOIN c)))";
     let select = verified_only_select(sql);
-    assert_eq!(select.relation.unwrap(), table("a"));
+    let from = only(select.from);
+    assert_eq!(from.relation, table("a"));
     assert_eq!(
-        select.joins,
+        from.joins,
         vec![join(nest!(nest!(nest!(table("b"), table("c")))))]
     );
 }
@@ -1729,8 +1782,8 @@ fn parse_ctes() {
     // CTE in a derived table
     let sql = &format!("SELECT * FROM ({})", with);
     let select = verified_only_select(sql);
-    match select.relation {
-        Some(TableFactor::Derived { subquery, .. }) => {
+    match only(select.from).relation {
+        TableFactor::Derived { subquery, .. } => {
             assert_ctes_in_select(&cte_sqls, subquery.as_ref())
         }
         _ => panic!("Expected derived table"),
@@ -2072,8 +2125,8 @@ fn parse_offset() {
     let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS) OFFSET 2 ROWS");
     assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
     match ast.body {
-        SQLSetExpr::Select(s) => match s.relation {
-            Some(TableFactor::Derived { subquery, .. }) => {
+        SQLSetExpr::Select(s) => match only(s.from).relation {
+            TableFactor::Derived { subquery, .. } => {
                 assert_eq!(subquery.offset, Some(ASTNode::SQLValue(Value::Long(2))));
             }
             _ => panic!("Test broke"),
@@ -2172,8 +2225,8 @@ fn parse_fetch() {
         })
     );
     match ast.body {
-        SQLSetExpr::Select(s) => match s.relation {
-            Some(TableFactor::Derived { subquery, .. }) => {
+        SQLSetExpr::Select(s) => match only(s.from).relation {
+            TableFactor::Derived { subquery, .. } => {
                 assert_eq!(
                     subquery.fetch,
                     Some(Fetch {
@@ -2198,8 +2251,8 @@ fn parse_fetch() {
         })
     );
     match ast.body {
-        SQLSetExpr::Select(s) => match s.relation {
-            Some(TableFactor::Derived { subquery, .. }) => {
+        SQLSetExpr::Select(s) => match only(s.from).relation {
+            TableFactor::Derived { subquery, .. } => {
                 assert_eq!(subquery.offset, Some(ASTNode::SQLValue(Value::Long(2))));
                 assert_eq!(
                     subquery.fetch,
@@ -2250,16 +2303,18 @@ fn lateral_derived() {
             lateral_str
         );
         let select = verified_only_select(&sql);
-        assert_eq!(select.joins.len(), 1);
+        let from = only(select.from);
+        assert_eq!(from.joins.len(), 1);
+        let join = &from.joins[0];
         assert_eq!(
-            select.joins[0].join_operator,
+            join.join_operator,
             JoinOperator::LeftOuter(JoinConstraint::On(ASTNode::SQLValue(Value::Boolean(true))))
         );
         if let TableFactor::Derived {
             lateral,
             ref subquery,
             alias: Some(ref alias),
-        } = select.joins[0].relation
+        } = join.relation
         {
             assert_eq!(lateral_in, lateral);
             assert_eq!("order".to_string(), alias.name);

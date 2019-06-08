@@ -394,14 +394,8 @@ impl<'a> Tokenizer<'a> {
                 '!' => {
                     chars.next(); // consume
                     match chars.peek() {
-                        Some(&ch) => match ch {
-                            '=' => self.consume_and_return(chars, Token::Neq),
-                            _ => Err(TokenizerError(format!(
-                                "Tokenizer Error at Line: {}, Col: {}",
-                                self.line, self.col
-                            ))),
-                        },
-                        None => Err(TokenizerError(format!(
+                        Some('=') => self.consume_and_return(chars, Token::Neq),
+                        _ => Err(TokenizerError(format!(
                             "Tokenizer Error at Line: {}, Col: {}",
                             self.line, self.col
                         ))),
@@ -410,39 +404,27 @@ impl<'a> Tokenizer<'a> {
                 '<' => {
                     chars.next(); // consume
                     match chars.peek() {
-                        Some(&ch) => match ch {
-                            '=' => self.consume_and_return(chars, Token::LtEq),
-                            '>' => self.consume_and_return(chars, Token::Neq),
-                            _ => Ok(Some(Token::Lt)),
-                        },
-                        None => Ok(Some(Token::Lt)),
+                        Some('=') => self.consume_and_return(chars, Token::LtEq),
+                        Some('>') => self.consume_and_return(chars, Token::Neq),
+                        _ => Ok(Some(Token::Lt)),
                     }
                 }
                 '>' => {
                     chars.next(); // consume
                     match chars.peek() {
-                        Some(&ch) => match ch {
-                            '=' => self.consume_and_return(chars, Token::GtEq),
-                            _ => Ok(Some(Token::Gt)),
-                        },
-                        None => Ok(Some(Token::Gt)),
+                        Some('=') => self.consume_and_return(chars, Token::GtEq),
+                        _ => Ok(Some(Token::Gt)),
                     }
                 }
-                // colon
                 ':' => {
                     chars.next();
                     match chars.peek() {
-                        Some(&ch) => match ch {
-                            // double colon
-                            ':' => self.consume_and_return(chars, Token::DoubleColon),
-                            _ => Ok(Some(Token::Colon)),
-                        },
-                        None => Ok(Some(Token::Colon)),
+                        Some(':') => self.consume_and_return(chars, Token::DoubleColon),
+                        _ => Ok(Some(Token::Colon)),
                     }
                 }
                 ';' => self.consume_and_return(chars, Token::SemiColon),
                 '\\' => self.consume_and_return(chars, Token::Backslash),
-                // brakets
                 '[' => self.consume_and_return(chars, Token::LBracket),
                 ']' => self.consume_and_return(chars, Token::RBracket),
                 '&' => self.consume_and_return(chars, Token::Ampersand),

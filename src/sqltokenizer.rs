@@ -322,8 +322,14 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume the opening quote
                     let quote_end = SQLWord::matching_end_quote(quote_start);
                     let s = peeking_take_while(chars, |ch| ch != quote_end);
-                    chars.next(); // TODO: raise error on EOF
-                    Ok(Some(Token::make_word(&s, Some(quote_start))))
+                    if chars.next() == Some(quote_end) {
+                        Ok(Some(Token::make_word(&s, Some(quote_start))))
+                    } else {
+                        Err(TokenizerError(format!(
+                            "Expected close delimiter '{}' before EOF.",
+                            quote_end
+                        )))
+                    }
                 }
                 // numbers
                 '0'..='9' => {
@@ -741,6 +747,20 @@ mod tests {
             Token::Whitespace(Whitespace::Newline),
         ];
         compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_mismatched_quotes() {
+        let sql = String::from("\"foo");
+
+        let dialect = GenericSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        assert_eq!(
+            tokenizer.tokenize(),
+            Err(TokenizerError(
+                "Expected close delimiter '\"' before EOF.".to_string(),
+            ))
+        );
     }
 
     #[test]

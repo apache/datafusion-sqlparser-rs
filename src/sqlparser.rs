@@ -1719,6 +1719,16 @@ impl Parser {
                     // we won't, and we'll return that error instead.
                     self.index = index;
                     let table_and_joins = self.parse_table_and_joins()?;
+                    match table_and_joins.relation {
+                        TableFactor::NestedJoin { .. } => (),
+                        _ => {
+                            if table_and_joins.joins.is_empty() {
+                                // The SQL spec prohibits derived tables and bare
+                                // tables from appearing alone in parentheses.
+                                self.expected("joined table", self.peek_token())?
+                            }
+                        }
+                    }
                     self.expect_token(&Token::RParen)?;
                     Ok(TableFactor::NestedJoin(Box::new(table_and_joins)))
                 }

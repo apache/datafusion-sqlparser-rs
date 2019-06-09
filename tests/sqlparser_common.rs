@@ -1742,6 +1742,12 @@ fn parse_join_nesting() {
         from.joins,
         vec![join(nest!(nest!(nest!(table("b"), table("c")))))]
     );
+
+    let res = parse_sql_statements("SELECT * FROM (a NATURAL JOIN (b))");
+    assert_eq!(
+        ParserError::ParserError("Expected joined table, found: )".to_string()),
+        res.unwrap_err()
+    );
 }
 
 #[test]
@@ -1873,7 +1879,13 @@ fn parse_derived_tables() {
                 join_operator: JoinOperator::Inner(JoinConstraint::Natural),
             }],
         }))
-    )
+    );
+
+    let res = parse_sql_statements("SELECT * FROM ((SELECT 1) AS t)");
+    assert_eq!(
+        ParserError::ParserError("Expected joined table, found: )".to_string()),
+        res.unwrap_err()
+    );
 }
 
 #[test]

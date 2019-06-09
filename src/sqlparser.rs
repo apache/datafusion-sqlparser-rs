@@ -822,15 +822,10 @@ impl Parser {
             ));
         };
         let if_exists = self.parse_keywords(vec!["IF", "EXISTS"]);
-        let mut names = vec![self.parse_object_name()?];
+        let mut names = vec![];
         loop {
-            let token = &self.next_token();
-            if let Some(Token::Comma) = token {
-                names.push(self.parse_object_name()?)
-            } else {
-                if token.is_some() {
-                    self.prev_token();
-                }
+            names.push(self.parse_object_name()?);
+            if !self.consume_token(&Token::Comma) {
                 break;
             }
         }
@@ -1014,10 +1009,9 @@ impl Parser {
             self.expect_token(&Token::Eq)?;
             let value = self.parse_value()?;
             options.push(SQLOption { name, value });
-            match self.peek_token() {
-                Some(Token::Comma) => self.next_token(),
-                _ => break,
-            };
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
         }
         self.expect_token(&Token::RParen)?;
         Ok(options)
@@ -1279,29 +1273,13 @@ impl Parser {
     /// Parse one or more identifiers with the specified separator between them
     pub fn parse_list_of_ids(&mut self, separator: &Token) -> Result<Vec<SQLIdent>, ParserError> {
         let mut idents = vec![];
-        let mut expect_identifier = true;
         loop {
-            let token = &self.next_token();
-            match token {
-                Some(Token::SQLWord(s)) if expect_identifier => {
-                    expect_identifier = false;
-                    idents.push(s.as_sql_ident());
-                }
-                Some(token) if token == separator && !expect_identifier => {
-                    expect_identifier = true;
-                    continue;
-                }
-                _ => {
-                    self.prev_token();
-                    break;
-                }
+            idents.push(self.parse_identifier()?);
+            if !self.consume_token(separator) {
+                break;
             }
         }
-        if expect_identifier {
-            self.expected("identifier", self.peek_token())
-        } else {
-            Ok(idents)
-        }
+        Ok(idents)
     }
 
     /// Parse a possibly qualified, possibly quoted identifier, e.g.
@@ -1844,10 +1822,9 @@ impl Parser {
             self.expect_token(&Token::LParen)?;
             values.push(self.parse_expr_list()?);
             self.expect_token(&Token::RParen)?;
-            match self.peek_token() {
-                Some(Token::Comma) => self.next_token(),
-                _ => break,
-            };
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
         }
         Ok(SQLValues(values))
     }

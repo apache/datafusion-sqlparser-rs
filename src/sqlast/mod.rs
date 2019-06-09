@@ -416,6 +416,14 @@ pub enum SQLStatement {
         names: Vec<SQLObjectName>,
         cascade: bool,
     },
+    /// { BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...
+    SQLStartTransaction { modes: Vec<TransactionMode> },
+    /// SET TRANSACTION ...
+    SQLSetTransaction { modes: Vec<TransactionMode> },
+    /// COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]
+    SQLCommit { chain: bool },
+    /// ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]
+    SQLRollback { chain: bool },
 }
 
 impl ToString for SQLStatement {
@@ -555,6 +563,28 @@ impl ToString for SQLStatement {
                 comma_separated_string(names),
                 if *cascade { " CASCADE" } else { "" },
             ),
+            SQLStatement::SQLStartTransaction { modes } => format!(
+                "START TRANSACTION{}",
+                if modes.is_empty() {
+                    "".into()
+                } else {
+                    format!(" {}", comma_separated_string(modes))
+                }
+            ),
+            SQLStatement::SQLSetTransaction { modes } => format!(
+                "SET TRANSACTION{}",
+                if modes.is_empty() {
+                    "".into()
+                } else {
+                    format!(" {}", comma_separated_string(modes))
+                }
+            ),
+            SQLStatement::SQLCommit { chain } => {
+                format!("COMMIT{}", if *chain { " AND CHAIN" } else { "" },)
+            }
+            SQLStatement::SQLRollback { chain } => {
+                format!("ROLLBACK{}", if *chain { " AND CHAIN" } else { "" },)
+            }
         }
     }
 }
@@ -704,5 +734,57 @@ pub struct SQLOption {
 impl ToString for SQLOption {
     fn to_string(&self) -> String {
         format!("{} = {}", self.name.to_string(), self.value.to_string())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub enum TransactionMode {
+    AccessMode(TransactionAccessMode),
+    IsolationLevel(TransactionIsolationLevel),
+}
+
+impl ToString for TransactionMode {
+    fn to_string(&self) -> String {
+        use TransactionMode::*;
+        match self {
+            AccessMode(access_mode) => access_mode.to_string(),
+            IsolationLevel(iso_level) => format!("ISOLATION LEVEL {}", iso_level.to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub enum TransactionAccessMode {
+    ReadOnly,
+    ReadWrite,
+}
+
+impl ToString for TransactionAccessMode {
+    fn to_string(&self) -> String {
+        use TransactionAccessMode::*;
+        match self {
+            ReadOnly => "READ ONLY".into(),
+            ReadWrite => "READ WRITE".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub enum TransactionIsolationLevel {
+    ReadUncommitted,
+    ReadCommitted,
+    RepeatableRead,
+    Serializable,
+}
+
+impl ToString for TransactionIsolationLevel {
+    fn to_string(&self) -> String {
+        use TransactionIsolationLevel::*;
+        match self {
+            ReadUncommitted => "READ UNCOMMITTED".into(),
+            ReadCommitted => "READ COMMITTED".into(),
+            RepeatableRead => "REPEATABLE READ".into(),
+            Serializable => "SERIALIZABLE".into(),
+        }
     }
 }

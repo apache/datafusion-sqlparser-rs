@@ -120,6 +120,14 @@ impl Parser {
                     "UPDATE" => Ok(self.parse_update()?),
                     "ALTER" => Ok(self.parse_alter()?),
                     "COPY" => Ok(self.parse_copy()?),
+                    "START" => Ok(self.parse_start_transaction()?),
+                    "SET" => Ok(self.parse_set_transaction()?),
+                    // `BEGIN` is a nonstandard but common alias for the
+                    // standard `START TRANSACTION` statement. It is supported
+                    // by at least PostgreSQL and MySQL.
+                    "BEGIN" => Ok(self.parse_begin()?),
+                    "COMMIT" => Ok(self.parse_commit()?),
+                    "ROLLBACK" => Ok(self.parse_rollback()?),
                     _ => parser_err!(format!(
                         "Unexpected keyword {:?} at the beginning of a statement",
                         w.to_string()
@@ -1842,6 +1850,86 @@ impl Parser {
             };
         }
         Ok(SQLValues(values))
+    }
+
+    pub fn parse_start_transaction(&mut self) -> Result<SQLStatement, ParserError> {
+        self.expect_keyword("TRANSACTION")?;
+        Ok(SQLStatement::SQLStartTransaction {
+            modes: self.parse_transaction_modes()?,
+        })
+    }
+
+    pub fn parse_begin(&mut self) -> Result<SQLStatement, ParserError> {
+        let _ = self.parse_one_of_keywords(&["TRANSACTION", "WORK"]);
+        Ok(SQLStatement::SQLStartTransaction {
+            modes: self.parse_transaction_modes()?,
+        })
+    }
+
+    pub fn parse_set_transaction(&mut self) -> Result<SQLStatement, ParserError> {
+        self.expect_keyword("TRANSACTION")?;
+        Ok(SQLStatement::SQLSetTransaction {
+            modes: self.parse_transaction_modes()?,
+        })
+    }
+
+    pub fn parse_transaction_modes(&mut self) -> Result<Vec<TransactionMode>, ParserError> {
+        let mut modes = vec![];
+        let mut required = false;
+        loop {
+            let mode = if self.parse_keywords(vec!["ISOLATION", "LEVEL"]) {
+                let iso_level = if self.parse_keywords(vec!["READ", "UNCOMMITTED"]) {
+                    TransactionIsolationLevel::ReadUncommitted
+                } else if self.parse_keywords(vec!["READ", "COMMITTED"]) {
+                    TransactionIsolationLevel::ReadCommitted
+                } else if self.parse_keywords(vec!["REPEATABLE", "READ"]) {
+                    TransactionIsolationLevel::RepeatableRead
+                } else if self.parse_keyword("SERIALIZABLE") {
+                    TransactionIsolationLevel::Serializable
+                } else {
+                    self.expected("isolation level", self.peek_token())?
+                };
+                TransactionMode::IsolationLevel(iso_level)
+            } else if self.parse_keywords(vec!["READ", "ONLY"]) {
+                TransactionMode::AccessMode(TransactionAccessMode::ReadOnly)
+            } else if self.parse_keywords(vec!["READ", "WRITE"]) {
+                TransactionMode::AccessMode(TransactionAccessMode::ReadWrite)
+            } else if required || self.peek_token().is_some() {
+                self.expected("transaction mode", self.peek_token())?
+            } else {
+                break;
+            };
+            modes.push(mode);
+            // ANSI requires a comma after each transaction mode, but
+            // PostgreSQL, for historical reasons, does not. We follow
+            // PostgreSQL in making the comma optional, since that is strictly
+            // more general.
+            required = self.consume_token(&Token::Comma);
+        }
+        Ok(modes)
+    }
+
+    pub fn parse_commit(&mut self) -> Result<SQLStatement, ParserError> {
+        Ok(SQLStatement::SQLCommit {
+            chain: self.parse_commit_rollback_chain()?,
+        })
+    }
+
+    pub fn parse_rollback(&mut self) -> Result<SQLStatement, ParserError> {
+        Ok(SQLStatement::SQLRollback {
+            chain: self.parse_commit_rollback_chain()?,
+        })
+    }
+
+    pub fn parse_commit_rollback_chain(&mut self) -> Result<bool, ParserError> {
+        let _ = self.parse_one_of_keywords(&["TRANSACTION", "WORK"]);
+        if self.parse_keyword("AND") {
+            let chain = !self.parse_keyword("NO");
+            self.expect_keyword("CHAIN")?;
+            Ok(chain)
+        } else {
+            Ok(false)
+        }
     }
 }
 

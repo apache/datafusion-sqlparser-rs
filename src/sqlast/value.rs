@@ -27,21 +27,32 @@ pub enum Value {
     HexStringLiteral(String),
     /// Boolean value true or false
     Boolean(bool),
-    /// Date literals
+    /// `DATE '...'` literals
     Date(String),
-    /// Time literals
+    /// `TIME '...'` literals
     Time(String),
-    /// Timestamp literals, which include both a date and time
+    /// `TIMESTAMP '...'` literals
     Timestamp(String),
-    /// INTERVAL literals, e.g. INTERVAL '12:34.56' MINUTE TO SECOND (2)
+    /// INTERVAL literals, roughly in the following format:
+    /// `INTERVAL '<value>' <leading_field> [ (<leading_precision>) ]
+    /// [ TO <last_field> [ (<fractional_seconds_precision>) ] ]`,
+    /// e.g. `INTERVAL '123:45.67' MINUTE(3) TO SECOND(2)`.
+    ///
+    /// The parser does not validate the `<value>`, nor does it ensure
+    /// that the `<leading_field>` units >= the units in `<last_field>`,
+    /// so the user will have to reject intervals like `HOUR TO YEAR`.
     Interval {
         value: String,
         leading_field: SQLDateTimeField,
         leading_precision: Option<u64>,
         last_field: Option<SQLDateTimeField>,
+        /// The seconds precision can be specified in SQL source as
+        /// `INTERVAL '__' SECOND(_, x)` (in which case the `leading_field`
+        /// will be `Second` and the `last_field` will be `None`),
+        /// or as `__ TO SECOND(x)`.
         fractional_seconds_precision: Option<u64>,
     },
-    /// NULL value in insert statements,
+    /// `NULL` value
     Null,
 }
 

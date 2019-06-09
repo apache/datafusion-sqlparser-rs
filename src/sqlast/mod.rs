@@ -56,9 +56,12 @@ pub type SQLIdent = String;
 pub enum ASTNode {
     /// Identifier e.g. table name or column name
     SQLIdentifier(SQLIdent),
-    /// Unqualified wildcard (`*`). SQL allows this in limited contexts (such as right
-    /// after `SELECT` or as part of an aggregate function, e.g. `COUNT(*)`, but we
-    /// currently accept it in contexts where it doesn't make sense, such as `* + *`
+    /// Unqualified wildcard (`*`). SQL allows this in limited contexts, such as:
+    /// - right after `SELECT` (which is represented as a [SQLSelectItem::Wildcard] instead)
+    /// - or as part of an aggregate function, e.g. `COUNT(*)`,
+    ///
+    /// ...but we currently also accept it in contexts where it doesn't make
+    /// sense, such as `* + *`
     SQLWildcard,
     /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
     /// (Same caveats apply to SQLQualifiedWildcard as to SQLWildcard.)

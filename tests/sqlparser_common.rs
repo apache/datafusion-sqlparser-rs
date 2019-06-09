@@ -1848,6 +1848,32 @@ fn parse_derived_tables() {
     let sql = "SELECT * FROM t NATURAL JOIN (((SELECT 1)))";
     let _ = verified_only_select(sql);
     // TODO: add assertions
+
+    let sql = "SELECT * FROM (((SELECT 1) UNION (SELECT 2)) AS t1 NATURAL JOIN t2)";
+    let select = verified_only_select(sql);
+    let from = only(select.from);
+    assert_eq!(
+        from.relation,
+        TableFactor::NestedJoin(Box::new(TableWithJoins {
+            relation: TableFactor::Derived {
+                lateral: false,
+                subquery: Box::new(verified_query("(SELECT 1) UNION (SELECT 2)")),
+                alias: Some(TableAlias {
+                    name: "t1".into(),
+                    columns: vec![],
+                })
+            },
+            joins: vec![Join {
+                relation: TableFactor::Table {
+                    name: SQLObjectName(vec!["t2".into()]),
+                    alias: None,
+                    args: vec![],
+                    with_hints: vec![],
+                },
+                join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+            }],
+        }))
+    )
 }
 
 #[test]
@@ -2360,7 +2386,9 @@ fn lateral_derived() {
     let sql = "SELECT * FROM a LEFT JOIN LATERAL (b CROSS JOIN c)";
     let res = parse_sql_statements(sql);
     assert_eq!(
-        ParserError::ParserError("Expected subquery after LATERAL, found nested join".to_string()),
+        ParserError::ParserError(
+            "Expected SELECT or a subquery in the query body, found: b".to_string()
+        ),
         res.unwrap_err()
     );
 }

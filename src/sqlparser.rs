@@ -40,6 +40,12 @@ pub enum IsOptional {
 }
 use IsOptional::*;
 
+pub enum IsLateral {
+    Lateral,
+    NotLateral,
+}
+use IsLateral::*;
+
 impl From<TokenizerError> for ParserError {
     fn from(e: TokenizerError) -> Self {
         ParserError::TokenizerError(format!("{:?}", e))
@@ -1668,30 +1674,55 @@ impl Parser {
 
     /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
     pub fn parse_table_factor(&mut self) -> Result<TableFactor, ParserError> {
-        let lateral = self.parse_keyword("LATERAL");
-        if self.consume_token(&Token::LParen) {
-            if self.parse_keyword("SELECT")
-                || self.parse_keyword("WITH")
-                || self.parse_keyword("VALUES")
-            {
-                self.prev_token();
-                let subquery = Box::new(self.parse_query()?);
-                self.expect_token(&Token::RParen)?;
-                let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
-                Ok(TableFactor::Derived {
-                    lateral,
-                    subquery,
-                    alias,
-                })
-            } else if lateral {
-                parser_err!("Expected subquery after LATERAL, found nested join".to_string())
-            } else {
-                let table_reference = self.parse_table_and_joins()?;
-                self.expect_token(&Token::RParen)?;
-                Ok(TableFactor::NestedJoin(Box::new(table_reference)))
+        if self.parse_keyword("LATERAL") {
+            // LATERAL must always be followed by a subquery.
+            if !self.consume_token(&Token::LParen) {
+                self.expected("subquery after LATERAL", self.peek_token())?;
             }
-        } else if lateral {
-            self.expected("subquery after LATERAL", self.peek_token())
+            return self.parse_derived_table_factor(Lateral);
+        }
+
+        if self.consume_token(&Token::LParen) {
+            let index = self.index;
+            // A left paren introduces either a derived table (i.e., a subquery)
+            // or a nested join. It's nearly impossible to determine ahead of
+            // time which it is... so we just try to parse both.
+            //
+            // Here's an example that demonstrates the complexity:
+            //                     /-------------------------------------------------------\
+            //                     | /-----------------------------------\                 |
+            //     SELECT * FROM ( ( ( (SELECT 1) UNION (SELECT 2) ) AS t1 NATURAL JOIN t2 ) )
+            //                   ^ ^ ^ ^
+            //                   | | | |
+            //                   | | | |
+            //                   | | | (4) belongs to a SQLSetExpr::Query inside the subquery
+            //                   | | (3) starts a derived table (subquery)
+            //                   | (2) starts a nested join
+            //                   (1) an additional set of parens around a nested join
+            //
+            match self.parse_derived_table_factor(NotLateral) {
+                // The recently consumed '(' started a derived table, and we've
+                // parsed the subquery, followed by the closing ')', and the
+                // alias of the derived table. In the example above this is
+                // case (3), and the next token would be `NATURAL`.
+                Ok(table_factor) => Ok(table_factor),
+                Err(_) => {
+                    // The '(' we've recently consumed does not start a derived
+                    // table. For valid input this can happen either when the
+                    // token following the paren can't start a query (e.g. `foo`
+                    // in `FROM (foo NATURAL JOIN bar)`, or when the '(' we've
+                    // consumed is followed by another '(' that starts a
+                    // derived table, like (3), or another nested join (2).
+                    //
+                    // Ignore the error and back up to where we were before.
+                    // Either we'll be able to parse a valid nested join, or
+                    // we won't, and we'll return that error instead.
+                    self.index = index;
+                    let table_and_joins = self.parse_table_and_joins()?;
+                    self.expect_token(&Token::RParen)?;
+                    Ok(TableFactor::NestedJoin(Box::new(table_and_joins)))
+                }
+            }
         } else {
             let name = self.parse_object_name()?;
             // Postgres, MSSQL: table-valued functions:
@@ -1719,6 +1750,23 @@ impl Parser {
                 with_hints,
             })
         }
+    }
+
+    pub fn parse_derived_table_factor(
+        &mut self,
+        lateral: IsLateral,
+    ) -> Result<TableFactor, ParserError> {
+        let subquery = Box::new(self.parse_query()?);
+        self.expect_token(&Token::RParen)?;
+        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        Ok(TableFactor::Derived {
+            lateral: match lateral {
+                Lateral => true,
+                NotLateral => false,
+            },
+            subquery,
+            alias,
+        })
     }
 
     fn parse_join_constraint(&mut self, natural: bool) -> Result<JoinConstraint, ParserError> {

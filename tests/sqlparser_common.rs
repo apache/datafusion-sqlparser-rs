@@ -1994,7 +1994,7 @@ fn parse_drop_table() {
             assert_eq!(SQLObjectType::Table, object_type);
             assert_eq!(
                 vec!["foo"],
-                names.iter().map(|n| n.to_string()).collect::<Vec<_>>()
+                names.iter().map(ToString::to_string).collect::<Vec<_>>()
             );
             assert_eq!(false, cascade);
         }
@@ -2013,7 +2013,7 @@ fn parse_drop_table() {
             assert_eq!(SQLObjectType::Table, object_type);
             assert_eq!(
                 vec!["foo", "bar"],
-                names.iter().map(|n| n.to_string()).collect::<Vec<_>>()
+                names.iter().map(ToString::to_string).collect::<Vec<_>>()
             );
             assert_eq!(true, cascade);
         }
@@ -2042,7 +2042,7 @@ fn parse_drop_view() {
         } => {
             assert_eq!(
                 vec!["myschema.myview"],
-                names.iter().map(|n| n.to_string()).collect::<Vec<_>>()
+                names.iter().map(ToString::to_string).collect::<Vec<_>>()
             );
             assert_eq!(SQLObjectType::View, object_type);
         }

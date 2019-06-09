@@ -1466,7 +1466,7 @@ fn parse_join_nesting() {
     }
 
     macro_rules! nest {
-        ($base:expr, $($join:expr),*) => {
+        ($base:expr $(, $join:expr)*) => {
             TableFactor::NestedJoin {
                 base: Box::new($base),
                 joins: vec![$(join($join)),*]
@@ -1487,7 +1487,23 @@ fn parse_join_nesting() {
     let sql = "SELECT * FROM (a NATURAL JOIN b) NATURAL JOIN c";
     let select = verified_only_select(sql);
     assert_eq!(select.relation.unwrap(), nest!(table("a"), table("b")),);
-    assert_eq!(select.joins, vec![join(table("c"))],)
+    assert_eq!(select.joins, vec![join(table("c"))]);
+
+    let sql = "SELECT * FROM (((a NATURAL JOIN b)))";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        select.relation.unwrap(),
+        nest!(nest!(nest!(table("a"), table("b"))))
+    );
+    assert_eq!(select.joins, vec![]);
+
+    let sql = "SELECT * FROM a NATURAL JOIN (((b NATURAL JOIN c)))";
+    let select = verified_only_select(sql);
+    assert_eq!(select.relation.unwrap(), table("a"));
+    assert_eq!(
+        select.joins,
+        vec![join(nest!(nest!(nest!(table("b"), table("c")))))]
+    );
 }
 
 #[test]
@@ -1586,6 +1602,14 @@ fn parse_derived_tables() {
                CROSS JOIN (SELECT y FROM bar) AS b (y)";
     let _ = verified_only_select(sql);
     //TODO: add assertions
+
+    let sql = "SELECT * FROM (((SELECT 1)))";
+    let _ = verified_only_select(sql);
+    // TODO: add assertions
+
+    let sql = "SELECT * FROM t NATURAL JOIN (((SELECT 1)))";
+    let _ = verified_only_select(sql);
+    // TODO: add assertions
 }
 
 #[test]

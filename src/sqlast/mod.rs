@@ -119,10 +119,11 @@ pub enum ASTNode {
     SQLValue(Value),
     /// Scalar function call e.g. `LEFT(foo, 5)`
     SQLFunction(SQLFunction),
-    /// CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END
-    /// Note we only recognize a complete single expression as <condition>, not
-    /// `< 0` nor `1, 2, 3` as allowed in a <simple when clause> per
-    /// https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-when-clause
+    /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
+    ///
+    /// Note we only recognize a complete single expression as `<condition>`,
+    /// not `< 0` nor `1, 2, 3` as allowed in a `<simple when clause>` per
+    /// <https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-when-clause>
     SQLCase {
         operand: Option<Box<ASTNode>>,
         conditions: Vec<ASTNode>,
@@ -413,13 +414,13 @@ pub enum SQLStatement {
         names: Vec<SQLObjectName>,
         cascade: bool,
     },
-    /// { BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...
+    /// `{ BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...`
     SQLStartTransaction { modes: Vec<TransactionMode> },
-    /// SET TRANSACTION ...
+    /// `SET TRANSACTION ...`
     SQLSetTransaction { modes: Vec<TransactionMode> },
-    /// COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]
+    /// `COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
     SQLCommit { chain: bool },
-    /// ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]
+    /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
     SQLRollback { chain: bool },
 }
 

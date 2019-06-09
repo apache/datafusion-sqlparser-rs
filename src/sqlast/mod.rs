@@ -30,7 +30,7 @@ pub use self::query::{
     SQLSelectItem, SQLSetExpr, SQLSetOperator, SQLValues, TableAlias, TableFactor,
 };
 pub use self::sqltype::SQLType;
-pub use self::value::Value;
+pub use self::value::{SQLDateTimeField, Value};
 
 pub use self::sql_operator::SQLOperator;
 
@@ -634,29 +634,6 @@ impl ToString for SQLFunction {
             s += &format!(" OVER ({})", o.to_string())
         }
         s
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Hash)]
-pub enum SQLDateTimeField {
-    Year,
-    Month,
-    Day,
-    Hour,
-    Minute,
-    Second,
-}
-
-impl ToString for SQLDateTimeField {
-    fn to_string(&self) -> String {
-        match self {
-            SQLDateTimeField::Year => "YEAR".to_string(),
-            SQLDateTimeField::Month => "MONTH".to_string(),
-            SQLDateTimeField::Day => "DAY".to_string(),
-            SQLDateTimeField::Hour => "HOUR".to_string(),
-            SQLDateTimeField::Minute => "MINUTE".to_string(),
-            SQLDateTimeField::Second => "SECOND".to_string(),
-        }
     }
 }
 

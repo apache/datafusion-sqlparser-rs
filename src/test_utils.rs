@@ -109,9 +109,13 @@ pub fn all_dialects() -> TestedDialects {
     }
 }
 
-pub fn only<T>(v: &[T]) -> &T {
-    assert_eq!(1, v.len());
-    v.first().unwrap()
+pub fn only<T>(v: impl IntoIterator<Item = T>) -> T {
+    let mut iter = v.into_iter();
+    if let (Some(item), None) = (iter.next(), iter.next()) {
+        item
+    } else {
+        panic!("only called on collection without exactly one item")
+    }
 }
 
 pub fn expr_from_projection(item: &SQLSelectItem) -> &ASTNode {

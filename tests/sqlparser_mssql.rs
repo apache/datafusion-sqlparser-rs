@@ -19,8 +19,8 @@ fn parse_mssql_identifiers() {
         expr_from_projection(&select.projection[1]),
     );
     assert_eq!(2, select.projection.len());
-    match select.relation {
-        Some(TableFactor::Table { name, .. }) => {
+    match &only(&select.from).relation {
+        TableFactor::Table { name, .. } => {
             assert_eq!("##temp".to_string(), name.to_string());
         }
         _ => unreachable!(),

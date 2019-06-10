@@ -109,7 +109,7 @@ impl Parser {
         match self.next_token() {
             Some(t) => match t {
                 Token::SQLWord(ref w) if w.keyword != "" => match w.keyword.as_ref() {
-                    "SELECT" | "WITH" => {
+                    "SELECT" | "WITH" | "VALUES" => {
                         self.prev_token();
                         Ok(SQLStatement::SQLQuery(Box::new(self.parse_query()?)))
                     }
@@ -133,6 +133,10 @@ impl Parser {
                         w.to_string()
                     )),
                 },
+                Token::LParen => {
+                    self.prev_token();
+                    Ok(SQLStatement::SQLQuery(Box::new(self.parse_query()?)))
+                }
                 unexpected => self.expected(
                     "a keyword at the beginning of a statement",
                     Some(unexpected),
@@ -1570,13 +1574,15 @@ impl Parser {
         }
         let projection = self.parse_select_list()?;
 
-        let (relation, joins) = if self.parse_keyword("FROM") {
-            let relation = Some(self.parse_table_factor()?);
-            let joins = self.parse_joins()?;
-            (relation, joins)
-        } else {
-            (None, vec![])
-        };
+        let mut from = vec![];
+        if self.parse_keyword("FROM") {
+            loop {
+                from.push(self.parse_table_and_joins()?);
+                if !self.consume_token(&Token::Comma) {
+                    break;
+                }
+            }
+        }
 
         let selection = if self.parse_keyword("WHERE") {
             Some(self.parse_expr()?)
@@ -1599,95 +1605,18 @@ impl Parser {
         Ok(SQLSelect {
             distinct,
             projection,
+            from,
             selection,
-            relation,
-            joins,
             group_by,
             having,
         })
     }
 
-    /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
-    pub fn parse_table_factor(&mut self) -> Result<TableFactor, ParserError> {
-        let lateral = self.parse_keyword("LATERAL");
-        if self.consume_token(&Token::LParen) {
-            if self.parse_keyword("SELECT")
-                || self.parse_keyword("WITH")
-                || self.parse_keyword("VALUES")
-            {
-                self.prev_token();
-                let subquery = Box::new(self.parse_query()?);
-                self.expect_token(&Token::RParen)?;
-                let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
-                Ok(TableFactor::Derived {
-                    lateral,
-                    subquery,
-                    alias,
-                })
-            } else if lateral {
-                parser_err!("Expected subquery after LATERAL, found nested join".to_string())
-            } else {
-                let base = Box::new(self.parse_table_factor()?);
-                let joins = self.parse_joins()?;
-                self.expect_token(&Token::RParen)?;
-                Ok(TableFactor::NestedJoin { base, joins })
-            }
-        } else if lateral {
-            self.expected("subquery after LATERAL", self.peek_token())
-        } else {
-            let name = self.parse_object_name()?;
-            // Postgres, MSSQL: table-valued functions:
-            let args = if self.consume_token(&Token::LParen) {
-                self.parse_optional_args()?
-            } else {
-                vec![]
-            };
-            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
-            // MSSQL-specific table hints:
-            let mut with_hints = vec![];
-            if self.parse_keyword("WITH") {
-                if self.consume_token(&Token::LParen) {
-                    with_hints = self.parse_expr_list()?;
-                    self.expect_token(&Token::RParen)?;
-                } else {
-                    // rewind, as WITH may belong to the next statement's CTE
-                    self.prev_token();
-                }
-            };
-            Ok(TableFactor::Table {
-                name,
-                alias,
-                args,
-                with_hints,
-            })
-        }
-    }
-
-    fn parse_join_constraint(&mut self, natural: bool) -> Result<JoinConstraint, ParserError> {
-        if natural {
-            Ok(JoinConstraint::Natural)
-        } else if self.parse_keyword("ON") {
-            let constraint = self.parse_expr()?;
-            Ok(JoinConstraint::On(constraint))
-        } else if self.parse_keyword("USING") {
-            let columns = self.parse_parenthesized_column_list(Mandatory)?;
-            Ok(JoinConstraint::Using(columns))
-        } else {
-            self.expected("ON, or USING after JOIN", self.peek_token())
-        }
-    }
-
-    fn parse_joins(&mut self) -> Result<Vec<Join>, ParserError> {
+    pub fn parse_table_and_joins(&mut self) -> Result<TableWithJoins, ParserError> {
+        let relation = self.parse_table_factor()?;
         let mut joins = vec![];
         loop {
             let join = match &self.peek_token() {
-                Some(Token::Comma) => {
-                    self.next_token();
-                    Join {
-                        relation: self.parse_table_factor()?,
-                        join_operator: JoinOperator::Implicit,
-                    }
-                }
                 Some(Token::SQLWord(kw)) if kw.keyword == "CROSS" => {
                     self.next_token();
                     self.expect_keyword("JOIN")?;
@@ -1736,7 +1665,76 @@ impl Parser {
             };
             joins.push(join);
         }
-        Ok(joins)
+        Ok(TableWithJoins { relation, joins })
+    }
+
+    /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
+    pub fn parse_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        let lateral = self.parse_keyword("LATERAL");
+        if self.consume_token(&Token::LParen) {
+            if self.parse_keyword("SELECT")
+                || self.parse_keyword("WITH")
+                || self.parse_keyword("VALUES")
+            {
+                self.prev_token();
+                let subquery = Box::new(self.parse_query()?);
+                self.expect_token(&Token::RParen)?;
+                let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+                Ok(TableFactor::Derived {
+                    lateral,
+                    subquery,
+                    alias,
+                })
+            } else if lateral {
+                parser_err!("Expected subquery after LATERAL, found nested join".to_string())
+            } else {
+                let table_reference = self.parse_table_and_joins()?;
+                self.expect_token(&Token::RParen)?;
+                Ok(TableFactor::NestedJoin(Box::new(table_reference)))
+            }
+        } else if lateral {
+            self.expected("subquery after LATERAL", self.peek_token())
+        } else {
+            let name = self.parse_object_name()?;
+            // Postgres, MSSQL: table-valued functions:
+            let args = if self.consume_token(&Token::LParen) {
+                self.parse_optional_args()?
+            } else {
+                vec![]
+            };
+            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+            // MSSQL-specific table hints:
+            let mut with_hints = vec![];
+            if self.parse_keyword("WITH") {
+                if self.consume_token(&Token::LParen) {
+                    with_hints = self.parse_expr_list()?;
+                    self.expect_token(&Token::RParen)?;
+                } else {
+                    // rewind, as WITH may belong to the next statement's CTE
+                    self.prev_token();
+                }
+            };
+            Ok(TableFactor::Table {
+                name,
+                alias,
+                args,
+                with_hints,
+            })
+        }
+    }
+
+    fn parse_join_constraint(&mut self, natural: bool) -> Result<JoinConstraint, ParserError> {
+        if natural {
+            Ok(JoinConstraint::Natural)
+        } else if self.parse_keyword("ON") {
+            let constraint = self.parse_expr()?;
+            Ok(JoinConstraint::On(constraint))
+        } else if self.parse_keyword("USING") {
+            let columns = self.parse_parenthesized_column_list(Mandatory)?;
+            Ok(JoinConstraint::Using(columns))
+        } else {
+            self.expected("ON, or USING after JOIN", self.peek_token())
+        }
     }
 
     /// Parse an INSERT statement

@@ -27,7 +27,7 @@ pub use self::ddl::{
 };
 pub use self::query::{
     Cte, Fetch, Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLQuery, SQLSelect,
-    SQLSelectItem, SQLSetExpr, SQLSetOperator, SQLValues, TableAlias, TableFactor,
+    SQLSelectItem, SQLSetExpr, SQLSetOperator, SQLValues, TableAlias, TableFactor, TableWithJoins,
 };
 pub use self::sqltype::SQLType;
 pub use self::value::{SQLDateTimeField, Value};

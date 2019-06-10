@@ -182,6 +182,14 @@ fn parse_where_delete_statement() {
 }
 
 #[test]
+fn parse_top_level() {
+    verified_stmt("SELECT 1");
+    verified_stmt("(SELECT 1)");
+    verified_stmt("((SELECT 1))");
+    verified_stmt("VALUES (1)");
+}
+
+#[test]
 fn parse_simple_select() {
     let sql = "SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5";
     let select = verified_only_select(sql);

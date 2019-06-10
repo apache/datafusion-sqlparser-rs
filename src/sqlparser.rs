@@ -109,7 +109,7 @@ impl Parser {
         match self.next_token() {
             Some(t) => match t {
                 Token::SQLWord(ref w) if w.keyword != "" => match w.keyword.as_ref() {
-                    "SELECT" | "WITH" => {
+                    "SELECT" | "WITH" | "VALUES" => {
                         self.prev_token();
                         Ok(SQLStatement::SQLQuery(Box::new(self.parse_query()?)))
                     }
@@ -133,6 +133,10 @@ impl Parser {
                         w.to_string()
                     )),
                 },
+                Token::LParen => {
+                    self.prev_token();
+                    Ok(SQLStatement::SQLQuery(Box::new(self.parse_query()?)))
+                }
                 unexpected => self.expected(
                     "a keyword at the beginning of a statement",
                     Some(unexpected),

@@ -17,6 +17,7 @@ mod query;
 mod sql_operator;
 mod sqltype;
 mod value;
+pub mod visit;
 
 use std::ops::Deref;
 

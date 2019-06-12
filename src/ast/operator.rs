@@ -11,7 +11,7 @@
 // limitations under the License.
 
 /// Unary operators
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UnaryOperator {
     Plus,
     Minus,
@@ -29,7 +29,7 @@ impl ToString for UnaryOperator {
 }
 
 /// Binary operators
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum BinaryOperator {
     Plus,
     Minus,

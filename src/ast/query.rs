@@ -14,7 +14,7 @@ use super::*;
 
 /// The most complete variant of a `SELECT` query expression, optionally
 /// including `WITH`, `UNION` / other set operations, and `ORDER BY`.
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Query {
     /// WITH (common table expressions, or CTEs)
     pub ctes: Vec<Cte>,
@@ -56,7 +56,7 @@ impl ToString for Query {
 
 /// A node in a tree, representing a "query body" expression, roughly:
 /// `SELECT ... [ {UNION|EXCEPT|INTERSECT} SELECT ...]`
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SetExpr {
     /// Restricted SELECT .. FROM .. HAVING (no ORDER BY or set operations)
     Select(Box<Select>),
@@ -99,7 +99,7 @@ impl ToString for SetExpr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SetOperator {
     Union,
     Except,
@@ -119,7 +119,7 @@ impl ToString for SetOperator {
 /// A restricted variant of `SELECT` (without CTEs/`ORDER BY`), which may
 /// appear either as the only body item of an `SQLQuery`, or as an operand
 /// to a set operation like `UNION`.
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Select {
     pub distinct: bool,
     /// projection expressions
@@ -161,7 +161,7 @@ impl ToString for Select {
 /// The names in the column list before `AS`, when specified, replace the names
 /// of the columns returned by the query. The parser does not validate that the
 /// number of columns in the query matches the number of columns in the query.
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Cte {
     pub alias: TableAlias,
     pub query: Query,
@@ -174,7 +174,7 @@ impl ToString for Cte {
 }
 
 /// One item of the comma-separated list following `SELECT`
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SelectItem {
     /// Any expression, not followed by `[ AS ] alias`
     UnnamedExpr(Expr),
@@ -199,7 +199,7 @@ impl ToString for SelectItem {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TableWithJoins {
     pub relation: TableFactor,
     pub joins: Vec<Join>,
@@ -216,7 +216,7 @@ impl ToString for TableWithJoins {
 }
 
 /// A table name or a parenthesized subquery with an optional alias
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TableFactor {
     Table {
         name: ObjectName,
@@ -283,7 +283,7 @@ impl ToString for TableFactor {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TableAlias {
     pub name: Ident,
     pub columns: Vec<Ident>,
@@ -299,7 +299,7 @@ impl ToString for TableAlias {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Join {
     pub relation: TableFactor,
     pub join_operator: JoinOperator,
@@ -352,7 +352,7 @@ impl ToString for Join {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum JoinOperator {
     Inner(JoinConstraint),
     LeftOuter(JoinConstraint),
@@ -365,7 +365,7 @@ pub enum JoinOperator {
     OuterApply,
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum JoinConstraint {
     On(Expr),
     Using(Vec<Ident>),
@@ -373,7 +373,7 @@ pub enum JoinConstraint {
 }
 
 /// SQL ORDER BY expression
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OrderByExpr {
     pub expr: Expr,
     pub asc: Option<bool>,
@@ -389,7 +389,7 @@ impl ToString for OrderByExpr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Fetch {
     pub with_ties: bool,
     pub percent: bool,
@@ -413,7 +413,7 @@ impl ToString for Fetch {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Values(pub Vec<Vec<Expr>>);
 
 impl ToString for Values {

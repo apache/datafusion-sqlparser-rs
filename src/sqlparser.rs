@@ -1212,16 +1212,6 @@ impl Parser {
         }
     }
 
-    /// Parse a literal double
-    pub fn parse_literal_double(&mut self) -> Result<f64, ParserError> {
-        match self.next_token() {
-            Some(Token::Number(s)) => s.parse::<f64>().map_err(|e| {
-                ParserError::ParserError(format!("Could not parse '{}' as f64: {}", s, e))
-            }),
-            other => parser_err!(format!("Expected literal number, found {:?}", other)),
-        }
-    }
-
     /// Parse a literal string
     pub fn parse_literal_string(&mut self) -> Result<String, ParserError> {
         match self.next_token() {

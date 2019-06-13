@@ -1529,7 +1529,10 @@ impl Parser {
         } else if self.parse_keyword("VALUES") {
             SQLSetExpr::Values(self.parse_values()?)
         } else {
-            return self.expected("SELECT or a subquery in the query body", self.peek_token());
+            return self.expected(
+                "SELECT, VALUES, or a subquery in the query body",
+                self.peek_token(),
+            );
         };
 
         loop {

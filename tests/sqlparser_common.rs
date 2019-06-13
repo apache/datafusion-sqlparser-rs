@@ -1990,7 +1990,7 @@ fn parse_exists_subquery() {
     let res = parse_sql_statements("SELECT EXISTS (");
     assert_eq!(
         ParserError::ParserError(
-            "Expected SELECT or a subquery in the query body, found: EOF".to_string()
+            "Expected SELECT, VALUES, or a subquery in the query body, found: EOF".to_string()
         ),
         res.unwrap_err(),
     );
@@ -1998,7 +1998,7 @@ fn parse_exists_subquery() {
     let res = parse_sql_statements("SELECT EXISTS (NULL)");
     assert_eq!(
         ParserError::ParserError(
-            "Expected SELECT or a subquery in the query body, found: NULL".to_string()
+            "Expected SELECT, VALUES, or a subquery in the query body, found: NULL".to_string()
         ),
         res.unwrap_err(),
     );
@@ -2399,7 +2399,7 @@ fn lateral_derived() {
     let res = parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError(
-            "Expected SELECT or a subquery in the query body, found: b".to_string()
+            "Expected SELECT, VALUES, or a subquery in the query body, found: b".to_string()
         ),
         res.unwrap_err()
     );

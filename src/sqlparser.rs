@@ -890,10 +890,7 @@ impl Parser {
         } else if self.parse_keyword("VIEW") {
             SQLObjectType::View
         } else {
-            return parser_err!(format!(
-                "Unexpected token after DROP: {:?}",
-                self.peek_token()
-            ));
+            return self.expected("TABLE or VIEW after DROP", self.peek_token());
         };
         let if_exists = self.parse_keywords(vec!["IF", "EXISTS"]);
         let mut names = vec![];
@@ -1015,10 +1012,7 @@ impl Parser {
             self.expect_token(&Token::RParen)?;
             ColumnOption::Check(expr)
         } else {
-            return parser_err!(format!(
-                "Unexpected token in column definition: {:?}",
-                self.peek_token()
-            ));
+            return self.expected("column option", self.peek_token());
         };
 
         Ok(ColumnOptionDef { name, option })
@@ -1216,7 +1210,7 @@ impl Parser {
     pub fn parse_literal_string(&mut self) -> Result<String, ParserError> {
         match self.next_token() {
             Some(Token::SingleQuotedString(ref s)) => Ok(s.clone()),
-            other => parser_err!(format!("Expected literal string, found {:?}", other)),
+            other => self.expected("literal string", other),
         }
     }
 

@@ -949,7 +949,7 @@ fn parse_create_table() {
     assert!(res
         .unwrap_err()
         .to_string()
-        .contains("Unexpected token in column definition"));
+        .contains("Expected column option, found: GARBAGE"));
 }
 
 #[test]

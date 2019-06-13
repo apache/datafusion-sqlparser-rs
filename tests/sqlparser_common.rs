@@ -402,6 +402,16 @@ fn parse_projection_nested_type() {
 }
 
 #[test]
+fn parse_null_in_select() {
+    let sql = "SELECT NULL";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &ASTNode::SQLValue(Value::Null),
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn parse_escaped_single_quote_string_predicate() {
     use self::ASTNode::*;
     use self::SQLBinaryOperator::*;

@@ -238,6 +238,10 @@ pub enum TableFactor {
         subquery: Box<SQLQuery>,
         alias: Option<TableAlias>,
     },
+    /// Represents a parenthesized join expression, such as
+    /// `(foo <JOIN> bar [ <JOIN> baz ... ])`.
+    /// The inner `TableWithJoins` can have no joins only if its
+    /// `relation` is itself a `TableFactor::NestedJoin`.
     NestedJoin(Box<TableWithJoins>),
 }
 

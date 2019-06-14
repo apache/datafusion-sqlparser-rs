@@ -402,6 +402,16 @@ fn parse_projection_nested_type() {
 }
 
 #[test]
+fn parse_null_in_select() {
+    let sql = "SELECT NULL";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &ASTNode::SQLValue(Value::Null),
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn parse_escaped_single_quote_string_predicate() {
     use self::ASTNode::*;
     use self::SQLBinaryOperator::*;
@@ -949,7 +959,7 @@ fn parse_create_table() {
     assert!(res
         .unwrap_err()
         .to_string()
-        .contains("Unexpected token in column definition"));
+        .contains("Expected column option, found: GARBAGE"));
 }
 
 #[test]
@@ -1904,6 +1914,7 @@ fn parse_union() {
     verified_stmt("SELECT 1 UNION (SELECT 2 ORDER BY 1 LIMIT 1)");
     verified_stmt("SELECT 1 UNION SELECT 2 INTERSECT SELECT 3"); // Union[1, Intersect[2,3]]
     verified_stmt("SELECT foo FROM tab UNION SELECT bar FROM TAB");
+    verified_stmt("(SELECT * FROM new EXCEPT SELECT * FROM old) UNION ALL (SELECT * FROM old EXCEPT SELECT * FROM new) ORDER BY 1");
 }
 
 #[test]

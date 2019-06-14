@@ -56,9 +56,12 @@ pub type SQLIdent = String;
 pub enum ASTNode {
     /// Identifier e.g. table name or column name
     SQLIdentifier(SQLIdent),
-    /// Unqualified wildcard (`*`). SQL allows this in limited contexts (such as right
-    /// after `SELECT` or as part of an aggregate function, e.g. `COUNT(*)`, but we
-    /// currently accept it in contexts where it doesn't make sense, such as `* + *`
+    /// Unqualified wildcard (`*`). SQL allows this in limited contexts, such as:
+    /// - right after `SELECT` (which is represented as a [SQLSelectItem::Wildcard] instead)
+    /// - or as part of an aggregate function, e.g. `COUNT(*)`,
+    ///
+    /// ...but we currently also accept it in contexts where it doesn't make
+    /// sense, such as `* + *`
     SQLWildcard,
     /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
     /// (Same caveats apply to SQLQualifiedWildcard as to SQLWildcard.)
@@ -119,10 +122,11 @@ pub enum ASTNode {
     SQLValue(Value),
     /// Scalar function call e.g. `LEFT(foo, 5)`
     SQLFunction(SQLFunction),
-    /// CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END
-    /// Note we only recognize a complete single expression as <condition>, not
-    /// `< 0` nor `1, 2, 3` as allowed in a <simple when clause> per
-    /// https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-when-clause
+    /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
+    ///
+    /// Note we only recognize a complete single expression as `<condition>`,
+    /// not `< 0` nor `1, 2, 3` as allowed in a `<simple when clause>` per
+    /// <https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-when-clause>
     SQLCase {
         operand: Option<Box<ASTNode>>,
         conditions: Vec<ASTNode>,
@@ -413,13 +417,13 @@ pub enum SQLStatement {
         names: Vec<SQLObjectName>,
         cascade: bool,
     },
-    /// { BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...
+    /// `{ BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...`
     SQLStartTransaction { modes: Vec<TransactionMode> },
-    /// SET TRANSACTION ...
+    /// `SET TRANSACTION ...`
     SQLSetTransaction { modes: Vec<TransactionMode> },
-    /// COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]
+    /// `COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
     SQLCommit { chain: bool },
-    /// ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]
+    /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
     SQLRollback { chain: bool },
 }
 

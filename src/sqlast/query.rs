@@ -22,11 +22,11 @@ pub struct SQLQuery {
     pub body: SQLSetExpr,
     /// ORDER BY
     pub order_by: Vec<SQLOrderByExpr>,
-    /// LIMIT { <N> | ALL }
+    /// `LIMIT { <N> | ALL }`
     pub limit: Option<ASTNode>,
-    /// OFFSET <N> { ROW | ROWS }
+    /// `OFFSET <N> { ROW | ROWS }`
     pub offset: Option<ASTNode>,
-    /// FETCH { FIRST | NEXT } <N> [ PERCENT ] { ROW | ROWS } | { ONLY | WITH TIES }
+    /// `FETCH { FIRST | NEXT } <N> [ PERCENT ] { ROW | ROWS } | { ONLY | WITH TIES }`
     pub fetch: Option<Fetch>,
 }
 

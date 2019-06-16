@@ -212,13 +212,10 @@ fn parse_simple_select() {
 }
 
 #[test]
-fn parse_select_with_limit_but_no_where() {
-    let sql = "SELECT id, fname, lname FROM customer LIMIT 5";
-    let select = verified_only_select(sql);
-    assert_eq!(false, select.distinct);
-    assert_eq!(3, select.projection.len());
-    let select = verified_query(sql);
-    assert_eq!(Some(ASTNode::SQLValue(Value::Long(5))), select.limit);
+fn parse_limit_is_not_an_alias() {
+    // In dialects supporting LIMIT it shouldn't be parsed as a table alias
+    let ast = verified_query("SELECT id FROM customer LIMIT 1");
+    assert_eq!(Some(ASTNode::SQLValue(Value::Long(1))), ast.limit);
 }
 
 #[test]

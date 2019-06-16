@@ -1566,6 +1566,11 @@ impl Parser {
         }
         let projection = self.parse_select_list()?;
 
+        // Note that for keywords to be properly handled here, they need to be
+        // added to `RESERVED_FOR_COLUMN_ALIAS` / `RESERVED_FOR_TABLE_ALIAS`,
+        // otherwise they may be parsed as an alias as part of the `projection`
+        // or `from`.
+
         let mut from = vec![];
         if self.parse_keyword("FROM") {
             loop {

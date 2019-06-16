@@ -790,6 +790,29 @@ fn parse_select_group_by() {
 }
 
 #[test]
+fn parse_select_having() {
+    let sql = "SELECT foo FROM bar GROUP BY foo HAVING COUNT(*) > 1";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        Some(ASTNode::SQLBinaryOp {
+            left: Box::new(ASTNode::SQLFunction(SQLFunction {
+                name: SQLObjectName(vec!["COUNT".to_string()]),
+                args: vec![ASTNode::SQLWildcard],
+                over: None,
+                distinct: false
+            })),
+            op: SQLBinaryOperator::Gt,
+            right: Box::new(ASTNode::SQLValue(Value::Long(1)))
+        }),
+        select.having
+    );
+
+    let sql = "SELECT 'foo' HAVING 1 = 1";
+    let select = verified_only_select(sql);
+    assert!(select.having.is_some());
+}
+
+#[test]
 fn parse_limit_accepts_all() {
     one_statement_parses_to(
         "SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT ALL",

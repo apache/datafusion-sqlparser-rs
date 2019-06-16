@@ -420,7 +420,7 @@ define_keywords!(
 /// can be parsed unambiguously without looking ahead.
 pub const RESERVED_FOR_TABLE_ALIAS: &[&str] = &[
     // Reserved as both a table and a column alias:
-    WITH, SELECT, WHERE, GROUP, ORDER, LIMIT, OFFSET, FETCH, UNION, EXCEPT, INTERSECT,
+    WITH, SELECT, WHERE, GROUP, HAVING, ORDER, LIMIT, OFFSET, FETCH, UNION, EXCEPT, INTERSECT,
     // Reserved only as a table alias in the `FROM`/`JOIN` clauses:
     ON, JOIN, INNER, CROSS, FULL, LEFT, RIGHT, NATURAL, USING,
 ];
@@ -429,7 +429,7 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[&str] = &[
 /// can be parsed unambiguously without looking ahead.
 pub const RESERVED_FOR_COLUMN_ALIAS: &[&str] = &[
     // Reserved as both a table and a column alias:
-    WITH, SELECT, WHERE, GROUP, ORDER, LIMIT, OFFSET, FETCH, UNION, EXCEPT, INTERSECT,
+    WITH, SELECT, WHERE, GROUP, HAVING, ORDER, LIMIT, OFFSET, FETCH, UNION, EXCEPT, INTERSECT,
     // Reserved only as a column alias in the `SELECT` clause:
     FROM,
 ];

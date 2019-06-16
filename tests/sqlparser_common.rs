@@ -216,6 +216,9 @@ fn parse_limit_is_not_an_alias() {
     // In dialects supporting LIMIT it shouldn't be parsed as a table alias
     let ast = verified_query("SELECT id FROM customer LIMIT 1");
     assert_eq!(Some(ASTNode::SQLValue(Value::Long(1))), ast.limit);
+
+    let ast = verified_query("SELECT 1 LIMIT 5");
+    assert_eq!(Some(ASTNode::SQLValue(Value::Long(5))), ast.limit);
 }
 
 #[test]
@@ -2194,6 +2197,8 @@ fn parse_offset() {
         },
         _ => panic!("Test broke"),
     }
+    let ast = verified_query("SELECT 'foo' OFFSET 0 ROWS");
+    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(0))));
 }
 
 #[test]
@@ -2212,6 +2217,8 @@ fn parse_fetch() {
         quantity: Some(ASTNode::SQLValue(Value::Long(2))),
     };
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST 2 ROWS ONLY");
+    assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
+    let ast = verified_query("SELECT 'foo' FETCH FIRST 2 ROWS ONLY");
     assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST ROWS ONLY");
     assert_eq!(

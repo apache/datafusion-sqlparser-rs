@@ -574,13 +574,13 @@ impl Parser {
                         self.expected("IN or BETWEEN after NOT", self.peek_token())
                     }
                 }
-                // Can only happen if `get_precedence` got out of sync with this function
+                // Can only happen if `get_next_precedence` got out of sync with this function
                 _ => panic!("No infix parser for token {:?}", tok),
             }
         } else if Token::DoubleColon == tok {
             self.parse_pg_cast(expr)
         } else {
-            // Can only happen if `get_precedence` got out of sync with this function
+            // Can only happen if `get_next_precedence` got out of sync with this function
             panic!("No infix parser for token {:?}", tok)
         }
     }
@@ -636,7 +636,7 @@ impl Parser {
     /// Get the precedence of the next token
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
         if let Some(token) = self.peek_token() {
-            debug!("get_precedence() {:?}", token);
+            debug!("get_next_precedence() {:?}", token);
 
             match &token {
                 Token::SQLWord(k) if k.keyword == "OR" => Ok(5),

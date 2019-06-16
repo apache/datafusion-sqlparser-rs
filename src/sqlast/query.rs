@@ -163,18 +163,13 @@ impl ToString for SQLSelect {
 /// number of columns in the query matches the number of columns in the query.
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct Cte {
-    pub alias: SQLIdent,
+    pub alias: TableAlias,
     pub query: SQLQuery,
-    pub renamed_columns: Vec<SQLIdent>,
 }
 
 impl ToString for Cte {
     fn to_string(&self) -> String {
-        let mut s = self.alias.clone();
-        if !self.renamed_columns.is_empty() {
-            s += &format!(" ({})", comma_separated_string(&self.renamed_columns));
-        }
-        s + &format!(" AS ({})", self.query.to_string())
+        format!("{} AS ({})", self.alias.to_string(), self.query.to_string())
     }
 }
 

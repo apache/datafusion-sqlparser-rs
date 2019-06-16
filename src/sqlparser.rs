@@ -1475,14 +1475,15 @@ impl Parser {
     fn parse_cte_list(&mut self) -> Result<Vec<Cte>, ParserError> {
         let mut cte = vec![];
         loop {
-            let alias = self.parse_identifier()?;
-            let renamed_columns = self.parse_parenthesized_column_list(Optional)?;
+            let alias = TableAlias {
+                name: self.parse_identifier()?,
+                columns: self.parse_parenthesized_column_list(Optional)?,
+            };
             self.expect_keyword("AS")?;
             self.expect_token(&Token::LParen)?;
             cte.push(Cte {
                 alias,
                 query: self.parse_query()?,
-                renamed_columns,
             });
             self.expect_token(&Token::RParen)?;
             if !self.consume_token(&Token::Comma) {

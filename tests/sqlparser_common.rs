@@ -1791,14 +1791,10 @@ fn parse_ctes() {
     fn assert_ctes_in_select(expected: &[&str], sel: &SQLQuery) {
         let mut i = 0;
         for exp in expected {
-            let Cte {
-                query,
-                alias,
-                renamed_columns,
-            } = &sel.ctes[i];
+            let Cte { alias, query } = &sel.ctes[i];
             assert_eq!(*exp, query.to_string());
-            assert_eq!(if i == 0 { "a" } else { "b" }, alias);
-            assert!(renamed_columns.is_empty());
+            assert_eq!(if i == 0 { "a" } else { "b" }, alias.name);
+            assert!(alias.columns.is_empty());
             i += 1;
         }
     }
@@ -1841,7 +1837,7 @@ fn parse_cte_renamed_columns() {
     let query = all_dialects().verified_query(sql);
     assert_eq!(
         vec!["col1", "col2"],
-        query.ctes.first().unwrap().renamed_columns
+        query.ctes.first().unwrap().alias.columns
     );
 }
 

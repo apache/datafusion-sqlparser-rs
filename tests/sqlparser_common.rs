@@ -212,13 +212,13 @@ fn parse_simple_select() {
 }
 
 #[test]
-fn parse_select_with_limit_but_no_where() {
-    let sql = "SELECT id, fname, lname FROM customer LIMIT 5";
-    let select = verified_only_select(sql);
-    assert_eq!(false, select.distinct);
-    assert_eq!(3, select.projection.len());
-    let select = verified_query(sql);
-    assert_eq!(Some(ASTNode::SQLValue(Value::Long(5))), select.limit);
+fn parse_limit_is_not_an_alias() {
+    // In dialects supporting LIMIT it shouldn't be parsed as a table alias
+    let ast = verified_query("SELECT id FROM customer LIMIT 1");
+    assert_eq!(Some(ASTNode::SQLValue(Value::Long(1))), ast.limit);
+
+    let ast = verified_query("SELECT 1 LIMIT 5");
+    assert_eq!(Some(ASTNode::SQLValue(Value::Long(5))), ast.limit);
 }
 
 #[test]
@@ -787,6 +787,29 @@ fn parse_select_group_by() {
         ],
         select.group_by
     );
+}
+
+#[test]
+fn parse_select_having() {
+    let sql = "SELECT foo FROM bar GROUP BY foo HAVING COUNT(*) > 1";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        Some(ASTNode::SQLBinaryOp {
+            left: Box::new(ASTNode::SQLFunction(SQLFunction {
+                name: SQLObjectName(vec!["COUNT".to_string()]),
+                args: vec![ASTNode::SQLWildcard],
+                over: None,
+                distinct: false
+            })),
+            op: SQLBinaryOperator::Gt,
+            right: Box::new(ASTNode::SQLValue(Value::Long(1)))
+        }),
+        select.having
+    );
+
+    let sql = "SELECT 'foo' HAVING 1 = 1";
+    let select = verified_only_select(sql);
+    assert!(select.having.is_some());
 }
 
 #[test]
@@ -1791,14 +1814,10 @@ fn parse_ctes() {
     fn assert_ctes_in_select(expected: &[&str], sel: &SQLQuery) {
         let mut i = 0;
         for exp in expected {
-            let Cte {
-                query,
-                alias,
-                renamed_columns,
-            } = &sel.ctes[i];
+            let Cte { alias, query } = &sel.ctes[i];
             assert_eq!(*exp, query.to_string());
-            assert_eq!(if i == 0 { "a" } else { "b" }, alias);
-            assert!(renamed_columns.is_empty());
+            assert_eq!(if i == 0 { "a" } else { "b" }, alias.name);
+            assert!(alias.columns.is_empty());
             i += 1;
         }
     }
@@ -1841,7 +1860,7 @@ fn parse_cte_renamed_columns() {
     let query = all_dialects().verified_query(sql);
     assert_eq!(
         vec!["col1", "col2"],
-        query.ctes.first().unwrap().renamed_columns
+        query.ctes.first().unwrap().alias.columns
     );
 }
 
@@ -2201,6 +2220,8 @@ fn parse_offset() {
         },
         _ => panic!("Test broke"),
     }
+    let ast = verified_query("SELECT 'foo' OFFSET 0 ROWS");
+    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(0))));
 }
 
 #[test]
@@ -2213,15 +2234,15 @@ fn parse_singular_row_offset() {
 
 #[test]
 fn parse_fetch() {
+    const FETCH_FIRST_TWO_ROWS_ONLY: Fetch = Fetch {
+        with_ties: false,
+        percent: false,
+        quantity: Some(ASTNode::SQLValue(Value::Long(2))),
+    };
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST 2 ROWS ONLY");
-    assert_eq!(
-        ast.fetch,
-        Some(Fetch {
-            with_ties: false,
-            percent: false,
-            quantity: Some(ASTNode::SQLValue(Value::Long(2))),
-        })
-    );
+    assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
+    let ast = verified_query("SELECT 'foo' FETCH FIRST 2 ROWS ONLY");
+    assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST ROWS ONLY");
     assert_eq!(
         ast.fetch,
@@ -2232,23 +2253,9 @@ fn parse_fetch() {
         })
     );
     let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 FETCH FIRST 2 ROWS ONLY");
-    assert_eq!(
-        ast.fetch,
-        Some(Fetch {
-            with_ties: false,
-            percent: false,
-            quantity: Some(ASTNode::SQLValue(Value::Long(2))),
-        })
-    );
+    assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
     let ast = verified_query("SELECT foo FROM bar ORDER BY baz FETCH FIRST 2 ROWS ONLY");
-    assert_eq!(
-        ast.fetch,
-        Some(Fetch {
-            with_ties: false,
-            percent: false,
-            quantity: Some(ASTNode::SQLValue(Value::Long(2))),
-        })
-    );
+    assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
     let ast = verified_query(
         "SELECT foo FROM bar WHERE foo = 4 ORDER BY baz FETCH FIRST 2 ROWS WITH TIES",
     );
@@ -2273,36 +2280,15 @@ fn parse_fetch() {
         "SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY",
     );
     assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
-    assert_eq!(
-        ast.fetch,
-        Some(Fetch {
-            with_ties: false,
-            percent: false,
-            quantity: Some(ASTNode::SQLValue(Value::Long(2))),
-        })
-    );
+    assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
     let ast = verified_query(
         "SELECT foo FROM (SELECT * FROM bar FETCH FIRST 2 ROWS ONLY) FETCH FIRST 2 ROWS ONLY",
     );
-    assert_eq!(
-        ast.fetch,
-        Some(Fetch {
-            with_ties: false,
-            percent: false,
-            quantity: Some(ASTNode::SQLValue(Value::Long(2))),
-        })
-    );
+    assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
     match ast.body {
         SQLSetExpr::Select(s) => match only(s.from).relation {
             TableFactor::Derived { subquery, .. } => {
-                assert_eq!(
-                    subquery.fetch,
-                    Some(Fetch {
-                        with_ties: false,
-                        percent: false,
-                        quantity: Some(ASTNode::SQLValue(Value::Long(2))),
-                    })
-                );
+                assert_eq!(subquery.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
             }
             _ => panic!("Test broke"),
         },
@@ -2310,26 +2296,12 @@ fn parse_fetch() {
     }
     let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY) OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY");
     assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
-    assert_eq!(
-        ast.fetch,
-        Some(Fetch {
-            with_ties: false,
-            percent: false,
-            quantity: Some(ASTNode::SQLValue(Value::Long(2))),
-        })
-    );
+    assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
     match ast.body {
         SQLSetExpr::Select(s) => match only(s.from).relation {
             TableFactor::Derived { subquery, .. } => {
                 assert_eq!(subquery.offset, Some(ASTNode::SQLValue(Value::Long(2))));
-                assert_eq!(
-                    subquery.fetch,
-                    Some(Fetch {
-                        with_ties: false,
-                        percent: false,
-                        quantity: Some(ASTNode::SQLValue(Value::Long(2))),
-                    })
-                );
+                assert_eq!(subquery.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
             }
             _ => panic!("Test broke"),
         },

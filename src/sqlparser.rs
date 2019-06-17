@@ -574,13 +574,13 @@ impl Parser {
                         self.expected("IN or BETWEEN after NOT", self.peek_token())
                     }
                 }
-                // Can only happen if `get_precedence` got out of sync with this function
+                // Can only happen if `get_next_precedence` got out of sync with this function
                 _ => panic!("No infix parser for token {:?}", tok),
             }
         } else if Token::DoubleColon == tok {
             self.parse_pg_cast(expr)
         } else {
-            // Can only happen if `get_precedence` got out of sync with this function
+            // Can only happen if `get_next_precedence` got out of sync with this function
             panic!("No infix parser for token {:?}", tok)
         }
     }
@@ -636,7 +636,7 @@ impl Parser {
     /// Get the precedence of the next token
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
         if let Some(token) = self.peek_token() {
-            debug!("get_precedence() {:?}", token);
+            debug!("get_next_precedence() {:?}", token);
 
             match &token {
                 Token::SQLWord(k) if k.keyword == "OR" => Ok(5),
@@ -1475,14 +1475,15 @@ impl Parser {
     fn parse_cte_list(&mut self) -> Result<Vec<Cte>, ParserError> {
         let mut cte = vec![];
         loop {
-            let alias = self.parse_identifier()?;
-            let renamed_columns = self.parse_parenthesized_column_list(Optional)?;
+            let alias = TableAlias {
+                name: self.parse_identifier()?,
+                columns: self.parse_parenthesized_column_list(Optional)?,
+            };
             self.expect_keyword("AS")?;
             self.expect_token(&Token::LParen)?;
             cte.push(Cte {
                 alias,
                 query: self.parse_query()?,
-                renamed_columns,
             });
             self.expect_token(&Token::RParen)?;
             if !self.consume_token(&Token::Comma) {
@@ -1565,6 +1566,11 @@ impl Parser {
         }
         let projection = self.parse_select_list()?;
 
+        // Note that for keywords to be properly handled here, they need to be
+        // added to `RESERVED_FOR_COLUMN_ALIAS` / `RESERVED_FOR_TABLE_ALIAS`,
+        // otherwise they may be parsed as an alias as part of the `projection`
+        // or `from`.
+
         let mut from = vec![];
         if self.parse_keyword("FROM") {
             loop {
@@ -1605,6 +1611,10 @@ impl Parser {
 
     pub fn parse_table_and_joins(&mut self) -> Result<TableWithJoins, ParserError> {
         let relation = self.parse_table_factor()?;
+
+        // Note that for keywords to be properly handled here, they need to be
+        // added to `RESERVED_FOR_TABLE_ALIAS`, otherwise they may be parsed as
+        // a table alias.
         let mut joins = vec![];
         loop {
             let join = if self.parse_keyword("CROSS") {

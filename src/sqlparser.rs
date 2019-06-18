@@ -1648,6 +1648,7 @@ impl Parser {
                             _ => unreachable!(),
                         }
                     }
+                    "OUTER" => return self.expected("LEFT, RIGHT, or FULL", self.peek_token()),
                     _ if natural => {
                         return self.expected("a join type after NATURAL", self.peek_token());
                     }

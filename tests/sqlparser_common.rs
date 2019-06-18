@@ -1801,6 +1801,12 @@ fn parse_join_syntax_variants() {
         "SELECT c1 FROM t1 FULL OUTER JOIN t2 USING(c1)",
         "SELECT c1 FROM t1 FULL JOIN t2 USING(c1)",
     );
+
+    let res = parse_sql_statements("SELECT * FROM a OUTER JOIN b ON 1");
+    assert_eq!(
+        ParserError::ParserError("Expected LEFT, RIGHT, or FULL, found: OUTER".to_string()),
+        res.unwrap_err()
+    );
 }
 
 #[test]

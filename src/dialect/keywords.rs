@@ -422,7 +422,7 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[&str] = &[
     // Reserved as both a table and a column alias:
     WITH, SELECT, WHERE, GROUP, HAVING, ORDER, LIMIT, OFFSET, FETCH, UNION, EXCEPT, INTERSECT,
     // Reserved only as a table alias in the `FROM`/`JOIN` clauses:
-    ON, JOIN, INNER, CROSS, FULL, LEFT, RIGHT, NATURAL, USING, LIMIT, OFFSET, FETCH,
+    ON, JOIN, INNER, CROSS, FULL, LEFT, RIGHT, NATURAL, USING,
     // Reserved not because of ambiguity, but so that parsing `SELECT * FROM a
     // OUTER JOIN b` causes a syntax error, rather than silently parsing to an
     // inner join where table `a` is aliased as `OUTER`, which is certainly not

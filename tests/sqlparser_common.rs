@@ -1560,7 +1560,7 @@ fn parse_cross_join() {
                 args: vec![],
                 with_hints: vec![],
             },
-            join_operator: JoinOperator::Cross
+            join_operator: JoinOperator::CrossJoin
         },
         only(only(select.from).joins),
     );
@@ -1804,7 +1804,7 @@ fn parse_join_syntax_variants() {
 
     let res = parse_sql_statements("SELECT * FROM a OUTER JOIN b ON 1");
     assert_eq!(
-        ParserError::ParserError("Expected LEFT, RIGHT, or FULL, found: OUTER".to_string()),
+        ParserError::ParserError("Expected APPLY, found: JOIN".to_string()),
         res.unwrap_err()
     );
 }

@@ -327,7 +327,6 @@ impl ToString for Join {
                 self.relation.to_string(),
                 suffix(constraint)
             ),
-            JoinOperator::Cross => format!(" CROSS JOIN {}", self.relation.to_string()),
             JoinOperator::LeftOuter(constraint) => format!(
                 " {}LEFT JOIN {}{}",
                 prefix(constraint),
@@ -346,6 +345,9 @@ impl ToString for Join {
                 self.relation.to_string(),
                 suffix(constraint)
             ),
+            JoinOperator::CrossJoin => format!(" CROSS JOIN {}", self.relation.to_string()),
+            JoinOperator::CrossApply => format!(" CROSS APPLY {}", self.relation.to_string()),
+            JoinOperator::OuterApply => format!(" OUTER APPLY {}", self.relation.to_string()),
         }
     }
 }
@@ -356,7 +358,11 @@ pub enum JoinOperator {
     LeftOuter(JoinConstraint),
     RightOuter(JoinConstraint),
     FullOuter(JoinConstraint),
-    Cross,
+    CrossJoin,
+    /// CROSS APPLY (non-standard)
+    CrossApply,
+    /// OUTER APPLY (non-standard)
+    OuterApply,
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]

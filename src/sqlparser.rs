@@ -1618,10 +1618,24 @@ impl Parser {
         let mut joins = vec![];
         loop {
             let join = if self.parse_keyword("CROSS") {
-                self.expect_keyword("JOIN")?;
+                let join_operator = if self.parse_keyword("JOIN") {
+                    JoinOperator::CrossJoin
+                } else if self.parse_keyword("APPLY") {
+                    // MSSQL extension, similar to CROSS JOIN LATERAL
+                    JoinOperator::CrossApply
+                } else {
+                    return self.expected("JOIN or APPLY after CROSS", self.peek_token());
+                };
                 Join {
                     relation: self.parse_table_factor()?,
-                    join_operator: JoinOperator::Cross,
+                    join_operator,
+                }
+            } else if self.parse_keyword("OUTER") {
+                // MSSQL extension, similar to LEFT JOIN LATERAL .. ON 1=1
+                self.expect_keyword("APPLY")?;
+                Join {
+                    relation: self.parse_table_factor()?,
+                    join_operator: JoinOperator::OuterApply,
                 }
             } else {
                 let natural = self.parse_keyword("NATURAL");

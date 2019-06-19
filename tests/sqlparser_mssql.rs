@@ -52,6 +52,22 @@ fn parse_mssql_delimited_identifiers() {
     );
 }
 
+#[test]
+fn parse_mssql_apply_join() {
+    let _ = ms_and_generic().verified_only_select(
+        "SELECT * FROM sys.dm_exec_query_stats AS deqs \
+         CROSS APPLY sys.dm_exec_query_plan(deqs.plan_handle)",
+    );
+    let _ = ms_and_generic().verified_only_select(
+        "SELECT * FROM sys.dm_exec_query_stats AS deqs \
+         OUTER APPLY sys.dm_exec_query_plan(deqs.plan_handle)",
+    );
+    let _ = ms_and_generic().verified_only_select(
+        "SELECT * FROM foo \
+         OUTER APPLY (SELECT foo.x + 1) AS bar",
+    );
+}
+
 fn ms() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MsSqlDialect {})],

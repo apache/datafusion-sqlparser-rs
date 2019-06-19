@@ -58,6 +58,7 @@ define_keywords!(
     ALTER,
     AND,
     ANY,
+    APPLY,
     ARE,
     ARRAY,
     ARRAY_AGG,
@@ -422,11 +423,8 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[&str] = &[
     // Reserved as both a table and a column alias:
     WITH, SELECT, WHERE, GROUP, HAVING, ORDER, LIMIT, OFFSET, FETCH, UNION, EXCEPT, INTERSECT,
     // Reserved only as a table alias in the `FROM`/`JOIN` clauses:
-    ON, JOIN, INNER, CROSS, FULL, LEFT, RIGHT, NATURAL, USING, LIMIT, OFFSET, FETCH,
-    // Reserved not because of ambiguity, but so that parsing `SELECT * FROM a
-    // OUTER JOIN b` causes a syntax error, rather than silently parsing to an
-    // inner join where table `a` is aliased as `OUTER`, which is certainly not
-    // what the user intended and also not valid according to the SQL standard.
+    ON, JOIN, INNER, CROSS, FULL, LEFT, RIGHT, NATURAL, USING,
+    // for MSSQL-specific OUTER APPLY (seems reserved in most dialects)
     OUTER,
 ];
 

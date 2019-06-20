@@ -27,9 +27,9 @@ use sqlparser::test_utils::{all_dialects, expr_from_projection, only};
 #[test]
 fn parse_insert_values() {
     let row = vec![
-        ASTNode::SQLValue(Value::Long(1)),
-        ASTNode::SQLValue(Value::Long(2)),
-        ASTNode::SQLValue(Value::Long(3)),
+        Expr::SQLValue(Value::Long(1)),
+        Expr::SQLValue(Value::Long(2)),
+        Expr::SQLValue(Value::Long(3)),
     ];
     let rows1 = vec![row.clone()];
     let rows2 = vec![row.clone(), row];
@@ -58,7 +58,7 @@ fn parse_insert_values() {
         sql: &str,
         expected_table_name: &str,
         expected_columns: &[String],
-        expected_rows: &[Vec<ASTNode>],
+        expected_rows: &[Vec<Expr>],
     ) {
         match verified_stmt(sql) {
             SQLStatement::SQLInsert {
@@ -109,19 +109,19 @@ fn parse_update() {
                 vec![
                     SQLAssignment {
                         id: "a".into(),
-                        value: ASTNode::SQLValue(Value::Long(1)),
+                        value: Expr::SQLValue(Value::Long(1)),
                     },
                     SQLAssignment {
                         id: "b".into(),
-                        value: ASTNode::SQLValue(Value::Long(2)),
+                        value: Expr::SQLValue(Value::Long(2)),
                     },
                     SQLAssignment {
                         id: "c".into(),
-                        value: ASTNode::SQLValue(Value::Long(3)),
+                        value: Expr::SQLValue(Value::Long(3)),
                     },
                 ]
             );
-            assert_eq!(selection.unwrap(), ASTNode::SQLIdentifier("d".into()));
+            assert_eq!(selection.unwrap(), Expr::SQLIdentifier("d".into()));
         }
         _ => unreachable!(),
     }
@@ -168,7 +168,7 @@ fn parse_delete_statement() {
 
 #[test]
 fn parse_where_delete_statement() {
-    use self::ASTNode::*;
+    use self::Expr::*;
     use self::SQLBinaryOperator::*;
 
     let sql = "DELETE FROM foo WHERE name = 5";
@@ -208,17 +208,17 @@ fn parse_simple_select() {
     assert_eq!(false, select.distinct);
     assert_eq!(3, select.projection.len());
     let select = verified_query(sql);
-    assert_eq!(Some(ASTNode::SQLValue(Value::Long(5))), select.limit);
+    assert_eq!(Some(Expr::SQLValue(Value::Long(5))), select.limit);
 }
 
 #[test]
 fn parse_limit_is_not_an_alias() {
     // In dialects supporting LIMIT it shouldn't be parsed as a table alias
     let ast = verified_query("SELECT id FROM customer LIMIT 1");
-    assert_eq!(Some(ASTNode::SQLValue(Value::Long(1))), ast.limit);
+    assert_eq!(Some(Expr::SQLValue(Value::Long(1))), ast.limit);
 
     let ast = verified_query("SELECT 1 LIMIT 5");
-    assert_eq!(Some(ASTNode::SQLValue(Value::Long(5))), ast.limit);
+    assert_eq!(Some(Expr::SQLValue(Value::Long(5))), ast.limit);
 }
 
 #[test]
@@ -227,7 +227,7 @@ fn parse_select_distinct() {
     let select = verified_only_select(sql);
     assert_eq!(true, select.distinct);
     assert_eq!(
-        &SQLSelectItem::UnnamedExpression(ASTNode::SQLIdentifier("name".to_string())),
+        &SQLSelectItem::UnnamedExpr(Expr::SQLIdentifier("name".to_string())),
         only(&select.projection)
     );
 }
@@ -281,18 +281,18 @@ fn parse_count_wildcard() {
 fn parse_column_aliases() {
     let sql = "SELECT a.col + 1 AS newname FROM foo AS a";
     let select = verified_only_select(sql);
-    if let SQLSelectItem::ExpressionWithAlias {
-        expr: ASTNode::SQLBinaryOp {
+    if let SQLSelectItem::ExprWithAlias {
+        expr: Expr::SQLBinaryOp {
             ref op, ref right, ..
         },
         ref alias,
     } = only(&select.projection)
     {
         assert_eq!(&SQLBinaryOperator::Plus, op);
-        assert_eq!(&ASTNode::SQLValue(Value::Long(1)), right.as_ref());
+        assert_eq!(&Expr::SQLValue(Value::Long(1)), right.as_ref());
         assert_eq!("newname", alias);
     } else {
-        panic!("Expected ExpressionWithAlias")
+        panic!("Expected ExprWithAlias")
     }
 
     // alias without AS is parsed correctly:
@@ -319,9 +319,9 @@ fn parse_select_count_wildcard() {
     let sql = "SELECT COUNT(*) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &ASTNode::SQLFunction(SQLFunction {
+        &Expr::SQLFunction(SQLFunction {
             name: SQLObjectName(vec!["COUNT".to_string()]),
-            args: vec![ASTNode::SQLWildcard],
+            args: vec![Expr::SQLWildcard],
             over: None,
             distinct: false,
         }),
@@ -334,11 +334,11 @@ fn parse_select_count_distinct() {
     let sql = "SELECT COUNT(DISTINCT + x) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &ASTNode::SQLFunction(SQLFunction {
+        &Expr::SQLFunction(SQLFunction {
             name: SQLObjectName(vec!["COUNT".to_string()]),
-            args: vec![ASTNode::SQLUnaryOp {
+            args: vec![Expr::SQLUnaryOp {
                 op: SQLUnaryOperator::Plus,
-                expr: Box::new(ASTNode::SQLIdentifier("x".to_string()))
+                expr: Box::new(Expr::SQLIdentifier("x".to_string()))
             }],
             over: None,
             distinct: true,
@@ -382,7 +382,7 @@ fn parse_collate() {
     let sql = "SELECT name COLLATE \"de_DE\" FROM customer";
     assert_matches!(
         only(&all_dialects().verified_only_select(sql).projection),
-        SQLSelectItem::UnnamedExpression(ASTNode::SQLCollate { .. })
+        SQLSelectItem::UnnamedExpr(Expr::SQLCollate { .. })
     );
 }
 
@@ -406,14 +406,14 @@ fn parse_null_in_select() {
     let sql = "SELECT NULL";
     let select = verified_only_select(sql);
     assert_eq!(
-        &ASTNode::SQLValue(Value::Null),
+        &Expr::SQLValue(Value::Null),
         expr_from_projection(only(&select.projection)),
     );
 }
 
 #[test]
 fn parse_escaped_single_quote_string_predicate() {
-    use self::ASTNode::*;
+    use self::Expr::*;
     use self::SQLBinaryOperator::*;
     let sql = "SELECT id, fname, lname FROM customer \
                WHERE salary <> 'Jim''s salary'";
@@ -432,7 +432,7 @@ fn parse_escaped_single_quote_string_predicate() {
 
 #[test]
 fn parse_compound_expr_1() {
-    use self::ASTNode::*;
+    use self::Expr::*;
     use self::SQLBinaryOperator::*;
     let sql = "a + b * c";
     assert_eq!(
@@ -451,7 +451,7 @@ fn parse_compound_expr_1() {
 
 #[test]
 fn parse_compound_expr_2() {
-    use self::ASTNode::*;
+    use self::Expr::*;
     use self::SQLBinaryOperator::*;
     let sql = "a * b + c";
     assert_eq!(
@@ -470,7 +470,7 @@ fn parse_compound_expr_2() {
 
 #[test]
 fn parse_unary_math() {
-    use self::ASTNode::*;
+    use self::Expr::*;
     let sql = "- a + - b";
     assert_eq!(
         SQLBinaryOp {
@@ -490,7 +490,7 @@ fn parse_unary_math() {
 
 #[test]
 fn parse_is_null() {
-    use self::ASTNode::*;
+    use self::Expr::*;
     let sql = "a IS NULL";
     assert_eq!(
         SQLIsNull(Box::new(SQLIdentifier("a".to_string()))),
@@ -500,7 +500,7 @@ fn parse_is_null() {
 
 #[test]
 fn parse_is_not_null() {
-    use self::ASTNode::*;
+    use self::Expr::*;
     let sql = "a IS NOT NULL";
     assert_eq!(
         SQLIsNotNull(Box::new(SQLIdentifier("a".to_string()))),
@@ -510,7 +510,7 @@ fn parse_is_not_null() {
 
 #[test]
 fn parse_not_precedence() {
-    use self::ASTNode::*;
+    use self::Expr::*;
     // NOT has higher precedence than OR/AND, so the following must parse as (NOT true) OR true
     let sql = "NOT true OR true";
     assert_matches!(verified_expr(sql), SQLBinaryOp {
@@ -578,16 +578,14 @@ fn parse_like() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            ASTNode::SQLBinaryOp {
-                left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
+            Expr::SQLBinaryOp {
+                left: Box::new(Expr::SQLIdentifier("name".to_string())),
                 op: if negated {
                     SQLBinaryOperator::NotLike
                 } else {
                     SQLBinaryOperator::Like
                 },
-                right: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
-                    "%a".to_string()
-                ))),
+                right: Box::new(Expr::SQLValue(Value::SingleQuotedString("%a".to_string()))),
             },
             select.selection.unwrap()
         );
@@ -600,16 +598,14 @@ fn parse_like() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            ASTNode::SQLIsNull(Box::new(ASTNode::SQLBinaryOp {
-                left: Box::new(ASTNode::SQLIdentifier("name".to_string())),
+            Expr::SQLIsNull(Box::new(Expr::SQLBinaryOp {
+                left: Box::new(Expr::SQLIdentifier("name".to_string())),
                 op: if negated {
                     SQLBinaryOperator::NotLike
                 } else {
                     SQLBinaryOperator::Like
                 },
-                right: Box::new(ASTNode::SQLValue(Value::SingleQuotedString(
-                    "%a".to_string()
-                ))),
+                right: Box::new(Expr::SQLValue(Value::SingleQuotedString("%a".to_string()))),
             })),
             select.selection.unwrap()
         );
@@ -627,11 +623,11 @@ fn parse_in_list() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            ASTNode::SQLInList {
-                expr: Box::new(ASTNode::SQLIdentifier("segment".to_string())),
+            Expr::SQLInList {
+                expr: Box::new(Expr::SQLIdentifier("segment".to_string())),
                 list: vec![
-                    ASTNode::SQLValue(Value::SingleQuotedString("HIGH".to_string())),
-                    ASTNode::SQLValue(Value::SingleQuotedString("MED".to_string())),
+                    Expr::SQLValue(Value::SingleQuotedString("HIGH".to_string())),
+                    Expr::SQLValue(Value::SingleQuotedString("MED".to_string())),
                 ],
                 negated,
             },
@@ -647,8 +643,8 @@ fn parse_in_subquery() {
     let sql = "SELECT * FROM customers WHERE segment IN (SELECT segm FROM bar)";
     let select = verified_only_select(sql);
     assert_eq!(
-        ASTNode::SQLInSubquery {
-            expr: Box::new(ASTNode::SQLIdentifier("segment".to_string())),
+        Expr::SQLInSubquery {
+            expr: Box::new(Expr::SQLIdentifier("segment".to_string())),
             subquery: Box::new(verified_query("SELECT segm FROM bar")),
             negated: false,
         },
@@ -665,10 +661,10 @@ fn parse_between() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            ASTNode::SQLBetween {
-                expr: Box::new(ASTNode::SQLIdentifier("age".to_string())),
-                low: Box::new(ASTNode::SQLValue(Value::Long(25))),
-                high: Box::new(ASTNode::SQLValue(Value::Long(32))),
+            Expr::SQLBetween {
+                expr: Box::new(Expr::SQLIdentifier("age".to_string())),
+                low: Box::new(Expr::SQLValue(Value::Long(25))),
+                high: Box::new(Expr::SQLValue(Value::Long(32))),
                 negated,
             },
             select.selection.unwrap()
@@ -680,22 +676,22 @@ fn parse_between() {
 
 #[test]
 fn parse_between_with_expr() {
-    use self::ASTNode::*;
+    use self::Expr::*;
     use self::SQLBinaryOperator::*;
     let sql = "SELECT * FROM t WHERE 1 BETWEEN 1 + 2 AND 3 + 4 IS NULL";
     let select = verified_only_select(sql);
     assert_eq!(
-        ASTNode::SQLIsNull(Box::new(ASTNode::SQLBetween {
-            expr: Box::new(ASTNode::SQLValue(Value::Long(1))),
+        Expr::SQLIsNull(Box::new(Expr::SQLBetween {
+            expr: Box::new(Expr::SQLValue(Value::Long(1))),
             low: Box::new(SQLBinaryOp {
-                left: Box::new(ASTNode::SQLValue(Value::Long(1))),
+                left: Box::new(Expr::SQLValue(Value::Long(1))),
                 op: Plus,
-                right: Box::new(ASTNode::SQLValue(Value::Long(2))),
+                right: Box::new(Expr::SQLValue(Value::Long(2))),
             }),
             high: Box::new(SQLBinaryOp {
-                left: Box::new(ASTNode::SQLValue(Value::Long(3))),
+                left: Box::new(Expr::SQLValue(Value::Long(3))),
                 op: Plus,
-                right: Box::new(ASTNode::SQLValue(Value::Long(4))),
+                right: Box::new(Expr::SQLValue(Value::Long(4))),
             }),
             negated: false,
         })),
@@ -705,21 +701,21 @@ fn parse_between_with_expr() {
     let sql = "SELECT * FROM t WHERE 1 = 1 AND 1 + x BETWEEN 1 AND 2";
     let select = verified_only_select(sql);
     assert_eq!(
-        ASTNode::SQLBinaryOp {
-            left: Box::new(ASTNode::SQLBinaryOp {
-                left: Box::new(ASTNode::SQLValue(Value::Long(1))),
+        Expr::SQLBinaryOp {
+            left: Box::new(Expr::SQLBinaryOp {
+                left: Box::new(Expr::SQLValue(Value::Long(1))),
                 op: SQLBinaryOperator::Eq,
-                right: Box::new(ASTNode::SQLValue(Value::Long(1))),
+                right: Box::new(Expr::SQLValue(Value::Long(1))),
             }),
             op: SQLBinaryOperator::And,
-            right: Box::new(ASTNode::SQLBetween {
-                expr: Box::new(ASTNode::SQLBinaryOp {
-                    left: Box::new(ASTNode::SQLValue(Value::Long(1))),
+            right: Box::new(Expr::SQLBetween {
+                expr: Box::new(Expr::SQLBinaryOp {
+                    left: Box::new(Expr::SQLValue(Value::Long(1))),
                     op: SQLBinaryOperator::Plus,
-                    right: Box::new(ASTNode::SQLIdentifier("x".to_string())),
+                    right: Box::new(Expr::SQLIdentifier("x".to_string())),
                 }),
-                low: Box::new(ASTNode::SQLValue(Value::Long(1))),
-                high: Box::new(ASTNode::SQLValue(Value::Long(2))),
+                low: Box::new(Expr::SQLValue(Value::Long(1))),
+                high: Box::new(Expr::SQLValue(Value::Long(2))),
                 negated: false,
             }),
         },
@@ -734,15 +730,15 @@ fn parse_select_order_by() {
         assert_eq!(
             vec![
                 SQLOrderByExpr {
-                    expr: ASTNode::SQLIdentifier("lname".to_string()),
+                    expr: Expr::SQLIdentifier("lname".to_string()),
                     asc: Some(true),
                 },
                 SQLOrderByExpr {
-                    expr: ASTNode::SQLIdentifier("fname".to_string()),
+                    expr: Expr::SQLIdentifier("fname".to_string()),
                     asc: Some(false),
                 },
                 SQLOrderByExpr {
-                    expr: ASTNode::SQLIdentifier("id".to_string()),
+                    expr: Expr::SQLIdentifier("id".to_string()),
                     asc: None,
                 },
             ],
@@ -763,17 +759,17 @@ fn parse_select_order_by_limit() {
     assert_eq!(
         vec![
             SQLOrderByExpr {
-                expr: ASTNode::SQLIdentifier("lname".to_string()),
+                expr: Expr::SQLIdentifier("lname".to_string()),
                 asc: Some(true),
             },
             SQLOrderByExpr {
-                expr: ASTNode::SQLIdentifier("fname".to_string()),
+                expr: Expr::SQLIdentifier("fname".to_string()),
                 asc: Some(false),
             },
         ],
         select.order_by
     );
-    assert_eq!(Some(ASTNode::SQLValue(Value::Long(2))), select.limit);
+    assert_eq!(Some(Expr::SQLValue(Value::Long(2))), select.limit);
 }
 
 #[test]
@@ -782,8 +778,8 @@ fn parse_select_group_by() {
     let select = verified_only_select(sql);
     assert_eq!(
         vec![
-            ASTNode::SQLIdentifier("lname".to_string()),
-            ASTNode::SQLIdentifier("fname".to_string()),
+            Expr::SQLIdentifier("lname".to_string()),
+            Expr::SQLIdentifier("fname".to_string()),
         ],
         select.group_by
     );
@@ -794,15 +790,15 @@ fn parse_select_having() {
     let sql = "SELECT foo FROM bar GROUP BY foo HAVING COUNT(*) > 1";
     let select = verified_only_select(sql);
     assert_eq!(
-        Some(ASTNode::SQLBinaryOp {
-            left: Box::new(ASTNode::SQLFunction(SQLFunction {
+        Some(Expr::SQLBinaryOp {
+            left: Box::new(Expr::SQLFunction(SQLFunction {
                 name: SQLObjectName(vec!["COUNT".to_string()]),
-                args: vec![ASTNode::SQLWildcard],
+                args: vec![Expr::SQLWildcard],
                 over: None,
                 distinct: false
             })),
             op: SQLBinaryOperator::Gt,
-            right: Box::new(ASTNode::SQLValue(Value::Long(1)))
+            right: Box::new(Expr::SQLValue(Value::Long(1)))
         }),
         select.having
     );
@@ -825,8 +821,8 @@ fn parse_cast() {
     let sql = "SELECT CAST(id AS bigint) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &ASTNode::SQLCast {
-            expr: Box::new(ASTNode::SQLIdentifier("id".to_string())),
+        &Expr::SQLCast {
+            expr: Box::new(Expr::SQLIdentifier("id".to_string())),
             data_type: SQLType::BigInt
         },
         expr_from_projection(only(&select.projection))
@@ -854,9 +850,9 @@ fn parse_extract() {
     let sql = "SELECT EXTRACT(YEAR FROM d)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &ASTNode::SQLExtract {
+        &Expr::SQLExtract {
             field: SQLDateTimeField::Year,
-            expr: Box::new(ASTNode::SQLIdentifier("d".to_string())),
+            expr: Box::new(Expr::SQLIdentifier("d".to_string())),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -1141,9 +1137,9 @@ fn parse_scalar_function_in_projection() {
     let sql = "SELECT sqrt(id) FROM foo";
     let select = verified_only_select(sql);
     assert_eq!(
-        &ASTNode::SQLFunction(SQLFunction {
+        &Expr::SQLFunction(SQLFunction {
             name: SQLObjectName(vec!["sqrt".to_string()]),
-            args: vec![ASTNode::SQLIdentifier("id".to_string())],
+            args: vec![Expr::SQLIdentifier("id".to_string())],
             over: None,
             distinct: false,
         }),
@@ -1164,13 +1160,13 @@ fn parse_window_functions() {
     let select = verified_only_select(sql);
     assert_eq!(4, select.projection.len());
     assert_eq!(
-        &ASTNode::SQLFunction(SQLFunction {
+        &Expr::SQLFunction(SQLFunction {
             name: SQLObjectName(vec!["row_number".to_string()]),
             args: vec![],
             over: Some(SQLWindowSpec {
                 partition_by: vec![],
                 order_by: vec![SQLOrderByExpr {
-                    expr: ASTNode::SQLIdentifier("dt".to_string()),
+                    expr: Expr::SQLIdentifier("dt".to_string()),
                     asc: Some(false)
                 }],
                 window_frame: None,
@@ -1194,15 +1190,15 @@ fn parse_literal_string() {
     let select = verified_only_select(sql);
     assert_eq!(3, select.projection.len());
     assert_eq!(
-        &ASTNode::SQLValue(Value::SingleQuotedString("one".to_string())),
+        &Expr::SQLValue(Value::SingleQuotedString("one".to_string())),
         expr_from_projection(&select.projection[0])
     );
     assert_eq!(
-        &ASTNode::SQLValue(Value::NationalStringLiteral("national string".to_string())),
+        &Expr::SQLValue(Value::NationalStringLiteral("national string".to_string())),
         expr_from_projection(&select.projection[1])
     );
     assert_eq!(
-        &ASTNode::SQLValue(Value::HexStringLiteral("deadBEEF".to_string())),
+        &Expr::SQLValue(Value::HexStringLiteral("deadBEEF".to_string())),
         expr_from_projection(&select.projection[2])
     );
 
@@ -1214,7 +1210,7 @@ fn parse_literal_date() {
     let sql = "SELECT DATE '1999-01-01'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &ASTNode::SQLValue(Value::Date("1999-01-01".into())),
+        &Expr::SQLValue(Value::Date("1999-01-01".into())),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -1224,7 +1220,7 @@ fn parse_literal_time() {
     let sql = "SELECT TIME '01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &ASTNode::SQLValue(Value::Time("01:23:34".into())),
+        &Expr::SQLValue(Value::Time("01:23:34".into())),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -1234,7 +1230,7 @@ fn parse_literal_timestamp() {
     let sql = "SELECT TIMESTAMP '1999-01-01 01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &ASTNode::SQLValue(Value::Timestamp("1999-01-01 01:23:34".into())),
+        &Expr::SQLValue(Value::Timestamp("1999-01-01 01:23:34".into())),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -1244,7 +1240,7 @@ fn parse_literal_interval() {
     let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";
     let select = verified_only_select(sql);
     assert_eq!(
-        &ASTNode::SQLValue(Value::Interval {
+        &Expr::SQLValue(Value::Interval {
             value: "1-1".into(),
             leading_field: SQLDateTimeField::Year,
             leading_precision: None,
@@ -1257,7 +1253,7 @@ fn parse_literal_interval() {
     let sql = "SELECT INTERVAL '01:01.01' MINUTE (5) TO SECOND (5)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &ASTNode::SQLValue(Value::Interval {
+        &Expr::SQLValue(Value::Interval {
             value: "01:01.01".into(),
             leading_field: SQLDateTimeField::Minute,
             leading_precision: Some(5),
@@ -1270,7 +1266,7 @@ fn parse_literal_interval() {
     let sql = "SELECT INTERVAL '1' SECOND (5, 4)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &ASTNode::SQLValue(Value::Interval {
+        &Expr::SQLValue(Value::Interval {
             value: "1".into(),
             leading_field: SQLDateTimeField::Second,
             leading_precision: Some(5),
@@ -1283,7 +1279,7 @@ fn parse_literal_interval() {
     let sql = "SELECT INTERVAL '10' HOUR";
     let select = verified_only_select(sql);
     assert_eq!(
-        &ASTNode::SQLValue(Value::Interval {
+        &Expr::SQLValue(Value::Interval {
             value: "10".into(),
             leading_field: SQLDateTimeField::Hour,
             leading_precision: None,
@@ -1296,7 +1292,7 @@ fn parse_literal_interval() {
     let sql = "SELECT INTERVAL '10' HOUR (1)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &ASTNode::SQLValue(Value::Interval {
+        &Expr::SQLValue(Value::Interval {
             value: "10".into(),
             leading_field: SQLDateTimeField::Hour,
             leading_precision: Some(1),
@@ -1369,11 +1365,11 @@ fn parse_delimited_identifiers() {
     // check SELECT
     assert_eq!(3, select.projection.len());
     assert_eq!(
-        &ASTNode::SQLCompoundIdentifier(vec![r#""alias""#.to_string(), r#""bar baz""#.to_string()]),
+        &Expr::SQLCompoundIdentifier(vec![r#""alias""#.to_string(), r#""bar baz""#.to_string()]),
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
-        &ASTNode::SQLFunction(SQLFunction {
+        &Expr::SQLFunction(SQLFunction {
             name: SQLObjectName(vec![r#""myfun""#.to_string()]),
             args: vec![],
             over: None,
@@ -1382,11 +1378,11 @@ fn parse_delimited_identifiers() {
         expr_from_projection(&select.projection[1]),
     );
     match &select.projection[2] {
-        SQLSelectItem::ExpressionWithAlias { expr, alias } => {
-            assert_eq!(&ASTNode::SQLIdentifier(r#""simple id""#.to_string()), expr);
+        SQLSelectItem::ExprWithAlias { expr, alias } => {
+            assert_eq!(&Expr::SQLIdentifier(r#""simple id""#.to_string()), expr);
             assert_eq!(r#""column alias""#, alias);
         }
-        _ => panic!("Expected ExpressionWithAlias"),
+        _ => panic!("Expected ExprWithAlias"),
     }
 
     verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
@@ -1396,7 +1392,7 @@ fn parse_delimited_identifiers() {
 
 #[test]
 fn parse_parens() {
-    use self::ASTNode::*;
+    use self::Expr::*;
     use self::SQLBinaryOperator::*;
     let sql = "(a + b) - (c + d)";
     assert_eq!(
@@ -1418,9 +1414,9 @@ fn parse_parens() {
 }
 
 #[test]
-fn parse_searched_case_expression() {
+fn parse_searched_case_expr() {
     let sql = "SELECT CASE WHEN bar IS NULL THEN 'null' WHEN bar = 0 THEN '=0' WHEN bar >= 0 THEN '>=0' ELSE '<0' END FROM foo";
-    use self::ASTNode::{SQLBinaryOp, SQLCase, SQLIdentifier, SQLIsNull, SQLValue};
+    use self::Expr::{SQLBinaryOp, SQLCase, SQLIdentifier, SQLIsNull, SQLValue};
     use self::SQLBinaryOperator::*;
     let select = verified_only_select(sql);
     assert_eq!(
@@ -1453,11 +1449,11 @@ fn parse_searched_case_expression() {
 }
 
 #[test]
-fn parse_simple_case_expression() {
+fn parse_simple_case_expr() {
     // ANSI calls a CASE expression with an operand "<simple case>"
     let sql = "SELECT CASE foo WHEN 1 THEN 'Y' ELSE 'N' END";
     let select = verified_only_select(sql);
-    use self::ASTNode::{SQLCase, SQLIdentifier, SQLValue};
+    use self::Expr::{SQLCase, SQLIdentifier, SQLValue};
     assert_eq!(
         &SQLCase {
             operand: Some(Box::new(SQLIdentifier("foo".to_string()))),
@@ -1587,10 +1583,10 @@ fn parse_joins_on() {
                 args: vec![],
                 with_hints: vec![],
             },
-            join_operator: f(JoinConstraint::On(ASTNode::SQLBinaryOp {
-                left: Box::new(ASTNode::SQLIdentifier("c1".into())),
+            join_operator: f(JoinConstraint::On(Expr::SQLBinaryOp {
+                left: Box::new(Expr::SQLIdentifier("c1".into())),
                 op: SQLBinaryOperator::Eq,
-                right: Box::new(ASTNode::SQLIdentifier("c2".into())),
+                right: Box::new(Expr::SQLIdentifier("c2".into())),
             })),
         }
     }
@@ -1834,7 +1830,7 @@ fn parse_ctes() {
     let sql = &format!("SELECT ({})", with);
     let select = verified_only_select(sql);
     match expr_from_projection(only(&select.projection)) {
-        ASTNode::SQLSubquery(ref subquery) => {
+        Expr::SQLSubquery(ref subquery) => {
             assert_ctes_in_select(&cte_sqls, subquery.as_ref());
         }
         _ => panic!("Expected subquery"),
@@ -1991,7 +1987,7 @@ fn parse_multiple_statements() {
 
 #[test]
 fn parse_scalar_subqueries() {
-    use self::ASTNode::*;
+    use self::Expr::*;
     let sql = "(SELECT 1) + (SELECT 2)";
     assert_matches!(verified_expr(sql), SQLBinaryOp {
         op: SQLBinaryOperator::Plus, ..
@@ -2006,16 +2002,16 @@ fn parse_exists_subquery() {
     let sql = "SELECT * FROM t WHERE EXISTS (SELECT 1)";
     let select = verified_only_select(sql);
     assert_eq!(
-        ASTNode::SQLExists(Box::new(expected_inner.clone())),
+        Expr::SQLExists(Box::new(expected_inner.clone())),
         select.selection.unwrap(),
     );
 
     let sql = "SELECT * FROM t WHERE NOT EXISTS (SELECT 1)";
     let select = verified_only_select(sql);
     assert_eq!(
-        ASTNode::SQLUnaryOp {
+        Expr::SQLUnaryOp {
             op: SQLUnaryOperator::Not,
-            expr: Box::new(ASTNode::SQLExists(Box::new(expected_inner))),
+            expr: Box::new(Expr::SQLExists(Box::new(expected_inner))),
         },
         select.selection.unwrap(),
     );
@@ -2208,26 +2204,26 @@ fn parse_invalid_subquery_without_parens() {
 #[test]
 fn parse_offset() {
     let ast = verified_query("SELECT foo FROM bar OFFSET 2 ROWS");
-    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+    assert_eq!(ast.offset, Some(Expr::SQLValue(Value::Long(2))));
     let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 OFFSET 2 ROWS");
-    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+    assert_eq!(ast.offset, Some(Expr::SQLValue(Value::Long(2))));
     let ast = verified_query("SELECT foo FROM bar ORDER BY baz OFFSET 2 ROWS");
-    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+    assert_eq!(ast.offset, Some(Expr::SQLValue(Value::Long(2))));
     let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS");
-    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+    assert_eq!(ast.offset, Some(Expr::SQLValue(Value::Long(2))));
     let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS) OFFSET 2 ROWS");
-    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+    assert_eq!(ast.offset, Some(Expr::SQLValue(Value::Long(2))));
     match ast.body {
         SQLSetExpr::Select(s) => match only(s.from).relation {
             TableFactor::Derived { subquery, .. } => {
-                assert_eq!(subquery.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+                assert_eq!(subquery.offset, Some(Expr::SQLValue(Value::Long(2))));
             }
             _ => panic!("Test broke"),
         },
         _ => panic!("Test broke"),
     }
     let ast = verified_query("SELECT 'foo' OFFSET 0 ROWS");
-    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(0))));
+    assert_eq!(ast.offset, Some(Expr::SQLValue(Value::Long(0))));
 }
 
 #[test]
@@ -2243,7 +2239,7 @@ fn parse_fetch() {
     const FETCH_FIRST_TWO_ROWS_ONLY: Fetch = Fetch {
         with_ties: false,
         percent: false,
-        quantity: Some(ASTNode::SQLValue(Value::Long(2))),
+        quantity: Some(Expr::SQLValue(Value::Long(2))),
     };
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST 2 ROWS ONLY");
     assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
@@ -2270,7 +2266,7 @@ fn parse_fetch() {
         Some(Fetch {
             with_ties: true,
             percent: false,
-            quantity: Some(ASTNode::SQLValue(Value::Long(2))),
+            quantity: Some(Expr::SQLValue(Value::Long(2))),
         })
     );
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST 50 PERCENT ROWS ONLY");
@@ -2279,13 +2275,13 @@ fn parse_fetch() {
         Some(Fetch {
             with_ties: false,
             percent: true,
-            quantity: Some(ASTNode::SQLValue(Value::Long(50))),
+            quantity: Some(Expr::SQLValue(Value::Long(50))),
         })
     );
     let ast = verified_query(
         "SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY",
     );
-    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+    assert_eq!(ast.offset, Some(Expr::SQLValue(Value::Long(2))));
     assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
     let ast = verified_query(
         "SELECT foo FROM (SELECT * FROM bar FETCH FIRST 2 ROWS ONLY) FETCH FIRST 2 ROWS ONLY",
@@ -2301,12 +2297,12 @@ fn parse_fetch() {
         _ => panic!("Test broke"),
     }
     let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY) OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY");
-    assert_eq!(ast.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+    assert_eq!(ast.offset, Some(Expr::SQLValue(Value::Long(2))));
     assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
     match ast.body {
         SQLSetExpr::Select(s) => match only(s.from).relation {
             TableFactor::Derived { subquery, .. } => {
-                assert_eq!(subquery.offset, Some(ASTNode::SQLValue(Value::Long(2))));
+                assert_eq!(subquery.offset, Some(Expr::SQLValue(Value::Long(2))));
                 assert_eq!(subquery.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
             }
             _ => panic!("Test broke"),
@@ -2354,7 +2350,7 @@ fn lateral_derived() {
         let join = &from.joins[0];
         assert_eq!(
             join.join_operator,
-            JoinOperator::LeftOuter(JoinConstraint::On(ASTNode::SQLValue(Value::Boolean(true))))
+            JoinOperator::LeftOuter(JoinConstraint::On(Expr::SQLValue(Value::Boolean(true))))
         );
         if let TableFactor::Derived {
             lateral,
@@ -2545,6 +2541,6 @@ fn verified_only_select(query: &str) -> SQLSelect {
     all_dialects().verified_only_select(query)
 }
 
-fn verified_expr(query: &str) -> ASTNode {
+fn verified_expr(query: &str) -> Expr {
     all_dialects().verified_expr(query)
 }

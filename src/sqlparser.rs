@@ -151,12 +151,12 @@ impl Parser {
     }
 
     /// Parse a new expression
-    pub fn parse_expr(&mut self) -> Result<ASTNode, ParserError> {
+    pub fn parse_expr(&mut self) -> Result<Expr, ParserError> {
         self.parse_subexpr(0)
     }
 
     /// Parse tokens until the precedence changes
-    pub fn parse_subexpr(&mut self, precedence: u8) -> Result<ASTNode, ParserError> {
+    pub fn parse_subexpr(&mut self, precedence: u8) -> Result<Expr, ParserError> {
         debug!("parsing expr");
         let mut expr = self.parse_prefix()?;
         debug!("prefix: {:?}", expr);
@@ -173,7 +173,7 @@ impl Parser {
     }
 
     /// Parse an expression prefix
-    pub fn parse_prefix(&mut self) -> Result<ASTNode, ParserError> {
+    pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
         let tok = self
             .next_token()
             .ok_or_else(|| ParserError::ParserError("Unexpected EOF".to_string()))?;
@@ -183,18 +183,18 @@ impl Parser {
                     self.prev_token();
                     self.parse_sql_value()
                 }
-                "CASE" => self.parse_case_expression(),
-                "CAST" => self.parse_cast_expression(),
-                "DATE" => Ok(ASTNode::SQLValue(Value::Date(self.parse_literal_string()?))),
-                "EXISTS" => self.parse_exists_expression(),
-                "EXTRACT" => self.parse_extract_expression(),
+                "CASE" => self.parse_case_expr(),
+                "CAST" => self.parse_cast_expr(),
+                "DATE" => Ok(Expr::SQLValue(Value::Date(self.parse_literal_string()?))),
+                "EXISTS" => self.parse_exists_expr(),
+                "EXTRACT" => self.parse_extract_expr(),
                 "INTERVAL" => self.parse_literal_interval(),
-                "NOT" => Ok(ASTNode::SQLUnaryOp {
+                "NOT" => Ok(Expr::SQLUnaryOp {
                     op: SQLUnaryOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
                 }),
-                "TIME" => Ok(ASTNode::SQLValue(Value::Time(self.parse_literal_string()?))),
-                "TIMESTAMP" => Ok(ASTNode::SQLValue(Value::Timestamp(
+                "TIME" => Ok(Expr::SQLValue(Value::Time(self.parse_literal_string()?))),
+                "TIMESTAMP" => Ok(Expr::SQLValue(Value::Timestamp(
                     self.parse_literal_string()?,
                 ))),
                 // Here `w` is a word, check if it's a part of a multi-part
@@ -217,25 +217,25 @@ impl Parser {
                             }
                         }
                         if ends_with_wildcard {
-                            Ok(ASTNode::SQLQualifiedWildcard(id_parts))
+                            Ok(Expr::SQLQualifiedWildcard(id_parts))
                         } else if self.consume_token(&Token::LParen) {
                             self.prev_token();
                             self.parse_function(SQLObjectName(id_parts))
                         } else {
-                            Ok(ASTNode::SQLCompoundIdentifier(id_parts))
+                            Ok(Expr::SQLCompoundIdentifier(id_parts))
                         }
                     }
-                    _ => Ok(ASTNode::SQLIdentifier(w.as_sql_ident())),
+                    _ => Ok(Expr::SQLIdentifier(w.as_sql_ident())),
                 },
             }, // End of Token::SQLWord
-            Token::Mult => Ok(ASTNode::SQLWildcard),
+            Token::Mult => Ok(Expr::SQLWildcard),
             tok @ Token::Minus | tok @ Token::Plus => {
                 let op = if tok == Token::Plus {
                     SQLUnaryOperator::Plus
                 } else {
                     SQLUnaryOperator::Minus
                 };
-                Ok(ASTNode::SQLUnaryOp {
+                Ok(Expr::SQLUnaryOp {
                     op,
                     expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
                 })
@@ -250,9 +250,9 @@ impl Parser {
             Token::LParen => {
                 let expr = if self.parse_keyword("SELECT") || self.parse_keyword("WITH") {
                     self.prev_token();
-                    ASTNode::SQLSubquery(Box::new(self.parse_query()?))
+                    Expr::SQLSubquery(Box::new(self.parse_query()?))
                 } else {
-                    ASTNode::SQLNested(Box::new(self.parse_expr()?))
+                    Expr::SQLNested(Box::new(self.parse_expr()?))
                 };
                 self.expect_token(&Token::RParen)?;
                 Ok(expr)
@@ -261,7 +261,7 @@ impl Parser {
         }?;
 
         if self.parse_keyword("COLLATE") {
-            Ok(ASTNode::SQLCollate {
+            Ok(Expr::SQLCollate {
                 expr: Box::new(expr),
                 collation: self.parse_object_name()?,
             })
@@ -270,7 +270,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_function(&mut self, name: SQLObjectName) -> Result<ASTNode, ParserError> {
+    pub fn parse_function(&mut self, name: SQLObjectName) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let all = self.parse_keyword("ALL");
         let distinct = self.parse_keyword("DISTINCT");
@@ -306,7 +306,7 @@ impl Parser {
             None
         };
 
-        Ok(ASTNode::SQLFunction(SQLFunction {
+        Ok(Expr::SQLFunction(SQLFunction {
             name,
             args,
             over,
@@ -366,7 +366,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_case_expression(&mut self) -> Result<ASTNode, ParserError> {
+    pub fn parse_case_expr(&mut self) -> Result<Expr, ParserError> {
         let mut operand = None;
         if !self.parse_keyword("WHEN") {
             operand = Some(Box::new(self.parse_expr()?));
@@ -388,7 +388,7 @@ impl Parser {
             None
         };
         self.expect_keyword("END")?;
-        Ok(ASTNode::SQLCase {
+        Ok(Expr::SQLCase {
             operand,
             conditions,
             results,
@@ -397,33 +397,33 @@ impl Parser {
     }
 
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
-    pub fn parse_cast_expression(&mut self) -> Result<ASTNode, ParserError> {
+    pub fn parse_cast_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
         self.expect_keyword("AS")?;
         let data_type = self.parse_data_type()?;
         self.expect_token(&Token::RParen)?;
-        Ok(ASTNode::SQLCast {
+        Ok(Expr::SQLCast {
             expr: Box::new(expr),
             data_type,
         })
     }
 
     /// Parse a SQL EXISTS expression e.g. `WHERE EXISTS(SELECT ...)`.
-    pub fn parse_exists_expression(&mut self) -> Result<ASTNode, ParserError> {
+    pub fn parse_exists_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let exists_node = ASTNode::SQLExists(Box::new(self.parse_query()?));
+        let exists_node = Expr::SQLExists(Box::new(self.parse_query()?));
         self.expect_token(&Token::RParen)?;
         Ok(exists_node)
     }
 
-    pub fn parse_extract_expression(&mut self) -> Result<ASTNode, ParserError> {
+    pub fn parse_extract_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let field = self.parse_date_time_field()?;
         self.expect_keyword("FROM")?;
         let expr = self.parse_expr()?;
         self.expect_token(&Token::RParen)?;
-        Ok(ASTNode::SQLExtract {
+        Ok(Expr::SQLExtract {
             field,
             expr: Box::new(expr),
         })
@@ -462,7 +462,7 @@ impl Parser {
     ///   6. `INTERVAL '1:1' HOUR (5) TO MINUTE (5)`
     ///
     /// Note that we do not currently attempt to parse the quoted value.
-    pub fn parse_literal_interval(&mut self) -> Result<ASTNode, ParserError> {
+    pub fn parse_literal_interval(&mut self) -> Result<Expr, ParserError> {
         // The SQL standard allows an optional sign before the value string, but
         // it is not clear if any implementations support that syntax, so we
         // don't currently try to parse it. (The sign can instead be included
@@ -504,7 +504,7 @@ impl Parser {
                 }
             };
 
-        Ok(ASTNode::SQLValue(Value::Interval {
+        Ok(Expr::SQLValue(Value::Interval {
             value,
             leading_field,
             leading_precision,
@@ -514,7 +514,7 @@ impl Parser {
     }
 
     /// Parse an operator following an expression
-    pub fn parse_infix(&mut self, expr: ASTNode, precedence: u8) -> Result<ASTNode, ParserError> {
+    pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
         debug!("parsing infix");
         let tok = self.next_token().unwrap(); // safe as EOF's precedence is the lowest
 
@@ -547,7 +547,7 @@ impl Parser {
         };
 
         if let Some(op) = regular_binary_operator {
-            Ok(ASTNode::SQLBinaryOp {
+            Ok(Expr::SQLBinaryOp {
                 left: Box::new(expr),
                 op,
                 right: Box::new(self.parse_subexpr(precedence)?),
@@ -556,9 +556,9 @@ impl Parser {
             match k.keyword.as_ref() {
                 "IS" => {
                     if self.parse_keyword("NULL") {
-                        Ok(ASTNode::SQLIsNull(Box::new(expr)))
+                        Ok(Expr::SQLIsNull(Box::new(expr)))
                     } else if self.parse_keywords(vec!["NOT", "NULL"]) {
-                        Ok(ASTNode::SQLIsNotNull(Box::new(expr)))
+                        Ok(Expr::SQLIsNotNull(Box::new(expr)))
                     } else {
                         self.expected("NULL or NOT NULL after IS", self.peek_token())
                     }
@@ -586,17 +586,17 @@ impl Parser {
     }
 
     /// Parses the parens following the `[ NOT ] IN` operator
-    pub fn parse_in(&mut self, expr: ASTNode, negated: bool) -> Result<ASTNode, ParserError> {
+    pub fn parse_in(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let in_op = if self.parse_keyword("SELECT") || self.parse_keyword("WITH") {
             self.prev_token();
-            ASTNode::SQLInSubquery {
+            Expr::SQLInSubquery {
                 expr: Box::new(expr),
                 subquery: Box::new(self.parse_query()?),
                 negated,
             }
         } else {
-            ASTNode::SQLInList {
+            Expr::SQLInList {
                 expr: Box::new(expr),
                 list: self.parse_expr_list()?,
                 negated,
@@ -607,13 +607,13 @@ impl Parser {
     }
 
     /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed
-    pub fn parse_between(&mut self, expr: ASTNode, negated: bool) -> Result<ASTNode, ParserError> {
+    pub fn parse_between(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
         // Stop parsing subexpressions for <low> and <high> on tokens with
         // precedence lower than that of `BETWEEN`, such as `AND`, `IS`, etc.
         let low = self.parse_subexpr(Self::BETWEEN_PREC)?;
         self.expect_keyword("AND")?;
         let high = self.parse_subexpr(Self::BETWEEN_PREC)?;
-        Ok(ASTNode::SQLBetween {
+        Ok(Expr::SQLBetween {
             expr: Box::new(expr),
             negated,
             low: Box::new(low),
@@ -622,8 +622,8 @@ impl Parser {
     }
 
     /// Parse a postgresql casting style which is in the form of `expr::datatype`
-    pub fn parse_pg_cast(&mut self, expr: ASTNode) -> Result<ASTNode, ParserError> {
-        Ok(ASTNode::SQLCast {
+    pub fn parse_pg_cast(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+        Ok(Expr::SQLCast {
             expr: Box::new(expr),
             data_type: self.parse_data_type()?,
         })
@@ -1132,8 +1132,8 @@ impl Parser {
         Ok(values)
     }
 
-    fn parse_sql_value(&mut self) -> Result<ASTNode, ParserError> {
-        Ok(ASTNode::SQLValue(self.parse_value()?))
+    fn parse_sql_value(&mut self) -> Result<Expr, ParserError> {
+        Ok(Expr::SQLValue(self.parse_value()?))
     }
 
     fn parse_tab_value(&mut self) -> Result<Vec<Option<String>>, ParserError> {
@@ -1840,8 +1840,8 @@ impl Parser {
     }
 
     /// Parse a comma-delimited list of SQL expressions
-    pub fn parse_expr_list(&mut self) -> Result<Vec<ASTNode>, ParserError> {
-        let mut expr_list: Vec<ASTNode> = vec![];
+    pub fn parse_expr_list(&mut self) -> Result<Vec<Expr>, ParserError> {
+        let mut expr_list: Vec<Expr> = vec![];
         loop {
             expr_list.push(self.parse_expr()?);
             if !self.consume_token(&Token::Comma) {
@@ -1851,7 +1851,7 @@ impl Parser {
         Ok(expr_list)
     }
 
-    pub fn parse_optional_args(&mut self) -> Result<Vec<ASTNode>, ParserError> {
+    pub fn parse_optional_args(&mut self) -> Result<Vec<Expr>, ParserError> {
         if self.consume_token(&Token::RParen) {
             Ok(vec![])
         } else {
@@ -1866,18 +1866,18 @@ impl Parser {
         let mut projections: Vec<SQLSelectItem> = vec![];
         loop {
             let expr = self.parse_expr()?;
-            if let ASTNode::SQLWildcard = expr {
+            if let Expr::SQLWildcard = expr {
                 projections.push(SQLSelectItem::Wildcard);
-            } else if let ASTNode::SQLQualifiedWildcard(prefix) = expr {
+            } else if let Expr::SQLQualifiedWildcard(prefix) = expr {
                 projections.push(SQLSelectItem::QualifiedWildcard(SQLObjectName(prefix)));
             } else {
                 // `expr` is a regular SQL expression and can be followed by an alias
                 if let Some(alias) =
                     self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)?
                 {
-                    projections.push(SQLSelectItem::ExpressionWithAlias { expr, alias });
+                    projections.push(SQLSelectItem::ExprWithAlias { expr, alias });
                 } else {
-                    projections.push(SQLSelectItem::UnnamedExpression(expr));
+                    projections.push(SQLSelectItem::UnnamedExpr(expr));
                 }
             }
 
@@ -1911,20 +1911,20 @@ impl Parser {
     }
 
     /// Parse a LIMIT clause
-    pub fn parse_limit(&mut self) -> Result<Option<ASTNode>, ParserError> {
+    pub fn parse_limit(&mut self) -> Result<Option<Expr>, ParserError> {
         if self.parse_keyword("ALL") {
             Ok(None)
         } else {
             self.parse_literal_uint()
-                .map(|n| Some(ASTNode::SQLValue(Value::Long(n))))
+                .map(|n| Some(Expr::SQLValue(Value::Long(n))))
         }
     }
 
     /// Parse an OFFSET clause
-    pub fn parse_offset(&mut self) -> Result<ASTNode, ParserError> {
+    pub fn parse_offset(&mut self) -> Result<Expr, ParserError> {
         let value = self
             .parse_literal_uint()
-            .map(|n| ASTNode::SQLValue(Value::Long(n)))?;
+            .map(|n| Expr::SQLValue(Value::Long(n)))?;
         self.expect_one_of_keywords(&["ROW", "ROWS"])?;
         Ok(value)
     }

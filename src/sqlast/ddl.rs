@@ -1,6 +1,6 @@
 //! AST types specific to CREATE/ALTER variants of `SQLStatement`
 //! (commonly referred to as Data Definition Language, or DDL)
-use super::{ASTNode, SQLIdent, SQLObjectName, SQLType};
+use super::{Expr, SQLIdent, SQLObjectName, SQLType};
 
 /// An `ALTER TABLE` (`SQLStatement::SQLAlterTable`) operation
 #[derive(Debug, Clone, PartialEq, Hash)]
@@ -42,7 +42,7 @@ pub enum TableConstraint {
     /// `[ CONSTRAINT <name> ] CHECK (<expr>)`
     Check {
         name: Option<SQLIdent>,
-        expr: Box<ASTNode>,
+        expr: Box<Expr>,
     },
 }
 
@@ -145,7 +145,7 @@ pub enum ColumnOption {
     /// `NOT NULL`
     NotNull,
     /// `DEFAULT <restricted-expr>`
-    Default(ASTNode),
+    Default(Expr),
     /// `{ PRIMARY KEY | UNIQUE }`
     Unique {
         is_primary: bool,
@@ -157,7 +157,7 @@ pub enum ColumnOption {
         referred_columns: Vec<SQLIdent>,
     },
     // `CHECK (<expr>)`
-    Check(ASTNode),
+    Check(Expr),
 }
 
 impl ToString for ColumnOption {

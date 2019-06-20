@@ -23,9 +23,9 @@ pub struct SQLQuery {
     /// ORDER BY
     pub order_by: Vec<SQLOrderByExpr>,
     /// `LIMIT { <N> | ALL }`
-    pub limit: Option<ASTNode>,
+    pub limit: Option<Expr>,
     /// `OFFSET <N> { ROW | ROWS }`
-    pub offset: Option<ASTNode>,
+    pub offset: Option<Expr>,
     /// `FETCH { FIRST | NEXT } <N> [ PERCENT ] { ROW | ROWS } | { ONLY | WITH TIES }`
     pub fetch: Option<Fetch>,
 }
@@ -127,11 +127,11 @@ pub struct SQLSelect {
     /// FROM
     pub from: Vec<TableWithJoins>,
     /// WHERE
-    pub selection: Option<ASTNode>,
+    pub selection: Option<Expr>,
     /// GROUP BY
-    pub group_by: Vec<ASTNode>,
+    pub group_by: Vec<Expr>,
     /// HAVING
-    pub having: Option<ASTNode>,
+    pub having: Option<Expr>,
 }
 
 impl ToString for SQLSelect {
@@ -177,9 +177,9 @@ impl ToString for Cte {
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub enum SQLSelectItem {
     /// Any expression, not followed by `[ AS ] alias`
-    UnnamedExpression(ASTNode),
+    UnnamedExpr(Expr),
     /// An expression, followed by `[ AS ] alias`
-    ExpressionWithAlias { expr: ASTNode, alias: SQLIdent },
+    ExprWithAlias { expr: Expr, alias: SQLIdent },
     /// `alias.*` or even `schema.table.*`
     QualifiedWildcard(SQLObjectName),
     /// An unqualified `*`
@@ -189,8 +189,8 @@ pub enum SQLSelectItem {
 impl ToString for SQLSelectItem {
     fn to_string(&self) -> String {
         match &self {
-            SQLSelectItem::UnnamedExpression(expr) => expr.to_string(),
-            SQLSelectItem::ExpressionWithAlias { expr, alias } => {
+            SQLSelectItem::UnnamedExpr(expr) => expr.to_string(),
+            SQLSelectItem::ExprWithAlias { expr, alias } => {
                 format!("{} AS {}", expr.to_string(), alias)
             }
             SQLSelectItem::QualifiedWildcard(prefix) => format!("{}.*", prefix.to_string()),
@@ -224,9 +224,9 @@ pub enum TableFactor {
         /// Arguments of a table-valued function, as supported by Postgres
         /// and MSSQL. Note that deprecated MSSQL `FROM foo (NOLOCK)` syntax
         /// will also be parsed as `args`.
-        args: Vec<ASTNode>,
+        args: Vec<Expr>,
         /// MSSQL-specific `WITH (...)` hints such as NOLOCK.
-        with_hints: Vec<ASTNode>,
+        with_hints: Vec<Expr>,
     },
     Derived {
         lateral: bool,
@@ -367,7 +367,7 @@ pub enum JoinOperator {
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub enum JoinConstraint {
-    On(ASTNode),
+    On(Expr),
     Using(Vec<SQLIdent>),
     Natural,
 }
@@ -375,7 +375,7 @@ pub enum JoinConstraint {
 /// SQL ORDER BY expression
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct SQLOrderByExpr {
-    pub expr: ASTNode,
+    pub expr: Expr,
     pub asc: Option<bool>,
 }
 
@@ -393,7 +393,7 @@ impl ToString for SQLOrderByExpr {
 pub struct Fetch {
     pub with_ties: bool,
     pub percent: bool,
-    pub quantity: Option<ASTNode>,
+    pub quantity: Option<Expr>,
 }
 
 impl ToString for Fetch {
@@ -414,7 +414,7 @@ impl ToString for Fetch {
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]
-pub struct SQLValues(pub Vec<Vec<ASTNode>>);
+pub struct SQLValues(pub Vec<Vec<Expr>>);
 
 impl ToString for SQLValues {
     fn to_string(&self) -> String {

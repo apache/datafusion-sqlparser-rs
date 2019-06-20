@@ -53,7 +53,7 @@ pub type SQLIdent = String;
 /// (e.g. boolean vs string), so the caller must handle expressions of
 /// inappropriate type, like `WHERE 1` or `SELECT 1=1`, as necessary.
 #[derive(Debug, Clone, PartialEq, Hash)]
-pub enum ASTNode {
+pub enum Expr {
     /// Identifier e.g. table name or column name
     SQLIdentifier(SQLIdent),
     /// Unqualified wildcard (`*`). SQL allows this in limited contexts, such as:
@@ -69,55 +69,52 @@ pub enum ASTNode {
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     SQLCompoundIdentifier(Vec<SQLIdent>),
     /// `IS NULL` expression
-    SQLIsNull(Box<ASTNode>),
+    SQLIsNull(Box<Expr>),
     /// `IS NOT NULL` expression
-    SQLIsNotNull(Box<ASTNode>),
+    SQLIsNotNull(Box<Expr>),
     /// `[ NOT ] IN (val1, val2, ...)`
     SQLInList {
-        expr: Box<ASTNode>,
-        list: Vec<ASTNode>,
+        expr: Box<Expr>,
+        list: Vec<Expr>,
         negated: bool,
     },
     /// `[ NOT ] IN (SELECT ...)`
     SQLInSubquery {
-        expr: Box<ASTNode>,
+        expr: Box<Expr>,
         subquery: Box<SQLQuery>,
         negated: bool,
     },
     /// `<expr> [ NOT ] BETWEEN <low> AND <high>`
     SQLBetween {
-        expr: Box<ASTNode>,
+        expr: Box<Expr>,
         negated: bool,
-        low: Box<ASTNode>,
-        high: Box<ASTNode>,
+        low: Box<Expr>,
+        high: Box<Expr>,
     },
     /// Binary operation e.g. `1 + 1` or `foo > bar`
     SQLBinaryOp {
-        left: Box<ASTNode>,
+        left: Box<Expr>,
         op: SQLBinaryOperator,
-        right: Box<ASTNode>,
+        right: Box<Expr>,
     },
     /// Unary operation e.g. `NOT foo`
     SQLUnaryOp {
         op: SQLUnaryOperator,
-        expr: Box<ASTNode>,
+        expr: Box<Expr>,
     },
     /// CAST an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
-    SQLCast {
-        expr: Box<ASTNode>,
-        data_type: SQLType,
-    },
+    SQLCast { expr: Box<Expr>, data_type: SQLType },
     SQLExtract {
         field: SQLDateTimeField,
-        expr: Box<ASTNode>,
+        expr: Box<Expr>,
     },
     /// `expr COLLATE collation`
     SQLCollate {
-        expr: Box<ASTNode>,
+        expr: Box<Expr>,
         collation: SQLObjectName,
     },
     /// Nested expression e.g. `(foo > bar)` or `(1)`
-    SQLNested(Box<ASTNode>),
+    SQLNested(Box<Expr>),
     /// SQLValue
     SQLValue(Value),
     /// Scalar function call e.g. `LEFT(foo, 5)`
@@ -128,10 +125,10 @@ pub enum ASTNode {
     /// not `< 0` nor `1, 2, 3` as allowed in a `<simple when clause>` per
     /// <https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-when-clause>
     SQLCase {
-        operand: Option<Box<ASTNode>>,
-        conditions: Vec<ASTNode>,
-        results: Vec<ASTNode>,
-        else_result: Option<Box<ASTNode>>,
+        operand: Option<Box<Expr>>,
+        conditions: Vec<Expr>,
+        results: Vec<Expr>,
+        else_result: Option<Box<Expr>>,
     },
     /// An exists expression `EXISTS(SELECT ...)`, used in expressions like
     /// `WHERE EXISTS (SELECT ...)`.
@@ -141,16 +138,16 @@ pub enum ASTNode {
     SQLSubquery(Box<SQLQuery>),
 }
 
-impl ToString for ASTNode {
+impl ToString for Expr {
     fn to_string(&self) -> String {
         match self {
-            ASTNode::SQLIdentifier(s) => s.to_string(),
-            ASTNode::SQLWildcard => "*".to_string(),
-            ASTNode::SQLQualifiedWildcard(q) => q.join(".") + ".*",
-            ASTNode::SQLCompoundIdentifier(s) => s.join("."),
-            ASTNode::SQLIsNull(ast) => format!("{} IS NULL", ast.as_ref().to_string()),
-            ASTNode::SQLIsNotNull(ast) => format!("{} IS NOT NULL", ast.as_ref().to_string()),
-            ASTNode::SQLInList {
+            Expr::SQLIdentifier(s) => s.to_string(),
+            Expr::SQLWildcard => "*".to_string(),
+            Expr::SQLQualifiedWildcard(q) => q.join(".") + ".*",
+            Expr::SQLCompoundIdentifier(s) => s.join("."),
+            Expr::SQLIsNull(ast) => format!("{} IS NULL", ast.as_ref().to_string()),
+            Expr::SQLIsNotNull(ast) => format!("{} IS NOT NULL", ast.as_ref().to_string()),
+            Expr::SQLInList {
                 expr,
                 list,
                 negated,
@@ -160,7 +157,7 @@ impl ToString for ASTNode {
                 if *negated { "NOT " } else { "" },
                 comma_separated_string(list)
             ),
-            ASTNode::SQLInSubquery {
+            Expr::SQLInSubquery {
                 expr,
                 subquery,
                 negated,
@@ -170,7 +167,7 @@ impl ToString for ASTNode {
                 if *negated { "NOT " } else { "" },
                 subquery.to_string()
             ),
-            ASTNode::SQLBetween {
+            Expr::SQLBetween {
                 expr,
                 negated,
                 low,
@@ -182,32 +179,32 @@ impl ToString for ASTNode {
                 low.to_string(),
                 high.to_string()
             ),
-            ASTNode::SQLBinaryOp { left, op, right } => format!(
+            Expr::SQLBinaryOp { left, op, right } => format!(
                 "{} {} {}",
                 left.as_ref().to_string(),
                 op.to_string(),
                 right.as_ref().to_string()
             ),
-            ASTNode::SQLUnaryOp { op, expr } => {
+            Expr::SQLUnaryOp { op, expr } => {
                 format!("{} {}", op.to_string(), expr.as_ref().to_string())
             }
-            ASTNode::SQLCast { expr, data_type } => format!(
+            Expr::SQLCast { expr, data_type } => format!(
                 "CAST({} AS {})",
                 expr.as_ref().to_string(),
                 data_type.to_string()
             ),
-            ASTNode::SQLExtract { field, expr } => {
+            Expr::SQLExtract { field, expr } => {
                 format!("EXTRACT({} FROM {})", field.to_string(), expr.to_string())
             }
-            ASTNode::SQLCollate { expr, collation } => format!(
+            Expr::SQLCollate { expr, collation } => format!(
                 "{} COLLATE {}",
                 expr.as_ref().to_string(),
                 collation.to_string()
             ),
-            ASTNode::SQLNested(ast) => format!("({})", ast.as_ref().to_string()),
-            ASTNode::SQLValue(v) => v.to_string(),
-            ASTNode::SQLFunction(f) => f.to_string(),
-            ASTNode::SQLCase {
+            Expr::SQLNested(ast) => format!("({})", ast.as_ref().to_string()),
+            Expr::SQLValue(v) => v.to_string(),
+            Expr::SQLFunction(f) => f.to_string(),
+            Expr::SQLCase {
                 operand,
                 conditions,
                 results,
@@ -228,8 +225,8 @@ impl ToString for ASTNode {
                 }
                 s + " END"
             }
-            ASTNode::SQLExists(s) => format!("EXISTS ({})", s.to_string()),
-            ASTNode::SQLSubquery(s) => format!("({})", s.to_string()),
+            Expr::SQLExists(s) => format!("EXISTS ({})", s.to_string()),
+            Expr::SQLSubquery(s) => format!("({})", s.to_string()),
         }
     }
 }
@@ -237,7 +234,7 @@ impl ToString for ASTNode {
 /// A window specification (i.e. `OVER (PARTITION BY .. ORDER BY .. etc.)`)
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct SQLWindowSpec {
-    pub partition_by: Vec<ASTNode>,
+    pub partition_by: Vec<Expr>,
     pub order_by: Vec<SQLOrderByExpr>,
     pub window_frame: Option<SQLWindowFrame>,
 }
@@ -374,14 +371,14 @@ pub enum SQLStatement {
         /// Column assignments
         assignments: Vec<SQLAssignment>,
         /// WHERE
-        selection: Option<ASTNode>,
+        selection: Option<Expr>,
     },
     /// DELETE
     SQLDelete {
         /// FROM
         table_name: SQLObjectName,
         /// WHERE
-        selection: Option<ASTNode>,
+        selection: Option<Expr>,
     },
     /// CREATE VIEW
     SQLCreateView {
@@ -604,7 +601,7 @@ impl ToString for SQLObjectName {
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct SQLAssignment {
     pub id: SQLIdent,
-    pub value: ASTNode,
+    pub value: Expr,
 }
 
 impl ToString for SQLAssignment {
@@ -617,7 +614,7 @@ impl ToString for SQLAssignment {
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct SQLFunction {
     pub name: SQLObjectName,
-    pub args: Vec<ASTNode>,
+    pub args: Vec<Expr>,
     pub over: Option<SQLWindowSpec>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,

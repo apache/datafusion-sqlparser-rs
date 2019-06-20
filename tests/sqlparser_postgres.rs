@@ -106,9 +106,7 @@ fn parse_create_table_with_defaults() {
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
-                                option: ColumnOption::Default(ASTNode::SQLValue(Value::Boolean(
-                                    true
-                                ))),
+                                option: ColumnOption::Default(Expr::SQLValue(Value::Boolean(true))),
                             },
                             ColumnOptionDef {
                                 name: None,

@@ -1,6 +1,6 @@
 //! AST types specific to CREATE/ALTER variants of `SQLStatement`
 //! (commonly referred to as Data Definition Language, or DDL)
-use super::{Expr, SQLIdent, SQLObjectName, SQLType};
+use super::{DataType, Expr, Ident, ObjectName};
 
 /// An `ALTER TABLE` (`SQLStatement::SQLAlterTable`) operation
 #[derive(Debug, Clone, PartialEq, Hash)]
@@ -8,7 +8,7 @@ pub enum AlterTableOperation {
     /// `ADD <table_constraint>`
     AddConstraint(TableConstraint),
     /// TODO: implement `DROP CONSTRAINT <name>`
-    DropConstraint { name: SQLIdent },
+    DropConstraint { name: Ident },
 }
 
 impl ToString for AlterTableOperation {
@@ -26,22 +26,22 @@ impl ToString for AlterTableOperation {
 pub enum TableConstraint {
     /// `[ CONSTRAINT <name> ] { PRIMARY KEY | UNIQUE } (<columns>)`
     Unique {
-        name: Option<SQLIdent>,
-        columns: Vec<SQLIdent>,
+        name: Option<Ident>,
+        columns: Vec<Ident>,
         /// Whether this is a `PRIMARY KEY` or just a `UNIQUE` constraint
         is_primary: bool,
     },
     /// A referential integrity constraint (`[ CONSTRAINT <name> ] FOREIGN KEY (<columns>)
     /// REFERENCES <foreign_table> (<referred_columns>)`)
     ForeignKey {
-        name: Option<SQLIdent>,
-        columns: Vec<SQLIdent>,
-        foreign_table: SQLObjectName,
-        referred_columns: Vec<SQLIdent>,
+        name: Option<Ident>,
+        columns: Vec<Ident>,
+        foreign_table: ObjectName,
+        referred_columns: Vec<Ident>,
     },
     /// `[ CONSTRAINT <name> ] CHECK (<expr>)`
     Check {
-        name: Option<SQLIdent>,
+        name: Option<Ident>,
         expr: Box<Expr>,
     },
 }
@@ -82,14 +82,14 @@ impl ToString for TableConstraint {
 
 /// SQL column definition
 #[derive(Debug, Clone, PartialEq, Hash)]
-pub struct SQLColumnDef {
-    pub name: SQLIdent,
-    pub data_type: SQLType,
-    pub collation: Option<SQLObjectName>,
+pub struct ColumnDef {
+    pub name: Ident,
+    pub data_type: DataType,
+    pub collation: Option<ObjectName>,
     pub options: Vec<ColumnOptionDef>,
 }
 
-impl ToString for SQLColumnDef {
+impl ToString for ColumnDef {
     fn to_string(&self) -> String {
         format!(
             "{} {}{}",
@@ -122,7 +122,7 @@ impl ToString for SQLColumnDef {
 /// "column options," and we allow any column option to be named.
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct ColumnOptionDef {
-    pub name: Option<SQLIdent>,
+    pub name: Option<Ident>,
     pub option: ColumnOption,
 }
 
@@ -153,8 +153,8 @@ pub enum ColumnOption {
     /// A referential integrity constraint (`[FOREIGN KEY REFERENCES
     /// <foreign_table> (<referred_columns>)`).
     ForeignKey {
-        foreign_table: SQLObjectName,
-        referred_columns: Vec<SQLIdent>,
+        foreign_table: ObjectName,
+        referred_columns: Vec<Ident>,
     },
     // `CHECK (<expr>)`
     Check(Expr),
@@ -187,7 +187,7 @@ impl ToString for ColumnOption {
     }
 }
 
-fn format_constraint_name(name: &Option<SQLIdent>) -> String {
+fn format_constraint_name(name: &Option<Ident>) -> String {
     name.as_ref()
         .map(|name| format!("CONSTRAINT {} ", name))
         .unwrap_or_default()

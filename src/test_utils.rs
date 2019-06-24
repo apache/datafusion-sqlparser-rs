@@ -57,7 +57,7 @@ impl TestedDialects {
         })
     }
 
-    pub fn parse_sql_statements(&self, sql: &str) -> Result<Vec<SQLStatement>, ParserError> {
+    pub fn parse_sql_statements(&self, sql: &str) -> Result<Vec<Statement>, ParserError> {
         self.one_of_identical_results(|dialect| Parser::parse_sql(dialect, sql.to_string()))
         // To fail the `ensure_multiple_dialects_are_tested` test:
         // Parser::parse_sql(&**self.dialects.first().unwrap(), sql.to_string())
@@ -66,7 +66,7 @@ impl TestedDialects {
     /// Ensures that `sql` parses as a single statement, optionally checking
     /// that converting AST back to string equals to `canonical` (unless an
     /// empty canonical string is provided).
-    pub fn one_statement_parses_to(&self, sql: &str, canonical: &str) -> SQLStatement {
+    pub fn one_statement_parses_to(&self, sql: &str, canonical: &str) -> Statement {
         let mut statements = self.parse_sql_statements(&sql).unwrap();
         assert_eq!(statements.len(), 1);
 
@@ -79,24 +79,24 @@ impl TestedDialects {
 
     /// Ensures that `sql` parses as a single SQLStatement, and is not modified
     /// after a serialization round-trip.
-    pub fn verified_stmt(&self, query: &str) -> SQLStatement {
+    pub fn verified_stmt(&self, query: &str) -> Statement {
         self.one_statement_parses_to(query, query)
     }
 
     /// Ensures that `sql` parses as a single SQLQuery, and is not modified
     /// after a serialization round-trip.
-    pub fn verified_query(&self, sql: &str) -> SQLQuery {
+    pub fn verified_query(&self, sql: &str) -> Query {
         match self.verified_stmt(sql) {
-            SQLStatement::SQLQuery(query) => *query,
+            Statement::Query(query) => *query,
             _ => panic!("Expected SQLQuery"),
         }
     }
 
     /// Ensures that `sql` parses as a single SQLSelect, and is not modified
     /// after a serialization round-trip.
-    pub fn verified_only_select(&self, query: &str) -> SQLSelect {
+    pub fn verified_only_select(&self, query: &str) -> Select {
         match self.verified_query(query).body {
-            SQLSetExpr::Select(s) => *s,
+            SetExpr::Select(s) => *s,
             _ => panic!("Expected SQLSetExpr::Select"),
         }
     }
@@ -113,10 +113,10 @@ impl TestedDialects {
 pub fn all_dialects() -> TestedDialects {
     TestedDialects {
         dialects: vec![
-            Box::new(GenericSqlDialect {}),
+            Box::new(GenericDialect {}),
             Box::new(PostgreSqlDialect {}),
             Box::new(MsSqlDialect {}),
-            Box::new(AnsiSqlDialect {}),
+            Box::new(AnsiDialect {}),
         ],
     }
 }
@@ -130,9 +130,9 @@ pub fn only<T>(v: impl IntoIterator<Item = T>) -> T {
     }
 }
 
-pub fn expr_from_projection(item: &SQLSelectItem) -> &Expr {
+pub fn expr_from_projection(item: &SelectItem) -> &Expr {
     match item {
-        SQLSelectItem::UnnamedExpr(expr) => expr,
+        SelectItem::UnnamedExpr(expr) => expr,
         _ => panic!("Expected UnnamedExpr"),
     }
 }

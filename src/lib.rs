@@ -18,10 +18,10 @@
 //! Syntax Tree (AST).
 //!
 //! ```
-//! use sqlparser::dialect::GenericSqlDialect;
+//! use sqlparser::dialect::GenericDialect;
 //! use sqlparser::parser::Parser;
 //!
-//! let dialect = GenericSqlDialect {}; // or AnsiSqlDialect
+//! let dialect = GenericDialect {}; // or AnsiSqlDialect
 //!
 //! let sql = "SELECT a, b, 123, myfunc(b) \
 //!            FROM table_1 \

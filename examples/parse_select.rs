@@ -12,7 +12,7 @@
 
 #![warn(clippy::all)]
 
-use sqlparser::dialect::GenericSqlDialect;
+use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::*;
 
 fn main() {
@@ -21,7 +21,7 @@ fn main() {
                WHERE a > b AND b < 100 \
                ORDER BY a DESC, b";
 
-    let dialect = GenericSqlDialect {};
+    let dialect = GenericDialect {};
 
     let ast = Parser::parse_sql(&dialect, sql.to_string()).unwrap();
 

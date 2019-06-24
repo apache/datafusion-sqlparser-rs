@@ -10,11 +10,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::SQLObjectName;
+use super::ObjectName;
 
 /// SQL data types
 #[derive(Debug, Clone, PartialEq, Hash)]
-pub enum SQLType {
+pub enum DataType {
     /// Fixed-length character type e.g. CHAR(10)
     Char(Option<u64>),
     /// Variable-length character type e.g. VARCHAR(10)
@@ -60,44 +60,44 @@ pub enum SQLType {
     /// Bytea
     Bytea,
     /// Custom type such as enums
-    Custom(SQLObjectName),
+    Custom(ObjectName),
     /// Arrays
-    Array(Box<SQLType>),
+    Array(Box<DataType>),
 }
 
-impl ToString for SQLType {
+impl ToString for DataType {
     fn to_string(&self) -> String {
         match self {
-            SQLType::Char(size) => format_type_with_optional_length("char", size),
-            SQLType::Varchar(size) => format_type_with_optional_length("character varying", size),
-            SQLType::Uuid => "uuid".to_string(),
-            SQLType::Clob(size) => format!("clob({})", size),
-            SQLType::Binary(size) => format!("binary({})", size),
-            SQLType::Varbinary(size) => format!("varbinary({})", size),
-            SQLType::Blob(size) => format!("blob({})", size),
-            SQLType::Decimal(precision, scale) => {
+            DataType::Char(size) => format_type_with_optional_length("char", size),
+            DataType::Varchar(size) => format_type_with_optional_length("character varying", size),
+            DataType::Uuid => "uuid".to_string(),
+            DataType::Clob(size) => format!("clob({})", size),
+            DataType::Binary(size) => format!("binary({})", size),
+            DataType::Varbinary(size) => format!("varbinary({})", size),
+            DataType::Blob(size) => format!("blob({})", size),
+            DataType::Decimal(precision, scale) => {
                 if let Some(scale) = scale {
                     format!("numeric({},{})", precision.unwrap(), scale)
                 } else {
                     format_type_with_optional_length("numeric", precision)
                 }
             }
-            SQLType::Float(size) => format_type_with_optional_length("float", size),
-            SQLType::SmallInt => "smallint".to_string(),
-            SQLType::Int => "int".to_string(),
-            SQLType::BigInt => "bigint".to_string(),
-            SQLType::Real => "real".to_string(),
-            SQLType::Double => "double".to_string(),
-            SQLType::Boolean => "boolean".to_string(),
-            SQLType::Date => "date".to_string(),
-            SQLType::Time => "time".to_string(),
-            SQLType::Timestamp => "timestamp".to_string(),
-            SQLType::Interval => "interval".to_string(),
-            SQLType::Regclass => "regclass".to_string(),
-            SQLType::Text => "text".to_string(),
-            SQLType::Bytea => "bytea".to_string(),
-            SQLType::Array(ty) => format!("{}[]", ty.to_string()),
-            SQLType::Custom(ty) => ty.to_string(),
+            DataType::Float(size) => format_type_with_optional_length("float", size),
+            DataType::SmallInt => "smallint".to_string(),
+            DataType::Int => "int".to_string(),
+            DataType::BigInt => "bigint".to_string(),
+            DataType::Real => "real".to_string(),
+            DataType::Double => "double".to_string(),
+            DataType::Boolean => "boolean".to_string(),
+            DataType::Date => "date".to_string(),
+            DataType::Time => "time".to_string(),
+            DataType::Timestamp => "timestamp".to_string(),
+            DataType::Interval => "interval".to_string(),
+            DataType::Regclass => "regclass".to_string(),
+            DataType::Text => "text".to_string(),
+            DataType::Bytea => "bytea".to_string(),
+            DataType::Array(ty) => format!("{}[]", ty.to_string()),
+            DataType::Custom(ty) => ty.to_string(),
         }
     }
 }

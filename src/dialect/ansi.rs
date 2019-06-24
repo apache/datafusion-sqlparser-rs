@@ -13,9 +13,9 @@
 use crate::dialect::Dialect;
 
 #[derive(Debug)]
-pub struct AnsiSqlDialect {}
+pub struct AnsiDialect {}
 
-impl Dialect for AnsiSqlDialect {
+impl Dialect for AnsiDialect {
     fn is_identifier_start(&self, ch: char) -> bool {
         (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
     }

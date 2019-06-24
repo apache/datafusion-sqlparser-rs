@@ -12,25 +12,25 @@
 
 /// Unary operators
 #[derive(Debug, Clone, PartialEq, Hash)]
-pub enum SQLUnaryOperator {
+pub enum UnaryOperator {
     Plus,
     Minus,
     Not,
 }
 
-impl ToString for SQLUnaryOperator {
+impl ToString for UnaryOperator {
     fn to_string(&self) -> String {
         match self {
-            SQLUnaryOperator::Plus => "+".to_string(),
-            SQLUnaryOperator::Minus => "-".to_string(),
-            SQLUnaryOperator::Not => "NOT".to_string(),
+            UnaryOperator::Plus => "+".to_string(),
+            UnaryOperator::Minus => "-".to_string(),
+            UnaryOperator::Not => "NOT".to_string(),
         }
     }
 }
 
 /// Binary operators
 #[derive(Debug, Clone, PartialEq, Hash)]
-pub enum SQLBinaryOperator {
+pub enum BinaryOperator {
     Plus,
     Minus,
     Multiply,
@@ -48,24 +48,24 @@ pub enum SQLBinaryOperator {
     NotLike,
 }
 
-impl ToString for SQLBinaryOperator {
+impl ToString for BinaryOperator {
     fn to_string(&self) -> String {
         match self {
-            SQLBinaryOperator::Plus => "+".to_string(),
-            SQLBinaryOperator::Minus => "-".to_string(),
-            SQLBinaryOperator::Multiply => "*".to_string(),
-            SQLBinaryOperator::Divide => "/".to_string(),
-            SQLBinaryOperator::Modulus => "%".to_string(),
-            SQLBinaryOperator::Gt => ">".to_string(),
-            SQLBinaryOperator::Lt => "<".to_string(),
-            SQLBinaryOperator::GtEq => ">=".to_string(),
-            SQLBinaryOperator::LtEq => "<=".to_string(),
-            SQLBinaryOperator::Eq => "=".to_string(),
-            SQLBinaryOperator::NotEq => "<>".to_string(),
-            SQLBinaryOperator::And => "AND".to_string(),
-            SQLBinaryOperator::Or => "OR".to_string(),
-            SQLBinaryOperator::Like => "LIKE".to_string(),
-            SQLBinaryOperator::NotLike => "NOT LIKE".to_string(),
+            BinaryOperator::Plus => "+".to_string(),
+            BinaryOperator::Minus => "-".to_string(),
+            BinaryOperator::Multiply => "*".to_string(),
+            BinaryOperator::Divide => "/".to_string(),
+            BinaryOperator::Modulus => "%".to_string(),
+            BinaryOperator::Gt => ">".to_string(),
+            BinaryOperator::Lt => "<".to_string(),
+            BinaryOperator::GtEq => ">=".to_string(),
+            BinaryOperator::LtEq => "<=".to_string(),
+            BinaryOperator::Eq => "=".to_string(),
+            BinaryOperator::NotEq => "<>".to_string(),
+            BinaryOperator::And => "AND".to_string(),
+            BinaryOperator::Or => "OR".to_string(),
+            BinaryOperator::Like => "LIKE".to_string(),
+            BinaryOperator::NotLike => "NOT LIKE".to_string(),
         }
     }
 }

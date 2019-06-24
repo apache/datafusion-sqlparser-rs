@@ -15,7 +15,7 @@
 //! generic dialect is also tested (on the inputs it can handle).
 
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericSqlDialect, PostgreSqlDialect};
+use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::test_utils::*;
 
 #[test]
@@ -33,7 +33,7 @@ fn parse_create_table_with_defaults() {
             active integer NOT NULL
     ) WITH (fillfactor = 20, user_catalog_table = true, autovacuum_vacuum_threshold = 100)";
     match pg_and_generic().one_statement_parses_to(sql, "") {
-        SQLStatement::SQLCreateTable {
+        Statement::CreateTable {
             name,
             columns,
             constraints,
@@ -46,9 +46,9 @@ fn parse_create_table_with_defaults() {
             assert_eq!(
                 columns,
                 vec![
-                    SQLColumnDef {
+                    ColumnDef {
                         name: "customer_id".into(),
-                        data_type: SQLType::Int,
+                        data_type: DataType::Int,
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -57,56 +57,56 @@ fn parse_create_table_with_defaults() {
                             )
                         }],
                     },
-                    SQLColumnDef {
+                    ColumnDef {
                         name: "store_id".into(),
-                        data_type: SQLType::SmallInt,
+                        data_type: DataType::SmallInt,
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
                         }],
                     },
-                    SQLColumnDef {
+                    ColumnDef {
                         name: "first_name".into(),
-                        data_type: SQLType::Varchar(Some(45)),
+                        data_type: DataType::Varchar(Some(45)),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
                         }],
                     },
-                    SQLColumnDef {
+                    ColumnDef {
                         name: "last_name".into(),
-                        data_type: SQLType::Varchar(Some(45)),
-                        collation: Some(SQLObjectName(vec!["\"es_ES\"".into()])),
+                        data_type: DataType::Varchar(Some(45)),
+                        collation: Some(ObjectName(vec!["\"es_ES\"".into()])),
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
                         }],
                     },
-                    SQLColumnDef {
+                    ColumnDef {
                         name: "email".into(),
-                        data_type: SQLType::Varchar(Some(50)),
+                        data_type: DataType::Varchar(Some(50)),
                         collation: None,
                         options: vec![],
                     },
-                    SQLColumnDef {
+                    ColumnDef {
                         name: "address_id".into(),
-                        data_type: SQLType::SmallInt,
+                        data_type: DataType::SmallInt,
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull
                         }],
                     },
-                    SQLColumnDef {
+                    ColumnDef {
                         name: "activebool".into(),
-                        data_type: SQLType::Boolean,
+                        data_type: DataType::Boolean,
                         collation: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
-                                option: ColumnOption::Default(Expr::SQLValue(Value::Boolean(true))),
+                                option: ColumnOption::Default(Expr::Value(Value::Boolean(true))),
                             },
                             ColumnOptionDef {
                                 name: None,
@@ -114,9 +114,9 @@ fn parse_create_table_with_defaults() {
                             }
                         ],
                     },
-                    SQLColumnDef {
+                    ColumnDef {
                         name: "create_date".into(),
-                        data_type: SQLType::Date,
+                        data_type: DataType::Date,
                         collation: None,
                         options: vec![
                             ColumnOptionDef {
@@ -131,9 +131,9 @@ fn parse_create_table_with_defaults() {
                             }
                         ],
                     },
-                    SQLColumnDef {
+                    ColumnDef {
                         name: "last_update".into(),
-                        data_type: SQLType::Timestamp,
+                        data_type: DataType::Timestamp,
                         collation: None,
                         options: vec![
                             ColumnOptionDef {
@@ -146,9 +146,9 @@ fn parse_create_table_with_defaults() {
                             }
                         ],
                     },
-                    SQLColumnDef {
+                    ColumnDef {
                         name: "active".into(),
-                        data_type: SQLType::Int,
+                        data_type: DataType::Int,
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -161,15 +161,15 @@ fn parse_create_table_with_defaults() {
             assert_eq!(
                 with_options,
                 vec![
-                    SQLOption {
+                    SqlOption {
                         name: "fillfactor".into(),
                         value: Value::Long(20)
                     },
-                    SQLOption {
+                    SqlOption {
                         name: "user_catalog_table".into(),
                         value: Value::Boolean(true)
                     },
-                    SQLOption {
+                    SqlOption {
                         name: "autovacuum_vacuum_threshold".into(),
                         value: Value::Long(100)
                     },
@@ -259,9 +259,6 @@ fn pg() -> TestedDialects {
 
 fn pg_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![
-            Box::new(PostgreSqlDialect {}),
-            Box::new(GenericSqlDialect {}),
-        ],
+        dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(GenericDialect {})],
     }
 }

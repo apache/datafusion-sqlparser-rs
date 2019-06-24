@@ -14,10 +14,10 @@
 
 use log::debug;
 
+use super::ast::*;
 use super::dialect::keywords;
 use super::dialect::Dialect;
-use super::sqlast::*;
-use super::sqltokenizer::*;
+use super::tokenizer::*;
 use std::error::Error;
 
 #[derive(Debug, Clone, PartialEq)]

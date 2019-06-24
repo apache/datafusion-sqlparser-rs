@@ -20,8 +20,8 @@
 
 use matches::assert_matches;
 
-use sqlparser::sqlast::*;
-use sqlparser::sqlparser::*;
+use sqlparser::ast::*;
+use sqlparser::parser::*;
 use sqlparser::test_utils::{all_dialects, expr_from_projection, only};
 
 #[test]

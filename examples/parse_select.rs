@@ -13,7 +13,7 @@
 #![warn(clippy::all)]
 
 use sqlparser::dialect::GenericSqlDialect;
-use sqlparser::sqlparser::*;
+use sqlparser::parser::*;
 
 fn main() {
     let sql = "SELECT a, b, 123, myfunc(b) \

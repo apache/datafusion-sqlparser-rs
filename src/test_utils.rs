@@ -12,10 +12,10 @@
 
 use std::fmt::Debug;
 
+use super::ast::*;
 use super::dialect::*;
-use super::sqlast::*;
-use super::sqlparser::{Parser, ParserError};
-use super::sqltokenizer::Tokenizer;
+use super::parser::{Parser, ParserError};
+use super::tokenizer::Tokenizer;
 
 /// Tests use the methods on this struct to invoke the parser on one or
 /// multiple dialects.

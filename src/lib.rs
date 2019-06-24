@@ -19,7 +19,7 @@
 //!
 //! ```
 //! use sqlparser::dialect::GenericSqlDialect;
-//! use sqlparser::sqlparser::Parser;
+//! use sqlparser::parser::Parser;
 //!
 //! let dialect = GenericSqlDialect {}; // or AnsiSqlDialect
 //!
@@ -34,10 +34,10 @@
 //! ```
 #![warn(clippy::all)]
 
+pub mod ast;
 pub mod dialect;
-pub mod sqlast;
-pub mod sqlparser;
-pub mod sqltokenizer;
+pub mod parser;
+pub mod tokenizer;
 
 #[doc(hidden)]
 // This is required to make utilities accessible by both the crate-internal

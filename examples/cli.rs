@@ -19,7 +19,7 @@ use simple_logger;
 use std::fs;
 
 use sqlparser::dialect::*;
-use sqlparser::sqlparser::Parser;
+use sqlparser::parser::Parser;
 
 fn main() {
     simple_logger::init().unwrap();

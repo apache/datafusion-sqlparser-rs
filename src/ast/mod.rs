@@ -12,23 +12,23 @@
 
 //! SQL Abstract Syntax Tree (AST) types
 
+mod data_type;
 mod ddl;
+mod operator;
 mod query;
-mod sql_operator;
-mod sqltype;
 mod value;
 
 use std::ops::Deref;
 
+pub use self::data_type::SQLType;
 pub use self::ddl::{
     AlterTableOperation, ColumnOption, ColumnOptionDef, SQLColumnDef, TableConstraint,
 };
+pub use self::operator::{SQLBinaryOperator, SQLUnaryOperator};
 pub use self::query::{
     Cte, Fetch, Join, JoinConstraint, JoinOperator, SQLOrderByExpr, SQLQuery, SQLSelect,
     SQLSelectItem, SQLSetExpr, SQLSetOperator, SQLValues, TableAlias, TableFactor, TableWithJoins,
 };
-pub use self::sql_operator::{SQLBinaryOperator, SQLUnaryOperator};
-pub use self::sqltype::SQLType;
 pub use self::value::{SQLDateTimeField, Value};
 
 /// Like `vec.join(", ")`, but for any types implementing ToString.
@@ -662,7 +662,7 @@ impl ToString for FileFormat {
     }
 }
 
-use crate::sqlparser::ParserError;
+use crate::parser::ParserError;
 use std::str::FromStr;
 impl FromStr for FileFormat {
     type Err = ParserError;

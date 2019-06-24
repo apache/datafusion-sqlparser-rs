@@ -10,16 +10,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod ansi_sql;
-mod generic_sql;
+mod ansi;
+mod generic;
 pub mod keywords;
 mod mssql;
 mod postgresql;
 
 use std::fmt::Debug;
 
-pub use self::ansi_sql::AnsiSqlDialect;
-pub use self::generic_sql::GenericSqlDialect;
+pub use self::ansi::AnsiSqlDialect;
+pub use self::generic::GenericSqlDialect;
 pub use self::mssql::MsSqlDialect;
 pub use self::postgresql::PostgreSqlDialect;
 

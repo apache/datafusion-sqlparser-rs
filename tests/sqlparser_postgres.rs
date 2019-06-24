@@ -14,8 +14,8 @@
 //! Test SQL syntax specific to PostgreSQL. The parser based on the
 //! generic dialect is also tested (on the inputs it can handle).
 
+use sqlparser::ast::*;
 use sqlparser::dialect::{GenericSqlDialect, PostgreSqlDialect};
-use sqlparser::sqlast::*;
 use sqlparser::test_utils::*;
 
 #[test]

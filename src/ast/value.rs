@@ -13,7 +13,7 @@
 use ordered_float::OrderedFloat;
 
 /// Primitive SQL values such as number and string
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Value {
     /// Unsigned integer value
     Long(u64),
@@ -113,7 +113,7 @@ impl ToString for Value {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DateTimeField {
     Year,
     Month,

@@ -3,7 +3,7 @@
 use super::{DataType, Expr, Ident, ObjectName};
 
 /// An `ALTER TABLE` (`SQLStatement::SQLAlterTable`) operation
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AlterTableOperation {
     /// `ADD <table_constraint>`
     AddConstraint(TableConstraint),
@@ -22,7 +22,7 @@ impl ToString for AlterTableOperation {
 
 /// A table-level constraint, specified in a `CREATE TABLE` or an
 /// `ALTER TABLE ADD <constraint>` statement.
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TableConstraint {
     /// `[ CONSTRAINT <name> ] { PRIMARY KEY | UNIQUE } (<columns>)`
     Unique {
@@ -81,7 +81,7 @@ impl ToString for TableConstraint {
 }
 
 /// SQL column definition
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ColumnDef {
     pub name: Ident,
     pub data_type: DataType,
@@ -120,7 +120,7 @@ impl ToString for ColumnDef {
 /// For maximum flexibility, we don't distinguish between constraint and
 /// non-constraint options, lumping them all together under the umbrella of
 /// "column options," and we allow any column option to be named.
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ColumnOptionDef {
     pub name: Option<Ident>,
     pub option: ColumnOption,
@@ -138,7 +138,7 @@ impl ToString for ColumnOptionDef {
 
 /// `ColumnOption`s are modifiers that follow a column definition in a `CREATE
 /// TABLE` statement.
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ColumnOption {
     /// `NULL`
     Null,

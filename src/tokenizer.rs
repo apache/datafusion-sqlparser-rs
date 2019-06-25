@@ -26,7 +26,7 @@ use super::dialect::Dialect;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     /// A keyword (like SELECT) or an optionally quoted SQL identifier
-    SQLWord(SQLWord),
+    Word(Word),
     /// An unsigned numeric literal
     Number(String),
     /// A character that could not be tokenized
@@ -92,7 +92,7 @@ pub enum Token {
 impl ToString for Token {
     fn to_string(&self) -> String {
         match self {
-            Token::SQLWord(ref w) => w.to_string(),
+            Token::Word(ref w) => w.to_string(),
             Token::Number(ref n) => n.to_string(),
             Token::Char(ref c) => c.to_string(),
             Token::SingleQuotedString(ref s) => format!("'{}'", s),
@@ -137,7 +137,7 @@ impl Token {
         // not fast but I want the simplicity for now while I experiment with pluggable
         // dialects
         let is_keyword = quote_style == None && ALL_KEYWORDS.contains(&word_uppercase.as_str());
-        Token::SQLWord(SQLWord {
+        Token::Word(Word {
             value: word.to_string(),
             quote_style,
             keyword: if is_keyword {
@@ -151,7 +151,7 @@ impl Token {
 
 /// A keyword (like SELECT) or an optionally quoted SQL identifier
 #[derive(Debug, Clone, PartialEq)]
-pub struct SQLWord {
+pub struct Word {
     /// The value of the token, without the enclosing quotes, and with the
     /// escape sequences (if any) processed (TODO: escapes are not handled)
     pub value: String,
@@ -164,18 +164,18 @@ pub struct SQLWord {
     pub keyword: String,
 }
 
-impl ToString for SQLWord {
+impl ToString for Word {
     fn to_string(&self) -> String {
         match self.quote_style {
             Some(s) if s == '"' || s == '[' || s == '`' => {
-                format!("{}{}{}", s, self.value, SQLWord::matching_end_quote(s))
+                format!("{}{}{}", s, self.value, Word::matching_end_quote(s))
             }
             None => self.value.clone(),
             _ => panic!("Unexpected quote_style!"),
         }
     }
 }
-impl SQLWord {
+impl Word {
     fn matching_end_quote(ch: char) -> char {
         match ch {
             '"' => '"', // ANSI and most dialects
@@ -244,8 +244,8 @@ impl<'a> Tokenizer<'a> {
                 }
 
                 Token::Whitespace(Whitespace::Tab) => self.col += 4,
-                Token::SQLWord(w) if w.quote_style == None => self.col += w.value.len() as u64,
-                Token::SQLWord(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
+                Token::Word(w) if w.quote_style == None => self.col += w.value.len() as u64,
+                Token::Word(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
                 Token::Number(s) => self.col += s.len() as u64,
                 Token::SingleQuotedString(s) => self.col += s.len() as u64,
                 _ => self.col += 1,
@@ -318,7 +318,7 @@ impl<'a> Tokenizer<'a> {
                 // delimited (quoted) identifier
                 quote_start if self.dialect.is_delimited_identifier_start(quote_start) => {
                     chars.next(); // consume the opening quote
-                    let quote_end = SQLWord::matching_end_quote(quote_start);
+                    let quote_end = Word::matching_end_quote(quote_start);
                     let s = peeking_take_while(chars, |ch| ch != quote_end);
                     if chars.next() == Some(quote_end) {
                         Ok(Some(Token::make_word(&s, Some(quote_start))))
@@ -520,13 +520,13 @@ fn peeking_take_while(
 
 #[cfg(test)]
 mod tests {
-    use super::super::dialect::GenericSqlDialect;
+    use super::super::dialect::GenericDialect;
     use super::*;
 
     #[test]
     fn tokenize_select_1() {
         let sql = String::from("SELECT 1");
-        let dialect = GenericSqlDialect {};
+        let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
 
@@ -542,7 +542,7 @@ mod tests {
     #[test]
     fn tokenize_scalar_function() {
         let sql = String::from("SELECT sqrt(1)");
-        let dialect = GenericSqlDialect {};
+        let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
 
@@ -561,7 +561,7 @@ mod tests {
     #[test]
     fn tokenize_simple_select() {
         let sql = String::from("SELECT * FROM customer WHERE id = 1 LIMIT 5");
-        let dialect = GenericSqlDialect {};
+        let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
 
@@ -593,7 +593,7 @@ mod tests {
     #[test]
     fn tokenize_string_predicate() {
         let sql = String::from("SELECT * FROM customer WHERE salary != 'Not Provided'");
-        let dialect = GenericSqlDialect {};
+        let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
 
@@ -622,7 +622,7 @@ mod tests {
     fn tokenize_invalid_string() {
         let sql = String::from("\nمصطفىh");
 
-        let dialect = GenericSqlDialect {};
+        let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
         println!("tokens: {:#?}", tokens);
@@ -642,7 +642,7 @@ mod tests {
     fn tokenize_invalid_string_cols() {
         let sql = String::from("\n\nSELECT * FROM table\tمصطفىh");
 
-        let dialect = GenericSqlDialect {};
+        let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
         println!("tokens: {:#?}", tokens);
@@ -670,7 +670,7 @@ mod tests {
     #[test]
     fn tokenize_is_null() {
         let sql = String::from("a IS NULL");
-        let dialect = GenericSqlDialect {};
+        let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
 
@@ -689,7 +689,7 @@ mod tests {
     fn tokenize_comment() {
         let sql = String::from("0--this is a comment\n1");
 
-        let dialect = GenericSqlDialect {};
+        let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![
@@ -706,7 +706,7 @@ mod tests {
     fn tokenize_comment_at_eof() {
         let sql = String::from("--this is a comment");
 
-        let dialect = GenericSqlDialect {};
+        let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![Token::Whitespace(Whitespace::SingleLineComment(
@@ -719,7 +719,7 @@ mod tests {
     fn tokenize_multiline_comment() {
         let sql = String::from("0/*multi-line\n* /comment*/1");
 
-        let dialect = GenericSqlDialect {};
+        let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![
@@ -736,7 +736,7 @@ mod tests {
     fn tokenize_multiline_comment_with_even_asterisks() {
         let sql = String::from("\n/** Comment **/\n");
 
-        let dialect = GenericSqlDialect {};
+        let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![
@@ -751,7 +751,7 @@ mod tests {
     fn tokenize_mismatched_quotes() {
         let sql = String::from("\"foo");
 
-        let dialect = GenericSqlDialect {};
+        let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         assert_eq!(
             tokenizer.tokenize(),
@@ -765,7 +765,7 @@ mod tests {
     fn tokenize_newlines() {
         let sql = String::from("line1\nline2\rline3\r\nline4\r");
 
-        let dialect = GenericSqlDialect {};
+        let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![

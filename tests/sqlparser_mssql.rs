@@ -14,8 +14,8 @@
 //! Test SQL syntax specific to Microsoft's T-SQL. The parser based on the
 //! generic dialect is also tested (on the inputs it can handle).
 
-use sqlparser::dialect::{GenericSqlDialect, MsSqlDialect};
-use sqlparser::sqlast::*;
+use sqlparser::ast::*;
+use sqlparser::dialect::{GenericDialect, MsSqlDialect};
 use sqlparser::test_utils::*;
 
 #[test]
@@ -23,11 +23,11 @@ fn parse_mssql_identifiers() {
     let sql = "SELECT @@version, _foo$123 FROM ##temp";
     let select = ms_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::SQLIdentifier("@@version".to_string()),
+        &Expr::Identifier("@@version".to_string()),
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
-        &Expr::SQLIdentifier("_foo$123".to_string()),
+        &Expr::Identifier("_foo$123".to_string()),
         expr_from_projection(&select.projection[1]),
     );
     assert_eq!(2, select.projection.len());
@@ -75,6 +75,6 @@ fn ms() -> TestedDialects {
 }
 fn ms_and_generic() -> TestedDialects {
     TestedDialects {
-        dialects: vec![Box::new(MsSqlDialect {}), Box::new(GenericSqlDialect {})],
+        dialects: vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})],
     }
 }

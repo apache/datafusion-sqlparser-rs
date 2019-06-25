@@ -19,7 +19,7 @@ use simple_logger;
 use std::fs;
 
 use sqlparser::dialect::*;
-use sqlparser::sqlparser::Parser;
+use sqlparser::parser::Parser;
 
 fn main() {
     simple_logger::init().unwrap();
@@ -30,10 +30,10 @@ fn main() {
     );
 
     let dialect: Box<dyn Dialect> = match std::env::args().nth(2).unwrap_or_default().as_ref() {
-        "--ansi" => Box::new(AnsiSqlDialect {}),
+        "--ansi" => Box::new(AnsiDialect {}),
         "--postgres" => Box::new(PostgreSqlDialect {}),
         "--ms" => Box::new(MsSqlDialect {}),
-        "--generic" | "" => Box::new(GenericSqlDialect {}),
+        "--generic" | "" => Box::new(GenericDialect {}),
         s => panic!("Unexpected parameter: {}", s),
     };
 

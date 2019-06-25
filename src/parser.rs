@@ -431,16 +431,16 @@ impl Parser {
     // operator and interval qualifiers. EXTRACT supports a wider set of
     // date/time fields than interval qualifiers, so this function may need to
     // be split in two.
-    pub fn parse_date_time_field(&mut self) -> Result<SQLDateTimeField, ParserError> {
+    pub fn parse_date_time_field(&mut self) -> Result<DateTimeField, ParserError> {
         let tok = self.next_token();
         if let Some(Token::Word(ref k)) = tok {
             match k.keyword.as_ref() {
-                "YEAR" => Ok(SQLDateTimeField::Year),
-                "MONTH" => Ok(SQLDateTimeField::Month),
-                "DAY" => Ok(SQLDateTimeField::Day),
-                "HOUR" => Ok(SQLDateTimeField::Hour),
-                "MINUTE" => Ok(SQLDateTimeField::Minute),
-                "SECOND" => Ok(SQLDateTimeField::Second),
+                "YEAR" => Ok(DateTimeField::Year),
+                "MONTH" => Ok(DateTimeField::Month),
+                "DAY" => Ok(DateTimeField::Day),
+                "HOUR" => Ok(DateTimeField::Hour),
+                "MINUTE" => Ok(DateTimeField::Minute),
+                "SECOND" => Ok(DateTimeField::Second),
                 _ => self.expected("date/time field", tok)?,
             }
         } else {
@@ -478,7 +478,7 @@ impl Parser {
         let leading_field = self.parse_date_time_field()?;
 
         let (leading_precision, last_field, fsec_precision) =
-            if leading_field == SQLDateTimeField::Second {
+            if leading_field == DateTimeField::Second {
                 // SQL mandates special syntax for `SECOND TO SECOND` literals.
                 // Instead of
                 //     `SECOND [(<leading precision>)] TO SECOND[(<fractional seconds precision>)]`
@@ -491,7 +491,7 @@ impl Parser {
                 let leading_precision = self.parse_optional_precision()?;
                 if self.parse_keyword("TO") {
                     let last_field = Some(self.parse_date_time_field()?);
-                    let fsec_precision = if last_field == Some(SQLDateTimeField::Second) {
+                    let fsec_precision = if last_field == Some(DateTimeField::Second) {
                         self.parse_optional_precision()?
                     } else {
                         None

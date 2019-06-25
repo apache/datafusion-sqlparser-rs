@@ -845,7 +845,7 @@ fn parse_extract() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Extract {
-            field: SQLDateTimeField::Year,
+            field: DateTimeField::Year,
             expr: Box::new(Expr::Identifier("d".to_string())),
         },
         expr_from_projection(only(&select.projection)),
@@ -1236,9 +1236,9 @@ fn parse_literal_interval() {
     assert_eq!(
         &Expr::Value(Value::Interval {
             value: "1-1".into(),
-            leading_field: SQLDateTimeField::Year,
+            leading_field: DateTimeField::Year,
             leading_precision: None,
-            last_field: Some(SQLDateTimeField::Month),
+            last_field: Some(DateTimeField::Month),
             fractional_seconds_precision: None,
         }),
         expr_from_projection(only(&select.projection)),
@@ -1249,9 +1249,9 @@ fn parse_literal_interval() {
     assert_eq!(
         &Expr::Value(Value::Interval {
             value: "01:01.01".into(),
-            leading_field: SQLDateTimeField::Minute,
+            leading_field: DateTimeField::Minute,
             leading_precision: Some(5),
-            last_field: Some(SQLDateTimeField::Second),
+            last_field: Some(DateTimeField::Second),
             fractional_seconds_precision: Some(5),
         }),
         expr_from_projection(only(&select.projection)),
@@ -1262,7 +1262,7 @@ fn parse_literal_interval() {
     assert_eq!(
         &Expr::Value(Value::Interval {
             value: "1".into(),
-            leading_field: SQLDateTimeField::Second,
+            leading_field: DateTimeField::Second,
             leading_precision: Some(5),
             last_field: None,
             fractional_seconds_precision: Some(4),
@@ -1275,7 +1275,7 @@ fn parse_literal_interval() {
     assert_eq!(
         &Expr::Value(Value::Interval {
             value: "10".into(),
-            leading_field: SQLDateTimeField::Hour,
+            leading_field: DateTimeField::Hour,
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
@@ -1288,7 +1288,7 @@ fn parse_literal_interval() {
     assert_eq!(
         &Expr::Value(Value::Interval {
             value: "10".into(),
-            leading_field: SQLDateTimeField::Hour,
+            leading_field: DateTimeField::Hour,
             leading_precision: Some(1),
             last_field: None,
             fractional_seconds_precision: None,

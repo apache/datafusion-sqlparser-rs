@@ -29,7 +29,7 @@ pub use self::query::{
     Cte, Fetch, Join, JoinConstraint, JoinOperator, OrderByExpr, Query, Select, SelectItem,
     SetExpr, SetOperator, TableAlias, TableFactor, TableWithJoins, Values,
 };
-pub use self::value::{SQLDateTimeField, Value};
+pub use self::value::{DateTimeField, Value};
 
 /// Like `vec.join(", ")`, but for any types implementing ToString.
 fn comma_separated_string<I>(iter: I) -> String
@@ -105,7 +105,7 @@ pub enum Expr {
         data_type: DataType,
     },
     Extract {
-        field: SQLDateTimeField,
+        field: DateTimeField,
         expr: Box<Expr>,
     },
     /// `expr COLLATE collation`

@@ -43,9 +43,9 @@ pub enum Value {
     /// so the user will have to reject intervals like `HOUR TO YEAR`.
     Interval {
         value: String,
-        leading_field: SQLDateTimeField,
+        leading_field: DateTimeField,
         leading_precision: Option<u64>,
-        last_field: Option<SQLDateTimeField>,
+        last_field: Option<DateTimeField>,
         /// The seconds precision can be specified in SQL source as
         /// `INTERVAL '__' SECOND(_, x)` (in which case the `leading_field`
         /// will be `Second` and the `last_field` will be `None`),
@@ -70,7 +70,7 @@ impl ToString for Value {
             Value::Timestamp(v) => format!("TIMESTAMP '{}'", escape_single_quote_string(v)),
             Value::Interval {
                 value,
-                leading_field: SQLDateTimeField::Second,
+                leading_field: DateTimeField::Second,
                 leading_precision: Some(leading_precision),
                 last_field,
                 fractional_seconds_precision: Some(fractional_seconds_precision),
@@ -114,7 +114,7 @@ impl ToString for Value {
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]
-pub enum SQLDateTimeField {
+pub enum DateTimeField {
     Year,
     Month,
     Day,
@@ -123,15 +123,15 @@ pub enum SQLDateTimeField {
     Second,
 }
 
-impl ToString for SQLDateTimeField {
+impl ToString for DateTimeField {
     fn to_string(&self) -> String {
         match self {
-            SQLDateTimeField::Year => "YEAR".to_string(),
-            SQLDateTimeField::Month => "MONTH".to_string(),
-            SQLDateTimeField::Day => "DAY".to_string(),
-            SQLDateTimeField::Hour => "HOUR".to_string(),
-            SQLDateTimeField::Minute => "MINUTE".to_string(),
-            SQLDateTimeField::Second => "SECOND".to_string(),
+            DateTimeField::Year => "YEAR".to_string(),
+            DateTimeField::Month => "MONTH".to_string(),
+            DateTimeField::Day => "DAY".to_string(),
+            DateTimeField::Hour => "HOUR".to_string(),
+            DateTimeField::Minute => "MINUTE".to_string(),
+            DateTimeField::Second => "SECOND".to_string(),
         }
     }
 }

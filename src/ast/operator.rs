@@ -10,6 +10,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 /// Unary operators
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UnaryOperator {
@@ -18,13 +20,17 @@ pub enum UnaryOperator {
     Not,
 }
 
-impl ToString for UnaryOperator {
-    fn to_string(&self) -> String {
-        match self {
-            UnaryOperator::Plus => "+".to_string(),
-            UnaryOperator::Minus => "-".to_string(),
-            UnaryOperator::Not => "NOT".to_string(),
-        }
+impl fmt::Display for UnaryOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                UnaryOperator::Plus => "+",
+                UnaryOperator::Minus => "-",
+                UnaryOperator::Not => "NOT",
+            }
+        )
     }
 }
 
@@ -48,24 +54,28 @@ pub enum BinaryOperator {
     NotLike,
 }
 
-impl ToString for BinaryOperator {
-    fn to_string(&self) -> String {
-        match self {
-            BinaryOperator::Plus => "+".to_string(),
-            BinaryOperator::Minus => "-".to_string(),
-            BinaryOperator::Multiply => "*".to_string(),
-            BinaryOperator::Divide => "/".to_string(),
-            BinaryOperator::Modulus => "%".to_string(),
-            BinaryOperator::Gt => ">".to_string(),
-            BinaryOperator::Lt => "<".to_string(),
-            BinaryOperator::GtEq => ">=".to_string(),
-            BinaryOperator::LtEq => "<=".to_string(),
-            BinaryOperator::Eq => "=".to_string(),
-            BinaryOperator::NotEq => "<>".to_string(),
-            BinaryOperator::And => "AND".to_string(),
-            BinaryOperator::Or => "OR".to_string(),
-            BinaryOperator::Like => "LIKE".to_string(),
-            BinaryOperator::NotLike => "NOT LIKE".to_string(),
-        }
+impl fmt::Display for BinaryOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                BinaryOperator::Plus => "+",
+                BinaryOperator::Minus => "-",
+                BinaryOperator::Multiply => "*",
+                BinaryOperator::Divide => "/",
+                BinaryOperator::Modulus => "%",
+                BinaryOperator::Gt => ">",
+                BinaryOperator::Lt => "<",
+                BinaryOperator::GtEq => ">=",
+                BinaryOperator::LtEq => "<=",
+                BinaryOperator::Eq => "=",
+                BinaryOperator::NotEq => "<>",
+                BinaryOperator::And => "AND",
+                BinaryOperator::Or => "OR",
+                BinaryOperator::Like => "LIKE",
+                BinaryOperator::NotLike => "NOT LIKE",
+            }
+        )
     }
 }

@@ -30,27 +30,25 @@ pub struct Query {
     pub fetch: Option<Fetch>,
 }
 
-impl ToString for Query {
-    fn to_string(&self) -> String {
-        let mut s = String::new();
+impl fmt::Display for Query {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if !self.ctes.is_empty() {
-            s += &format!("WITH {} ", comma_separated_string(&self.ctes))
+            write!(f, "WITH {} ", display_comma_separated(&self.ctes))?;
         }
-        s += &self.body.to_string();
+        write!(f, "{}", self.body)?;
         if !self.order_by.is_empty() {
-            s += &format!(" ORDER BY {}", comma_separated_string(&self.order_by));
+            write!(f, " ORDER BY {}", display_comma_separated(&self.order_by))?;
         }
         if let Some(ref limit) = self.limit {
-            s += &format!(" LIMIT {}", limit.to_string());
+            write!(f, " LIMIT {}", limit)?;
         }
         if let Some(ref offset) = self.offset {
-            s += &format!(" OFFSET {} ROWS", offset.to_string());
+            write!(f, " OFFSET {} ROWS", offset)?;
         }
         if let Some(ref fetch) = self.fetch {
-            s.push(' ');
-            s += &fetch.to_string();
+            write!(f, " {}", fetch)?;
         }
-        s
+        Ok(())
     }
 }
 
@@ -74,12 +72,12 @@ pub enum SetExpr {
     // TODO: ANSI SQL supports `TABLE` here.
 }
 
-impl ToString for SetExpr {
-    fn to_string(&self) -> String {
+impl fmt::Display for SetExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            SetExpr::Select(s) => s.to_string(),
-            SetExpr::Query(q) => format!("({})", q.to_string()),
-            SetExpr::Values(v) => v.to_string(),
+            SetExpr::Select(s) => write!(f, "{}", s),
+            SetExpr::Query(q) => write!(f, "({})", q),
+            SetExpr::Values(v) => write!(f, "{}", v),
             SetExpr::SetOperation {
                 left,
                 right,
@@ -87,13 +85,7 @@ impl ToString for SetExpr {
                 all,
             } => {
                 let all_str = if *all { " ALL" } else { "" };
-                format!(
-                    "{} {}{} {}",
-                    left.to_string(),
-                    op.to_string(),
-                    all_str,
-                    right.to_string()
-                )
+                write!(f, "{} {}{} {}", left, op, all_str, right)
             }
         }
     }
@@ -106,13 +98,17 @@ pub enum SetOperator {
     Intersect,
 }
 
-impl ToString for SetOperator {
-    fn to_string(&self) -> String {
-        match self {
-            SetOperator::Union => "UNION".to_string(),
-            SetOperator::Except => "EXCEPT".to_string(),
-            SetOperator::Intersect => "INTERSECT".to_string(),
-        }
+impl fmt::Display for SetOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                SetOperator::Union => "UNION",
+                SetOperator::Except => "EXCEPT",
+                SetOperator::Intersect => "INTERSECT",
+            }
+        )
     }
 }
 
@@ -134,26 +130,27 @@ pub struct Select {
     pub having: Option<Expr>,
 }
 
-impl ToString for Select {
-    fn to_string(&self) -> String {
-        let mut s = format!(
+impl fmt::Display for Select {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
             "SELECT{} {}",
             if self.distinct { " DISTINCT" } else { "" },
-            comma_separated_string(&self.projection)
-        );
+            display_comma_separated(&self.projection)
+        )?;
         if !self.from.is_empty() {
-            s += &format!(" FROM {}", comma_separated_string(&self.from));
+            write!(f, " FROM {}", display_comma_separated(&self.from))?;
         }
         if let Some(ref selection) = self.selection {
-            s += &format!(" WHERE {}", selection.to_string());
+            write!(f, " WHERE {}", selection)?;
         }
         if !self.group_by.is_empty() {
-            s += &format!(" GROUP BY {}", comma_separated_string(&self.group_by));
+            write!(f, " GROUP BY {}", display_comma_separated(&self.group_by))?;
         }
         if let Some(ref having) = self.having {
-            s += &format!(" HAVING {}", having.to_string());
+            write!(f, " HAVING {}", having)?;
         }
-        s
+        Ok(())
     }
 }
 
@@ -167,9 +164,9 @@ pub struct Cte {
     pub query: Query,
 }
 
-impl ToString for Cte {
-    fn to_string(&self) -> String {
-        format!("{} AS ({})", self.alias.to_string(), self.query.to_string())
+impl fmt::Display for Cte {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} AS ({})", self.alias, self.query)
     }
 }
 
@@ -186,15 +183,13 @@ pub enum SelectItem {
     Wildcard,
 }
 
-impl ToString for SelectItem {
-    fn to_string(&self) -> String {
+impl fmt::Display for SelectItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self {
-            SelectItem::UnnamedExpr(expr) => expr.to_string(),
-            SelectItem::ExprWithAlias { expr, alias } => {
-                format!("{} AS {}", expr.to_string(), alias)
-            }
-            SelectItem::QualifiedWildcard(prefix) => format!("{}.*", prefix.to_string()),
-            SelectItem::Wildcard => "*".to_string(),
+            SelectItem::UnnamedExpr(expr) => write!(f, "{}", expr),
+            SelectItem::ExprWithAlias { expr, alias } => write!(f, "{} AS {}", expr, alias),
+            SelectItem::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
+            SelectItem::Wildcard => write!(f, "*"),
         }
     }
 }
@@ -205,13 +200,13 @@ pub struct TableWithJoins {
     pub joins: Vec<Join>,
 }
 
-impl ToString for TableWithJoins {
-    fn to_string(&self) -> String {
-        let mut s = self.relation.to_string();
+impl fmt::Display for TableWithJoins {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.relation)?;
         for join in &self.joins {
-            s += &join.to_string();
+            write!(f, "{}", join)?;
         }
-        s
+        Ok(())
     }
 }
 
@@ -240,8 +235,8 @@ pub enum TableFactor {
     NestedJoin(Box<TableWithJoins>),
 }
 
-impl ToString for TableFactor {
-    fn to_string(&self) -> String {
+impl fmt::Display for TableFactor {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             TableFactor::Table {
                 name,
@@ -249,36 +244,33 @@ impl ToString for TableFactor {
                 args,
                 with_hints,
             } => {
-                let mut s = name.to_string();
+                write!(f, "{}", name)?;
                 if !args.is_empty() {
-                    s += &format!("({})", comma_separated_string(args))
-                };
+                    write!(f, "({})", display_comma_separated(args))?;
+                }
                 if let Some(alias) = alias {
-                    s += &format!(" AS {}", alias.to_string());
+                    write!(f, " AS {}", alias)?;
                 }
                 if !with_hints.is_empty() {
-                    s += &format!(" WITH ({})", comma_separated_string(with_hints));
+                    write!(f, " WITH ({})", display_comma_separated(with_hints))?;
                 }
-                s
+                Ok(())
             }
             TableFactor::Derived {
                 lateral,
                 subquery,
                 alias,
             } => {
-                let mut s = String::new();
                 if *lateral {
-                    s += "LATERAL ";
+                    write!(f, "LATERAL ")?;
                 }
-                s += &format!("({})", subquery.to_string());
+                write!(f, "({})", subquery)?;
                 if let Some(alias) = alias {
-                    s += &format!(" AS {}", alias.to_string());
+                    write!(f, " AS {}", alias)?;
                 }
-                s
+                Ok(())
             }
-            TableFactor::NestedJoin(table_reference) => {
-                format!("({})", table_reference.to_string())
-            }
+            TableFactor::NestedJoin(table_reference) => write!(f, "({})", table_reference),
         }
     }
 }
@@ -289,13 +281,13 @@ pub struct TableAlias {
     pub columns: Vec<Ident>,
 }
 
-impl ToString for TableAlias {
-    fn to_string(&self) -> String {
-        let mut s = self.name.clone();
+impl fmt::Display for TableAlias {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)?;
         if !self.columns.is_empty() {
-            s += &format!(" ({})", comma_separated_string(&self.columns));
+            write!(f, " ({})", display_comma_separated(&self.columns))?;
         }
-        s
+        Ok(())
     }
 }
 
@@ -305,49 +297,61 @@ pub struct Join {
     pub join_operator: JoinOperator,
 }
 
-impl ToString for Join {
-    fn to_string(&self) -> String {
-        fn prefix(constraint: &JoinConstraint) -> String {
+impl fmt::Display for Join {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fn prefix(constraint: &JoinConstraint) -> &'static str {
             match constraint {
-                JoinConstraint::Natural => "NATURAL ".to_string(),
-                _ => "".to_string(),
+                JoinConstraint::Natural => "NATURAL ",
+                _ => "",
             }
         }
-        fn suffix(constraint: &JoinConstraint) -> String {
-            match constraint {
-                JoinConstraint::On(expr) => format!(" ON {}", expr.to_string()),
-                JoinConstraint::Using(attrs) => format!(" USING({})", attrs.join(", ")),
-                _ => "".to_string(),
+        fn suffix<'a>(constraint: &'a JoinConstraint) -> impl fmt::Display + 'a {
+            struct Suffix<'a>(&'a JoinConstraint);
+            impl<'a> fmt::Display for Suffix<'a> {
+                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    match self.0 {
+                        JoinConstraint::On(expr) => write!(f, " ON {}", expr),
+                        JoinConstraint::Using(attrs) => {
+                            write!(f, " USING({})", display_comma_separated(attrs))
+                        }
+                        _ => Ok(()),
+                    }
+                }
             }
+            Suffix(constraint)
         }
         match &self.join_operator {
-            JoinOperator::Inner(constraint) => format!(
+            JoinOperator::Inner(constraint) => write!(
+                f,
                 " {}JOIN {}{}",
                 prefix(constraint),
-                self.relation.to_string(),
+                self.relation,
                 suffix(constraint)
             ),
-            JoinOperator::LeftOuter(constraint) => format!(
+            JoinOperator::LeftOuter(constraint) => write!(
+                f,
                 " {}LEFT JOIN {}{}",
                 prefix(constraint),
-                self.relation.to_string(),
+                self.relation,
                 suffix(constraint)
             ),
-            JoinOperator::RightOuter(constraint) => format!(
+            JoinOperator::RightOuter(constraint) => write!(
+                f,
                 " {}RIGHT JOIN {}{}",
                 prefix(constraint),
-                self.relation.to_string(),
+                self.relation,
                 suffix(constraint)
             ),
-            JoinOperator::FullOuter(constraint) => format!(
+            JoinOperator::FullOuter(constraint) => write!(
+                f,
                 " {}FULL JOIN {}{}",
                 prefix(constraint),
-                self.relation.to_string(),
+                self.relation,
                 suffix(constraint)
             ),
-            JoinOperator::CrossJoin => format!(" CROSS JOIN {}", self.relation.to_string()),
-            JoinOperator::CrossApply => format!(" CROSS APPLY {}", self.relation.to_string()),
-            JoinOperator::OuterApply => format!(" OUTER APPLY {}", self.relation.to_string()),
+            JoinOperator::CrossJoin => write!(f, " CROSS JOIN {}", self.relation),
+            JoinOperator::CrossApply => write!(f, " CROSS APPLY {}", self.relation),
+            JoinOperator::OuterApply => write!(f, " OUTER APPLY {}", self.relation),
         }
     }
 }
@@ -379,12 +383,12 @@ pub struct OrderByExpr {
     pub asc: Option<bool>,
 }
 
-impl ToString for OrderByExpr {
-    fn to_string(&self) -> String {
+impl fmt::Display for OrderByExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.asc {
-            Some(true) => format!("{} ASC", self.expr.to_string()),
-            Some(false) => format!("{} DESC", self.expr.to_string()),
-            None => self.expr.to_string(),
+            Some(true) => write!(f, "{} ASC", self.expr),
+            Some(false) => write!(f, "{} DESC", self.expr),
+            None => write!(f, "{}", self.expr),
         }
     }
 }
@@ -396,19 +400,14 @@ pub struct Fetch {
     pub quantity: Option<Expr>,
 }
 
-impl ToString for Fetch {
-    fn to_string(&self) -> String {
+impl fmt::Display for Fetch {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let extension = if self.with_ties { "WITH TIES" } else { "ONLY" };
         if let Some(ref quantity) = self.quantity {
             let percent = if self.percent { " PERCENT" } else { "" };
-            format!(
-                "FETCH FIRST {}{} ROWS {}",
-                quantity.to_string(),
-                percent,
-                extension
-            )
+            write!(f, "FETCH FIRST {}{} ROWS {}", quantity, percent, extension)
         } else {
-            format!("FETCH FIRST ROWS {}", extension)
+            write!(f, "FETCH FIRST ROWS {}", extension)
         }
     }
 }
@@ -416,12 +415,15 @@ impl ToString for Fetch {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Values(pub Vec<Vec<Expr>>);
 
-impl ToString for Values {
-    fn to_string(&self) -> String {
-        let rows = self
-            .0
-            .iter()
-            .map(|row| format!("({})", comma_separated_string(row)));
-        format!("VALUES {}", comma_separated_string(rows))
+impl fmt::Display for Values {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "VALUES ")?;
+        let mut delim = "";
+        for row in &self.0 {
+            write!(f, "{}", delim)?;
+            delim = ", ";
+            write!(f, "({})", display_comma_separated(row))?;
+        }
+        Ok(())
     }
 }

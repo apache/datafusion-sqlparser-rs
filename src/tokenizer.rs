@@ -21,6 +21,7 @@ use std::str::Chars;
 
 use super::dialect::keywords::ALL_KEYWORDS;
 use super::dialect::Dialect;
+use std::fmt;
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq)]
@@ -89,40 +90,40 @@ pub enum Token {
     RBrace,
 }
 
-impl ToString for Token {
-    fn to_string(&self) -> String {
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Token::Word(ref w) => w.to_string(),
-            Token::Number(ref n) => n.to_string(),
-            Token::Char(ref c) => c.to_string(),
-            Token::SingleQuotedString(ref s) => format!("'{}'", s),
-            Token::NationalStringLiteral(ref s) => format!("N'{}'", s),
-            Token::HexStringLiteral(ref s) => format!("X'{}'", s),
-            Token::Comma => ",".to_string(),
-            Token::Whitespace(ws) => ws.to_string(),
-            Token::Eq => "=".to_string(),
-            Token::Neq => "<>".to_string(),
-            Token::Lt => "<".to_string(),
-            Token::Gt => ">".to_string(),
-            Token::LtEq => "<=".to_string(),
-            Token::GtEq => ">=".to_string(),
-            Token::Plus => "+".to_string(),
-            Token::Minus => "-".to_string(),
-            Token::Mult => "*".to_string(),
-            Token::Div => "/".to_string(),
-            Token::Mod => "%".to_string(),
-            Token::LParen => "(".to_string(),
-            Token::RParen => ")".to_string(),
-            Token::Period => ".".to_string(),
-            Token::Colon => ":".to_string(),
-            Token::DoubleColon => "::".to_string(),
-            Token::SemiColon => ";".to_string(),
-            Token::Backslash => "\\".to_string(),
-            Token::LBracket => "[".to_string(),
-            Token::RBracket => "]".to_string(),
-            Token::Ampersand => "&".to_string(),
-            Token::LBrace => "{".to_string(),
-            Token::RBrace => "}".to_string(),
+            Token::Word(ref w) => write!(f, "{}", w),
+            Token::Number(ref n) => f.write_str(n),
+            Token::Char(ref c) => write!(f, "{}", c),
+            Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
+            Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
+            Token::HexStringLiteral(ref s) => write!(f, "X'{}'", s),
+            Token::Comma => f.write_str(","),
+            Token::Whitespace(ws) => write!(f, "{}", ws),
+            Token::Eq => f.write_str("="),
+            Token::Neq => f.write_str("<>"),
+            Token::Lt => f.write_str("<"),
+            Token::Gt => f.write_str(">"),
+            Token::LtEq => f.write_str("<="),
+            Token::GtEq => f.write_str(">="),
+            Token::Plus => f.write_str("+"),
+            Token::Minus => f.write_str("-"),
+            Token::Mult => f.write_str("*"),
+            Token::Div => f.write_str("/"),
+            Token::Mod => f.write_str("%"),
+            Token::LParen => f.write_str("("),
+            Token::RParen => f.write_str(")"),
+            Token::Period => f.write_str("."),
+            Token::Colon => f.write_str(":"),
+            Token::DoubleColon => f.write_str("::"),
+            Token::SemiColon => f.write_str(";"),
+            Token::Backslash => f.write_str("\\"),
+            Token::LBracket => f.write_str("["),
+            Token::RBracket => f.write_str("]"),
+            Token::Ampersand => f.write_str("&"),
+            Token::LBrace => f.write_str("{"),
+            Token::RBrace => f.write_str("}"),
         }
     }
 }
@@ -164,13 +165,13 @@ pub struct Word {
     pub keyword: String,
 }
 
-impl ToString for Word {
-    fn to_string(&self) -> String {
+impl fmt::Display for Word {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.quote_style {
             Some(s) if s == '"' || s == '[' || s == '`' => {
-                format!("{}{}{}", s, self.value, Word::matching_end_quote(s))
+                write!(f, "{}{}{}", s, self.value, Word::matching_end_quote(s))
             }
-            None => self.value.clone(),
+            None => f.write_str(&self.value),
             _ => panic!("Unexpected quote_style!"),
         }
     }
@@ -195,14 +196,14 @@ pub enum Whitespace {
     MultiLineComment(String),
 }
 
-impl ToString for Whitespace {
-    fn to_string(&self) -> String {
+impl fmt::Display for Whitespace {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Whitespace::Space => " ".to_string(),
-            Whitespace::Newline => "\n".to_string(),
-            Whitespace::Tab => "\t".to_string(),
-            Whitespace::SingleLineComment(s) => format!("--{}", s),
-            Whitespace::MultiLineComment(s) => format!("/*{}*/", s),
+            Whitespace::Space => f.write_str(" "),
+            Whitespace::Newline => f.write_str("\n"),
+            Whitespace::Tab => f.write_str("\t"),
+            Whitespace::SingleLineComment(s) => write!(f, "--{}", s),
+            Whitespace::MultiLineComment(s) => write!(f, "/*{}*/", s),
         }
     }
 }

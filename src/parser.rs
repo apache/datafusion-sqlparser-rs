@@ -19,6 +19,7 @@ use super::dialect::keywords;
 use super::dialect::Dialect;
 use super::tokenizer::*;
 use std::error::Error;
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParserError {
@@ -52,8 +53,8 @@ impl From<TokenizerError> for ParserError {
     }
 }
 
-impl std::fmt::Display for ParserError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for ParserError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "sql parser error: {}",
@@ -728,7 +729,7 @@ impl Parser {
         parser_err!(format!(
             "Expected {}, found: {}",
             expected,
-            found.map_or("EOF".to_string(), |t| t.to_string())
+            found.map_or_else(|| "EOF".to_string(), |t| format!("{}", t))
         ))
     }
 

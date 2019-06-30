@@ -18,7 +18,7 @@ mod operator;
 mod query;
 mod value;
 
-use std::ops::Deref;
+use std::fmt;
 
 pub use self::data_type::DataType;
 pub use self::ddl::{
@@ -31,17 +31,41 @@ pub use self::query::{
 };
 pub use self::value::{DateTimeField, Value};
 
-/// Like `vec.join(", ")`, but for any types implementing ToString.
-fn comma_separated_string<I>(iter: I) -> String
+struct DisplaySeparated<'a, T>
 where
-    I: IntoIterator,
-    I::Item: Deref,
-    <I::Item as Deref>::Target: ToString,
+    T: fmt::Display,
 {
-    iter.into_iter()
-        .map(|t| t.deref().to_string())
-        .collect::<Vec<String>>()
-        .join(", ")
+    slice: &'a [T],
+    sep: &'static str,
+}
+
+impl<'a, T> fmt::Display for DisplaySeparated<'a, T>
+where
+    T: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut delim = "";
+        for t in self.slice {
+            write!(f, "{}", delim)?;
+            delim = self.sep;
+            write!(f, "{}", t)?;
+        }
+        Ok(())
+    }
+}
+
+fn display_separated<'a, T>(slice: &'a [T], sep: &'static str) -> DisplaySeparated<'a, T>
+where
+    T: fmt::Display,
+{
+    DisplaySeparated { slice, sep }
+}
+
+fn display_comma_separated<T>(slice: &[T]) -> DisplaySeparated<'_, T>
+where
+    T: fmt::Display,
+{
+    DisplaySeparated { slice, sep: ", " }
 }
 
 /// Identifier name, in the originally quoted form (e.g. `"id"`)
@@ -138,95 +162,82 @@ pub enum Expr {
     Subquery(Box<Query>),
 }
 
-impl ToString for Expr {
-    fn to_string(&self) -> String {
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expr::Identifier(s) => s.to_string(),
-            Expr::Wildcard => "*".to_string(),
-            Expr::QualifiedWildcard(q) => q.join(".") + ".*",
-            Expr::CompoundIdentifier(s) => s.join("."),
-            Expr::IsNull(ast) => format!("{} IS NULL", ast.as_ref().to_string()),
-            Expr::IsNotNull(ast) => format!("{} IS NOT NULL", ast.as_ref().to_string()),
+            Expr::Identifier(s) => write!(f, "{}", s),
+            Expr::Wildcard => f.write_str("*"),
+            Expr::QualifiedWildcard(q) => {
+                write!(f, "{}", display_separated(q, "."))?;
+                f.write_str(".*")
+            }
+            Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
+            Expr::IsNull(ast) => write!(f, "{} IS NULL", ast),
+            Expr::IsNotNull(ast) => write!(f, "{} IS NOT NULL", ast),
             Expr::InList {
                 expr,
                 list,
                 negated,
-            } => format!(
+            } => write!(
+                f,
                 "{} {}IN ({})",
-                expr.as_ref().to_string(),
+                expr,
                 if *negated { "NOT " } else { "" },
-                comma_separated_string(list)
+                display_comma_separated(list)
             ),
             Expr::InSubquery {
                 expr,
                 subquery,
                 negated,
-            } => format!(
+            } => write!(
+                f,
                 "{} {}IN ({})",
-                expr.as_ref().to_string(),
+                expr,
                 if *negated { "NOT " } else { "" },
-                subquery.to_string()
+                subquery
             ),
             Expr::Between {
                 expr,
                 negated,
                 low,
                 high,
-            } => format!(
+            } => write!(
+                f,
                 "{} {}BETWEEN {} AND {}",
-                expr.to_string(),
+                expr,
                 if *negated { "NOT " } else { "" },
-                low.to_string(),
-                high.to_string()
+                low,
+                high
             ),
-            Expr::BinaryOp { left, op, right } => format!(
-                "{} {} {}",
-                left.as_ref().to_string(),
-                op.to_string(),
-                right.as_ref().to_string()
-            ),
-            Expr::UnaryOp { op, expr } => {
-                format!("{} {}", op.to_string(), expr.as_ref().to_string())
-            }
-            Expr::Cast { expr, data_type } => format!(
-                "CAST({} AS {})",
-                expr.as_ref().to_string(),
-                data_type.to_string()
-            ),
-            Expr::Extract { field, expr } => {
-                format!("EXTRACT({} FROM {})", field.to_string(), expr.to_string())
-            }
-            Expr::Collate { expr, collation } => format!(
-                "{} COLLATE {}",
-                expr.as_ref().to_string(),
-                collation.to_string()
-            ),
-            Expr::Nested(ast) => format!("({})", ast.as_ref().to_string()),
-            Expr::Value(v) => v.to_string(),
-            Expr::Function(f) => f.to_string(),
+            Expr::BinaryOp { left, op, right } => write!(f, "{} {} {}", left, op, right),
+            Expr::UnaryOp { op, expr } => write!(f, "{} {}", op, expr),
+            Expr::Cast { expr, data_type } => write!(f, "CAST({} AS {})", expr, data_type),
+            Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
+            Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),
+            Expr::Nested(ast) => write!(f, "({})", ast),
+            Expr::Value(v) => write!(f, "{}", v),
+            Expr::Function(fun) => write!(f, "{}", fun),
             Expr::Case {
                 operand,
                 conditions,
                 results,
                 else_result,
             } => {
-                let mut s = "CASE".to_string();
+                f.write_str("CASE")?;
                 if let Some(operand) = operand {
-                    s += &format!(" {}", operand.to_string());
+                    write!(f, " {}", operand)?;
                 }
-                s += &conditions
-                    .iter()
-                    .zip(results)
-                    .map(|(c, r)| format!(" WHEN {} THEN {}", c.to_string(), r.to_string()))
-                    .collect::<Vec<String>>()
-                    .join("");
+                for (c, r) in conditions.iter().zip(results) {
+                    write!(f, " WHEN {} THEN {}", c, r)?;
+                }
+
                 if let Some(else_result) = else_result {
-                    s += &format!(" ELSE {}", else_result.to_string())
+                    write!(f, " ELSE {}", else_result)?;
                 }
-                s + " END"
+                f.write_str(" END")
             }
-            Expr::Exists(s) => format!("EXISTS ({})", s.to_string()),
-            Expr::Subquery(s) => format!("({})", s.to_string()),
+            Expr::Exists(s) => write!(f, "EXISTS ({})", s),
+            Expr::Subquery(s) => write!(f, "({})", s),
         }
     }
 }
@@ -239,38 +250,36 @@ pub struct WindowSpec {
     pub window_frame: Option<WindowFrame>,
 }
 
-impl ToString for WindowSpec {
-    fn to_string(&self) -> String {
-        let mut clauses = vec![];
+impl fmt::Display for WindowSpec {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut delim = "";
         if !self.partition_by.is_empty() {
-            clauses.push(format!(
+            delim = " ";
+            write!(
+                f,
                 "PARTITION BY {}",
-                comma_separated_string(&self.partition_by)
-            ))
-        };
+                display_comma_separated(&self.partition_by)
+            )?;
+        }
         if !self.order_by.is_empty() {
-            clauses.push(format!(
-                "ORDER BY {}",
-                comma_separated_string(&self.order_by)
-            ))
-        };
+            f.write_str(delim)?;
+            delim = " ";
+            write!(f, "ORDER BY {}", display_comma_separated(&self.order_by))?;
+        }
         if let Some(window_frame) = &self.window_frame {
             if let Some(end_bound) = &window_frame.end_bound {
-                clauses.push(format!(
+                f.write_str(delim)?;
+                write!(
+                    f,
                     "{} BETWEEN {} AND {}",
-                    window_frame.units.to_string(),
-                    window_frame.start_bound.to_string(),
-                    end_bound.to_string()
-                ));
+                    window_frame.units, window_frame.start_bound, end_bound
+                )?;
             } else {
-                clauses.push(format!(
-                    "{} {}",
-                    window_frame.units.to_string(),
-                    window_frame.start_bound.to_string()
-                ));
+                f.write_str(delim)?;
+                write!(f, "{} {}", window_frame.units, window_frame.start_bound)?;
             }
         }
-        clauses.join(" ")
+        Ok(())
     }
 }
 
@@ -292,13 +301,13 @@ pub enum WindowFrameUnits {
     Groups,
 }
 
-impl ToString for WindowFrameUnits {
-    fn to_string(&self) -> String {
-        match self {
-            WindowFrameUnits::Rows => "ROWS".to_string(),
-            WindowFrameUnits::Range => "RANGE".to_string(),
-            WindowFrameUnits::Groups => "GROUPS".to_string(),
-        }
+impl fmt::Display for WindowFrameUnits {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            WindowFrameUnits::Rows => "ROWS",
+            WindowFrameUnits::Range => "RANGE",
+            WindowFrameUnits::Groups => "GROUPS",
+        })
     }
 }
 
@@ -329,14 +338,14 @@ pub enum WindowFrameBound {
     Following(Option<u64>),
 }
 
-impl ToString for WindowFrameBound {
-    fn to_string(&self) -> String {
+impl fmt::Display for WindowFrameBound {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            WindowFrameBound::CurrentRow => "CURRENT ROW".to_string(),
-            WindowFrameBound::Preceding(None) => "UNBOUNDED PRECEDING".to_string(),
-            WindowFrameBound::Following(None) => "UNBOUNDED FOLLOWING".to_string(),
-            WindowFrameBound::Preceding(Some(n)) => format!("{} PRECEDING", n),
-            WindowFrameBound::Following(Some(n)) => format!("{} FOLLOWING", n),
+            WindowFrameBound::CurrentRow => f.write_str("CURRENT ROW"),
+            WindowFrameBound::Preceding(None) => f.write_str("UNBOUNDED PRECEDING"),
+            WindowFrameBound::Following(None) => f.write_str("UNBOUNDED FOLLOWING"),
+            WindowFrameBound::Preceding(Some(n)) => write!(f, "{} PRECEDING", n),
+            WindowFrameBound::Following(Some(n)) => write!(f, "{} FOLLOWING", n),
         }
     }
 }
@@ -424,69 +433,70 @@ pub enum Statement {
     Rollback { chain: bool },
 }
 
-impl ToString for Statement {
-    fn to_string(&self) -> String {
+impl fmt::Display for Statement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Statement::Query(s) => s.to_string(),
+            Statement::Query(s) => write!(f, "{}", s),
             Statement::Insert {
                 table_name,
                 columns,
                 source,
             } => {
-                let mut s = format!("INSERT INTO {} ", table_name.to_string());
+                write!(f, "INSERT INTO {} ", table_name)?;
                 if !columns.is_empty() {
-                    s += &format!("({}) ", columns.join(", "));
+                    write!(f, "({}) ", display_comma_separated(columns))?;
                 }
-                s += &source.to_string();
-                s
+                write!(f, "{}", source)
             }
             Statement::Copy {
                 table_name,
                 columns,
                 values,
             } => {
-                let mut s = format!("COPY {}", table_name.to_string());
+                write!(f, "COPY {}", table_name)?;
                 if !columns.is_empty() {
-                    s += &format!(" ({})", comma_separated_string(columns));
+                    write!(f, " ({})", display_comma_separated(columns))?;
                 }
-                s += " FROM stdin; ";
+                write!(f, " FROM stdin; ")?;
                 if !values.is_empty() {
-                    s += &format!(
-                        "\n{}",
-                        values
-                            .iter()
-                            .map(|v| v.clone().unwrap_or_else(|| "\\N".to_string()))
-                            .collect::<Vec<String>>()
-                            .join("\t")
-                    );
+                    writeln!(f)?;
+                    let mut delim = "";
+                    for v in values {
+                        write!(f, "{}", delim)?;
+                        delim = "\t";
+                        if let Some(v) = v {
+                            write!(f, "{}", v)?;
+                        } else {
+                            write!(f, "\\N")?;
+                        }
+                    }
                 }
-                s += "\n\\.";
-                s
+                write!(f, "\n\\.")
             }
             Statement::Update {
                 table_name,
                 assignments,
                 selection,
             } => {
-                let mut s = format!("UPDATE {}", table_name.to_string());
+                write!(f, "UPDATE {}", table_name)?;
                 if !assignments.is_empty() {
-                    s += " SET ";
-                    s += &comma_separated_string(assignments);
+                    write!(f, " SET ")?;
+                    write!(f, "{}", display_comma_separated(assignments))?;
                 }
                 if let Some(selection) = selection {
-                    s += &format!(" WHERE {}", selection.to_string());
+                    write!(f, " WHERE {}", selection)?;
                 }
-                s
+                Ok(())
             }
             Statement::Delete {
                 table_name,
                 selection,
             } => {
-                let mut s = format!("DELETE FROM {}", table_name.to_string());
+                write!(f, "DELETE FROM {}", table_name)?;
                 if let Some(selection) = selection {
-                    s += &format!(" WHERE {}", selection.to_string());
+                    write!(f, " WHERE {}", selection)?;
                 }
-                s
+                Ok(())
             }
             Statement::CreateView {
                 name,
@@ -495,25 +505,22 @@ impl ToString for Statement {
                 materialized,
                 with_options,
             } => {
-                let modifier = if *materialized { " MATERIALIZED" } else { "" };
-                let with_options = if !with_options.is_empty() {
-                    format!(" WITH ({})", comma_separated_string(with_options))
-                } else {
-                    "".into()
-                };
-                let columns = if !columns.is_empty() {
-                    format!(" ({})", comma_separated_string(columns))
-                } else {
-                    "".into()
-                };
-                format!(
-                    "CREATE{} VIEW {}{}{} AS {}",
-                    modifier,
-                    name.to_string(),
-                    with_options,
-                    columns,
-                    query.to_string(),
-                )
+                write!(f, "CREATE")?;
+                if *materialized {
+                    write!(f, " MATERIALIZED")?;
+                }
+
+                write!(f, " VIEW {}", name)?;
+
+                if !with_options.is_empty() {
+                    write!(f, " WITH ({})", display_comma_separated(with_options))?;
+                }
+
+                if !columns.is_empty() {
+                    write!(f, " ({})", display_comma_separated(columns))?;
+                }
+
+                write!(f, " AS {}", query)
             }
             Statement::CreateTable {
                 name,
@@ -524,64 +531,66 @@ impl ToString for Statement {
                 file_format,
                 location,
             } => {
-                let mut s = format!(
+                write!(
+                    f,
                     "CREATE {}TABLE {} ({}",
                     if *external { "EXTERNAL " } else { "" },
-                    name.to_string(),
-                    comma_separated_string(columns)
-                );
+                    name,
+                    display_comma_separated(columns)
+                )?;
                 if !constraints.is_empty() {
-                    s += &format!(", {}", comma_separated_string(constraints));
+                    write!(f, ", {}", display_comma_separated(constraints))?;
                 }
-                s += ")";
+                write!(f, ")")?;
+
                 if *external {
-                    s += &format!(
+                    write!(
+                        f,
                         " STORED AS {} LOCATION '{}'",
-                        file_format.as_ref().unwrap().to_string(),
+                        file_format.as_ref().unwrap(),
                         location.as_ref().unwrap()
-                    );
+                    )?;
                 }
                 if !with_options.is_empty() {
-                    s += &format!(" WITH ({})", comma_separated_string(with_options));
+                    write!(f, " WITH ({})", display_comma_separated(with_options))?;
                 }
-                s
+                Ok(())
             }
             Statement::AlterTable { name, operation } => {
-                format!("ALTER TABLE {} {}", name.to_string(), operation.to_string())
+                write!(f, "ALTER TABLE {} {}", name, operation)
             }
             Statement::Drop {
                 object_type,
                 if_exists,
                 names,
                 cascade,
-            } => format!(
+            } => write!(
+                f,
                 "DROP {}{} {}{}",
-                object_type.to_string(),
+                object_type,
                 if *if_exists { " IF EXISTS" } else { "" },
-                comma_separated_string(names),
+                display_comma_separated(names),
                 if *cascade { " CASCADE" } else { "" },
             ),
-            Statement::StartTransaction { modes } => format!(
-                "START TRANSACTION{}",
-                if modes.is_empty() {
-                    "".into()
-                } else {
-                    format!(" {}", comma_separated_string(modes))
+            Statement::StartTransaction { modes } => {
+                write!(f, "START TRANSACTION")?;
+                if !modes.is_empty() {
+                    write!(f, " {}", display_comma_separated(modes))?;
                 }
-            ),
-            Statement::SetTransaction { modes } => format!(
-                "SET TRANSACTION{}",
-                if modes.is_empty() {
-                    "".into()
-                } else {
-                    format!(" {}", comma_separated_string(modes))
+                Ok(())
+            }
+            Statement::SetTransaction { modes } => {
+                write!(f, "SET TRANSACTION")?;
+                if !modes.is_empty() {
+                    write!(f, " {}", display_comma_separated(modes))?;
                 }
-            ),
+                Ok(())
+            }
             Statement::Commit { chain } => {
-                format!("COMMIT{}", if *chain { " AND CHAIN" } else { "" },)
+                write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" },)
             }
             Statement::Rollback { chain } => {
-                format!("ROLLBACK{}", if *chain { " AND CHAIN" } else { "" },)
+                write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" },)
             }
         }
     }
@@ -591,9 +600,9 @@ impl ToString for Statement {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ObjectName(pub Vec<Ident>);
 
-impl ToString for ObjectName {
-    fn to_string(&self) -> String {
-        self.0.join(".")
+impl fmt::Display for ObjectName {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", display_separated(&self.0, "."))
     }
 }
 
@@ -604,9 +613,9 @@ pub struct Assignment {
     pub value: Expr,
 }
 
-impl ToString for Assignment {
-    fn to_string(&self) -> String {
-        format!("{} = {}", self.id, self.value.to_string())
+impl fmt::Display for Assignment {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} = {}", self.id, self.value)
     }
 }
 
@@ -620,18 +629,19 @@ pub struct Function {
     pub distinct: bool,
 }
 
-impl ToString for Function {
-    fn to_string(&self) -> String {
-        let mut s = format!(
+impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
             "{}({}{})",
-            self.name.to_string(),
+            self.name,
             if self.distinct { "DISTINCT " } else { "" },
-            comma_separated_string(&self.args),
-        );
+            display_comma_separated(&self.args),
+        )?;
         if let Some(o) = &self.over {
-            s += &format!(" OVER ({})", o.to_string())
+            write!(f, " OVER ({})", o)?;
         }
-        s
+        Ok(())
     }
 }
 
@@ -647,18 +657,22 @@ pub enum FileFormat {
     JSONFILE,
 }
 
-impl ToString for FileFormat {
-    fn to_string(&self) -> String {
+impl fmt::Display for FileFormat {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::FileFormat::*;
-        match self {
-            TEXTFILE => "TEXTFILE".to_string(),
-            SEQUENCEFILE => "SEQUENCEFILE".to_string(),
-            ORC => "ORC".to_string(),
-            PARQUET => "PARQUET".to_string(),
-            AVRO => "AVRO".to_string(),
-            RCFILE => "RCFILE".to_string(),
-            JSONFILE => "TEXTFILE".to_string(),
-        }
+        write!(
+            f,
+            "{}",
+            match self {
+                TEXTFILE => "TEXTFILE",
+                SEQUENCEFILE => "SEQUENCEFILE",
+                ORC => "ORC",
+                PARQUET => "PARQUET",
+                AVRO => "AVRO",
+                RCFILE => "RCFILE",
+                JSONFILE => "TEXTFILE",
+            }
+        )
     }
 }
 
@@ -691,12 +705,16 @@ pub enum ObjectType {
     View,
 }
 
-impl ObjectType {
-    fn to_string(&self) -> String {
-        match self {
-            ObjectType::Table => "TABLE".into(),
-            ObjectType::View => "VIEW".into(),
-        }
+impl fmt::Display for ObjectType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ObjectType::Table => "TABLE",
+                ObjectType::View => "VIEW",
+            }
+        )
     }
 }
 
@@ -706,9 +724,9 @@ pub struct SqlOption {
     pub value: Value,
 }
 
-impl ToString for SqlOption {
-    fn to_string(&self) -> String {
-        format!("{} = {}", self.name.to_string(), self.value.to_string())
+impl fmt::Display for SqlOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} = {}", self.name, self.value)
     }
 }
 
@@ -718,12 +736,12 @@ pub enum TransactionMode {
     IsolationLevel(TransactionIsolationLevel),
 }
 
-impl ToString for TransactionMode {
-    fn to_string(&self) -> String {
+impl fmt::Display for TransactionMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use TransactionMode::*;
         match self {
-            AccessMode(access_mode) => access_mode.to_string(),
-            IsolationLevel(iso_level) => format!("ISOLATION LEVEL {}", iso_level.to_string()),
+            AccessMode(access_mode) => write!(f, "{}", access_mode.to_string()),
+            IsolationLevel(iso_level) => write!(f, "ISOLATION LEVEL {}", iso_level),
         }
     }
 }
@@ -734,13 +752,17 @@ pub enum TransactionAccessMode {
     ReadWrite,
 }
 
-impl ToString for TransactionAccessMode {
-    fn to_string(&self) -> String {
+impl fmt::Display for TransactionAccessMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use TransactionAccessMode::*;
-        match self {
-            ReadOnly => "READ ONLY".into(),
-            ReadWrite => "READ WRITE".into(),
-        }
+        write!(
+            f,
+            "{}",
+            match self {
+                ReadOnly => "READ ONLY",
+                ReadWrite => "READ WRITE",
+            }
+        )
     }
 }
 
@@ -752,14 +774,18 @@ pub enum TransactionIsolationLevel {
     Serializable,
 }
 
-impl ToString for TransactionIsolationLevel {
-    fn to_string(&self) -> String {
+impl fmt::Display for TransactionIsolationLevel {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use TransactionIsolationLevel::*;
-        match self {
-            ReadUncommitted => "READ UNCOMMITTED".into(),
-            ReadCommitted => "READ COMMITTED".into(),
-            RepeatableRead => "REPEATABLE READ".into(),
-            Serializable => "SERIALIZABLE".into(),
-        }
+        write!(
+            f,
+            "{}",
+            match self {
+                ReadUncommitted => "READ UNCOMMITTED",
+                ReadCommitted => "READ COMMITTED",
+                RepeatableRead => "REPEATABLE READ",
+                Serializable => "SERIALIZABLE",
+            }
+        )
     }
 }

@@ -20,9 +20,9 @@ let sql = "SELECT a, b, 123, myfunc(b) \
            WHERE a > b AND b < 100 \
            ORDER BY a DESC, b";
 
-let dialect = GenericSqlDialect{}; // or AnsiSqlDialect, or your own dialect ...
+let dialect = GenericDialect {}; // or AnsiDialect, or your own dialect ...
 
-let ast = Parser::parse_sql(&dialect,sql.to_string()).unwrap();
+let ast = Parser::parse_sql(&dialect, sql.to_string()).unwrap();
 
 println!("AST: {:?}", ast);
 ```
@@ -30,7 +30,7 @@ println!("AST: {:?}", ast);
 This outputs
 
 ```rust
-AST: [SQLSelect(SQLQuery { ctes: [], body: Select(SQLSelect { distinct: false, projection: [UnnamedExpression(SQLIdentifier("a")), UnnamedExpression(SQLIdentifier("b")), UnnamedExpression(SQLValue(Long(123))), UnnamedExpression(SQLFunction { name: SQLObjectName(["myfunc"]), args: [SQLIdentifier("b")], over: None })], relation: Some(Table { name: SQLObjectName(["table_1"]), alias: None }), joins: [], selection: Some(SQLBinaryExpr { left: SQLBinaryExpr { left: SQLIdentifier("a"), op: Gt, right: SQLIdentifier("b") }, op: And, right: SQLBinaryExpr { left: SQLIdentifier("b"), op: Lt, right: SQLValue(Long(100)) } }), group_by: None, having: None }), order_by: Some([SQLOrderByExpr { expr: SQLIdentifier("a"), asc: Some(false) }, SQLOrderByExpr { expr: SQLIdentifier("b"), asc: None }]), limit: None })]
+AST: [Query(Query { ctes: [], body: Select(Select { distinct: false, projection: [UnnamedExpr(Identifier("a")), UnnamedExpr(Identifier("b")), UnnamedExpr(Value(Long(123))), UnnamedExpr(Function(Function { name: ObjectName(["myfunc"]), args: [Identifier("b")], over: None, distinct: false }))], from: [TableWithJoins { relation: Table { name: ObjectName(["table_1"]), alias: None, args: [], with_hints: [] }, joins: [] }], selection: Some(BinaryOp { left: BinaryOp { left: Identifier("a"), op: Gt, right: Identifier("b") }, op: And, right: BinaryOp { left: Identifier("b"), op: Lt, right: Value(Long(100)) } }), group_by: [], having: None }), order_by: [OrderByExpr { expr: Identifier("a"), asc: Some(false) }, OrderByExpr { expr: Identifier("b"), asc: None }], limit: None, offset: None, fetch: None })]
 ```
 
 ## Design

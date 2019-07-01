@@ -77,27 +77,27 @@ impl TestedDialects {
         only_statement
     }
 
-    /// Ensures that `sql` parses as a single SQLStatement, and is not modified
+    /// Ensures that `sql` parses as a single [Statement], and is not modified
     /// after a serialization round-trip.
     pub fn verified_stmt(&self, query: &str) -> Statement {
         self.one_statement_parses_to(query, query)
     }
 
-    /// Ensures that `sql` parses as a single SQLQuery, and is not modified
+    /// Ensures that `sql` parses as a single [Query], and is not modified
     /// after a serialization round-trip.
     pub fn verified_query(&self, sql: &str) -> Query {
         match self.verified_stmt(sql) {
             Statement::Query(query) => *query,
-            _ => panic!("Expected SQLQuery"),
+            _ => panic!("Expected Query"),
         }
     }
 
-    /// Ensures that `sql` parses as a single SQLSelect, and is not modified
+    /// Ensures that `sql` parses as a single [Select], and is not modified
     /// after a serialization round-trip.
     pub fn verified_only_select(&self, query: &str) -> Select {
         match self.verified_query(query).body {
             SetExpr::Select(s) => *s,
-            _ => panic!("Expected SQLSetExpr::Select"),
+            _ => panic!("Expected SetExpr::Select"),
         }
     }
 

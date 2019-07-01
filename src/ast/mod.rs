@@ -57,14 +57,14 @@ pub enum Expr {
     /// Identifier e.g. table name or column name
     Identifier(Ident),
     /// Unqualified wildcard (`*`). SQL allows this in limited contexts, such as:
-    /// - right after `SELECT` (which is represented as a [SQLSelectItem::Wildcard] instead)
+    /// - right after `SELECT` (which is represented as a [SelectItem::Wildcard] instead)
     /// - or as part of an aggregate function, e.g. `COUNT(*)`,
     ///
     /// ...but we currently also accept it in contexts where it doesn't make
     /// sense, such as `* + *`
     Wildcard,
     /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
-    /// (Same caveats apply to SQLQualifiedWildcard as to SQLWildcard.)
+    /// (Same caveats apply to `QualifiedWildcard` as to `Wildcard`.)
     QualifiedWildcard(Vec<Ident>),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
@@ -115,7 +115,7 @@ pub enum Expr {
     },
     /// Nested expression e.g. `(foo > bar)` or `(1)`
     Nested(Box<Expr>),
-    /// SQLValue
+    /// A literal value, such as string, number, date or NULL
     Value(Value),
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
@@ -320,12 +320,12 @@ impl FromStr for WindowFrameUnits {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum WindowFrameBound {
-    /// "CURRENT ROW"
+    /// `CURRENT ROW`
     CurrentRow,
-    /// "<N> PRECEDING" or "UNBOUNDED PRECEDING"
+    /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
     Preceding(Option<u64>),
-    /// "<N> FOLLOWING" or "UNBOUNDED FOLLOWING". This can only appear in
-    /// SQLWindowFrame::end_bound.
+    /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`. This can only appear in
+    /// [WindowFrame::end_bound].
     Following(Option<u64>),
 }
 
@@ -610,7 +610,7 @@ impl ToString for Assignment {
     }
 }
 
-/// SQL function
+/// A function call
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Function {
     pub name: ObjectName,

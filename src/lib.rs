@@ -14,14 +14,14 @@
 //!
 //! Example code:
 //!
-//! This crate provides an ANSI:SQL 2011 lexer and parser that can parsed SQL into an Abstract
-//! Syntax Tree (AST).
+//! This crate provides an ANSI:SQL 2011 lexer and parser that can parse SQL
+//! into an Abstract Syntax Tree (AST).
 //!
 //! ```
 //! use sqlparser::dialect::GenericDialect;
 //! use sqlparser::parser::Parser;
 //!
-//! let dialect = GenericDialect {}; // or AnsiSqlDialect
+//! let dialect = GenericDialect {}; // or AnsiDialect
 //!
 //! let sql = "SELECT a, b, 123, myfunc(b) \
 //!            FROM table_1 \

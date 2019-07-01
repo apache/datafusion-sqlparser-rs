@@ -1,8 +1,8 @@
-//! AST types specific to CREATE/ALTER variants of `SQLStatement`
+//! AST types specific to CREATE/ALTER variants of [Statement]
 //! (commonly referred to as Data Definition Language, or DDL)
 use super::{DataType, Expr, Ident, ObjectName};
 
-/// An `ALTER TABLE` (`SQLStatement::SQLAlterTable`) operation
+/// An `ALTER TABLE` (`Statement::AlterTable`) operation
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AlterTableOperation {
     /// `ADD <table_constraint>`

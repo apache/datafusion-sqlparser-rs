@@ -225,7 +225,7 @@ impl Parser {
                     }
                     _ => Ok(Expr::Identifier(w.as_ident())),
                 },
-            }, // End of Token::SQLWord
+            }, // End of Token::Word
             Token::Mult => Ok(Expr::Wildcard),
             tok @ Token::Minus | tok @ Token::Plus => {
                 let op = if tok == Token::Plus {
@@ -1697,7 +1697,7 @@ impl Parser {
             //                   ^ ^ ^ ^
             //                   | | | |
             //                   | | | |
-            //                   | | | (4) belongs to a SQLSetExpr::Query inside the subquery
+            //                   | | | (4) belongs to a SetExpr::Query inside the subquery
             //                   | | (3) starts a derived table (subquery)
             //                   | (2) starts a nested join
             //                   (1) an additional set of parens around a nested join
@@ -1882,7 +1882,7 @@ impl Parser {
         Ok(projections)
     }
 
-    /// Parse a comma-delimited list of SQL ORDER BY expressions
+    /// Parse a comma-delimited list of ORDER BY expressions
     pub fn parse_order_by_expr_list(&mut self) -> Result<Vec<OrderByExpr>, ParserError> {
         let mut expr_list: Vec<OrderByExpr> = vec![];
         loop {

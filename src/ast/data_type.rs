@@ -11,6 +11,7 @@
 // limitations under the License.
 
 use super::ObjectName;
+use std::fmt;
 
 /// SQL data types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -65,47 +66,53 @@ pub enum DataType {
     Array(Box<DataType>),
 }
 
-impl ToString for DataType {
-    fn to_string(&self) -> String {
+impl fmt::Display for DataType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DataType::Char(size) => format_type_with_optional_length("char", size),
-            DataType::Varchar(size) => format_type_with_optional_length("character varying", size),
-            DataType::Uuid => "uuid".to_string(),
-            DataType::Clob(size) => format!("clob({})", size),
-            DataType::Binary(size) => format!("binary({})", size),
-            DataType::Varbinary(size) => format!("varbinary({})", size),
-            DataType::Blob(size) => format!("blob({})", size),
+            DataType::Char(size) => format_type_with_optional_length(f, "char", size),
+            DataType::Varchar(size) => {
+                format_type_with_optional_length(f, "character varying", size)
+            }
+            DataType::Uuid => write!(f, "uuid"),
+            DataType::Clob(size) => write!(f, "clob({})", size),
+            DataType::Binary(size) => write!(f, "binary({})", size),
+            DataType::Varbinary(size) => write!(f, "varbinary({})", size),
+            DataType::Blob(size) => write!(f, "blob({})", size),
             DataType::Decimal(precision, scale) => {
                 if let Some(scale) = scale {
-                    format!("numeric({},{})", precision.unwrap(), scale)
+                    write!(f, "numeric({},{})", precision.unwrap(), scale)
                 } else {
-                    format_type_with_optional_length("numeric", precision)
+                    format_type_with_optional_length(f, "numeric", precision)
                 }
             }
-            DataType::Float(size) => format_type_with_optional_length("float", size),
-            DataType::SmallInt => "smallint".to_string(),
-            DataType::Int => "int".to_string(),
-            DataType::BigInt => "bigint".to_string(),
-            DataType::Real => "real".to_string(),
-            DataType::Double => "double".to_string(),
-            DataType::Boolean => "boolean".to_string(),
-            DataType::Date => "date".to_string(),
-            DataType::Time => "time".to_string(),
-            DataType::Timestamp => "timestamp".to_string(),
-            DataType::Interval => "interval".to_string(),
-            DataType::Regclass => "regclass".to_string(),
-            DataType::Text => "text".to_string(),
-            DataType::Bytea => "bytea".to_string(),
-            DataType::Array(ty) => format!("{}[]", ty.to_string()),
-            DataType::Custom(ty) => ty.to_string(),
+            DataType::Float(size) => format_type_with_optional_length(f, "float", size),
+            DataType::SmallInt => write!(f, "smallint"),
+            DataType::Int => write!(f, "int"),
+            DataType::BigInt => write!(f, "bigint"),
+            DataType::Real => write!(f, "real"),
+            DataType::Double => write!(f, "double"),
+            DataType::Boolean => write!(f, "boolean"),
+            DataType::Date => write!(f, "date"),
+            DataType::Time => write!(f, "time"),
+            DataType::Timestamp => write!(f, "timestamp"),
+            DataType::Interval => write!(f, "interval"),
+            DataType::Regclass => write!(f, "regclass"),
+            DataType::Text => write!(f, "text"),
+            DataType::Bytea => write!(f, "bytea"),
+            DataType::Array(ty) => write!(f, "{}[]", ty),
+            DataType::Custom(ty) => write!(f, "{}", ty),
         }
     }
 }
 
-fn format_type_with_optional_length(sql_type: &str, len: &Option<u64>) -> String {
-    let mut s = sql_type.to_string();
+fn format_type_with_optional_length(
+    f: &mut fmt::Formatter,
+    sql_type: &'static str,
+    len: &Option<u64>,
+) -> fmt::Result {
+    write!(f, "{}", sql_type)?;
     if let Some(len) = len {
-        s += &format!("({})", len);
+        write!(f, "({})", len)?;
     }
-    s
+    Ok(())
 }

@@ -11,6 +11,7 @@
 // limitations under the License.
 
 use ordered_float::OrderedFloat;
+use std::fmt;
 
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -56,18 +57,18 @@ pub enum Value {
     Null,
 }
 
-impl ToString for Value {
-    fn to_string(&self) -> String {
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Value::Long(v) => v.to_string(),
-            Value::Double(v) => v.to_string(),
-            Value::SingleQuotedString(v) => format!("'{}'", escape_single_quote_string(v)),
-            Value::NationalStringLiteral(v) => format!("N'{}'", v),
-            Value::HexStringLiteral(v) => format!("X'{}'", v),
-            Value::Boolean(v) => v.to_string(),
-            Value::Date(v) => format!("DATE '{}'", escape_single_quote_string(v)),
-            Value::Time(v) => format!("TIME '{}'", escape_single_quote_string(v)),
-            Value::Timestamp(v) => format!("TIMESTAMP '{}'", escape_single_quote_string(v)),
+            Value::Long(v) => write!(f, "{}", v),
+            Value::Double(v) => write!(f, "{}", v),
+            Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
+            Value::NationalStringLiteral(v) => write!(f, "N'{}'", v),
+            Value::HexStringLiteral(v) => write!(f, "X'{}'", v),
+            Value::Boolean(v) => write!(f, "{}", v),
+            Value::Date(v) => write!(f, "DATE '{}'", escape_single_quote_string(v)),
+            Value::Time(v) => write!(f, "TIME '{}'", escape_single_quote_string(v)),
+            Value::Timestamp(v) => write!(f, "TIMESTAMP '{}'", escape_single_quote_string(v)),
             Value::Interval {
                 value,
                 leading_field: DateTimeField::Second,
@@ -78,7 +79,8 @@ impl ToString for Value {
                 // When the leading field is SECOND, the parser guarantees that
                 // the last field is None.
                 assert!(last_field.is_none());
-                format!(
+                write!(
+                    f,
                     "INTERVAL '{}' SECOND ({}, {})",
                     escape_single_quote_string(value),
                     leading_precision,
@@ -92,23 +94,24 @@ impl ToString for Value {
                 last_field,
                 fractional_seconds_precision,
             } => {
-                let mut s = format!(
+                write!(
+                    f,
                     "INTERVAL '{}' {}",
                     escape_single_quote_string(value),
-                    leading_field.to_string()
-                );
+                    leading_field
+                )?;
                 if let Some(leading_precision) = leading_precision {
-                    s += &format!(" ({})", leading_precision);
+                    write!(f, " ({})", leading_precision)?;
                 }
                 if let Some(last_field) = last_field {
-                    s += &format!(" TO {}", last_field.to_string());
+                    write!(f, " TO {}", last_field)?;
                 }
                 if let Some(fractional_seconds_precision) = fractional_seconds_precision {
-                    s += &format!(" ({})", fractional_seconds_precision);
+                    write!(f, " ({})", fractional_seconds_precision)?;
                 }
-                s
+                Ok(())
             }
-            Value::Null => "NULL".to_string(),
+            Value::Null => write!(f, "NULL"),
         }
     }
 }
@@ -123,27 +126,36 @@ pub enum DateTimeField {
     Second,
 }
 
-impl ToString for DateTimeField {
-    fn to_string(&self) -> String {
-        match self {
-            DateTimeField::Year => "YEAR".to_string(),
-            DateTimeField::Month => "MONTH".to_string(),
-            DateTimeField::Day => "DAY".to_string(),
-            DateTimeField::Hour => "HOUR".to_string(),
-            DateTimeField::Minute => "MINUTE".to_string(),
-            DateTimeField::Second => "SECOND".to_string(),
-        }
+impl fmt::Display for DateTimeField {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                DateTimeField::Year => "YEAR",
+                DateTimeField::Month => "MONTH",
+                DateTimeField::Day => "DAY",
+                DateTimeField::Hour => "HOUR",
+                DateTimeField::Minute => "MINUTE",
+                DateTimeField::Second => "SECOND",
+            }
+        )
     }
 }
 
-fn escape_single_quote_string(s: &str) -> String {
-    let mut escaped = String::new();
-    for c in s.chars() {
-        if c == '\'' {
-            escaped.push_str("\'\'");
-        } else {
-            escaped.push(c);
+struct EscapeSingleQuoteString<'a>(&'a str);
+impl<'a> fmt::Display for EscapeSingleQuoteString<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for c in self.0.chars() {
+            if c == '\'' {
+                write!(f, "\'\'")?;
+            } else {
+                write!(f, "{}", c)?;
+            }
         }
+        Ok(())
     }
-    escaped
+}
+fn escape_single_quote_string(s: &str) -> EscapeSingleQuoteString<'_> {
+    EscapeSingleQuoteString(s)
 }

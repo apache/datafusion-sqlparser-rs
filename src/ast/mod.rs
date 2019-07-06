@@ -71,6 +71,16 @@ where
 /// Identifier name, in the originally quoted form (e.g. `"id"`)
 pub type Ident = String;
 
+/// A name of a table, view, custom type, etc., possibly multi-part, i.e. db.schema.obj
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ObjectName(pub Vec<Ident>);
+
+impl fmt::Display for ObjectName {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", display_separated(&self.0, "."))
+    }
+}
+
 /// An SQL expression of any type.
 ///
 /// The parser does not distinguish between expressions of different types
@@ -590,16 +600,6 @@ impl fmt::Display for Statement {
                 write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" },)
             }
         }
-    }
-}
-
-/// A name of a table, view, custom type, etc., possibly multi-part, i.e. db.schema.obj
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ObjectName(pub Vec<Ident>);
-
-impl fmt::Display for ObjectName {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", display_separated(&self.0, "."))
     }
 }
 

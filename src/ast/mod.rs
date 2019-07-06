@@ -423,11 +423,16 @@ pub enum Statement {
         name: ObjectName,
         operation: AlterTableOperation,
     },
-    /// DROP TABLE
+    /// DROP
     Drop {
+        /// The type of the object to drop: TABLE, VIEW, etc.
         object_type: ObjectType,
+        /// An optional `IF EXISTS` clause. (Non-standard.)
         if_exists: bool,
+        /// One or more objects to drop. (ANSI SQL requires exactly one.)
         names: Vec<ObjectName>,
+        /// Whether `CASCADE` was specified. This will be `false` when
+        /// `RESTRICT` or no drop behavior at all was specified.
         cascade: bool,
     },
     /// `{ BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...`

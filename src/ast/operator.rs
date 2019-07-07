@@ -22,15 +22,11 @@ pub enum UnaryOperator {
 
 impl fmt::Display for UnaryOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                UnaryOperator::Plus => "+",
-                UnaryOperator::Minus => "-",
-                UnaryOperator::Not => "NOT",
-            }
-        )
+        f.write_str(match self {
+            UnaryOperator::Plus => "+",
+            UnaryOperator::Minus => "-",
+            UnaryOperator::Not => "NOT",
+        })
     }
 }
 
@@ -56,26 +52,22 @@ pub enum BinaryOperator {
 
 impl fmt::Display for BinaryOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                BinaryOperator::Plus => "+",
-                BinaryOperator::Minus => "-",
-                BinaryOperator::Multiply => "*",
-                BinaryOperator::Divide => "/",
-                BinaryOperator::Modulus => "%",
-                BinaryOperator::Gt => ">",
-                BinaryOperator::Lt => "<",
-                BinaryOperator::GtEq => ">=",
-                BinaryOperator::LtEq => "<=",
-                BinaryOperator::Eq => "=",
-                BinaryOperator::NotEq => "<>",
-                BinaryOperator::And => "AND",
-                BinaryOperator::Or => "OR",
-                BinaryOperator::Like => "LIKE",
-                BinaryOperator::NotLike => "NOT LIKE",
-            }
-        )
+        f.write_str(match self {
+            BinaryOperator::Plus => "+",
+            BinaryOperator::Minus => "-",
+            BinaryOperator::Multiply => "*",
+            BinaryOperator::Divide => "/",
+            BinaryOperator::Modulus => "%",
+            BinaryOperator::Gt => ">",
+            BinaryOperator::Lt => "<",
+            BinaryOperator::GtEq => ">=",
+            BinaryOperator::LtEq => "<=",
+            BinaryOperator::Eq => "=",
+            BinaryOperator::NotEq => "<>",
+            BinaryOperator::And => "AND",
+            BinaryOperator::Or => "OR",
+            BinaryOperator::Like => "LIKE",
+            BinaryOperator::NotLike => "NOT LIKE",
+        })
     }
 }

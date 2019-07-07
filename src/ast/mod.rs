@@ -660,19 +660,15 @@ pub enum FileFormat {
 impl fmt::Display for FileFormat {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::FileFormat::*;
-        write!(
-            f,
-            "{}",
-            match self {
-                TEXTFILE => "TEXTFILE",
-                SEQUENCEFILE => "SEQUENCEFILE",
-                ORC => "ORC",
-                PARQUET => "PARQUET",
-                AVRO => "AVRO",
-                RCFILE => "RCFILE",
-                JSONFILE => "TEXTFILE",
-            }
-        )
+        f.write_str(match self {
+            TEXTFILE => "TEXTFILE",
+            SEQUENCEFILE => "SEQUENCEFILE",
+            ORC => "ORC",
+            PARQUET => "PARQUET",
+            AVRO => "AVRO",
+            RCFILE => "RCFILE",
+            JSONFILE => "TEXTFILE",
+        })
     }
 }
 
@@ -707,14 +703,10 @@ pub enum ObjectType {
 
 impl fmt::Display for ObjectType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                ObjectType::Table => "TABLE",
-                ObjectType::View => "VIEW",
-            }
-        )
+        f.write_str(match self {
+            ObjectType::Table => "TABLE",
+            ObjectType::View => "VIEW",
+        })
     }
 }
 
@@ -755,14 +747,10 @@ pub enum TransactionAccessMode {
 impl fmt::Display for TransactionAccessMode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use TransactionAccessMode::*;
-        write!(
-            f,
-            "{}",
-            match self {
-                ReadOnly => "READ ONLY",
-                ReadWrite => "READ WRITE",
-            }
-        )
+        f.write_str(match self {
+            ReadOnly => "READ ONLY",
+            ReadWrite => "READ WRITE",
+        })
     }
 }
 
@@ -777,15 +765,11 @@ pub enum TransactionIsolationLevel {
 impl fmt::Display for TransactionIsolationLevel {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use TransactionIsolationLevel::*;
-        write!(
-            f,
-            "{}",
-            match self {
-                ReadUncommitted => "READ UNCOMMITTED",
-                ReadCommitted => "READ COMMITTED",
-                RepeatableRead => "REPEATABLE READ",
-                Serializable => "SERIALIZABLE",
-            }
-        )
+        f.write_str(match self {
+            ReadUncommitted => "READ UNCOMMITTED",
+            ReadCommitted => "READ COMMITTED",
+            RepeatableRead => "REPEATABLE READ",
+            Serializable => "SERIALIZABLE",
+        })
     }
 }

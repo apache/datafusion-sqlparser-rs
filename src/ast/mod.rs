@@ -165,12 +165,9 @@ pub enum Expr {
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expr::Identifier(s) => write!(f, "{}", s),
+            Expr::Identifier(s) => f.write_str(s),
             Expr::Wildcard => f.write_str("*"),
-            Expr::QualifiedWildcard(q) => {
-                write!(f, "{}", display_separated(q, "."))?;
-                f.write_str(".*")
-            }
+            Expr::QualifiedWildcard(q) => write!(f, "{}.*", display_separated(q, ".")),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
             Expr::IsNull(ast) => write!(f, "{} IS NULL", ast),
             Expr::IsNotNull(ast) => write!(f, "{} IS NOT NULL", ast),
@@ -732,7 +729,7 @@ impl fmt::Display for TransactionMode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use TransactionMode::*;
         match self {
-            AccessMode(access_mode) => write!(f, "{}", access_mode.to_string()),
+            AccessMode(access_mode) => write!(f, "{}", access_mode),
             IsolationLevel(iso_level) => write!(f, "ISOLATION LEVEL {}", iso_level),
         }
     }

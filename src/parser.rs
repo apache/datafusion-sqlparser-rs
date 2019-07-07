@@ -285,7 +285,7 @@ impl Parser {
             self.expect_token(&Token::LParen)?;
             let partition_by = if self.parse_keywords(vec!["PARTITION", "BY"]) {
                 // a list of possibly-qualified column names
-                self.parse_expr_list()?
+                self.parse_comma_separated(Parser::parse_expr)?
             } else {
                 vec![]
             };
@@ -597,7 +597,7 @@ impl Parser {
         } else {
             Expr::InList {
                 expr: Box::new(expr),
-                list: self.parse_expr_list()?,
+                list: self.parse_comma_separated(Parser::parse_expr)?,
                 negated,
             }
         };
@@ -1568,7 +1568,7 @@ impl Parser {
         };
 
         let group_by = if self.parse_keywords(vec!["GROUP", "BY"]) {
-            self.parse_expr_list()?
+            self.parse_comma_separated(Parser::parse_expr)?
         } else {
             vec![]
         };
@@ -1734,7 +1734,7 @@ impl Parser {
             let mut with_hints = vec![];
             if self.parse_keyword("WITH") {
                 if self.consume_token(&Token::LParen) {
-                    with_hints = self.parse_expr_list()?;
+                    with_hints = self.parse_comma_separated(Parser::parse_expr)?;
                     self.expect_token(&Token::RParen)?;
                 } else {
                     // rewind, as WITH may belong to the next statement's CTE
@@ -1818,16 +1818,11 @@ impl Parser {
         Ok(Assignment { id, value })
     }
 
-    /// Parse a comma-delimited list of SQL expressions
-    pub fn parse_expr_list(&mut self) -> Result<Vec<Expr>, ParserError> {
-        Ok(self.parse_comma_separated(Parser::parse_expr)?)
-    }
-
     pub fn parse_optional_args(&mut self) -> Result<Vec<Expr>, ParserError> {
         if self.consume_token(&Token::RParen) {
             Ok(vec![])
         } else {
-            let args = self.parse_expr_list()?;
+            let args = self.parse_comma_separated(Parser::parse_expr)?;
             self.expect_token(&Token::RParen)?;
             Ok(args)
         }
@@ -1911,9 +1906,9 @@ impl Parser {
     pub fn parse_values(&mut self) -> Result<Values, ParserError> {
         let values = self.parse_comma_separated(|parser| {
             parser.expect_token(&Token::LParen)?;
-            let e = parser.parse_expr_list()?;
+            let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
             parser.expect_token(&Token::RParen)?;
-            Ok(e)
+            Ok(exprs)
         })?;
         Ok(Values(values))
     }

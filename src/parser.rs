@@ -294,7 +294,13 @@ impl Parser {
             } else {
                 vec![]
             };
-            let window_frame = self.parse_window_frame()?;
+            let window_frame = if !self.consume_token(&Token::RParen) {
+                let window_frame = self.parse_window_frame()?;
+                self.expect_token(&Token::RParen)?;
+                Some(window_frame)
+            } else {
+                None
+            };
 
             Some(WindowSpec {
                 partition_by,
@@ -313,35 +319,24 @@ impl Parser {
         }))
     }
 
-    pub fn parse_window_frame(&mut self) -> Result<Option<WindowFrame>, ParserError> {
-        let window_frame = match self.peek_token() {
-            Some(Token::Word(w)) => {
-                let units = w.keyword.parse::<WindowFrameUnits>()?;
-                self.next_token();
-                if self.parse_keyword("BETWEEN") {
-                    let start_bound = self.parse_window_frame_bound()?;
-                    self.expect_keyword("AND")?;
-                    let end_bound = Some(self.parse_window_frame_bound()?);
-                    Some(WindowFrame {
-                        units,
-                        start_bound,
-                        end_bound,
-                    })
-                } else {
-                    let start_bound = self.parse_window_frame_bound()?;
-                    let end_bound = None;
-                    Some(WindowFrame {
-                        units,
-                        start_bound,
-                        end_bound,
-                    })
-                }
-            }
-            Some(Token::RParen) => None,
-            unexpected => return self.expected("'ROWS', 'RANGE', 'GROUPS', or ')'", unexpected),
+    pub fn parse_window_frame(&mut self) -> Result<WindowFrame, ParserError> {
+        let units = match self.next_token() {
+            Some(Token::Word(w)) => w.keyword.parse::<WindowFrameUnits>()?,
+            unexpected => return self.expected("ROWS, RANGE, GROUPS", unexpected),
         };
-        self.expect_token(&Token::RParen)?;
-        Ok(window_frame)
+        let (start_bound, end_bound) = if self.parse_keyword("BETWEEN") {
+            let start_bound = self.parse_window_frame_bound()?;
+            self.expect_keyword("AND")?;
+            let end_bound = Some(self.parse_window_frame_bound()?);
+            (start_bound, end_bound)
+        } else {
+            (self.parse_window_frame_bound()?, None)
+        };
+        Ok(WindowFrame {
+            units,
+            start_bound,
+            end_bound,
+        })
     }
 
     /// "CURRENT ROW" | ( (<positive number> | "UNBOUNDED") ("PRECEDING" | FOLLOWING) )

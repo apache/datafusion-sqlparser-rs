@@ -10,16 +10,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ordered_float::OrderedFloat;
 use std::fmt;
 
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Value {
-    /// Unsigned integer value
-    Long(u64),
-    /// Unsigned floating point value
-    Double(OrderedFloat<f64>),
+    /// Numeric literal
+    Number(String),
     /// 'string value'
     SingleQuotedString(String),
     /// N'string value'
@@ -60,8 +57,7 @@ pub enum Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Value::Long(v) => write!(f, "{}", v),
-            Value::Double(v) => write!(f, "{}", v),
+            Value::Number(v) => write!(f, "{}", v),
             Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
             Value::NationalStringLiteral(v) => write!(f, "N'{}'", v),
             Value::HexStringLiteral(v) => write!(f, "X'{}'", v),

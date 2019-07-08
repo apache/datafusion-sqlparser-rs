@@ -339,7 +339,7 @@ impl Parser {
         })
     }
 
-    /// "CURRENT ROW" | ( (<positive number> | "UNBOUNDED") ("PRECEDING" | FOLLOWING) )
+    /// Parse `CURRENT ROW` or `{ <positive number> | UNBOUNDED } { PRECEDING | FOLLOWING }`
     pub fn parse_window_frame_bound(&mut self) -> Result<WindowFrameBound, ParserError> {
         if self.parse_keywords(vec!["CURRENT", "ROW"]) {
             Ok(WindowFrameBound::CurrentRow)
@@ -347,8 +347,7 @@ impl Parser {
             let rows = if self.parse_keyword("UNBOUNDED") {
                 None
             } else {
-                let rows = self.parse_literal_uint()?;
-                Some(rows)
+                Some(self.parse_literal_uint()?)
             };
             if self.parse_keyword("PRECEDING") {
                 Ok(WindowFrameBound::Preceding(rows))

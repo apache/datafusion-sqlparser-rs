@@ -292,11 +292,16 @@ impl fmt::Display for WindowSpec {
 
 /// Specifies the data processed by a window function, e.g.
 /// `RANGE UNBOUNDED PRECEDING` or `ROWS BETWEEN 5 PRECEDING AND CURRENT ROW`.
+///
+/// Note: The parser does not validate the specified bounds; the caller should
+/// reject invalid bounds like `ROWS UNBOUNDED FOLLOWING` before execution.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WindowFrame {
     pub units: WindowFrameUnits,
     pub start_bound: WindowFrameBound,
-    /// The right bound of the `BETWEEN .. AND` clause.
+    /// The right bound of the `BETWEEN .. AND` clause. The end bound of `None`
+    /// indicates the shorthand form (e.g. `ROWS 1 PRECEDING`), which must
+    /// behave the same as `end_bound = WindowFrameBound::CurrentRow`.
     pub end_bound: Option<WindowFrameBound>,
     // TBD: EXCLUDE
 }
@@ -334,14 +339,14 @@ impl FromStr for WindowFrameUnits {
     }
 }
 
+/// Specifies [WindowFrame]'s `start_bound` and `end_bound`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum WindowFrameBound {
     /// `CURRENT ROW`
     CurrentRow,
     /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
     Preceding(Option<u64>),
-    /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`. This can only appear in
-    /// [WindowFrame::end_bound].
+    /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
     Following(Option<u64>),
 }
 

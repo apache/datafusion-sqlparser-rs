@@ -128,18 +128,14 @@ pub enum DateTimeField {
 
 impl fmt::Display for DateTimeField {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                DateTimeField::Year => "YEAR",
-                DateTimeField::Month => "MONTH",
-                DateTimeField::Day => "DAY",
-                DateTimeField::Hour => "HOUR",
-                DateTimeField::Minute => "MINUTE",
-                DateTimeField::Second => "SECOND",
-            }
-        )
+        f.write_str(match self {
+            DateTimeField::Year => "YEAR",
+            DateTimeField::Month => "MONTH",
+            DateTimeField::Day => "DAY",
+            DateTimeField::Hour => "HOUR",
+            DateTimeField::Minute => "MINUTE",
+            DateTimeField::Second => "SECOND",
+        })
     }
 }
 

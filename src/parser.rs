@@ -125,6 +125,7 @@ impl Parser {
                     "UPDATE" => Ok(self.parse_update()?),
                     "ALTER" => Ok(self.parse_alter()?),
                     "COPY" => Ok(self.parse_copy()?),
+                    "SHOW" => Ok(self.parse_show()?),
                     "START" => Ok(self.parse_start_transaction()?),
                     "SET" => Ok(self.parse_set_transaction()?),
                     // `BEGIN` is a nonstandard but common alias for the
@@ -763,7 +764,11 @@ impl Parser {
     #[must_use]
     pub fn parse_one_of_keywords(&mut self, keywords: &[&'static str]) -> Option<&'static str> {
         for keyword in keywords {
-            assert!(keywords::ALL_KEYWORDS.contains(keyword));
+            assert!(
+                keywords::ALL_KEYWORDS.contains(keyword),
+                "{} is not contained in keyword list",
+                keyword
+            );
         }
         match self.peek_token() {
             Some(Token::Word(ref k)) => keywords
@@ -1586,6 +1591,48 @@ impl Parser {
             group_by,
             having,
         })
+    }
+
+    pub fn parse_show(&mut self) -> Result<Statement, ParserError> {
+        if self
+            .parse_one_of_keywords(&["EXTENDED", "FULL", "COLUMNS", "FIELDS"])
+            .is_some()
+        {
+            self.prev_token();
+            self.parse_show_columns()
+        } else {
+            self.expected("EXTENDED, FULL, COLUMNS, or FIELDS", self.peek_token())
+        }
+    }
+
+    fn parse_show_columns(&mut self) -> Result<Statement, ParserError> {
+        let extended = self.parse_keyword("EXTENDED");
+        let full = self.parse_keyword("FULL");
+        self.expect_one_of_keywords(&["COLUMNS", "FIELDS"])?;
+        self.expect_one_of_keywords(&["FROM", "IN"])?;
+        let table_name = self.parse_object_name()?;
+        // MySQL also supports FROM <database> here. In other words, MySQL
+        // allows both FROM <table> FROM <database> and FROM <database>.<table>,
+        // while we only support the latter for now.
+        let filter = self.parse_show_statement_filter()?;
+        Ok(Statement::ShowColumns {
+            extended,
+            full,
+            table_name,
+            filter,
+        })
+    }
+
+    fn parse_show_statement_filter(&mut self) -> Result<Option<ShowStatementFilter>, ParserError> {
+        if self.parse_keyword("LIKE") {
+            Ok(Some(ShowStatementFilter::Like(
+                self.parse_literal_string()?,
+            )))
+        } else if self.parse_keyword("WHERE") {
+            Ok(Some(ShowStatementFilter::Where(self.parse_expr()?)))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn parse_table_and_joins(&mut self) -> Result<TableWithJoins, ParserError> {

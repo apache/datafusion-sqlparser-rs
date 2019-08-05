@@ -802,6 +802,15 @@ impl Parser {
         }
     }
 
+    /// Bail out if the following tokens are not the expected sequence of
+    /// keywords, or consume them if they are.
+    pub fn expect_keywords(&mut self, expected: &[&'static str]) -> Result<(), ParserError> {
+        for kw in expected {
+            self.expect_keyword(kw)?;
+        }
+        Ok(())
+    }
+
     /// Consume the next token if it matches the expected token, otherwise return false
     #[must_use]
     pub fn consume_token(&mut self, expected: &Token) -> bool {
@@ -856,8 +865,7 @@ impl Parser {
         self.expect_keyword("TABLE")?;
         let table_name = self.parse_object_name()?;
         let (columns, constraints) = self.parse_columns()?;
-        self.expect_keyword("STORED")?;
-        self.expect_keyword("AS")?;
+        self.expect_keywords(&["STORED", "AS"])?;
         let file_format = self.parse_identifier()?.parse::<FileFormat>()?;
 
         self.expect_keyword("LOCATION")?;
@@ -1111,8 +1119,7 @@ impl Parser {
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
-        self.expect_keyword("FROM")?;
-        self.expect_keyword("STDIN")?;
+        self.expect_keywords(&["FROM", "STDIN"])?;
         self.expect_token(&Token::SemiColon)?;
         let values = self.parse_tsv()?;
         Ok(Statement::Copy {
@@ -1240,16 +1247,14 @@ impl Parser {
                 "TIMESTAMP" => {
                     // TBD: we throw away "with/without timezone" information
                     if self.parse_keyword("WITH") || self.parse_keyword("WITHOUT") {
-                        self.expect_keyword("TIME")?;
-                        self.expect_keyword("ZONE")?;
+                        self.expect_keywords(&["TIME", "ZONE"])?;
                     }
                     Ok(DataType::Timestamp)
                 }
                 "TIME" => {
                     // TBD: we throw away "with/without timezone" information
                     if self.parse_keyword("WITH") || self.parse_keyword("WITHOUT") {
-                        self.expect_keyword("TIME")?;
-                        self.expect_keyword("ZONE")?;
+                        self.expect_keywords(&["TIME", "ZONE"])?;
                     }
                     Ok(DataType::Time)
                 }

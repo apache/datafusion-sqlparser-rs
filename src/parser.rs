@@ -1260,7 +1260,7 @@ impl Parser {
                 }
                 // Interval types can be followed by a complicated interval
                 // qualifier that we don't currently support. See
-                // parse_interval_literal for a taste.
+                // parse_literal_interval for a taste.
                 "INTERVAL" => Ok(DataType::Interval),
                 "REGCLASS" => Ok(DataType::Regclass),
                 "TEXT" => {

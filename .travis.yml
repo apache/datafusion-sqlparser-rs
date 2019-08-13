@@ -49,6 +49,7 @@ script:
   - travis-cargo clippy -- --all-targets --all-features -- -D warnings
   - travis-cargo build
   - travis-cargo test
+  - travis-cargo test -- all-features
   - cargo +nightly fmt -- --check --config-path <(echo 'license_template_path = "HEADER"')
 
 after_success:

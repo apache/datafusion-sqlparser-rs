@@ -10,13 +10,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(feature = "bigdecimal")]
+use bigdecimal::BigDecimal;
 use std::fmt;
 
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Value {
     /// Numeric literal
+    #[cfg(not(feature = "bigdecimal"))]
     Number(String),
+    #[cfg(feature = "bigdecimal")]
+    Number(BigDecimal),
     /// 'string value'
     SingleQuotedString(String),
     /// N'string value'

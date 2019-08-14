@@ -251,6 +251,81 @@ PHP	₱ USD $
     //assert_eq!(sql, ast.to_string());
 }
 
+#[test]
+fn parse_set() {
+    let stmt = pg_and_generic().verified_stmt("SET a = b");
+    assert_eq!(
+        stmt,
+        Statement::SetVariable {
+            local: false,
+            variable: "a".into(),
+            value: SetVariableValue::Ident("b".into()),
+        }
+    );
+
+    let stmt = pg_and_generic().verified_stmt("SET a = 'b'");
+    assert_eq!(
+        stmt,
+        Statement::SetVariable {
+            local: false,
+            variable: "a".into(),
+            value: SetVariableValue::Literal(Value::SingleQuotedString("b".into())),
+        }
+    );
+
+    let stmt = pg_and_generic().verified_stmt("SET a = 0");
+    assert_eq!(
+        stmt,
+        Statement::SetVariable {
+            local: false,
+            variable: "a".into(),
+            value: SetVariableValue::Literal(Value::Long(0)),
+        }
+    );
+
+    let stmt = pg_and_generic().verified_stmt("SET a = DEFAULT");
+    assert_eq!(
+        stmt,
+        Statement::SetVariable {
+            local: false,
+            variable: "a".into(),
+            value: SetVariableValue::Ident("DEFAULT".into()),
+        }
+    );
+
+    let stmt = pg_and_generic().verified_stmt("SET LOCAL a = b");
+    assert_eq!(
+        stmt,
+        Statement::SetVariable {
+            local: true,
+            variable: "a".into(),
+            value: SetVariableValue::Ident("b".into()),
+        }
+    );
+
+    pg_and_generic().one_statement_parses_to("SET a TO b", "SET a = b");
+    pg_and_generic().one_statement_parses_to("SET SESSION a = b", "SET a = b");
+}
+
+#[test]
+fn parse_show() {
+    let stmt = pg_and_generic().verified_stmt("SHOW a");
+    assert_eq!(
+        stmt,
+        Statement::ShowVariable {
+            variable: "a".into()
+        }
+    );
+
+    let stmt = pg_and_generic().verified_stmt("SHOW ALL");
+    assert_eq!(
+        stmt,
+        Statement::ShowVariable {
+            variable: "ALL".into()
+        }
+    )
+}
+
 fn pg() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {})],

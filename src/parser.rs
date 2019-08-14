@@ -125,9 +125,9 @@ impl Parser {
                     "UPDATE" => Ok(self.parse_update()?),
                     "ALTER" => Ok(self.parse_alter()?),
                     "COPY" => Ok(self.parse_copy()?),
+                    "SET" => Ok(self.parse_set()?),
                     "SHOW" => Ok(self.parse_show()?),
                     "START" => Ok(self.parse_start_transaction()?),
-                    "SET" => Ok(self.parse_set_transaction()?),
                     // `BEGIN` is a nonstandard but common alias for the
                     // standard `START TRANSACTION` statement. It is supported
                     // by at least PostgreSQL and MySQL.
@@ -1593,6 +1593,30 @@ impl Parser {
         })
     }
 
+    pub fn parse_set(&mut self) -> Result<Statement, ParserError> {
+        let modifier = self.parse_one_of_keywords(&["SESSION", "LOCAL"]);
+        let variable = self.parse_identifier()?;
+        if self.consume_token(&Token::Eq) || self.parse_keyword("TO") {
+            let token = self.peek_token();
+            let value = match (self.parse_value(), token) {
+                (Ok(value), _) => SetVariableValue::Literal(value),
+                (Err(_), Some(Token::Word(ident))) => SetVariableValue::Ident(ident.as_ident()),
+                (Err(_), other) => self.expected("variable value", other)?,
+            };
+            Ok(Statement::SetVariable {
+                local: modifier == Some("LOCAL"),
+                variable,
+                value,
+            })
+        } else if variable == "TRANSACTION" && modifier.is_none() {
+            Ok(Statement::SetTransaction {
+                modes: self.parse_transaction_modes()?,
+            })
+        } else {
+            self.expected("variable name", self.peek_token())
+        }
+    }
+
     pub fn parse_show(&mut self) -> Result<Statement, ParserError> {
         if self
             .parse_one_of_keywords(&["EXTENDED", "FULL", "COLUMNS", "FIELDS"])
@@ -1601,7 +1625,9 @@ impl Parser {
             self.prev_token();
             self.parse_show_columns()
         } else {
-            self.expected("EXTENDED, FULL, COLUMNS, or FIELDS", self.peek_token())
+            Ok(Statement::ShowVariable {
+                variable: self.parse_identifier()?,
+            })
         }
     }
 
@@ -1969,13 +1995,6 @@ impl Parser {
     pub fn parse_begin(&mut self) -> Result<Statement, ParserError> {
         let _ = self.parse_one_of_keywords(&["TRANSACTION", "WORK"]);
         Ok(Statement::StartTransaction {
-            modes: self.parse_transaction_modes()?,
-        })
-    }
-
-    pub fn parse_set_transaction(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword("TRANSACTION")?;
-        Ok(Statement::SetTransaction {
             modes: self.parse_transaction_modes()?,
         })
     }

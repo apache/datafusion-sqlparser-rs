@@ -440,6 +440,20 @@ pub enum Statement {
         /// `RESTRICT` or no drop behavior at all was specified.
         cascade: bool,
     },
+    /// SET <variable>
+    ///
+    /// Note: this is not a standard SQL statement, but it is supported by at
+    /// least MySQL and PostgreSQL. Not all MySQL-specific syntatic forms are
+    /// supported yet.
+    SetVariable {
+        local: bool,
+        variable: Ident,
+        value: SetVariableValue,
+    },
+    /// SHOW <variable>
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    ShowVariable { variable: Ident },
     /// SHOW COLUMNS
     ///
     /// Note: this is a MySQL-specific statement.
@@ -601,6 +615,18 @@ impl fmt::Display for Statement {
                 display_comma_separated(names),
                 if *cascade { " CASCADE" } else { "" },
             ),
+            Statement::SetVariable {
+                local,
+                variable,
+                value,
+            } => {
+                f.write_str("SET ")?;
+                if *local {
+                    f.write_str("LOCAL ")?;
+                }
+                write!(f, "{} = {}", variable, value)
+            }
+            Statement::ShowVariable { variable } => write!(f, "SHOW {}", variable),
             Statement::ShowColumns {
                 extended,
                 full,
@@ -824,6 +850,22 @@ impl fmt::Display for ShowStatementFilter {
         match self {
             Like(pattern) => write!(f, "LIKE '{}'", value::escape_single_quote_string(pattern)),
             Where(expr) => write!(f, "WHERE {}", expr),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SetVariableValue {
+    Ident(Ident),
+    Literal(Value),
+}
+
+impl fmt::Display for SetVariableValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use SetVariableValue::*;
+        match self {
+            Ident(ident) => f.write_str(ident),
+            Literal(literal) => write!(f, "{}", literal),
         }
     }
 }

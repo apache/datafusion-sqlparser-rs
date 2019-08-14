@@ -335,6 +335,7 @@ define_keywords!(
     SELECT,
     SENSITIVE,
     SERIALIZABLE,
+    SESSION,
     SESSION_USER,
     SET,
     SHOW,

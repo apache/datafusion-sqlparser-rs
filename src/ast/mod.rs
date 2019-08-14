@@ -366,9 +366,9 @@ impl fmt::Display for WindowFrameBound {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Statement {
-    /// SELECT
+    /// `SELECT`
     Query(Box<Query>),
-    /// INSERT
+    /// `INSERT`
     Insert {
         /// TABLE
         table_name: ObjectName,
@@ -385,7 +385,7 @@ pub enum Statement {
         /// VALUES a vector of values to be copied
         values: Vec<Option<String>>,
     },
-    /// UPDATE
+    /// `UPDATE`
     Update {
         /// TABLE
         table_name: ObjectName,
@@ -394,14 +394,14 @@ pub enum Statement {
         /// WHERE
         selection: Option<Expr>,
     },
-    /// DELETE
+    /// `DELETE`
     Delete {
-        /// FROM
+        /// `FROM`
         table_name: ObjectName,
-        /// WHERE
+        /// `WHERE`
         selection: Option<Expr>,
     },
-    /// CREATE VIEW
+    /// `CREATE VIEW`
     CreateView {
         /// View name
         name: ObjectName,
@@ -410,7 +410,7 @@ pub enum Statement {
         materialized: bool,
         with_options: Vec<SqlOption>,
     },
-    /// CREATE TABLE
+    /// `CREATE TABLE`
     CreateTable {
         /// Table name
         name: ObjectName,
@@ -422,13 +422,13 @@ pub enum Statement {
         file_format: Option<FileFormat>,
         location: Option<String>,
     },
-    /// ALTER TABLE
+    /// `ALTER TABLE`
     AlterTable {
         /// Table name
         name: ObjectName,
         operation: AlterTableOperation,
     },
-    /// DROP
+    /// `DROP`
     Drop {
         /// The type of the object to drop: TABLE, VIEW, etc.
         object_type: ObjectType,
@@ -440,7 +440,7 @@ pub enum Statement {
         /// `RESTRICT` or no drop behavior at all was specified.
         cascade: bool,
     },
-    /// SET <variable>
+    /// `SET <variable>`
     ///
     /// Note: this is not a standard SQL statement, but it is supported by at
     /// least MySQL and PostgreSQL. Not all MySQL-specific syntatic forms are
@@ -450,11 +450,11 @@ pub enum Statement {
         variable: Ident,
         value: SetVariableValue,
     },
-    /// SHOW <variable>
+    /// `SHOW <variable>`
     ///
     /// Note: this is a PostgreSQL-specific statement.
     ShowVariable { variable: Ident },
-    /// SHOW COLUMNS
+    /// `SHOW COLUMNS`
     ///
     /// Note: this is a MySQL-specific statement.
     ShowColumns {

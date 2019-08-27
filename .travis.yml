@@ -49,7 +49,7 @@ script:
   - travis-cargo clippy -- --all-targets --all-features -- -D warnings
   - travis-cargo build
   - travis-cargo test
-  - travis-cargo --only nightly fmt -- -- --check --config-path <(echo 'license_template_path = "HEADER"')
+  - cargo +nightly fmt -- --check --config-path <(echo 'license_template_path = "HEADER"')
 
 after_success:
   - cargo coveralls --verbose

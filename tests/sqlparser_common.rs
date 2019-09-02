@@ -22,14 +22,14 @@ use matches::assert_matches;
 
 use sqlparser::ast::*;
 use sqlparser::parser::*;
-use sqlparser::test_utils::{all_dialects, expr_from_projection, only};
+use sqlparser::test_utils::{all_dialects, expr_from_projection, number, only};
 
 #[test]
 fn parse_insert_values() {
     let row = vec![
-        Expr::Value(Value::Long(1)),
-        Expr::Value(Value::Long(2)),
-        Expr::Value(Value::Long(3)),
+        Expr::Value(number("1")),
+        Expr::Value(number("2")),
+        Expr::Value(number("3")),
     ];
     let rows1 = vec![row.clone()];
     let rows2 = vec![row.clone(), row];
@@ -107,15 +107,15 @@ fn parse_update() {
                 vec![
                     Assignment {
                         id: "a".into(),
-                        value: Expr::Value(Value::Long(1)),
+                        value: Expr::Value(number("1")),
                     },
                     Assignment {
                         id: "b".into(),
-                        value: Expr::Value(Value::Long(2)),
+                        value: Expr::Value(number("2")),
                     },
                     Assignment {
                         id: "c".into(),
-                        value: Expr::Value(Value::Long(3)),
+                        value: Expr::Value(number("3")),
                     },
                 ]
             );
@@ -181,7 +181,7 @@ fn parse_where_delete_statement() {
                 Expr::BinaryOp {
                     left: Box::new(Expr::Identifier("name".to_string())),
                     op: Eq,
-                    right: Box::new(Expr::Value(Value::Long(5))),
+                    right: Box::new(Expr::Value(number("5"))),
                 },
                 selection.unwrap(),
             );
@@ -205,17 +205,17 @@ fn parse_simple_select() {
     assert_eq!(false, select.distinct);
     assert_eq!(3, select.projection.len());
     let select = verified_query(sql);
-    assert_eq!(Some(Expr::Value(Value::Long(5))), select.limit);
+    assert_eq!(Some(Expr::Value(number("5"))), select.limit);
 }
 
 #[test]
 fn parse_limit_is_not_an_alias() {
     // In dialects supporting LIMIT it shouldn't be parsed as a table alias
     let ast = verified_query("SELECT id FROM customer LIMIT 1");
-    assert_eq!(Some(Expr::Value(Value::Long(1))), ast.limit);
+    assert_eq!(Some(Expr::Value(number("1"))), ast.limit);
 
     let ast = verified_query("SELECT 1 LIMIT 5");
-    assert_eq!(Some(Expr::Value(Value::Long(5))), ast.limit);
+    assert_eq!(Some(Expr::Value(number("5"))), ast.limit);
 }
 
 #[test]
@@ -286,7 +286,7 @@ fn parse_column_aliases() {
     } = only(&select.projection)
     {
         assert_eq!(&BinaryOperator::Plus, op);
-        assert_eq!(&Expr::Value(Value::Long(1)), right.as_ref());
+        assert_eq!(&Expr::Value(number("1")), right.as_ref());
         assert_eq!("newname", alias);
     } else {
         panic!("Expected ExprWithAlias")
@@ -427,6 +427,20 @@ fn parse_escaped_single_quote_string_predicate() {
 }
 
 #[test]
+fn parse_number() {
+    let expr = verified_expr("1.0");
+
+    #[cfg(feature = "bigdecimal")]
+    assert_eq!(
+        expr,
+        Expr::Value(Value::Number(bigdecimal::BigDecimal::from(1)))
+    );
+
+    #[cfg(not(feature = "bigdecimal"))]
+    assert_eq!(expr, Expr::Value(Value::Number("1.0".into())));
+}
+
+#[test]
 fn parse_compound_expr_1() {
     use self::BinaryOperator::*;
     use self::Expr::*;
@@ -527,9 +541,9 @@ fn parse_not_precedence() {
         Expr::UnaryOp {
             op: UnaryOperator::Not,
             expr: Box::new(Expr::Between {
-                expr: Box::new(Expr::Value(Value::Long(1))),
-                low: Box::new(Expr::Value(Value::Long(1))),
-                high: Box::new(Expr::Value(Value::Long(2))),
+                expr: Box::new(Expr::Value(number("1"))),
+                low: Box::new(Expr::Value(number("1"))),
+                high: Box::new(Expr::Value(number("2"))),
                 negated: true,
             }),
         },
@@ -658,8 +672,8 @@ fn parse_between() {
         assert_eq!(
             Expr::Between {
                 expr: Box::new(Expr::Identifier("age".to_string())),
-                low: Box::new(Expr::Value(Value::Long(25))),
-                high: Box::new(Expr::Value(Value::Long(32))),
+                low: Box::new(Expr::Value(number("25"))),
+                high: Box::new(Expr::Value(number("32"))),
                 negated,
             },
             select.selection.unwrap()
@@ -676,16 +690,16 @@ fn parse_between_with_expr() {
     let select = verified_only_select(sql);
     assert_eq!(
         Expr::IsNull(Box::new(Expr::Between {
-            expr: Box::new(Expr::Value(Value::Long(1))),
+            expr: Box::new(Expr::Value(number("1"))),
             low: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Value(Value::Long(1))),
+                left: Box::new(Expr::Value(number("1"))),
                 op: Plus,
-                right: Box::new(Expr::Value(Value::Long(2))),
+                right: Box::new(Expr::Value(number("2"))),
             }),
             high: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Value(Value::Long(3))),
+                left: Box::new(Expr::Value(number("3"))),
                 op: Plus,
-                right: Box::new(Expr::Value(Value::Long(4))),
+                right: Box::new(Expr::Value(number("4"))),
             }),
             negated: false,
         })),
@@ -697,19 +711,19 @@ fn parse_between_with_expr() {
     assert_eq!(
         Expr::BinaryOp {
             left: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Value(Value::Long(1))),
+                left: Box::new(Expr::Value(number("1"))),
                 op: BinaryOperator::Eq,
-                right: Box::new(Expr::Value(Value::Long(1))),
+                right: Box::new(Expr::Value(number("1"))),
             }),
             op: BinaryOperator::And,
             right: Box::new(Expr::Between {
                 expr: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Value(Value::Long(1))),
+                    left: Box::new(Expr::Value(number("1"))),
                     op: BinaryOperator::Plus,
                     right: Box::new(Expr::Identifier("x".to_string())),
                 }),
-                low: Box::new(Expr::Value(Value::Long(1))),
-                high: Box::new(Expr::Value(Value::Long(2))),
+                low: Box::new(Expr::Value(number("1"))),
+                high: Box::new(Expr::Value(number("2"))),
                 negated: false,
             }),
         },
@@ -763,7 +777,7 @@ fn parse_select_order_by_limit() {
         ],
         select.order_by
     );
-    assert_eq!(Some(Expr::Value(Value::Long(2))), select.limit);
+    assert_eq!(Some(Expr::Value(number("2"))), select.limit);
 }
 
 #[test]
@@ -792,7 +806,7 @@ fn parse_select_having() {
                 distinct: false
             })),
             op: BinaryOperator::Gt,
-            right: Box::new(Expr::Value(Value::Long(1)))
+            right: Box::new(Expr::Value(number("1")))
         }),
         select.having
     );
@@ -988,7 +1002,7 @@ fn parse_create_table_with_options() {
                     },
                     SqlOption {
                         name: "a".into(),
-                        value: Value::Long(123)
+                        value: number("123")
                     },
                 ],
                 with_options
@@ -1176,6 +1190,23 @@ fn parse_aggregate_with_group_by() {
     let sql = "SELECT a, COUNT(1), MIN(b), MAX(b) FROM foo GROUP BY a";
     let _ast = verified_only_select(sql);
     //TODO: assertions
+}
+
+#[test]
+fn parse_literal_decimal() {
+    // These numbers were explicitly chosen to not roundtrip if represented as
+    // f64s (i.e., as 64-bit binary floating point numbers).
+    let sql = "SELECT 0.300000000000000004, 9007199254740993.0";
+    let select = verified_only_select(sql);
+    assert_eq!(2, select.projection.len());
+    assert_eq!(
+        &Expr::Value(number("0.300000000000000004")),
+        expr_from_projection(&select.projection[0]),
+    );
+    assert_eq!(
+        &Expr::Value(number("9007199254740993.0")),
+        expr_from_projection(&select.projection[1]),
+    )
 }
 
 #[test]
@@ -1421,12 +1452,12 @@ fn parse_searched_case_expr() {
                 BinaryOp {
                     left: Box::new(Identifier("bar".to_string())),
                     op: Eq,
-                    right: Box::new(Expr::Value(Value::Long(0)))
+                    right: Box::new(Expr::Value(number("0")))
                 },
                 BinaryOp {
                     left: Box::new(Identifier("bar".to_string())),
                     op: GtEq,
-                    right: Box::new(Expr::Value(Value::Long(0)))
+                    right: Box::new(Expr::Value(number("0")))
                 }
             ],
             results: vec![
@@ -1451,7 +1482,7 @@ fn parse_simple_case_expr() {
     assert_eq!(
         &Case {
             operand: Some(Box::new(Identifier("foo".to_string()))),
-            conditions: vec![Expr::Value(Value::Long(1))],
+            conditions: vec![Expr::Value(number("1"))],
             results: vec![Expr::Value(Value::SingleQuotedString("Y".to_string())),],
             else_result: Some(Box::new(Expr::Value(Value::SingleQuotedString(
                 "N".to_string()
@@ -2063,7 +2094,7 @@ fn parse_create_view_with_options() {
                     },
                     SqlOption {
                         name: "a".into(),
-                        value: Value::Long(123)
+                        value: number("123")
                     },
                 ],
                 with_options
@@ -2197,26 +2228,26 @@ fn parse_invalid_subquery_without_parens() {
 #[test]
 fn parse_offset() {
     let ast = verified_query("SELECT foo FROM bar OFFSET 2 ROWS");
-    assert_eq!(ast.offset, Some(Expr::Value(Value::Long(2))));
+    assert_eq!(ast.offset, Some(Expr::Value(number("2"))));
     let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 OFFSET 2 ROWS");
-    assert_eq!(ast.offset, Some(Expr::Value(Value::Long(2))));
+    assert_eq!(ast.offset, Some(Expr::Value(number("2"))));
     let ast = verified_query("SELECT foo FROM bar ORDER BY baz OFFSET 2 ROWS");
-    assert_eq!(ast.offset, Some(Expr::Value(Value::Long(2))));
+    assert_eq!(ast.offset, Some(Expr::Value(number("2"))));
     let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS");
-    assert_eq!(ast.offset, Some(Expr::Value(Value::Long(2))));
+    assert_eq!(ast.offset, Some(Expr::Value(number("2"))));
     let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS) OFFSET 2 ROWS");
-    assert_eq!(ast.offset, Some(Expr::Value(Value::Long(2))));
+    assert_eq!(ast.offset, Some(Expr::Value(number("2"))));
     match ast.body {
         SetExpr::Select(s) => match only(s.from).relation {
             TableFactor::Derived { subquery, .. } => {
-                assert_eq!(subquery.offset, Some(Expr::Value(Value::Long(2))));
+                assert_eq!(subquery.offset, Some(Expr::Value(number("2"))));
             }
             _ => panic!("Test broke"),
         },
         _ => panic!("Test broke"),
     }
     let ast = verified_query("SELECT 'foo' OFFSET 0 ROWS");
-    assert_eq!(ast.offset, Some(Expr::Value(Value::Long(0))));
+    assert_eq!(ast.offset, Some(Expr::Value(number("0"))));
 }
 
 #[test]
@@ -2229,15 +2260,15 @@ fn parse_singular_row_offset() {
 
 #[test]
 fn parse_fetch() {
-    const FETCH_FIRST_TWO_ROWS_ONLY: Fetch = Fetch {
+    let fetch_first_two_rows_only = Some(Fetch {
         with_ties: false,
         percent: false,
-        quantity: Some(Expr::Value(Value::Long(2))),
-    };
+        quantity: Some(Expr::Value(number("2"))),
+    });
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST 2 ROWS ONLY");
-    assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
+    assert_eq!(ast.fetch, fetch_first_two_rows_only);
     let ast = verified_query("SELECT 'foo' FETCH FIRST 2 ROWS ONLY");
-    assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
+    assert_eq!(ast.fetch, fetch_first_two_rows_only);
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST ROWS ONLY");
     assert_eq!(
         ast.fetch,
@@ -2248,9 +2279,9 @@ fn parse_fetch() {
         })
     );
     let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 FETCH FIRST 2 ROWS ONLY");
-    assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
+    assert_eq!(ast.fetch, fetch_first_two_rows_only);
     let ast = verified_query("SELECT foo FROM bar ORDER BY baz FETCH FIRST 2 ROWS ONLY");
-    assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
+    assert_eq!(ast.fetch, fetch_first_two_rows_only);
     let ast = verified_query(
         "SELECT foo FROM bar WHERE foo = 4 ORDER BY baz FETCH FIRST 2 ROWS WITH TIES",
     );
@@ -2259,7 +2290,7 @@ fn parse_fetch() {
         Some(Fetch {
             with_ties: true,
             percent: false,
-            quantity: Some(Expr::Value(Value::Long(2))),
+            quantity: Some(Expr::Value(number("2"))),
         })
     );
     let ast = verified_query("SELECT foo FROM bar FETCH FIRST 50 PERCENT ROWS ONLY");
@@ -2268,35 +2299,35 @@ fn parse_fetch() {
         Some(Fetch {
             with_ties: false,
             percent: true,
-            quantity: Some(Expr::Value(Value::Long(50))),
+            quantity: Some(Expr::Value(number("50"))),
         })
     );
     let ast = verified_query(
         "SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY",
     );
-    assert_eq!(ast.offset, Some(Expr::Value(Value::Long(2))));
-    assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
+    assert_eq!(ast.offset, Some(Expr::Value(number("2"))));
+    assert_eq!(ast.fetch, fetch_first_two_rows_only);
     let ast = verified_query(
         "SELECT foo FROM (SELECT * FROM bar FETCH FIRST 2 ROWS ONLY) FETCH FIRST 2 ROWS ONLY",
     );
-    assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
+    assert_eq!(ast.fetch, fetch_first_two_rows_only);
     match ast.body {
         SetExpr::Select(s) => match only(s.from).relation {
             TableFactor::Derived { subquery, .. } => {
-                assert_eq!(subquery.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
+                assert_eq!(subquery.fetch, fetch_first_two_rows_only);
             }
             _ => panic!("Test broke"),
         },
         _ => panic!("Test broke"),
     }
     let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY) OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY");
-    assert_eq!(ast.offset, Some(Expr::Value(Value::Long(2))));
-    assert_eq!(ast.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
+    assert_eq!(ast.offset, Some(Expr::Value(number("2"))));
+    assert_eq!(ast.fetch, fetch_first_two_rows_only);
     match ast.body {
         SetExpr::Select(s) => match only(s.from).relation {
             TableFactor::Derived { subquery, .. } => {
-                assert_eq!(subquery.offset, Some(Expr::Value(Value::Long(2))));
-                assert_eq!(subquery.fetch, Some(FETCH_FIRST_TWO_ROWS_ONLY));
+                assert_eq!(subquery.offset, Some(Expr::Value(number("2"))));
+                assert_eq!(subquery.fetch, fetch_first_two_rows_only);
             }
             _ => panic!("Test broke"),
         },

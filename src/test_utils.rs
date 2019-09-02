@@ -136,3 +136,7 @@ pub fn expr_from_projection(item: &SelectItem) -> &Expr {
         _ => panic!("Expected UnnamedExpr"),
     }
 }
+
+pub fn number(n: &'static str) -> Value {
+    Value::Number(n.parse().unwrap())
+}

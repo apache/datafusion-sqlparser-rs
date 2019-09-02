@@ -1183,13 +1183,12 @@ impl Parser {
                         return parser_err!(format!("No value parser for keyword {}", k.keyword));
                     }
                 },
-                Token::Number(ref n) if n.contains('.') => match n.parse::<f64>() {
-                    Ok(n) => Ok(Value::Double(n.into())),
-                    Err(e) => parser_err!(format!("Could not parse '{}' as f64: {}", n, e)),
-                },
-                Token::Number(ref n) => match n.parse::<u64>() {
-                    Ok(n) => Ok(Value::Long(n)),
-                    Err(e) => parser_err!(format!("Could not parse '{}' as u64: {}", n, e)),
+                // The call to n.parse() returns a bigdecimal when the
+                // bigdecimal feature is enabled, and is otherwise a no-op
+                // (i.e., it returns the input string).
+                Token::Number(ref n) => match n.parse() {
+                    Ok(n) => Ok(Value::Number(n)),
+                    Err(e) => parser_err!(format!("Could not parse '{}' as number: {}", n, e)),
                 },
                 Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
                 Token::NationalStringLiteral(ref s) => {
@@ -1199,6 +1198,16 @@ impl Parser {
                 _ => parser_err!(format!("Unsupported value: {:?}", t)),
             },
             None => parser_err!("Expecting a value, but found EOF"),
+        }
+    }
+
+    pub fn parse_number_value(&mut self) -> Result<Value, ParserError> {
+        match self.parse_value()? {
+            v @ Value::Number(_) => Ok(v),
+            _ => {
+                self.prev_token();
+                self.expected("literal number", self.peek_token())
+            }
         }
     }
 
@@ -1863,16 +1872,13 @@ impl Parser {
         if self.parse_keyword("ALL") {
             Ok(None)
         } else {
-            self.parse_literal_uint()
-                .map(|n| Some(Expr::Value(Value::Long(n))))
+            Ok(Some(Expr::Value(self.parse_number_value()?)))
         }
     }
 
     /// Parse an OFFSET clause
     pub fn parse_offset(&mut self) -> Result<Expr, ParserError> {
-        let value = self
-            .parse_literal_uint()
-            .map(|n| Expr::Value(Value::Long(n)))?;
+        let value = Expr::Value(self.parse_number_value()?);
         self.expect_one_of_keywords(&["ROW", "ROWS"])?;
         Ok(value)
     }

@@ -280,7 +280,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             variable: "a".into(),
-            value: SetVariableValue::Literal(Value::Long(0)),
+            value: SetVariableValue::Literal(number("0")),
         }
     );
 

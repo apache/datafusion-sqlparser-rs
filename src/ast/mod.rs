@@ -440,6 +440,29 @@ pub enum Statement {
         /// `RESTRICT` or no drop behavior at all was specified.
         cascade: bool,
     },
+    /// SET <variable>
+    ///
+    /// Note: this is not a standard SQL statement, but it is supported by at
+    /// least MySQL and PostgreSQL. Not all MySQL-specific syntatic forms are
+    /// supported yet.
+    SetVariable {
+        local: bool,
+        variable: Ident,
+        value: SetVariableValue,
+    },
+    /// SHOW <variable>
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    ShowVariable { variable: Ident },
+    /// SHOW COLUMNS
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowColumns {
+        extended: bool,
+        full: bool,
+        table_name: ObjectName,
+        filter: Option<ShowStatementFilter>,
+    },
     /// `{ BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...`
     StartTransaction { modes: Vec<TransactionMode> },
     /// `SET TRANSACTION ...`
@@ -451,6 +474,9 @@ pub enum Statement {
 }
 
 impl fmt::Display for Statement {
+    // Clippy thinks this function is too complicated, but it is painful to
+    // split up without extracting structs for each `Statement` variant.
+    #[allow(clippy::cognitive_complexity)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Statement::Query(s) => write!(f, "{}", s),
@@ -589,6 +615,37 @@ impl fmt::Display for Statement {
                 display_comma_separated(names),
                 if *cascade { " CASCADE" } else { "" },
             ),
+            Statement::SetVariable {
+                local,
+                variable,
+                value,
+            } => {
+                f.write_str("SET ")?;
+                if *local {
+                    f.write_str("LOCAL ")?;
+                }
+                write!(f, "{} = {}", variable, value)
+            }
+            Statement::ShowVariable { variable } => write!(f, "SHOW {}", variable),
+            Statement::ShowColumns {
+                extended,
+                full,
+                table_name,
+                filter,
+            } => {
+                f.write_str("SHOW ")?;
+                if *extended {
+                    f.write_str("EXTENDED ")?;
+                }
+                if *full {
+                    f.write_str("FULL ")?;
+                }
+                write!(f, "COLUMNS FROM {}", table_name)?;
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
+                }
+                Ok(())
+            }
             Statement::StartTransaction { modes } => {
                 write!(f, "START TRANSACTION")?;
                 if !modes.is_empty() {
@@ -778,5 +835,37 @@ impl fmt::Display for TransactionIsolationLevel {
             RepeatableRead => "REPEATABLE READ",
             Serializable => "SERIALIZABLE",
         })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ShowStatementFilter {
+    Like(String),
+    Where(Expr),
+}
+
+impl fmt::Display for ShowStatementFilter {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use ShowStatementFilter::*;
+        match self {
+            Like(pattern) => write!(f, "LIKE '{}'", value::escape_single_quote_string(pattern)),
+            Where(expr) => write!(f, "WHERE {}", expr),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SetVariableValue {
+    Ident(Ident),
+    Literal(Value),
+}
+
+impl fmt::Display for SetVariableValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use SetVariableValue::*;
+        match self {
+            Ident(ident) => f.write_str(ident),
+            Literal(literal) => write!(f, "{}", literal),
+        }
     }
 }

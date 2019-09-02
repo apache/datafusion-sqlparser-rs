@@ -14,6 +14,7 @@ mod ansi;
 mod generic;
 pub mod keywords;
 mod mssql;
+mod mysql;
 mod postgresql;
 
 use std::fmt::Debug;
@@ -21,6 +22,7 @@ use std::fmt::Debug;
 pub use self::ansi::AnsiDialect;
 pub use self::generic::GenericDialect;
 pub use self::mssql::MsSqlDialect;
+pub use self::mysql::MySqlDialect;
 pub use self::postgresql::PostgreSqlDialect;
 
 pub trait Dialect: Debug {

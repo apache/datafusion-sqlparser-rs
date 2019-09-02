@@ -125,8 +125,9 @@ impl Parser {
                     "UPDATE" => Ok(self.parse_update()?),
                     "ALTER" => Ok(self.parse_alter()?),
                     "COPY" => Ok(self.parse_copy()?),
+                    "SET" => Ok(self.parse_set()?),
+                    "SHOW" => Ok(self.parse_show()?),
                     "START" => Ok(self.parse_start_transaction()?),
-                    "SET" => Ok(self.parse_set_transaction()?),
                     // `BEGIN` is a nonstandard but common alias for the
                     // standard `START TRANSACTION` statement. It is supported
                     // by at least PostgreSQL and MySQL.
@@ -763,7 +764,11 @@ impl Parser {
     #[must_use]
     pub fn parse_one_of_keywords(&mut self, keywords: &[&'static str]) -> Option<&'static str> {
         for keyword in keywords {
-            assert!(keywords::ALL_KEYWORDS.contains(keyword));
+            assert!(
+                keywords::ALL_KEYWORDS.contains(keyword),
+                "{} is not contained in keyword list",
+                keyword
+            );
         }
         match self.peek_token() {
             Some(Token::Word(ref k)) => keywords
@@ -1597,6 +1602,74 @@ impl Parser {
         })
     }
 
+    pub fn parse_set(&mut self) -> Result<Statement, ParserError> {
+        let modifier = self.parse_one_of_keywords(&["SESSION", "LOCAL"]);
+        let variable = self.parse_identifier()?;
+        if self.consume_token(&Token::Eq) || self.parse_keyword("TO") {
+            let token = self.peek_token();
+            let value = match (self.parse_value(), token) {
+                (Ok(value), _) => SetVariableValue::Literal(value),
+                (Err(_), Some(Token::Word(ident))) => SetVariableValue::Ident(ident.as_ident()),
+                (Err(_), other) => self.expected("variable value", other)?,
+            };
+            Ok(Statement::SetVariable {
+                local: modifier == Some("LOCAL"),
+                variable,
+                value,
+            })
+        } else if variable == "TRANSACTION" && modifier.is_none() {
+            Ok(Statement::SetTransaction {
+                modes: self.parse_transaction_modes()?,
+            })
+        } else {
+            self.expected("equals sign or TO", self.peek_token())
+        }
+    }
+
+    pub fn parse_show(&mut self) -> Result<Statement, ParserError> {
+        if self
+            .parse_one_of_keywords(&["EXTENDED", "FULL", "COLUMNS", "FIELDS"])
+            .is_some()
+        {
+            self.prev_token();
+            self.parse_show_columns()
+        } else {
+            Ok(Statement::ShowVariable {
+                variable: self.parse_identifier()?,
+            })
+        }
+    }
+
+    fn parse_show_columns(&mut self) -> Result<Statement, ParserError> {
+        let extended = self.parse_keyword("EXTENDED");
+        let full = self.parse_keyword("FULL");
+        self.expect_one_of_keywords(&["COLUMNS", "FIELDS"])?;
+        self.expect_one_of_keywords(&["FROM", "IN"])?;
+        let table_name = self.parse_object_name()?;
+        // MySQL also supports FROM <database> here. In other words, MySQL
+        // allows both FROM <table> FROM <database> and FROM <database>.<table>,
+        // while we only support the latter for now.
+        let filter = self.parse_show_statement_filter()?;
+        Ok(Statement::ShowColumns {
+            extended,
+            full,
+            table_name,
+            filter,
+        })
+    }
+
+    fn parse_show_statement_filter(&mut self) -> Result<Option<ShowStatementFilter>, ParserError> {
+        if self.parse_keyword("LIKE") {
+            Ok(Some(ShowStatementFilter::Like(
+                self.parse_literal_string()?,
+            )))
+        } else if self.parse_keyword("WHERE") {
+            Ok(Some(ShowStatementFilter::Where(self.parse_expr()?)))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn parse_table_and_joins(&mut self) -> Result<TableWithJoins, ParserError> {
         let relation = self.parse_table_factor()?;
 
@@ -1928,13 +2001,6 @@ impl Parser {
     pub fn parse_begin(&mut self) -> Result<Statement, ParserError> {
         let _ = self.parse_one_of_keywords(&["TRANSACTION", "WORK"]);
         Ok(Statement::StartTransaction {
-            modes: self.parse_transaction_modes()?,
-        })
-    }
-
-    pub fn parse_set_transaction(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword("TRANSACTION")?;
-        Ok(Statement::SetTransaction {
             modes: self.parse_transaction_modes()?,
         })
     }

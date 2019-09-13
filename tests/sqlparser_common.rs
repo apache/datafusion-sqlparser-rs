@@ -2455,6 +2455,17 @@ fn parse_start_transaction() {
     verified_stmt("START TRANSACTION ISOLATION LEVEL REPEATABLE READ");
     verified_stmt("START TRANSACTION ISOLATION LEVEL SERIALIZABLE");
 
+    // Regression test for https://github.com/andygrove/sqlparser-rs/pull/139,
+    // in which START TRANSACTION would fail to parse if followed by a statement
+    // terminator.
+    assert_eq!(
+        parse_sql_statements("START TRANSACTION; SELECT 1"),
+        Ok(vec![
+            verified_stmt("START TRANSACTION"),
+            verified_stmt("SELECT 1"),
+        ])
+    );
+
     let res = parse_sql_statements("START TRANSACTION ISOLATION LEVEL BAD");
     assert_eq!(
         ParserError::ParserError("Expected isolation level, found: BAD".to_string()),
@@ -2463,7 +2474,7 @@ fn parse_start_transaction() {
 
     let res = parse_sql_statements("START TRANSACTION BAD");
     assert_eq!(
-        ParserError::ParserError("Expected transaction mode, found: BAD".to_string()),
+        ParserError::ParserError("Expected end of statement, found: BAD".to_string()),
         res.unwrap_err()
     );
 

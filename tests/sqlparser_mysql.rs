@@ -26,7 +26,7 @@ fn parse_identifiers() {
 
 #[test]
 fn parse_show_columns() {
-    let table_name = ObjectName(vec!["mytable".to_string()]);
+    let table_name = ObjectName(vec![Ident::new("mytable")]);
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mytable"),
         Statement::ShowColumns {
@@ -41,7 +41,7 @@ fn parse_show_columns() {
         Statement::ShowColumns {
             extended: false,
             full: false,
-            table_name: ObjectName(vec!["mydb".to_string(), "mytable".to_string()]),
+            table_name: ObjectName(vec![Ident::new("mydb"), Ident::new("mytable")]),
             filter: None,
         }
     );

@@ -68,8 +68,61 @@ where
     DisplaySeparated { slice, sep: ", " }
 }
 
-/// Identifier name, in the originally quoted form (e.g. `"id"`)
-pub type Ident = String;
+/// An identifier, decomposed into its value or character data and the quote style.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Ident {
+    /// The value of the identifier without quotes.
+    pub value: String,
+    /// The starting quote if any. Valid quote characters are the single quote,
+    /// double quote, backtick, and opening square bracket.
+    pub quote_style: Option<char>,
+}
+
+impl Ident {
+    /// Create a new identifier with the given value and no quotes.
+    pub fn new<S>(value: S) -> Self
+    where
+        S: Into<String>,
+    {
+        Ident {
+            value: value.into(),
+            quote_style: None,
+        }
+    }
+
+    /// Create a new quoted identifier with the given quote and value. This function
+    /// panics if the given quote is not a valid quote character.
+    pub fn with_quote<S>(quote: char, value: S) -> Self
+    where
+        S: Into<String>,
+    {
+        assert!(quote == '\'' || quote == '"' || quote == '`' || quote == '[');
+        Ident {
+            value: value.into(),
+            quote_style: Some(quote),
+        }
+    }
+}
+
+impl From<&str> for Ident {
+    fn from(value: &str) -> Self {
+        Ident {
+            value: value.to_string(),
+            quote_style: None,
+        }
+    }
+}
+
+impl fmt::Display for Ident {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.quote_style {
+            Some(q) if q == '"' || q == '\'' || q == '`' => write!(f, "{}{}{}", q, self.value, q),
+            Some(q) if q == '[' => write!(f, "[{}]", self.value),
+            None => f.write_str(&self.value),
+            _ => panic!("unexpected quote style"),
+        }
+    }
+}
 
 /// A name of a table, view, custom type, etc., possibly multi-part, i.e. db.schema.obj
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -175,7 +228,7 @@ pub enum Expr {
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expr::Identifier(s) => f.write_str(s),
+            Expr::Identifier(s) => write!(f, "{}", s),
             Expr::Wildcard => f.write_str("*"),
             Expr::QualifiedWildcard(q) => write!(f, "{}.*", display_separated(q, ".")),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
@@ -864,7 +917,7 @@ impl fmt::Display for SetVariableValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use SetVariableValue::*;
         match self {
-            Ident(ident) => f.write_str(ident),
+            Ident(ident) => write!(f, "{}", ident),
             Literal(literal) => write!(f, "{}", literal),
         }
     }

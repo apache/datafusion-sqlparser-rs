@@ -79,7 +79,7 @@ fn parse_create_table_with_defaults() {
                     ColumnDef {
                         name: "last_name".into(),
                         data_type: DataType::Varchar(Some(45)),
-                        collation: Some(ObjectName(vec!["\"es_ES\"".into()])),
+                        collation: Some(ObjectName(vec![Ident::with_quote('"', "es_ES")])),
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,

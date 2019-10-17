@@ -8,6 +8,20 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Nothing here yet! Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented changes.
 
+
+## [0.5.0] - 2019-10-10 
+
+### Changed
+- Replace the `Value::Long(u64)` and `Value::Double(f64)` variants with `Value::Number(String)` to avoid losing precision when parsing decimal literals (#130) - thanks @benesch!
+- `--features bigdecimal` can be enabled to work with `Value::Number(BigDecimal)` instead, at the cost of an additional dependency.
+
+### Added
+- Support MySQL `SHOW COLUMNS`, `SET <variable>=<value>`, and `SHOW <variable>` statements (#135) - thanks @quodlibetor and @benesch!
+
+### Fixed
+- Don't fail to parse `START TRANSACTION` followed by a semicolon (#139) - thanks @gaffneyk!
+
+
 ## [0.4.0] - 2019-07-02
 This release brings us closer to SQL-92 support, mainly thanks to the improvements contributed back from @MaterializeInc's fork and other work by @benesch.
 

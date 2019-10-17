@@ -9,7 +9,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
+    # Clippy must be run first, as its lints are only triggered during
+    # compilation. Put another way: after a successful `cargo build`, `cargo
+    # clippy` is guaranteed to produce no results. This bug is known upstream:
+    # https://github.com/rust-lang/rust-clippy/issues/2604.
+    - name: Clippy
+      run: cargo clippy -- --all-targets --all-features -- -D warnings
+    - name: Check formatting
+      run: cargo +nightly fmt -- --check --config-path <(echo 'license_template_path = "HEADER"')
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+    - name: Run tests for all features
+      run: cargo test --verbose -- all-features

@@ -1370,7 +1370,7 @@ fn parse_simple_math_expr_minus() {
 fn parse_delimited_identifiers() {
     // check that quoted identifiers in any position remain quoted after serialization
     let select = verified_only_select(
-        r#"SELECT "alias"."bar baz", "myfun"(), "simple id" AS "column alias" FROM "a table" AS "alias""#
+        r#"SELECT "alias"."bar baz", "myfun"(), "simple id" AS "column alias" FROM "a table" AS "alias""#,
     );
     // check FROM
     match only(select.from).relation {

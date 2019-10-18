@@ -11,6 +11,7 @@ jobs:
     - uses: actions/checkout@v1
     - name: Setup Rust
       run: |
+        rustup toolchain install nightly && rustup component add --toolchain nightly rustfmt
         rustup toolchain install stable
         rustup override set stable
     # Clippy must be run first, as its lints are only triggered during
@@ -21,7 +22,6 @@ jobs:
 #      run: cargo clippy -- --all-targets --all-features -- -D warnings
     - name: Check formatting
       run: |
-        rustup toolchain install nightly && rustup component add --toolchain nightly rustfmt
         cargo +nightly fmt -- --check --config-path <(echo 'license_template_path = "HEADER"')
     - name: Build
       run: cargo build --verbose

@@ -201,11 +201,11 @@ impl Parser {
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {
                     Some(Token::LParen) | Some(Token::Period) => {
-                        let mut id_parts: Vec<Ident> = vec![w.as_ident()];
+                        let mut id_parts: Vec<Ident> = vec![w.to_ident()];
                         let mut ends_with_wildcard = false;
                         while self.consume_token(&Token::Period) {
                             match self.next_token() {
-                                Some(Token::Word(w)) => id_parts.push(w.as_ident()),
+                                Some(Token::Word(w)) => id_parts.push(w.to_ident()),
                                 Some(Token::Mult) => {
                                     ends_with_wildcard = true;
                                     break;
@@ -225,7 +225,7 @@ impl Parser {
                             Ok(Expr::CompoundIdentifier(id_parts))
                         }
                     }
-                    _ => Ok(Expr::Identifier(w.as_ident())),
+                    _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word
             Token::Mult => Ok(Expr::Wildcard),
@@ -871,7 +871,7 @@ impl Parser {
         let table_name = self.parse_object_name()?;
         let (columns, constraints) = self.parse_columns()?;
         self.expect_keywords(&["STORED", "AS"])?;
-        let file_format = self.parse_identifier()?.parse::<FileFormat>()?;
+        let file_format = self.parse_identifier()?.value.parse::<FileFormat>()?;
 
         self.expect_keyword("LOCATION")?;
         let location = self.parse_literal_string()?;
@@ -976,7 +976,7 @@ impl Parser {
                 }
 
                 columns.push(ColumnDef {
-                    name: column_name.as_ident(),
+                    name: column_name.to_ident(),
                     data_type,
                     collation,
                     options,
@@ -1318,11 +1318,11 @@ impl Parser {
             Some(Token::Word(ref w))
                 if after_as || !reserved_kwds.contains(&w.keyword.as_str()) =>
             {
-                Ok(Some(w.as_ident()))
+                Ok(Some(w.to_ident()))
             }
             // MSSQL supports single-quoted strings as aliases for columns
             // We accept them as table aliases too, although MSSQL does not.
-            Some(Token::SingleQuotedString(ref s)) => Ok(Some(format!("'{}'", s))),
+            Some(Token::SingleQuotedString(ref s)) => Ok(Some(Ident::with_quote('\'', s.clone()))),
             not_an_ident => {
                 if after_as {
                     return self.expected("an identifier after AS", not_an_ident);
@@ -1366,7 +1366,7 @@ impl Parser {
     /// Parse a simple one-word identifier (possibly quoted, possibly a keyword)
     pub fn parse_identifier(&mut self) -> Result<Ident, ParserError> {
         match self.next_token() {
-            Some(Token::Word(w)) => Ok(w.as_ident()),
+            Some(Token::Word(w)) => Ok(w.to_ident()),
             unexpected => self.expected("identifier", unexpected),
         }
     }
@@ -1609,7 +1609,7 @@ impl Parser {
             let token = self.peek_token();
             let value = match (self.parse_value(), token) {
                 (Ok(value), _) => SetVariableValue::Literal(value),
-                (Err(_), Some(Token::Word(ident))) => SetVariableValue::Ident(ident.as_ident()),
+                (Err(_), Some(Token::Word(ident))) => SetVariableValue::Ident(ident.to_ident()),
                 (Err(_), other) => self.expected("variable value", other)?,
             };
             Ok(Statement::SetVariable {
@@ -1617,7 +1617,7 @@ impl Parser {
                 variable,
                 value,
             })
-        } else if variable == "TRANSACTION" && modifier.is_none() {
+        } else if variable.value == "TRANSACTION" && modifier.is_none() {
             Ok(Statement::SetTransaction {
                 modes: self.parse_transaction_modes()?,
             })
@@ -2066,8 +2066,11 @@ impl Parser {
 }
 
 impl Word {
-    pub fn as_ident(&self) -> Ident {
-        self.to_string()
+    pub fn to_ident(&self) -> Ident {
+        Ident {
+            value: self.value.clone(),
+            quote_style: self.quote_style,
+        }
     }
 }
 

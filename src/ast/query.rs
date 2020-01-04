@@ -134,11 +134,13 @@ impl fmt::Display for Select {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "SELECT{}", if self.distinct { " DISTINCT" } else { "" })?;
         if let Some(ref top) = self.top {
-            write!(f,
-                   " TOP ({}){}{}",
-                   top,
-                   if self.percent { " PERCENT" } else { "" },
-                   if self.with_ties { " WITH TIES"} else { "" })?;
+            write!(
+                f,
+                " TOP ({}){}{}",
+                top,
+                if self.percent { " PERCENT" } else { "" },
+                if self.with_ties { " WITH TIES" } else { "" }
+            )?;
         }
         write!(f, " {}", display_comma_separated(&self.projection))?;
         if !self.from.is_empty() {

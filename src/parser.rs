@@ -1568,14 +1568,6 @@ impl Parser {
             None
         };
 
-        let percent = self.parse_keyword("PERCENT");
-
-        let with_ties = self.parse_keywords(vec!["WITH", "TIES"]);
-
-        if top.is_none() && percent {
-            return parser_err!("Cannot specify PERCENT without TOP in SELECT");
-        }
-
         let projection = self.parse_comma_separated(Parser::parse_select_item)?;
 
         // Note that for keywords to be properly handled here, they need to be
@@ -1610,8 +1602,6 @@ impl Parser {
         Ok(Select {
             distinct,
             top,
-            percent,
-            with_ties,
             projection,
             from,
             selection,
@@ -1960,14 +1950,24 @@ impl Parser {
 
     /// Parse a TOP clause, MSSQL equivalent of LIMIT,
     /// that follows after SELECT [DISTINCT].
-    pub fn parse_top(&mut self) -> Result<Option<Expr>, ParserError> {
-        if self.consume_token(&Token::LParen) {
-            let expr = self.parse_expr()?;
+    pub fn parse_top(&mut self) -> Result<Top, ParserError> {
+        let quantity = if self.consume_token(&Token::LParen) {
+            let quantity = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
-            Ok(Some(expr))
+            Some(quantity)
         } else {
-            Ok(Some(Expr::Value(self.parse_number_value()?)))
-        }
+            Some(Expr::Value(self.parse_number_value()?))
+        };
+
+        let percent = self.parse_keyword("PERCENT");
+
+        let with_ties = self.parse_keywords(vec!["WITH", "TIES"]);
+
+        Ok(Top {
+            with_ties,
+            percent,
+            quantity,
+        })
     }
 
     /// Parse a LIMIT clause

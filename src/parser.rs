@@ -1563,7 +1563,7 @@ impl Parser {
         }
 
         let top = if self.parse_keyword("TOP") {
-            self.parse_top()?
+            Some(self.parse_top()?)
         } else {
             None
         };

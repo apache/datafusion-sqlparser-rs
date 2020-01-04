@@ -69,10 +69,41 @@ fn parse_mssql_apply_join() {
 }
 
 #[test]
+fn parse_mssql_top_paren() {
+    let sql = "SELECT TOP (5) * FROM foo";
+    let select = ms_and_generic().verified_only_select(sql);
+    assert_eq!(Some(Expr::Value(number("5"))), select.top);
+    assert!(!select.percent);
+}
+
+#[test]
+fn parse_mssql_top_percent() {
+    let sql = "SELECT TOP (5) PERCENT * FROM foo";
+    let select = ms_and_generic().verified_only_select(sql);
+    assert_eq!(Some(Expr::Value(number("5"))), select.top);
+    assert!(select.percent);
+}
+
+#[test]
+fn parse_mssql_top_with_ties() {
+    let sql = "SELECT TOP (5) WITH TIES * FROM foo";
+    let select = ms_and_generic().verified_only_select(sql);
+    assert_eq!(Some(Expr::Value(number("5"))), select.top);
+    assert!(select.with_ties);
+}
+
+#[test]
+fn parse_mssql_top_percent_with_ties() {
+    let sql = "SELECT TOP (5) PERCENT WITH TIES * FROM foo";
+    let select = ms_and_generic().verified_only_select(sql);
+    assert_eq!(Some(Expr::Value(number("5"))), select.top);
+    assert!(select.percent);
+}
+
+#[test]
 fn parse_mssql_top() {
-    let sql = "SELECT TOP 5 [bar] FROM foo";
-    let select = ms_and_generic().verified_query(sql);
-    assert_eq!(Some(Expr::Value(number("5"))), select.limit);
+    let sql = "SELECT TOP 5 bar, baz FROM foo";
+    let _ = ms_and_generic().one_statement_parses_to(sql, "SELECT TOP (5) bar, baz FROM foo");
 }
 
 fn ms() -> TestedDialects {

@@ -1561,6 +1561,21 @@ impl Parser {
         if all && distinct {
             return parser_err!("Cannot specify both ALL and DISTINCT in SELECT");
         }
+
+        let top = if self.parse_keyword("TOP") {
+            self.parse_top()?
+        } else {
+            None
+        };
+
+        let percent = self.parse_keyword("PERCENT");
+
+        let with_ties = self.parse_keywords(vec!["WITH", "TIES"]);
+
+        if top.is_none() && percent {
+            return parser_err!("Cannot specify PERCENT without TOP in SELECT");
+        }
+
         let projection = self.parse_comma_separated(Parser::parse_select_item)?;
 
         // Note that for keywords to be properly handled here, they need to be
@@ -1594,6 +1609,9 @@ impl Parser {
 
         Ok(Select {
             distinct,
+            top,
+            percent,
+            with_ties,
             projection,
             from,
             selection,
@@ -1938,6 +1956,18 @@ impl Parser {
             None
         };
         Ok(OrderByExpr { expr, asc })
+    }
+
+    /// Parse a TOP clause, MSSQL equivalent of LIMIT,
+    /// that follows after SELECT [DISTINCT].
+    pub fn parse_top(&mut self) -> Result<Option<Expr>, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let expr = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Some(expr))
+        } else {
+            Ok(Some(Expr::Value(self.parse_number_value()?)))
+        }
     }
 
     /// Parse a LIMIT clause

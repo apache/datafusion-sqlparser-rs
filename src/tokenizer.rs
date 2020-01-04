@@ -786,8 +786,6 @@ mod tests {
     #[test]
     fn tokenize_mssql_top() {
         let sql = "SELECT TOP 5 [bar] FROM foo";
-        //let select = ms_and_generic().verified_query(sql);
-        //assert_eq!(Some(Expr::Value(number("5"))), select.limit);
         let dialect = MsSqlDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, sql);
         let tokens = tokenizer.tokenize().unwrap();
@@ -806,7 +804,6 @@ mod tests {
         ];
         compare(expected, tokens);
     }
-
 
     fn compare(expected: Vec<Token>, actual: Vec<Token>) {
         //println!("------------------------------");

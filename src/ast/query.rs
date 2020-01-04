@@ -114,6 +114,10 @@ impl fmt::Display for SetOperator {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Select {
     pub distinct: bool,
+    /// top and percent are MSSQL only
+    pub top: Option<Expr>,
+    pub percent: bool,
+    pub with_ties: bool,
     /// projection expressions
     pub projection: Vec<SelectItem>,
     /// FROM
@@ -128,12 +132,15 @@ pub struct Select {
 
 impl fmt::Display for Select {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "SELECT{} {}",
-            if self.distinct { " DISTINCT" } else { "" },
-            display_comma_separated(&self.projection)
-        )?;
+        write!(f, "SELECT{}", if self.distinct { " DISTINCT" } else { "" })?;
+        if let Some(ref top) = self.top {
+            write!(f,
+                   " TOP ({}){}{}",
+                   top,
+                   if self.percent { " PERCENT" } else { "" },
+                   if self.with_ties { " WITH TIES"} else { "" })?;
+        }
+        write!(f, " {}", display_comma_separated(&self.projection))?;
         if !self.from.is_empty() {
             write!(f, " FROM {}", display_comma_separated(&self.from))?;
         }

@@ -68,6 +68,13 @@ fn parse_mssql_apply_join() {
     );
 }
 
+#[test]
+fn parse_mssql_top() {
+    let sql = "SELECT TOP 5 [bar] FROM foo";
+    let select = ms_and_generic().verified_query(sql);
+    assert_eq!(Some(Expr::Value(number("5"))), select.limit);
+}
+
 fn ms() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MsSqlDialect {})],

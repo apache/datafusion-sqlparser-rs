@@ -783,7 +783,6 @@ impl Parser {
     }
 
     /// Bail out if the current token is not one of the expected keywords, or consume it if it is
-    #[must_use]
     pub fn expect_one_of_keywords(
         &mut self,
         keywords: &[&'static str],

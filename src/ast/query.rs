@@ -114,6 +114,8 @@ impl fmt::Display for SetOperator {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Select {
     pub distinct: bool,
+    /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
+    pub top: Option<Top>,
     /// projection expressions
     pub projection: Vec<SelectItem>,
     /// FROM
@@ -128,12 +130,11 @@ pub struct Select {
 
 impl fmt::Display for Select {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "SELECT{} {}",
-            if self.distinct { " DISTINCT" } else { "" },
-            display_comma_separated(&self.projection)
-        )?;
+        write!(f, "SELECT{}", if self.distinct { " DISTINCT" } else { "" })?;
+        if let Some(ref top) = self.top {
+            write!(f, " {}", top)?;
+        }
+        write!(f, " {}", display_comma_separated(&self.projection))?;
         if !self.from.is_empty() {
             write!(f, " FROM {}", display_comma_separated(&self.from))?;
         }
@@ -404,6 +405,26 @@ impl fmt::Display for Fetch {
             write!(f, "FETCH FIRST {}{} ROWS {}", quantity, percent, extension)
         } else {
             write!(f, "FETCH FIRST ROWS {}", extension)
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Top {
+    /// SQL semantic equivalent of LIMIT but with same structure as FETCH.
+    pub with_ties: bool,
+    pub percent: bool,
+    pub quantity: Option<Expr>,
+}
+
+impl fmt::Display for Top {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let extension = if self.with_ties { " WITH TIES" } else { "" };
+        if let Some(ref quantity) = self.quantity {
+            let percent = if self.percent { " PERCENT" } else { "" };
+            write!(f, "TOP ({}){}{}", quantity, percent, extension)
+        } else {
+            write!(f, "TOP{}", extension)
         }
     }
 }

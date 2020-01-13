@@ -522,6 +522,7 @@ fn peeking_take_while(
 #[cfg(test)]
 mod tests {
     use super::super::dialect::GenericDialect;
+    use super::super::dialect::MsSqlDialect;
     use super::*;
 
     #[test]
@@ -778,6 +779,28 @@ mod tests {
             Token::Whitespace(Whitespace::Newline),
             Token::make_word("line4", None),
             Token::Whitespace(Whitespace::Newline),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_mssql_top() {
+        let sql = "SELECT TOP 5 [bar] FROM foo";
+        let dialect = MsSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("TOP"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("5")),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("bar", Some('[')),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("FROM"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("foo", None),
         ];
         compare(expected, tokens);
     }

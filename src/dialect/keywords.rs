@@ -374,6 +374,7 @@ define_keywords!(
     TIMEZONE_HOUR,
     TIMEZONE_MINUTE,
     TO,
+    TOP,
     TRAILING,
     TRANSACTION,
     TRANSLATE,
@@ -426,7 +427,7 @@ define_keywords!(
 /// can be parsed unambiguously without looking ahead.
 pub const RESERVED_FOR_TABLE_ALIAS: &[&str] = &[
     // Reserved as both a table and a column alias:
-    WITH, SELECT, WHERE, GROUP, HAVING, ORDER, LIMIT, OFFSET, FETCH, UNION, EXCEPT, INTERSECT,
+    WITH, SELECT, WHERE, GROUP, HAVING, ORDER, TOP, LIMIT, OFFSET, FETCH, UNION, EXCEPT, INTERSECT,
     // Reserved only as a table alias in the `FROM`/`JOIN` clauses:
     ON, JOIN, INNER, CROSS, FULL, LEFT, RIGHT, NATURAL, USING,
     // for MSSQL-specific OUTER APPLY (seems reserved in most dialects)

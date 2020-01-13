@@ -783,7 +783,6 @@ impl Parser {
     }
 
     /// Bail out if the current token is not one of the expected keywords, or consume it if it is
-    #[must_use]
     pub fn expect_one_of_keywords(
         &mut self,
         keywords: &[&'static str],
@@ -1561,6 +1560,13 @@ impl Parser {
         if all && distinct {
             return parser_err!("Cannot specify both ALL and DISTINCT in SELECT");
         }
+
+        let top = if self.parse_keyword("TOP") {
+            Some(self.parse_top()?)
+        } else {
+            None
+        };
+
         let projection = self.parse_comma_separated(Parser::parse_select_item)?;
 
         // Note that for keywords to be properly handled here, they need to be
@@ -1594,6 +1600,7 @@ impl Parser {
 
         Ok(Select {
             distinct,
+            top,
             projection,
             from,
             selection,
@@ -1938,6 +1945,28 @@ impl Parser {
             None
         };
         Ok(OrderByExpr { expr, asc })
+    }
+
+    /// Parse a TOP clause, MSSQL equivalent of LIMIT,
+    /// that follows after SELECT [DISTINCT].
+    pub fn parse_top(&mut self) -> Result<Top, ParserError> {
+        let quantity = if self.consume_token(&Token::LParen) {
+            let quantity = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            Some(quantity)
+        } else {
+            Some(Expr::Value(self.parse_number_value()?))
+        };
+
+        let percent = self.parse_keyword("PERCENT");
+
+        let with_ties = self.parse_keywords(vec!["WITH", "TIES"]);
+
+        Ok(Top {
+            with_ties,
+            percent,
+            quantity,
+        })
     }
 
     /// Parse a LIMIT clause

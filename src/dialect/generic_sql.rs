@@ -1,6 +1,6 @@
-use dialect::Dialect;
+use crate::dialect::keywords::*;
+use crate::dialect::Dialect;
 
-use dialect::keywords::*;
 pub struct GenericSqlDialect {}
 
 impl Dialect for GenericSqlDialect {

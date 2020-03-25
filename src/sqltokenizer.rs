@@ -151,7 +151,7 @@ pub struct TokenizerError(String);
 
 /// SQL Tokenizer
 pub struct Tokenizer<'a> {
-    dialect: &'a Dialect,
+    dialect: &'a dyn Dialect,
     pub query: String,
     pub line: u64,
     pub col: u64,
@@ -159,7 +159,7 @@ pub struct Tokenizer<'a> {
 
 impl<'a> Tokenizer<'a> {
     /// Create a new SQL tokenizer for the specified SQL statement
-    pub fn new(dialect: &'a Dialect, query: &str) -> Self {
+    pub fn new(dialect: &'a dyn Dialect, query: &str) -> Self {
         Self {
             dialect,
             query: query.to_string(),
@@ -278,11 +278,11 @@ impl<'a> Tokenizer<'a> {
                     Ok(Some(Token::DoubleQuotedString(s)))
                 }
                 // numbers
-                '0'...'9' => {
+                '0'..='9' => {
                     let mut s = String::new();
                     while let Some(&ch) = chars.peek() {
                         match ch {
-                            '0'...'9' | '.' => {
+                            '0'..='9' | '.' => {
                                 chars.next(); // consume
                                 s.push(ch);
                             }
@@ -550,5 +550,4 @@ mod tests {
         //println!("------------------------------");
         assert_eq!(expected, actual);
     }
-
 }

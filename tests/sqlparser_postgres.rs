@@ -313,7 +313,8 @@ fn parse_alter_table_constraint_foreign_key() {
 
 #[test]
 fn parse_copy_example() {
-    let sql = String::from(r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM stdin;
+    let sql = String::from(
+        r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM stdin;
 1	PENELOPE	GUINESS	2006-02-15 09:34:33 0.11111
 2	NICK	WAHLBERG	2006-02-15 09:34:33 0.22222
 3	ED	CHASE	2006-02-15 09:34:33 0.312323
@@ -332,7 +333,8 @@ Kwara & Kogi
 'awe':5 'awe-inspir':4 'barbarella':1 'cat':13 'conquer':16 'dog':18 'feminist':10 'inspir':6 'monasteri':21 'must':15 'stori':7 'streetcar':2
 PHP	₱ USD $
 \N  Some other value
-\\."#);
+\\."#,
+    );
     let ast = parse_sql(&sql);
     println!("{:#?}", ast);
     //assert_eq!(sql, ast.to_string());

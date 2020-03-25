@@ -30,6 +30,8 @@ pub use self::sql_operator::SQLOperator;
 pub enum ASTNode {
     /// Identifier e.g. table name or column name
     SQLIdentifier(String),
+    /// Aliased expression
+    SQLAliasedExpr(Box<ASTNode>, String),
     /// Wildcard e.g. `*`
     SQLWildcard,
     /// Multi part identifier e.g. `myschema.dbo.mytable`
@@ -139,6 +141,9 @@ pub enum ASTNode {
 impl ToString for ASTNode {
     fn to_string(&self) -> String {
         match self {
+            ASTNode::SQLAliasedExpr(ast, alias) => {
+                format!("{} AS {}", ast.as_ref().to_string(), alias)
+            }
             ASTNode::SQLIdentifier(s) => s.to_string(),
             ASTNode::SQLWildcard => "*".to_string(),
             ASTNode::SQLCompoundIdentifier(s) => s.join("."),

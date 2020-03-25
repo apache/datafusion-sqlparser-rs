@@ -6,7 +6,7 @@ macro_rules! keyword {
     }
 }
 
-/// enumerate all the keywords here for all dialects to support in this project
+// enumerate all the keywords here for all dialects to support in this project
 keyword!(
     ABS,
     ADD,

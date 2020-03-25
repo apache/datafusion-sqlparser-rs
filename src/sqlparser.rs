@@ -53,7 +53,7 @@ impl Parser {
     }
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
-    pub fn parse_sql(dialect: &Dialect, sql: String) -> Result<ASTNode, ParserError> {
+    pub fn parse_sql(dialect: &dyn Dialect, sql: String) -> Result<ASTNode, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, &sql);
         let tokens = tokenizer.tokenize()?;
         let mut parser = Parser::new(tokens);
@@ -256,6 +256,11 @@ impl Parser {
         debug!("parsing infix");
         match self.next_token() {
             Some(tok) => match tok {
+                // Token::Keyword(ref k) if k == "AS" => {
+                // aliased expressions and CAST expr AS ident
+                //     Ok(Some(ASTNode::SQLAliasedExpr(Box::new(expr), self.parse_identifier()?)))
+                //     Ok(None)
+                // }
                 Token::Keyword(ref k) if k == "IS" => {
                     if self.parse_keywords(vec!["NULL"]) {
                         Ok(Some(ASTNode::SQLIsNull(Box::new(expr))))
@@ -342,6 +347,7 @@ impl Parser {
         debug!("get_precedence() {:?}", tok);
 
         match tok {
+            //&Token::Keyword(ref k) if k == "AS" => Ok(4),
             &Token::Keyword(ref k) if k == "OR" => Ok(5),
             &Token::Keyword(ref k) if k == "AND" => Ok(10),
             &Token::Keyword(ref k) if k == "NOT" => Ok(15),
@@ -1015,6 +1021,14 @@ impl Parser {
         }
     }
 
+    pub fn parse_identifier(&mut self) -> Result<String, ParserError> {
+        let identifier = self.parse_compound_identifier(&Token::Period)?;
+        match identifier {
+            ASTNode::SQLCompoundIdentifier(idents) => Ok(idents.join(".")),
+            other => parser_err!(format!("Expecting identifier, found: {:?}", other)),
+        }
+    }
+
     pub fn parse_column_names(&mut self) -> Result<Vec<String>, ParserError> {
         let identifier = self.parse_compound_identifier(&Token::Comma)?;
         match identifier {
@@ -1300,7 +1314,18 @@ impl Parser {
     pub fn parse_expr_list(&mut self) -> Result<Vec<ASTNode>, ParserError> {
         let mut expr_list: Vec<ASTNode> = vec![];
         loop {
-            expr_list.push(self.parse_expr(0)?);
+            let expr = self.parse_expr(0)?;
+            match self.peek_token() {
+                Some(Token::Keyword(k)) if k.as_str() == "AS" => {
+                    self.next_token();
+                    expr_list.push(ASTNode::SQLAliasedExpr(
+                        Box::new(expr),
+                        self.parse_identifier()?,
+                    ));
+                }
+                _ => expr_list.push(expr),
+            }
+
             if let Some(t) = self.peek_token() {
                 if t == Token::Comma {
                     self.next_token();

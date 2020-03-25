@@ -509,6 +509,24 @@ fn parse_select_with_semi_colon() {
 }
 
 #[test]
+fn parse_select_with_alias() {
+    let sql = String::from("SELECT id AS aliased_id FROM customer");
+    let ast = parse_sql(&sql);
+    match ast {
+        ASTNode::SQLSelect { projection, .. } => {
+            assert_eq!(1, projection.len());
+            match &projection[0] {
+                ASTNode::SQLAliasedExpr(_, alias) => {
+                    assert_eq!("aliased_id", alias.as_str());
+                }
+                _ => assert!(false),
+            }
+        }
+        _ => assert!(false),
+    }
+}
+
+#[test]
 fn parse_delete_with_semi_colon() {
     let sql: &str = "DELETE FROM 'table';";
 
@@ -676,7 +694,7 @@ fn parse_sql(sql: &str) -> ASTNode {
     generic_ast
 }
 
-fn parse_sql_with(sql: &str, dialect: &Dialect) -> ASTNode {
+fn parse_sql_with(sql: &str, dialect: &dyn Dialect) -> ASTNode {
     let mut tokenizer = Tokenizer::new(dialect, &sql);
     let tokens = tokenizer.tokenize().unwrap();
     let mut parser = Parser::new(tokens);

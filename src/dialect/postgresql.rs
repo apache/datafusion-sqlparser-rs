@@ -1,6 +1,5 @@
-use dialect::Dialect;
-
-use dialect::keywords::*;
+use crate::dialect::keywords::*;
+use crate::dialect::Dialect;
 
 pub struct PostgreSqlDialect {}
 

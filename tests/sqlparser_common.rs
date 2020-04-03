@@ -1264,15 +1264,43 @@ fn parse_literal_timestamp() {
     let sql = "SELECT TIMESTAMP '1999-01-01 01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Timestamp {
-            value: "1999-01-01 01:23:34".into(),
-            timezone: None,
-            has_parentheses: false,
-        }),
+        &Expr::Value(Value::Timestamp("1999-01-01 01:23:34".into())),
         expr_from_projection(only(&select.projection)),
     );
 }
 
+#[test]
+fn parse_function_timestamp() {
+    // https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp
+    let sql = "SELECT TIMESTAMP('1999-01-01 01:23:34')";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("TIMESTAMP")]),
+            args: vec![Expr::Value(Value::SingleQuotedString(
+                "1999-01-01 01:23:34".to_string(),
+            ))],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let sql = "SELECT TIMESTAMP('1999-01-01 01:23:34', 'America/Los_Angeles')";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("TIMESTAMP")]),
+            args: vec!["1999-01-01 01:23:34", "America/Los_Angeles"]
+                .iter()
+                .map(|s| Expr::Value(Value::SingleQuotedString(s.to_string())))
+                .collect(),
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+}
 #[test]
 fn parse_literal_interval() {
     let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";

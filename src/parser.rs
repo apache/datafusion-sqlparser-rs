@@ -196,7 +196,15 @@ impl Parser {
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
                 }),
                 "TIME" => Ok(Expr::Value(Value::Time(self.parse_literal_string()?))),
-                "TIMESTAMP" => Ok(self.parse_timestamp_field()?),
+                "TIMESTAMP" => match self.peek_token() {
+                    Some(Token::LParen) => {
+                        // TIMESTAMP can also be a function in BigQuery
+                        // https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp
+                        let id_parts: Vec<Ident> = vec![w.to_ident()];
+                        self.parse_function(ObjectName(id_parts))
+                    }
+                    _ => Ok(Expr::Value(Value::Timestamp(self.parse_literal_string()?))),
+                },
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {
@@ -421,25 +429,6 @@ impl Parser {
             field,
             expr: Box::new(expr),
         })
-    }
-
-    /// Parse a Timestamp literal
-    ///
-    /// Valid timestamp
-    ///
-    ///   1. TIMESTAMP '2020-10-30'
-    ///   2. TIMESTAMP YYYY-[M]M-[D]D[( |T)[H]H:[M]M:[S]S[.DDDDDD]][time zone]
-    pub fn parse_timestamp_field(&mut self) -> Result<Expr, ParserError> {
-        let has_paraentheses = self.consume_token(&Token::LParen);
-        let expr = self.parse_literal_string()?;
-        if has_paraentheses {
-            self.expect_token(&Token::RParen)?;
-        }
-        Ok(Expr::Value(Value::Timestamp {
-            value: expr,
-            timezone: None,
-            has_parentheses: has_paraentheses,
-        }))
     }
 
     // This function parses date/time fields for both the EXTRACT function-like

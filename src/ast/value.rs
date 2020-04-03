@@ -35,11 +35,7 @@ pub enum Value {
     /// `TIME '...'` literals
     Time(String),
     /// `TIMESTAMP '...'` literals
-    Timestamp {
-        value: String,
-        timezone: Option<String>,
-        has_parentheses: bool,
-    },
+    Timestamp(String),
     /// INTERVAL literals, roughly in the following format:
     /// `INTERVAL '<value>' <leading_field> [ (<leading_precision>) ]
     /// [ TO <last_field> [ (<fractional_seconds_precision>) ] ]`,
@@ -73,25 +69,7 @@ impl fmt::Display for Value {
             Value::Boolean(v) => write!(f, "{}", v),
             Value::Date(v) => write!(f, "DATE '{}'", escape_single_quote_string(v)),
             Value::Time(v) => write!(f, "TIME '{}'", escape_single_quote_string(v)),
-            Value::Timestamp {
-                value,
-                timezone,
-                has_parentheses,
-            } => {
-                let mut pre = " ";
-                let mut post = "";
-                if *has_parentheses {
-                    pre = "(";
-                    post = ")";
-                }
-                write!(
-                    f,
-                    "TIMESTAMP{}'{}'{}",
-                    pre,
-                    escape_single_quote_string(value),
-                    post
-                )
-            }
+            Value::Timestamp(v) => write!(f, "TIMESTAMP '{}'", escape_single_quote_string(v)),
             Value::Interval {
                 value,
                 leading_field: DateTimeField::Second,

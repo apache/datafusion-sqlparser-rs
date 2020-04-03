@@ -425,6 +425,10 @@ impl Parser {
 
     /// Parse a Timestamp literal
     ///
+    /// Valid timestamp
+    ///
+    ///   1. TIMESTAMP '2020-10-30'
+    ///   2. TIMESTAMP YYYY-[M]M-[D]D[( |T)[H]H:[M]M:[S]S[.DDDDDD]][time zone]
     pub fn parse_timestamp_field(&mut self) -> Result<Expr, ParserError> {
         let has_paraentheses = self.consume_token(&Token::LParen);
         let expr = self.parse_literal_string()?;

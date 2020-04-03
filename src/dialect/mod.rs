@@ -11,6 +11,7 @@
 // limitations under the License.
 
 mod ansi;
+mod bigquery;
 mod generic;
 pub mod keywords;
 mod mssql;
@@ -20,6 +21,7 @@ mod postgresql;
 use std::fmt::Debug;
 
 pub use self::ansi::AnsiDialect;
+pub use self::bigquery::BigQueryDialect;
 pub use self::generic::GenericDialect;
 pub use self::mssql::MsSqlDialect;
 pub use self::mysql::MySqlDialect;

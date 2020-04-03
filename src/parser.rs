@@ -939,14 +939,14 @@ impl Parser {
         }
         self.expect_keyword("AS")?;
         self.expect_token(&Token::LParen)?;
-        let statements = self.parse_statement();
+        let expr = self.parse_expr()?;
         self.expect_token(&Token::RParen)?;
 
         Ok(Statement::CreateFunction {
             name,
             or_replace,
             if_not_exists,
-            statements: vec![],
+            expr,
         })
     }
 

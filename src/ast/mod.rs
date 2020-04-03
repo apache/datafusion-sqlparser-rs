@@ -481,7 +481,7 @@ pub enum Statement {
         name: ObjectName,
         or_replace: bool,
         if_not_exists: bool,
-        statements: Vec<Statement>,
+        expr: Expr,
     },
     /// ALTER TABLE
     AlterTable {
@@ -666,14 +666,14 @@ impl fmt::Display for Statement {
                 name,
                 or_replace,
                 if_not_exists,
-                statements,
+                expr,
             } => write!(
                 f,
                 "CREATE {}FUNCTION {}{}() AS ({})",
                 if *or_replace { "OR REPLACE" } else { "" },
                 if *if_not_exists { "IF NOT EXISTS " } else { "" },
                 name,
-                "statements"
+                expr,
             ),
             Statement::AlterTable { name, operation } => {
                 write!(f, "ALTER TABLE {} {}", name, operation)

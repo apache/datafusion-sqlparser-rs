@@ -928,15 +928,17 @@ impl Parser {
     }
 
     pub fn parse_create_function(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
-        println!("WHAT ??? {}", self.parse_keyword("OR"));
         let if_not_exists = self.parse_keywords(vec!["IF", "NOT", "EXISTS"]);
 
         let name = self.parse_object_name()?;
-        let args = self.parse_optional_args();
+        self.expect_token(&Token::LParen)?;
+        let args = self.parse_optional_args()?; // TODO: support arguments
+
         if self.parse_keyword("RETURNS") {
             // Return type
             self.next_token();
         }
+
         self.expect_keyword("AS")?;
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
@@ -946,6 +948,7 @@ impl Parser {
             name,
             or_replace,
             if_not_exists,
+            args,
             expr,
         })
     }

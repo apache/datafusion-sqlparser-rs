@@ -1264,7 +1264,11 @@ fn parse_literal_timestamp() {
     let sql = "SELECT TIMESTAMP '1999-01-01 01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Timestamp("1999-01-01 01:23:34".into())),
+        &Expr::Value(Value::Timestamp {
+            value: "1999-01-01 01:23:34".into(),
+            timezone: None,
+            has_parentheses: false,
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }

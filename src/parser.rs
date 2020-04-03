@@ -196,7 +196,7 @@ impl Parser {
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
                 }),
                 "TIME" => Ok(Expr::Value(Value::Time(self.parse_literal_string()?))),
-                "TIMESTAMP" => Ok(Expr::Value(Value::Timestamp(self.parse_literal_string()?))),
+                "TIMESTAMP" => Ok(self.parse_timestamp_field()?),
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {
@@ -421,6 +421,19 @@ impl Parser {
             field,
             expr: Box::new(expr),
         })
+    }
+
+    pub fn parse_timestamp_field(&mut self) -> Result<Expr, ParserError> {
+        let has_paraentheses = self.consume_token(&Token::LParen);
+        let expr = self.parse_literal_string()?;
+        if has_paraentheses {
+            self.expect_token(&Token::RParen)?;
+        }
+        Ok(Expr::Value(Value::Timestamp {
+            value: expr,
+            timezone: None,
+            has_parentheses: has_paraentheses,
+        }))
     }
 
     // This function parses date/time fields for both the EXTRACT function-like

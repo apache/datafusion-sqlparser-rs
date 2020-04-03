@@ -423,6 +423,8 @@ impl Parser {
         })
     }
 
+    /// Parse a Timestamp literal
+    ///
     pub fn parse_timestamp_field(&mut self) -> Result<Expr, ParserError> {
         let has_paraentheses = self.consume_token(&Token::LParen);
         let expr = self.parse_literal_string()?;

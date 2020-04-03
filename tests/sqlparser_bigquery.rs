@@ -17,6 +17,7 @@
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 use sqlparser::test_utils::*;
+use sqlparser::ast::Statement::CreateFunction;
 
 #[test]
 fn parse_bigquery() {
@@ -80,8 +81,30 @@ fn parse_simple_udf() {
       -- output: numeric - pi
       CAST(ACOS(-1) AS NUMERIC)
     );";
-    let func = bq().parse_sql_statements(udf).unwrap();
-    print!("{:?}", func)
+    let stmts = bq().parse_sql_statements(udf).unwrap();
+    assert_eq!(1, stmts.len());
+
+    let func = stmts.get(0).unwrap();
+    assert_eq!(&Statement::CreateFunction {
+        name: ObjectName(vec![Ident::with_quote('`', "project.dataset.name")]),
+        or_replace: true,
+        if_not_exists: false,
+        args: vec![],
+        expr: Expr::Cast {
+            expr: Box::new(Expr::Function(
+                Function{
+                    name: ObjectName(vec![Ident::new("ACOS")]),
+                    args: vec![Expr::UnaryOp {
+                        op: UnaryOperator::Minus,
+                        expr: Box::new(Expr::Value(Value::Number("1".to_string()))),
+                    }],
+                    over: None,
+                    distinct: false
+                }
+            )),
+            data_type: DataType::Decimal(None, None),
+        }
+    }, func);
 }
 
 fn bq() -> TestedDialects {

@@ -854,8 +854,8 @@ fn parse_cast() {
     );
 
     one_statement_parses_to(
-        "SELECT CAST(id AS decimal) FROM customer",
-        "SELECT CAST(id AS numeric) FROM customer",
+        "SELECT CAST(CELL(a) AS decimal) FROM customer",
+        "SELECT CAST(CELL(a) AS numeric) FROM customer",
     );
 }
 
@@ -1301,6 +1301,7 @@ fn parse_function_timestamp() {
         expr_from_projection(only(&select.projection)),
     );
 }
+
 #[test]
 fn parse_literal_interval() {
     let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";

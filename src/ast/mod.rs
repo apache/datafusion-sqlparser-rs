@@ -476,6 +476,13 @@ pub enum Statement {
         file_format: Option<FileFormat>,
         location: Option<String>,
     },
+    /// CREATE UDF
+    CreateFunction {
+        name: ObjectName,
+        or_replace: bool,
+        if_not_exists: bool,
+        statements: Vec<Statement>,
+    },
     /// ALTER TABLE
     AlterTable {
         /// Table name
@@ -655,6 +662,19 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::CreateFunction {
+                name,
+                or_replace,
+                if_not_exists,
+                statements,
+            } => write!(
+                f,
+                "CREATE {}FUNCTION {}{}() AS ({})",
+                if *or_replace { "OR REPLACE" } else { "" },
+                if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                name,
+                "statements"
+            ),
             Statement::AlterTable { name, operation } => {
                 write!(f, "ALTER TABLE {} {}", name, operation)
             }

@@ -15,7 +15,7 @@
 //! generic dialect is also tested (on the inputs it can handle).
 
 use sqlparser::ast::*;
-use sqlparser::dialect::BigQueryDialect;
+use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 use sqlparser::test_utils::*;
 
 #[test]
@@ -70,12 +70,28 @@ fn parse_simple_select() {
 fn parse_timestamp() {
     let query =
         "SELECT a FROM t WHERE _time BETWEEN TIMESTAMP('2019-07-15') AND TIMESTAMP('2019-07-30')";
-    let select = bq().verified_only_select(query);
-    println!("{:?}", select)
+    let select = bq_and_generic().verified_only_select(query);
+}
+
+#[test]
+fn parse_simple_udf() {
+    let udf = "CREATE
+    OR REPLACE FUNCTION `project.dataset.name`() AS (
+      -- output: numeric - pi
+      CAST(ACOS(-1) AS NUMERIC)
+    );";
+    let func = bq().parse_sql_statements(udf).unwrap();
+    print!("{:?}", func)
 }
 
 fn bq() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(BigQueryDialect {})],
+    }
+}
+
+fn bq_and_generic() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(BigQueryDialect {}), Box::new(GenericDialect {})],
     }
 }

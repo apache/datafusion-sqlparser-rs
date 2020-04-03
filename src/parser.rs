@@ -401,7 +401,15 @@ impl Parser {
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
     pub fn parse_cast_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let expr = self.parse_expr()?;
+        // Can be an expr or a function
+        let expr = match self.peek_nth_token(1) {
+            Some(Token::LParen) => {
+                let name = self.parse_object_name()?;
+                self.parse_function(name)
+            }
+            _ => self.parse_expr(),
+        }?;
+
         self.expect_keyword("AS")?;
         let data_type = self.parse_data_type()?;
         self.expect_token(&Token::RParen)?;
@@ -868,6 +876,10 @@ impl Parser {
             self.parse_create_view()
         } else if self.parse_keyword("EXTERNAL") {
             self.parse_create_external_table()
+        } else if self.parse_keyword("FUNCTION") {
+            self.parse_create_function(false)
+        } else if self.parse_keywords(vec!["OR", "REPLACE", "FUNCTION"]) {
+            self.parse_create_function(true)
         } else {
             self.expected("TABLE or VIEW after CREATE", self.peek_token())
         }
@@ -912,6 +924,29 @@ impl Parser {
             query,
             materialized,
             with_options,
+        })
+    }
+
+    pub fn parse_create_function(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
+        println!("WHAT ??? {}", self.parse_keyword("OR"));
+        let if_not_exists = self.parse_keywords(vec!["IF", "NOT", "EXISTS"]);
+
+        let name = self.parse_object_name()?;
+        let args = self.parse_optional_args();
+        if self.parse_keyword("RETURNS") {
+            // Return type
+            self.next_token();
+        }
+        self.expect_keyword("AS")?;
+        self.expect_token(&Token::LParen)?;
+        let statements = self.parse_statement();
+        self.expect_token(&Token::RParen)?;
+
+        Ok(Statement::CreateFunction {
+            name,
+            or_replace,
+            if_not_exists,
+            statements: vec![],
         })
     }
 

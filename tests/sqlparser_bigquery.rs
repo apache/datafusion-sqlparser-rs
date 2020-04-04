@@ -70,7 +70,7 @@ fn parse_simple_select() {
 fn parse_timestamp() {
     let query =
         "SELECT a FROM t WHERE _time BETWEEN TIMESTAMP('2019-07-15') AND TIMESTAMP('2019-07-30')";
-    let select = bq_and_generic().verified_only_select(query);
+    let _select = bq_and_generic().verified_only_select(query);
 }
 
 #[test]

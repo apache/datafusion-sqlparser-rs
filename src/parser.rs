@@ -927,12 +927,16 @@ impl Parser {
         })
     }
 
+    /// Parse Create User Defined Function statement
+    ///
+    /// 1. https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#schema-function
+    /// 2. https://cloud.google.com/bigquery/docs/reference/standard-sql/user-defined-functions
     pub fn parse_create_function(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(vec!["IF", "NOT", "EXISTS"]);
 
         let name = self.parse_object_name()?;
         self.expect_token(&Token::LParen)?;
-        let args = self.parse_optional_args()?; // TODO: support arguments
+        let args = self.parse_optional_parameters()?; // TODO: support arguments
 
         if self.parse_keyword("RETURNS") {
             // Return type
@@ -1953,6 +1957,46 @@ impl Parser {
             let args = self.parse_comma_separated(Parser::parse_expr)?;
             self.expect_token(&Token::RParen)?;
             Ok(args)
+        }
+    }
+
+    pub fn parse_parameter(&mut self) -> Result<Expr, ParserError> {
+        let mut words = 0;
+        loop {
+            if self.consume_token(&Token::Comma) || self.consume_token(&Token::RParen) {
+                break;
+            }
+            self.next_token();
+            words += 1;
+        }
+        for _ in 0..words + 1 {
+            self.prev_token();
+        }
+
+        match words {
+            1 => Ok(Expr::Parameter {
+                name: None,
+                data_type: self.parse_data_type()?,
+                default: None,
+            }),
+            2 => Ok(Expr::Parameter {
+                name: Some(self.parse_identifier()?),
+                data_type: self.parse_data_type()?,
+                default: None,
+            }),
+            _ => Err(ParserError::ParserError(
+                "Unrecognized function".to_string(),
+            )),
+        }
+    }
+
+    pub fn parse_optional_parameters(&mut self) -> Result<Vec<Expr>, ParserError> {
+        if self.consume_token(&Token::RParen) {
+            Ok(vec![])
+        } else {
+            let parameters = self.parse_comma_separated(Parser::parse_parameter)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(parameters)
         }
     }
 

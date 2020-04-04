@@ -223,6 +223,13 @@ pub enum Expr {
     /// A parenthesized subquery `(SELECT ...)`, used in expression like
     /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
     Subquery(Box<Query>),
+    /// A parameter declaration.
+    /// https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#SQL-parameter-declaration
+    Parameter {
+        name: Option<Ident>,
+        data_type: DataType,
+        default: Option<Value>,
+    },
 }
 
 impl fmt::Display for Expr {
@@ -298,6 +305,20 @@ impl fmt::Display for Expr {
             }
             Expr::Exists(s) => write!(f, "EXISTS ({})", s),
             Expr::Subquery(s) => write!(f, "({})", s),
+            Expr::Parameter {
+                name,
+                data_type,
+                default,
+            } => {
+                if let Some(name) = name {
+                    write!(f, "{} ", name)?;
+                }
+                write!(f, "{}", data_type)?;
+                if let Some(default) = default {
+                    write!(f, " DEFAULT {}", default)?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -675,7 +696,7 @@ impl fmt::Display for Statement {
                 if *or_replace { "OR REPLACE" } else { "" },
                 if *if_not_exists { "IF NOT EXISTS " } else { "" },
                 name,
-                "",
+                display_comma_separated(args),
                 expr,
             ),
             Statement::AlterTable { name, operation } => {

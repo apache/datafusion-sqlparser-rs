@@ -17,7 +17,6 @@
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 use sqlparser::test_utils::*;
-use sqlparser::ast::Statement::CreateFunction;
 
 #[test]
 fn parse_bigquery() {
@@ -85,14 +84,14 @@ fn parse_simple_udf() {
     assert_eq!(1, stmts.len());
 
     let func = stmts.get(0).unwrap();
-    assert_eq!(&Statement::CreateFunction {
-        name: ObjectName(vec![Ident::with_quote('`', "project.dataset.name")]),
-        or_replace: true,
-        if_not_exists: false,
-        args: vec![],
-        expr: Expr::Cast {
-            expr: Box::new(Expr::Function(
-                Function{
+    assert_eq!(
+        &Statement::CreateFunction {
+            name: ObjectName(vec![Ident::with_quote('`', "project.dataset.name")]),
+            or_replace: true,
+            if_not_exists: false,
+            args: vec![],
+            expr: Expr::Cast {
+                expr: Box::new(Expr::Function(Function {
                     name: ObjectName(vec![Ident::new("ACOS")]),
                     args: vec![Expr::UnaryOp {
                         op: UnaryOperator::Minus,
@@ -100,11 +99,12 @@ fn parse_simple_udf() {
                     }],
                     over: None,
                     distinct: false
-                }
-            )),
-            data_type: DataType::Decimal(None, None),
-        }
-    }, func);
+                })),
+                data_type: DataType::Decimal(None, None),
+            }
+        },
+        func
+    );
 }
 
 fn bq() -> TestedDialects {

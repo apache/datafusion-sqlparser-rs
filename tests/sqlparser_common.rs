@@ -2656,6 +2656,44 @@ fn parse_rollback() {
 }
 
 #[test]
+fn parse_create_func_no_argument() {
+    match verified_stmt("CREATE FUNCTION foo(uid int) AS (CONCAT(uid, 'abc'))") {
+        Statement::CreateFunction {
+            name,
+            or_replace,
+            if_not_exists,
+            args,
+            expr,
+        } => {
+            assert_eq!("foo", name.0[0].value);
+            assert_eq!(false, or_replace);
+            assert_eq!(false, if_not_exists);
+            assert_eq!(
+                vec![Expr::Parameter {
+                    name: Some(Ident::new("uid")),
+                    data_type: DataType::Int,
+                    default: None
+                }],
+                args
+            );
+            assert_eq!(
+                Expr::Function(Function {
+                    name: ObjectName(vec![Ident::new("CONCAT")]),
+                    args: vec![
+                        Expr::Identifier(Ident::new("uid")),
+                        Expr::Value(Value::SingleQuotedString("abc".to_string()))
+                    ],
+                    over: None,
+                    distinct: false
+                }),
+                expr
+            )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 #[should_panic(expected = "Parse results with GenericDialect are different from PostgreSqlDialect")]
 fn ensure_multiple_dialects_are_tested() {
     // The SQL here must be parsed differently by different dialects.

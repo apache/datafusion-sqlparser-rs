@@ -1806,11 +1806,19 @@ fn parse_join_nesting() {
         vec![join(nest!(nest!(nest!(table("b"), table("c")))))]
     );
 
-    let res = parse_sql_statements("SELECT * FROM (a NATURAL JOIN (b))");
-    assert_eq!(
-        ParserError::ParserError("Expected joined table, found: )".to_string()),
-        res.unwrap_err()
-    );
+    // Parenthesized table names are non-standard, but supported in Snowflake SQL
+    let sql = "SELECT * FROM (a NATURAL JOIN (b))";
+    let select = verified_only_select(sql);
+    let from = only(select.from);
+
+    assert_eq!(from.relation, nest!(table("a"), nest!(table("b"))));
+
+    // Double parentheses around table names are non-standard, but supported in Snowflake SQL
+    let sql = "SELECT * FROM (a NATURAL JOIN ((b)))";
+    let select = verified_only_select(sql);
+    let from = only(select.from);
+
+    assert_eq!(from.relation, nest!(table("a"), nest!(nest!(table("b")))));
 }
 
 #[test]
@@ -1953,10 +1961,24 @@ fn parse_derived_tables() {
         }))
     );
 
-    let res = parse_sql_statements("SELECT * FROM ((SELECT 1) AS t)");
+    // Nesting a subquery in parentheses is non-standard, but supported in Snowflake SQL
+    let sql = "SELECT * FROM ((SELECT 1) AS t)";
+    let select = verified_only_select(sql);
+    let from = only(select.from);
+
     assert_eq!(
-        ParserError::ParserError("Expected joined table, found: )".to_string()),
-        res.unwrap_err()
+        from.relation,
+        TableFactor::NestedJoin(Box::new(TableWithJoins {
+            relation: TableFactor::Derived {
+                lateral: false,
+                subquery: Box::new(verified_query("SELECT 1")),
+                alias: Some(TableAlias {
+                    name: "t".into(),
+                    columns: vec![],
+                })
+            },
+            joins: Vec::new(),
+        }))
     );
 }
 

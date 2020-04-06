@@ -2656,7 +2656,7 @@ fn parse_rollback() {
 }
 
 #[test]
-fn parse_create_func_no_argument() {
+fn parse_create_function_one_argument() {
     match verified_stmt("CREATE FUNCTION foo(uid int) AS (CONCAT(uid, 'abc'))") {
         Statement::CreateFunction {
             name,

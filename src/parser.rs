@@ -938,10 +938,12 @@ impl Parser {
         self.expect_token(&Token::LParen)?;
         let args = self.parse_optional_parameters()?; // TODO: support arguments
 
-        if self.parse_keyword("RETURNS") {
-            // Return type
-            self.next_token();
-        }
+        let temporary = self.parse_keyword("TEMPORARY") || self.parse_keyword("TEMP");
+        let returns = if self.parse_keyword("RETURNS") {
+            Some(self.parse_data_type()?)
+        } else {
+            None
+        };
 
         self.expect_keyword("AS")?;
         self.expect_token(&Token::LParen)?;
@@ -950,10 +952,12 @@ impl Parser {
 
         Ok(Statement::CreateFunction {
             name,
+            temporary,
             or_replace,
             if_not_exists,
             args,
             expr,
+            returns,
         })
     }
 

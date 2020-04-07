@@ -499,11 +499,14 @@ pub enum Statement {
     },
     /// CREATE UDF
     CreateFunction {
+        /// Table name
         name: ObjectName,
+        temporary: bool,
         or_replace: bool,
         if_not_exists: bool,
         args: Vec<Expr>,
         expr: Expr,
+        returns: Option<DataType>,
     },
     /// ALTER TABLE
     AlterTable {
@@ -687,16 +690,25 @@ impl fmt::Display for Statement {
             Statement::CreateFunction {
                 name,
                 or_replace,
+                temporary,
                 if_not_exists,
                 args,
+                returns,
                 expr,
             } => write!(
                 f,
-                "CREATE {}FUNCTION {}{}({}) AS ({})",
-                if *or_replace { "OR REPLACE" } else { "" },
+                "CREATE {}{}FUNCTION {}{}({}){} AS ({})",
+                if *or_replace { "OR REPLACE " } else { "" },
+                if *temporary { "TEMPORARY " } else { "" },
                 if *if_not_exists { "IF NOT EXISTS " } else { "" },
                 name,
                 display_comma_separated(args),
+                match returns {
+                    Some(dt) => {
+                        format!(" RETURNS {}", dt)
+                    }
+                    None => String::from(""),
+                },
                 expr,
             ),
             Statement::AlterTable { name, operation } => {

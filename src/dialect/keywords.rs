@@ -368,6 +368,8 @@ define_keywords!(
     TABLE,
     TABLESAMPLE,
     TEXT,
+    TEMP,
+    TEMPORARY,
     THEN,
     TIES,
     TIME,

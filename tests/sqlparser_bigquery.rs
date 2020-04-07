@@ -87,6 +87,7 @@ fn parse_simple_udf() {
     assert_eq!(
         &Statement::CreateFunction {
             name: ObjectName(vec![Ident::with_quote('`', "project.dataset.name")]),
+            temporary: false,
             or_replace: true,
             if_not_exists: false,
             args: vec![],
@@ -101,7 +102,8 @@ fn parse_simple_udf() {
                     distinct: false
                 })),
                 data_type: DataType::Decimal(None, None),
-            }
+            },
+            returns: None
         },
         func
     );

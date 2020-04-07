@@ -2660,12 +2660,15 @@ fn parse_create_function_one_argument() {
     match verified_stmt("CREATE FUNCTION foo(uid int) AS (CONCAT(uid, 'abc'))") {
         Statement::CreateFunction {
             name,
+            temporary,
             or_replace,
             if_not_exists,
             args,
             expr,
+            returns,
         } => {
             assert_eq!("foo", name.0[0].value);
+            assert_eq!(false, temporary);
             assert_eq!(false, or_replace);
             assert_eq!(false, if_not_exists);
             assert_eq!(
@@ -2687,7 +2690,8 @@ fn parse_create_function_one_argument() {
                     distinct: false
                 }),
                 expr
-            )
+            );
+            assert_eq!(None, returns);
         }
         _ => unreachable!(),
     }

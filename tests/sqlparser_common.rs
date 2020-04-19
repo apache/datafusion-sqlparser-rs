@@ -909,6 +909,7 @@ fn parse_create_table() {
             columns,
             constraints,
             with_options,
+            if_not_exists: false,
             external: false,
             file_format: None,
             location: None,
@@ -996,6 +997,102 @@ fn parse_create_table() {
 }
 
 #[test]
+fn parse_create_table_if_not_exists() {
+    let sql = "CREATE TABLE IF NOT EXISTS uk_cities (\
+               name VARCHAR(100) NOT NULL,\
+               lat DOUBLE NULL,\
+               lng DOUBLE)";
+    let ast = one_statement_parses_to(
+        sql,
+        "CREATE TABLE IF NOT EXISTS uk_cities (\
+         name character varying(100) NOT NULL, \
+         lat double NULL, \
+         lng double)",
+    );
+    match ast {
+        Statement::CreateTable {
+            name,
+            columns,
+            constraints,
+            with_options,
+            if_not_exists: true,
+            external: false,
+            file_format: None,
+            location: None,
+        } => {
+            assert_eq!("uk_cities", name.to_string());
+            assert_eq!(
+                columns,
+                vec![
+                    ColumnDef {
+                        name: "name".into(),
+                        data_type: DataType::Varchar(Some(100)),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull
+                        }],
+                    },
+                    ColumnDef {
+                        name: "lat".into(),
+                        data_type: DataType::Double,
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Null
+                        }],
+                    },
+                    ColumnDef {
+                        name: "lng".into(),
+                        data_type: DataType::Double,
+                        collation: None,
+                        options: vec![],
+                    }
+                ]
+            );
+            assert!(constraints.is_empty());
+            assert_eq!(with_options, vec![]);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_bad_if_not_exists() {
+    let res = parse_sql_statements("CREATE TABLE NOT EXISTS uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected a table name found: keyword NOT".to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("CREATE TABLE IF EXISTS uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected keyword NOT found: keyword EXISTS".to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("CREATE TABLE IF uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected keyword NOT found: table name".to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("CREATE TABLE IF NOT uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected keyword EXISTS found: table name".to_string()
+        ),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_create_table_with_options() {
     let sql = "CREATE TABLE t (c int) WITH (foo = 'bar', a = 123)";
     match verified_stmt(sql) {
@@ -1045,6 +1142,7 @@ fn parse_create_external_table() {
             columns,
             constraints,
             with_options,
+            if_not_exists,
             external,
             file_format,
             location,
@@ -1086,6 +1184,7 @@ fn parse_create_external_table() {
             assert_eq!("/tmp/example.csv", location.unwrap());
 
             assert_eq!(with_options, vec![]);
+            assert!(!if_not_exists);
         }
         _ => unreachable!(),
     }

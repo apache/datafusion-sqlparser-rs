@@ -39,6 +39,7 @@ fn parse_create_table_with_defaults() {
             columns,
             constraints,
             with_options,
+            if_not_exists: false,
             external: false,
             file_format: None,
             location: None,

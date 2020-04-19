@@ -880,6 +880,7 @@ impl Parser {
             columns,
             constraints,
             with_options: vec![],
+            if_not_exists: false,
             external: true,
             file_format: Some(file_format),
             location: Some(location),
@@ -932,6 +933,37 @@ impl Parser {
     }
 
     pub fn parse_create_table(&mut self) -> Result<Statement, ParserError> {
+        let if_keyword = self.parse_keyword("IF");
+        let not_keyword = self.parse_keyword("NOT");
+        let exists_keyword = self.parse_keyword("EXISTS");
+
+        if !if_keyword && not_keyword {
+            return Err(
+                ParserError::ParserError("Expected a table name found: keyword NOT".to_string())
+            )
+        }
+
+        if if_keyword && !not_keyword && !exists_keyword {
+            return Err(
+                ParserError::ParserError("Expected keyword NOT found: table name".to_string())
+            )
+        }
+
+        if if_keyword && !not_keyword {
+            return Err(
+                ParserError::ParserError("Expected keyword NOT found: keyword EXISTS".to_string())
+            )
+        }
+
+        if if_keyword && not_keyword && !exists_keyword {
+            return Err(
+                ParserError::ParserError("Expected keyword EXISTS found: table name".to_string())
+            )
+        }
+
+        let if_not_exists = if_keyword
+            && not_keyword
+            && exists_keyword;
         let table_name = self.parse_object_name()?;
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
@@ -942,6 +974,7 @@ impl Parser {
             columns,
             constraints,
             with_options,
+            if_not_exists,
             external: false,
             file_format: None,
             location: None,

@@ -1771,7 +1771,6 @@ impl Parser {
             //                   ^ ^ ^ ^
             //                   | | | |
             //                   | | | |
-            //                   | | | |
             //                   | | | (4) belongs to a SetExpr::Query inside the subquery
             //                   | | (3) starts a derived table (subquery)
             //                   | (2) starts a nested join
@@ -1784,23 +1783,20 @@ impl Parser {
                 // case (3), and the next token would be `NATURAL`.
                 Ok(table_factor) => Ok(table_factor),
                 Err(_) => {
-                    // The '(' we've recently consumed does not start a derived
-                    // table. For valid input this can happen either when the
-                    // token following the paren can't start a query (e.g. `foo`
-                    // in `FROM (foo NATURAL JOIN bar)`, or when the '(' we've
-                    // consumed is followed by another '(' that starts a
-                    // derived table, like (3), or another nested join (2).
-                    //
-                    // Ignore the error and back up to where we were before.
-                    // Either we'll be able to parse a valid nested join, or
-                    // we won't, and we'll return that error instead.
-                    //
-                    // Even the SQL spec prohibits derived tables and bare
-                    // tables from appearing alone in parentheses, we allowed it
-                    // as some Db's allowed that (snowflake as example)
+                    // A parsing error from `parse_derived_table_factor` indicates that
+                    // the '(' we've recently consumed does not start a derived table
+                    // (cases 1, 2, or 4). Ignore the error and back up to where we
+                    // were before - right after the opening '('.
                     self.index = index;
+
+                    // Inside the parentheses we expect to find a table factor
+                    // followed by some joins or another level of nesting.
                     let table_and_joins = self.parse_table_and_joins()?;
                     self.expect_token(&Token::RParen)?;
+                    // The SQL spec prohibits derived and bare tables from appearing
+                    // alone in parentheses. We don't enforce this as some databases
+                    // (e.g. Snowflake) allow such syntax.
+
                     Ok(TableFactor::NestedJoin(Box::new(table_and_joins)))
                 }
             }

@@ -403,8 +403,10 @@ impl fmt::Display for Offset {
     }
 }
 
+/// Stores the keyword after `OFFSET <number>`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum OffsetRows {
+    /// Omitting ROW/ROWS is non-standard MySQL quirk.
     None,
     Row,
     Rows,

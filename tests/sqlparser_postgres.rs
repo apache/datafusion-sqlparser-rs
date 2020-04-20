@@ -229,10 +229,8 @@ fn parse_create_table_with_inherit() {
 #[test]
 fn parse_create_table_if_not_exists() {
     let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
-    let ast = pg().one_statement_parses_to(
-        sql,
-        "CREATE TABLE IF NOT EXISTS uk_cities ()",
-    );
+    let ast =
+        pg_and_generic().one_statement_parses_to(sql, "CREATE TABLE IF NOT EXISTS uk_cities ()");
     match ast {
         Statement::CreateTable {
             name,
@@ -256,25 +254,25 @@ fn parse_create_table_if_not_exists() {
 fn parse_bad_if_not_exists() {
     let res = pg().parse_sql_statements("CREATE TABLE NOT EXISTS uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected a table name found: keyword NOT".to_string()),
+        ParserError::ParserError("Expected end of statement, found: EXISTS".to_string()),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF EXISTS uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected keyword NOT found: keyword EXISTS".to_string()),
+        ParserError::ParserError("Expected end of statement, found: EXISTS".to_string()),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected keyword NOT found: table name".to_string()),
+        ParserError::ParserError("Expected end of statement, found: uk_cities".to_string()),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF NOT uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected keyword EXISTS found: table name".to_string()),
+        ParserError::ParserError("Expected end of statement, found: NOT".to_string()),
         res.unwrap_err()
     );
 }

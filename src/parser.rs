@@ -1771,6 +1771,7 @@ impl Parser {
             //                   ^ ^ ^ ^
             //                   | | | |
             //                   | | | |
+            //                   | | | |
             //                   | | | (4) belongs to a SetExpr::Query inside the subquery
             //                   | | (3) starts a derived table (subquery)
             //                   | (2) starts a nested join
@@ -1793,18 +1794,12 @@ impl Parser {
                     // Ignore the error and back up to where we were before.
                     // Either we'll be able to parse a valid nested join, or
                     // we won't, and we'll return that error instead.
+                    //
+                    // Even the SQL spec prohibits derived tables and bare
+                    // tables from appearing alone in parentheses, we allowed it
+                    // as some Db's allowed that (snowflake as example)
                     self.index = index;
                     let table_and_joins = self.parse_table_and_joins()?;
-                    match table_and_joins.relation {
-                        TableFactor::NestedJoin { .. } => (),
-                        _ => {
-                            if table_and_joins.joins.is_empty() {
-                                // The SQL spec prohibits derived tables and bare
-                                // tables from appearing alone in parentheses.
-                                self.expected("joined table", self.peek_token())?
-                            }
-                        }
-                    }
                     self.expect_token(&Token::RParen)?;
                     Ok(TableFactor::NestedJoin(Box::new(table_and_joins)))
                 }

@@ -12,8 +12,8 @@
 
 use crate::dialect::Dialect;
 
-#[derive(Debug)]
-pub struct GenericDialect {}
+#[derive(Debug, Default)]
+pub struct GenericDialect;
 
 impl Dialect for GenericDialect {
     fn is_identifier_start(&self, ch: char) -> bool {

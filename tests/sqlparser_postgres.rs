@@ -227,6 +227,59 @@ fn parse_create_table_with_inherit() {
 }
 
 #[test]
+fn parse_create_table_if_not_exists() {
+    let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
+    let ast = pg().one_statement_parses_to(
+        sql,
+        "CREATE TABLE IF NOT EXISTS uk_cities ()",
+    );
+    match ast {
+        Statement::CreateTable {
+            name,
+            columns: _columns,
+            constraints,
+            with_options,
+            if_not_exists: true,
+            external: false,
+            file_format: None,
+            location: None,
+        } => {
+            assert_eq!("uk_cities", name.to_string());
+            assert!(constraints.is_empty());
+            assert_eq!(with_options, vec![]);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_bad_if_not_exists() {
+    let res = pg().parse_sql_statements("CREATE TABLE NOT EXISTS uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError("Expected a table name found: keyword NOT".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("CREATE TABLE IF EXISTS uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError("Expected keyword NOT found: keyword EXISTS".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("CREATE TABLE IF uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError("Expected keyword NOT found: table name".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("CREATE TABLE IF NOT uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError("Expected keyword EXISTS found: table name".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_copy_example() {
     let sql = r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM stdin;
 1	PENELOPE	GUINESS	2006-02-15 09:34:33 0.11111

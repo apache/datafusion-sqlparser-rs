@@ -40,7 +40,7 @@ fn main() {
     println!("Parsing from file '{}' using {:?}", &filename, dialect);
     let contents = fs::read_to_string(&filename)
         .unwrap_or_else(|_| panic!("Unable to read the file {}", &filename));
-    let without_bom = if contents.chars().nth(0).unwrap() as u64 != 0xfeff {
+    let without_bom = if contents.chars().next().unwrap() as u64 != 0xfeff {
         contents.as_str()
     } else {
         let mut chars = contents.chars();

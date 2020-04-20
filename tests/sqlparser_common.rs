@@ -2265,34 +2265,52 @@ fn parse_invalid_subquery_without_parens() {
 
 #[test]
 fn parse_offset() {
+    let expect = Some(Offset {
+        value: Expr::Value(number("2")),
+        rows: OffsetRows::Rows,
+    });
     let ast = verified_query("SELECT foo FROM bar OFFSET 2 ROWS");
-    assert_eq!(ast.offset, Some(Expr::Value(number("2"))));
+    assert_eq!(ast.offset, expect);
     let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 OFFSET 2 ROWS");
-    assert_eq!(ast.offset, Some(Expr::Value(number("2"))));
+    assert_eq!(ast.offset, expect);
     let ast = verified_query("SELECT foo FROM bar ORDER BY baz OFFSET 2 ROWS");
-    assert_eq!(ast.offset, Some(Expr::Value(number("2"))));
+    assert_eq!(ast.offset, expect);
     let ast = verified_query("SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS");
-    assert_eq!(ast.offset, Some(Expr::Value(number("2"))));
+    assert_eq!(ast.offset, expect);
     let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS) OFFSET 2 ROWS");
-    assert_eq!(ast.offset, Some(Expr::Value(number("2"))));
+    assert_eq!(ast.offset, expect);
     match ast.body {
         SetExpr::Select(s) => match only(s.from).relation {
             TableFactor::Derived { subquery, .. } => {
-                assert_eq!(subquery.offset, Some(Expr::Value(number("2"))));
+                assert_eq!(subquery.offset, expect);
             }
             _ => panic!("Test broke"),
         },
         _ => panic!("Test broke"),
     }
     let ast = verified_query("SELECT 'foo' OFFSET 0 ROWS");
-    assert_eq!(ast.offset, Some(Expr::Value(number("0"))));
-}
-
-#[test]
-fn parse_singular_row_offset() {
-    one_statement_parses_to(
-        "SELECT foo FROM bar OFFSET 1 ROW",
-        "SELECT foo FROM bar OFFSET 1 ROWS",
+    assert_eq!(
+        ast.offset,
+        Some(Offset {
+            value: Expr::Value(number("0")),
+            rows: OffsetRows::Rows,
+        })
+    );
+    let ast = verified_query("SELECT 'foo' OFFSET 1 ROW");
+    assert_eq!(
+        ast.offset,
+        Some(Offset {
+            value: Expr::Value(number("1")),
+            rows: OffsetRows::Row,
+        })
+    );
+    let ast = verified_query("SELECT 'foo' OFFSET 1");
+    assert_eq!(
+        ast.offset,
+        Some(Offset {
+            value: Expr::Value(number("1")),
+            rows: OffsetRows::None,
+        })
     );
 }
 
@@ -2343,7 +2361,13 @@ fn parse_fetch() {
     let ast = verified_query(
         "SELECT foo FROM bar WHERE foo = 4 ORDER BY baz OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY",
     );
-    assert_eq!(ast.offset, Some(Expr::Value(number("2"))));
+    assert_eq!(
+        ast.offset,
+        Some(Offset {
+            value: Expr::Value(number("2")),
+            rows: OffsetRows::Rows,
+        })
+    );
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
     let ast = verified_query(
         "SELECT foo FROM (SELECT * FROM bar FETCH FIRST 2 ROWS ONLY) FETCH FIRST 2 ROWS ONLY",
@@ -2359,12 +2383,24 @@ fn parse_fetch() {
         _ => panic!("Test broke"),
     }
     let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY) OFFSET 2 ROWS FETCH FIRST 2 ROWS ONLY");
-    assert_eq!(ast.offset, Some(Expr::Value(number("2"))));
+    assert_eq!(
+        ast.offset,
+        Some(Offset {
+            value: Expr::Value(number("2")),
+            rows: OffsetRows::Rows,
+        })
+    );
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
     match ast.body {
         SetExpr::Select(s) => match only(s.from).relation {
             TableFactor::Derived { subquery, .. } => {
-                assert_eq!(subquery.offset, Some(Expr::Value(number("2"))));
+                assert_eq!(
+                    subquery.offset,
+                    Some(Offset {
+                        value: Expr::Value(number("2")),
+                        rows: OffsetRows::Rows,
+                    })
+                );
                 assert_eq!(subquery.fetch, fetch_first_two_rows_only);
             }
             _ => panic!("Test broke"),

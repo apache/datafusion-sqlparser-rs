@@ -24,8 +24,8 @@ pub struct Query {
     pub order_by: Vec<OrderByExpr>,
     /// `LIMIT { <N> | ALL }`
     pub limit: Option<Expr>,
-    /// `OFFSET <N> { ROW | ROWS }`
-    pub offset: Option<Expr>,
+    /// `OFFSET <N> [ { ROW | ROWS } ]`
+    pub offset: Option<Offset>,
     /// `FETCH { FIRST | NEXT } <N> [ PERCENT ] { ROW | ROWS } | { ONLY | WITH TIES }`
     pub fetch: Option<Fetch>,
 }
@@ -43,7 +43,7 @@ impl fmt::Display for Query {
             write!(f, " LIMIT {}", limit)?;
         }
         if let Some(ref offset) = self.offset {
-            write!(f, " OFFSET {} ROWS", offset)?;
+            write!(f, " {}", offset)?;
         }
         if let Some(ref fetch) = self.fetch {
             write!(f, " {}", fetch)?;
@@ -387,6 +387,35 @@ impl fmt::Display for OrderByExpr {
             Some(true) => write!(f, "{} ASC", self.expr),
             Some(false) => write!(f, "{} DESC", self.expr),
             None => write!(f, "{}", self.expr),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Offset {
+    pub value: Expr,
+    pub rows: OffsetRows,
+}
+
+impl fmt::Display for Offset {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "OFFSET {}{}", self.value, self.rows)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum OffsetRows {
+    None,
+    Row,
+    Rows,
+}
+
+impl fmt::Display for OffsetRows {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            OffsetRows::None => Ok(()),
+            OffsetRows::Row => write!(f, " ROW"),
+            OffsetRows::Rows => write!(f, " ROWS"),
         }
     }
 }

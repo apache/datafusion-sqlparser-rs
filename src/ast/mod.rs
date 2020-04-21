@@ -471,6 +471,7 @@ pub enum Statement {
         columns: Vec<ColumnDef>,
         constraints: Vec<TableConstraint>,
         with_options: Vec<SqlOption>,
+        if_not_exists: bool,
         external: bool,
         file_format: Option<FileFormat>,
         location: Option<String>,
@@ -623,14 +624,16 @@ impl fmt::Display for Statement {
                 columns,
                 constraints,
                 with_options,
+                if_not_exists,
                 external,
                 file_format,
                 location,
             } => {
                 write!(
                     f,
-                    "CREATE {}TABLE {} ({}",
+                    "CREATE {}TABLE {}{} ({}",
                     if *external { "EXTERNAL " } else { "" },
+                    if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     name,
                     display_comma_separated(columns)
                 )?;

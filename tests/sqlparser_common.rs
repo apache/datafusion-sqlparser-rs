@@ -909,6 +909,7 @@ fn parse_create_table() {
             columns,
             constraints,
             with_options,
+            if_not_exists: false,
             external: false,
             file_format: None,
             location: None,
@@ -1045,6 +1046,7 @@ fn parse_create_external_table() {
             columns,
             constraints,
             with_options,
+            if_not_exists,
             external,
             file_format,
             location,
@@ -1086,6 +1088,7 @@ fn parse_create_external_table() {
             assert_eq!("/tmp/example.csv", location.unwrap());
 
             assert_eq!(with_options, vec![]);
+            assert!(!if_not_exists);
         }
         _ => unreachable!(),
     }

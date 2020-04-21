@@ -880,6 +880,7 @@ impl Parser {
             columns,
             constraints,
             with_options: vec![],
+            if_not_exists: false,
             external: true,
             file_format: Some(file_format),
             location: Some(location),
@@ -932,6 +933,7 @@ impl Parser {
     }
 
     pub fn parse_create_table(&mut self) -> Result<Statement, ParserError> {
+        let if_not_exists = self.parse_keywords(vec!["IF", "NOT", "EXISTS"]);
         let table_name = self.parse_object_name()?;
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
@@ -942,6 +944,7 @@ impl Parser {
             columns,
             constraints,
             with_options,
+            if_not_exists,
             external: false,
             file_format: None,
             location: None,

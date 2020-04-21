@@ -39,6 +39,7 @@ fn parse_create_table_with_defaults() {
             columns,
             constraints,
             with_options,
+            if_not_exists: false,
             external: false,
             file_format: None,
             location: None,
@@ -223,6 +224,57 @@ fn parse_create_table_with_inherit() {
                use_metric boolean DEFAULT true\
                )";
     pg().verified_stmt(sql);
+}
+
+#[test]
+fn parse_create_table_if_not_exists() {
+    let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
+    let ast =
+        pg_and_generic().one_statement_parses_to(sql, "CREATE TABLE IF NOT EXISTS uk_cities ()");
+    match ast {
+        Statement::CreateTable {
+            name,
+            columns: _columns,
+            constraints,
+            with_options,
+            if_not_exists: true,
+            external: false,
+            file_format: None,
+            location: None,
+        } => {
+            assert_eq!("uk_cities", name.to_string());
+            assert!(constraints.is_empty());
+            assert_eq!(with_options, vec![]);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_bad_if_not_exists() {
+    let res = pg().parse_sql_statements("CREATE TABLE NOT EXISTS uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: EXISTS".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("CREATE TABLE IF EXISTS uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: EXISTS".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("CREATE TABLE IF uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: uk_cities".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("CREATE TABLE IF NOT uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: NOT".to_string()),
+        res.unwrap_err()
+    );
 }
 
 #[test]

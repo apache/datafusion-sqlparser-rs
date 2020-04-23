@@ -1330,7 +1330,7 @@ impl Parser {
                 // parse_interval_literal for a taste.
                 "INTERVAL" => Ok(DataType::Interval),
                 "REGCLASS" => Ok(DataType::Regclass),
-                "TEXT" => {
+                "TEXT" | "STRING" => {
                     if self.consume_token(&Token::LBracket) {
                         // Note: this is postgresql-specific
                         self.expect_token(&Token::RBracket)?;
@@ -1962,33 +1962,15 @@ impl Parser {
     }
 
     pub fn parse_parameter_declaration(&mut self) -> Result<ParamDecl, ParserError> {
-        let mut words = 0;
-        loop {
-            if self.consume_token(&Token::Comma) || self.consume_token(&Token::RParen) {
-                break;
-            }
-            self.next_token();
-            words += 1;
-        }
-        for _ in 0..words + 1 {
-            self.prev_token();
-        }
-
-        match words {
-            1 => Ok(ParamDecl {
-                name: None,
-                data_type: self.parse_data_type()?,
-                default: None,
-            }),
-            2 => Ok(ParamDecl {
-                name: Some(self.parse_identifier()?),
-                data_type: self.parse_data_type()?,
-                default: None,
-            }),
-            _ => Err(ParserError::ParserError(
-                "Unrecognized function".to_string(),
-            )),
-        }
+        Ok(ParamDecl {
+            name: self.parse_identifier()?,
+            data_type: if self.parse_keywords(vec!["ANY", "TYPE"]) {
+                None
+            } else {
+                Some(self.parse_data_type()?)
+            },
+            default: None,
+        })
     }
 
     pub fn parse_optional_parameters(&mut self) -> Result<Vec<ParamDecl>, ParserError> {

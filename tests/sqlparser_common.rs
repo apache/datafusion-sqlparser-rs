@@ -2678,8 +2678,8 @@ fn parse_create_function_one_argument() {
             assert_eq!(false, if_not_exists);
             assert_eq!(
                 vec![ParamDecl {
-                    name: Some(Ident::new("uid")),
-                    data_type: DataType::Int,
+                    name: Ident::new("uid"),
+                    data_type: Some(DataType::Int),
                     default: None
                 }],
                 args
@@ -2696,6 +2696,75 @@ fn parse_create_function_one_argument() {
                 }),
                 expr
             );
+            assert_eq!(None, returns);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_function_multiple_params() {
+    match verified_stmt("CREATE FUNCTION foo(uid text, value numeric) AS (100)") {
+        Statement::CreateFunction {
+            name,
+            temporary,
+            or_replace,
+            if_not_exists,
+            args,
+            expr,
+            returns,
+        } => {
+            assert_eq!("foo", name.0[0].value);
+            assert_eq!(false, temporary);
+            assert_eq!(false, or_replace);
+            assert_eq!(false, if_not_exists);
+            assert_eq!(
+                vec![
+                    ParamDecl {
+                        name: Ident::new("uid"),
+                        data_type: Some(DataType::Text),
+                        default: None
+                    },
+                    ParamDecl {
+                        name: Ident::new("value"),
+                        data_type: Some(DataType::Decimal(None, None)),
+                        default: None
+                    }
+                ],
+                args
+            );
+            assert_eq!(Expr::Value(Value::Number("100".to_string())), expr);
+            assert_eq!(None, returns);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_function_any_type() {
+    match verified_stmt("CREATE FUNCTION foo(uid ANY TYPE) AS (100)") {
+        Statement::CreateFunction {
+            name,
+            temporary,
+            or_replace,
+            if_not_exists,
+            args,
+            expr,
+            returns,
+        } => {
+            assert_eq!("foo", name.0[0].value);
+            assert_eq!(false, temporary);
+            assert_eq!(false, or_replace);
+            assert_eq!(false, if_not_exists);
+            assert_eq!(
+                vec![ParamDecl {
+                    name: Ident::new("uid"),
+                    data_type: None,
+                    default: None
+                }],
+                args
+            );
+            assert_eq!(Expr::Value(Value::Number("100".to_string())), expr);
             assert_eq!(None, returns);
         }
         _ => unreachable!(),

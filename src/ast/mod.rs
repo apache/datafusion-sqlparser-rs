@@ -134,6 +134,28 @@ impl fmt::Display for ObjectName {
     }
 }
 
+/// A parameter declaration.
+/// https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#SQL-parameter-declaration
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ParamDecl {
+    pub name: Option<Ident>,
+    pub data_type: DataType,
+    pub default: Option<Value>,
+}
+
+impl fmt::Display for ParamDecl {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(name) = &self.name {
+            write!(f, "{} ", name)?;
+        }
+        write!(f, "{}", self.data_type)?;
+        if let Some(default) = &self.default {
+            write!(f, " DEFAULT {}", default)?;
+        }
+        Ok(())
+    }
+}
+
 /// An SQL expression of any type.
 ///
 /// The parser does not distinguish between expressions of different types
@@ -223,13 +245,6 @@ pub enum Expr {
     /// A parenthesized subquery `(SELECT ...)`, used in expression like
     /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
     Subquery(Box<Query>),
-    /// A parameter declaration.
-    /// https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#SQL-parameter-declaration
-    Parameter {
-        name: Option<Ident>,
-        data_type: DataType,
-        default: Option<Value>,
-    },
 }
 
 impl fmt::Display for Expr {
@@ -305,20 +320,6 @@ impl fmt::Display for Expr {
             }
             Expr::Exists(s) => write!(f, "EXISTS ({})", s),
             Expr::Subquery(s) => write!(f, "({})", s),
-            Expr::Parameter {
-                name,
-                data_type,
-                default,
-            } => {
-                if let Some(name) = name {
-                    write!(f, "{} ", name)?;
-                }
-                write!(f, "{}", data_type)?;
-                if let Some(default) = default {
-                    write!(f, " DEFAULT {}", default)?;
-                }
-                Ok(())
-            }
         }
     }
 }
@@ -504,7 +505,7 @@ pub enum Statement {
         temporary: bool,
         or_replace: bool,
         if_not_exists: bool,
-        args: Vec<Expr>,
+        args: Vec<ParamDecl>,
         expr: Expr,
         returns: Option<DataType>,
     },

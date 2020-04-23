@@ -2677,7 +2677,7 @@ fn parse_create_function_one_argument() {
             assert_eq!(false, or_replace);
             assert_eq!(false, if_not_exists);
             assert_eq!(
-                vec![Expr::Parameter {
+                vec![ParamDecl {
                     name: Some(Ident::new("uid")),
                     data_type: DataType::Int,
                     default: None

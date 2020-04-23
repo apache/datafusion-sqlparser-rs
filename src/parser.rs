@@ -1961,7 +1961,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_parameter(&mut self) -> Result<Expr, ParserError> {
+    pub fn parse_parameter_declaration(&mut self) -> Result<ParamDecl, ParserError> {
         let mut words = 0;
         loop {
             if self.consume_token(&Token::Comma) || self.consume_token(&Token::RParen) {
@@ -1975,12 +1975,12 @@ impl Parser {
         }
 
         match words {
-            1 => Ok(Expr::Parameter {
+            1 => Ok(ParamDecl {
                 name: None,
                 data_type: self.parse_data_type()?,
                 default: None,
             }),
-            2 => Ok(Expr::Parameter {
+            2 => Ok(ParamDecl {
                 name: Some(self.parse_identifier()?),
                 data_type: self.parse_data_type()?,
                 default: None,
@@ -1991,11 +1991,11 @@ impl Parser {
         }
     }
 
-    pub fn parse_optional_parameters(&mut self) -> Result<Vec<Expr>, ParserError> {
+    pub fn parse_optional_parameters(&mut self) -> Result<Vec<ParamDecl>, ParserError> {
         if self.consume_token(&Token::RParen) {
             Ok(vec![])
         } else {
-            let parameters = self.parse_comma_separated(Parser::parse_parameter)?;
+            let parameters = self.parse_comma_separated(Parser::parse_parameter_declaration)?;
             self.expect_token(&Token::RParen)?;
             Ok(parameters)
         }

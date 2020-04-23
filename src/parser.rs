@@ -402,13 +402,7 @@ impl Parser {
     pub fn parse_cast_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         // Can be an expr or a function
-        let expr = match self.peek_nth_token(1) {
-            Some(Token::LParen) => {
-                let name = self.parse_object_name()?;
-                self.parse_function(name)
-            }
-            _ => self.parse_expr(),
-        }?;
+        let expr = self.parse_expr()?;
 
         self.expect_keyword("AS")?;
         let data_type = self.parse_data_type()?;
@@ -869,6 +863,8 @@ impl Parser {
 
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
+        let or_replace = self.parse_keywords(vec!["OR", "REPLACE"]);
+        let temporary = self.parse_keyword("TEMP") || self.parse_keyword("TEMPORARY");
         if self.parse_keyword("TABLE") {
             self.parse_create_table()
         } else if self.parse_keyword("MATERIALIZED") || self.parse_keyword("VIEW") {
@@ -877,11 +873,9 @@ impl Parser {
         } else if self.parse_keyword("EXTERNAL") {
             self.parse_create_external_table()
         } else if self.parse_keyword("FUNCTION") {
-            self.parse_create_function(false)
-        } else if self.parse_keywords(vec!["OR", "REPLACE", "FUNCTION"]) {
-            self.parse_create_function(true)
+            self.parse_create_function(or_replace, temporary)
         } else {
-            self.expected("TABLE or VIEW after CREATE", self.peek_token())
+            self.expected("TABLE, VIEW or FUNCTION after CREATE", self.peek_token())
         }
     }
 
@@ -927,18 +921,21 @@ impl Parser {
         })
     }
 
-    /// Parse Create User Defined Function statement
+    /// Parse CREATE FUNCTION statement
     ///
     /// 1. https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#schema-function
     /// 2. https://cloud.google.com/bigquery/docs/reference/standard-sql/user-defined-functions
-    pub fn parse_create_function(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
+    pub fn parse_create_function(
+        &mut self,
+        or_replace: bool,
+        temporary: bool,
+    ) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(vec!["IF", "NOT", "EXISTS"]);
 
         let name = self.parse_object_name()?;
         self.expect_token(&Token::LParen)?;
-        let args = self.parse_optional_parameters()?; // TODO: support arguments
+        let args = self.parse_optional_parameters()?;
 
-        let temporary = self.parse_keyword("TEMPORARY") || self.parse_keyword("TEMP");
         let returns = if self.parse_keyword("RETURNS") {
             Some(self.parse_data_type()?)
         } else {

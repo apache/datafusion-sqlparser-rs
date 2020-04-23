@@ -854,8 +854,13 @@ fn parse_cast() {
     );
 
     one_statement_parses_to(
-        "SELECT CAST(CELL(a) AS decimal) FROM customer",
-        "SELECT CAST(CELL(a) AS numeric) FROM customer",
+        "SELECT CAST(id AS decimal) FROM customer",
+        "SELECT CAST(id AS numeric) FROM customer",
+    );
+
+    one_statement_parses_to(
+        "SELECT CAST(CELL(id) AS decimal) FROM customer",
+        "SELECT CAST(CELL(id) AS numeric) FROM customer",
     );
 }
 

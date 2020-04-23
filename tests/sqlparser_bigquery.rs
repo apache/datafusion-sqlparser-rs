@@ -109,6 +109,48 @@ fn parse_simple_udf() {
     );
 }
 
+fn parse_temp_udf(udf: &str) {
+    let stmts = bq().parse_sql_statements(udf).unwrap();
+    assert_eq!(1, stmts.len());
+
+    let func = stmts.get(0).unwrap();
+    assert_eq!(
+        &Statement::CreateFunction {
+            name: ObjectName(vec![Ident::with_quote('`', "project.dataset.name")]),
+            temporary: true,
+            or_replace: false,
+            if_not_exists: false,
+            args: vec![],
+            expr: Expr::Function(Function {
+                name: ObjectName(vec![Ident::new("ACOS")]),
+                args: vec![Expr::UnaryOp {
+                    op: UnaryOperator::Minus,
+                    expr: Box::new(Expr::Value(Value::Number("1".to_string()))),
+                }],
+                over: None,
+                distinct: false
+            }),
+            returns: None
+        },
+        func
+    );
+}
+
+#[test]
+fn test_temporary_udf() {
+    parse_temp_udf(
+        "CREATE TEMPORARY FUNCTION `project.dataset.name`() AS (
+      ACOS(-1)
+    );",
+    );
+
+    parse_temp_udf(
+        "CREATE TEMP FUNCTION `project.dataset.name`() AS (
+      ACOS(-1)
+    );",
+    );
+}
+
 fn bq() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(BigQueryDialect {})],

@@ -21,6 +21,7 @@ use super::tokenizer::*;
 use std::error::Error;
 use std::fmt;
 
+use crate::builder;
 use crate::{cst, cst::SyntaxKind as SK};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,7 +41,7 @@ macro_rules! parser_err {
 pub struct Marker {
     /// position in the token stream (`parser.index`)
     index: usize,
-    builder_checkpoint: rowan::Checkpoint,
+    builder_checkpoint: builder::Checkpoint,
 }
 
 #[derive(PartialEq)]
@@ -82,7 +83,7 @@ pub struct Parser {
     tokens: Vec<Token>,
     /// The index of the first unprocessed token in `self.tokens`
     index: usize,
-    builder: rowan::GreenNodeBuilder<'static>,
+    builder: builder::GreenNodeBuilder<'static>,
 
     // TBD: the parser currently provides an API to move around the token
     // stream without restrictions (`next_token`/`prev_token`), while the
@@ -114,7 +115,7 @@ impl Parser {
         let mut parser = Parser {
             tokens,
             index: 0,
-            builder: rowan::GreenNodeBuilder::new(),
+            builder: builder::GreenNodeBuilder::new(),
             pending: vec![],
         };
         parser.builder.start_node(SK::ROOT.into());

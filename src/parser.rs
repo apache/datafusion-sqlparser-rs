@@ -40,6 +40,7 @@ macro_rules! parser_err {
 }
 
 /// The parser state
+#[derive(Clone)]
 pub struct Marker {
     /// position in the token stream (`parser.index`)
     index: usize,
@@ -238,6 +239,7 @@ impl Parser {
     /// the `precedence` is 0 (representing the lowest binding power).
     pub fn parse_subexpr(&mut self, precedence: u8) -> Result<Expr, ParserError> {
         debug!("parsing expr");
+        let m = self.start();
         let mut expr = self.parse_prefix()?;
         debug!("prefix: {:?}", expr);
         loop {
@@ -259,13 +261,14 @@ impl Parser {
             //    |           |< current token (returned by `peek_token()`;
             // `precedence`                       has `next_precedence`)
             //
-            expr = self.parse_infix(expr, next_precedence)?;
+            expr = self.parse_infix(m.clone(), expr, next_precedence)?;
         }
         Ok(expr)
     }
 
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
+        let m = self.start();
         let tok = self
             .next_token()
             .ok_or_else(|| ParserError::ParserError("Unexpected EOF".to_string()))?;
@@ -341,11 +344,14 @@ impl Parser {
             Token::LParen => {
                 let expr = if self.parse_keyword("SELECT") || self.parse_keyword("WITH") {
                     self.prev_token();
-                    Expr::Subquery(Box::new(self.parse_query()?))
+                    let expr = Expr::Subquery(Box::new(self.parse_query()?));
+                    self.expect_token(&Token::RParen)?;
+                    ret!(expr => via self.complete(m, SK::EXPR_SUBQUERY, ..))
                 } else {
-                    Expr::Nested(Box::new(self.parse_expr()?))
+                    let expr = Expr::Nested(Box::new(self.parse_expr()?));
+                    self.expect_token(&Token::RParen)?;
+                    ret!(expr => via self.complete(m, SK::EXPR_NESTED, ..))
                 };
-                self.expect_token(&Token::RParen)?;
                 Ok(expr)
             }
             unexpected => self.expected("an expression", Some(unexpected)),
@@ -651,7 +657,12 @@ impl Parser {
     }
 
     /// Parse an operator following an expression
-    pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
+    pub fn parse_infix(
+        &mut self,
+        m: Marker,
+        expr: Expr,
+        precedence: u8,
+    ) -> Result<Expr, ParserError> {
         debug!("parsing infix");
         let tok = self.next_token().unwrap(); // safe as EOF's precedence is the lowest
 
@@ -688,11 +699,12 @@ impl Parser {
         };
 
         if let Some(op) = regular_binary_operator {
-            Ok(Expr::BinaryOp {
-                left: Box::new(expr),
-                op,
-                right: Box::new(self.parse_subexpr(precedence)?),
-            })
+            ret!(Ok(Expr::BinaryOp {
+                    left: Box::new(expr),
+                    op,
+                    right: Box::new(self.parse_subexpr(precedence)?),
+                })
+                => via self.complete(m, SK::BIN_EXPR, ..)) // TBD OTHER
         } else if let Token::Word(ref k) = tok {
             match k.keyword.as_ref() {
                 "IS" => {
@@ -1669,6 +1681,7 @@ impl Parser {
     /// Parse a possibly qualified, possibly quoted identifier, e.g.
     /// `foo` or `myschema."table"`
     pub fn parse_object_name(&mut self) -> Result<ObjectName, ParserError> {
+        let m = self.start();
         let mut idents = vec![];
         loop {
             idents.push(self.parse_identifier()?);
@@ -1676,14 +1689,18 @@ impl Parser {
                 break;
             }
         }
-        Ok(ObjectName(idents))
+        ret!(Ok(ObjectName(idents))
+            => via self.complete(m, SK::OBJECT_NAME, ..))
     }
 
     /// Parse a simple one-word identifier (possibly quoted, possibly a keyword)
     pub fn parse_identifier(&mut self) -> Result<Ident, ParserError> {
+        let m = self.start();
         match self.next_token() {
-            Some(Token::Word(w)) => Ok(w.to_ident()),
-            unexpected => self.expected("identifier", unexpected),
+            Some(Token::Word(w)) => ret!(Ok(w.to_ident())
+                => via self.complete(m, SK::IDENT, ..)),
+            unexpected => ret!(self.expected("identifier", unexpected)
+                => via self.complete(m, SK::ERR, ..)),
         }
     }
 
@@ -1750,47 +1767,44 @@ impl Parser {
     /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
     /// expect the initial keyword to be already consumed
     pub fn parse_query(&mut self) -> Result<Query, ParserError> {
-        let ctes = if self.parse_keyword("WITH") {
+        let m = self.start();
+        let ctes = if let Some(m) = self.start_if(|p| p.parse_keyword("WITH")) {
             // TODO: optional RECURSIVE
-            self.parse_comma_separated(Parser::parse_cte)?
+            ret!(self.parse_comma_separated(Parser::parse_cte)?
+                => via self.complete(m, SK::CTES, ..))
         } else {
             vec![]
         };
 
         let body = self.parse_query_body(0)?;
 
-        let order_by = if self.parse_keywords(vec!["ORDER", "BY"]) {
-            self.parse_comma_separated(Parser::parse_order_by_expr)?
+        let order_by = if let Some(m) = self.start_if(|p| p.parse_keywords(vec!["ORDER", "BY"])) {
+            ret!(self.parse_comma_separated(Parser::parse_order_by_expr)?
+                => via self.complete(m, SK::ORDER_BY, ..))
         } else {
             vec![]
         };
 
-        let limit = if self.parse_keyword("LIMIT") {
-            self.parse_limit()?
+        let limit = if let Some(_m) = self.start_if(|p| p.parse_keyword("LIMIT")) {
+            self.parse_limit()? // TBD
         } else {
             None
         };
 
-        let offset = if self.parse_keyword("OFFSET") {
-            Some(self.parse_offset()?)
+        let offset = if let Some(_m) = self.start_if(|p| p.parse_keyword("OFFSET")) {
+            Some(self.parse_offset()?) // TBD
         } else {
             None
         };
 
-        let fetch = if self.parse_keyword("FETCH") {
-            Some(self.parse_fetch()?)
+        let fetch = if let Some(_m) = self.start_if(|p| p.parse_keyword("FETCH")) {
+            Some(self.parse_fetch()?) // TBD
         } else {
             None
         };
 
-        Ok(Query {
-            ctes,
-            body,
-            limit,
-            order_by,
-            offset,
-            fetch,
-        })
+        ret!(Ok(Query { ctes, body, limit, order_by, offset, fetch })
+            => via self.complete(m, SK::QUERY, ..))
     }
 
     /// Parse a CTE (`alias [( col1, col2, ... )] AS (subquery)`)
@@ -1817,15 +1831,16 @@ impl Parser {
     fn parse_query_body(&mut self, precedence: u8) -> Result<SetExpr, ParserError> {
         // We parse the expression using a Pratt parser, as in `parse_expr()`.
         // Start by parsing a restricted SELECT or a `(subquery)`:
-        let mut expr = if self.parse_keyword("SELECT") {
-            SetExpr::Select(Box::new(self.parse_select()?))
+        let mut expr = if let Some(m) = self.start_if(|parser| parser.parse_keyword("SELECT")) {
+            ret!(SetExpr::Select(Box::new(self.parse_select()?))
+                => via self.complete(m, SK::SELECT, ..))
         } else if self.consume_token(&Token::LParen) {
             // CTEs are not allowed here, but the parser currently accepts them
             let subquery = self.parse_query()?;
             self.expect_token(&Token::RParen)?;
-            SetExpr::Query(Box::new(subquery))
+            SetExpr::Query(Box::new(subquery)) // TBD
         } else if self.parse_keyword("VALUES") {
-            SetExpr::Values(self.parse_values()?)
+            SetExpr::Values(self.parse_values()?) // TBD
         } else {
             return self.expected(
                 "SELECT, VALUES, or a subquery in the query body",
@@ -1850,6 +1865,7 @@ impl Parser {
             }
             self.next_token(); // skip past the set operator
             expr = SetExpr::SetOperation {
+                // TBD ret!
                 left: Box::new(expr),
                 op: op.unwrap(),
                 all: self.parse_keyword("ALL"),
@@ -1880,21 +1896,24 @@ impl Parser {
             None
         };
 
-        let projection = self.parse_comma_separated(Parser::parse_select_item)?;
+        let m = self.start();
+        let projection = ret!(self.parse_comma_separated(Parser::parse_select_item)?
+            => via self.complete(m, SK::PROJECTION, ..));
 
         // Note that for keywords to be properly handled here, they need to be
         // added to `RESERVED_FOR_COLUMN_ALIAS` / `RESERVED_FOR_TABLE_ALIAS`,
         // otherwise they may be parsed as an alias as part of the `projection`
         // or `from`.
 
-        let from = if self.parse_keyword("FROM") {
-            self.parse_comma_separated(Parser::parse_table_and_joins)?
+        let from = if let Some(m) = self.start_if(|parser| parser.parse_keyword("FROM")) {
+            ret!(self.parse_comma_separated(Parser::parse_table_and_joins)?
+                => via self.complete(m, SK::FROM, ..))
         } else {
             vec![]
         };
 
-        let selection = if self.parse_keyword("WHERE") {
-            Some(self.parse_expr()?)
+        let selection = if let Some(m) = self.start_if(|parser| parser.parse_keyword("WHERE")) {
+            ret!(Some(self.parse_expr()?) => via self.complete(m, SK::WHERE, ..))
         } else {
             None
         };
@@ -2162,12 +2181,14 @@ impl Parser {
     fn parse_join_constraint(&mut self, natural: bool) -> Result<JoinConstraint, ParserError> {
         if natural {
             Ok(JoinConstraint::Natural)
-        } else if self.parse_keyword("ON") {
+        } else if let Some(m) = self.start_if(|parser| parser.parse_keyword("ON")) {
             let constraint = self.parse_expr()?;
-            Ok(JoinConstraint::On(constraint))
-        } else if self.parse_keyword("USING") {
+            ret!(Ok(JoinConstraint::On(constraint))
+                => via self.complete(m, SK::JoinConstraint__On, ..))
+        } else if let Some(m) = self.start_if(|parser| parser.parse_keyword("USING")) {
             let columns = self.parse_parenthesized_column_list(Mandatory)?;
-            Ok(JoinConstraint::Using(columns))
+            ret!(Ok(JoinConstraint::Using(columns))
+                => via self.complete(m, SK::JoinConstraint__Using, ..))
         } else {
             self.expected("ON, or USING after JOIN", self.peek_token())
         }
@@ -2222,17 +2243,22 @@ impl Parser {
 
     /// Parse a comma-delimited list of projections after SELECT
     pub fn parse_select_item(&mut self) -> Result<SelectItem, ParserError> {
+        let m = self.start();
         let expr = self.parse_expr()?;
         if let Expr::Wildcard = expr {
-            Ok(SelectItem::Wildcard)
+            ret!(Ok(SelectItem::Wildcard)
+                => via self.complete(m, SK::SELECT_ITEM_WILDCARD, ..))
         } else if let Expr::QualifiedWildcard(prefix) = expr {
-            Ok(SelectItem::QualifiedWildcard(ObjectName(prefix)))
+            ret!(Ok(SelectItem::QualifiedWildcard(ObjectName(prefix)))
+                => via self.complete(m, SK::SELECT_ITEM_QWILDCARD, ..))
         } else {
             // `expr` is a regular SQL expression and can be followed by an alias
             if let Some(alias) = self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)? {
-                Ok(SelectItem::ExprWithAlias { expr, alias })
+                ret!(Ok(SelectItem::ExprWithAlias { expr, alias })
+                    => via self.complete(m, SK::SELECT_ITEM_EXPR_WITH_ALIAS, ..))
             } else {
-                Ok(SelectItem::UnnamedExpr(expr))
+                ret!(Ok(SelectItem::UnnamedExpr(expr))
+                    => via self.complete(m, SK::SELECT_ITEM_UNNAMED, ..))
             }
         }
     }

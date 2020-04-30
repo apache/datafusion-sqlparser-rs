@@ -108,6 +108,25 @@ pub enum SyntaxKind {
     ROOT,
     ERR,
     KW,
+    IDENT,
+    OBJECT_NAME,
+    QUERY,
+        CTES,
+        BODY,
+        SELECT,
+            PROJECTION,
+            SELECT_ITEM_WILDCARD, SELECT_ITEM_QWILDCARD, SELECT_ITEM_EXPR_WITH_ALIAS, SELECT_ITEM_UNNAMED,
+            FROM,
+            WHERE,
+        ORDER_BY,
+
+        JoinConstraint__On, JoinConstraint__Using,
+
+    EXPR_PREFIX, // TBD
+    EXPR,
+    EXPR_NESTED,
+    EXPR_SUBQUERY,
+    BIN_EXPR,
 
     // Sentinel value
     LAST

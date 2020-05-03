@@ -157,7 +157,9 @@ impl Parser {
         self.parse_subexpr(0)
     }
 
-    /// Parse tokens until the precedence changes
+    /// Parse an expression, that either follows an operator with the
+    /// specified `precedence` or starts at the beginning, in which case
+    /// the `precedence` is 0 (representing the lowest binding power).
     pub fn parse_subexpr(&mut self, precedence: u8) -> Result<Expr, ParserError> {
         debug!("parsing expr");
         let mut expr = self.parse_prefix()?;
@@ -169,6 +171,18 @@ impl Parser {
                 break;
             }
 
+            // Here next_precedence > precedence... i.e. the following operator
+            // has higher binding power than the operator to the left of `expr`
+            // In the following illustration, we're at the second (and the
+            // last) iteration of this loop.
+            //
+            //         expr
+            //       _______
+            // a  +  b  *  c  *  d  +  e
+            //    ^           ^
+            //    |           |< current token (returned by `peek_token()`;
+            // `precedence`                       has `next_precedence`)
+            //
             expr = self.parse_infix(expr, next_precedence)?;
         }
         Ok(expr)
@@ -684,7 +698,8 @@ impl Parser {
     const BETWEEN_PREC: u8 = 20;
     const PLUS_MINUS_PREC: u8 = 30;
 
-    /// Get the precedence of the next token
+    /// Get the precedence of the next unprocessed token (or multiple
+    /// tokens, in cases like `NOT IN`)
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
         if let Some(token) = self.peek_token() {
             debug!("get_next_precedence() {:?}", token);
@@ -1261,7 +1276,7 @@ impl Parser {
         })
     }
 
-    /// Parse a copy statement
+    /// Parse a PostgreSQL `COPY` statement
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
@@ -1275,14 +1290,8 @@ impl Parser {
         })
     }
 
-    /// Parse a tab separated values in
-    /// COPY payload
+    /// Parse a tab separated values in PostgreSQL `COPY` payload
     fn parse_tsv(&mut self) -> Result<Vec<Option<String>>, ParserError> {
-        let values = self.parse_tab_value()?;
-        Ok(values)
-    }
-
-    fn parse_tab_value(&mut self) -> Result<Vec<Option<String>>, ParserError> {
         let mut values = vec![];
         let mut content = String::from("");
         while let Some(t) = self.next_token_no_skip() {

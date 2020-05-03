@@ -34,6 +34,12 @@ macro_rules! parser_err {
     };
 }
 
+/// The parser state
+pub struct Marker {
+    /// position in the token stream (`parser.index`)
+    index: usize,
+}
+
 #[derive(PartialEq)]
 pub enum IsOptional {
     Optional,
@@ -742,6 +748,14 @@ impl Parser {
         }
     }
 
+    pub fn start(&mut self) -> Marker {
+        Marker { index: self.index }
+    }
+
+    pub fn reset(&mut self, m: Marker) {
+        self.index = m.index;
+    }
+
     /// Return the first non-whitespace token that has not yet been processed
     /// (or None if reached end-of-file)
     pub fn peek_token(&self) -> Option<Token> {
@@ -827,12 +841,10 @@ impl Parser {
     /// Look for an expected sequence of keywords and consume them if they exist
     #[must_use]
     pub fn parse_keywords(&mut self, keywords: Vec<&'static str>) -> bool {
-        let index = self.index;
+        let checkpoint = self.start();
         for keyword in keywords {
             if !self.parse_keyword(&keyword) {
-                //println!("parse_keywords aborting .. did not find {}", keyword);
-                // reset index and return immediately
-                self.index = index;
+                self.reset(checkpoint);
                 return false;
             }
         }
@@ -1920,7 +1932,7 @@ impl Parser {
         }
 
         if self.consume_token(&Token::LParen) {
-            let index = self.index;
+            let checkpoint = self.start();
             // A left paren introduces either a derived table (i.e., a subquery)
             // or a nested join. It's nearly impossible to determine ahead of
             // time which it is... so we just try to parse both.
@@ -1948,7 +1960,7 @@ impl Parser {
                     // the '(' we've recently consumed does not start a derived table
                     // (cases 1, 2, or 4). Ignore the error and back up to where we
                     // were before - right after the opening '('.
-                    self.index = index;
+                    self.reset(checkpoint);
 
                     // Inside the parentheses we expect to find a table factor
                     // followed by some joins or another level of nesting.

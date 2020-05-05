@@ -827,7 +827,7 @@ impl Parser {
     pub fn reset(&mut self, m: Marker) {
         self.index = m.index;
         self.pending.truncate(0);
-        // TBD: rowan's builder does not allow reverting to a checkpoint
+        self.builder.reset(m.builder_checkpoint);
     }
 
     pub fn complete<T>(&mut self, m: Marker, kind: cst::SyntaxKind, rv: T) -> T {

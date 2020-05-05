@@ -1942,7 +1942,6 @@ fn parse_complex_join() {
 }
 
 #[test]
-#[ignore = "TBD (fixed in a later commit): backtracking"]
 fn parse_join_nesting() {
     fn table(name: impl Into<String>) -> TableFactor {
         TableFactor::Table {
@@ -2110,7 +2109,6 @@ fn parse_cte_renamed_columns() {
 }
 
 #[test]
-#[ignore = "TBD (fixed in a later commit): backtracking"]
 fn parse_derived_tables() {
     let sql = "SELECT a.x, b.y FROM (SELECT x FROM foo) AS a CROSS JOIN (SELECT y FROM bar) AS b";
     let _ = verified_only_select(sql);

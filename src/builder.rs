@@ -15,6 +15,9 @@
 //! Based on the code from rowan:
 //! https://github.com/rust-analyzer/rowan/blob/v0.10.0/src/green/builder.rs
 //!
+//! This version adds the ability to reset the builder to a previous checkpoint
+//! to support backtracking in the SQL parser.
+//!
 //! The deviations are marked with `CHANGED(sqlparser)`.
 
 // CHANGED(sqlparser): parts of the imported code may be unused
@@ -101,7 +104,7 @@ impl<T: Default> Default for MaybeOwned<'_, T> {
 
 /// A checkpoint for maybe wrapping a node. See `GreenNodeBuilder::checkpoint` for details.
 #[derive(Clone, Copy, Debug)]
-pub struct Checkpoint(usize);
+pub struct Checkpoint(usize, usize); // CHANGED(sqlparser): added the depth field
 
 /// A builder for a green tree.
 #[derive(Default, Debug)]
@@ -178,14 +181,20 @@ impl GreenNodeBuilder<'_> {
     /// ```
     #[inline]
     pub fn checkpoint(&self) -> Checkpoint {
-        Checkpoint(self.children.len())
+        Checkpoint(self.parents.len(), self.children.len())
+    }
+
+    // CHANGED(sqlparser): added reset()
+    pub fn reset(&mut self, checkpoint: Checkpoint) {
+        self.parents.truncate(checkpoint.0);
+        self.children.truncate(checkpoint.1);
     }
 
     /// Wrap the previous branch marked by `checkpoint` in a new branch and
     /// make it current.
     #[inline]
     pub fn start_node_at(&mut self, checkpoint: Checkpoint, kind: SyntaxKind) {
-        let Checkpoint(checkpoint) = checkpoint;
+        let Checkpoint(_, checkpoint) = checkpoint; // CHANGED(sqlparser)
         assert!(
             checkpoint <= self.children.len(),
             "checkpoint no longer valid, was finish_node called early?"

@@ -337,6 +337,19 @@ impl<'a> Tokenizer<'a> {
                         '0'..='9' | '.' => true,
                         _ => false,
                     });
+                    // Scientific Notion
+                    let s = match chars.peek() {
+                        Some('e') => match self.next_token(chars)? {
+                            Some(power_of) => format!("{}e{}", s, power_of),
+                            None => {
+                                return Err(TokenizerError(format!(
+                                    "Expected scientific notion, got {}",
+                                    s
+                                )))
+                            }
+                        },
+                        _ => s,
+                    };
                     Ok(Some(Token::Number(s)))
                 }
                 // punctuation

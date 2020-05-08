@@ -1231,6 +1231,7 @@ impl Parser {
 
     /// Parse a literal value (numbers, strings, date/time, booleans)
     fn parse_value(&mut self) -> Result<Value, ParserError> {
+        println!("Parse value: {:?}", self.peek_token());
         match self.next_token() {
             Some(t) => match t {
                 Token::Word(k) => match k.keyword.as_ref() {

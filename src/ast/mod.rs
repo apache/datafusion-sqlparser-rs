@@ -20,7 +20,7 @@ mod value;
 
 use std::fmt;
 
-pub use self::data_type::DataType;
+pub use self::data_type::{DataType, StructField};
 pub use self::ddl::{
     AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, TableConstraint,
 };

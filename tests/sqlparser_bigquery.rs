@@ -109,6 +109,23 @@ fn parse_simple_udf() {
     );
 }
 
+#[test]
+fn parse_udf_with_struct_param() {
+    let udf = "CREATE OR REPLACE FUNCTION
+    `project.dataset.table`(
+      header STRUCT<
+        seq	INT64,
+        stamp STRUCT< secs INT64, nsecs INT64 >,
+        id STRING
+      >
+    )
+    RETURNS FLOAT64 AS (
+      header.stamp.secs + header.stamp.nsecs * 1e-9
+    );";
+    let stmts = bq().parse_sql_statements(udf).unwrap();
+    assert_eq!(1, stmts.len());
+}
+
 fn parse_temp_udf(udf: &str) {
     let stmts = bq().parse_sql_statements(udf).unwrap();
     assert_eq!(1, stmts.len());

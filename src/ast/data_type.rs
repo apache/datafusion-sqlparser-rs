@@ -13,6 +13,29 @@
 use super::ObjectName;
 use std::fmt;
 
+use super::Ident;
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct StructField {
+    pub name: Option<Ident>,
+    pub data_type: Box<DataType>,
+}
+
+impl fmt::Display for StructField {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{} {}",
+            if let Some(name) = &self.name {
+                name.to_string()
+            } else {
+                "".to_string()
+            },
+            self.data_type
+        )
+    }
+}
+
 /// SQL data types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DataType {
@@ -64,6 +87,8 @@ pub enum DataType {
     Custom(ObjectName),
     /// Arrays
     Array(Box<DataType>),
+    /// Struct
+    Struct(Vec<StructField>),
 }
 
 impl fmt::Display for DataType {
@@ -100,6 +125,14 @@ impl fmt::Display for DataType {
             DataType::Text => write!(f, "text"),
             DataType::Bytea => write!(f, "bytea"),
             DataType::Array(ty) => write!(f, "{}[]", ty),
+            DataType::Struct(st) => write!(
+                f,
+                "struct<{}>",
+                st.iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", "),
+            ),
             DataType::Custom(ty) => write!(f, "{}", ty),
         }
     }

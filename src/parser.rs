@@ -1299,7 +1299,7 @@ impl Parser {
                     Ok(DataType::Double)
                 }
                 "SMALLINT" => Ok(DataType::SmallInt),
-                "INT" | "INTEGER" => Ok(DataType::Int),
+                "INT" | "INTEGER" | "INT64" => Ok(DataType::Int),
                 "BIGINT" => Ok(DataType::BigInt),
                 "VARCHAR" => Ok(DataType::Varchar(self.parse_optional_precision()?)),
                 "CHAR" | "CHARACTER" => {
@@ -1344,6 +1344,7 @@ impl Parser {
                     let (precision, scale) = self.parse_optional_precision_scale()?;
                     Ok(DataType::Decimal(precision, scale))
                 }
+                "STRUCT" => Ok(DataType::Struct(self.parse_struct()?)),
                 _ => {
                     self.prev_token();
                     let type_name = self.parse_object_name()?;
@@ -1465,6 +1466,29 @@ impl Parser {
         } else {
             Ok((None, None))
         }
+    }
+
+    pub fn parse_struct_field(&mut self) -> Result<StructField, ParserError> {
+        let name = self.parse_identifier()?;
+        if self.consume_token(&Token::Comma) {
+            self.prev_token();
+            Ok(StructField {
+                name: None,
+                data_type: Box::new(self.parse_data_type()?),
+            })
+        } else {
+            Ok(StructField {
+                name: Some(name),
+                data_type: Box::new(self.parse_data_type()?),
+            })
+        }
+    }
+
+    pub fn parse_struct(&mut self) -> Result<Vec<StructField>, ParserError> {
+        self.expect_token(&Token::Lt)?;
+        let fields = self.parse_comma_separated(Parser::parse_struct_field)?;
+        self.expect_token(&Token::Gt)?;
+        Ok(fields)
     }
 
     pub fn parse_delete(&mut self) -> Result<Statement, ParserError> {
@@ -1962,11 +1986,14 @@ impl Parser {
     }
 
     pub fn parse_parameter_declaration(&mut self) -> Result<ParamDecl, ParserError> {
+        println!("Parse parameter {:?}", self.peek_token());
         Ok(ParamDecl {
             name: self.parse_identifier()?,
             data_type: if self.parse_keywords(vec!["ANY", "TYPE"]) {
                 None
             } else {
+                println!("Parse parameter {:?}", self.peek_token());
+
                 Some(self.parse_data_type()?)
             },
             default: None,

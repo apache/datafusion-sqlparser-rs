@@ -30,6 +30,8 @@ pub enum Token {
     Word(Word),
     /// An unsigned numeric literal
     Number(String),
+    /// Exponent
+    Exponent,
     /// A character that could not be tokenized
     Char(char),
     /// Single quoted string: i.e: 'string'
@@ -95,6 +97,7 @@ impl fmt::Display for Token {
         match self {
             Token::Word(ref w) => write!(f, "{}", w),
             Token::Number(ref n) => f.write_str(n),
+            Token::Exponent => write!(f, "E"),
             Token::Char(ref c) => write!(f, "{}", c),
             Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
@@ -305,6 +308,23 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
                 }
+                'e' | 'E' => {
+                    chars.next(); // consume
+                    match chars.peek() {
+                        Some(next_ch) => {
+                            match next_ch {
+                                '+' | '-' | '0'..='9' => Ok(Some(Token::Exponent)),
+                                _ => {
+                                    // A regular identifier or keyword starts with E
+                                    chars.next(); // consume the first char
+                                    let s = self.tokenize_word(ch, chars);
+                                    Ok(Some(Token::make_word(&s, None)))
+                                }
+                            }
+                        }
+                        _ => self.consume_and_return(chars, Token::Char(ch)),
+                    }
+                }
                 // identifier or keyword
                 ch if self.dialect.is_identifier_start(ch) => {
                     chars.next(); // consume the first char
@@ -333,37 +353,10 @@ impl<'a> Tokenizer<'a> {
                 // numbers
                 '0'..='9' => {
                     // TODO: https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#unsigned-numeric-literal
-                    let mut s = peeking_take_while(chars, |ch| match ch {
+                    let s = peeking_take_while(chars, |ch| match ch {
                         '0'..='9' | '.' => true,
                         _ => false,
                     });
-                    // Support scientific notion
-                    // https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#approximate-numeric-literal
-                    match chars.peek() {
-                        Some('e') => {
-                            chars.next(); // consume 'e'
-                            s.push('e');
-                            // Consume sign
-                            match chars.peek() {
-                                Some('+') => {
-                                    chars.next();
-                                }
-                                Some('-') => {
-                                    chars.next();
-                                    s.push('-');
-                                }
-                                _ => {}
-                            }
-                            s.push_str(
-                                peeking_take_while(chars, |ch| match ch {
-                                    '0'..='9' => true,
-                                    _ => false,
-                                })
-                                .as_ref(),
-                            );
-                        }
-                        _ => {}
-                    };
                     Ok(Some(Token::Number(s)))
                 }
                 // punctuation
@@ -575,17 +568,40 @@ mod tests {
         let sql = String::from("13.5e10");
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
-        compare(vec![Token::Number(String::from("13.5e10"))], tokens);
+        compare(
+            vec![
+                Token::Number(String::from("13.5")),
+                Token::Exponent,
+                Token::Number(String::from("10")),
+            ],
+            tokens,
+        );
 
         let sql = String::from("5e-9");
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
-        compare(vec![Token::Number(String::from("5e-9"))], tokens);
+        compare(
+            vec![
+                Token::Number(String::from("5")),
+                Token::Exponent,
+                Token::Minus,
+                Token::Number(String::from("9")),
+            ],
+            tokens,
+        );
 
         let sql = String::from("12e+7");
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
-        compare(vec![Token::Number(String::from("12e7"))], tokens);
+        compare(
+            vec![
+                Token::Number(String::from("12")),
+                Token::Exponent,
+                Token::Plus,
+                Token::Number(String::from("7")),
+            ],
+            tokens,
+        );
     }
 
     #[test]

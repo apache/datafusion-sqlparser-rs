@@ -333,22 +333,36 @@ impl<'a> Tokenizer<'a> {
                 // numbers
                 '0'..='9' => {
                     // TODO: https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#unsigned-numeric-literal
-                    let s = peeking_take_while(chars, |ch| match ch {
+                    let mut s = peeking_take_while(chars, |ch| match ch {
                         '0'..='9' | '.' => true,
                         _ => false,
                     });
-                    // Scientific Notion
-                    let s = match chars.peek() {
-                        Some('e') => match self.next_token(chars)? {
-                            Some(power_of) => format!("{}e{}", s, power_of),
-                            None => {
-                                return Err(TokenizerError(format!(
-                                    "Expected scientific notion, got {}",
-                                    s
-                                )))
+                    // Support scientific notion
+                    // https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#approximate-numeric-literal
+                    match chars.peek() {
+                        Some('e') => {
+                            chars.next(); // consume 'e'
+                            s.push('e');
+                            // Consume sign
+                            match chars.peek() {
+                                Some('+') => {
+                                    chars.next();
+                                }
+                                Some('-') => {
+                                    chars.next();
+                                    s.push('-');
+                                }
+                                _ => {}
                             }
-                        },
-                        _ => s,
+                            s.push_str(
+                                peeking_take_while(chars, |ch| match ch {
+                                    '0'..='9' => true,
+                                    _ => false,
+                                })
+                                .as_ref(),
+                            );
+                        }
+                        _ => {}
                     };
                     Ok(Some(Token::Number(s)))
                 }
@@ -552,6 +566,26 @@ mod tests {
         ];
 
         compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_scientific_notion() {
+        let dialect = GenericDialect {};
+
+        let sql = String::from("13.5e10");
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        compare(vec![Token::Number(String::from("13.5e10"))], tokens);
+
+        let sql = String::from("5e-9");
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        compare(vec![Token::Number(String::from("5e-9"))], tokens);
+
+        let sql = String::from("12e+7");
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        compare(vec![Token::Number(String::from("12e7"))], tokens);
     }
 
     #[test]

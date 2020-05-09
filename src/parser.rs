@@ -729,6 +729,11 @@ impl Parser {
         }
     }
 
+    /// Push back the last token.
+    pub fn prev_token_no_skip(&mut self) {
+        self.index -= 1;
+    }
+
     /// Report unexpected token
     fn expected<T>(&self, expected: &str, found: Option<Token>) -> Result<T, ParserError> {
         parser_err!(format!(
@@ -1246,7 +1251,49 @@ impl Parser {
                 // bigdecimal feature is enabled, and is otherwise a no-op
                 // (i.e., it returns the input string).
                 Token::Number(ref n) => match n.parse() {
-                    Ok(n) => Ok(Value::Number(n)),
+                    Ok(n) => {
+                        // Exponent notion, i.e., 12E10
+                        match self.next_token_no_skip() {
+                            Some(&Token::Exponent) => {
+                                let mut value: String = n;
+                                value.push('E');
+                                // Match sign
+                                match self.next_token_no_skip() {
+                                    Some(&Token::Plus) => {
+                                        // Ignore "+" in the exponent part
+                                    }
+                                    Some(&Token::Minus) => {
+                                        value.push('-');
+                                    }
+                                    _ => {
+                                        self.prev_token_no_skip();
+                                    }
+                                };
+                                // Match the exponent part of the number.
+                                println!("Parse exp token: {:?}", self.peek_token());
+                                match self.next_token_no_skip() {
+                                    Some(exp_token) => match exp_token {
+                                        Token::Number(exp) => {
+                                            value.push_str(exp);
+                                            Ok(Value::Number(value))
+                                        }
+                                        _ => parser_err!(format!(
+                                            "Could not parse '{}E{}', missing exponet part",
+                                            t, exp_token
+                                        )),
+                                    },
+                                    _ => parser_err!(format!(
+                                        "Could not parse '{}', missing exponet part",
+                                        t,
+                                    )),
+                                }
+                            }
+                            _ => {
+                                self.prev_token_no_skip();
+                                Ok(Value::Number(n))
+                            }
+                        }
+                    }
                     Err(e) => parser_err!(format!("Could not parse '{}' as number: {}", n, e)),
                 },
                 Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
@@ -1293,7 +1340,7 @@ impl Parser {
         match self.next_token() {
             Some(Token::Word(k)) => match k.keyword.as_ref() {
                 "BOOLEAN" => Ok(DataType::Boolean),
-                "FLOAT" => Ok(DataType::Float(self.parse_optional_precision()?)),
+                "FLOAT" | "FLOAT64" => Ok(DataType::Float(self.parse_optional_precision()?)),
                 "REAL" => Ok(DataType::Real),
                 "DOUBLE" => {
                     let _ = self.parse_keyword("PRECISION");
@@ -1989,12 +2036,13 @@ impl Parser {
     pub fn parse_parameter_declaration(&mut self) -> Result<ParamDecl, ParserError> {
         println!("Parse parameter {:?}", self.peek_token());
         Ok(ParamDecl {
-            name: self.parse_identifier()?,
+            // TODO: optional param name
+            // https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#SQL-parameter-declaration
+            name: Some(self.parse_identifier()?),
             data_type: if self.parse_keywords(vec!["ANY", "TYPE"]) {
                 None
             } else {
                 println!("Parse parameter {:?}", self.peek_token());
-
                 Some(self.parse_data_type()?)
             },
             default: None,

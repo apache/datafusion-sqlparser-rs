@@ -316,7 +316,6 @@ impl<'a> Tokenizer<'a> {
                                 '+' | '-' | '0'..='9' => Ok(Some(Token::Exponent)),
                                 _ => {
                                     // A regular identifier or keyword starts with E
-                                    chars.next(); // consume the first char
                                     let s = self.tokenize_word(ch, chars);
                                     Ok(Some(Token::make_word(&s, None)))
                                 }

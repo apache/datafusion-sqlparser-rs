@@ -23,16 +23,10 @@ pub struct StructField {
 
 impl fmt::Display for StructField {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{} {}",
-            if let Some(name) = &self.name {
-                name.to_string()
-            } else {
-                "".to_string()
-            },
-            self.data_type
-        )
+        if let Some(name) = &self.name {
+            write!(f, "{} ", name)?
+        }
+        write!(f, "{}", self.data_type)
     }
 }
 

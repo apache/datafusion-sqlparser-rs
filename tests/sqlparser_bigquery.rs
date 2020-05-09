@@ -124,6 +124,62 @@ fn parse_udf_with_struct_param() {
     );";
     let stmts = bq().parse_sql_statements(udf).unwrap();
     assert_eq!(1, stmts.len());
+    let func = stmts.get(0).unwrap();
+
+    assert_eq!(
+        &Statement::CreateFunction {
+            name: ObjectName(vec![Ident::with_quote('`', "project.dataset.table")]),
+            temporary: false,
+            or_replace: true,
+            if_not_exists: false,
+            args: vec![ParamDecl {
+                name: Some(Ident::new("header")),
+                data_type: Some(DataType::Struct(vec![
+                    StructField {
+                        name: Some(Ident::new("seq")),
+                        data_type: Box::new(DataType::Int),
+                    },
+                    StructField {
+                        name: Some(Ident::new("stamp")),
+                        data_type: Box::new(DataType::Struct(vec![
+                            StructField {
+                                name: Some(Ident::new("secs")),
+                                data_type: Box::new(DataType::Int),
+                            },
+                            StructField {
+                                name: Some(Ident::new("nsecs")),
+                                data_type: Box::new(DataType::Int),
+                            },
+                        ]))
+                    },
+                    StructField {
+                        name: Some(Ident::new("id")),
+                        data_type: Box::new(DataType::Text),
+                    }
+                ])),
+                default: None,
+            }],
+            expr: Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("header"),
+                    Ident::new("stamp"),
+                    Ident::new("secs"),
+                ])),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::CompoundIdentifier(vec![
+                        Ident::new("header"),
+                        Ident::new("stamp"),
+                        Ident::new("nsecs"),
+                    ])),
+                    op: BinaryOperator::Multiply,
+                    right: Box::new(Expr::Value(Value::Number(String::from("1E-9")))),
+                })
+            },
+            returns: Some(DataType::Float(None))
+        },
+        func
+    );
 }
 
 fn parse_temp_udf(udf: &str) {

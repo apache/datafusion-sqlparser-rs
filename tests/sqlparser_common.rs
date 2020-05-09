@@ -2678,7 +2678,7 @@ fn parse_create_function_one_argument() {
             assert_eq!(false, if_not_exists);
             assert_eq!(
                 vec![ParamDecl {
-                    name: Ident::new("uid"),
+                    name: Some(Ident::new("uid")),
                     data_type: Some(DataType::Int),
                     default: None
                 }],
@@ -2721,12 +2721,12 @@ fn parse_create_function_multiple_params() {
             assert_eq!(
                 vec![
                     ParamDecl {
-                        name: Ident::new("uid"),
+                        name: Some(Ident::new("uid")),
                         data_type: Some(DataType::Text),
                         default: None
                     },
                     ParamDecl {
-                        name: Ident::new("value"),
+                        name: Some(Ident::new("value")),
                         data_type: Some(DataType::Decimal(None, None)),
                         default: None
                     }
@@ -2758,7 +2758,7 @@ fn parse_create_function_any_type() {
             assert_eq!(false, if_not_exists);
             assert_eq!(
                 vec![ParamDecl {
-                    name: Ident::new("uid"),
+                    name: Some(Ident::new("uid")),
                     data_type: None,
                     default: None
                 }],

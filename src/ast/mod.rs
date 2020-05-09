@@ -135,21 +135,26 @@ impl fmt::Display for ObjectName {
 }
 
 /// A parameter declaration.
+///
+/// SQL 2011 supports optional parameter name.
 /// https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#SQL-parameter-declaration
+///
+/// BigQuery support ANY TYPE.  We use data_type = None to represent a Any type
+/// https://cloud.google.com/bigquery/docs/reference/standard-sql/user-defined-functions
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ParamDecl {
-    pub name: Ident,
+    pub name: Option<Ident>,
     pub data_type: Option<DataType>,
     pub default: Option<Value>,
 }
 
 impl fmt::Display for ParamDecl {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} ", self.name)?;
+        if let Some(name) = &self.name {
+            write!(f, "{} ", name)?
+        }
         match &self.data_type {
-            Some(data_type) => {
-                write!(f, "{}", data_type)?;
-            }
+            Some(data_type) => write!(f, "{}", data_type)?,
             None => write!(f, "ANY TYPE")?,
         }
         if let Some(default) = &self.default {

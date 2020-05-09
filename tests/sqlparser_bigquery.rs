@@ -135,27 +135,15 @@ fn parse_udf_with_struct_param() {
             args: vec![ParamDecl {
                 name: Some(Ident::new("header")),
                 data_type: Some(DataType::Struct(vec![
-                    StructField {
-                        name: Some(Ident::new("seq")),
-                        data_type: Box::new(DataType::Int),
-                    },
-                    StructField {
-                        name: Some(Ident::new("stamp")),
-                        data_type: Box::new(DataType::Struct(vec![
-                            StructField {
-                                name: Some(Ident::new("secs")),
-                                data_type: Box::new(DataType::Int),
-                            },
-                            StructField {
-                                name: Some(Ident::new("nsecs")),
-                                data_type: Box::new(DataType::Int),
-                            },
-                        ]))
-                    },
-                    StructField {
-                        name: Some(Ident::new("id")),
-                        data_type: Box::new(DataType::Text),
-                    }
+                    StructField::new("seq", DataType::Int),
+                    StructField::new(
+                        "stamp",
+                        DataType::Struct(vec![
+                            StructField::new("secs", DataType::Int),
+                            StructField::new("nsecs", DataType::Int),
+                        ])
+                    ),
+                    StructField::new("id", DataType::Text),
                 ])),
                 default: None,
             }],

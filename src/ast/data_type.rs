@@ -30,6 +30,16 @@ impl fmt::Display for StructField {
     }
 }
 
+impl StructField {
+    /// Create a StructField with name and type.
+    pub fn new(name: &str, data_type: DataType) -> StructField {
+        StructField {
+            name: Some(Ident::new(name)),
+            data_type: Box::new(data_type),
+        }
+    }
+}
+
 /// SQL data types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DataType {

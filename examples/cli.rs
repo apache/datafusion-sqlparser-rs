@@ -12,8 +12,6 @@
 
 #![warn(clippy::all)]
 
-use simple_logger;
-
 ///! A small command-line app to run the parser.
 /// Run with `cargo run --example cli`
 use std::fs;

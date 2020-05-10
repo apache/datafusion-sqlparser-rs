@@ -53,12 +53,21 @@ impl TestedDialects {
         self.one_of_identical_results(|dialect| {
             let mut tokenizer = Tokenizer::new(dialect, sql);
             let tokens = tokenizer.tokenize().unwrap();
-            f(&mut Parser::new(tokens))
+            let mut parser = Parser::new(tokens);
+            #[allow(clippy::let_and_return)]
+            let rv = f(&mut parser);
+
+            // Concatenating CST tokens should result in a string
+            // identical to the input SQL:
+            let syn = parser.syntax();
+            assert_eq!(sql, syn.to_string());
+
+            rv
         })
     }
 
     pub fn parse_sql_statements(&self, sql: &str) -> Result<Vec<Statement>, ParserError> {
-        self.one_of_identical_results(|dialect| Parser::parse_sql(dialect, &sql))
+        self.run_parser_method(sql, Parser::parse_statements)
         // To fail the `ensure_multiple_dialects_are_tested` test:
         // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)
     }

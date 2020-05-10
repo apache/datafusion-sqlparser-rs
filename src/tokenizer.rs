@@ -24,7 +24,10 @@ use super::dialect::Dialect;
 use std::fmt;
 
 /// SQL Token enumeration
+///
+/// N.B.! keep in sync with `SyntaxKind`.
 #[derive(Debug, Clone, PartialEq)]
+#[repr(u16)]
 pub enum Token {
     /// A keyword (like SELECT) or an optionally quoted SQL identifier
     Word(Word),

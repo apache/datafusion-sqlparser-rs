@@ -17,7 +17,7 @@
 use std::fs;
 
 use sqlparser::dialect::*;
-use sqlparser::parser::Parser;
+use sqlparser::{parser::Parser, tokenizer::Tokenizer};
 
 fn main() {
     simple_logger::init().unwrap();
@@ -45,7 +45,17 @@ fn main() {
         chars.next();
         chars.as_str()
     };
-    let parse_result = Parser::parse_sql(&*dialect, without_bom);
+
+    let tokens = Tokenizer::new(&*dialect, without_bom)
+        .tokenize()
+        .unwrap_or_else(|e| {
+            println!("Error tokenizing: {:?}", e);
+            std::process::exit(1);
+        });
+
+    let mut parser = Parser::new(tokens);
+    let parse_result = parser.parse_statements();
+
     match parse_result {
         Ok(statements) => {
             println!(
@@ -57,7 +67,8 @@ fn main() {
                     .join("\n")
             );
             println!("Parse results:\n{:#?}", statements);
-            std::process::exit(0);
+
+            println!("Parse tree:\n{:#?}", parser.syntax());
         }
         Err(e) => {
             println!("Error during parsing: {:?}", e);

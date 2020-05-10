@@ -35,6 +35,7 @@
 #![warn(clippy::all)]
 
 pub mod ast;
+pub mod cst;
 pub mod dialect;
 pub mod parser;
 pub mod tokenizer;

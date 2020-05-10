@@ -21,6 +21,8 @@ use super::tokenizer::*;
 use std::error::Error;
 use std::fmt;
 
+use crate::{cst, cst::SyntaxKind as SK};
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParserError {
     TokenizerError(String),
@@ -38,6 +40,7 @@ macro_rules! parser_err {
 pub struct Marker {
     /// position in the token stream (`parser.index`)
     index: usize,
+    builder_checkpoint: rowan::Checkpoint,
 }
 
 #[derive(PartialEq)]
@@ -79,12 +82,63 @@ pub struct Parser {
     tokens: Vec<Token>,
     /// The index of the first unprocessed token in `self.tokens`
     index: usize,
+    builder: rowan::GreenNodeBuilder<'static>,
+
+    // TBD: the parser currently provides an API to move around the token
+    // stream without restrictions (`next_token`/`prev_token`), while the
+    // `builder` does not. To work around this, we keep a list of "pending"
+    // tokens which have already been processed via `next_token`, but may
+    // be put back via `prev_token`.
+    pending: Vec<(cst::SyntaxKind, rowan::SmolStr)>,
+}
+
+/// `ret!(expr => via self.complete(m, SK::FOO, ..)` runs the following steps:
+///   1) Evaluates `expr`, possibly advancing the parser's position in the token stream;
+///   2) Closes the current branch of the CST, identified by `m`, and sets its kind to
+///     `SyntaxKind::FOO`;
+///   3) Returns the value of `expr`, which should be the typed AST node, corresponding
+///     to the recently closed branch.
+/// The weird syntax prevents rustfmt from making each call to this macro take up 5 lines.
+macro_rules! ret {
+    { $e: expr => via $self: ident .complete($m: ident, $syntax_kind: expr, ..) } => {
+        {
+            let rv = $e;
+            $self.complete($m, $syntax_kind, rv)
+        }
+    };
 }
 
 impl Parser {
     /// Parse the specified tokens
     pub fn new(tokens: Vec<Token>) -> Self {
-        Parser { tokens, index: 0 }
+        let mut parser = Parser {
+            tokens,
+            index: 0,
+            builder: rowan::GreenNodeBuilder::new(),
+            pending: vec![],
+        };
+        parser.builder.start_node(SK::ROOT.into());
+        parser
+    }
+
+    pub fn syntax(mut self) -> cst::SyntaxNode {
+        if self.peek_token().is_some() {
+            // Not at end-of-file: either some extraneous tokens left after
+            // successfully parsing something, or we've bailed with an error.
+            //
+            // TBD: ideally we wouldn't abandon the "current" branch of the
+            // CST on error, instead `.complete()`-ing it as usual, but that's
+            // in conflict with having to return the typed AST, which can't
+            // lack certain bits.
+            self.builder.start_node(SK::ERR.into());
+            while self.next_token().is_some() {}
+            self.builder.finish_node();
+        } else {
+            // TBD: this is required until all parser methods end with `ret!`.
+            self.flush_pending_buffer();
+        }
+        self.builder.finish_node();
+        cst::SyntaxNode::new_root(self.builder.finish())
     }
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
@@ -749,11 +803,44 @@ impl Parser {
     }
 
     pub fn start(&mut self) -> Marker {
-        Marker { index: self.index }
+        self.flush_pending_buffer();
+        Marker {
+            index: self.index,
+            builder_checkpoint: self.builder.checkpoint(),
+        }
+    }
+
+    fn start_if<F>(&mut self, f: F) -> Option<Marker>
+    where
+        F: FnOnce(&mut Parser) -> bool,
+    {
+        self.flush_pending_buffer();
+        let m = self.start();
+        if f(self) {
+            Some(m)
+        } else {
+            None
+        }
     }
 
     pub fn reset(&mut self, m: Marker) {
         self.index = m.index;
+        self.pending.truncate(0);
+        // TBD: rowan's builder does not allow reverting to a checkpoint
+    }
+
+    pub fn complete<T>(&mut self, m: Marker, kind: cst::SyntaxKind, rv: T) -> T {
+        self.flush_pending_buffer();
+        self.builder
+            .start_node_at(m.builder_checkpoint, kind.into());
+        self.builder.finish_node();
+        rv
+    }
+
+    pub fn flush_pending_buffer(&mut self) {
+        for (kind, s) in self.pending.drain(..) {
+            self.builder.token(kind.into(), s);
+        }
     }
 
     /// Return the first non-whitespace token that has not yet been processed
@@ -783,9 +870,10 @@ impl Parser {
     /// (or None if reached end-of-file) and mark it as processed. OK to call
     /// repeatedly after reaching EOF.
     pub fn next_token(&mut self) -> Option<Token> {
+        self.flush_pending_buffer();
+
         loop {
-            self.index += 1;
-            match self.tokens.get(self.index - 1) {
+            match self.next_token_no_skip() {
                 Some(Token::Whitespace(_)) => continue,
                 token => return token.cloned(),
             }
@@ -795,7 +883,12 @@ impl Parser {
     /// Return the first unprocessed token, possibly whitespace.
     pub fn next_token_no_skip(&mut self) -> Option<&Token> {
         self.index += 1;
-        self.tokens.get(self.index - 1)
+        #[allow(clippy::let_and_return)]
+        let token = self.tokens.get(self.index - 1);
+        if let Some(t) = token {
+            self.pending.push((t.kind(), t.to_string().into()));
+        }
+        token
     }
 
     /// Push back the last one non-whitespace token. Must be called after
@@ -805,8 +898,22 @@ impl Parser {
         loop {
             assert!(self.index > 0);
             self.index -= 1;
+
+            if !self.pending.is_empty() {
+                self.pending.pop();
+            } else {
+                assert!(self.index >= self.tokens.len()); // past EOF
+            }
+
             if let Some(Token::Whitespace(_)) = self.tokens.get(self.index) {
                 continue;
+            }
+
+            // There may be only one non-whitespace token `pending` as by
+            // convention, backtracking (i.e. going more than one token back)
+            // is done via `start`/`reset` instead.
+            for tok in &self.pending {
+                assert!(tok.0 == SK::Whitespace);
             }
             return;
         }
@@ -832,6 +939,10 @@ impl Parser {
         match self.peek_token() {
             Some(Token::Word(ref k)) if expected.eq_ignore_ascii_case(&k.keyword) => {
                 self.next_token();
+                // TBD: a hack to change the "kind" of the token just processed
+                let mut p = self.pending.pop().unwrap();
+                p.0 = SK::KW.into();
+                self.pending.push(p);
                 true
             }
             _ => false,

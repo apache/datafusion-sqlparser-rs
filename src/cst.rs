@@ -120,6 +120,7 @@ impl Token {
     }
 }
 
+#[cfg(feature = "cst")]
 impl From<SyntaxKind> for rowan::SyntaxKind {
     fn from(kind: SyntaxKind) -> Self {
         Self(kind as u16)
@@ -128,6 +129,7 @@ impl From<SyntaxKind> for rowan::SyntaxKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Lang {}
+#[cfg(feature = "cst")]
 impl rowan::Language for Lang {
     type Kind = SyntaxKind;
     fn kind_from_raw(raw: rowan::SyntaxKind) -> Self::Kind {
@@ -139,4 +141,5 @@ impl rowan::Language for Lang {
     }
 }
 
+#[cfg(feature = "cst")]
 pub type SyntaxNode = rowan::SyntaxNode<Lang>;

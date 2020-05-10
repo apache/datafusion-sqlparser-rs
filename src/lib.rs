@@ -35,6 +35,7 @@
 #![warn(clippy::all)]
 
 pub mod ast;
+#[cfg(feature = "cst")]
 mod builder;
 pub mod cst;
 pub mod dialect;

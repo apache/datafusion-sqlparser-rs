@@ -21,7 +21,9 @@ use super::tokenizer::*;
 use std::error::Error;
 use std::fmt;
 
+#[cfg(feature = "cst")]
 use crate::builder;
+
 use crate::{cst, cst::SyntaxKind as SK};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -41,6 +43,7 @@ macro_rules! parser_err {
 pub struct Marker {
     /// position in the token stream (`parser.index`)
     index: usize,
+    #[cfg(feature = "cst")]
     builder_checkpoint: builder::Checkpoint,
 }
 
@@ -83,6 +86,8 @@ pub struct Parser {
     tokens: Vec<Token>,
     /// The index of the first unprocessed token in `self.tokens`
     index: usize,
+
+    #[cfg(feature = "cst")]
     builder: builder::GreenNodeBuilder<'static>,
 
     // TBD: the parser currently provides an API to move around the token
@@ -90,6 +95,7 @@ pub struct Parser {
     // `builder` does not. To work around this, we keep a list of "pending"
     // tokens which have already been processed via `next_token`, but may
     // be put back via `prev_token`.
+    #[cfg(feature = "cst")]
     pending: Vec<(cst::SyntaxKind, rowan::SmolStr)>,
 }
 
@@ -112,16 +118,21 @@ macro_rules! ret {
 impl Parser {
     /// Parse the specified tokens
     pub fn new(tokens: Vec<Token>) -> Self {
+        #[allow(unused_mut)]
         let mut parser = Parser {
             tokens,
             index: 0,
+            #[cfg(feature = "cst")]
             builder: builder::GreenNodeBuilder::new(),
+            #[cfg(feature = "cst")]
             pending: vec![],
         };
+        #[cfg(feature = "cst")]
         parser.builder.start_node(SK::ROOT.into());
         parser
     }
 
+    #[cfg(feature = "cst")]
     pub fn syntax(mut self) -> cst::SyntaxNode {
         if self.peek_token().is_some() {
             // Not at end-of-file: either some extraneous tokens left after
@@ -807,6 +818,7 @@ impl Parser {
         self.flush_pending_buffer();
         Marker {
             index: self.index,
+            #[cfg(feature = "cst")]
             builder_checkpoint: self.builder.checkpoint(),
         }
     }
@@ -826,19 +838,25 @@ impl Parser {
 
     pub fn reset(&mut self, m: Marker) {
         self.index = m.index;
+        #[cfg(feature = "cst")]
         self.pending.truncate(0);
+        #[cfg(feature = "cst")]
         self.builder.reset(m.builder_checkpoint);
     }
 
+    #[allow(unused_variables)]
     pub fn complete<T>(&mut self, m: Marker, kind: cst::SyntaxKind, rv: T) -> T {
         self.flush_pending_buffer();
+        #[cfg(feature = "cst")]
         self.builder
             .start_node_at(m.builder_checkpoint, kind.into());
+        #[cfg(feature = "cst")]
         self.builder.finish_node();
         rv
     }
 
     pub fn flush_pending_buffer(&mut self) {
+        #[cfg(feature = "cst")]
         for (kind, s) in self.pending.drain(..) {
             self.builder.token(kind.into(), s);
         }
@@ -886,8 +904,11 @@ impl Parser {
         self.index += 1;
         #[allow(clippy::let_and_return)]
         let token = self.tokens.get(self.index - 1);
-        if let Some(t) = token {
-            self.pending.push((t.kind(), t.to_string().into()));
+        #[cfg(feature = "cst")]
+        {
+            if let Some(t) = token {
+                self.pending.push((t.kind(), t.to_string().into()));
+            }
         }
         token
     }
@@ -900,10 +921,13 @@ impl Parser {
             assert!(self.index > 0);
             self.index -= 1;
 
-            if !self.pending.is_empty() {
-                self.pending.pop();
-            } else {
-                assert!(self.index >= self.tokens.len()); // past EOF
+            #[cfg(feature = "cst")]
+            {
+                if !self.pending.is_empty() {
+                    self.pending.pop();
+                } else {
+                    assert!(self.index >= self.tokens.len()); // past EOF
+                }
             }
 
             if let Some(Token::Whitespace(_)) = self.tokens.get(self.index) {
@@ -913,6 +937,7 @@ impl Parser {
             // There may be only one non-whitespace token `pending` as by
             // convention, backtracking (i.e. going more than one token back)
             // is done via `start`/`reset` instead.
+            #[cfg(feature = "cst")]
             for tok in &self.pending {
                 assert!(tok.0 == SK::Whitespace);
             }
@@ -941,9 +966,12 @@ impl Parser {
             Some(Token::Word(ref k)) if expected.eq_ignore_ascii_case(&k.keyword) => {
                 self.next_token();
                 // TBD: a hack to change the "kind" of the token just processed
-                let mut p = self.pending.pop().unwrap();
-                p.0 = SK::KW.into();
-                self.pending.push(p);
+                #[cfg(feature = "cst")]
+                {
+                    let mut p = self.pending.pop().unwrap();
+                    p.0 = SK::KW;
+                    self.pending.push(p);
+                }
                 true
             }
             _ => false,

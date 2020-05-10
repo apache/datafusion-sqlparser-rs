@@ -58,17 +58,20 @@ fn main() {
 
     match parse_result {
         Ok(statements) => {
-            println!(
-                "Round-trip:\n'{}'",
-                statements
-                    .iter()
-                    .map(std::string::ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            );
-            println!("Parse results:\n{:#?}", statements);
-
-            println!("Parse tree:\n{:#?}", parser.syntax());
+            if cfg!(not(feature = "cst")) {
+                println!(
+                    "Round-trip:\n'{}'",
+                    statements
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                );
+                println!("Parse results:\n{:#?}", statements);
+            } else {
+                #[cfg(feature = "cst")]
+                println!("Parse tree:\n{:#?}", parser.syntax());
+            }
         }
         Err(e) => {
             println!("Error during parsing: {:?}", e);

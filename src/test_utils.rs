@@ -57,17 +57,24 @@ impl TestedDialects {
             #[allow(clippy::let_and_return)]
             let rv = f(&mut parser);
 
-            // Concatenating CST tokens should result in a string
-            // identical to the input SQL:
-            let syn = parser.syntax();
-            assert_eq!(sql, syn.to_string());
+            #[cfg(feature = "cst")]
+            {
+                // Concatenating CST tokens should result in a string
+                // identical to the input SQL:
+                let syn = parser.syntax();
+                assert_eq!(sql, syn.to_string());
+            }
 
             rv
         })
     }
 
     pub fn parse_sql_statements(&self, sql: &str) -> Result<Vec<Statement>, ParserError> {
-        self.run_parser_method(sql, Parser::parse_statements)
+        if cfg!(feature = "cst") {
+            self.run_parser_method(sql, Parser::parse_statements)
+        } else {
+            self.one_of_identical_results(|dialect| Parser::parse_sql(dialect, &sql))
+        }
         // To fail the `ensure_multiple_dialects_are_tested` test:
         // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)
     }

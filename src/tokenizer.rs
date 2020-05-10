@@ -278,7 +278,7 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('\'') => {
                             // N'...' - a <national character string literal>
-                            let s = self.tokenize_single_quoted_string(chars);
+                            let s = self.tokenize_single_quoted_string(chars)?;
                             Ok(Some(Token::NationalStringLiteral(s)))
                         }
                         _ => {
@@ -295,7 +295,7 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('\'') => {
                             // X'...' - a <binary string literal>
-                            let s = self.tokenize_single_quoted_string(chars);
+                            let s = self.tokenize_single_quoted_string(chars)?;
                             Ok(Some(Token::HexStringLiteral(s)))
                         }
                         _ => {
@@ -313,7 +313,7 @@ impl<'a> Tokenizer<'a> {
                 }
                 // string
                 '\'' => {
-                    let s = self.tokenize_single_quoted_string(chars);
+                    let s = self.tokenize_single_quoted_string(chars)?;
                     Ok(Some(Token::SingleQuotedString(s)))
                 }
                 // delimited (quoted) identifier
@@ -431,11 +431,10 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Read a single quoted string, starting with the opening quote.
-    fn tokenize_single_quoted_string(&self, chars: &mut Peekable<Chars<'_>>) -> String {
-        //TODO: handle escaped quotes in string
-        //TODO: handle newlines in string
-        //TODO: handle EOF before terminating quote
-        //TODO: handle 'string' <white space> 'string continuation'
+    fn tokenize_single_quoted_string(
+        &self,
+        chars: &mut Peekable<Chars<'_>>,
+    ) -> Result<String, TokenizerError> {
         let mut s = String::new();
         chars.next(); // consume the opening quote
         while let Some(&ch) = chars.peek() {
@@ -447,7 +446,7 @@ impl<'a> Tokenizer<'a> {
                         s.push('\'');
                         chars.next();
                     } else {
-                        break;
+                        return Ok(s);
                     }
                 }
                 _ => {
@@ -456,7 +455,10 @@ impl<'a> Tokenizer<'a> {
                 }
             }
         }
-        s
+        Err(TokenizerError(format!(
+            "Unterminated string literal at Line: {}, Col: {}",
+            self.line, self.col
+        )))
     }
 
     fn tokenize_multiline_comment(
@@ -638,6 +640,31 @@ mod tests {
             Token::make_word("h", None),
         ];
         compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_newline_in_string_literal() {
+        let sql = String::from("'foo\r\nbar\nbaz'");
+
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![Token::SingleQuotedString("foo\r\nbar\nbaz".to_string())];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_unterminated_string_literal() {
+        let sql = String::from("select 'foo");
+
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        assert_eq!(
+            tokenizer.tokenize(),
+            Err(TokenizerError(
+                "Unterminated string literal at Line: 1, Col: 8".to_string()
+            ))
+        );
     }
 
     #[test]

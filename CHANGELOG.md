@@ -6,10 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 Given that the parser produces a typed AST, any changes to the AST will technically be breaking and thus will result in a `0.(N+1)` version. We document changes that break via addition as "Added".
 
 ## [Unreleased]
-Nothing here yet! Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented changes.
+Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented changes.
 
+### Changed
+- Change `Ident` (previously a simple `String`) to store the parsed (unquoted) `value` of the identifier and the `quote_style` separately (#143) - thanks @apparebit!
+- Support Snowflake's `FROM (table_name)` (#155) - thanks @eyalleshem!
 
-## [0.5.0] - 2019-10-10 
+### Added
+- Support MSSQL `TOP (<N>) [ PERCENT ] [ WITH TIES ]` (#150) - thanks @alexkyllo!
+- Support MySQL `LIMIT row_count OFFSET offset` (not followed by `ROW` or `ROWS`) and remember which variant was parsed (#158) - thanks @mjibson!
+- Support PostgreSQL `CREATE TABLE IF NOT EXISTS table_name` (#163) - thanks @alex-dukhno!
+
+### Fixed
+- Report an error for unterminated string literals (#165)
+
+## [0.5.0] - 2019-10-10
 
 ### Changed
 - Replace the `Value::Long(u64)` and `Value::Double(f64)` variants with `Value::Number(String)` to avoid losing precision when parsing decimal literals (#130) - thanks @benesch!

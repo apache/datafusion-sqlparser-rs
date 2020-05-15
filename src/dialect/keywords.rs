@@ -420,7 +420,8 @@ define_keywords!(
     WORK,
     YEAR,
     ZONE,
-    END_EXEC = "END-EXEC"
+    END_EXEC = "END-EXEC",
+    INDEX
 );
 
 /// These keywords can't be used as a table alias, so that `FROM table_name alias`

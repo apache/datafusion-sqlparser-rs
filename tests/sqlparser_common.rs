@@ -2631,6 +2631,44 @@ fn ensure_multiple_dialects_are_tested() {
     let _ = parse_sql_statements("SELECT @foo");
 }
 
+#[test]
+fn parse_create_index() {
+    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test(name,age);";
+    let ident_vec = vec![Ident::new("name"), Ident::new("age")];
+    match verified_stmt(sql) {
+        Statement::CreateIndex {
+            name,
+            table_name,
+            columns,
+            unique,
+            if_not_exists,
+        } => {
+            assert_eq!("idx_name", name.to_string());
+            assert_eq!("test", table_name.to_string());
+            assert_eq!(ident_vec, columns);
+            assert_eq!(true, unique);
+            assert_eq!(true, if_not_exists)
+        }
+        _ => unreachable!(),
+    }
+}
+#[test]
+fn parse_drop_index() {
+    let sql = "DROP INDEX idx_a";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names, object_type, ..
+        } => {
+            assert_eq!(
+                vec!["idx_a"],
+                names.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert_eq!(ObjectType::Index, object_type);
+        }
+        _ => unreachable!(),
+    }
+}
+
 fn parse_sql_statements(sql: &str) -> Result<Vec<Statement>, ParserError> {
     all_dialects().parse_sql_statements(sql)
 }

@@ -855,13 +855,17 @@ impl Parser {
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
         if self.parse_keyword("TABLE") {
             self.parse_create_table()
+        } else if self.parse_keyword("INDEX") {
+            self.parse_create_index(false)
+        } else if self.parse_keywords(vec!["UNIQUE", "INDEX"]) {
+            self.parse_create_index(true)
         } else if self.parse_keyword("MATERIALIZED") || self.parse_keyword("VIEW") {
             self.prev_token();
             self.parse_create_view()
         } else if self.parse_keyword("EXTERNAL") {
             self.parse_create_external_table()
         } else {
-            self.expected("TABLE or VIEW after CREATE", self.peek_token())
+            self.expected("TABLE, VIEW or INDEX after CREATE", self.peek_token())
         }
     }
 
@@ -912,8 +916,10 @@ impl Parser {
             ObjectType::Table
         } else if self.parse_keyword("VIEW") {
             ObjectType::View
+        } else if self.parse_keyword("INDEX") {
+            ObjectType::Index
         } else {
-            return self.expected("TABLE or VIEW after DROP", self.peek_token());
+            return self.expected("TABLE, VIEW or INDEX after DROP", self.peek_token());
         };
         // Many dialects support the non standard `IF EXISTS` clause and allow
         // specifying multiple objects to delete in a single statement
@@ -929,6 +935,23 @@ impl Parser {
             if_exists,
             names,
             cascade,
+        })
+    }
+
+    pub fn parse_create_index(&mut self, unique: bool) -> Result<Statement, ParserError> {
+        let if_not_exists = self.parse_keywords(vec!["IF", "NOT", "EXISTS"]);
+        let index_name = self.parse_object_name()?;
+        self.expect_keyword("ON")?;
+        let table_name = self.parse_object_name()?;
+        self.expect_token(&Token::LParen)?;
+        let columns = self.parse_comma_separated(Parser::parse_identifier)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Statement::CreateIndex {
+            name: index_name,
+            table_name,
+            columns,
+            unique,
+            if_not_exists,
         })
     }
 

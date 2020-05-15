@@ -476,6 +476,15 @@ pub enum Statement {
         file_format: Option<FileFormat>,
         location: Option<String>,
     },
+    /// CREATE INDEX
+    CreateIndex {
+        /// index name
+        name: ObjectName,
+        table_name: ObjectName,
+        columns: Vec<Ident>,
+        unique: bool,
+        if_not_exists: bool,
+    },
     /// ALTER TABLE
     AlterTable {
         /// Table name
@@ -655,6 +664,28 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::CreateIndex {
+                name,
+                table_name,
+                columns,
+                unique,
+                if_not_exists,
+            } => {
+                write!(
+                    f,
+                    "CREATE{}INDEX{}{} ON {}({}",
+                    if *unique { " UNIQUE " } else { " " },
+                    if *if_not_exists {
+                        " IF NOT EXISTS "
+                    } else {
+                        " "
+                    },
+                    name,
+                    table_name,
+                    display_separated(columns, ",")
+                )?;
+                write!(f, ");")
+            }
             Statement::AlterTable { name, operation } => {
                 write!(f, "ALTER TABLE {} {}", name, operation)
             }
@@ -819,6 +850,7 @@ impl FromStr for FileFormat {
 pub enum ObjectType {
     Table,
     View,
+    Index,
 }
 
 impl fmt::Display for ObjectType {
@@ -826,6 +858,7 @@ impl fmt::Display for ObjectType {
         f.write_str(match self {
             ObjectType::Table => "TABLE",
             ObjectType::View => "VIEW",
+            ObjectType::Index => "INDEX",
         })
     }
 }

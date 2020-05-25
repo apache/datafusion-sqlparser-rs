@@ -1017,10 +1017,36 @@ impl Parser {
             ColumnOption::Unique { is_primary: false }
         } else if self.parse_keyword("REFERENCES") {
             let foreign_table = self.parse_object_name()?;
-            let referred_columns = self.parse_parenthesized_column_list(Mandatory)?;
+            let referred_columns =
+                self.parse_parenthesized_column_list(Optional)?;
+            let mut on_delete = None;
+            let mut on_update = None;
+            while self.parse_keyword("ON") {
+                if self.parse_keyword("DELETE") {
+                    if on_delete == None {
+                        on_delete = Some(self.parse_reference_change_action()?);
+                    } else {
+                        return self.expected(
+                            "ON DELETE option not more than once",
+                            self.peek_token()
+                        );
+                    }
+                } else if self.parse_keyword("UPDATE") {
+                    if on_update == None {
+                        on_update = Some(self.parse_reference_change_action()?);
+                    } else {
+                        return self.expected(
+                            "ON UPDATE option not more than once",
+                            self.peek_token()
+                        );
+                    }
+                }
+            }
             ColumnOption::ForeignKey {
                 foreign_table,
                 referred_columns,
+                on_delete,
+                on_update,
             }
         } else if self.parse_keyword("CHECK") {
             self.expect_token(&Token::LParen)?;
@@ -1032,6 +1058,17 @@ impl Parser {
         };
 
         Ok(ColumnOptionDef { name, option })
+    }
+
+    pub fn parse_reference_change_action(&mut self) -> Result<ReferentialAction, ParserError> {
+        if self.parse_keyword("RESTRICT") { Ok(ReferentialAction::Restrict) }
+        else if self.parse_keyword("CASCADE") { Ok(ReferentialAction::Cascade) }
+        else if self.parse_keywords(vec!["SET", "NULL"]) { Ok(ReferentialAction::SetNull) }
+        else if self.parse_keywords(vec!["NO", "ACTION"]) { Ok(ReferentialAction::NoAction) }
+        else if self.parse_keywords(vec!["SET", "DEFAULT"]) { Ok(ReferentialAction::SetDefault) }
+        else {
+            self.expected("one of RESTRICT, CASCADE, SET NULL, NO ACTION or SET DEFAULT", self.peek_token())
+        }
     }
 
     pub fn parse_optional_table_constraint(

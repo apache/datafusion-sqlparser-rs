@@ -51,6 +51,7 @@ macro_rules! define_keywords {
 
 define_keywords!(
     ABS,
+    ACTION,
     ADD,
     ASC,
     ALL,

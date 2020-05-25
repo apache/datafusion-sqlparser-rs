@@ -23,6 +23,7 @@ use std::fmt;
 pub use self::data_type::DataType;
 pub use self::ddl::{
     AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, TableConstraint,
+    ReferentialAction,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{

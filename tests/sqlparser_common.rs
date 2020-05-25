@@ -990,17 +990,15 @@ fn parse_create_table() {
                         name: "ref2".into(),
                         data_type: DataType::Int,
                         collation: None,
-                        options: vec![
-                            ColumnOptionDef {
-                                name: None,
-                                option: ColumnOption::ForeignKey {
-                                    foreign_table: ObjectName(vec!["othertable2".into()]),
-                                    referred_columns: vec![],
-                                    on_delete: Some(ReferentialAction::Cascade),
-                                    on_update: Some(ReferentialAction::NoAction),
-                                }
-                            },
-                        ]
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::ForeignKey {
+                                foreign_table: ObjectName(vec!["othertable2".into()]),
+                                referred_columns: vec![],
+                                on_delete: Some(ReferentialAction::Cascade),
+                                on_update: Some(ReferentialAction::NoAction),
+                            }
+                        },]
                     }
                 ]
             );

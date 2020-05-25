@@ -22,8 +22,8 @@ use std::fmt;
 
 pub use self::data_type::DataType;
 pub use self::ddl::{
-    AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, TableConstraint,
-    ReferentialAction,
+    AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, ReferentialAction,
+    TableConstraint,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{

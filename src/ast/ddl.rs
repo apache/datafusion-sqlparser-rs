@@ -187,7 +187,7 @@ impl fmt::Display for ColumnOption {
                 on_update,
             } => {
                 write!(f, "REFERENCES {}", foreign_table)?;
-                if referred_columns.len() > 0 {
+                if ! referred_columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(referred_columns))?;
                 }
                 if let Some(action) = on_delete {

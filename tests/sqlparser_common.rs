@@ -1031,7 +1031,7 @@ fn parse_create_external_table() {
                name VARCHAR(100) NOT NULL,\
                lat DOUBLE NULL,\
                lng DOUBLE)\
-               STORED AS TEXTFILE LOCATION '/tmp/example.csv";
+               STORED AS TEXTFILE LOCATION '/tmp/example.csv'";
     let ast = one_statement_parses_to(
         sql,
         "CREATE EXTERNAL TABLE uk_cities (\

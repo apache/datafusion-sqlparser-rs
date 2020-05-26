@@ -46,9 +46,9 @@ SQL was first standardized in 1987, and revisions of the standard have been
 published regularly since. Most revisions have added significant new features to
 the language, and as a result no database claims to support the full breadth of
 features. This parser currently supports most of the SQL-92 syntax, plus some
-syntax from newer versions that have been explicitly requested, plus some MSSQL-
-and PostgreSQL-specific syntax. Whenever possible, the [online SQL:2016
-grammar][sql-2016-grammar] is used to guide what syntax to accept.
+syntax from newer versions that have been explicitly requested, plus some MSSQL,
+PostgreSQL, and other dialect-specific syntax. Whenever possible, the [online
+SQL:2016 grammar][sql-2016-grammar] is used to guide what syntax to accept.
 
 Unfortunately, stating anything more specific about compliance is difficult.
 There is no publicly available test suite that can assess compliance

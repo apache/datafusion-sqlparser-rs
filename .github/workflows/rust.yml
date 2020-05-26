@@ -4,14 +4,13 @@ on: [push]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v1
     - name: Setup Rust
       run: |
-        rustup toolchain install nightly && rustup component add --toolchain nightly rustfmt
+        rustup toolchain install nightly --profile default
         rustup toolchain install stable
         rustup override set stable
     # Clippy must be run first, as its lints are only triggered during

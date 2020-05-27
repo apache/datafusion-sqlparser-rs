@@ -1017,6 +1017,8 @@ impl Parser {
             ColumnOption::Unique { is_primary: false }
         } else if self.parse_keyword("REFERENCES") {
             let foreign_table = self.parse_object_name()?;
+            // PostgreSQL allows omitting the column list and
+            // uses the primary key column of the foreign table by default
             let referred_columns = self.parse_parenthesized_column_list(Optional)?;
             let mut on_delete = None;
             let mut on_update = None;

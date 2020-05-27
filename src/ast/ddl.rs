@@ -155,10 +155,15 @@ pub enum ColumnOption {
         is_primary: bool,
     },
     /// A referential integrity constraint (`[FOREIGN KEY REFERENCES
-    /// <foreign_table> (<referred_columns>)`).
+    /// <foreign_table> (<referred_columns>)
+    /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
+    ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
+    /// }`).
     ForeignKey {
         foreign_table: ObjectName,
         referred_columns: Vec<Ident>,
+        on_delete: Option<ReferentialAction>,
+        on_update: Option<ReferentialAction>,
     },
     // `CHECK (<expr>)`
     Check(Expr),
@@ -177,12 +182,21 @@ impl fmt::Display for ColumnOption {
             ForeignKey {
                 foreign_table,
                 referred_columns,
-            } => write!(
-                f,
-                "REFERENCES {} ({})",
-                foreign_table,
-                display_comma_separated(referred_columns)
-            ),
+                on_delete,
+                on_update,
+            } => {
+                write!(f, "REFERENCES {}", foreign_table)?;
+                if !referred_columns.is_empty() {
+                    write!(f, " ({})", display_comma_separated(referred_columns))?;
+                }
+                if let Some(action) = on_delete {
+                    write!(f, " ON DELETE {}", action)?;
+                }
+                if let Some(action) = on_update {
+                    write!(f, " ON UPDATE {}", action)?;
+                }
+                Ok(())
+            }
             Check(expr) => write!(f, "CHECK ({})", expr),
         }
     }
@@ -199,4 +213,29 @@ fn display_constraint_name<'a>(name: &'a Option<Ident>) -> impl fmt::Display + '
         }
     }
     ConstraintName(name)
+}
+
+/// `<referential_action> =
+/// { RESTRICT | CASCADE | SET NULL | NO ACTION | SET DEFAULT }`
+///
+/// Used in foreign key constraints in `ON UPDATE` and `ON DELETE` options.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ReferentialAction {
+    Restrict,
+    Cascade,
+    SetNull,
+    NoAction,
+    SetDefault,
+}
+
+impl fmt::Display for ReferentialAction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            ReferentialAction::Restrict => "RESTRICT",
+            ReferentialAction::Cascade => "CASCADE",
+            ReferentialAction::SetNull => "SET NULL",
+            ReferentialAction::NoAction => "NO ACTION",
+            ReferentialAction::SetDefault => "SET DEFAULT",
+        })
+    }
 }

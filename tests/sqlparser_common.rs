@@ -893,7 +893,9 @@ fn parse_create_table() {
                lat DOUBLE NULL,\
                lng DOUBLE,
                constrained INT NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0),
-               ref INT REFERENCES othertable (a, b))";
+               ref INT REFERENCES othertable (a, b),\
+               ref2 INT references othertable2 on delete cascade on update no action\
+               )";
     let ast = one_statement_parses_to(
         sql,
         "CREATE TABLE uk_cities (\
@@ -901,7 +903,8 @@ fn parse_create_table() {
          lat double NULL, \
          lng double, \
          constrained int NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0), \
-         ref int REFERENCES othertable (a, b))",
+         ref int REFERENCES othertable (a, b), \
+         ref2 int REFERENCES othertable2 ON DELETE CASCADE ON UPDATE NO ACTION)",
     );
     match ast {
         Statement::CreateTable {
@@ -978,8 +981,24 @@ fn parse_create_table() {
                             option: ColumnOption::ForeignKey {
                                 foreign_table: ObjectName(vec!["othertable".into()]),
                                 referred_columns: vec!["a".into(), "b".into(),],
+                                on_delete: None,
+                                on_update: None,
                             }
                         }]
+                    },
+                    ColumnDef {
+                        name: "ref2".into(),
+                        data_type: DataType::Int,
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::ForeignKey {
+                                foreign_table: ObjectName(vec!["othertable2".into()]),
+                                referred_columns: vec![],
+                                on_delete: Some(ReferentialAction::Cascade),
+                                on_update: Some(ReferentialAction::NoAction),
+                            }
+                        },]
                     }
                 ]
             );
@@ -994,6 +1013,32 @@ fn parse_create_table() {
         .unwrap_err()
         .to_string()
         .contains("Expected column option, found: GARBAGE"));
+}
+
+#[test]
+fn parse_create_table_with_multiple_on_delete_fails() {
+    parse_sql_statements(
+        "\
+        create table X (\
+            y_id int references Y (id) \
+            on delete cascade on update cascade on delete no action\
+        )",
+    )
+    .expect_err("should have failed");
+}
+
+#[test]
+fn parse_create_table_with_on_delete_on_update_2in_any_order() -> Result<(), ParserError> {
+    let sql = |options: &str| -> String {
+        format!("create table X (y_id int references Y (id) {})", options)
+    };
+
+    parse_sql_statements(&sql("on update cascade on delete no action"))?;
+    parse_sql_statements(&sql("on delete cascade on update cascade"))?;
+    parse_sql_statements(&sql("on update no action"))?;
+    parse_sql_statements(&sql("on delete restrict"))?;
+
+    Ok(())
 }
 
 #[test]

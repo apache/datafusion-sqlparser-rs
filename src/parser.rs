@@ -1038,10 +1038,25 @@ impl Parser {
             ColumnOption::Unique { is_primary: false }
         } else if self.parse_keyword("REFERENCES") {
             let foreign_table = self.parse_object_name()?;
-            let referred_columns = self.parse_parenthesized_column_list(Mandatory)?;
+            // PostgreSQL allows omitting the column list and
+            // uses the primary key column of the foreign table by default
+            let referred_columns = self.parse_parenthesized_column_list(Optional)?;
+            let mut on_delete = None;
+            let mut on_update = None;
+            loop {
+                if on_delete.is_none() && self.parse_keywords(vec!["ON", "DELETE"]) {
+                    on_delete = Some(self.parse_referential_action()?);
+                } else if on_update.is_none() && self.parse_keywords(vec!["ON", "UPDATE"]) {
+                    on_update = Some(self.parse_referential_action()?);
+                } else {
+                    break;
+                }
+            }
             ColumnOption::ForeignKey {
                 foreign_table,
                 referred_columns,
+                on_delete,
+                on_update,
             }
         } else if self.parse_keyword("CHECK") {
             self.expect_token(&Token::LParen)?;
@@ -1053,6 +1068,25 @@ impl Parser {
         };
 
         Ok(ColumnOptionDef { name, option })
+    }
+
+    pub fn parse_referential_action(&mut self) -> Result<ReferentialAction, ParserError> {
+        if self.parse_keyword("RESTRICT") {
+            Ok(ReferentialAction::Restrict)
+        } else if self.parse_keyword("CASCADE") {
+            Ok(ReferentialAction::Cascade)
+        } else if self.parse_keywords(vec!["SET", "NULL"]) {
+            Ok(ReferentialAction::SetNull)
+        } else if self.parse_keywords(vec!["NO", "ACTION"]) {
+            Ok(ReferentialAction::NoAction)
+        } else if self.parse_keywords(vec!["SET", "DEFAULT"]) {
+            Ok(ReferentialAction::SetDefault)
+        } else {
+            self.expected(
+                "one of RESTRICT, CASCADE, SET NULL, NO ACTION or SET DEFAULT",
+                self.peek_token(),
+            )
+        }
     }
 
     pub fn parse_optional_table_constraint(

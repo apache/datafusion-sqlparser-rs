@@ -200,6 +200,7 @@ define_keywords!(
     IDENTITY,
     IF,
     IN,
+    INDEX,
     INDICATOR,
     INNER,
     INOUT,

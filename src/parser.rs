@@ -1022,21 +1022,13 @@ impl Parser {
             let referred_columns = self.parse_parenthesized_column_list(Optional)?;
             let mut on_delete = None;
             let mut on_update = None;
-            while self.parse_keyword("ON") {
-                if self.parse_keyword("DELETE") {
-                    if on_delete == None {
-                        on_delete = Some(self.parse_referential_action()?);
-                    } else {
-                        return self
-                            .expected("ON DELETE option not more than once", self.peek_token());
-                    }
-                } else if self.parse_keyword("UPDATE") {
-                    if on_update == None {
-                        on_update = Some(self.parse_referential_action()?);
-                    } else {
-                        return self
-                            .expected("ON UPDATE option not more than once", self.peek_token());
-                    }
+            loop {
+                if on_delete.is_none() && self.parse_keywords(vec!["ON", "DELETE"]) {
+                    on_delete = Some(self.parse_referential_action()?);
+                } else if on_update.is_none() && self.parse_keywords(vec!["ON", "UPDATE"]) {
+                    on_update = Some(self.parse_referential_action()?);
+                } else {
+                    break;
                 }
             }
             ColumnOption::ForeignKey {

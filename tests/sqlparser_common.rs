@@ -1016,6 +1016,32 @@ fn parse_create_table() {
 }
 
 #[test]
+fn parse_create_table_with_multiple_on_delete_fails() {
+    parse_sql_statements(
+        "\
+        create table X (\
+            y_id int references Y (id) \
+            on delete cascade on update cascade on delete no action\
+        )",
+    )
+    .expect_err("should have failed");
+}
+
+#[test]
+fn parse_create_table_with_on_delete_on_update_2in_any_order() -> Result<(), ParserError> {
+    let sql = |options: &str| -> String {
+        format!("create table X (y_id int references Y (id) {})", options)
+    };
+
+    parse_sql_statements(&sql("on update cascade on delete no action"))?;
+    parse_sql_statements(&sql("on delete cascade on update cascade"))?;
+    parse_sql_statements(&sql("on update no action"))?;
+    parse_sql_statements(&sql("on delete restrict"))?;
+
+    Ok(())
+}
+
+#[test]
 fn parse_create_table_with_options() {
     let sql = "CREATE TABLE t (c int) WITH (foo = 'bar', a = 123)";
     match verified_stmt(sql) {

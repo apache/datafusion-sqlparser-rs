@@ -200,6 +200,7 @@ define_keywords!(
     IDENTITY,
     IF,
     IN,
+    INDEX,
     INDICATOR,
     INNER,
     INOUT,
@@ -420,8 +421,7 @@ define_keywords!(
     WORK,
     YEAR,
     ZONE,
-    END_EXEC = "END-EXEC",
-    INDEX
+    END_EXEC = "END-EXEC"
 );
 
 /// These keywords can't be used as a table alias, so that `FROM table_name alias`

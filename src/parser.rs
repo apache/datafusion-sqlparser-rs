@@ -943,9 +943,7 @@ impl Parser {
         let index_name = self.parse_object_name()?;
         self.expect_keyword("ON")?;
         let table_name = self.parse_object_name()?;
-        self.expect_token(&Token::LParen)?;
-        let columns = self.parse_comma_separated(Parser::parse_identifier)?;
-        self.expect_token(&Token::RParen)?;
+        let columns = self.parse_parenthesized_column_list(Mandatory)?;
         Ok(Statement::CreateIndex {
             name: index_name,
             table_name,

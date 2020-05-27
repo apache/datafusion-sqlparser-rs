@@ -1023,14 +1023,14 @@ impl Parser {
             while self.parse_keyword("ON") {
                 if self.parse_keyword("DELETE") {
                     if on_delete == None {
-                        on_delete = Some(self.parse_reference_change_action()?);
+                        on_delete = Some(self.parse_referential_action()?);
                     } else {
                         return self
                             .expected("ON DELETE option not more than once", self.peek_token());
                     }
                 } else if self.parse_keyword("UPDATE") {
                     if on_update == None {
-                        on_update = Some(self.parse_reference_change_action()?);
+                        on_update = Some(self.parse_referential_action()?);
                     } else {
                         return self
                             .expected("ON UPDATE option not more than once", self.peek_token());
@@ -1055,7 +1055,7 @@ impl Parser {
         Ok(ColumnOptionDef { name, option })
     }
 
-    pub fn parse_reference_change_action(&mut self) -> Result<ReferentialAction, ParserError> {
+    pub fn parse_referential_action(&mut self) -> Result<ReferentialAction, ParserError> {
         if self.parse_keyword("RESTRICT") {
             Ok(ReferentialAction::Restrict)
         } else if self.parse_keyword("CASCADE") {

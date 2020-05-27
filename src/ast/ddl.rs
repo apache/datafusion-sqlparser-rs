@@ -156,8 +156,8 @@ pub enum ColumnOption {
     },
     /// A referential integrity constraint (`[FOREIGN KEY REFERENCES
     /// <foreign_table> (<referred_columns>)
-    /// [ON DELETE <reference_change_action>]
-    /// [ON UPDATE <reference_change_action>]`).
+    /// [ON DELETE <referential_action>]
+    /// [ON UPDATE <referential_action>]`).
     ///
     /// The `ON DELETE` option may be placed after the `ON UPDATE` option.
     ForeignKey {
@@ -216,7 +216,7 @@ fn display_constraint_name<'a>(name: &'a Option<Ident>) -> impl fmt::Display + '
     ConstraintName(name)
 }
 
-/// `<reference_change_action> =
+/// `<referential_action> =
 /// { RESTRICT | CASCADE | SET NULL | NO ACTION | SET DEFAULT }`
 ///
 /// Used in foreign key constraints in `ON UPDATE` and `ON DELETE` options.

@@ -156,10 +156,9 @@ pub enum ColumnOption {
     },
     /// A referential integrity constraint (`[FOREIGN KEY REFERENCES
     /// <foreign_table> (<referred_columns>)
-    /// [ON DELETE <referential_action>]
-    /// [ON UPDATE <referential_action>]`).
-    ///
-    /// The `ON DELETE` option may be placed after the `ON UPDATE` option.
+    /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
+    ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
+    /// }`).
     ForeignKey {
         foreign_table: ObjectName,
         referred_columns: Vec<Ident>,

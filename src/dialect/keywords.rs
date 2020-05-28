@@ -330,6 +330,7 @@ define_keywords!(
     ROW_NUMBER,
     ROWS,
     SAVEPOINT,
+    SCHEMA,
     SCOPE,
     SCROLL,
     SEARCH,

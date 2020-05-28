@@ -1028,6 +1028,28 @@ fn parse_create_table_with_multiple_on_delete_fails() {
 }
 
 #[test]
+fn parse_create_schema() {
+    let sql = "CREATE SCHEMA X";
+
+    match verified_stmt(sql) {
+        Statement::CreateSchema { schema_name } => {
+            assert_eq!(schema_name.to_string(), "X".to_owned())
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_drop_schema() {
+    let sql = "DROP SCHEMA X";
+
+    match verified_stmt(sql) {
+        Statement::Drop { object_type, .. } => assert_eq!(object_type, ObjectType::Schema),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_with_on_delete_on_update_2in_any_order() -> Result<(), ParserError> {
     let sql = |options: &str| -> String {
         format!("create table X (y_id int references Y (id) {})", options)

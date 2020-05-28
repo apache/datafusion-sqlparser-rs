@@ -535,6 +535,8 @@ pub enum Statement {
     Commit { chain: bool },
     /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
     Rollback { chain: bool },
+    /// CREATE SCHEMA
+    CreateSchema { schema_name: ObjectName },
 }
 
 impl fmt::Display for Statement {
@@ -754,6 +756,7 @@ impl fmt::Display for Statement {
             Statement::Rollback { chain } => {
                 write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" },)
             }
+            Statement::CreateSchema { schema_name } => write!(f, "CREATE SCHEMA {}", schema_name),
         }
     }
 }
@@ -852,6 +855,7 @@ pub enum ObjectType {
     Table,
     View,
     Index,
+    Schema,
 }
 
 impl fmt::Display for ObjectType {
@@ -860,6 +864,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Table => "TABLE",
             ObjectType::View => "VIEW",
             ObjectType::Index => "INDEX",
+            ObjectType::Schema => "SCHEMA",
         })
     }
 }

@@ -864,9 +864,19 @@ impl Parser {
             self.parse_create_view()
         } else if self.parse_keyword("EXTERNAL") {
             self.parse_create_external_table()
+        } else if self.parse_keyword("SCHEMA") {
+            self.parse_create_schema()
         } else {
-            self.expected("TABLE, VIEW or INDEX after CREATE", self.peek_token())
+            self.expected(
+                "TABLE, VIEW, INDEX or SCHEMA after CREATE",
+                self.peek_token(),
+            )
         }
+    }
+
+    pub fn parse_create_schema(&mut self) -> Result<Statement, ParserError> {
+        let schema_name = self.parse_object_name()?;
+        Ok(Statement::CreateSchema { schema_name })
     }
 
     pub fn parse_create_external_table(&mut self) -> Result<Statement, ParserError> {
@@ -918,8 +928,10 @@ impl Parser {
             ObjectType::View
         } else if self.parse_keyword("INDEX") {
             ObjectType::Index
+        } else if self.parse_keyword("SCHEMA") {
+            ObjectType::Schema
         } else {
-            return self.expected("TABLE, VIEW or INDEX after DROP", self.peek_token());
+            return self.expected("TABLE, VIEW, INDEX or SCHEMA after DROP", self.peek_token());
         };
         // Many dialects support the non standard `IF EXISTS` clause and allow
         // specifying multiple objects to delete in a single statement

@@ -925,8 +925,7 @@ fn parse_listagg() {
     verified_stmt("SELECT LISTAGG(DISTINCT dateid)");
 
     let expr = Box::new(Expr::Identifier(Ident::new("dateid")));
-    let on_overflow = Some(ListAggOnOverflow {
-        error: false,
+    let on_overflow = Some(ListAggOnOverflow::Truncate {
         filler: Some(Box::new(Expr::Value(Value::SingleQuotedString(
             "%".to_string(),
         )))),

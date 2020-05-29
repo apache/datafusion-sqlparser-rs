@@ -895,28 +895,32 @@ impl fmt::Display for ListAgg {
 
 /// The `ON OVERFLOW` clause of a LISTAGG invocation
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ListAggOnOverflow {
-    pub error: bool,
-    pub filler: Option<Box<Expr>>,
-    pub with_count: bool,
+pub enum ListAggOnOverflow {
+    Error,
+    Truncate {
+        filler: Option<Box<Expr>>,
+        with_count: bool,
+    },
 }
 
 impl fmt::Display for ListAggOnOverflow {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let overflow = if self.error {
-            "ERROR".to_owned()
-        } else {
-            format!(
-                "TRUNCATE {}{} COUNT",
-                if let Some(filler) = &self.filler {
-                    format!("{} ", filler)
+        write!(f, " ON OVERFLOW")?;
+        match self {
+            ListAggOnOverflow::Error => write!(f, " ERROR"),
+            ListAggOnOverflow::Truncate { filler, with_count } => {
+                write!(f, " TRUNCATE")?;
+                if let Some(filler) = filler {
+                    write!(f, " {}", filler)?;
+                }
+                if *with_count {
+                    write!(f, " WITH")?;
                 } else {
-                    "".to_owned()
-                },
-                if self.with_count { "WITH" } else { "WITHOUT" }
-            )
-        };
-        write!(f, " ON OVERFLOW {}", overflow)
+                    write!(f, " WITHOUT")?;
+                }
+                write!(f, " COUNT")
+            }
+        }
     }
 }
 

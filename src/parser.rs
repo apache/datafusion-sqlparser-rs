@@ -273,14 +273,7 @@ impl Parser {
 
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let all = self.parse_keyword("ALL");
-        let distinct = self.parse_keyword("DISTINCT");
-        if all && distinct {
-            return parser_err!(format!(
-                "Cannot specify both ALL and DISTINCT in function: {}",
-                name.to_string(),
-            ));
-        }
+        let distinct = self.parse_all_or_distinct()?;
         let args = self.parse_optional_args()?;
         let over = if self.parse_keyword("OVER") {
             // TBD: support window names (`OVER mywin`) in place of inline specification
@@ -427,11 +420,7 @@ impl Parser {
     /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.
     pub fn parse_listagg_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let all = self.parse_keyword("ALL");
-        let distinct = self.parse_keyword("DISTINCT");
-        if all && distinct {
-            return parser_err!("Cannot specify both ALL and DISTINCT in LISTAGG".to_string());
-        }
+        let distinct = self.parse_all_or_distinct()?;
         let args = self.parse_comma_separated(Parser::parse_expr)?;
         // TODO: Is there a safer way of grabbing the expr and separator?
         let expr = Box::new(args[0].clone());
@@ -914,6 +903,18 @@ impl Parser {
             }
         }
         Ok(values)
+    }
+
+    /// Parse either `ALL` or `DISTINCT`. Returns `true` if `DISTINCT` is parsed and results in a
+    /// `ParserError` if both `ALL` and `DISTINCT` are fround.
+    pub fn parse_all_or_distinct(&mut self) -> Result<bool, ParserError> {
+        let all = self.parse_keyword("ALL");
+        let distinct = self.parse_keyword("DISTINCT");
+        if all && distinct {
+            return parser_err!("Cannot specify both ALL and DISTINCT".to_string());
+        } else {
+            Ok(distinct)
+        }
     }
 
     /// Parse a SQL CREATE statement
@@ -1700,11 +1701,7 @@ impl Parser {
     /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`),
     /// assuming the initial `SELECT` was already consumed
     pub fn parse_select(&mut self) -> Result<Select, ParserError> {
-        let all = self.parse_keyword("ALL");
-        let distinct = self.parse_keyword("DISTINCT");
-        if all && distinct {
-            return parser_err!("Cannot specify both ALL and DISTINCT in SELECT");
-        }
+        let distinct = self.parse_all_or_distinct()?;
 
         let top = if self.parse_keyword("TOP") {
             Some(self.parse_top()?)

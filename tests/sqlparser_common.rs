@@ -244,7 +244,7 @@ fn parse_select_all() {
 fn parse_select_all_distinct() {
     let result = parse_sql_statements("SELECT ALL DISTINCT name FROM customer");
     assert_eq!(
-        ParserError::ParserError("Cannot specify both ALL and DISTINCT in SELECT".to_string()),
+        ParserError::ParserError("Cannot specify both ALL and DISTINCT".to_string()),
         result.unwrap_err(),
     );
 }
@@ -358,7 +358,7 @@ fn parse_select_count_distinct() {
     let res = parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError(
-            "Cannot specify both ALL and DISTINCT in function: COUNT".to_string()
+            "Cannot specify both ALL and DISTINCT".to_string()
         ),
         res.unwrap_err()
     );

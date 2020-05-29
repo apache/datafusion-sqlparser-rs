@@ -421,13 +421,9 @@ impl Parser {
     pub fn parse_listagg_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let distinct = self.parse_all_or_distinct()?;
-        let args = self.parse_comma_separated(Parser::parse_expr)?;
-        // TODO: Is there a safer way of grabbing the expr and separator?
-        let expr = Box::new(args[0].clone());
-        // While ANSI SQL would require the separator, Redshift makes this optional. Here we also
-        // make the separator optional as this provides a more general implementation.
-        let separator = if let Some(separtor) = args.get(1) {
-            Some(Box::new(separtor.clone()))
+        let expr = Box::new(self.parse_expr()?);
+        let separator = if self.consume_token(&Token::Comma) {
+            Some(Box::new(self.parse_expr()?))
         } else {
             None
         };

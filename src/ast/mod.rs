@@ -853,7 +853,9 @@ impl FromStr for FileFormat {
     }
 }
 
-/// A `LISTAGG` invocation
+/// A `LISTAGG` invocation, e.g.
+/// LISTAGG( [ DISTINCT ] <expr>[, <separator> ] [ON OVERFLOW <on_overflow>] )
+/// [ WITHIN GROUP (ORDER BY <within_group1>[, ...] ) ]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ListAgg {
     pub distinct: bool,

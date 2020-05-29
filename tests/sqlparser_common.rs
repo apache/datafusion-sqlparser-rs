@@ -935,7 +935,7 @@ fn parse_listagg() {
         )))),
         with_count: false,
     });
-    let within_group = Some(vec![
+    let within_group = vec![
         OrderByExpr {
             expr: Expr::Identifier(Ident {
                 value: "id".to_string(),
@@ -950,7 +950,7 @@ fn parse_listagg() {
             }),
             asc: None,
         },
-    ]);
+    ];
     assert_eq!(
         &Expr::ListAgg(ListAgg {
             distinct: true,

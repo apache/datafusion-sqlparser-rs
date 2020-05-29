@@ -476,11 +476,11 @@ impl Parser {
         let within_group = if self.parse_keywords(vec!["WITHIN", "GROUP"]) {
             self.expect_token(&Token::LParen)?;
             self.expect_keywords(&["ORDER", "BY"])?;
-            Some(self.parse_comma_separated(Parser::parse_order_by_expr)?)
+            self.parse_comma_separated(Parser::parse_order_by_expr)?
         } else {
-            None
+            vec![]
         };
-        if within_group.is_some() {
+        if !within_group.is_empty() {
             self.expect_token(&Token::RParen)?;
         }
         Ok(Expr::ListAgg(ListAgg {

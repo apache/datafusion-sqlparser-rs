@@ -862,7 +862,7 @@ pub struct ListAgg {
     pub expr: Box<Expr>,
     pub separator: Option<Box<Expr>>,
     pub on_overflow: Option<ListAggOnOverflow>,
-    pub within_group: Option<Vec<OrderByExpr>>,
+    pub within_group: Vec<OrderByExpr>,
 }
 
 impl fmt::Display for ListAgg {
@@ -881,11 +881,11 @@ impl fmt::Display for ListAgg {
         } else {
             write!(f, "LISTAGG({}{})", distinct, args)
         }?;
-        if let Some(within_group) = &self.within_group {
+        if !self.within_group.is_empty() {
             write!(
                 f,
                 " WITHIN GROUP (ORDER BY {})",
-                display_comma_separated(within_group)
+                display_comma_separated(&self.within_group)
             )
         } else {
             Ok(())

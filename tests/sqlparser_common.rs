@@ -920,11 +920,8 @@ fn parse_listagg() {
                WITHIN GROUP (ORDER BY id, username)";
     let select = verified_only_select(sql);
 
-    one_statement_parses_to(
-        "SELECT LISTAGG(sellerid) WITHIN GROUP (ORDER BY dateid)",
-        "SELECT LISTAGG(ALL sellerid) WITHIN GROUP (ORDER BY dateid)",
-    );
-    one_statement_parses_to("SELECT LISTAGG(dateid)", "SELECT LISTAGG(ALL dateid)");
+    verified_stmt("SELECT LISTAGG(sellerid) WITHIN GROUP (ORDER BY dateid)");
+    verified_stmt("SELECT LISTAGG(dateid)");
     verified_stmt("SELECT LISTAGG(DISTINCT dateid)");
 
     let expr = Box::new(Expr::Identifier(Ident::new("dateid")));

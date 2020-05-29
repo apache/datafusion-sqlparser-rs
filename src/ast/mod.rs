@@ -867,7 +867,7 @@ pub struct ListAgg {
 
 impl fmt::Display for ListAgg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let distinct = if self.distinct { "DISTINCT " } else { "ALL " };
+        let distinct = if self.distinct { "DISTINCT " } else { "" };
         let args = if let Some(separator) = &self.separator {
             format!(
                 "{}",

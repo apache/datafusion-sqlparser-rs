@@ -915,6 +915,57 @@ fn parse_extract() {
 }
 
 #[test]
+fn parse_listagg() {
+    let sql = "SELECT LISTAGG(DISTINCT dateid, ', ' ON OVERFLOW TRUNCATE '%' WITHOUT COUNT) \
+               WITHIN GROUP (ORDER BY id, username)";
+    let select = verified_only_select(sql);
+
+    one_statement_parses_to(
+        "SELECT LISTAGG(sellerid) WITHIN GROUP (ORDER BY dateid)",
+        "SELECT LISTAGG(ALL sellerid) WITHIN GROUP (ORDER BY dateid)",
+    );
+    one_statement_parses_to("SELECT LISTAGG(dateid)", "SELECT LISTAGG(ALL dateid)");
+    verified_stmt("SELECT LISTAGG(DISTINCT dateid)");
+
+    let expr = Box::new(Expr::Identifier(Ident::new("dateid")));
+    let on_overflow = Some(ListAggOnOverflow {
+        error: false,
+        filler: Some(Box::new(Expr::Value(Value::SingleQuotedString(
+            "%".to_string(),
+        )))),
+        with_count: false,
+    });
+    let within_group = Some(vec![
+        OrderByExpr {
+            expr: Expr::Identifier(Ident {
+                value: "id".to_string(),
+                quote_style: None,
+            }),
+            asc: None,
+        },
+        OrderByExpr {
+            expr: Expr::Identifier(Ident {
+                value: "username".to_string(),
+                quote_style: None,
+            }),
+            asc: None,
+        },
+    ]);
+    assert_eq!(
+        &Expr::ListAgg(ListAgg {
+            distinct: true,
+            expr,
+            separator: Some(Box::new(Expr::Value(Value::SingleQuotedString(
+                ", ".to_string()
+            )))),
+            on_overflow,
+            within_group
+        }),
+        expr_from_projection(only(&select.projection))
+    );
+}
+
+#[test]
 fn parse_create_table() {
     let sql = "CREATE TABLE uk_cities (\
                name VARCHAR(100) NOT NULL,\

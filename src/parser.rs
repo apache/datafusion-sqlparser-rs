@@ -191,6 +191,7 @@ impl Parser {
                 "EXISTS" => self.parse_exists_expr(),
                 "EXTRACT" => self.parse_extract_expr(),
                 "INTERVAL" => self.parse_literal_interval(),
+                "LISTAGG" => self.parse_listagg_expr(),
                 "NOT" => Ok(Expr::UnaryOp {
                     op: UnaryOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
@@ -421,6 +422,74 @@ impl Parser {
             field,
             expr: Box::new(expr),
         })
+    }
+
+    /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.
+    pub fn parse_listagg_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let all = self.parse_keyword("ALL");
+        let distinct = self.parse_keyword("DISTINCT");
+        if all && distinct {
+            return parser_err!("Cannot specify both ALL and DISTINCT in LISTAGG".to_string());
+        }
+        let args = self.parse_comma_separated(Parser::parse_expr)?;
+        // TODO: Is there a safer way of grabbing the expr and separator?
+        let expr = Box::new(args[0].clone());
+        // While ANSI SQL would require the separator, Redshift makes this optional. Here we also
+        // make the separator optional as this provides a more general implementation.
+        let separator = if let Some(separtor) = args.get(1) {
+            Some(Box::new(separtor.clone()))
+        } else {
+            None
+        };
+        let on_overflow = if self.parse_keywords(vec!["ON", "OVERFLOW"]) {
+            let error = self.parse_keyword("ERROR");
+            let filler = if !error {
+                self.expect_keyword("TRUNCATE")?;
+                Some(Box::new(self.parse_expr()?))
+            } else {
+                None
+            };
+            let with_count = if !error {
+                let with_count = self.parse_keywords(vec!["WITH", "COUNT"]);
+                let without_count = self.parse_keywords(vec!["WITHOUT", "COUNT"]);
+                if !with_count && !without_count {
+                    return parser_err!(
+                        "Expected either WITH COUNT or WITHOUT COUNT in LISTAGG".to_string()
+                    );
+                };
+                with_count
+            } else {
+                false
+            };
+            Some(ListAggOnOverflow {
+                error,
+                filler,
+                with_count,
+            })
+        } else {
+            None
+        };
+        self.expect_token(&Token::RParen)?;
+        // Once again ANSI SQL requires WITHIN GROUP, but Redshift does not. Again we choose the
+        // more general implementation.
+        let within_group = if self.parse_keywords(vec!["WITHIN", "GROUP"]) {
+            self.expect_token(&Token::LParen)?;
+            self.expect_keywords(&["ORDER", "BY"])?;
+            Some(self.parse_comma_separated(Parser::parse_order_by_expr)?)
+        } else {
+            None
+        };
+        if within_group.is_some() {
+            self.expect_token(&Token::RParen)?;
+        }
+        Ok(Expr::ListAgg(ListAgg {
+            distinct,
+            expr,
+            separator,
+            on_overflow,
+            within_group,
+        }))
     }
 
     // This function parses date/time fields for both the EXTRACT function-like

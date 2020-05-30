@@ -428,13 +428,11 @@ impl Parser {
             None
         };
         let on_overflow = if self.parse_keywords(vec!["ON", "OVERFLOW"]) {
-            let error = self.parse_keyword("ERROR");
-            Some(if error {
-                ListAggOnOverflow::Error
+            if self.parse_keyword("ERROR") {
+                Some(ListAggOnOverflow::Error)
             } else {
                 self.expect_keyword("TRUNCATE")?;
                 let filler = Some(Box::new(self.parse_expr()?));
-                let with_count = if !error {
                     let with_count = self.parse_keywords(vec!["WITH", "COUNT"]);
                     let without_count = self.parse_keywords(vec!["WITHOUT", "COUNT"]);
                     if !with_count && !without_count {
@@ -442,12 +440,8 @@ impl Parser {
                             "Expected either WITH COUNT or WITHOUT COUNT in LISTAGG".to_string()
                         );
                     };
-                    with_count
-                } else {
-                    false
-                };
-                ListAggOnOverflow::Truncate { filler, with_count }
-            })
+                Some(ListAggOnOverflow::Truncate { filler, with_count })
+            }
         } else {
             None
         };

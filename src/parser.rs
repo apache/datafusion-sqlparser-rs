@@ -422,9 +422,8 @@ impl Parser {
         self.expect_token(&Token::LParen)?;
         let distinct = self.parse_all_or_distinct()?;
         let expr = Box::new(self.parse_expr()?);
-                // While ANSI SQL would would require the separator, Redshift makes this optional.
-                // Here we choose to make the separator optional as this provides the more general
-                // implementation.
+        // While ANSI SQL would would require the separator, Redshift makes this optional. Here we
+        // choose to make the separator optional as this provides the more general implementation.
         let separator = if self.consume_token(&Token::Comma) {
             Some(Box::new(self.parse_expr()?))
         } else {

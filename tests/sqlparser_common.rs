@@ -939,6 +939,7 @@ fn parse_listagg() {
                 quote_style: None,
             }),
             asc: None,
+            nulls_first: None,
         },
         OrderByExpr {
             expr: Expr::Identifier(Ident {
@@ -946,6 +947,7 @@ fn parse_listagg() {
                 quote_style: None,
             }),
             asc: None,
+            nulls_first: None
         },
     ];
     assert_eq!(

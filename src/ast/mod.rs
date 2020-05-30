@@ -867,17 +867,21 @@ pub struct ListAgg {
 
 impl fmt::Display for ListAgg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let distinct = if self.distinct { "DISTINCT " } else { "" };
-        let args = if let Some(separator) = &self.separator {
-            format!("{}, {}", self.expr, separator)
-        } else {
-            format!("{}", self.expr)
-        };
-        if let Some(on_overflow) = &self.on_overflow {
-            write!(f, "LISTAGG({}{}{})", distinct, args, on_overflow)
-        } else {
-            write!(f, "LISTAGG({}{})", distinct, args)
-        }?;
+        write!(
+            f,
+            "LISTAGG({}{}{})",
+            if self.distinct { "DISTINCT " } else { "" },
+            if let Some(separator) = &self.separator {
+                format!("{}, {}", self.expr, separator)
+            } else {
+                format!("{}", self.expr)
+            },
+            if let Some(on_overflow) = &self.on_overflow {
+                format!("{}", on_overflow)
+            } else {
+                "".to_string()
+            }
+        )?;
         if !self.within_group.is_empty() {
             write!(
                 f,

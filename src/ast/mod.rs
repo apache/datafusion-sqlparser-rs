@@ -224,6 +224,8 @@ pub enum Expr {
     /// A parenthesized subquery `(SELECT ...)`, used in expression like
     /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
     Subquery(Box<Query>),
+    /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
+    ListAgg(ListAgg),
 }
 
 impl fmt::Display for Expr {
@@ -299,6 +301,7 @@ impl fmt::Display for Expr {
             }
             Expr::Exists(s) => write!(f, "EXISTS ({})", s),
             Expr::Subquery(s) => write!(f, "({})", s),
+            Expr::ListAgg(listagg) => write!(f, "{}", listagg),
         }
     }
 }
@@ -846,6 +849,77 @@ impl FromStr for FileFormat {
                 "Unexpected file format: {}",
                 s
             ))),
+        }
+    }
+}
+
+/// A `LISTAGG` invocation `LISTAGG( [ DISTINCT ] <expr>[, <separator> ] [ON OVERFLOW <on_overflow>] ) )
+/// [ WITHIN GROUP (ORDER BY <within_group1>[, ...] ) ]`
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ListAgg {
+    pub distinct: bool,
+    pub expr: Box<Expr>,
+    pub separator: Option<Box<Expr>>,
+    pub on_overflow: Option<ListAggOnOverflow>,
+    pub within_group: Vec<OrderByExpr>,
+}
+
+impl fmt::Display for ListAgg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "LISTAGG({}{}",
+            if self.distinct { "DISTINCT " } else { "" },
+            self.expr
+        )?;
+        if let Some(separator) = &self.separator {
+            write!(f, ", {}", separator)?;
+        }
+        if let Some(on_overflow) = &self.on_overflow {
+            write!(f, "{}", on_overflow)?;
+        }
+        write!(f, ")")?;
+        if !self.within_group.is_empty() {
+            write!(
+                f,
+                " WITHIN GROUP (ORDER BY {})",
+                display_comma_separated(&self.within_group)
+            )?;
+        }
+        Ok(())
+    }
+}
+
+/// The `ON OVERFLOW` clause of a LISTAGG invocation
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ListAggOnOverflow {
+    /// `ON OVERFLOW ERROR`
+    Error,
+
+    /// `ON OVERFLOW TRUNCATE [ <filler> ] WITH[OUT] COUNT`
+    Truncate {
+        filler: Option<Box<Expr>>,
+        with_count: bool,
+    },
+}
+
+impl fmt::Display for ListAggOnOverflow {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, " ON OVERFLOW")?;
+        match self {
+            ListAggOnOverflow::Error => write!(f, " ERROR"),
+            ListAggOnOverflow::Truncate { filler, with_count } => {
+                write!(f, " TRUNCATE")?;
+                if let Some(filler) = filler {
+                    write!(f, " {}", filler)?;
+                }
+                if *with_count {
+                    write!(f, " WITH")?;
+                } else {
+                    write!(f, " WITHOUT")?;
+                }
+                write!(f, " COUNT")
+            }
         }
     }
 }

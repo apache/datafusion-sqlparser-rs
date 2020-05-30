@@ -191,6 +191,7 @@ impl Parser {
                 "EXISTS" => self.parse_exists_expr(),
                 "EXTRACT" => self.parse_extract_expr(),
                 "INTERVAL" => self.parse_literal_interval(),
+                "LISTAGG" => self.parse_listagg_expr(),
                 "NOT" => Ok(Expr::UnaryOp {
                     op: UnaryOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
@@ -272,14 +273,7 @@ impl Parser {
 
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let all = self.parse_keyword("ALL");
-        let distinct = self.parse_keyword("DISTINCT");
-        if all && distinct {
-            return parser_err!(format!(
-                "Cannot specify both ALL and DISTINCT in function: {}",
-                name.to_string(),
-            ));
-        }
+        let distinct = self.parse_all_or_distinct()?;
         let args = self.parse_optional_args()?;
         let over = if self.parse_keyword("OVER") {
             // TBD: support window names (`OVER mywin`) in place of inline specification
@@ -421,6 +415,66 @@ impl Parser {
             field,
             expr: Box::new(expr),
         })
+    }
+
+    /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.
+    pub fn parse_listagg_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let distinct = self.parse_all_or_distinct()?;
+        let expr = Box::new(self.parse_expr()?);
+        // While ANSI SQL would would require the separator, Redshift makes this optional. Here we
+        // choose to make the separator optional as this provides the more general implementation.
+        let separator = if self.consume_token(&Token::Comma) {
+            Some(Box::new(self.parse_expr()?))
+        } else {
+            None
+        };
+        let on_overflow = if self.parse_keywords(vec!["ON", "OVERFLOW"]) {
+            if self.parse_keyword("ERROR") {
+                Some(ListAggOnOverflow::Error)
+            } else {
+                self.expect_keyword("TRUNCATE")?;
+                let filler = match self.peek_token() {
+                    Some(Token::Word(kw)) if kw.keyword == "WITH" || kw.keyword == "WITHOUT" => {
+                        None
+                    }
+                    Some(Token::SingleQuotedString(_))
+                    | Some(Token::NationalStringLiteral(_))
+                    | Some(Token::HexStringLiteral(_)) => Some(Box::new(self.parse_expr()?)),
+                    _ => self.expected(
+                        "either filler, WITH, or WITHOUT in LISTAGG",
+                        self.peek_token(),
+                    )?,
+                };
+                let with_count = self.parse_keyword("WITH");
+                if !with_count && !self.parse_keyword("WITHOUT") {
+                    self.expected("either WITH or WITHOUT in LISTAGG", self.peek_token())?;
+                }
+                self.expect_keyword("COUNT")?;
+                Some(ListAggOnOverflow::Truncate { filler, with_count })
+            }
+        } else {
+            None
+        };
+        self.expect_token(&Token::RParen)?;
+        // Once again ANSI SQL requires WITHIN GROUP, but Redshift does not. Again we choose the
+        // more general implementation.
+        let within_group = if self.parse_keywords(vec!["WITHIN", "GROUP"]) {
+            self.expect_token(&Token::LParen)?;
+            self.expect_keywords(&["ORDER", "BY"])?;
+            let order_by_expr = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+            self.expect_token(&Token::RParen)?;
+            order_by_expr
+        } else {
+            vec![]
+        };
+        Ok(Expr::ListAgg(ListAgg {
+            distinct,
+            expr,
+            separator,
+            on_overflow,
+            within_group,
+        }))
     }
 
     // This function parses date/time fields for both the EXTRACT function-like
@@ -849,6 +903,18 @@ impl Parser {
             }
         }
         Ok(values)
+    }
+
+    /// Parse either `ALL` or `DISTINCT`. Returns `true` if `DISTINCT` is parsed and results in a
+    /// `ParserError` if both `ALL` and `DISTINCT` are fround.
+    pub fn parse_all_or_distinct(&mut self) -> Result<bool, ParserError> {
+        let all = self.parse_keyword("ALL");
+        let distinct = self.parse_keyword("DISTINCT");
+        if all && distinct {
+            return parser_err!("Cannot specify both ALL and DISTINCT".to_string());
+        } else {
+            Ok(distinct)
+        }
     }
 
     /// Parse a SQL CREATE statement
@@ -1635,11 +1701,7 @@ impl Parser {
     /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`),
     /// assuming the initial `SELECT` was already consumed
     pub fn parse_select(&mut self) -> Result<Select, ParserError> {
-        let all = self.parse_keyword("ALL");
-        let distinct = self.parse_keyword("DISTINCT");
-        if all && distinct {
-            return parser_err!("Cannot specify both ALL and DISTINCT in SELECT");
-        }
+        let distinct = self.parse_all_or_distinct()?;
 
         let top = if self.parse_keyword("TOP") {
             Some(self.parse_top()?)

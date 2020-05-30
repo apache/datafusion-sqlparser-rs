@@ -20,6 +20,7 @@ Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented 
 - Support `ON { UPDATE | DELETE } { RESTRICT | CASCADE | SET NULL | NO ACTION | SET DEFAULT }` in `FOREIGN KEY` constraints (#170) - thanks @c7hm4r!
 - Support basic forms of `CREATE SCHEMA` and `DROP SCHEMA` (#173) - thanks @alex-dukhno!
 - Support `NULLS FIRST`/`LAST` in `ORDER BY` expressions (#176) - thanks @houqp!
+- Support `LISTAGG()` (#174) - thanks @maxcountryman!
 
 ### Fixed
 - Report an error for unterminated string literals (#165)

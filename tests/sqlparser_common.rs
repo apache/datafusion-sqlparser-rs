@@ -244,7 +244,7 @@ fn parse_select_all() {
 fn parse_select_all_distinct() {
     let result = parse_sql_statements("SELECT ALL DISTINCT name FROM customer");
     assert_eq!(
-        ParserError::ParserError("Cannot specify both ALL and DISTINCT in SELECT".to_string()),
+        ParserError::ParserError("Cannot specify both ALL and DISTINCT".to_string()),
         result.unwrap_err(),
     );
 }
@@ -357,9 +357,7 @@ fn parse_select_count_distinct() {
     let sql = "SELECT COUNT(ALL DISTINCT + x) FROM customer";
     let res = parse_sql_statements(sql);
     assert_eq!(
-        ParserError::ParserError(
-            "Cannot specify both ALL and DISTINCT in function: COUNT".to_string()
-        ),
+        ParserError::ParserError("Cannot specify both ALL and DISTINCT".to_string()),
         res.unwrap_err()
     );
 }
@@ -911,6 +909,58 @@ fn parse_extract() {
     assert_eq!(
         ParserError::ParserError("Expected date/time field, found: MILLISECOND".to_string()),
         res.unwrap_err()
+    );
+}
+
+#[test]
+fn parse_listagg() {
+    let sql = "SELECT LISTAGG(DISTINCT dateid, ', ' ON OVERFLOW TRUNCATE '%' WITHOUT COUNT) \
+               WITHIN GROUP (ORDER BY id, username)";
+    let select = verified_only_select(sql);
+
+    verified_stmt("SELECT LISTAGG(sellerid) WITHIN GROUP (ORDER BY dateid)");
+    verified_stmt("SELECT LISTAGG(dateid)");
+    verified_stmt("SELECT LISTAGG(DISTINCT dateid)");
+    verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW ERROR)");
+    verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE N'...' WITH COUNT)");
+    verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE X'deadbeef' WITH COUNT)");
+
+    let expr = Box::new(Expr::Identifier(Ident::new("dateid")));
+    let on_overflow = Some(ListAggOnOverflow::Truncate {
+        filler: Some(Box::new(Expr::Value(Value::SingleQuotedString(
+            "%".to_string(),
+        )))),
+        with_count: false,
+    });
+    let within_group = vec![
+        OrderByExpr {
+            expr: Expr::Identifier(Ident {
+                value: "id".to_string(),
+                quote_style: None,
+            }),
+            asc: None,
+            nulls_first: None,
+        },
+        OrderByExpr {
+            expr: Expr::Identifier(Ident {
+                value: "username".to_string(),
+                quote_style: None,
+            }),
+            asc: None,
+            nulls_first: None,
+        },
+    ];
+    assert_eq!(
+        &Expr::ListAgg(ListAgg {
+            distinct: true,
+            expr,
+            separator: Some(Box::new(Expr::Value(Value::SingleQuotedString(
+                ", ".to_string()
+            )))),
+            on_overflow,
+            within_group
+        }),
+        expr_from_projection(only(&select.projection))
     );
 }
 

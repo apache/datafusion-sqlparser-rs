@@ -2015,7 +2015,20 @@ impl Parser {
         } else {
             None
         };
-        Ok(OrderByExpr { expr, asc })
+
+        let nulls_first = if self.parse_keywords(vec!["NULLS", "FIRST"]) {
+            Some(true)
+        } else if self.parse_keywords(vec!["NULLS", "LAST"]) {
+            Some(false)
+        } else {
+            None
+        };
+
+        Ok(OrderByExpr {
+            expr,
+            asc,
+            nulls_first,
+        })
     }
 
     /// Parse a TOP clause, MSSQL equivalent of LIMIT,

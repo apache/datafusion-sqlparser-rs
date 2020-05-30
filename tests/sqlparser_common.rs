@@ -746,14 +746,17 @@ fn parse_select_order_by() {
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("lname")),
                     asc: Some(true),
+                    nulls_first: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("fname")),
                     asc: Some(false),
+                    nulls_first: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("id")),
                     asc: None,
+                    nulls_first: None,
                 },
             ],
             select.order_by
@@ -775,10 +778,35 @@ fn parse_select_order_by_limit() {
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("lname")),
                 asc: Some(true),
+                nulls_first: None,
             },
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("fname")),
                 asc: Some(false),
+                nulls_first: None,
+            },
+        ],
+        select.order_by
+    );
+    assert_eq!(Some(Expr::Value(number("2"))), select.limit);
+}
+
+#[test]
+fn parse_select_order_by_nulls_order() {
+    let sql = "SELECT id, fname, lname FROM customer WHERE id < 5 \
+               ORDER BY lname ASC NULLS FIRST, fname DESC NULLS LAST LIMIT 2";
+    let select = verified_query(sql);
+    assert_eq!(
+        vec![
+            OrderByExpr {
+                expr: Expr::Identifier(Ident::new("lname")),
+                asc: Some(true),
+                nulls_first: Some(true),
+            },
+            OrderByExpr {
+                expr: Expr::Identifier(Ident::new("fname")),
+                asc: Some(false),
+                nulls_first: Some(false),
             },
         ],
         select.order_by
@@ -1251,7 +1279,8 @@ fn parse_window_functions() {
                 partition_by: vec![],
                 order_by: vec![OrderByExpr {
                     expr: Expr::Identifier(Ident::new("dt")),
-                    asc: Some(false)
+                    asc: Some(false),
+                    nulls_first: None,
                 }],
                 window_frame: None,
             }),

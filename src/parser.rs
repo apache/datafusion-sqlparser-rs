@@ -439,7 +439,7 @@ impl Parser {
                         None
                     }
                     Some(Token::SingleQuotedString(_)) => Some(Box::new(self.parse_expr()?)),
-                    _ => self.expected("either filler, WITH, or WITHOUT", self.peek_token())?,
+                    _ => self.expected("either filler, WITH, or WITHOUT in LISTAGG", self.peek_token())?,
                 };
                 let with_count = self.parse_keyword("WITH");
                 if !with_count {

@@ -947,7 +947,7 @@ fn parse_listagg() {
                 quote_style: None,
             }),
             asc: None,
-            nulls_first: None
+            nulls_first: None,
         },
     ];
     assert_eq!(

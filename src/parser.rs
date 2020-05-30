@@ -447,8 +447,8 @@ impl Parser {
                     )?,
                 };
                 let with_count = self.parse_keyword("WITH");
-                if !with_count {
-                    self.expect_keyword("WITHOUT")?;
+                if !with_count && !self.parse_keyword("WITHOUT") {
+                    self.expected("either WITH or WITHOUT in LISTAGG", self.peek_token())?;
                 }
                 self.expect_keyword("COUNT")?;
                 Some(ListAggOnOverflow::Truncate { filler, with_count })

@@ -224,7 +224,7 @@ pub enum Expr {
     /// A parenthesized subquery `(SELECT ...)`, used in expression like
     /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
     Subquery(Box<Query>),
-    /// The `lISTAGG` function, e.g. `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.
+    /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
     ListAgg(ListAgg),
 }
 
@@ -1040,5 +1040,4 @@ impl fmt::Display for SetVariableValue {
             Literal(literal) => write!(f, "{}", literal),
         }
     }
-}
 }

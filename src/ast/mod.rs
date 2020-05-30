@@ -868,28 +868,25 @@ impl fmt::Display for ListAgg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "LISTAGG({}{}{})",
+            "LISTAGG({}{}",
             if self.distinct { "DISTINCT " } else { "" },
-            if let Some(separator) = &self.separator {
-                format!("{}, {}", self.expr, separator)
-            } else {
-                format!("{}", self.expr)
-            },
-            if let Some(on_overflow) = &self.on_overflow {
-                format!("{}", on_overflow)
-            } else {
-                "".to_string()
-            }
+            self.expr
         )?;
+        if let Some(separator) = &self.separator {
+            write!(f, ", {}", separator)?;
+        }
+        if let Some(on_overflow) = &self.on_overflow {
+            write!(f, "{}", on_overflow)?;
+        }
+        write!(f, ")")?;
         if !self.within_group.is_empty() {
             write!(
                 f,
                 " WITHIN GROUP (ORDER BY {})",
                 display_comma_separated(&self.within_group)
-            )
-        } else {
-            Ok(())
+            )?;
         }
+        Ok(())
     }
 }
 

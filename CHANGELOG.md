@@ -13,11 +13,13 @@ Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented 
 - Support Snowflake's `FROM (table_name)` (#155) - thanks @eyalleshem!
 
 ### Added
-- Support basic forms of `CREATE INDEX` and `DROP INDEX` (#167) - thanks @mashuai!
-- Support `ON { UPDATE | DELETE } { RESTRICT | CASCADE | SET NULL | NO ACTION | SET DEFAULT }` in `FOREIGN KEY` constraints (#170) - thanks @c7hm4r!
 - Support MSSQL `TOP (<N>) [ PERCENT ] [ WITH TIES ]` (#150) - thanks @alexkyllo!
 - Support MySQL `LIMIT row_count OFFSET offset` (not followed by `ROW` or `ROWS`) and remember which variant was parsed (#158) - thanks @mjibson!
 - Support PostgreSQL `CREATE TABLE IF NOT EXISTS table_name` (#163) - thanks @alex-dukhno!
+- Support basic forms of `CREATE INDEX` and `DROP INDEX` (#167) - thanks @mashuai!
+- Support `ON { UPDATE | DELETE } { RESTRICT | CASCADE | SET NULL | NO ACTION | SET DEFAULT }` in `FOREIGN KEY` constraints (#170) - thanks @c7hm4r!
+- Support basic forms of `CREATE SCHEMA` and `DROP SCHEMA` (#173) - thanks @alex-dukhno!
+- Support `NULLS FIRST`/`LAST` in `ORDER BY` expressions (#176) - thanks @houqp!
 
 ### Fixed
 - Report an error for unterminated string literals (#165)

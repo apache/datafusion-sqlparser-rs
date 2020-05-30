@@ -374,11 +374,13 @@ pub enum JoinConstraint {
     Natural,
 }
 
-/// SQL ORDER BY expression
+/// An `ORDER BY` expression
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OrderByExpr {
     pub expr: Expr,
+    /// Optional `ASC` or `DESC`
     pub asc: Option<bool>,
+    /// Optional `NULLS FIRST` or `NULLS LAST`
     pub nulls_first: Option<bool>,
 }
 
@@ -386,21 +388,13 @@ impl fmt::Display for OrderByExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.expr)?;
         match self.asc {
-            Some(true) => {
-                write!(f, " ASC")?;
-            }
-            Some(false) => {
-                write!(f, " DESC")?;
-            }
+            Some(true) => write!(f, " ASC")?,
+            Some(false) => write!(f, " DESC")?,
             None => (),
         }
         match self.nulls_first {
-            Some(true) => {
-                write!(f, " NULLS FIRST")?;
-            }
-            Some(false) => {
-                write!(f, " NULLS LAST")?;
-            }
+            Some(true) => write!(f, " NULLS FIRST")?,
+            Some(false) => write!(f, " NULLS LAST")?,
             None => (),
         }
         Ok(())

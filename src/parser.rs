@@ -435,21 +435,15 @@ impl Parser {
             } else {
                 self.expect_keyword("TRUNCATE")?;
                 let filler = match self.peek_token() {
-                    Some(tok) => {
-                        if tok == Token::make_keyword("WITH")
-                            || tok == Token::make_keyword("WITHOUT")
-                        {
-                            None
-                        } else {
-                            Some(Box::new(self.parse_expr()?))
-                        }
+                    Some(Token::Word(kw)) if kw.keyword == "WITH" || kw.keyword == "WITHOUT" => {
+                        None
                     }
-                    None => None,
+                    Some(Token::SingleQuotedString(_)) => Some(Box::new(self.parse_expr()?)),
+                    _ => self.expected("either filler, WITH, or WITHOUT", self.peek_token())?,
                 };
-
                 let with_count = self.parse_keyword("WITH");
-                if !with_count && !self.parse_keyword("WITHOUT") {
-                    self.expected("either WITH or WITHOUT in LISTAGG", self.peek_token())?;
+                if !with_count {
+                    self.expect_keyword("WITHOUT")?;
                 }
                 self.expect_keyword("COUNT")?;
                 Some(ListAggOnOverflow::Truncate { filler, with_count })

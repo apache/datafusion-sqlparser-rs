@@ -869,10 +869,7 @@ impl fmt::Display for ListAgg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let distinct = if self.distinct { "DISTINCT " } else { "" };
         let args = if let Some(separator) = &self.separator {
-            format!(
-                "{}",
-                display_comma_separated(&[self.expr.clone(), separator.clone()])
-            )
+            format!("{}, {}", self.expr, separator)
         } else {
             format!("{}", self.expr)
         };

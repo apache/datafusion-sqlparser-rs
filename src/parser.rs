@@ -438,8 +438,13 @@ impl Parser {
                     Some(Token::Word(kw)) if kw.keyword == "WITH" || kw.keyword == "WITHOUT" => {
                         None
                     }
-                    Some(Token::SingleQuotedString(_)) => Some(Box::new(self.parse_expr()?)),
-                    _ => self.expected("either filler, WITH, or WITHOUT in LISTAGG", self.peek_token())?,
+                    Some(Token::SingleQuotedString(_))
+                    | Some(Token::NationalStringLiteral(_))
+                    | Some(Token::HexStringLiteral(_)) => Some(Box::new(self.parse_expr()?)),
+                    _ => self.expected(
+                        "either filler, WITH, or WITHOUT in LISTAGG",
+                        self.peek_token(),
+                    )?,
                 };
                 let with_count = self.parse_keyword("WITH");
                 if !with_count {

@@ -921,6 +921,7 @@ fn parse_listagg() {
     verified_stmt("SELECT LISTAGG(sellerid) WITHIN GROUP (ORDER BY dateid)");
     verified_stmt("SELECT LISTAGG(dateid)");
     verified_stmt("SELECT LISTAGG(DISTINCT dateid)");
+    verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW ERROR)");
 
     let expr = Box::new(Expr::Identifier(Ident::new("dateid")));
     let on_overflow = Some(ListAggOnOverflow::Truncate {

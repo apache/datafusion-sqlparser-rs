@@ -432,14 +432,25 @@ impl Parser {
                 Some(ListAggOnOverflow::Error)
             } else {
                 self.expect_keyword("TRUNCATE")?;
-                let filler = Some(Box::new(self.parse_expr()?));
-                    let with_count = self.parse_keywords(vec!["WITH", "COUNT"]);
-                    let without_count = self.parse_keywords(vec!["WITHOUT", "COUNT"]);
-                    if !with_count && !without_count {
-                        return parser_err!(
-                            "Expected either WITH COUNT or WITHOUT COUNT in LISTAGG".to_string()
-                        );
-                    };
+                let filler = match self.peek_token() {
+                    Some(tok) => {
+                        if tok == Token::make_keyword("WITH")
+                            || tok == Token::make_keyword("WITHOUT")
+                        {
+                            None
+                        } else {
+                            Some(Box::new(self.parse_expr()?))
+                        }
+                    }
+                    None => None,
+                };
+                let with_count = self.parse_keywords(vec!["WITH", "COUNT"]);
+                let without_count = self.parse_keywords(vec!["WITHOUT", "COUNT"]);
+                if !with_count && !without_count {
+                    return parser_err!(
+                        "Expected either WITH COUNT or WITHOUT COUNT in LISTAGG".to_string()
+                    );
+                };
                 Some(ListAggOnOverflow::Truncate { filler, with_count })
             }
         } else {

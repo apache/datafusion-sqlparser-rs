@@ -853,9 +853,8 @@ impl FromStr for FileFormat {
     }
 }
 
-/// A `LISTAGG` invocation, e.g.
-/// LISTAGG( [ DISTINCT ] <expr>[, <separator> ] [ON OVERFLOW <on_overflow>] )
-/// [ WITHIN GROUP (ORDER BY <within_group1>[, ...] ) ]
+/// A `LISTAGG` invocation `LISTAGG( [ DISTINCT ] <expr>[, <separator> ] [ON OVERFLOW <on_overflow>] ) )
+/// [ WITHIN GROUP (ORDER BY <within_group1>[, ...] ) ]`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ListAgg {
     pub distinct: bool,
@@ -894,13 +893,13 @@ impl fmt::Display for ListAgg {
     }
 }
 
-/// The `ON OVERFLOW` clause of a LISTAGG invocation e.g.
+/// The `ON OVERFLOW` clause of a LISTAGG invocation
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ListAggOnOverflow {
-    /// e.g. ON OVERFLOW ERROR
+    /// `ON OVERFLOW ERROR`
     Error,
 
-    /// e.g. TRUNCATE [ <filler> ] WITH[OUT] COUNT
+    /// `ON OVERFLOW TRUNCATE [ <filler> ] WITH[OUT] COUNT`
     Truncate {
         filler: Option<Box<Expr>>,
         with_count: bool,
@@ -1041,4 +1040,5 @@ impl fmt::Display for SetVariableValue {
             Literal(literal) => write!(f, "{}", literal),
         }
     }
+}
 }

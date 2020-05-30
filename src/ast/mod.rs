@@ -895,10 +895,12 @@ impl fmt::Display for ListAgg {
 }
 
 /// The `ON OVERFLOW` clause of a LISTAGG invocation e.g.
-/// ON OVERFLOW ERROR | TRUNCATE [ <filler> ] WITH[OUT] COUNT
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ListAggOnOverflow {
+    /// e.g. ON OVERFLOW ERROR
     Error,
+
+    /// e.g. TRUNCATE [ <filler> ] WITH[OUT] COUNT
     Truncate {
         filler: Option<Box<Expr>>,
         with_count: bool,

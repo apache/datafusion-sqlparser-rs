@@ -432,6 +432,9 @@ impl Parser {
                 Some(ListAggOnOverflow::Error)
             } else {
                 self.expect_keyword("TRUNCATE")?;
+                // While ANSI SQL would would require the separator, Redshift makes this optional.
+                // Here we choose to make the separator optional as this provides the more general
+                // implementation.
                 let filler = match self.peek_token() {
                     Some(tok) => {
                         if tok == Token::make_keyword("WITH")

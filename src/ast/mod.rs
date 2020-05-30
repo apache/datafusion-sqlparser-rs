@@ -893,7 +893,8 @@ impl fmt::Display for ListAgg {
     }
 }
 
-/// The `ON OVERFLOW` clause of a LISTAGG invocation
+/// The `ON OVERFLOW` clause of a LISTAGG invocation e.g.
+/// ON OVERFLOW ERROR | TRUNCATE [ <filler> ] WITH[OUT] COUNT
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ListAggOnOverflow {
     Error,

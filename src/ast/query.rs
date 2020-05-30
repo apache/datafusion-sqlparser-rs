@@ -379,15 +379,31 @@ pub enum JoinConstraint {
 pub struct OrderByExpr {
     pub expr: Expr,
     pub asc: Option<bool>,
+    pub nulls_first: Option<bool>,
 }
 
 impl fmt::Display for OrderByExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.expr)?;
         match self.asc {
-            Some(true) => write!(f, "{} ASC", self.expr),
-            Some(false) => write!(f, "{} DESC", self.expr),
-            None => write!(f, "{}", self.expr),
+            Some(true) => {
+                write!(f, " ASC")?;
+            }
+            Some(false) => {
+                write!(f, " DESC")?;
+            }
+            None => (),
         }
+        match self.nulls_first {
+            Some(true) => {
+                write!(f, " NULLS FIRST")?;
+            }
+            Some(false) => {
+                write!(f, " NULLS LAST")?;
+            }
+            None => (),
+        }
+        Ok(())
     }
 }
 

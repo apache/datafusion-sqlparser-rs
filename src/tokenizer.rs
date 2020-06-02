@@ -381,9 +381,8 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume the '|'
                     match chars.peek() {
                         Some('|') => self.consume_and_return(chars, Token::StringConcat),
-                        // a regular '/' operator
                         _ => Err(TokenizerError(format!(
-                            "Tokenizer Error at Line: {}, Col: {}",
+                            "Expecting to see `||`. Bitwise or operator `|` is not supported. \nError at Line: {}, Col: {}",
                             self.line, self.col
                         ))),
                     }

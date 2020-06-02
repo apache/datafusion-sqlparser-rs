@@ -64,6 +64,8 @@ pub enum Token {
     Div,
     /// Modulo Operator `%`
     Mod,
+    /// String concatenation `||`
+    StringConcat,
     /// Left parenthesis `(`
     LParen,
     /// Right parenthesis `)`
@@ -111,6 +113,7 @@ impl fmt::Display for Token {
             Token::Minus => f.write_str("-"),
             Token::Mult => f.write_str("*"),
             Token::Div => f.write_str("/"),
+            Token::StringConcat => f.write_str("||"),
             Token::Mod => f.write_str("%"),
             Token::LParen => f.write_str("("),
             Token::RParen => f.write_str(")"),
@@ -374,6 +377,16 @@ impl<'a> Tokenizer<'a> {
                 '+' => self.consume_and_return(chars, Token::Plus),
                 '*' => self.consume_and_return(chars, Token::Mult),
                 '%' => self.consume_and_return(chars, Token::Mod),
+                '|' => {
+                    chars.next(); // consume the '|'
+                    match chars.peek() {
+                        Some('|') => self.consume_and_return(chars, Token::StringConcat),
+                        _ => Err(TokenizerError(format!(
+                            "Expecting to see `||`. Bitwise or operator `|` is not supported. \nError at Line: {}, Col: {}",
+                            self.line, self.col
+                        ))),
+                    }
+                }
                 '=' => self.consume_and_return(chars, Token::Eq),
                 '.' => self.consume_and_return(chars, Token::Period),
                 '!' => {
@@ -557,6 +570,26 @@ mod tests {
             Token::LParen,
             Token::Number(String::from("1")),
             Token::RParen,
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_string_string_concat() {
+        let sql = String::from("SELECT 'a' || 'b'");
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString(String::from("a")),
+            Token::Whitespace(Whitespace::Space),
+            Token::StringConcat,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString(String::from("b")),
         ];
 
         compare(expected, tokens);

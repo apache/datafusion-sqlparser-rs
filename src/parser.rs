@@ -577,6 +577,7 @@ impl Parser {
             Token::Minus => Some(BinaryOperator::Minus),
             Token::Mult => Some(BinaryOperator::Multiply),
             Token::Mod => Some(BinaryOperator::Modulus),
+            Token::StringConcat => Some(BinaryOperator::StringConcat),
             Token::Div => Some(BinaryOperator::Divide),
             Token::Word(ref k) => match k.keyword.as_ref() {
                 "AND" => Some(BinaryOperator::And),
@@ -708,7 +709,7 @@ impl Parser {
                     Ok(20)
                 }
                 Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
-                Token::Mult | Token::Div | Token::Mod => Ok(40),
+                Token::Mult | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
                 Token::DoubleColon => Ok(50),
                 _ => Ok(0),
             }

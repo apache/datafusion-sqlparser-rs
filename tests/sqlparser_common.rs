@@ -666,6 +666,21 @@ fn parse_in_subquery() {
 }
 
 #[test]
+fn parse_string_agg() {
+    let sql = "SELECT a || b";
+
+    let select = verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            op: BinaryOperator::StringConcat,
+            right: Box::new(Expr::Identifier(Ident::new("b"))),
+        }),
+        select.projection[0]
+    );
+}
+
+#[test]
 fn parse_between() {
     fn chk(negated: bool) {
         let sql = &format!(

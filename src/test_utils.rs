@@ -58,9 +58,9 @@ impl TestedDialects {
     }
 
     pub fn parse_sql_statements(&self, sql: &str) -> Result<Vec<Statement>, ParserError> {
-        self.one_of_identical_results(|dialect| Parser::parse_sql(dialect, sql.to_string()))
+        self.one_of_identical_results(|dialect| Parser::parse_sql(dialect, &sql))
         // To fail the `ensure_multiple_dialects_are_tested` test:
-        // Parser::parse_sql(&**self.dialects.first().unwrap(), sql.to_string())
+        // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)
     }
 
     /// Ensures that `sql` parses as a single statement, optionally checking

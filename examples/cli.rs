@@ -45,7 +45,7 @@ fn main() {
         chars.next();
         chars.as_str()
     };
-    let parse_result = Parser::parse_sql(&*dialect, without_bom.to_owned());
+    let parse_result = Parser::parse_sql(&*dialect, without_bom);
     match parse_result {
         Ok(statements) => {
             println!(

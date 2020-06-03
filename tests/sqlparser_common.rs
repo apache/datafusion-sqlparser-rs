@@ -681,6 +681,27 @@ fn parse_string_agg() {
 }
 
 #[test]
+fn parse_bitwise_ops() {
+    let bitwise_ops = vec![
+        ("^", BinaryOperator::BitwiseXor),
+        ("|", BinaryOperator::BitwiseOr),
+        ("&", BinaryOperator::BitwiseAnd),
+    ];
+
+    for (str_op, op) in bitwise_ops.iter() {
+        let select = verified_only_select(&format!("SELECT a {} b", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: op.clone(),
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }),
+            select.projection[0]
+        );
+    }
+}
+
+#[test]
 fn parse_between() {
     fn chk(negated: bool) {
         let sql = &format!(

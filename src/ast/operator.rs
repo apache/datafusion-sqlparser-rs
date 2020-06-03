@@ -49,6 +49,9 @@ pub enum BinaryOperator {
     Or,
     Like,
     NotLike,
+    BitwiseOr,
+    BitwiseAnd,
+    BitwiseXor,
 }
 
 impl fmt::Display for BinaryOperator {
@@ -70,6 +73,9 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::Or => "OR",
             BinaryOperator::Like => "LIKE",
             BinaryOperator::NotLike => "NOT LIKE",
+            BinaryOperator::BitwiseOr => "|",
+            BinaryOperator::BitwiseAnd => "&",
+            BinaryOperator::BitwiseXor => "^",
         })
     }
 }

@@ -28,7 +28,7 @@
 //!            WHERE a > b AND b < 100 \
 //!            ORDER BY a DESC, b";
 //!
-//! let ast = Parser::parse_sql(&dialect, sql.to_string()).unwrap();
+//! let ast = Parser::parse_sql(&dialect, sql).unwrap();
 //!
 //! println!("AST: {:?}", ast);
 //! ```

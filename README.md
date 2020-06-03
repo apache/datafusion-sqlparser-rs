@@ -29,7 +29,7 @@ let sql = "SELECT a, b, 123, myfunc(b) \
 
 let dialect = GenericDialect {}; // or AnsiDialect, or your own dialect ...
 
-let ast = Parser::parse_sql(&dialect, sql.to_string()).unwrap();
+let ast = Parser::parse_sql(&dialect, sql).unwrap();
 
 println!("AST: {:?}", ast);
 ```

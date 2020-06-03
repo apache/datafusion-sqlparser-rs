@@ -682,13 +682,13 @@ fn parse_string_agg() {
 
 #[test]
 fn parse_bitwise_ops() {
-    let bitwise_ops = vec![
+    let bitwise_ops = &[
         ("^", BinaryOperator::BitwiseXor),
         ("|", BinaryOperator::BitwiseOr),
         ("&", BinaryOperator::BitwiseAnd),
     ];
 
-    for (str_op, op) in bitwise_ops.iter() {
+    for (str_op, op) in bitwise_ops {
         let select = verified_only_select(&format!("SELECT a {} b", &str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {

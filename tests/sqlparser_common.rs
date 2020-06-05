@@ -1459,7 +1459,7 @@ fn parse_literal_interval() {
     assert_eq!(
         &Expr::Value(Value::Interval {
             value: "1-1".into(),
-            leading_field: DateTimeField::Year,
+            leading_field: Some(DateTimeField::Year),
             leading_precision: None,
             last_field: Some(DateTimeField::Month),
             fractional_seconds_precision: None,
@@ -1472,7 +1472,7 @@ fn parse_literal_interval() {
     assert_eq!(
         &Expr::Value(Value::Interval {
             value: "01:01.01".into(),
-            leading_field: DateTimeField::Minute,
+            leading_field: Some(DateTimeField::Minute),
             leading_precision: Some(5),
             last_field: Some(DateTimeField::Second),
             fractional_seconds_precision: Some(5),
@@ -1485,7 +1485,7 @@ fn parse_literal_interval() {
     assert_eq!(
         &Expr::Value(Value::Interval {
             value: "1".into(),
-            leading_field: DateTimeField::Second,
+            leading_field: Some(DateTimeField::Second),
             leading_precision: Some(5),
             last_field: None,
             fractional_seconds_precision: Some(4),
@@ -1498,7 +1498,7 @@ fn parse_literal_interval() {
     assert_eq!(
         &Expr::Value(Value::Interval {
             value: "10".into(),
-            leading_field: DateTimeField::Hour,
+            leading_field: Some(DateTimeField::Hour),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
@@ -1511,8 +1511,21 @@ fn parse_literal_interval() {
     assert_eq!(
         &Expr::Value(Value::Interval {
             value: "10".into(),
-            leading_field: DateTimeField::Hour,
+            leading_field: Some(DateTimeField::Hour),
             leading_precision: Some(1),
+            last_field: None,
+            fractional_seconds_precision: None,
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let sql = "SELECT INTERVAL '1 DAY'";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Value(Value::Interval {
+            value: "1 DAY".into(),
+            leading_field: None,
+            leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
         }),
@@ -1544,6 +1557,7 @@ fn parse_literal_interval() {
     verified_only_select("SELECT INTERVAL '1' HOUR TO MINUTE");
     verified_only_select("SELECT INTERVAL '1' HOUR TO SECOND");
     verified_only_select("SELECT INTERVAL '1' MINUTE TO SECOND");
+    verified_only_select("SELECT INTERVAL '1 YEAR'");
 }
 
 #[test]

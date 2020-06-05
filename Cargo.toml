@@ -22,9 +22,11 @@ path = "src/lib.rs"
 cst = ["rowan"]  # Retain a concrete synatax tree, available as `parser.syntax()`
 
 [dependencies]
-bigdecimal = { version = "0.1.0", optional = true }
+bigdecimal = { version = "0.1.0", optional = true, features = ["serde"] }
 log = "0.4.5"
-rowan = { version = "0.10.0", optional = true }
+rowan = { version = "0.10.0", optional = true, features = ["serde1"] }
+serde = { version = "1.0.106", features = ["derive"] }
+serde_json = "1.0.52"
 
 [dev-dependencies]
 simple_logger = "1.0.1"

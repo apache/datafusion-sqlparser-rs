@@ -70,7 +70,14 @@ fn main() {
                 println!("Parse results:\n{:#?}", statements);
             } else {
                 #[cfg(feature = "cst")]
-                println!("Parse tree:\n{:#?}", parser.syntax());
+                {
+                    let syn = parser.syntax();
+                    println!("Parse tree:\n{:#?}", syn);
+                    let serialized = serde_json::to_string(&syn).unwrap();
+                    println!("Parse tree as json:\n{}", serialized);
+                    let serialized = serde_json::to_string(&statements).unwrap();
+                    println!("AST as JSON:\n{}", serialized);
+                }
             }
         }
         Err(e) => {

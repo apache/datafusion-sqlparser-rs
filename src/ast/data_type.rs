@@ -11,10 +11,11 @@
 // limitations under the License.
 
 use super::ObjectName;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// SQL data types
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DataType {
     /// Fixed-length character type e.g. CHAR(10)
     Char(Option<u64>),

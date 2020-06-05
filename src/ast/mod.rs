@@ -18,6 +18,7 @@ mod operator;
 mod query;
 mod value;
 
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 pub use self::data_type::DataType;
@@ -70,7 +71,7 @@ where
 }
 
 /// An identifier, decomposed into its value or character data and the quote style.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Ident {
     /// The value of the identifier without quotes.
     pub value: String,
@@ -126,7 +127,7 @@ impl fmt::Display for Ident {
 }
 
 /// A name of a table, view, custom type, etc., possibly multi-part, i.e. db.schema.obj
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ObjectName(pub Vec<Ident>);
 
 impl fmt::Display for ObjectName {
@@ -140,7 +141,7 @@ impl fmt::Display for ObjectName {
 /// The parser does not distinguish between expressions of different types
 /// (e.g. boolean vs string), so the caller must handle expressions of
 /// inappropriate type, like `WHERE 1` or `SELECT 1=1`, as necessary.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Expr {
     /// Identifier e.g. table name or column name
     Identifier(Ident),
@@ -303,7 +304,7 @@ impl fmt::Display for Expr {
 /// Note: we only recognize a complete single expression as `<condition>`,
 /// not `< 0` nor `1, 2, 3` as allowed in a `<simple when clause>` per
 /// <https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-when-clause>
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WhenClause {
     pub condition: Expr,
     pub result: Expr,
@@ -316,7 +317,7 @@ impl fmt::Display for WhenClause {
 }
 
 /// A window specification (i.e. `OVER (PARTITION BY .. ORDER BY .. etc.)`)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WindowSpec {
     pub partition_by: Vec<Expr>,
     pub order_by: Vec<OrderByExpr>,
@@ -361,7 +362,7 @@ impl fmt::Display for WindowSpec {
 ///
 /// Note: The parser does not validate the specified bounds; the caller should
 /// reject invalid bounds like `ROWS UNBOUNDED FOLLOWING` before execution.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WindowFrame {
     pub units: WindowFrameUnits,
     pub start_bound: WindowFrameBound,
@@ -372,7 +373,7 @@ pub struct WindowFrame {
     // TBD: EXCLUDE
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum WindowFrameUnits {
     Rows,
     Range,
@@ -406,7 +407,7 @@ impl FromStr for WindowFrameUnits {
 }
 
 /// Specifies [WindowFrame]'s `start_bound` and `end_bound`
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum WindowFrameBound {
     /// `CURRENT ROW`
     CurrentRow,
@@ -430,7 +431,7 @@ impl fmt::Display for WindowFrameBound {
 
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Statement {
     /// SELECT
     Query(Box<Query>),
@@ -774,7 +775,7 @@ impl fmt::Display for Statement {
 }
 
 /// SQL assignment `foo = expr` as used in SQLUpdate
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Assignment {
     pub id: Ident,
     pub value: Expr,
@@ -787,7 +788,7 @@ impl fmt::Display for Assignment {
 }
 
 /// A function call
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Function {
     pub name: ObjectName,
     pub args: Vec<Expr>,
@@ -813,7 +814,7 @@ impl fmt::Display for Function {
 }
 
 /// External table's available file format
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum FileFormat {
     TEXTFILE,
     SEQUENCEFILE,
@@ -864,7 +865,7 @@ impl FromStr for FileFormat {
 
 /// A `LISTAGG` invocation `LISTAGG( [ DISTINCT ] <expr>[, <separator> ] [ON OVERFLOW <on_overflow>] ) )
 /// [ WITHIN GROUP (ORDER BY <within_group1>[, ...] ) ]`
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ListAgg {
     pub distinct: bool,
     pub expr: Box<Expr>,
@@ -900,7 +901,7 @@ impl fmt::Display for ListAgg {
 }
 
 /// The `ON OVERFLOW` clause of a LISTAGG invocation
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ListAggOnOverflow {
     /// `ON OVERFLOW ERROR`
     Error,
@@ -933,7 +934,7 @@ impl fmt::Display for ListAggOnOverflow {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ObjectType {
     Table,
     View,
@@ -952,7 +953,7 @@ impl fmt::Display for ObjectType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SqlOption {
     pub name: Ident,
     pub value: Value,
@@ -964,7 +965,7 @@ impl fmt::Display for SqlOption {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TransactionMode {
     AccessMode(TransactionAccessMode),
     IsolationLevel(TransactionIsolationLevel),
@@ -980,7 +981,7 @@ impl fmt::Display for TransactionMode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TransactionAccessMode {
     ReadOnly,
     ReadWrite,
@@ -996,7 +997,7 @@ impl fmt::Display for TransactionAccessMode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TransactionIsolationLevel {
     ReadUncommitted,
     ReadCommitted,
@@ -1016,7 +1017,7 @@ impl fmt::Display for TransactionIsolationLevel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ShowStatementFilter {
     Like(String),
     Where(Expr),
@@ -1032,7 +1033,7 @@ impl fmt::Display for ShowStatementFilter {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SetVariableValue {
     Ident(Ident),
     Literal(Value),

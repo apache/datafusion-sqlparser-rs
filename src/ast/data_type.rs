@@ -11,10 +11,13 @@
 // limitations under the License.
 
 use super::ObjectName;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// SQL data types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DataType {
     /// Fixed-length character type e.g. CHAR(10)
     Char(Option<u64>),

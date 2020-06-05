@@ -13,10 +13,13 @@
 //! AST types specific to CREATE/ALTER variants of [Statement]
 //! (commonly referred to as Data Definition Language, or DDL)
 use super::{display_comma_separated, DataType, Expr, Ident, ObjectName};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AlterTableOperation {
     /// `ADD <table_constraint>`
     AddConstraint(TableConstraint),
@@ -36,6 +39,7 @@ impl fmt::Display for AlterTableOperation {
 /// A table-level constraint, specified in a `CREATE TABLE` or an
 /// `ALTER TABLE ADD <constraint>` statement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TableConstraint {
     /// `[ CONSTRAINT <name> ] { PRIMARY KEY | UNIQUE } (<columns>)`
     Unique {
@@ -95,6 +99,7 @@ impl fmt::Display for TableConstraint {
 
 /// SQL column definition
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ColumnDef {
     pub name: Ident,
     pub data_type: DataType,
@@ -129,6 +134,7 @@ impl fmt::Display for ColumnDef {
 /// non-constraint options, lumping them all together under the umbrella of
 /// "column options," and we allow any column option to be named.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ColumnOptionDef {
     pub name: Option<Ident>,
     pub option: ColumnOption,
@@ -143,6 +149,7 @@ impl fmt::Display for ColumnOptionDef {
 /// `ColumnOption`s are modifiers that follow a column definition in a `CREATE
 /// TABLE` statement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ColumnOption {
     /// `NULL`
     Null,
@@ -220,6 +227,7 @@ fn display_constraint_name<'a>(name: &'a Option<Ident>) -> impl fmt::Display + '
 ///
 /// Used in foreign key constraints in `ON UPDATE` and `ON DELETE` options.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ReferentialAction {
     Restrict,
     Cascade,

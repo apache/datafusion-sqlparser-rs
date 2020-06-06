@@ -1,0 +1,226 @@
+struct_name	enum_name	variant_name	field_name	field_type
+ColumnDef			name	Ident
+ColumnDef			data_type	DataType
+ColumnDef			collation	Option<ObjectName>
+ColumnDef			options	Vec<ColumnOptionDef>
+ColumnOptionDef			name	Option<Ident>
+ColumnOptionDef			option	ColumnOption
+Ident			value	String
+Ident			quote_style	Option<char>
+ObjectName			unnamed	Vec<Ident>
+WhenClause			condition	Expr
+WhenClause			result	Expr
+WindowSpec			partition_by	Vec<Expr>
+WindowSpec			order_by	Vec<OrderByExpr>
+WindowSpec			window_frame	Option<WindowFrame>
+WindowFrame			units	WindowFrameUnits
+WindowFrame			start_bound	WindowFrameBound
+WindowFrame			end_bound	Option<WindowFrameBound>
+Assignment			id	Ident
+Assignment			value	Expr
+Function			name	ObjectName
+Function			args	Vec<Expr>
+Function			over	Option<WindowSpec>
+Function			distinct	bool
+ListAgg			distinct	bool
+ListAgg			expr	Box<Expr>
+ListAgg			separator	Option<Box<Expr>>
+ListAgg			on_overflow	Option<ListAggOnOverflow>
+ListAgg			within_group	Vec<OrderByExpr>
+SqlOption			name	Ident
+SqlOption			value	Value
+Query			ctes	Vec<Cte>
+Query			body	SetExpr
+Query			order_by	Vec<OrderByExpr>
+Query			limit	Option<Expr>
+Query			offset	Option<Offset>
+Query			fetch	Option<Fetch>
+Select			distinct	bool
+Select			top	Option<Top>
+Select			projection	Vec<SelectItem>
+Select			from	Vec<TableWithJoins>
+Select			selection	Option<Expr>
+Select			group_by	Vec<Expr>
+Select			having	Option<Expr>
+Cte			alias	TableAlias
+Cte			query	Query
+TableWithJoins			relation	TableFactor
+TableWithJoins			joins	Vec<Join>
+TableAlias			name	Ident
+TableAlias			columns	Vec<Ident>
+Join			relation	TableFactor
+Join			join_operator	JoinOperator
+OrderByExpr			expr	Expr
+OrderByExpr			asc	Option<bool>
+OrderByExpr			nulls_first	Option<bool>
+Offset			value	Expr
+Offset			rows	OffsetRows
+Fetch			with_ties	bool
+Fetch			percent	bool
+Fetch			quantity	Option<Expr>
+Top			with_ties	bool
+Top			percent	bool
+Top			quantity	Option<Expr>
+Values			unnamed	Vec<Vec<Expr>>
+DataType::Char	DataType	Char	unnamed	Option<u64>
+DataType::Varchar	DataType	Varchar	unnamed	Option<u64>
+DataType::Clob	DataType	Clob	unnamed	u64
+DataType::Binary	DataType	Binary	unnamed	u64
+DataType::Varbinary	DataType	Varbinary	unnamed	u64
+DataType::Blob	DataType	Blob	unnamed	u64
+DataType::Decimal	DataType	Decimal	unnamed	Option<u64>
+DataType::Decimal	DataType	Decimal	unnamed	Option<u64>
+DataType::Float	DataType	Float	unnamed	Option<u64>
+DataType::Custom	DataType	Custom	unnamed	ObjectName
+DataType::Array	DataType	Array	unnamed	Box<DataType>
+AlterTableOperation::AddConstraint	AlterTableOperation	AddConstraint	unnamed	TableConstraint
+AlterTableOperation::DropConstraint	AlterTableOperation	DropConstraint	name	Ident
+TableConstraint::Unique	TableConstraint	Unique	name	Option<Ident>
+TableConstraint::Unique	TableConstraint	Unique	columns	Vec<Ident>
+TableConstraint::Unique	TableConstraint	Unique	is_primary	bool
+TableConstraint::ForeignKey	TableConstraint	ForeignKey	name	Option<Ident>
+TableConstraint::ForeignKey	TableConstraint	ForeignKey	columns	Vec<Ident>
+TableConstraint::ForeignKey	TableConstraint	ForeignKey	foreign_table	ObjectName
+TableConstraint::ForeignKey	TableConstraint	ForeignKey	referred_columns	Vec<Ident>
+TableConstraint::Check	TableConstraint	Check	name	Option<Ident>
+TableConstraint::Check	TableConstraint	Check	expr	Box<Expr>
+ColumnOption::Default	ColumnOption	Default	unnamed	Expr
+ColumnOption::Unique	ColumnOption	Unique	is_primary	bool
+ColumnOption::ForeignKey	ColumnOption	ForeignKey	foreign_table	ObjectName
+ColumnOption::ForeignKey	ColumnOption	ForeignKey	referred_columns	Vec<Ident>
+ColumnOption::ForeignKey	ColumnOption	ForeignKey	on_delete	Option<ReferentialAction>
+ColumnOption::ForeignKey	ColumnOption	ForeignKey	on_update	Option<ReferentialAction>
+ColumnOption::Check	ColumnOption	Check	unnamed	Expr
+Expr::Identifier	Expr	Identifier	unnamed	Ident
+Expr::QualifiedWildcard	Expr	QualifiedWildcard	unnamed	Vec<Ident>
+Expr::CompoundIdentifier	Expr	CompoundIdentifier	unnamed	Vec<Ident>
+Expr::IsNull	Expr	IsNull	unnamed	Box<Expr>
+Expr::IsNotNull	Expr	IsNotNull	unnamed	Box<Expr>
+Expr::InList	Expr	InList	expr	Box<Expr>
+Expr::InList	Expr	InList	list	Vec<Expr>
+Expr::InList	Expr	InList	negated	bool
+Expr::InSubquery	Expr	InSubquery	expr	Box<Expr>
+Expr::InSubquery	Expr	InSubquery	subquery	Box<Query>
+Expr::InSubquery	Expr	InSubquery	negated	bool
+Expr::Between	Expr	Between	expr	Box<Expr>
+Expr::Between	Expr	Between	negated	bool
+Expr::Between	Expr	Between	low	Box<Expr>
+Expr::Between	Expr	Between	high	Box<Expr>
+Expr::BinaryOp	Expr	BinaryOp	left	Box<Expr>
+Expr::BinaryOp	Expr	BinaryOp	op	BinaryOperator
+Expr::BinaryOp	Expr	BinaryOp	right	Box<Expr>
+Expr::UnaryOp	Expr	UnaryOp	op	UnaryOperator
+Expr::UnaryOp	Expr	UnaryOp	expr	Box<Expr>
+Expr::Cast	Expr	Cast	expr	Box<Expr>
+Expr::Cast	Expr	Cast	data_type	DataType
+Expr::Extract	Expr	Extract	field	DateTimeField
+Expr::Extract	Expr	Extract	expr	Box<Expr>
+Expr::Collate	Expr	Collate	expr	Box<Expr>
+Expr::Collate	Expr	Collate	collation	ObjectName
+Expr::Nested	Expr	Nested	unnamed	Box<Expr>
+Expr::Value	Expr	Value	unnamed	Value
+Expr::Function	Expr	Function	unnamed	Function
+Expr::Case	Expr	Case	operand	Option<Box<Expr>>
+Expr::Case	Expr	Case	when_clauses	Vec<WhenClause>
+Expr::Case	Expr	Case	else_result	Option<Box<Expr>>
+Expr::Exists	Expr	Exists	unnamed	Box<Query>
+Expr::Subquery	Expr	Subquery	unnamed	Box<Query>
+Expr::ListAgg	Expr	ListAgg	unnamed	ListAgg
+WindowFrameBound::Preceding	WindowFrameBound	Preceding	unnamed	Option<u64>
+WindowFrameBound::Following	WindowFrameBound	Following	unnamed	Option<u64>
+Statement::Query	Statement	Query	unnamed	Box<Query>
+Statement::Insert	Statement	Insert	table_name	ObjectName
+Statement::Insert	Statement	Insert	columns	Vec<Ident>
+Statement::Insert	Statement	Insert	source	Box<Query>
+Statement::Copy	Statement	Copy	table_name	ObjectName
+Statement::Copy	Statement	Copy	columns	Vec<Ident>
+Statement::Copy	Statement	Copy	values	Vec<Option<String>>
+Statement::Update	Statement	Update	table_name	ObjectName
+Statement::Update	Statement	Update	assignments	Vec<Assignment>
+Statement::Update	Statement	Update	selection	Option<Expr>
+Statement::Delete	Statement	Delete	table_name	ObjectName
+Statement::Delete	Statement	Delete	selection	Option<Expr>
+Statement::CreateView	Statement	CreateView	name	ObjectName
+Statement::CreateView	Statement	CreateView	columns	Vec<Ident>
+Statement::CreateView	Statement	CreateView	query	Box<Query>
+Statement::CreateView	Statement	CreateView	materialized	bool
+Statement::CreateView	Statement	CreateView	with_options	Vec<SqlOption>
+Statement::CreateTable	Statement	CreateTable	name	ObjectName
+Statement::CreateTable	Statement	CreateTable	columns	Vec<ColumnDef>
+Statement::CreateTable	Statement	CreateTable	constraints	Vec<TableConstraint>
+Statement::CreateTable	Statement	CreateTable	with_options	Vec<SqlOption>
+Statement::CreateTable	Statement	CreateTable	if_not_exists	bool
+Statement::CreateTable	Statement	CreateTable	external	bool
+Statement::CreateTable	Statement	CreateTable	file_format	Option<FileFormat>
+Statement::CreateTable	Statement	CreateTable	location	Option<String>
+Statement::CreateIndex	Statement	CreateIndex	name	ObjectName
+Statement::CreateIndex	Statement	CreateIndex	table_name	ObjectName
+Statement::CreateIndex	Statement	CreateIndex	columns	Vec<Ident>
+Statement::CreateIndex	Statement	CreateIndex	unique	bool
+Statement::CreateIndex	Statement	CreateIndex	if_not_exists	bool
+Statement::AlterTable	Statement	AlterTable	name	ObjectName
+Statement::AlterTable	Statement	AlterTable	operation	AlterTableOperation
+Statement::Drop	Statement	Drop	object_type	ObjectType
+Statement::Drop	Statement	Drop	if_exists	bool
+Statement::Drop	Statement	Drop	names	Vec<ObjectName>
+Statement::Drop	Statement	Drop	cascade	bool
+Statement::SetVariable	Statement	SetVariable	local	bool
+Statement::SetVariable	Statement	SetVariable	variable	Ident
+Statement::SetVariable	Statement	SetVariable	value	SetVariableValue
+Statement::ShowVariable	Statement	ShowVariable	variable	Ident
+Statement::ShowColumns	Statement	ShowColumns	extended	bool
+Statement::ShowColumns	Statement	ShowColumns	full	bool
+Statement::ShowColumns	Statement	ShowColumns	table_name	ObjectName
+Statement::ShowColumns	Statement	ShowColumns	filter	Option<ShowStatementFilter>
+Statement::StartTransaction	Statement	StartTransaction	modes	Vec<TransactionMode>
+Statement::SetTransaction	Statement	SetTransaction	modes	Vec<TransactionMode>
+Statement::Commit	Statement	Commit	chain	bool
+Statement::Rollback	Statement	Rollback	chain	bool
+Statement::CreateSchema	Statement	CreateSchema	schema_name	ObjectName
+ListAggOnOverflow::Truncate	ListAggOnOverflow	Truncate	filler	Option<Box<Expr>>
+ListAggOnOverflow::Truncate	ListAggOnOverflow	Truncate	with_count	bool
+TransactionMode::AccessMode	TransactionMode	AccessMode	unnamed	TransactionAccessMode
+TransactionMode::IsolationLevel	TransactionMode	IsolationLevel	unnamed	TransactionIsolationLevel
+ShowStatementFilter::Like	ShowStatementFilter	Like	unnamed	String
+ShowStatementFilter::Where	ShowStatementFilter	Where	unnamed	Expr
+SetVariableValue::Ident	SetVariableValue	Ident	unnamed	Ident
+SetVariableValue::Literal	SetVariableValue	Literal	unnamed	Value
+SetExpr::Select	SetExpr	Select	unnamed	Box<Select>
+SetExpr::Query	SetExpr	Query	unnamed	Box<Query>
+SetExpr::SetOperation	SetExpr	SetOperation	op	SetOperator
+SetExpr::SetOperation	SetExpr	SetOperation	all	bool
+SetExpr::SetOperation	SetExpr	SetOperation	left	Box<SetExpr>
+SetExpr::SetOperation	SetExpr	SetOperation	right	Box<SetExpr>
+SetExpr::Values	SetExpr	Values	unnamed	Values
+SelectItem::UnnamedExpr	SelectItem	UnnamedExpr	unnamed	Expr
+SelectItem::ExprWithAlias	SelectItem	ExprWithAlias	expr	Expr
+SelectItem::ExprWithAlias	SelectItem	ExprWithAlias	alias	Ident
+SelectItem::QualifiedWildcard	SelectItem	QualifiedWildcard	unnamed	ObjectName
+TableFactor::Table	TableFactor	Table	name	ObjectName
+TableFactor::Table	TableFactor	Table	alias	Option<TableAlias>
+TableFactor::Table	TableFactor	Table	args	Vec<Expr>
+TableFactor::Table	TableFactor	Table	with_hints	Vec<Expr>
+TableFactor::Derived	TableFactor	Derived	lateral	bool
+TableFactor::Derived	TableFactor	Derived	subquery	Box<Query>
+TableFactor::Derived	TableFactor	Derived	alias	Option<TableAlias>
+TableFactor::NestedJoin	TableFactor	NestedJoin	unnamed	Box<TableWithJoins>
+JoinOperator::Inner	JoinOperator	Inner	unnamed	JoinConstraint
+JoinOperator::LeftOuter	JoinOperator	LeftOuter	unnamed	JoinConstraint
+JoinOperator::RightOuter	JoinOperator	RightOuter	unnamed	JoinConstraint
+JoinOperator::FullOuter	JoinOperator	FullOuter	unnamed	JoinConstraint
+JoinConstraint::On	JoinConstraint	On	unnamed	Expr
+JoinConstraint::Using	JoinConstraint	Using	unnamed	Vec<Ident>
+Value::Number	Value	Number	unnamed	String
+Value::Number	Value	Number	unnamed	BigDecimal
+Value::SingleQuotedString	Value	SingleQuotedString	unnamed	String
+Value::NationalStringLiteral	Value	NationalStringLiteral	unnamed	String
+Value::HexStringLiteral	Value	HexStringLiteral	unnamed	String
+Value::Boolean	Value	Boolean	unnamed	bool
+Value::Date	Value	Date	unnamed	String
+Value::Time	Value	Time	unnamed	String
+Value::Timestamp	Value	Timestamp	unnamed	String
+Value::Interval	Value	Interval	value	String
+Value::Interval	Value	Interval	leading_field	DateTimeField
+Value::Interval	Value	Interval	leading_precision	Option<u64>
+Value::Interval	Value	Interval	last_field	Option<DateTimeField>
+Value::Interval	Value	Interval	fractional_seconds_precision	Option<u64>

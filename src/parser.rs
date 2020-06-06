@@ -34,6 +34,15 @@ macro_rules! parser_err {
     };
 }
 
+// Returns a successful result if the optional expression is some
+macro_rules! return_ok_if_some {
+    ($e:expr) => {{
+        if let Some(v) = $e {
+            return Ok(v);
+        }
+    }};
+}
+
 #[derive(PartialEq)]
 pub enum IsOptional {
     Optional,
@@ -171,6 +180,38 @@ impl Parser {
 
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
+        // PostgreSQL allows any string literal to be preceded by a type name, indicating that the
+        // string literal represents a literal of that type. Some examples:
+        //
+        //      DATE '2020-05-20'
+        //      TIMESTAMP WITH TIME ZONE '2020-05-20 7:43:54'
+        //      BOOL 'true'
+        //
+        // The first two are standard SQL, while the latter is a PostgreSQL extension. Complicating
+        // matters is the fact that INTERVAL string literals may optionally be followed by special
+        // keywords, e.g.:
+        //
+        //      INTERVAL '7' DAY
+        //
+        // Note also that naively `SELECT date` looks like a syntax error because the `date` type
+        // name is not followed by a string literal, but in fact in PostgreSQL it is a valid
+        // expression that should parse as the column name "date".
+        return_ok_if_some!(self.maybe_parse(|parser| {
+            match parser.parse_data_type()? {
+                DataType::Interval => parser.parse_literal_interval(),
+                // Single-quoted strings are parsed as custom data types, however this not desirable
+                // when we are handling input like `"NOT 'a' NOT LIKE 'b'"` because this will produce a
+                // TypedString instead of a SingleQuotedString. Further, this leads to issues where the
+                // same input will yield a BinaryOperator instead of the correct UnaryOperator. Here we
+                // handle that specific case by returning an error.
+                DataType::Custom(..) => parser_err!("dummy"),
+                data_type => Ok(Expr::TypedString {
+                    data_type,
+                    value: parser.parse_literal_string()?,
+                }),
+            }
+        }));
+
         let expr = match self.next_token() {
             Token::Word(w) => match w.keyword.as_ref() {
                 "TRUE" | "FALSE" | "NULL" => {
@@ -179,7 +220,6 @@ impl Parser {
                 }
                 "CASE" => self.parse_case_expr(),
                 "CAST" => self.parse_cast_expr(),
-                "DATE" => Ok(Expr::Value(Value::Date(self.parse_literal_string()?))),
                 "EXISTS" => self.parse_exists_expr(),
                 "EXTRACT" => self.parse_extract_expr(),
                 "INTERVAL" => self.parse_literal_interval(),
@@ -188,8 +228,6 @@ impl Parser {
                     op: UnaryOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
                 }),
-                "TIME" => Ok(Expr::Value(Value::Time(self.parse_literal_string()?))),
-                "TIMESTAMP" => Ok(Expr::Value(Value::Timestamp(self.parse_literal_string()?))),
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {
@@ -893,6 +931,20 @@ impl Parser {
             }
         }
         Ok(values)
+    }
+
+    #[must_use]
+    fn maybe_parse<T, F>(&mut self, mut f: F) -> Option<T>
+    where
+        F: FnMut(&mut Parser) -> Result<T, ParserError>,
+    {
+        let index = self.index;
+        if let Ok(t) = f(self) {
+            Some(t)
+        } else {
+            self.index = index;
+            None
+        }
     }
 
     /// Parse either `ALL` or `DISTINCT`. Returns `true` if `DISTINCT` is parsed and results in a
@@ -1877,7 +1929,6 @@ impl Parser {
         }
 
         if self.consume_token(&Token::LParen) {
-            let index = self.index;
             // A left paren introduces either a derived table (i.e., a subquery)
             // or a nested join. It's nearly impossible to determine ahead of
             // time which it is... so we just try to parse both.
@@ -1894,30 +1945,26 @@ impl Parser {
             //                   | (2) starts a nested join
             //                   (1) an additional set of parens around a nested join
             //
-            match self.parse_derived_table_factor(NotLateral) {
-                // The recently consumed '(' started a derived table, and we've
-                // parsed the subquery, followed by the closing ')', and the
-                // alias of the derived table. In the example above this is
-                // case (3), and the next token would be `NATURAL`.
-                Ok(table_factor) => Ok(table_factor),
-                Err(_) => {
-                    // A parsing error from `parse_derived_table_factor` indicates that
-                    // the '(' we've recently consumed does not start a derived table
-                    // (cases 1, 2, or 4). Ignore the error and back up to where we
-                    // were before - right after the opening '('.
-                    self.index = index;
 
-                    // Inside the parentheses we expect to find a table factor
-                    // followed by some joins or another level of nesting.
-                    let table_and_joins = self.parse_table_and_joins()?;
-                    self.expect_token(&Token::RParen)?;
-                    // The SQL spec prohibits derived and bare tables from appearing
-                    // alone in parentheses. We don't enforce this as some databases
-                    // (e.g. Snowflake) allow such syntax.
+            // Check if the recently consumed '(' started a derived table, in which case we've
+            // parsed the subquery, followed by the closing ')', and the alias of the derived
+            // table. In the example above this is case (3).
+            //
+            // A parsing error from `parse_derived_table_factor` indicates that the '(' we've
+            // recently consumed does not start a derived table (cases 1, 2, or 4). Ignore the
+            // error and back up to where we after the opening '('.
+            return_ok_if_some!(
+                self.maybe_parse(|parser| parser.parse_derived_table_factor(NotLateral))
+            );
 
-                    Ok(TableFactor::NestedJoin(Box::new(table_and_joins)))
-                }
-            }
+            // Inside the parentheses we expect to find a table factor
+            // followed by some joins or another level of nesting.
+            let table_and_joins = self.parse_table_and_joins()?;
+            self.expect_token(&Token::RParen)?;
+            // The SQL spec prohibits derived and bare tables from appearing
+            // alone in parentheses. We don't enforce this as some databases
+            // (e.g. Snowflake) allow such syntax.
+            Ok(TableFactor::NestedJoin(Box::new(table_and_joins)))
         } else {
             let name = self.parse_object_name()?;
             // Postgres, MSSQL: table-valued functions:

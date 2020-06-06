@@ -414,6 +414,19 @@ fn parse_null_in_select() {
 }
 
 #[test]
+fn parse_select_with_date_column_name() {
+    let sql = "SELECT date";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Identifier(Ident {
+            value: "date".into(),
+            quote_style: None
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn parse_escaped_single_quote_string_predicate() {
     use self::BinaryOperator::*;
     let sql = "SELECT id, fname, lname FROM customer \
@@ -1424,30 +1437,39 @@ fn parse_literal_string() {
 
 #[test]
 fn parse_literal_date() {
-    let sql = "SELECT DATE '1999-01-01'";
+    let sql = "SELECT date '1999-01-01'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Date("1999-01-01".into())),
+        &Expr::TypedString {
+            data_type: DataType::Date,
+            value: "1999-01-01".into()
+        },
         expr_from_projection(only(&select.projection)),
     );
 }
 
 #[test]
 fn parse_literal_time() {
-    let sql = "SELECT TIME '01:23:34'";
+    let sql = "SELECT time '01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Time("01:23:34".into())),
+        &Expr::TypedString {
+            data_type: DataType::Time,
+            value: "01:23:34".into()
+        },
         expr_from_projection(only(&select.projection)),
     );
 }
 
 #[test]
 fn parse_literal_timestamp() {
-    let sql = "SELECT TIMESTAMP '1999-01-01 01:23:34'";
+    let sql = "SELECT timestamp '1999-01-01 01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Timestamp("1999-01-01 01:23:34".into())),
+        &Expr::TypedString {
+            data_type: DataType::Timestamp,
+            value: "1999-01-01 01:23:34".into()
+        },
         expr_from_projection(only(&select.projection)),
     );
 }

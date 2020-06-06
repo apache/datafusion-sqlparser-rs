@@ -1,4 +1,187 @@
-# Extensible SQL Lexer and Parser for Rust
+> _The following pertains to the `cst` branch; the [upstream README is below](#upstream-readme)._
+>
+> ⚠️ This branch is regularly rebased. Please let me know before working off it to coordinate.
+
+**Preserving full source code information ([#161](https://github.com/andygrove/sqlparser-rs/issues/161)) would enable SQL rewriting/refactoring tools based on sqlparser-rs.** For example:
+1. **Error reporting**, both in the parser and in later stages of query processing,  would benefit from knowing the source code location of SQL constructs ([#179](https://github.com/andygrove/sqlparser-rs/issues/179))
+2. **SQL pretty-printing** requires comments to be preserved in AST (see [#175](https://github.com/andygrove/sqlparser-rs/issues/175), mentioning [forma](https://github.com/maxcountryman/forma))
+3. **Refactoring via AST transformations** would also benefit from having full control over serialization, a possible solution for dialect-specific "writers" ([#18](https://github.com/andygrove/sqlparser-rs/issues/18))
+4. Analyzing partially invalid code may be useful in the context of an IDE or other tooling.
+
+**I think that adopting [rust-analyzer's design][ra-syntax], that includes a lossless syntax tree, is the right direction for sqlparser-rs.** In addition to solving the use-cases described above, it helps in other ways:
+
+5. We can omit syntax that does not affect semantics of the query (e.g. [`ROW` vs `ROWS`](https://github.com/andygrove/sqlparser-rs/blob/418b9631ce9c24cf9bb26cf7dd9e42edd29de985/src/ast/query.rs#L416)) from the typed AST by default, reducing the implementation effort.
+6. Having a homogenous syntax tree also alleviates the need for a "visitor" ([#114](https://github.com/andygrove/sqlparser-rs/pull/114)), also reducing the burden on implementors of new syntax
+
+In 2020 many new people contributed to `sqlparser-rs`, some bringing up the use-cases above. I found myself mentioning this design multiple times, so I felt I should "show the code" instead of just talking about it.
+
+Current typed AST vs rowan
+==========================
+
+To recap, the input SQL is currently parsed directly into _typed AST_ - with each node of the tree represented by a Rust `struct`/`enum` of a specific type, referring to other structs of specific type, such as:
+
+    struct Select {
+        pub projection: Vec<SelectItem>,
+        ...
+    }
+
+We try to retain most of "important" syntax in this representation (including, for example, [`Ident::quote_style`](https://github.com/andygrove/sqlparser-rs/blob/d32df527e68dd76d857f47ea051a3ec22138469b/src/ast/mod.rs#L77) and [`OffsetRows`](https://github.com/andygrove/sqlparser-rs/blob/418b9631ce9c24cf9bb26cf7dd9e42edd29de985/src/ast/query.rs#L416)), but there doesn't seem to be a practical way to extend it to also store whitespace, comments, and source code spans.
+
+The lossless syntax tree
+------------------------
+
+In the alternative design, the parser produces a tree (which I'll call "CST", [not 100% correct though it is](https://dev.to/cad97/lossless-syntax-trees-280c)), in which every node has has the same Rust type (`SyntaxNode`), and a numeric `SyntaxKind` determines what kind of node it is. Under the hood, the leaf and the non-leaf nodes are different:
+
+* Each leaf node stores a slice of the source text;
+* Each intermediate node represents a string obtained by concatenatenating the text of its children;
+* The root node, consequently, represents exactly the original source code.
+
+_(The actual [rust-analyzer's design][ra-syntax] is more involved, but the details are not relevant to this discussion.)_
+
+As an example, an SQL query "`select DISTINCT /* ? */ 1234`" could be represented as a tree like the following one:
+
+    SELECT@0..29
+      Keyword@0..6                "select"
+      Whitespace@6..7             " "
+      DISTINCT_OR_ALL
+        Keyword@7..15             "DISTINCT"
+      SELECT_ITEM_UNNAMED@16..29
+        Whitespace@16..17         " "
+        Comment@17..24            "/* ? */"
+        Whitespace@24..25         " "
+        Number@25..29             "1234"
+
+_(Using the `SyntaxKind@start_pos..end_pos   "relevant source code"` notation)_
+
+Note how all the formatting and comments are retained.
+
+Such tree data structure is available for re-use as a separate crate ([`rowan`](https://github.com/rust-analyzer/rowan)), and **as the proof-of-concept I extended the parser to populate a rowan-based tree _along with the typed AST_, for a few of the supported SQL constructs.**
+
+Open question: The future design of the typed AST
+-------------------------------------------------
+
+Though included in the PoC, **constructing both an AST and a CST in parallel should be considered a transitional solution only**, as it will not let us reap the full benefits of the proposed design (esp. points 1, 4, and 5). Additionally, the current one-AST-fits-all approach makes every new feature in the parser a (semver) breaking change, and makes the types as loose as necessary to fit the common denominator (e.g. if something is optional in one dialect, it has to be optional in the AST).
+
+What can we do instead?
+
+### Rust-analyzer's AST
+
+In rust-analyzer the AST layer does not store any additional data. Instead a "newtype" (a struct with exactly one field - the underlying CST node) is defined for each AST node type:
+
+    struct Select { syntax: SyntaxNode };  // the newtype
+    impl Select {
+        fn syntax(&self) -> &SyntaxNode { &self.syntax }
+        fn cast(syntax: SyntaxNode) -> Option<Self> {
+            match syntax.kind {
+                SyntaxKind::SELECT => Some(Select { syntax }),
+                _ => None,
+            }
+        }
+        ...
+
+Such newtypes define APIs to let the user navigate the AST through accessors specific to this node type:
+
+        // ...`impl Select` continued
+        pub fn distinct_or_all(&self) -> Option<DistinctOrAll> {
+            AstChildren::new(&self.syntax).next()
+        }
+        pub fn projection(&self) -> AstChildren<SelectItem> {
+            AstChildren::new(&self.syntax)
+        }
+
+These accessors go through the node's direct childen, looking for nodes of a specific `SyntaxKind` (by trying to `cast()` them to the requested output type).
+
+This approach is a good fit for IDEs, as it can work on partial / invalid source code due to its lazy nature. Whether it is acceptable in other contexts is an open question ([though it was **not** rejected w.r.t rust-analyzer and rustc sharing a libsyntax2.0](https://github.com/rust-lang/rfcs/pull/2256)).
+
+### Code generation and other options for the AST
+
+Though the specific form of the AST is yet to be determined, it seems necessary to use some form of automation to build an AST based on a CST, so that we don't have 3 places (the parser, the AST, and the CST->AST converter) to keep synchronised.
+
+Rust-analyzer implements its own simple code generator, which would [generate](https://github.com/rust-analyzer/rust-analyzer/blob/a0be39296d2925972cacd9fbf8b5fb258fad6947/xtask/src/codegen/gen_syntax.rs#L47) methods like the above based on a definition [like](https://github.com/rust-analyzer/rust-analyzer/blob/a0be39296d2925972cacd9fbf8b5fb258fad6947/xtask/src/ast_src.rs#L293) this:
+
+    const AST_SRC: AstSrc = AstSrc {
+        nodes: &ast_nodes! {
+            struct Select {
+                DistinctOrAll,
+                projection: [SelectItem],
+                ...
+
+_(Here the `ast_nodes!` macro converts something that looks like a simplified `struct` declaration to a literal value describing the struct's name and fields.)_
+
+A similar approach could be tried to eagerly build an AST akin to our current one [[*](#ref-1)]. A quick survey of our AST reveals some incompatibilities between the rust-analyzer-style codegen and our use-case:
+
+* In rust-analyzer all AST enums use fieldless variants (`enum Foo { Bar(Bar), Baz(Baz) }`), making codegen easier. sqlparser uses variants with fields, though there was a request to move to fieldless ([#40](https://github.com/andygrove/sqlparser-rs/issues/40)).
+
+    In my view, our motivation here was conciseness and inertia (little reason to rewrite, and much effort needed to update - both the library, including the tests, and the consumers). I think this can change.
+
+* RA's codegen assumes that the _type_ of a node usually determines its relation to its parent: different fields in a code-generated struct have to be of different types, as all children of a given type are available from a single "field". Odd cases like `BinExpr`'s `lhs` and `rhs` (both having the type `Expr`) are [implemented manually](https://github.com/rust-analyzer/rust-analyzer/blob/a0be39296d2925972cacd9fbf8b5fb258fad6947/crates/ra_syntax/src/ast/expr_extensions.rs#L195).
+
+    It's clear this does not work as well for an AST like ours. In rare cases there's a clear problem with our AST (e.g. `WhenClause` for `CASE` expressions is introduced on this branch), but consider:
+
+        pub struct Select {
+            //...
+            pub projection: Vec<SelectItem>,
+            pub where: Option<Expr>,
+            pub group_by: Vec<Expr>,
+            pub having: Option<Expr>,
+
+    The CST for this should probably have separate branches for `WHERE`, `GROUP BY` and `HAVING` at least. Should we introduce additional types like `Where` or make codegen handle this somehow?
+
+* Large portions of the `struct`s in our AST are allocated at once. We use `Box` only where necessary to break the cycles. RA's codegen doesn't have a way to specify these points.
+
+Of course we're not limited to stealing ideas from rust-analyzer, so alternatives can be considered.
+
+* Should we code-gen based on a real AST definition instead of a quasi-Rust code inside a macro like `ast_nodes`?
+* Can `serde` be of help?
+
+I think the design of the CST should be informed by the needs of the AST, so **this is the key question for me.** I've extracted the types and the fields of the current AST into a table (see `ast-stats.js` and `ast-fields.tsv` in `util/`) to help come up with a solution.
+
+
+Other tasks
+-----------
+
+Other than coming up with AST/CST design, there are a number of things to do:
+
+* Upstream the "Support parser backtracking in the GreenNodeBuilder" commit to avoid importing a copy of `GreenNodeBuilder` into sqlparser-rs
+* Setting up the testing infrastructure for the CST (rust-analyzer, again, has some good ideas here)
+
+<!-- the following is copied from the
+    "Introduce CST infrastructure based on rowan" commit -->
+- Fix `Token`/`SyntaxKind` duplication, changing the former to
+    store a slice of the original source code, e.g.
+    `(SyntaxKind, SmolStr)`
+
+  This should also fix the currently disabled test-cases where `Token`'s
+  `to_string()` does not return the original string:
+
+    * `parse_escaped_single_quote_string_predicate`
+    * `parse_literal_string`  (the case of `HexLiteralString`)
+
+- Fix the hack in `parse_keyword()` to remap the token type (RA has
+  `bump_remap() for this)
+
+- Fix the `Parser::pending` hack (needs rethinking parser's API)
+
+    Probably related is the issue of handling whitespace and comments:
+    the way this prototype handles it looks wrong.
+
+Remarks
+-------
+
+1. <a name="ref-1">[*]</a> During such eager construction of an AST we could also bail on CST nodes that have no place in the typed AST. This seems a part of the possible solution to the dialect problem: this way the parser can recognize a dialect-specific construct, while each consumer can pick which bits they want to support by defining their own typed AST.
+
+
+[ra-syntax]: https://github.com/rust-analyzer/rust-analyzer/blob/master/docs/dev/syntax.md
+
+
+
+
+
+
+
+
+
+# Upstream README
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Version](https://img.shields.io/crates/v/sqlparser.svg)](https://crates.io/crates/sqlparser)

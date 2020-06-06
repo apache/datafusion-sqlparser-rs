@@ -1641,23 +1641,27 @@ fn parse_searched_case_expr() {
     assert_eq!(
         &Case {
             operand: None,
-            conditions: vec![
-                IsNull(Box::new(Identifier(Ident::new("bar")))),
-                BinaryOp {
-                    left: Box::new(Identifier(Ident::new("bar"))),
-                    op: Eq,
-                    right: Box::new(Expr::Value(number("0")))
+            when_clauses: vec![
+                WhenClause {
+                    condition: IsNull(Box::new(Identifier(Ident::new("bar")))),
+                    result: Expr::Value(Value::SingleQuotedString("null".to_string())),
                 },
-                BinaryOp {
-                    left: Box::new(Identifier(Ident::new("bar"))),
-                    op: GtEq,
-                    right: Box::new(Expr::Value(number("0")))
-                }
-            ],
-            results: vec![
-                Expr::Value(Value::SingleQuotedString("null".to_string())),
-                Expr::Value(Value::SingleQuotedString("=0".to_string())),
-                Expr::Value(Value::SingleQuotedString(">=0".to_string()))
+                WhenClause {
+                    condition: BinaryOp {
+                        left: Box::new(Identifier(Ident::new("bar"))),
+                        op: Eq,
+                        right: Box::new(Expr::Value(number("0")))
+                    },
+                    result: Expr::Value(Value::SingleQuotedString("=0".to_string())),
+                },
+                WhenClause {
+                    condition: BinaryOp {
+                        left: Box::new(Identifier(Ident::new("bar"))),
+                        op: GtEq,
+                        right: Box::new(Expr::Value(number("0")))
+                    },
+                    result: Expr::Value(Value::SingleQuotedString(">=0".to_string())),
+                },
             ],
             else_result: Some(Box::new(Expr::Value(Value::SingleQuotedString(
                 "<0".to_string()
@@ -1676,8 +1680,10 @@ fn parse_simple_case_expr() {
     assert_eq!(
         &Case {
             operand: Some(Box::new(Identifier(Ident::new("foo")))),
-            conditions: vec![Expr::Value(number("1"))],
-            results: vec![Expr::Value(Value::SingleQuotedString("Y".to_string())),],
+            when_clauses: vec![WhenClause {
+                condition: Expr::Value(number("1")),
+                result: Expr::Value(Value::SingleQuotedString("Y".to_string())),
+            }],
             else_result: Some(Box::new(Expr::Value(Value::SingleQuotedString(
                 "N".to_string()
             ))))

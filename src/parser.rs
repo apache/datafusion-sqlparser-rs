@@ -360,12 +360,12 @@ impl Parser {
             operand = Some(Box::new(self.parse_expr()?));
             self.expect_keyword("WHEN")?;
         }
-        let mut conditions = vec![];
-        let mut results = vec![];
+        let mut when_clauses = vec![];
         loop {
-            conditions.push(self.parse_expr()?);
+            let condition = self.parse_expr()?;
             self.expect_keyword("THEN")?;
-            results.push(self.parse_expr()?);
+            let result = self.parse_expr()?;
+            when_clauses.push(WhenClause { condition, result });
             if !self.parse_keyword("WHEN") {
                 break;
             }
@@ -378,8 +378,7 @@ impl Parser {
         self.expect_keyword("END")?;
         Ok(Expr::Case {
             operand,
-            conditions,
-            results,
+            when_clauses,
             else_result,
         })
     }

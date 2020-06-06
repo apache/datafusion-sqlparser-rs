@@ -207,15 +207,10 @@ pub enum Expr {
     Value(Value),
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
-    /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
-    ///
-    /// Note we only recognize a complete single expression as `<condition>`,
-    /// not `< 0` nor `1, 2, 3` as allowed in a `<simple when clause>` per
-    /// <https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-when-clause>
+    /// `CASE [<operand>] <when_clauses> [ELSE <result>] END`
     Case {
         operand: Option<Box<Expr>>,
-        conditions: Vec<Expr>,
-        results: Vec<Expr>,
+        when_clauses: Vec<WhenClause>,
         else_result: Option<Box<Expr>>,
     },
     /// An exists expression `EXISTS(SELECT ...)`, used in expressions like
@@ -282,17 +277,14 @@ impl fmt::Display for Expr {
             Expr::Function(fun) => write!(f, "{}", fun),
             Expr::Case {
                 operand,
-                conditions,
-                results,
+                when_clauses,
                 else_result,
             } => {
                 f.write_str("CASE")?;
                 if let Some(operand) = operand {
                     write!(f, " {}", operand)?;
                 }
-                for (c, r) in conditions.iter().zip(results) {
-                    write!(f, " WHEN {} THEN {}", c, r)?;
-                }
+                write!(f, " {}", display_separated(when_clauses, " "))?;
 
                 if let Some(else_result) = else_result {
                     write!(f, " ELSE {}", else_result)?;
@@ -303,6 +295,23 @@ impl fmt::Display for Expr {
             Expr::Subquery(s) => write!(f, "({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
         }
+    }
+}
+
+/// An individual `WHEN <condition> THEN <result>` clause from a `CASE`.
+///
+/// Note: we only recognize a complete single expression as `<condition>`,
+/// not `< 0` nor `1, 2, 3` as allowed in a `<simple when clause>` per
+/// <https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-when-clause>
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct WhenClause {
+    pub condition: Expr,
+    pub result: Expr,
+}
+
+impl fmt::Display for WhenClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "WHEN {} THEN {}", self.condition, self.result)
     }
 }
 

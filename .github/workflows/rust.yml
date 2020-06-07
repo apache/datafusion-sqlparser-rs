@@ -34,7 +34,6 @@ jobs:
       - run: cargo check --all-targets --all-features
 
   test:
-    needs: [codestyle, lint, compile]
     strategy:
       matrix:
         rust: [stable, beta, nightly]

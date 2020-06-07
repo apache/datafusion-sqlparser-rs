@@ -25,8 +25,3 @@ log = "0.4.5"
 [dev-dependencies]
 simple_logger = "1.0.1"
 matches = "0.1"
-criterion = "0.3"
-
-[[bench]]
-name = "sqlparser_bench"
-harness = false

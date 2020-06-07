@@ -146,7 +146,8 @@ impl Token {
         //TODO: need to reintroduce FnvHashSet at some point .. iterating over keywords is
         // not fast but I want the simplicity for now while I experiment with pluggable
         // dialects
-        let is_keyword = quote_style == None && ALL_KEYWORDS.contains(&word_uppercase.as_str());
+        let is_keyword =
+            quote_style == None && ALL_KEYWORDS.binary_search(&word_uppercase.as_str()).is_ok();
         Token::Word(Word {
             value: word.to_string(),
             quote_style,

@@ -21,6 +21,7 @@
 use matches::assert_matches;
 
 use sqlparser::ast::*;
+use sqlparser::dialect::keywords::ALL_KEYWORDS;
 use sqlparser::parser::*;
 use sqlparser::test_utils::{all_dialects, expr_from_projection, number, only};
 
@@ -2849,6 +2850,14 @@ fn parse_drop_index() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn keywords_sorted() {
+    // assert!(ALL_KEYWORDS.is_sorted())
+    let mut copy = Vec::from(ALL_KEYWORDS);
+    copy.sort();
+    assert!(copy == ALL_KEYWORDS)
 }
 
 fn parse_sql_statements(sql: &str) -> Result<Vec<Statement>, ParserError> {

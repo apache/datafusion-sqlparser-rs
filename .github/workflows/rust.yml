@@ -23,7 +23,7 @@ jobs:
         with:
           components: clippy
       - uses: actions/checkout@v2
-      - run: cargo clippy -- --all-targets --all-features -- -D warnings
+      - run: cargo clippy --all-targets --all-features -- -D warnings
 
   compile:
     runs-on: ubuntu-latest

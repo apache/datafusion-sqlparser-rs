@@ -57,10 +57,9 @@ jobs:
       run: cargo test --all-features
     - name: Coverage
       if: matrix.rust == 'stable'
-      run: |
-        # Tarpaulin interoperates with CI services, however Actions is not
-        # currently supported. As a workaround, we can pretend to be Travis.
-        export TRAVIS_JOB_ID=${GITHUB_SHA}
-        export TRAVIS_PULL_REQUEST=false
-        export TRAVIS_BRANCH=${GITHUB_REF##*/}
-        cargo tarpaulin --ciserver travis-ci --coveralls $TRAVIS_JOB_ID
+      run: cargo tarpaulin -o Lcov --output-dir ./coverage
+    - name: Coveralls
+      if: matrix.rust == 'stable'
+      uses: coverallsapp/github-action@master
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -9,6 +9,7 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented changes.
 
 ### Changed
+- **`Parser::parse_sql` now accepts a `&str` instead of `String` (#182)** - thanks @Dandandan!
 - Change `Ident` (previously a simple `String`) to store the parsed (unquoted) `value` of the identifier and the `quote_style` separately (#143) - thanks @apparebit!
 - Support Snowflake's `FROM (table_name)` (#155) - thanks @eyalleshem!
 
@@ -21,6 +22,8 @@ Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented 
 - Support basic forms of `CREATE SCHEMA` and `DROP SCHEMA` (#173) - thanks @alex-dukhno!
 - Support `NULLS FIRST`/`LAST` in `ORDER BY` expressions (#176) - thanks @houqp!
 - Support `LISTAGG()` (#174) - thanks @maxcountryman!
+- Support the string concatentation operator `||` (#178) - thanks @Dandandan!
+- Support bitwise AND (`&`), OR (`|`), XOR (`^`) (#181) - thanks @Dandandan!
 
 ### Fixed
 - Report an error for unterminated string literals (#165)

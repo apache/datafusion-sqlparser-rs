@@ -372,20 +372,31 @@ impl ToString for SQLAssignment {
 pub struct SQLOrderByExpr {
     pub expr: Box<ASTNode>,
     pub asc: bool,
+    pub nulls_first: Option<bool>,
 }
 
 impl SQLOrderByExpr {
-    pub fn new(expr: Box<ASTNode>, asc: bool) -> Self {
-        SQLOrderByExpr { expr, asc }
+    pub fn new(expr: Box<ASTNode>, asc: bool, nulls_first: Option<bool>) -> Self {
+        SQLOrderByExpr {
+            expr,
+            asc,
+            nulls_first,
+        }
     }
 }
 
 impl ToString for SQLOrderByExpr {
     fn to_string(&self) -> String {
-        if self.asc {
+        let s = if self.asc {
             format!("{} ASC", self.expr.as_ref().to_string())
         } else {
             format!("{} DESC", self.expr.as_ref().to_string())
+        };
+
+        match self.nulls_first {
+            Some(true) => s + " NULLS FIRST",
+            Some(false) => s + " NULLS LAST",
+            None => s,
         }
     }
 }

@@ -230,7 +230,7 @@ fn parse_not_like() {
 #[test]
 fn parse_select_order_by() {
     let sql = String::from(
-        "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC",
+        "SELECT id, fname, lname FROM customer WHERE id < 5 ORDER BY lname ASC, fname DESC NULLS LAST",
     );
     match verified(&sql) {
         ASTNode::SQLSelect { order_by, .. } => {
@@ -239,10 +239,12 @@ fn parse_select_order_by() {
                     SQLOrderByExpr {
                         expr: Box::new(ASTNode::SQLIdentifier("lname".to_string())),
                         asc: true,
+                        nulls_first: None,
                     },
                     SQLOrderByExpr {
                         expr: Box::new(ASTNode::SQLIdentifier("fname".to_string())),
                         asc: false,
+                        nulls_first: Some(false),
                     },
                 ]),
                 order_by
@@ -267,10 +269,12 @@ fn parse_select_order_by_limit() {
                     SQLOrderByExpr {
                         expr: Box::new(ASTNode::SQLIdentifier("lname".to_string())),
                         asc: true,
+                        nulls_first: None
                     },
                     SQLOrderByExpr {
                         expr: Box::new(ASTNode::SQLIdentifier("fname".to_string())),
                         asc: false,
+                        nulls_first: None
                     },
                 ]),
                 order_by

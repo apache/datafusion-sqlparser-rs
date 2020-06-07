@@ -1359,11 +1359,37 @@ impl Parser {
                     }
                     _ => true,
                 },
-                Some(Token::Comma) => true,
                 _ => true,
             };
 
-            expr_list.push(SQLOrderByExpr::new(Box::new(expr), asc));
+            // look for optional NULLS FIRST / LAST specifier
+            let nulls_first = match self.peek_token() {
+                Some(Token::Keyword(k)) => match k.to_uppercase().as_ref() {
+                    "NULLS" => {
+                        self.next_token();
+                        match self.peek_token() {
+                            Some(Token::Keyword(k)) => match k.to_uppercase().as_ref() {
+                                "FIRST" => {
+                                    self.next_token();
+                                    Some(true)
+                                }
+                                "LAST" => {
+                                    self.next_token();
+                                    Some(false)
+                                }
+                                _ => {
+                                    return parser_err!("Expect FIRST/LAST after NULLS".to_string())
+                                }
+                            },
+                            _ => return parser_err!("Expect keyword after NULLS".to_string()),
+                        }
+                    }
+                    _ => None,
+                },
+                _ => None,
+            };
+
+            expr_list.push(SQLOrderByExpr::new(Box::new(expr), asc, nulls_first));
 
             if let Some(t) = self.peek_token() {
                 if t == Token::Comma {

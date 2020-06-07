@@ -28,7 +28,7 @@
 //! let sql = "SELECT a, b, 123, myfunc(b) \
 //!            FROM table_1 \
 //!            WHERE a > b AND b < 100 \
-//!            ORDER BY a DESC, b";
+//!            ORDER BY a DESC, b NULLS FIRST";
 //!
 //! let ast = Parser::parse_sql(&dialect, sql.to_string()).unwrap();
 //!

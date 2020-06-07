@@ -54,7 +54,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
     - name: Test
-      run: cargo test -- all-features
+      run: cargo test --all-features
     - name: Coverage
       if: matrix.rust == 'stable'
       run: |

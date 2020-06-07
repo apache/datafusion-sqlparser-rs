@@ -11,6 +11,7 @@ jobs:
         uses: hecrj/setup-rust-action@v1
         with:
           components: rustfmt
+          # Note that `nightly` is required for `license_template_path`, as it's an unstable feature.
           rust-version: nightly
       - uses: actions/checkout@v2
       - run: cargo fmt -- --check --config-path <(echo 'license_template_path = "HEADER"')

@@ -143,7 +143,6 @@ impl Token {
     }
     pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
         let word_uppercase = word.to_uppercase();
-        //TODO: validate use of a hashset (e.g. FnvHashSet) compared to using binary search 
         let is_keyword =
             quote_style == None && ALL_KEYWORDS.binary_search(&word_uppercase.as_str()).is_ok();
         Token::Word(Word {

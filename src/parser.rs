@@ -1480,7 +1480,7 @@ impl Parser {
     /// `SELECT ... FROM t1 foo, t2 bar`, `SELECT ... FROM (...) AS bar`
     pub fn parse_optional_alias(
         &mut self,
-        reserved_kwds: &[&str],
+        reserved_kwds: &[AllKeyWords],
     ) -> Result<Option<Ident>, ParserError> {
         let after_as = self.parse_keyword(AllKeyWords::AS);
         match self.next_token() {
@@ -1490,7 +1490,10 @@ impl Parser {
             // (For example, in `FROM t1 JOIN` the `JOIN` will always be parsed as a keyword,
             // not an alias.)
             Some(Token::Word(ref w))
-                if after_as || !reserved_kwds.contains(&w.value.to_ascii_uppercase().as_str()) =>
+                if after_as
+                    || w.keyword
+                        .clone()
+                        .map_or(true, |kw| !reserved_kwds.contains(&kw)) =>
             {
                 Ok(Some(w.to_ident()))
             }
@@ -1523,7 +1526,7 @@ impl Parser {
     /// addition to the table itself.
     pub fn parse_optional_table_alias(
         &mut self,
-        reserved_kwds: &[&str],
+        reserved_kwds: &[AllKeyWords],
     ) -> Result<Option<TableAlias>, ParserError> {
         match self.parse_optional_alias(reserved_kwds)? {
             Some(name) => {

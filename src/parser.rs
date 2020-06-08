@@ -1493,7 +1493,7 @@ impl Parser {
                 if after_as
                     || w.keyword
                         .clone()
-                        .map_or(true, |kw| !reserved_kwds.binary_search(&kw).is_ok()) =>
+                        .map_or(true, |kw| reserved_kwds.binary_search(&kw).is_err()) =>
             {
                 Ok(Some(w.to_ident()))
             }

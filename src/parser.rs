@@ -15,7 +15,7 @@
 use log::debug;
 
 use super::ast::*;
-use super::dialect::keywords;
+use super::dialect::keywords::{AllKeyWords};
 use super::dialect::Dialect;
 use super::tokenizer::*;
 use std::error::Error;
@@ -113,27 +113,27 @@ impl Parser {
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
         match self.next_token() {
             Some(t) => match t {
-                Token::Word(ref w) if w.keyword != "" => match w.keyword.as_ref() {
-                    "SELECT" | "WITH" | "VALUES" => {
+                Token::Word(ref w) if w.keyword.is_some() => match w.keyword.unwrap() {
+                    AllKeyWords::SELECT | AllKeyWords::WITH | AllKeyWords::VALUES => {
                         self.prev_token();
                         Ok(Statement::Query(Box::new(self.parse_query()?)))
                     }
-                    "CREATE" => Ok(self.parse_create()?),
-                    "DROP" => Ok(self.parse_drop()?),
-                    "DELETE" => Ok(self.parse_delete()?),
-                    "INSERT" => Ok(self.parse_insert()?),
-                    "UPDATE" => Ok(self.parse_update()?),
-                    "ALTER" => Ok(self.parse_alter()?),
-                    "COPY" => Ok(self.parse_copy()?),
-                    "SET" => Ok(self.parse_set()?),
-                    "SHOW" => Ok(self.parse_show()?),
-                    "START" => Ok(self.parse_start_transaction()?),
+                    AllKeyWords::CREATE => Ok(self.parse_create()?),
+                    AllKeyWords::DROP => Ok(self.parse_drop()?),
+                    AllKeyWords::DELETE => Ok(self.parse_delete()?),
+                    AllKeyWords::INSERT => Ok(self.parse_insert()?),
+                    AllKeyWords::UPDATE => Ok(self.parse_update()?),
+                    AllKeyWords::ALTER => Ok(self.parse_alter()?),
+                    AllKeyWords::COPY => Ok(self.parse_copy()?),
+                    AllKeyWords::SET => Ok(self.parse_set()?),
+                    AllKeyWords::SHOW => Ok(self.parse_show()?),
+                    AllKeyWords::START => Ok(self.parse_start_transaction()?),
                     // `BEGIN` is a nonstandard but common alias for the
                     // standard `START TRANSACTION` statement. It is supported
                     // by at least PostgreSQL and MySQL.
-                    "BEGIN" => Ok(self.parse_begin()?),
-                    "COMMIT" => Ok(self.parse_commit()?),
-                    "ROLLBACK" => Ok(self.parse_rollback()?),
+                    AllKeyWords::BEGIN => Ok(self.parse_begin()?),
+                    AllKeyWords::COMMIT => Ok(self.parse_commit()?),
+                    AllKeyWords::ROLLBACK => Ok(self.parse_rollback()?),
                     _ => parser_err!(format!(
                         "Unexpected keyword {:?} at the beginning of a statement",
                         w.to_string()
@@ -180,24 +180,24 @@ impl Parser {
             .next_token()
             .ok_or_else(|| ParserError::ParserError("Unexpected EOF".to_string()))?;
         let expr = match tok {
-            Token::Word(w) => match w.keyword.as_ref() {
-                "TRUE" | "FALSE" | "NULL" => {
+            Token::Word(w) => match w.keyword.unwrap() {
+                AllKeyWords::TRUE | AllKeyWords::FALSE | AllKeyWords::NULL => {
                     self.prev_token();
                     Ok(Expr::Value(self.parse_value()?))
                 }
-                "CASE" => self.parse_case_expr(),
-                "CAST" => self.parse_cast_expr(),
-                "DATE" => Ok(Expr::Value(Value::Date(self.parse_literal_string()?))),
-                "EXISTS" => self.parse_exists_expr(),
-                "EXTRACT" => self.parse_extract_expr(),
-                "INTERVAL" => self.parse_literal_interval(),
-                "LISTAGG" => self.parse_listagg_expr(),
-                "NOT" => Ok(Expr::UnaryOp {
+                AllKeyWords::CASE => self.parse_case_expr(),
+                AllKeyWords::CAST => self.parse_cast_expr(),
+                AllKeyWords::DATE => Ok(Expr::Value(Value::Date(self.parse_literal_string()?))),
+                AllKeyWords::EXISTS => self.parse_exists_expr(),
+                AllKeyWords::EXTRACT => self.parse_extract_expr(),
+                AllKeyWords::INTERVAL => self.parse_literal_interval(),
+                AllKeyWords::LISTAGG => self.parse_listagg_expr(),
+                AllKeyWords::NOT => Ok(Expr::UnaryOp {
                     op: UnaryOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
                 }),
-                "TIME" => Ok(Expr::Value(Value::Time(self.parse_literal_string()?))),
-                "TIMESTAMP" => Ok(Expr::Value(Value::Timestamp(self.parse_literal_string()?))),
+                AllKeyWords::TIME => Ok(Expr::Value(Value::Time(self.parse_literal_string()?))),
+                AllKeyWords::TIMESTAMP => Ok(Expr::Value(Value::Timestamp(self.parse_literal_string()?))),
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {
@@ -435,7 +435,7 @@ impl Parser {
             } else {
                 self.expect_keyword("TRUNCATE")?;
                 let filler = match self.peek_token() {
-                    Some(Token::Word(kw)) if kw.keyword == "WITH" || kw.keyword == "WITHOUT" => {
+                    Some(Token::Word(kw)) if kw.keyword == Some(AllKeyWords::WITH) || kw.keyword == Some(AllKeyWords::WITHOUT)=> {
                         None
                     }
                     Some(Token::SingleQuotedString(_))
@@ -582,11 +582,11 @@ impl Parser {
             Token::Caret => Some(BinaryOperator::BitwiseXor),
             Token::Ampersand => Some(BinaryOperator::BitwiseAnd),
             Token::Div => Some(BinaryOperator::Divide),
-            Token::Word(ref k) => match k.keyword.as_ref() {
-                "AND" => Some(BinaryOperator::And),
-                "OR" => Some(BinaryOperator::Or),
-                "LIKE" => Some(BinaryOperator::Like),
-                "NOT" => {
+            Token::Word(ref k) => match k.keyword {
+                Some(AllKeyWords::AND) => Some(BinaryOperator::And),
+                Some(AllKeyWords::OR) => Some(BinaryOperator::Or),
+                Some(AllKeyWords::LIKE) => Some(BinaryOperator::Like),
+                Some(AllKeyWords::NOT)  => {
                     if self.parse_keyword("LIKE") {
                         Some(BinaryOperator::NotLike)
                     } else {
@@ -605,17 +605,17 @@ impl Parser {
                 right: Box::new(self.parse_subexpr(precedence)?),
             })
         } else if let Token::Word(ref k) = tok {
-            match k.keyword.as_ref() {
-                "IS" => {
-                    if self.parse_keyword("NULL") {
+            match k.keyword {
+                Some(AllKeyWords::IS) => {
+                    if self.parse_keyword(Some(AllKeyWords::NULL)) {
                         Ok(Expr::IsNull(Box::new(expr)))
-                    } else if self.parse_keywords(vec!["NOT", "NULL"]) {
+                    } else if self.parse_keywords(vec![Some(AllKeyWords::NOT), Some(AllKeyWords::NULL)]) {
                         Ok(Expr::IsNotNull(Box::new(expr)))
                     } else {
                         self.expected("NULL or NOT NULL after IS", self.peek_token())
                     }
                 }
-                "NOT" | "IN" | "BETWEEN" => {
+                Some(AllKeyWords::NOT) | Some(AllKeyWords::IN) | Some(AllKeyWords::BETWEEN) => {
                     self.prev_token();
                     let negated = self.parse_keyword("NOT");
                     if self.parse_keyword("IN") {
@@ -691,7 +691,7 @@ impl Parser {
             debug!("get_next_precedence() {:?}", token);
 
             match &token {
-                Token::Word(k) if k.keyword == "OR" => Ok(5),
+                Token::Word(k) if k.keyword ==  => Ok(5),
                 Token::Word(k) if k.keyword == "AND" => Ok(10),
                 Token::Word(k) if k.keyword == "NOT" => match &self.peek_nth_token(1) {
                     // The precedence of NOT varies depending on keyword that
@@ -781,9 +781,9 @@ impl Parser {
     }
 
     /// Report unexpected token
-    fn expected<T>(&self, expected: &str, found: Option<Token>) -> Result<T, ParserError> {
+    fn expected<T>(&self, expected: AllKeyWords, found: Option<Token>) -> Result<T, ParserError> {
         parser_err!(format!(
-            "Expected {}, found: {}",
+            "Expected {:?}, found: {}",
             expected,
             found.map_or_else(|| "EOF".to_string(), |t| format!("{}", t))
         ))
@@ -791,14 +791,9 @@ impl Parser {
 
     /// Look for an expected keyword and consume it if it exists
     #[must_use]
-    pub fn parse_keyword(&mut self, expected: &'static str) -> bool {
-        // Ideally, we'd accept a enum variant, not a string, but since
-        // it's not trivial to maintain the enum without duplicating all
-        // the keywords three times, we'll settle for a run-time check that
-        // the string actually represents a known keyword...
-        assert!(keywords::ALL_KEYWORDS.contains(&expected));
+    pub fn parse_keyword(&mut self, expected: AllKeyWords) -> bool {
         match self.peek_token() {
-            Some(Token::Word(ref k)) if expected.eq_ignore_ascii_case(&k.keyword) => {
+            Some(Token::Word(ref k)) if Some(expected) == k.keyword => {
                 self.next_token();
                 true
             }
@@ -808,10 +803,10 @@ impl Parser {
 
     /// Look for an expected sequence of keywords and consume them if they exist
     #[must_use]
-    pub fn parse_keywords(&mut self, keywords: Vec<&'static str>) -> bool {
+    pub fn parse_keywords(&mut self, keywords: Vec<AllKeyWords>) -> bool {
         let index = self.index;
         for keyword in keywords {
-            if !self.parse_keyword(&keyword) {
+            if !self.parse_keyword(keyword) {
                 //println!("parse_keywords aborting .. did not find {}", keyword);
                 // reset index and return immediately
                 self.index = index;
@@ -823,18 +818,11 @@ impl Parser {
 
     /// Look for one of the given keywords and return the one that matches.
     #[must_use]
-    pub fn parse_one_of_keywords(&mut self, keywords: &[&'static str]) -> Option<&'static str> {
-        for keyword in keywords {
-            assert!(
-                keywords::ALL_KEYWORDS.contains(keyword),
-                "{} is not contained in keyword list",
-                keyword
-            );
-        }
+    pub fn parse_one_of_keywords(&mut self, keywords: &[AllKeyWords]) -> Option<AllKeyWords> {
         match self.peek_token() {
             Some(Token::Word(ref k)) => keywords
                 .iter()
-                .find(|keyword| keyword.eq_ignore_ascii_case(&k.keyword))
+                .find(|keyword| Some(**keyword) == k.keyword)
                 .map(|keyword| {
                     self.next_token();
                     *keyword
@@ -846,20 +834,20 @@ impl Parser {
     /// Bail out if the current token is not one of the expected keywords, or consume it if it is
     pub fn expect_one_of_keywords(
         &mut self,
-        keywords: &[&'static str],
-    ) -> Result<&'static str, ParserError> {
+        keywords: &[AllKeyWords],
+    ) -> Result<AllKeyWords, ParserError> {
         if let Some(keyword) = self.parse_one_of_keywords(keywords) {
             Ok(keyword)
         } else {
             self.expected(
-                &format!("one of {}", keywords.join(" or ")),
+                &format!("one of {}", keywords.iter().map(|x| format!("{:?}", x)).collect().join(" or ")),
                 self.peek_token(),
             )
         }
     }
 
     /// Bail out if the current token is not an expected keyword, or consume it if it is
-    pub fn expect_keyword(&mut self, expected: &'static str) -> Result<(), ParserError> {
+    pub fn expect_keyword(&mut self, expected: AllKeyWords) -> Result<(), ParserError> {
         if self.parse_keyword(expected) {
             Ok(())
         } else {
@@ -869,9 +857,9 @@ impl Parser {
 
     /// Bail out if the following tokens are not the expected sequence of
     /// keywords, or consume them if they are.
-    pub fn expect_keywords(&mut self, expected: &[&'static str]) -> Result<(), ParserError> {
+    pub fn expect_keywords(&mut self, expected: &[AllKeyWords]) -> Result<(), ParserError> {
         for kw in expected {
-            self.expect_keyword(kw)?;
+            self.expect_keyword(*kw)?;
         }
         Ok(())
     }
@@ -915,8 +903,8 @@ impl Parser {
     /// Parse either `ALL` or `DISTINCT`. Returns `true` if `DISTINCT` is parsed and results in a
     /// `ParserError` if both `ALL` and `DISTINCT` are fround.
     pub fn parse_all_or_distinct(&mut self) -> Result<bool, ParserError> {
-        let all = self.parse_keyword("ALL");
-        let distinct = self.parse_keyword("DISTINCT");
+        let all = self.parse_keyword(AllKeyWords::ALL);
+        let distinct = self.parse_keyword(AllKeyWords::DISTINCT);
         if all && distinct {
             return parser_err!("Cannot specify both ALL and DISTINCT".to_string());
         } else {
@@ -926,18 +914,18 @@ impl Parser {
 
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
-        if self.parse_keyword("TABLE") {
+        if self.parse_keyword(AllKeyWords::TABLE) {
             self.parse_create_table()
-        } else if self.parse_keyword("INDEX") {
+        } else if self.parse_keyword(AllKeyWords::INDEX) {
             self.parse_create_index(false)
-        } else if self.parse_keywords(vec!["UNIQUE", "INDEX"]) {
+        } else if self.parse_keywords(vec![AllKeyWords::UNIQUE, AllKeyWords::INDEX]) {
             self.parse_create_index(true)
-        } else if self.parse_keyword("MATERIALIZED") || self.parse_keyword("VIEW") {
+        } else if self.parse_keyword(AllKeyWords::MATERIALIZED) || self.parse_keyword(AllKeyWords::VIEW) {
             self.prev_token();
             self.parse_create_view()
-        } else if self.parse_keyword("EXTERNAL") {
+        } else if self.parse_keyword(AllKeyWords::EXTERNAL) {
             self.parse_create_external_table()
-        } else if self.parse_keyword("SCHEMA") {
+        } else if self.parse_keyword(AllKeyWords::SCHEMA) {
             self.parse_create_schema()
         } else {
             self.expected(
@@ -953,13 +941,13 @@ impl Parser {
     }
 
     pub fn parse_create_external_table(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword("TABLE")?;
+        self.expect_keyword(AllKeyWords::TABLE)?;
         let table_name = self.parse_object_name()?;
         let (columns, constraints) = self.parse_columns()?;
-        self.expect_keywords(&["STORED", "AS"])?;
+        self.expect_keywords(&[AllKeyWords::STORED, AllKeyWords::AS])?;
         let file_format = self.parse_identifier()?.value.parse::<FileFormat>()?;
 
-        self.expect_keyword("LOCATION")?;
+        self.expect_keyword(AllKeyWords::LOCATION)?;
         let location = self.parse_literal_string()?;
 
         Ok(Statement::CreateTable {
@@ -975,14 +963,14 @@ impl Parser {
     }
 
     pub fn parse_create_view(&mut self) -> Result<Statement, ParserError> {
-        let materialized = self.parse_keyword("MATERIALIZED");
-        self.expect_keyword("VIEW")?;
+        let materialized = self.parse_keyword(AllKeyWords::MATERIALIZED);
+        self.expect_keyword(AllKeyWords::VIEW)?;
         // Many dialects support `OR REPLACE` | `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
         let with_options = self.parse_with_options()?;
-        self.expect_keyword("AS")?;
+        self.expect_keyword(AllKeyWords::AS)?;
         let query = Box::new(self.parse_query()?);
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
         Ok(Statement::CreateView {
@@ -995,23 +983,23 @@ impl Parser {
     }
 
     pub fn parse_drop(&mut self) -> Result<Statement, ParserError> {
-        let object_type = if self.parse_keyword("TABLE") {
+        let object_type = if self.parse_keyword(AllKeyWords::TABLE) {
             ObjectType::Table
-        } else if self.parse_keyword("VIEW") {
+        } else if self.parse_keyword(AllKeyWords::VIEW) {
             ObjectType::View
-        } else if self.parse_keyword("INDEX") {
+        } else if self.parse_keyword(AllKeyWords::INDEX) {
             ObjectType::Index
-        } else if self.parse_keyword("SCHEMA") {
+        } else if self.parse_keyword(AllKeyWords::SCHEMA) {
             ObjectType::Schema
         } else {
             return self.expected("TABLE, VIEW, INDEX or SCHEMA after DROP", self.peek_token());
         };
         // Many dialects support the non standard `IF EXISTS` clause and allow
         // specifying multiple objects to delete in a single statement
-        let if_exists = self.parse_keywords(vec!["IF", "EXISTS"]);
+        let if_exists = self.parse_keywords(vec![AllKeyWords::IF, AllKeyWords::EXISTS]);
         let names = self.parse_comma_separated(Parser::parse_object_name)?;
-        let cascade = self.parse_keyword("CASCADE");
-        let restrict = self.parse_keyword("RESTRICT");
+        let cascade = self.parse_keyword(AllKeyWords::CASCADE);
+        let restrict = self.parse_keyword(AllKeyWords::RESTRICT);
         if cascade && restrict {
             return parser_err!("Cannot specify both CASCADE and RESTRICT in DROP");
         }
@@ -1024,9 +1012,9 @@ impl Parser {
     }
 
     pub fn parse_create_index(&mut self, unique: bool) -> Result<Statement, ParserError> {
-        let if_not_exists = self.parse_keywords(vec!["IF", "NOT", "EXISTS"]);
+        let if_not_exists = self.parse_keywords(vec![AllKeyWords::IF, AllKeyWords::NOT, AllKeyWords::EXISTS]);
         let index_name = self.parse_object_name()?;
-        self.expect_keyword("ON")?;
+        self.expect_keyword(AllKeyWords::ON)?;
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Mandatory)?;
         Ok(Statement::CreateIndex {
@@ -1039,7 +1027,7 @@ impl Parser {
     }
 
     pub fn parse_create_table(&mut self) -> Result<Statement, ParserError> {
-        let if_not_exists = self.parse_keywords(vec!["IF", "NOT", "EXISTS"]);
+        let if_not_exists = self.parse_keywords(vec![AllKeyWords::IF, AllKeyWords::NOT, AllKeyWords::EXISTS]);
         let table_name = self.parse_object_name()?;
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
@@ -1070,7 +1058,7 @@ impl Parser {
             } else if let Some(Token::Word(column_name)) = self.peek_token() {
                 self.next_token();
                 let data_type = self.parse_data_type()?;
-                let collation = if self.parse_keyword("COLLATE") {
+                let collation = if self.parse_keyword(AllKeyWords::COLLATE) {
                     Some(self.parse_object_name()?)
                 } else {
                     None
@@ -1105,23 +1093,23 @@ impl Parser {
     }
 
     pub fn parse_column_option_def(&mut self) -> Result<ColumnOptionDef, ParserError> {
-        let name = if self.parse_keyword("CONSTRAINT") {
+        let name = if self.parse_keyword(AllKeyWords::CONSTRAINT) {
             Some(self.parse_identifier()?)
         } else {
             None
         };
 
-        let option = if self.parse_keywords(vec!["NOT", "NULL"]) {
+        let option = if self.parse_keywords(vec![AllKeyWords::NOT, AllKeyWords::NULL]) {
             ColumnOption::NotNull
-        } else if self.parse_keyword("NULL") {
+        } else if self.parse_keyword(AllKeyWords::NULL) {
             ColumnOption::Null
-        } else if self.parse_keyword("DEFAULT") {
+        } else if self.parse_keyword(AllKeyWords::DEFAULT) {
             ColumnOption::Default(self.parse_expr()?)
-        } else if self.parse_keywords(vec!["PRIMARY", "KEY"]) {
+        } else if self.parse_keywords(vec![AllKeyWords::PRIMARY, AllKeyWords::KEY]) {
             ColumnOption::Unique { is_primary: true }
-        } else if self.parse_keyword("UNIQUE") {
+        } else if self.parse_keyword(AllKeyWords::UNIQUE) {
             ColumnOption::Unique { is_primary: false }
-        } else if self.parse_keyword("REFERENCES") {
+        } else if self.parse_keyword(AllKeyWords::REFERENCES) {
             let foreign_table = self.parse_object_name()?;
             // PostgreSQL allows omitting the column list and
             // uses the primary key column of the foreign table by default
@@ -1129,9 +1117,9 @@ impl Parser {
             let mut on_delete = None;
             let mut on_update = None;
             loop {
-                if on_delete.is_none() && self.parse_keywords(vec!["ON", "DELETE"]) {
+                if on_delete.is_none() && self.parse_keywords(vec![AllKeyWords::ON, AllKeyWords::DELETE]) {
                     on_delete = Some(self.parse_referential_action()?);
-                } else if on_update.is_none() && self.parse_keywords(vec!["ON", "UPDATE"]) {
+                } else if on_update.is_none() && self.parse_keywords(vec![AllKeyWords::ON, AllKeyWords::UPDATE]) {
                     on_update = Some(self.parse_referential_action()?);
                 } else {
                     break;

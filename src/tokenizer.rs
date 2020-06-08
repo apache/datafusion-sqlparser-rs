@@ -19,7 +19,7 @@
 use std::iter::Peekable;
 use std::str::Chars;
 
-use super::dialect::keywords::ALL_KEYWORDS;
+use super::dialect::keywords::{AllKeyWords, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 use super::dialect::Dialect;
 use std::fmt;
 
@@ -143,15 +143,15 @@ impl Token {
     }
     pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
         let word_uppercase = word.to_uppercase();
-        let is_keyword =
-            quote_style == None && ALL_KEYWORDS.binary_search(&word_uppercase.as_str()).is_ok();
+        let keyword = ALL_KEYWORDS.binary_search(&word_uppercase.as_str());
+        let is_keyword = quote_style == None && keyword.is_ok();
         Token::Word(Word {
             value: word.to_string(),
             quote_style,
             keyword: if is_keyword {
-                word_uppercase
+                Some(ALL_KEYWORDS_INDEX[keyword.unwrap()])
             } else {
-                "".to_string()
+                None
             },
         })
     }
@@ -169,7 +169,7 @@ pub struct Word {
     pub quote_style: Option<char>,
     /// If the word was not quoted and it matched one of the known keywords,
     /// this will have one of the values from dialect::keywords, otherwise empty
-    pub keyword: String,
+    pub keyword: Option<AllKeyWords>,
 }
 
 impl fmt::Display for Word {

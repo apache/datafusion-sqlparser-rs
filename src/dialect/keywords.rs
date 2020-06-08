@@ -41,11 +41,22 @@ macro_rules! define_keywords {
     ($(
         $ident:ident $(= $string_keyword:expr)?
     ),*) => {
+
+        #[derive(Debug, Clone, PartialEq)]
+        pub enum AllKeyWords {
+            $($ident),*
+        }
+
+        pub const ALL_KEYWORDS_INDEX: &[AllKeyWords] = &[
+            AllKeyWords::$($ident),*
+        ];
+
         $(kw_def!($ident $(= $string_keyword)?);)*
 
         pub const ALL_KEYWORDS: &[&str] = &[
             $($ident),*
         ];
+
     }
 }
 

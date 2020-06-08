@@ -526,7 +526,13 @@ impl Parser {
         // Note that PostgreSQL allows omitting the qualifier, so we provide
         // this more general implemenation.
         let leading_field = match self.peek_token() {
-            Some(Token::Word(..)) => Some(self.parse_date_time_field()?),
+            Some(Token::Word(kw))
+                if ["YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND"]
+                    .iter()
+                    .any(|d| kw.keyword == *d) =>
+            {
+                Some(self.parse_date_time_field()?)
+            }
             _ => None,
         };
 

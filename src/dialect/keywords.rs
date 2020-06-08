@@ -48,7 +48,7 @@ macro_rules! define_keywords {
         }
 
         pub const ALL_KEYWORDS_INDEX: &[AllKeyWords] = &[
-            AllKeyWords::$($ident),*
+            $(AllKeyWords::$ident),*
         ];
 
         $(kw_def!($ident $(= $string_keyword)?);)*
@@ -57,7 +57,8 @@ macro_rules! define_keywords {
             $($ident),*
         ];
 
-    }
+    };
+
 }
 
 // The following keywords should be sorted to be able to match using binary search

@@ -149,7 +149,7 @@ impl Token {
             value: word.to_string(),
             quote_style,
             keyword: if is_keyword {
-                Some(ALL_KEYWORDS_INDEX[keyword.unwrap()])
+                keyword.map(|x| ALL_KEYWORDS_INDEX[x].clone()).ok()
             } else {
                 None
             },

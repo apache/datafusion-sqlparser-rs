@@ -15,6 +15,7 @@
 use log::debug;
 
 use super::ast::*;
+use super::dialect::keywords;
 use super::dialect::keywords::AllKeyWords;
 use super::dialect::Dialect;
 use super::tokenizer::*;
@@ -2003,7 +2004,7 @@ impl Parser {
             } else {
                 vec![]
             };
-            let alias = self.parse_optional_table_alias(&["RESERVED_FOR_TABLE_ALIAS"])?;
+            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
             // MSSQL-specific table hints:
             let mut with_hints = vec![];
             if self.parse_keyword(AllKeyWords::WITH) {
@@ -2030,7 +2031,7 @@ impl Parser {
     ) -> Result<TableFactor, ParserError> {
         let subquery = Box::new(self.parse_query()?);
         self.expect_token(&Token::RParen)?;
-        let alias = self.parse_optional_table_alias(&["RESERVED_FOR_TABLE_ALIAS"])?;
+        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
         Ok(TableFactor::Derived {
             lateral: match lateral {
                 Lateral => true,
@@ -2111,7 +2112,7 @@ impl Parser {
             Ok(SelectItem::QualifiedWildcard(ObjectName(prefix)))
         } else {
             // `expr` is a regular SQL expression and can be followed by an alias
-            if let Some(alias) = self.parse_optional_alias(&["RESERVED_FOR_COLUMN_ALIAS"])? {
+            if let Some(alias) = self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)? {
                 Ok(SelectItem::ExprWithAlias { expr, alias })
             } else {
                 Ok(SelectItem::UnnamedExpr(expr))

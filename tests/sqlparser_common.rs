@@ -21,7 +21,7 @@
 use matches::assert_matches;
 
 use sqlparser::ast::*;
-use sqlparser::dialect::keywords::ALL_KEYWORDS;
+use sqlparser::dialect::keywords::*;
 use sqlparser::parser::*;
 use sqlparser::test_utils::{all_dialects, expr_from_projection, number, only};
 
@@ -2853,11 +2853,25 @@ fn parse_drop_index() {
 }
 
 #[test]
-fn keywords_sorted() {
+fn all_keywords_sorted() {
     // assert!(ALL_KEYWORDS.is_sorted())
     let mut copy = Vec::from(ALL_KEYWORDS);
     copy.sort();
     assert!(copy == ALL_KEYWORDS)
+}
+
+#[test]
+fn keywords_sorted_reserved_for_column_alias() {
+    let mut copy = Vec::from(RESERVED_FOR_COLUMN_ALIAS.clone());
+    copy.sort();
+    assert!(copy == RESERVED_FOR_COLUMN_ALIAS)
+}
+
+#[test]
+fn keywords_sorted_reserved_for_table_alias() {
+    let mut copy = Vec::from(RESERVED_FOR_TABLE_ALIAS.clone());
+    copy.sort();
+    assert!(copy == RESERVED_FOR_TABLE_ALIAS)
 }
 
 fn parse_sql_statements(sql: &str) -> Result<Vec<Statement>, ParserError> {

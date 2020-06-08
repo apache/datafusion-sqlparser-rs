@@ -2862,14 +2862,14 @@ fn all_keywords_sorted() {
 
 #[test]
 fn keywords_sorted_reserved_for_column_alias() {
-    let mut copy = Vec::from(RESERVED_FOR_COLUMN_ALIAS.clone());
+    let mut copy = Vec::from(RESERVED_FOR_COLUMN_ALIAS);
     copy.sort();
     assert!(copy == RESERVED_FOR_COLUMN_ALIAS)
 }
 
 #[test]
 fn keywords_sorted_reserved_for_table_alias() {
-    let mut copy = Vec::from(RESERVED_FOR_TABLE_ALIAS.clone());
+    let mut copy = Vec::from(RESERVED_FOR_TABLE_ALIAS);
     copy.sort();
     assert!(copy == RESERVED_FOR_TABLE_ALIAS)
 }

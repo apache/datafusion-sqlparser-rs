@@ -35,7 +35,6 @@ macro_rules! kw_def {
     };
 }
 
-
 /// Expands to a list of `kw_def!()` invocations for each keyword
 /// and defines an ALL_KEYWORDS array of the defined constants.
 macro_rules! define_keywords {

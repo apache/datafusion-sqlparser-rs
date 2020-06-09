@@ -399,7 +399,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::Neq),
-                        _ => self.tokenizer_error("Expected to see'=' after '!' character"),
+                        _ => self.tokenizer_error("Expected to see '=' after '!' character"),
                     }
                 }
                 '<' => {

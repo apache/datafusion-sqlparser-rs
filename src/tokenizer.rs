@@ -26,6 +26,8 @@ use std::fmt;
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
+    /// An end-of-file marker, not a real token
+    EOF,
     /// A keyword (like SELECT) or an optionally quoted SQL identifier
     Word(Word),
     /// An unsigned numeric literal
@@ -99,6 +101,7 @@ pub enum Token {
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Token::EOF => f.write_str("EOF"),
             Token::Word(ref w) => write!(f, "{}", w),
             Token::Number(ref n) => f.write_str(n),
             Token::Char(ref c) => write!(f, "{}", c),

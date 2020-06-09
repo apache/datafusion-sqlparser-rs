@@ -218,9 +218,9 @@ impl fmt::Display for Whitespace {
 /// Tokenizer error
 #[derive(Debug, PartialEq)]
 pub struct TokenizerError {
-    message: String,
-    line: u64,
-    col: u64,
+    pub message: String,
+    pub line: u64,
+    pub col: u64,
 }
 
 /// SQL Tokenizer

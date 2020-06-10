@@ -19,7 +19,7 @@ name = "sqlparser"
 path = "src/lib.rs"
 
 [dependencies]
-bigdecimal = { version = "0.1.0", optional = true }
+bigdecimal = { version = "0.1.0", features = ["serde"], optional = true }
 log = "0.4.5"
 serde = { version = "1.0", features = ["derive"], optional = true }
 

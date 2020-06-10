@@ -19,13 +19,15 @@
 use std::iter::Peekable;
 use std::str::Chars;
 
-use super::dialect::keywords::{AllKeyWords, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
+use super::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 use super::dialect::Dialect;
 use std::fmt;
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
+    /// An end-of-file marker, not a real token
+    EOF,
     /// A keyword (like SELECT) or an optionally quoted SQL identifier
     Word(Word),
     /// An unsigned numeric literal
@@ -99,6 +101,7 @@ pub enum Token {
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Token::EOF => f.write_str("EOF"),
             Token::Word(ref w) => write!(f, "{}", w),
             Token::Number(ref n) => f.write_str(n),
             Token::Char(ref c) => write!(f, "{}", c),
@@ -143,15 +146,14 @@ impl Token {
     }
     pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
         let word_uppercase = word.to_uppercase();
-        let keyword = ALL_KEYWORDS.binary_search(&word_uppercase.as_str());
-        let is_keyword = quote_style == None && keyword.is_ok();
         Token::Word(Word {
             value: word.to_string(),
             quote_style,
-            keyword: if is_keyword {
-                keyword.map(|x| ALL_KEYWORDS_INDEX[x].clone()).ok()
+            keyword: if quote_style == None {
+                let keyword = ALL_KEYWORDS.binary_search(&word_uppercase.as_str());
+                keyword.map_or(Keyword::NoKeyword, |x| ALL_KEYWORDS_INDEX[x])
             } else {
-                None
+                Keyword::NoKeyword
             },
         })
     }
@@ -169,7 +171,7 @@ pub struct Word {
     pub quote_style: Option<char>,
     /// If the word was not quoted and it matched one of the known keywords,
     /// this will have one of the values from dialect::keywords, otherwise empty
-    pub keyword: Option<AllKeyWords>,
+    pub keyword: Keyword,
 }
 
 impl fmt::Display for Word {
@@ -217,7 +219,11 @@ impl fmt::Display for Whitespace {
 
 /// Tokenizer error
 #[derive(Debug, PartialEq)]
-pub struct TokenizerError(String);
+pub struct TokenizerError {
+    pub message: String,
+    pub line: u64,
+    pub col: u64,
+}
 
 /// SQL Tokenizer
 pub struct Tokenizer<'a> {
@@ -331,10 +337,10 @@ impl<'a> Tokenizer<'a> {
                     if chars.next() == Some(quote_end) {
                         Ok(Some(Token::make_word(&s, Some(quote_start))))
                     } else {
-                        Err(TokenizerError(format!(
-                            "Expected close delimiter '{}' before EOF.",
-                            quote_end
-                        )))
+                        self.tokenizer_error(
+                            format!("Expected close delimiter '{}' before EOF.", quote_end)
+                                .as_str(),
+                        )
                     }
                 }
                 // numbers
@@ -395,10 +401,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::Neq),
-                        _ => Err(TokenizerError(format!(
-                            "Tokenizer Error at Line: {}, Col: {}",
-                            self.line, self.col
-                        ))),
+                        _ => self.tokenizer_error("Expected to see '=' after '!' character"),
                     }
                 }
                 '<' => {
@@ -437,6 +440,14 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
+    fn tokenizer_error<R>(&self, message: &str) -> Result<R, TokenizerError> {
+        Err(TokenizerError {
+            message: message.to_string(),
+            col: self.col,
+            line: self.line,
+        })
+    }
+
     /// Tokenize an identifier or keyword, after the first char is already consumed.
     fn tokenize_word(&self, first_char: char, chars: &mut Peekable<Chars<'_>>) -> String {
         let mut s = first_char.to_string();
@@ -471,10 +482,7 @@ impl<'a> Tokenizer<'a> {
                 }
             }
         }
-        Err(TokenizerError(format!(
-            "Unterminated string literal at Line: {}, Col: {}",
-            self.line, self.col
-        )))
+        self.tokenizer_error("Unterminated string literal")
     }
 
     fn tokenize_multiline_comment(
@@ -499,11 +507,7 @@ impl<'a> Tokenizer<'a> {
                         s.push(ch);
                     }
                 }
-                None => {
-                    break Err(TokenizerError(
-                        "Unexpected EOF while in a multi-line comment".to_string(),
-                    ));
-                }
+                None => break self.tokenizer_error("Unexpected EOF while in a multi-line comment"),
             }
         }
     }
@@ -720,9 +724,11 @@ mod tests {
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         assert_eq!(
             tokenizer.tokenize(),
-            Err(TokenizerError(
-                "Unterminated string literal at Line: 1, Col: 8".to_string()
-            ))
+            Err(TokenizerError {
+                message: "Unterminated string literal".to_string(),
+                line: 1,
+                col: 8
+            })
         );
     }
 
@@ -843,9 +849,11 @@ mod tests {
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         assert_eq!(
             tokenizer.tokenize(),
-            Err(TokenizerError(
-                "Expected close delimiter '\"' before EOF.".to_string(),
-            ))
+            Err(TokenizerError {
+                message: "Expected close delimiter '\"' before EOF.".to_string(),
+                line: 1,
+                col: 1
+            })
         );
     }
 

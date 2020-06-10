@@ -12,6 +12,8 @@ Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented 
 - **`Parser::parse_sql` now accepts a `&str` instead of `String` (#182)** - thanks @Dandandan!
 - Change `Ident` (previously a simple `String`) to store the parsed (unquoted) `value` of the identifier and the `quote_style` separately (#143) - thanks @apparebit!
 - Support Snowflake's `FROM (table_name)` (#155) - thanks @eyalleshem!
+- Add line and column number to TokenizerError (#194) - thanks @Dandandan!
+- Make the units keyword following `INTERVAL '...'` optional (#184) - thanks @maxcountryman!
 
 ### Added
 - Support MSSQL `TOP (<N>) [ PERCENT ] [ WITH TIES ]` (#150) - thanks @alexkyllo!

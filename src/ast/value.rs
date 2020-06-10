@@ -12,10 +12,13 @@
 
 #[cfg(feature = "bigdecimal")]
 use bigdecimal::BigDecimal;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Value {
     /// Numeric literal
     #[cfg(not(feature = "bigdecimal"))]
@@ -37,7 +40,7 @@ pub enum Value {
     /// `TIMESTAMP '...'` literals
     Timestamp(String),
     /// INTERVAL literals, roughly in the following format:
-    /// `INTERVAL '<value>' <leading_field> [ (<leading_precision>) ]
+    /// `INTERVAL '<value>' [ <leading_field> [ (<leading_precision>) ] ]
     /// [ TO <last_field> [ (<fractional_seconds_precision>) ] ]`,
     /// e.g. `INTERVAL '123:45.67' MINUTE(3) TO SECOND(2)`.
     ///
@@ -46,7 +49,7 @@ pub enum Value {
     /// so the user will have to reject intervals like `HOUR TO YEAR`.
     Interval {
         value: String,
-        leading_field: DateTimeField,
+        leading_field: Option<DateTimeField>,
         leading_precision: Option<u64>,
         last_field: Option<DateTimeField>,
         /// The seconds precision can be specified in SQL source as
@@ -72,7 +75,7 @@ impl fmt::Display for Value {
             Value::Timestamp(v) => write!(f, "TIMESTAMP '{}'", escape_single_quote_string(v)),
             Value::Interval {
                 value,
-                leading_field: DateTimeField::Second,
+                leading_field: Some(DateTimeField::Second),
                 leading_precision: Some(leading_precision),
                 last_field,
                 fractional_seconds_precision: Some(fractional_seconds_precision),
@@ -95,12 +98,10 @@ impl fmt::Display for Value {
                 last_field,
                 fractional_seconds_precision,
             } => {
-                write!(
-                    f,
-                    "INTERVAL '{}' {}",
-                    escape_single_quote_string(value),
-                    leading_field
-                )?;
+                write!(f, "INTERVAL '{}'", escape_single_quote_string(value))?;
+                if let Some(leading_field) = leading_field {
+                    write!(f, " {}", leading_field)?;
+                }
                 if let Some(leading_precision) = leading_precision {
                     write!(f, " ({})", leading_precision)?;
                 }
@@ -118,6 +119,7 @@ impl fmt::Display for Value {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DateTimeField {
     Year,
     Month,

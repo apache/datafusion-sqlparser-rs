@@ -41,14 +41,15 @@ macro_rules! define_keywords {
     ($(
         $ident:ident $(= $string_keyword:expr)?
     ),*) => {
-        #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
+        #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
         #[allow(non_camel_case_types)]
-        pub enum AllKeyWords {
+        pub enum Keyword {
+            NoKeyword,
             $($ident),*
         }
 
-        pub const ALL_KEYWORDS_INDEX: &[AllKeyWords] = &[
-            $(AllKeyWords::$ident),*
+        pub const ALL_KEYWORDS_INDEX: &[Keyword] = &[
+            $(Keyword::$ident),*
         ];
 
         $(kw_def!($ident $(= $string_keyword)?);)*
@@ -445,46 +446,46 @@ define_keywords!(
 
 /// These keywords can't be used as a table alias, so that `FROM table_name alias`
 /// can be parsed unambiguously without looking ahead.
-pub const RESERVED_FOR_TABLE_ALIAS: &[AllKeyWords] = &[
-    AllKeyWords::CROSS,
-    AllKeyWords::EXCEPT,
-    AllKeyWords::FETCH,
-    AllKeyWords::FULL,
-    AllKeyWords::GROUP,
-    AllKeyWords::HAVING,
-    AllKeyWords::INNER,
-    AllKeyWords::INTERSECT,
-    AllKeyWords::JOIN,
-    AllKeyWords::LEFT,
-    AllKeyWords::LIMIT,
-    AllKeyWords::NATURAL,
-    AllKeyWords::OFFSET,
-    AllKeyWords::ON,
-    AllKeyWords::ORDER,
-    AllKeyWords::OUTER,
-    AllKeyWords::RIGHT,
-    AllKeyWords::SELECT,
-    AllKeyWords::TOP,
-    AllKeyWords::UNION,
-    AllKeyWords::USING,
-    AllKeyWords::WHERE,
-    AllKeyWords::WITH,
+pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
+    Keyword::CROSS,
+    Keyword::EXCEPT,
+    Keyword::FETCH,
+    Keyword::FULL,
+    Keyword::GROUP,
+    Keyword::HAVING,
+    Keyword::INNER,
+    Keyword::INTERSECT,
+    Keyword::JOIN,
+    Keyword::LEFT,
+    Keyword::LIMIT,
+    Keyword::NATURAL,
+    Keyword::OFFSET,
+    Keyword::ON,
+    Keyword::ORDER,
+    Keyword::OUTER,
+    Keyword::RIGHT,
+    Keyword::SELECT,
+    Keyword::TOP,
+    Keyword::UNION,
+    Keyword::USING,
+    Keyword::WHERE,
+    Keyword::WITH,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`
 /// can be parsed unambiguously without looking ahead.
-pub const RESERVED_FOR_COLUMN_ALIAS: &[AllKeyWords] = &[
-    AllKeyWords::EXCEPT,
-    AllKeyWords::FETCH,
-    AllKeyWords::FROM,
-    AllKeyWords::GROUP,
-    AllKeyWords::HAVING,
-    AllKeyWords::INTERSECT,
-    AllKeyWords::LIMIT,
-    AllKeyWords::OFFSET,
-    AllKeyWords::ORDER,
-    AllKeyWords::SELECT,
-    AllKeyWords::UNION,
-    AllKeyWords::WHERE,
-    AllKeyWords::WITH,
+pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
+    Keyword::EXCEPT,
+    Keyword::FETCH,
+    Keyword::FROM,
+    Keyword::GROUP,
+    Keyword::HAVING,
+    Keyword::INTERSECT,
+    Keyword::LIMIT,
+    Keyword::OFFSET,
+    Keyword::ORDER,
+    Keyword::SELECT,
+    Keyword::UNION,
+    Keyword::WHERE,
+    Keyword::WITH,
 ];

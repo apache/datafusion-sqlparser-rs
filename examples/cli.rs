@@ -23,8 +23,16 @@ fn main() {
     simple_logger::init().unwrap();
 
     let filename = std::env::args().nth(1).expect(
-        "No arguments provided!\n\n\
-         Usage: cargo run --example cli FILENAME.sql [--dialectname]",
+        r#"
+No arguments provided!
+
+Usage:
+$ cargo run --example cli FILENAME.sql [--dialectname]
+
+To serialize as JSON:
+$ cargo run --feature serde --example cli FILENAME.sql [--dialectname]
+
+"#,
     );
 
     let dialect: Box<dyn Dialect> = match std::env::args().nth(2).unwrap_or_default().as_ref() {
@@ -56,7 +64,18 @@ fn main() {
                     .collect::<Vec<_>>()
                     .join("\n")
             );
-            println!("Parse results:\n{:#?}", statements);
+
+            if cfg!(not(feature = "serde")) {
+                println!("Parse results:\n{:#?}", statements);
+            } else {
+                #[cfg(feature = "serde")]
+                {
+                    let serialized = serde_json::to_string_pretty(&statements).unwrap();
+
+                    println!("Serialized as JSON:\n{}", serialized);
+                }
+            }
+
             std::process::exit(0);
         }
         Err(e) => {

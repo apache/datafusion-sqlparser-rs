@@ -1342,7 +1342,7 @@ impl Parser {
     /// Parse a literal string
     pub fn parse_literal_string(&mut self) -> Result<String, ParserError> {
         match self.next_token() {
-            Token::SingleQuotedString(s) => Ok(s.clone()),
+            Token::SingleQuotedString(s) => Ok(s),
             unexpected => self.expected("literal string", unexpected),
         }
     }
@@ -1443,7 +1443,7 @@ impl Parser {
             //    character. When it sees such a <literal>, your DBMS will
             //    ignore the <separator> and treat the multiple strings as
             //    a single <literal>."
-            Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s.clone()))),
+            Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
             not_an_ident => {
                 if after_as {
                     return self.expected("an identifier after AS", not_an_ident);

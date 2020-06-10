@@ -487,7 +487,7 @@ impl Parser {
                 Keyword::HOUR => Ok(DateTimeField::Hour),
                 Keyword::MINUTE => Ok(DateTimeField::Minute),
                 Keyword::SECOND => Ok(DateTimeField::Second),
-                _ => self.expected("date/time field", Token::Word(w.clone()))?,
+                _ => self.expected("date/time field", Token::Word(w))?,
             },
             unexpected => self.expected("date/time field", unexpected),
         }

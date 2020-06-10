@@ -100,7 +100,8 @@ impl Parser {
 
             if parser.peek_token() == Token::EOF {
                 break;
-            } else if expecting_statement_delimiter {
+            }
+            if expecting_statement_delimiter {
                 return parser.expected("end of statement", parser.peek_token());
             }
 

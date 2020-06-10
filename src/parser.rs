@@ -526,12 +526,21 @@ impl Parser {
         // Following the string literal is a qualifier which indicates the units
         // of the duration specified in the string literal.
         //
-        // Note that PostgreSQL allows omitting the qualifier, but we currently
-        // require at least the leading field, in accordance with the ANSI spec.
-        let leading_field = self.parse_date_time_field()?;
+        // Note that PostgreSQL allows omitting the qualifier, so we provide
+        // this more general implemenation.
+        let leading_field = match self.peek_token() {
+            Some(Token::Word(kw))
+                if ["YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND"]
+                    .iter()
+                    .any(|d| kw.keyword == *d) =>
+            {
+                Some(self.parse_date_time_field()?)
+            }
+            _ => None,
+        };
 
         let (leading_precision, last_field, fsec_precision) =
-            if leading_field == DateTimeField::Second {
+            if leading_field == Some(DateTimeField::Second) {
                 // SQL mandates special syntax for `SECOND TO SECOND` literals.
                 // Instead of
                 //     `SECOND [(<leading precision>)] TO SECOND[(<fractional seconds precision>)]`

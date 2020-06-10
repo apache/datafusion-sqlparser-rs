@@ -11,10 +11,13 @@
 // limitations under the License.
 
 use super::*;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 /// The most complete variant of a `SELECT` query expression, optionally
 /// including `WITH`, `UNION` / other set operations, and `ORDER BY`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Query {
     /// WITH (common table expressions, or CTEs)
     pub ctes: Vec<Cte>,
@@ -55,6 +58,7 @@ impl fmt::Display for Query {
 /// A node in a tree, representing a "query body" expression, roughly:
 /// `SELECT ... [ {UNION|EXCEPT|INTERSECT} SELECT ...]`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SetExpr {
     /// Restricted SELECT .. FROM .. HAVING (no ORDER BY or set operations)
     Select(Box<Select>),
@@ -92,6 +96,7 @@ impl fmt::Display for SetExpr {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SetOperator {
     Union,
     Except,
@@ -112,6 +117,7 @@ impl fmt::Display for SetOperator {
 /// appear either as the only body item of an `SQLQuery`, or as an operand
 /// to a set operation like `UNION`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Select {
     pub distinct: bool,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
@@ -156,6 +162,7 @@ impl fmt::Display for Select {
 /// of the columns returned by the query. The parser does not validate that the
 /// number of columns in the query matches the number of columns in the query.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Cte {
     pub alias: TableAlias,
     pub query: Query,
@@ -169,6 +176,7 @@ impl fmt::Display for Cte {
 
 /// One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SelectItem {
     /// Any expression, not followed by `[ AS ] alias`
     UnnamedExpr(Expr),
@@ -192,6 +200,7 @@ impl fmt::Display for SelectItem {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TableWithJoins {
     pub relation: TableFactor,
     pub joins: Vec<Join>,
@@ -209,6 +218,7 @@ impl fmt::Display for TableWithJoins {
 
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TableFactor {
     Table {
         name: ObjectName,
@@ -274,6 +284,7 @@ impl fmt::Display for TableFactor {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TableAlias {
     pub name: Ident,
     pub columns: Vec<Ident>,
@@ -290,6 +301,7 @@ impl fmt::Display for TableAlias {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Join {
     pub relation: TableFactor,
     pub join_operator: JoinOperator,
@@ -355,6 +367,7 @@ impl fmt::Display for Join {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum JoinOperator {
     Inner(JoinConstraint),
     LeftOuter(JoinConstraint),
@@ -368,6 +381,7 @@ pub enum JoinOperator {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum JoinConstraint {
     On(Expr),
     Using(Vec<Ident>),
@@ -376,6 +390,7 @@ pub enum JoinConstraint {
 
 /// An `ORDER BY` expression
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct OrderByExpr {
     pub expr: Expr,
     /// Optional `ASC` or `DESC`
@@ -402,6 +417,7 @@ impl fmt::Display for OrderByExpr {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Offset {
     pub value: Expr,
     pub rows: OffsetRows,
@@ -415,6 +431,7 @@ impl fmt::Display for Offset {
 
 /// Stores the keyword after `OFFSET <number>`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum OffsetRows {
     /// Omitting ROW/ROWS is non-standard MySQL quirk.
     None,
@@ -433,6 +450,7 @@ impl fmt::Display for OffsetRows {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Fetch {
     pub with_ties: bool,
     pub percent: bool,
@@ -452,6 +470,7 @@ impl fmt::Display for Fetch {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Top {
     /// SQL semantic equivalent of LIMIT but with same structure as FETCH.
     pub with_ties: bool,
@@ -472,6 +491,7 @@ impl fmt::Display for Top {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Values(pub Vec<Vec<Expr>>);
 
 impl fmt::Display for Values {

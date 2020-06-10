@@ -138,7 +138,7 @@ impl Parser {
                 Keyword::BEGIN => Ok(self.parse_begin()?),
                 Keyword::COMMIT => Ok(self.parse_commit()?),
                 Keyword::ROLLBACK => Ok(self.parse_rollback()?),
-                _ => self.expected("an SQL statement", Token::Word(w.clone())),
+                _ => self.expected("an SQL statement", Token::Word(w)),
             },
             Token::LParen => {
                 self.prev_token();
@@ -1309,7 +1309,7 @@ impl Parser {
                 Keyword::TRUE => Ok(Value::Boolean(true)),
                 Keyword::FALSE => Ok(Value::Boolean(false)),
                 Keyword::NULL => Ok(Value::Null),
-                _ => self.expected("a concrete value", Token::Word(w.clone())),
+                _ => self.expected("a concrete value", Token::Word(w)),
             },
             // The call to n.parse() returns a bigdecimal when the
             // bigdecimal feature is enabled, and is otherwise a no-op

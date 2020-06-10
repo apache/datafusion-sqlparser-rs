@@ -847,7 +847,7 @@ impl Parser {
 
     /// Bail out if the current token is not an expected keyword, or consume it if it is
     pub fn expect_keyword(&mut self, expected: Keyword) -> Result<(), ParserError> {
-        if self.parse_keyword(expected.clone()) {
+        if self.parse_keyword(expected) {
             Ok(())
         } else {
             self.expected(format!("{:?}", &expected).as_str(), self.peek_token())
@@ -857,8 +857,8 @@ impl Parser {
     /// Bail out if the following tokens are not the expected sequence of
     /// keywords, or consume them if they are.
     pub fn expect_keywords(&mut self, expected: &[Keyword]) -> Result<(), ParserError> {
-        for kw in expected {
-            self.expect_keyword(kw.clone())?;
+        for &kw in expected {
+            self.expect_keyword(kw)?;
         }
         Ok(())
     }

@@ -66,7 +66,8 @@ $ cargo run --feature json_example --example cli FILENAME.sql [--dialectname]
             );
 
             if cfg!(feature = "json_example") {
-                #[cfg(feature = "json_example")] {
+                #[cfg(feature = "json_example")]
+                {
                     let serialized = serde_json::to_string_pretty(&statements).unwrap();
                     println!("Serialized as JSON:\n{}", serialized);
                 }

@@ -22,7 +22,7 @@ use matches::assert_matches;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::keywords::ALL_KEYWORDS;
-use sqlparser::parser::*;
+use sqlparser::parser::{Parser, ParserError};
 use sqlparser::test_utils::{all_dialects, expr_from_projection, number, only};
 
 #[test]
@@ -1367,10 +1367,12 @@ fn parse_window_functions() {
                avg(bar) OVER (ORDER BY a \
                RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING), \
                max(baz) OVER (ORDER BY a \
-               ROWS UNBOUNDED PRECEDING) \
+               ROWS UNBOUNDED PRECEDING), \
+               sum(qux) OVER (ORDER BY a \
+               GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING) \
                FROM foo";
     let select = verified_only_select(sql);
-    assert_eq!(4, select.projection.len());
+    assert_eq!(5, select.projection.len());
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("row_number")]),
@@ -2894,7 +2896,7 @@ fn parse_drop_index() {
 }
 
 #[test]
-fn keywords_sorted() {
+fn all_keywords_sorted() {
     // assert!(ALL_KEYWORDS.is_sorted())
     let mut copy = Vec::from(ALL_KEYWORDS);
     copy.sort();

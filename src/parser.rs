@@ -274,13 +274,13 @@ impl Parser {
         let over = if self.parse_keyword(Keyword::OVER) {
             // TBD: support window names (`OVER mywin`) in place of inline specification
             self.expect_token(&Token::LParen)?;
-            let partition_by = if self.parse_keywords(vec![Keyword::PARTITION, Keyword::BY]) {
+            let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
                 // a list of possibly-qualified column names
                 self.parse_comma_separated(Parser::parse_expr)?
             } else {
                 vec![]
             };
-            let order_by = if self.parse_keywords(vec![Keyword::ORDER, Keyword::BY]) {
+            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
                 self.parse_comma_separated(Parser::parse_order_by_expr)?
             } else {
                 vec![]
@@ -341,7 +341,7 @@ impl Parser {
 
     /// Parse `CURRENT ROW` or `{ <positive number> | UNBOUNDED } { PRECEDING | FOLLOWING }`
     pub fn parse_window_frame_bound(&mut self) -> Result<WindowFrameBound, ParserError> {
-        if self.parse_keywords(vec![Keyword::CURRENT, Keyword::ROW]) {
+        if self.parse_keywords(&[Keyword::CURRENT, Keyword::ROW]) {
             Ok(WindowFrameBound::CurrentRow)
         } else {
             let rows = if self.parse_keyword(Keyword::UNBOUNDED) {
@@ -434,7 +434,7 @@ impl Parser {
         } else {
             None
         };
-        let on_overflow = if self.parse_keywords(vec![Keyword::ON, Keyword::OVERFLOW]) {
+        let on_overflow = if self.parse_keywords(&[Keyword::ON, Keyword::OVERFLOW]) {
             if self.parse_keyword(Keyword::ERROR) {
                 Some(ListAggOnOverflow::Error)
             } else {
@@ -465,7 +465,7 @@ impl Parser {
         self.expect_token(&Token::RParen)?;
         // Once again ANSI SQL requires WITHIN GROUP, but Redshift does not. Again we choose the
         // more general implementation.
-        let within_group = if self.parse_keywords(vec![Keyword::WITHIN, Keyword::GROUP]) {
+        let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
             self.expect_token(&Token::LParen)?;
             self.expect_keywords(&[Keyword::ORDER, Keyword::BY])?;
             let order_by_expr = self.parse_comma_separated(Parser::parse_order_by_expr)?;
@@ -627,7 +627,7 @@ impl Parser {
                 Keyword::IS => {
                     if self.parse_keyword(Keyword::NULL) {
                         Ok(Expr::IsNull(Box::new(expr)))
-                    } else if self.parse_keywords(vec![Keyword::NOT, Keyword::NULL]) {
+                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
                         Ok(Expr::IsNotNull(Box::new(expr)))
                     } else {
                         self.expected("NULL or NOT NULL after IS", self.peek_token())
@@ -811,9 +811,9 @@ impl Parser {
 
     /// Look for an expected sequence of keywords and consume them if they exist
     #[must_use]
-    pub fn parse_keywords(&mut self, keywords: Vec<Keyword>) -> bool {
+    pub fn parse_keywords(&mut self, keywords: &[Keyword]) -> bool {
         let index = self.index;
-        for keyword in keywords {
+        for &keyword in keywords {
             if !self.parse_keyword(keyword) {
                 //println!("parse_keywords aborting .. did not find {}", keyword);
                 // reset index and return immediately
@@ -925,7 +925,7 @@ impl Parser {
             self.parse_create_table()
         } else if self.parse_keyword(Keyword::INDEX) {
             self.parse_create_index(false)
-        } else if self.parse_keywords(vec![Keyword::UNIQUE, Keyword::INDEX]) {
+        } else if self.parse_keywords(&[Keyword::UNIQUE, Keyword::INDEX]) {
             self.parse_create_index(true)
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
@@ -1003,7 +1003,7 @@ impl Parser {
         };
         // Many dialects support the non standard `IF EXISTS` clause and allow
         // specifying multiple objects to delete in a single statement
-        let if_exists = self.parse_keywords(vec![Keyword::IF, Keyword::EXISTS]);
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let names = self.parse_comma_separated(Parser::parse_object_name)?;
         let cascade = self.parse_keyword(Keyword::CASCADE);
         let restrict = self.parse_keyword(Keyword::RESTRICT);
@@ -1019,7 +1019,7 @@ impl Parser {
     }
 
     pub fn parse_create_index(&mut self, unique: bool) -> Result<Statement, ParserError> {
-        let if_not_exists = self.parse_keywords(vec![Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let index_name = self.parse_object_name()?;
         self.expect_keyword(Keyword::ON)?;
         let table_name = self.parse_object_name()?;
@@ -1034,7 +1034,7 @@ impl Parser {
     }
 
     pub fn parse_create_table(&mut self) -> Result<Statement, ParserError> {
-        let if_not_exists = self.parse_keywords(vec![Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name()?;
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
@@ -1106,13 +1106,13 @@ impl Parser {
             None
         };
 
-        let option = if self.parse_keywords(vec![Keyword::NOT, Keyword::NULL]) {
+        let option = if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
             ColumnOption::NotNull
         } else if self.parse_keyword(Keyword::NULL) {
             ColumnOption::Null
         } else if self.parse_keyword(Keyword::DEFAULT) {
             ColumnOption::Default(self.parse_expr()?)
-        } else if self.parse_keywords(vec![Keyword::PRIMARY, Keyword::KEY]) {
+        } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY]) {
             ColumnOption::Unique { is_primary: true }
         } else if self.parse_keyword(Keyword::UNIQUE) {
             ColumnOption::Unique { is_primary: false }
@@ -1124,10 +1124,10 @@ impl Parser {
             let mut on_delete = None;
             let mut on_update = None;
             loop {
-                if on_delete.is_none() && self.parse_keywords(vec![Keyword::ON, Keyword::DELETE]) {
+                if on_delete.is_none() && self.parse_keywords(&[Keyword::ON, Keyword::DELETE]) {
                     on_delete = Some(self.parse_referential_action()?);
                 } else if on_update.is_none()
-                    && self.parse_keywords(vec![Keyword::ON, Keyword::UPDATE])
+                    && self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
                 {
                     on_update = Some(self.parse_referential_action()?);
                 } else {
@@ -1157,11 +1157,11 @@ impl Parser {
             Ok(ReferentialAction::Restrict)
         } else if self.parse_keyword(Keyword::CASCADE) {
             Ok(ReferentialAction::Cascade)
-        } else if self.parse_keywords(vec![Keyword::SET, Keyword::NULL]) {
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::NULL]) {
             Ok(ReferentialAction::SetNull)
-        } else if self.parse_keywords(vec![Keyword::NO, Keyword::ACTION]) {
+        } else if self.parse_keywords(&[Keyword::NO, Keyword::ACTION]) {
             Ok(ReferentialAction::NoAction)
-        } else if self.parse_keywords(vec![Keyword::SET, Keyword::DEFAULT]) {
+        } else if self.parse_keywords(&[Keyword::SET, Keyword::DEFAULT]) {
             Ok(ReferentialAction::SetDefault)
         } else {
             self.expected(
@@ -1579,7 +1579,7 @@ impl Parser {
 
         let body = self.parse_query_body(0)?;
 
-        let order_by = if self.parse_keywords(vec![Keyword::ORDER, Keyword::BY]) {
+        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
             self.parse_comma_separated(Parser::parse_order_by_expr)?
         } else {
             vec![]
@@ -1718,7 +1718,7 @@ impl Parser {
             None
         };
 
-        let group_by = if self.parse_keywords(vec![Keyword::GROUP, Keyword::BY]) {
+        let group_by = if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
             self.parse_comma_separated(Parser::parse_expr)?
         } else {
             vec![]
@@ -2075,9 +2075,9 @@ impl Parser {
             None
         };
 
-        let nulls_first = if self.parse_keywords(vec![Keyword::NULLS, Keyword::FIRST]) {
+        let nulls_first = if self.parse_keywords(&[Keyword::NULLS, Keyword::FIRST]) {
             Some(true)
-        } else if self.parse_keywords(vec![Keyword::NULLS, Keyword::LAST]) {
+        } else if self.parse_keywords(&[Keyword::NULLS, Keyword::LAST]) {
             Some(false)
         } else {
             None
@@ -2103,7 +2103,7 @@ impl Parser {
 
         let percent = self.parse_keyword(Keyword::PERCENT);
 
-        let with_ties = self.parse_keywords(vec![Keyword::WITH, Keyword::TIES]);
+        let with_ties = self.parse_keywords(&[Keyword::WITH, Keyword::TIES]);
 
         Ok(Top {
             with_ties,
@@ -2150,7 +2150,7 @@ impl Parser {
         };
         let with_ties = if self.parse_keyword(Keyword::ONLY) {
             false
-        } else if self.parse_keywords(vec![Keyword::WITH, Keyword::TIES]) {
+        } else if self.parse_keywords(&[Keyword::WITH, Keyword::TIES]) {
             true
         } else {
             return self.expected("one of ONLY or WITH TIES", self.peek_token());
@@ -2190,12 +2190,12 @@ impl Parser {
         let mut modes = vec![];
         let mut required = false;
         loop {
-            let mode = if self.parse_keywords(vec![Keyword::ISOLATION, Keyword::LEVEL]) {
-                let iso_level = if self.parse_keywords(vec![Keyword::READ, Keyword::UNCOMMITTED]) {
+            let mode = if self.parse_keywords(&[Keyword::ISOLATION, Keyword::LEVEL]) {
+                let iso_level = if self.parse_keywords(&[Keyword::READ, Keyword::UNCOMMITTED]) {
                     TransactionIsolationLevel::ReadUncommitted
-                } else if self.parse_keywords(vec![Keyword::READ, Keyword::COMMITTED]) {
+                } else if self.parse_keywords(&[Keyword::READ, Keyword::COMMITTED]) {
                     TransactionIsolationLevel::ReadCommitted
-                } else if self.parse_keywords(vec![Keyword::REPEATABLE, Keyword::READ]) {
+                } else if self.parse_keywords(&[Keyword::REPEATABLE, Keyword::READ]) {
                     TransactionIsolationLevel::RepeatableRead
                 } else if self.parse_keyword(Keyword::SERIALIZABLE) {
                     TransactionIsolationLevel::Serializable
@@ -2203,9 +2203,9 @@ impl Parser {
                     self.expected("isolation level", self.peek_token())?
                 };
                 TransactionMode::IsolationLevel(iso_level)
-            } else if self.parse_keywords(vec![Keyword::READ, Keyword::ONLY]) {
+            } else if self.parse_keywords(&[Keyword::READ, Keyword::ONLY]) {
                 TransactionMode::AccessMode(TransactionAccessMode::ReadOnly)
-            } else if self.parse_keywords(vec![Keyword::READ, Keyword::WRITE]) {
+            } else if self.parse_keywords(&[Keyword::READ, Keyword::WRITE]) {
                 TransactionMode::AccessMode(TransactionAccessMode::ReadWrite)
             } else if required {
                 self.expected("transaction mode", self.peek_token())?

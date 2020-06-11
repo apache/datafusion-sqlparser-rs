@@ -1354,10 +1354,12 @@ fn parse_window_functions() {
                avg(bar) OVER (ORDER BY a \
                RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING), \
                max(baz) OVER (ORDER BY a \
-               ROWS UNBOUNDED PRECEDING) \
+               ROWS UNBOUNDED PRECEDING), \
+               sum(qux) OVER (ORDER BY a \
+               GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING) \
                FROM foo";
     let select = verified_only_select(sql);
-    assert_eq!(4, select.projection.len());
+    assert_eq!(5, select.projection.len());
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("row_number")]),

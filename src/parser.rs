@@ -310,11 +310,20 @@ impl Parser {
         }))
     }
 
+    pub fn parse_window_frame_units(&mut self) -> Result<WindowFrameUnits, ParserError> {
+        match self.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::ROWS => Ok(WindowFrameUnits::Rows),
+                Keyword::RANGE => Ok(WindowFrameUnits::Range),
+                Keyword::GROUPS => Ok(WindowFrameUnits::Range),
+                _ => self.expected("ROWS, RANGE, GROUPS", Token::Word(w))?,
+            },
+            unexpected => self.expected("ROWS, RANGE, GROUPS", unexpected),
+        }
+    }
+
     pub fn parse_window_frame(&mut self) -> Result<WindowFrame, ParserError> {
-        let units = match self.next_token() {
-            Token::Word(w) => w.value.to_ascii_uppercase().parse::<WindowFrameUnits>()?,
-            unexpected => return self.expected("ROWS, RANGE, GROUPS", unexpected),
-        };
+        let units = self.parse_window_frame_units()?;
         let (start_bound, end_bound) = if self.parse_keyword(Keyword::BETWEEN) {
             let start_bound = self.parse_window_frame_bound()?;
             self.expect_keyword(Keyword::AND)?;
@@ -1478,7 +1487,7 @@ impl Parser {
     }
 
     /// Parse a possibly qualified, possibly quoted identifier, e.g.
-    /// `foo` or `myschema.Keyword::table`
+    /// `foo` or `myschema."table"
     pub fn parse_object_name(&mut self) -> Result<ObjectName, ParserError> {
         let mut idents = vec![];
         loop {

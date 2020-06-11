@@ -447,10 +447,10 @@ define_keywords!(
 /// These keywords can't be used as a table alias, so that `FROM table_name alias`
 /// can be parsed unambiguously without looking ahead.
 pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
-    // Reserved as both a table and a column alias
-    Keyword::WHERE,
+    // Reserved as both a table and a column alias:
     Keyword::WITH,
     Keyword::SELECT,
+    Keyword::WHERE,
     Keyword::GROUP,
     Keyword::HAVING,
     Keyword::ORDER,
@@ -461,16 +461,15 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::UNION,
     Keyword::EXCEPT,
     Keyword::INTERSECT,
-    // Reserved only as a table alias in the `FROM`/`JOIN` clauses
-    Keyword::CROSS,
-    Keyword::EXCEPT,
-    Keyword::FULL,
-    Keyword::INNER,
-    Keyword::JOIN,
-    Keyword::LEFT,
-    Keyword::NATURAL,
+    // Reserved only as a table alias in the `FROM`/`JOIN` clauses:
     Keyword::ON,
+    Keyword::JOIN,
+    Keyword::INNER,
+    Keyword::CROSS,
+    Keyword::FULL,
+    Keyword::LEFT,
     Keyword::RIGHT,
+    Keyword::NATURAL,
     Keyword::USING,
     // for MSSQL-specific OUTER APPLY (seems reserved in most dialects)
     Keyword::OUTER,
@@ -479,19 +478,20 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
 /// Can't be used as a column alias, so that `SELECT <expr> alias`
 /// can be parsed unambiguously without looking ahead.
 pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
-    // Reserved as both a table and a column alias
-    Keyword::EXCEPT,
-    Keyword::FETCH,
+    // Reserved as both a table and a column alias:
+    Keyword::WITH,
+    Keyword::SELECT,
+    Keyword::WHERE,
     Keyword::GROUP,
     Keyword::HAVING,
-    Keyword::INTERSECT,
+    Keyword::ORDER,
+    Keyword::TOP,
     Keyword::LIMIT,
     Keyword::OFFSET,
-    Keyword::ORDER,
-    Keyword::SELECT,
+    Keyword::FETCH,
     Keyword::UNION,
-    Keyword::WHERE,
-    Keyword::WITH,
+    Keyword::EXCEPT,
+    Keyword::INTERSECT,
     // Reserved only as a column alias in the `SELECT` clause
     Keyword::FROM,
 ];

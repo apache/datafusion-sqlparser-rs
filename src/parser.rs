@@ -315,7 +315,7 @@ impl Parser {
             Token::Word(w) => match w.keyword {
                 Keyword::ROWS => Ok(WindowFrameUnits::Rows),
                 Keyword::RANGE => Ok(WindowFrameUnits::Range),
-                Keyword::GROUPS => Ok(WindowFrameUnits::Range),
+                Keyword::GROUPS => Ok(WindowFrameUnits::Groups),
                 _ => self.expected("ROWS, RANGE, GROUPS", Token::Word(w))?,
             },
             unexpected => self.expected("ROWS, RANGE, GROUPS", unexpected),

@@ -447,37 +447,41 @@ define_keywords!(
 /// These keywords can't be used as a table alias, so that `FROM table_name alias`
 /// can be parsed unambiguously without looking ahead.
 pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
-    Keyword::CROSS,
-    Keyword::EXCEPT,
-    Keyword::FETCH,
-    Keyword::FULL,
-    Keyword::GROUP,
-    Keyword::HAVING,
-    Keyword::INNER,
-    Keyword::INTERSECT,
-    Keyword::JOIN,
-    Keyword::LEFT,
-    Keyword::LIMIT,
-    Keyword::NATURAL,
-    Keyword::OFFSET,
-    Keyword::ON,
-    Keyword::ORDER,
-    Keyword::OUTER,
-    Keyword::RIGHT,
-    Keyword::SELECT,
-    Keyword::TOP,
-    Keyword::UNION,
-    Keyword::USING,
+    // Reserved as both a table and a column alias
     Keyword::WHERE,
     Keyword::WITH,
+    Keyword::SELECT,
+    Keyword::GROUP,
+    Keyword::HAVING,
+    Keyword::ORDER,
+    Keyword::TOP,
+    Keyword::LIMIT,
+    Keyword::OFFSET,
+    Keyword::FETCH,
+    Keyword::UNION,
+    Keyword::EXCEPT,
+    Keyword::INTERSECT,
+    // Reserved only as a table alias in the `FROM`/`JOIN` clauses
+    Keyword::CROSS,
+    Keyword::EXCEPT,
+    Keyword::FULL,
+    Keyword::INNER,
+    Keyword::JOIN,
+    Keyword::LEFT,
+    Keyword::NATURAL,
+    Keyword::ON,
+    Keyword::RIGHT,
+    Keyword::USING,
+    // for MSSQL-specific OUTER APPLY (seems reserved in most dialects)
+    Keyword::OUTER,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`
 /// can be parsed unambiguously without looking ahead.
 pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
+    // Reserved as both a table and a column alias
     Keyword::EXCEPT,
     Keyword::FETCH,
-    Keyword::FROM,
     Keyword::GROUP,
     Keyword::HAVING,
     Keyword::INTERSECT,
@@ -488,4 +492,6 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::UNION,
     Keyword::WHERE,
     Keyword::WITH,
+    // Reserved only as a column alias in the `SELECT` clause
+    Keyword::FROM,
 ];

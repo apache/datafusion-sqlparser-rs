@@ -199,11 +199,13 @@ impl Parser {
         return_ok_if_some!(self.maybe_parse(|parser| {
             match parser.parse_data_type()? {
                 DataType::Interval => parser.parse_literal_interval(),
-                // Single-quoted strings are parsed as custom data types, however this not desirable
-                // when we are handling input like `"NOT 'a' NOT LIKE 'b'"` because this will produce a
-                // TypedString instead of a SingleQuotedString. Further, this leads to issues where the
-                // same input will yield a BinaryOperator instead of the correct UnaryOperator. Here we
-                // handle that specific case by returning an error.
+                // PosgreSQL allows almost any identifier to be used as custom data type name,
+                // and we support that in `parse_data_type()`. But unlike Postgres we don't
+                // have a list of globally reserved keywords (since they vary across dialects),
+                // so given `NOT 'a' LIKE 'b'`, we'd accept `NOT` as a possible custom data type
+                // name, resulting in `NOT 'a'` being recognized as a `TypedString` instead of
+                // an unary negation `NOT ('a' LIKE 'b')`. To solve this, we don't accept the
+                // `type 'string'` syntax for the custom data types at all.
                 DataType::Custom(..) => parser_err!("dummy"),
                 data_type => Ok(Expr::TypedString {
                     data_type,
@@ -933,6 +935,8 @@ impl Parser {
         Ok(values)
     }
 
+    /// Run a parser method `f`, reverting back to the current position
+    /// if unsuccessful.
     #[must_use]
     fn maybe_parse<T, F>(&mut self, mut f: F) -> Option<T>
     where
@@ -1946,16 +1950,16 @@ impl Parser {
             //                   (1) an additional set of parens around a nested join
             //
 
-            // Check if the recently consumed '(' started a derived table, in which case we've
-            // parsed the subquery, followed by the closing ')', and the alias of the derived
-            // table. In the example above this is case (3).
-            //
-            // A parsing error from `parse_derived_table_factor` indicates that the '(' we've
-            // recently consumed does not start a derived table (cases 1, 2, or 4). Ignore the
-            // error and back up to where we after the opening '('.
+            // If the recently consumed '(' starts a derived table, the call to
+            // `parse_derived_table_factor` below will return success after parsing the
+            // subquery, followed by the closing ')', and the alias of the derived table.
+            // In the example above this is case (3).
             return_ok_if_some!(
                 self.maybe_parse(|parser| parser.parse_derived_table_factor(NotLateral))
             );
+            // A parsing error from `parse_derived_table_factor` indicates that the '(' we've
+            // recently consumed does not start a derived table (cases 1, 2, or 4).
+            // `maybe_parse` will ignore such an error and rewind to be after the opening '('.
 
             // Inside the parentheses we expect to find a table factor
             // followed by some joins or another level of nesting.

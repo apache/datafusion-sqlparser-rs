@@ -29,8 +29,8 @@ No arguments provided!
 Usage:
 $ cargo run --example cli FILENAME.sql [--dialectname]
 
-To serialize as JSON:
-$ cargo run --feature serde --example cli FILENAME.sql [--dialectname]
+To print the parse results as JSON:
+$ cargo run --feature json_example --example cli FILENAME.sql [--dialectname]
 
 "#,
     );
@@ -65,15 +65,13 @@ $ cargo run --feature serde --example cli FILENAME.sql [--dialectname]
                     .join("\n")
             );
 
-            if cfg!(not(feature = "serde")) {
-                println!("Parse results:\n{:#?}", statements);
-            } else {
-                #[cfg(feature = "serde")]
-                {
+            if cfg!(feature = "json_example") {
+                #[cfg(feature = "json_example")] {
                     let serialized = serde_json::to_string_pretty(&statements).unwrap();
-
                     println!("Serialized as JSON:\n{}", serialized);
                 }
+            } else {
+                println!("Parse results:\n{:#?}", statements);
             }
 
             std::process::exit(0);

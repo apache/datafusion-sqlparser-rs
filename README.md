@@ -40,20 +40,10 @@ This outputs
 AST: [Query(Query { ctes: [], body: Select(Select { distinct: false, projection: [UnnamedExpr(Identifier("a")), UnnamedExpr(Identifier("b")), UnnamedExpr(Value(Long(123))), UnnamedExpr(Function(Function { name: ObjectName(["myfunc"]), args: [Identifier("b")], over: None, distinct: false }))], from: [TableWithJoins { relation: Table { name: ObjectName(["table_1"]), alias: None, args: [], with_hints: [] }, joins: [] }], selection: Some(BinaryOp { left: BinaryOp { left: Identifier("a"), op: Gt, right: Identifier("b") }, op: And, right: BinaryOp { left: Identifier("b"), op: Lt, right: Value(Long(100)) } }), group_by: [], having: None }), order_by: [OrderByExpr { expr: Identifier("a"), asc: Some(false) }, OrderByExpr { expr: Identifier("b"), asc: None }], limit: None, offset: None, fetch: None })]
 ```
 
-
-To simply try in CLI:
+## Command line
+To parse a file and dump the results as JSON:
 ```
-$ cargo run --example cli FILENAME.sql [--dialectname]
-
-[--dialectname]
---ansi         => AnsiDialect {}
---postgres     => PostgreSqlDialect {}
---ms           => MsSqlDialect {}
---generic | "" => GenericDialect {}
-```
-To serialize as JSON, just add `--feature serde`
-```
-$ cargo run --features serde --example cli FILENAME.sql [--dialectname]
+$ cargo run --feature json_example --example cli FILENAME.sql [--dialectname]
 ```
 
 ## SQL compliance

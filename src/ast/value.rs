@@ -33,12 +33,6 @@ pub enum Value {
     HexStringLiteral(String),
     /// Boolean value true or false
     Boolean(bool),
-    /// `DATE '...'` literals
-    Date(String),
-    /// `TIME '...'` literals
-    Time(String),
-    /// `TIMESTAMP '...'` literals
-    Timestamp(String),
     /// INTERVAL literals, roughly in the following format:
     /// `INTERVAL '<value>' [ <leading_field> [ (<leading_precision>) ] ]
     /// [ TO <last_field> [ (<fractional_seconds_precision>) ] ]`,
@@ -70,9 +64,6 @@ impl fmt::Display for Value {
             Value::NationalStringLiteral(v) => write!(f, "N'{}'", v),
             Value::HexStringLiteral(v) => write!(f, "X'{}'", v),
             Value::Boolean(v) => write!(f, "{}", v),
-            Value::Date(v) => write!(f, "DATE '{}'", escape_single_quote_string(v)),
-            Value::Time(v) => write!(f, "TIME '{}'", escape_single_quote_string(v)),
-            Value::Timestamp(v) => write!(f, "TIMESTAMP '{}'", escape_single_quote_string(v)),
             Value::Interval {
                 value,
                 leading_field: Some(DateTimeField::Second),

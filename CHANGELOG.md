@@ -13,7 +13,9 @@ Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented 
 - Change `Ident` (previously a simple `String`) to store the parsed (unquoted) `value` of the identifier and the `quote_style` separately (#143) - thanks @apparebit!
 - Support Snowflake's `FROM (table_name)` (#155) - thanks @eyalleshem!
 - Add line and column number to TokenizerError (#194) - thanks @Dandandan!
+- Use Token::EOF instead of Option<Token> (#195)
 - Make the units keyword following `INTERVAL '...'` optional (#184) - thanks @maxcountryman!
+- Generalize `DATE`/`TIME`/`TIMESTAMP` literals representation in the AST (`TypedString { data_type, value }`) and allow `DATE` and other keywords to be used as identifiers when not followed by a string (#187) - thanks @maxcountryman!
 
 ### Added
 - Support MSSQL `TOP (<N>) [ PERCENT ] [ WITH TIES ]` (#150) - thanks @alexkyllo!
@@ -26,6 +28,7 @@ Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented 
 - Support `LISTAGG()` (#174) - thanks @maxcountryman!
 - Support the string concatentation operator `||` (#178) - thanks @Dandandan!
 - Support bitwise AND (`&`), OR (`|`), XOR (`^`) (#181) - thanks @Dandandan!
+- Add serde support to AST structs and enums (#196) - thanks @panarch!
 
 ### Fixed
 - Report an error for unterminated string literals (#165)

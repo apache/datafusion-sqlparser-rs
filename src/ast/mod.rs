@@ -388,22 +388,6 @@ impl fmt::Display for WindowFrameUnits {
     }
 }
 
-impl FromStr for WindowFrameUnits {
-    type Err = ParserError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "ROWS" => Ok(WindowFrameUnits::Rows),
-            "RANGE" => Ok(WindowFrameUnits::Range),
-            "GROUPS" => Ok(WindowFrameUnits::Groups),
-            _ => Err(ParserError::ParserError(format!(
-                "Expected ROWS, RANGE, or GROUPS, found: {}",
-                s
-            ))),
-        }
-    }
-}
-
 /// Specifies [WindowFrame]'s `start_bound` and `end_bound`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

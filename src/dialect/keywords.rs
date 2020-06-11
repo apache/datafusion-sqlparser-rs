@@ -41,12 +41,24 @@ macro_rules! define_keywords {
     ($(
         $ident:ident $(= $string_keyword:expr)?
     ),*) => {
-        $(kw_def!($ident $(= $string_keyword)?);)*
+        #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
+        #[allow(non_camel_case_types)]
+        pub enum Keyword {
+            NoKeyword,
+            $($ident),*
+        }
 
+        pub const ALL_KEYWORDS_INDEX: &[Keyword] = &[
+            $(Keyword::$ident),*
+        ];
+
+        $(kw_def!($ident $(= $string_keyword)?);)*
         pub const ALL_KEYWORDS: &[&str] = &[
             $($ident),*
         ];
-    }
+
+    };
+
 }
 
 // The following keywords should be sorted to be able to match using binary search
@@ -434,20 +446,52 @@ define_keywords!(
 
 /// These keywords can't be used as a table alias, so that `FROM table_name alias`
 /// can be parsed unambiguously without looking ahead.
-pub const RESERVED_FOR_TABLE_ALIAS: &[&str] = &[
+pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     // Reserved as both a table and a column alias:
-    WITH, SELECT, WHERE, GROUP, HAVING, ORDER, TOP, LIMIT, OFFSET, FETCH, UNION, EXCEPT, INTERSECT,
+    Keyword::WITH,
+    Keyword::SELECT,
+    Keyword::WHERE,
+    Keyword::GROUP,
+    Keyword::HAVING,
+    Keyword::ORDER,
+    Keyword::TOP,
+    Keyword::LIMIT,
+    Keyword::OFFSET,
+    Keyword::FETCH,
+    Keyword::UNION,
+    Keyword::EXCEPT,
+    Keyword::INTERSECT,
     // Reserved only as a table alias in the `FROM`/`JOIN` clauses:
-    ON, JOIN, INNER, CROSS, FULL, LEFT, RIGHT, NATURAL, USING,
+    Keyword::ON,
+    Keyword::JOIN,
+    Keyword::INNER,
+    Keyword::CROSS,
+    Keyword::FULL,
+    Keyword::LEFT,
+    Keyword::RIGHT,
+    Keyword::NATURAL,
+    Keyword::USING,
     // for MSSQL-specific OUTER APPLY (seems reserved in most dialects)
-    OUTER,
+    Keyword::OUTER,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`
 /// can be parsed unambiguously without looking ahead.
-pub const RESERVED_FOR_COLUMN_ALIAS: &[&str] = &[
+pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     // Reserved as both a table and a column alias:
-    WITH, SELECT, WHERE, GROUP, HAVING, ORDER, LIMIT, OFFSET, FETCH, UNION, EXCEPT, INTERSECT,
-    // Reserved only as a column alias in the `SELECT` clause:
-    FROM,
+    Keyword::WITH,
+    Keyword::SELECT,
+    Keyword::WHERE,
+    Keyword::GROUP,
+    Keyword::HAVING,
+    Keyword::ORDER,
+    Keyword::TOP,
+    Keyword::LIMIT,
+    Keyword::OFFSET,
+    Keyword::FETCH,
+    Keyword::UNION,
+    Keyword::EXCEPT,
+    Keyword::INTERSECT,
+    // Reserved only as a column alias in the `SELECT` clause
+    Keyword::FROM,
 ];

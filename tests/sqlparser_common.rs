@@ -21,8 +21,8 @@
 use matches::assert_matches;
 
 use sqlparser::ast::*;
-use sqlparser::dialect::keywords::*;
-use sqlparser::parser::*;
+use sqlparser::dialect::keywords::ALL_KEYWORDS;
+use sqlparser::parser::{Parser, ParserError};
 use sqlparser::test_utils::{all_dialects, expr_from_projection, number, only};
 
 #[test]

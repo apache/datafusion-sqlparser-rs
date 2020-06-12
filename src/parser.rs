@@ -1006,7 +1006,6 @@ impl Parser {
         let table_name = self.parse_object_name()?;
         let (columns, constraints) = self.parse_columns()?;
         self.expect_keywords(&[Keyword::STORED, Keyword::AS])?;
-        // We probably shouldn't parse the file format as an identifier..
         let file_format = self.parse_file_format()?;
 
         self.expect_keyword(Keyword::LOCATION)?;

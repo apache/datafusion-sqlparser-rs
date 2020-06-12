@@ -1006,7 +1006,11 @@ impl Parser {
         let table_name = self.parse_object_name()?;
         let (columns, constraints) = self.parse_columns()?;
         self.expect_keywords(&[Keyword::STORED, Keyword::AS])?;
-        let file_format = self.parse_identifier()?.value.to_ascii_uppercase().parse::<FileFormat>()?;
+        let file_format = self
+            .parse_identifier()?
+            .value
+            .to_ascii_uppercase()
+            .parse::<FileFormat>()?;
 
         self.expect_keyword(Keyword::LOCATION)?;
         let location = self.parse_literal_string()?;

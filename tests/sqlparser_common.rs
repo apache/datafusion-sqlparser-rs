@@ -1290,6 +1290,24 @@ fn parse_create_external_table() {
 }
 
 #[test]
+fn parse_create_external_table_lowercase() {
+    let sql = "create external table uk_cities (\
+               name varchar(100) not null,\
+               lat double null,\
+               lng double)\
+               stored as parquet location '/tmp/example.csv'";
+    let ast = one_statement_parses_to(
+        sql,
+        "CREATE EXTERNAL TABLE uk_cities (\
+         name character varying(100) NOT NULL, \
+         lat double NULL, \
+         lng double) \
+         STORED AS PARQUET LOCATION '/tmp/example.csv'",
+    );
+    assert_matches!(ast, Statement::CreateTable{..});
+}
+
+#[test]
 fn parse_create_table_empty() {
     // Zero-column tables are weird, but supported by at least PostgreSQL.
     let _ = verified_stmt("CREATE TABLE t ()");

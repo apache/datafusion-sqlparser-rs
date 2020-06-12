@@ -1009,7 +1009,6 @@ impl Parser {
         // We probably shouldn't parse the file format as an identifier..
         let file_format = self.parse_file_format()?;
 
-
         self.expect_keyword(Keyword::LOCATION)?;
         let location = self.parse_literal_string()?;
 
@@ -1040,7 +1039,6 @@ impl Parser {
             unexpected => self.expected("fileformat", unexpected),
         }
     }
-
 
     pub fn parse_create_view(&mut self) -> Result<Statement, ParserError> {
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);

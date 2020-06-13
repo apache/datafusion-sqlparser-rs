@@ -908,7 +908,7 @@ fn parse_limit_accepts_all() {
 
 #[test]
 fn parse_cast() {
-    let sql = "SELECT CAST(id AS bigint) FROM customer";
+    let sql = "SELECT CAST(id AS BIGINT) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
@@ -919,19 +919,19 @@ fn parse_cast() {
     );
     one_statement_parses_to(
         "SELECT CAST(id AS BIGINT) FROM customer",
-        "SELECT CAST(id AS bigint) FROM customer",
+        "SELECT CAST(id AS BIGINT) FROM customer",
     );
 
-    verified_stmt("SELECT CAST(id AS numeric) FROM customer");
+    verified_stmt("SELECT CAST(id AS NUMERIC) FROM customer");
 
     one_statement_parses_to(
-        "SELECT CAST(id AS dec) FROM customer",
-        "SELECT CAST(id AS numeric) FROM customer",
+        "SELECT CAST(id AS DEC) FROM customer",
+        "SELECT CAST(id AS NUMERIC) FROM customer",
     );
 
     one_statement_parses_to(
-        "SELECT CAST(id AS decimal) FROM customer",
-        "SELECT CAST(id AS numeric) FROM customer",
+        "SELECT CAST(id AS DECIMAL) FROM customer",
+        "SELECT CAST(id AS NUMERIC) FROM customer",
     );
 }
 
@@ -1027,12 +1027,12 @@ fn parse_create_table() {
     let ast = one_statement_parses_to(
         sql,
         "CREATE TABLE uk_cities (\
-         name character varying(100) NOT NULL, \
-         lat double NULL, \
-         lng double, \
-         constrained int NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0), \
-         ref int REFERENCES othertable (a, b), \
-         ref2 int REFERENCES othertable2 ON DELETE CASCADE ON UPDATE NO ACTION)",
+         name CHARACTER VARYING(100) NOT NULL, \
+         lat DOUBLE NULL, \
+         lng DOUBLE, \
+         constrained INT NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0), \
+         ref INT REFERENCES othertable (a, b), \
+         ref2 INT REFERENCES othertable2 ON DELETE CASCADE ON UPDATE NO ACTION)",
     );
     match ast {
         Statement::CreateTable {
@@ -1193,7 +1193,7 @@ fn parse_create_table_with_on_delete_on_update_2in_any_order() -> Result<(), Par
 
 #[test]
 fn parse_create_table_with_options() {
-    let sql = "CREATE TABLE t (c int) WITH (foo = 'bar', a = 123)";
+    let sql = "CREATE TABLE t (c INT) WITH (foo = 'bar', a = 123)";
     match verified_stmt(sql) {
         Statement::CreateTable { with_options, .. } => {
             assert_eq!(
@@ -1217,7 +1217,7 @@ fn parse_create_table_with_options() {
 #[test]
 fn parse_create_table_trailing_comma() {
     let sql = "CREATE TABLE foo (bar int,)";
-    all_dialects().one_statement_parses_to(sql, "CREATE TABLE foo (bar int)");
+    all_dialects().one_statement_parses_to(sql, "CREATE TABLE foo (bar INT)");
 }
 
 #[test]
@@ -1230,9 +1230,9 @@ fn parse_create_external_table() {
     let ast = one_statement_parses_to(
         sql,
         "CREATE EXTERNAL TABLE uk_cities (\
-         name character varying(100) NOT NULL, \
-         lat double NULL, \
-         lng double) \
+         name CHARACTER VARYING(100) NOT NULL, \
+         lat DOUBLE NULL, \
+         lng DOUBLE) \
          STORED AS TEXTFILE LOCATION '/tmp/example.csv'",
     );
     match ast {
@@ -1299,9 +1299,9 @@ fn parse_create_external_table_lowercase() {
     let ast = one_statement_parses_to(
         sql,
         "CREATE EXTERNAL TABLE uk_cities (\
-         name character varying(100) NOT NULL, \
-         lat double NULL, \
-         lng double) \
+         name CHARACTER VARYING(100) NOT NULL, \
+         lat DOUBLE NULL, \
+         lng DOUBLE) \
          STORED AS PARQUET LOCATION '/tmp/example.csv'",
     );
     assert_matches!(ast, Statement::CreateTable{..});
@@ -1339,7 +1339,7 @@ fn parse_alter_table_constraints() {
             }
             _ => unreachable!(),
         }
-        verified_stmt(&format!("CREATE TABLE foo (id int, {})", constraint_text));
+        verified_stmt(&format!("CREATE TABLE foo (id INT, {})", constraint_text));
     }
 }
 
@@ -1457,7 +1457,7 @@ fn parse_literal_string() {
 
 #[test]
 fn parse_literal_date() {
-    let sql = "SELECT date '1999-01-01'";
+    let sql = "SELECT DATE '1999-01-01'";
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
@@ -1470,7 +1470,7 @@ fn parse_literal_date() {
 
 #[test]
 fn parse_literal_time() {
-    let sql = "SELECT time '01:23:34'";
+    let sql = "SELECT TIME '01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
@@ -1483,7 +1483,7 @@ fn parse_literal_time() {
 
 #[test]
 fn parse_literal_timestamp() {
-    let sql = "SELECT timestamp '1999-01-01 01:23:34'";
+    let sql = "SELECT TIMESTAMP '1999-01-01 01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
@@ -2289,7 +2289,7 @@ fn parse_multiple_statements() {
     );
     test_with("DELETE FROM foo", "SELECT", " bar");
     test_with("INSERT INTO foo VALUES (1)", "SELECT", " bar");
-    test_with("CREATE TABLE foo (baz int)", "SELECT", " bar");
+    test_with("CREATE TABLE foo (baz INT)", "SELECT", " bar");
     // Make sure that empty statements do not cause an error:
     let res = parse_sql_statements(";;");
     assert_eq!(0, res.unwrap().len());

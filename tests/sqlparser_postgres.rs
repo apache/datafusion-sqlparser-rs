@@ -124,7 +124,7 @@ fn parse_create_table_with_defaults() {
                             ColumnOptionDef {
                                 name: None,
                                 option: ColumnOption::Default(
-                                    pg().verified_expr("CAST(now() AS text)")
+                                    pg().verified_expr("CAST(now() AS TEXT)")
                                 )
                             },
                             ColumnOptionDef {
@@ -192,25 +192,25 @@ fn parse_create_table_from_pg_dump() {
             info text[],
             address_id smallint NOT NULL,
             activebool boolean DEFAULT true NOT NULL,
-            create_date date DEFAULT now()::date NOT NULL,
-            create_date1 date DEFAULT 'now'::text::date NOT NULL,
+            create_date date DEFAULT now()::DATE NOT NULL,
+            create_date1 date DEFAULT 'now'::TEXT::date NOT NULL,
             last_update timestamp without time zone DEFAULT now(),
             release_year public.year,
             active integer
         )";
     pg().one_statement_parses_to(sql, "CREATE TABLE public.customer (\
-            customer_id int DEFAULT nextval(CAST('public.customer_customer_id_seq' AS regclass)) NOT NULL, \
-            store_id smallint NOT NULL, \
-            first_name character varying(45) NOT NULL, \
-            last_name character varying(45) NOT NULL, \
-            info text[], \
-            address_id smallint NOT NULL, \
-            activebool boolean DEFAULT true NOT NULL, \
-            create_date date DEFAULT CAST(now() AS date) NOT NULL, \
-            create_date1 date DEFAULT CAST(CAST('now' AS text) AS date) NOT NULL, \
-            last_update timestamp DEFAULT now(), \
+            customer_id INT DEFAULT nextval(CAST('public.customer_customer_id_seq' AS REGCLASS)) NOT NULL, \
+            store_id SMALLINT NOT NULL, \
+            first_name CHARACTER VARYING(45) NOT NULL, \
+            last_name CHARACTER VARYING(45) NOT NULL, \
+            info TEXT[], \
+            address_id SMALLINT NOT NULL, \
+            activebool BOOLEAN DEFAULT true NOT NULL, \
+            create_date DATE DEFAULT CAST(now() AS DATE) NOT NULL, \
+            create_date1 DATE DEFAULT CAST(CAST('now' AS TEXT) AS DATE) NOT NULL, \
+            last_update TIMESTAMP DEFAULT now(), \
             release_year public.year, \
-            active int\
+            active INT\
         )");
 }
 
@@ -218,10 +218,10 @@ fn parse_create_table_from_pg_dump() {
 fn parse_create_table_with_inherit() {
     let sql = "\
                CREATE TABLE bazaar.settings (\
-               settings_id uuid PRIMARY KEY DEFAULT uuid_generate_v4() NOT NULL, \
-               user_id uuid UNIQUE, \
-               value text[], \
-               use_metric boolean DEFAULT true\
+               settings_id UUID PRIMARY KEY DEFAULT uuid_generate_v4() NOT NULL, \
+               user_id UUID UNIQUE, \
+               value TEXT[], \
+               use_metric BOOLEAN DEFAULT true\
                )";
     pg().verified_stmt(sql);
 }

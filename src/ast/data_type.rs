@@ -72,36 +72,36 @@ pub enum DataType {
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DataType::Char(size) => format_type_with_optional_length(f, "char", size),
+            DataType::Char(size) => format_type_with_optional_length(f, "CHAR", size),
             DataType::Varchar(size) => {
-                format_type_with_optional_length(f, "character varying", size)
+                format_type_with_optional_length(f, "CHARACTER VARYING", size)
             }
-            DataType::Uuid => write!(f, "uuid"),
-            DataType::Clob(size) => write!(f, "clob({})", size),
-            DataType::Binary(size) => write!(f, "binary({})", size),
-            DataType::Varbinary(size) => write!(f, "varbinary({})", size),
-            DataType::Blob(size) => write!(f, "blob({})", size),
+            DataType::Uuid => write!(f, "UUID"),
+            DataType::Clob(size) => write!(f, "CLOB({})", size),
+            DataType::Binary(size) => write!(f, "BINARY({})", size),
+            DataType::Varbinary(size) => write!(f, "VARBINARY({})", size),
+            DataType::Blob(size) => write!(f, "BLOB({})", size),
             DataType::Decimal(precision, scale) => {
                 if let Some(scale) = scale {
-                    write!(f, "numeric({},{})", precision.unwrap(), scale)
+                    write!(f, "NUMERIC({},{})", precision.unwrap(), scale)
                 } else {
-                    format_type_with_optional_length(f, "numeric", precision)
+                    format_type_with_optional_length(f, "NUMERIC", precision)
                 }
             }
-            DataType::Float(size) => format_type_with_optional_length(f, "float", size),
-            DataType::SmallInt => write!(f, "smallint"),
-            DataType::Int => write!(f, "int"),
-            DataType::BigInt => write!(f, "bigint"),
-            DataType::Real => write!(f, "real"),
-            DataType::Double => write!(f, "double"),
-            DataType::Boolean => write!(f, "boolean"),
-            DataType::Date => write!(f, "date"),
-            DataType::Time => write!(f, "time"),
-            DataType::Timestamp => write!(f, "timestamp"),
-            DataType::Interval => write!(f, "interval"),
-            DataType::Regclass => write!(f, "regclass"),
-            DataType::Text => write!(f, "text"),
-            DataType::Bytea => write!(f, "bytea"),
+            DataType::Float(size) => format_type_with_optional_length(f, "FLOAT", size),
+            DataType::SmallInt => write!(f, "SMALLINT"),
+            DataType::Int => write!(f, "INT"),
+            DataType::BigInt => write!(f, "BIGINT"),
+            DataType::Real => write!(f, "REAL"),
+            DataType::Double => write!(f, "DOUBLE"),
+            DataType::Boolean => write!(f, "BOOLEAN"),
+            DataType::Date => write!(f, "DATE"),
+            DataType::Time => write!(f, "TIME"),
+            DataType::Timestamp => write!(f, "TIMESTAMP"),
+            DataType::Interval => write!(f, "INTERVAL"),
+            DataType::Regclass => write!(f, "REGCLASS"),
+            DataType::Text => write!(f, "TEXT"),
+            DataType::Bytea => write!(f, "BYTEA"),
             DataType::Array(ty) => write!(f, "{}[]", ty),
             DataType::Custom(ty) => write!(f, "{}", ty),
         }

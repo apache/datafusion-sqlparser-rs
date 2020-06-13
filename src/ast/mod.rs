@@ -835,29 +835,6 @@ impl fmt::Display for FileFormat {
     }
 }
 
-use crate::parser::ParserError;
-use std::str::FromStr;
-impl FromStr for FileFormat {
-    type Err = ParserError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::FileFormat::*;
-        match s {
-            "TEXTFILE" => Ok(TEXTFILE),
-            "SEQUENCEFILE" => Ok(SEQUENCEFILE),
-            "ORC" => Ok(ORC),
-            "PARQUET" => Ok(PARQUET),
-            "AVRO" => Ok(AVRO),
-            "RCFILE" => Ok(RCFILE),
-            "JSONFILE" => Ok(JSONFILE),
-            _ => Err(ParserError::ParserError(format!(
-                "Unexpected file format: {}",
-                s
-            ))),
-        }
-    }
-}
-
 /// A `LISTAGG` invocation `LISTAGG( [ DISTINCT ] <expr>[, <separator> ] [ON OVERFLOW <on_overflow>] ) )
 /// [ WITHIN GROUP (ORDER BY <within_group1>[, ...] ) ]`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

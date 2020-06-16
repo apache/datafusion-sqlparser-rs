@@ -23,56 +23,34 @@ use std::fmt;
 pub enum AlterTableOperation {
     /// `ADD <table_constraint>`
     AddConstraint(TableConstraint),
-    AddColumn {
-        has_column_identifier: bool,
-        column_def: ColumnDef,
-    },
+    /// `ADD [ COLUMN ] <column-def>`
+    AddColumn { column_def: ColumnDef },
     /// TODO: implement `DROP CONSTRAINT <name>`
-    DropConstraint {
-        name: Ident,
-    },
+    DropConstraint { name: Ident },
+    /// `RENAME [ COLUMN ] <column-name> TO <column-name>`
     RenameColumn {
-        has_column_identifier: bool,
         old_column_name: Ident,
         new_column_name: Ident,
     },
-    RenameTable {
-        table_name: Ident,
-    },
+    /// `RENAME TO <table-name>`
+    RenameTable { table_name: Ident },
 }
 
 impl fmt::Display for AlterTableOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             AlterTableOperation::AddConstraint(c) => write!(f, "ADD {}", c),
-            AlterTableOperation::AddColumn {
-                has_column_identifier,
-                column_def,
-            } => write!(
-                f,
-                "ADD {}{}",
-                if *has_column_identifier {
-                    "COLUMN "
-                } else {
-                    ""
-                },
-                column_def.to_string()
-            ),
+            AlterTableOperation::AddColumn { column_def } => {
+                write!(f, "ADD COLUMN {}", column_def.to_string())
+            }
             AlterTableOperation::DropConstraint { name } => write!(f, "DROP CONSTRAINT {}", name),
             AlterTableOperation::RenameColumn {
-                has_column_identifier,
                 old_column_name,
                 new_column_name,
             } => write!(
                 f,
-                "RENAME {}{} TO {}",
-                if *has_column_identifier {
-                    "COLUMN "
-                } else {
-                    ""
-                },
-                old_column_name,
-                new_column_name
+                "RENAME COLUMN {} TO {}",
+                old_column_name, new_column_name
             ),
             AlterTableOperation::RenameTable { table_name } => {
                 write!(f, "RENAME TO {}", table_name)

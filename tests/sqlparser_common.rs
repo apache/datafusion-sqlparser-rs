@@ -1319,15 +1319,11 @@ fn parse_alter_table() {
     match verified_stmt(add_column) {
         Statement::AlterTable {
             name,
-            operation:
-                AlterTableOperation::AddColumn {
-                    has_column_identifier,
-                    column_def,
-                },
+            operation: AlterTableOperation::AddColumn { column_def },
         } => {
             assert_eq!("tab", name.to_string());
-            assert_eq!(has_column_identifier, true);
             assert_eq!("foo", column_def.name.to_string());
+            assert_eq!("TEXT", column_def.data_type.to_string());
         }
         _ => unreachable!(),
     };
@@ -1350,13 +1346,11 @@ fn parse_alter_table() {
             name,
             operation:
                 AlterTableOperation::RenameColumn {
-                    has_column_identifier,
                     old_column_name,
                     new_column_name,
                 },
         } => {
             assert_eq!("tab", name.to_string());
-            assert_eq!(has_column_identifier, true);
             assert_eq!(old_column_name.to_string(), "foo");
             assert_eq!(new_column_name.to_string(), "new_foo");
         }

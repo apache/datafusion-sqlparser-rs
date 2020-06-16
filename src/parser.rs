@@ -1341,33 +1341,26 @@ impl Parser {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
                 AlterTableOperation::AddConstraint(constraint)
             } else {
-                let has_column_identifier = self.parse_keyword(Keyword::COLUMN);
+                let _ = self.parse_keyword(Keyword::COLUMN);
                 let column_def = self.parse_column()?;
-                AlterTableOperation::AddColumn {
-                    has_column_identifier,
-                    column_def,
-                }
+                AlterTableOperation::AddColumn { column_def }
             }
         } else if self.parse_keyword(Keyword::RENAME) {
             if self.parse_keyword(Keyword::TO) {
                 let table_name = self.parse_identifier()?;
                 AlterTableOperation::RenameTable { table_name }
             } else {
-                let has_column_identifier = self.parse_keyword(Keyword::COLUMN);
+                let _ = self.parse_keyword(Keyword::COLUMN);
                 let old_column_name = self.parse_identifier()?;
                 self.expect_keyword(Keyword::TO)?;
                 let new_column_name = self.parse_identifier()?;
                 AlterTableOperation::RenameColumn {
-                    has_column_identifier,
                     old_column_name,
                     new_column_name,
                 }
             }
         } else {
-            return self.expected(
-                "ADD,RENAME TO or RENAME after ALTER TABLE",
-                self.peek_token(),
-            );
+            return self.expected("ADD or RENAME after ALTER TABLE", self.peek_token());
         };
         Ok(Statement::AlterTable {
             name: table_name,

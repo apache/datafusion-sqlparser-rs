@@ -340,6 +340,7 @@ define_keywords!(
     REGR_SXY,
     REGR_SYY,
     RELEASE,
+    RENAME,
     REPEATABLE,
     RESTRICT,
     RESULT,

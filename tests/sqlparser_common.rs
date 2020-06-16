@@ -1314,6 +1314,57 @@ fn parse_create_table_empty() {
 }
 
 #[test]
+fn parse_alter_table() {
+    let add_column = "ALTER TABLE tab ADD COLUMN foo TEXT";
+    match verified_stmt(add_column) {
+        Statement::AlterTable {
+            name,
+            operation:
+                AlterTableOperation::AddColumn {
+                    has_column_identifier,
+                    column_def,
+                },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!(has_column_identifier, true);
+            assert_eq!("foo", column_def.name.to_string());
+        }
+        _ => unreachable!(),
+    };
+
+    let rename_table = "ALTER TABLE tab RENAME TO new_tab";
+    match verified_stmt(rename_table) {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::RenameTable { table_name },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("new_tab", table_name.to_string())
+        }
+        _ => unreachable!(),
+    };
+
+    let rename_column = "ALTER TABLE tab RENAME COLUMN foo TO new_foo";
+    match verified_stmt(rename_column) {
+        Statement::AlterTable {
+            name,
+            operation:
+                AlterTableOperation::RenameColumn {
+                    has_column_identifier,
+                    old_column_name,
+                    new_column_name,
+                },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!(has_column_identifier, true);
+            assert_eq!(old_column_name.to_string(), "foo");
+            assert_eq!(new_column_name.to_string(), "new_foo");
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_alter_table_constraints() {
     check_one("CONSTRAINT address_pkey PRIMARY KEY (address_id)");
     check_one("CONSTRAINT uk_task UNIQUE (report_date, task_id)");
@@ -1347,9 +1398,7 @@ fn parse_alter_table_constraints() {
 fn parse_bad_constraint() {
     let res = parse_sql_statements("ALTER TABLE tab ADD");
     assert_eq!(
-        ParserError::ParserError(
-            "Expected a constraint in ALTER TABLE .. ADD, found: EOF".to_string()
-        ),
+        ParserError::ParserError("Expected identifier, found: EOF".to_string()),
         res.unwrap_err()
     );
 

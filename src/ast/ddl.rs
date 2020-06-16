@@ -23,15 +23,38 @@ use std::fmt;
 pub enum AlterTableOperation {
     /// `ADD <table_constraint>`
     AddConstraint(TableConstraint),
+    /// `ADD [ COLUMN ] <column_def>`
+    AddColumn { column_def: ColumnDef },
     /// TODO: implement `DROP CONSTRAINT <name>`
     DropConstraint { name: Ident },
+    /// `RENAME [ COLUMN ] <old_column_name> TO <new_column_name>`
+    RenameColumn {
+        old_column_name: Ident,
+        new_column_name: Ident,
+    },
+    /// `RENAME TO <table_name>`
+    RenameTable { table_name: Ident },
 }
 
 impl fmt::Display for AlterTableOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             AlterTableOperation::AddConstraint(c) => write!(f, "ADD {}", c),
+            AlterTableOperation::AddColumn { column_def } => {
+                write!(f, "ADD COLUMN {}", column_def.to_string())
+            }
             AlterTableOperation::DropConstraint { name } => write!(f, "DROP CONSTRAINT {}", name),
+            AlterTableOperation::RenameColumn {
+                old_column_name,
+                new_column_name,
+            } => write!(
+                f,
+                "RENAME COLUMN {} TO {}",
+                old_column_name, new_column_name
+            ),
+            AlterTableOperation::RenameTable { table_name } => {
+                write!(f, "RENAME TO {}", table_name)
+            }
         }
     }
 }

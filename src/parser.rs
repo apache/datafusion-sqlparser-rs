@@ -1122,6 +1122,29 @@ impl Parser {
         })
     }
 
+    fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
+        let name = self.parse_identifier()?;
+        let data_type = self.parse_data_type()?;
+        let collation = if self.parse_keyword(Keyword::COLLATE) {
+            Some(self.parse_object_name()?)
+        } else {
+            None
+        };
+        let mut options = vec![];
+        loop {
+            match self.peek_token() {
+                Token::EOF | Token::Comma | Token::RParen => break,
+                _ => options.push(self.parse_column_option_def()?),
+            }
+        }
+        Ok(ColumnDef {
+            name,
+            data_type,
+            collation,
+            options,
+        })
+    }
+
     fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
         let mut columns = vec![];
         let mut constraints = vec![];
@@ -1132,28 +1155,9 @@ impl Parser {
         loop {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
                 constraints.push(constraint);
-            } else if let Token::Word(column_name) = self.peek_token() {
-                self.next_token();
-                let data_type = self.parse_data_type()?;
-                let collation = if self.parse_keyword(Keyword::COLLATE) {
-                    Some(self.parse_object_name()?)
-                } else {
-                    None
-                };
-                let mut options = vec![];
-                loop {
-                    match self.peek_token() {
-                        Token::EOF | Token::Comma | Token::RParen => break,
-                        _ => options.push(self.parse_column_option_def()?),
-                    }
-                }
-
-                columns.push(ColumnDef {
-                    name: column_name.to_ident(),
-                    data_type,
-                    collation,
-                    options,
-                });
+            } else if let Token::Word(_) = self.peek_token() {
+                let column_def = self.parse_column_def()?;
+                columns.push(column_def);
             } else {
                 return self.expected("column name or constraint definition", self.peek_token());
             }
@@ -1318,10 +1322,26 @@ impl Parser {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
                 AlterTableOperation::AddConstraint(constraint)
             } else {
-                return self.expected("a constraint in ALTER TABLE .. ADD", self.peek_token());
+                let _ = self.parse_keyword(Keyword::COLUMN);
+                let column_def = self.parse_column_def()?;
+                AlterTableOperation::AddColumn { column_def }
+            }
+        } else if self.parse_keyword(Keyword::RENAME) {
+            if self.parse_keyword(Keyword::TO) {
+                let table_name = self.parse_identifier()?;
+                AlterTableOperation::RenameTable { table_name }
+            } else {
+                let _ = self.parse_keyword(Keyword::COLUMN);
+                let old_column_name = self.parse_identifier()?;
+                self.expect_keyword(Keyword::TO)?;
+                let new_column_name = self.parse_identifier()?;
+                AlterTableOperation::RenameColumn {
+                    old_column_name,
+                    new_column_name,
+                }
             }
         } else {
-            return self.expected("ADD after ALTER TABLE", self.peek_token());
+            return self.expected("ADD or RENAME after ALTER TABLE", self.peek_token());
         };
         Ok(Statement::AlterTable {
             name: table_name,

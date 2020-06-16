@@ -1342,17 +1342,9 @@ impl Parser {
             }
         } else if self.parse_keyword(Keyword::DROP) {
             if self.parse_keyword(Keyword::COLUMN) {
-                let if_exists = if self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]) {
-                    true
-                } else {
-                    false
-                };
+                let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
                 let column = self.parse_identifier()?;
-                let cascade = if self.parse_keyword(Keyword::CASCADE) {
-                    true
-                } else {
-                    false
-                };
+                let cascade = self.parse_keyword(Keyword::CASCADE);
                 AlterTableOperation::DropColumn {
                     column,
                     if_exists,

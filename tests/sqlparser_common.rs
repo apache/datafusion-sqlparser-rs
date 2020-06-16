@@ -1398,13 +1398,13 @@ fn parse_alter_table_drop_column() {
                 name,
                 operation:
                     AlterTableOperation::DropColumn {
-                        column,
+                        column_name,
                         if_exists,
                         cascade,
                     },
             } => {
                 assert_eq!("tab", name.to_string());
-                assert_eq!("is_active", column.to_string());
+                assert_eq!("is_active", column_name.to_string());
                 assert_eq!(true, if_exists);
                 assert_eq!(true, cascade);
             }

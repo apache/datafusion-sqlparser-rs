@@ -1340,8 +1340,29 @@ impl Parser {
                     new_column_name,
                 }
             }
+        } else if self.parse_keyword(Keyword::DROP) {
+            if self.parse_keyword(Keyword::COLUMN) {
+                let if_exists = if self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]) {
+                    true
+                } else {
+                    false
+                };
+                let column = self.parse_identifier()?;
+                let cascade = if self.parse_keyword(Keyword::CASCADE) {
+                    true
+                } else {
+                    false
+                };
+                AlterTableOperation::DropColumn {
+                    column,
+                    if_exists,
+                    cascade,
+                }
+            } else {
+                return self.expected("a column in ALTER TABLE .. DROP", self.peek_token());
+            }
         } else {
-            return self.expected("ADD or RENAME after ALTER TABLE", self.peek_token());
+            return self.expected("ADD, RENAME, or DROP after ALTER TABLE", self.peek_token());
         };
         Ok(Statement::AlterTable {
             name: table_name,

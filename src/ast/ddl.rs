@@ -27,6 +27,12 @@ pub enum AlterTableOperation {
     AddColumn { column_def: ColumnDef },
     /// TODO: implement `DROP CONSTRAINT <name>`
     DropConstraint { name: Ident },
+    /// `DROP COLUMN [ IF EXISTS ] <column> [ CASCADE ]`
+    DropColumn {
+        column: Ident,
+        if_exists: bool,
+        cascade: bool,
+    },
     /// `RENAME [ COLUMN ] <old_column_name> TO <new_column_name>`
     RenameColumn {
         old_column_name: Ident,
@@ -44,6 +50,17 @@ impl fmt::Display for AlterTableOperation {
                 write!(f, "ADD COLUMN {}", column_def.to_string())
             }
             AlterTableOperation::DropConstraint { name } => write!(f, "DROP CONSTRAINT {}", name),
+            AlterTableOperation::DropColumn {
+                column,
+                if_exists,
+                cascade,
+            } => write!(
+                f,
+                "DROP COLUMN {}{} {}",
+                if *if_exists { "IF EXISTS " } else { " " },
+                column,
+                if *cascade { "CASCADE" } else { "" }
+            ),
             AlterTableOperation::RenameColumn {
                 old_column_name,
                 new_column_name,

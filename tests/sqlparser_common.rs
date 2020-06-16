@@ -1389,6 +1389,39 @@ fn parse_alter_table_constraints() {
 }
 
 #[test]
+fn parse_alter_table_drop_column() {
+    check_one("DROP COLUMN IF EXISTS is_active CASCADE");
+    one_statement_parses_to(
+        "ALTER TABLE tab DROP IF EXISTS is_active CASCADE",
+        "ALTER TABLE tab DROP COLUMN IF EXISTS is_active CASCADE",
+    );
+    one_statement_parses_to(
+        "ALTER TABLE tab DROP is_active CASCADE",
+        "ALTER TABLE tab DROP COLUMN is_active CASCADE",
+    );
+
+    fn check_one(constraint_text: &str) {
+        match verified_stmt(&format!("ALTER TABLE tab {}", constraint_text)) {
+            Statement::AlterTable {
+                name,
+                operation:
+                    AlterTableOperation::DropColumn {
+                        column_name,
+                        if_exists,
+                        cascade,
+                    },
+            } => {
+                assert_eq!("tab", name.to_string());
+                assert_eq!("is_active", column_name.to_string());
+                assert_eq!(true, if_exists);
+                assert_eq!(true, cascade);
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
 fn parse_bad_constraint() {
     let res = parse_sql_statements("ALTER TABLE tab ADD");
     assert_eq!(

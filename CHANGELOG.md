@@ -31,6 +31,7 @@ Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented 
 - Support bitwise AND (`&`), OR (`|`), XOR (`^`) (#181) - thanks @Dandandan!
 - Add serde support to AST structs and enums (#196) - thanks @panarch!
 - Support `ALTER TABLE ADD COLUMN`, `RENAME COLUMN`, and `RENAME TO` (#203) - thanks @mashuai!
+- Support `ALTER TABLE DROP COLUMN` (#148) - thanks @ivanceras!
 
 ### Fixed
 - Report an error for unterminated string literals (#165)

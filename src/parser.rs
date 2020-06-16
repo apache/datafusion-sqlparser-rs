@@ -1122,7 +1122,7 @@ impl Parser {
         })
     }
 
-    fn parse_column(&mut self) -> Result<ColumnDef, ParserError> {
+    fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
         let name = self.parse_identifier()?;
         let data_type = self.parse_data_type()?;
         let collation = if self.parse_keyword(Keyword::COLLATE) {
@@ -1156,7 +1156,7 @@ impl Parser {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
                 constraints.push(constraint);
             } else if let Token::Word(_) = self.peek_token() {
-                let column_def = self.parse_column()?;
+                let column_def = self.parse_column_def()?;
                 columns.push(column_def);
             } else {
                 return self.expected("column name or constraint definition", self.peek_token());
@@ -1323,7 +1323,7 @@ impl Parser {
                 AlterTableOperation::AddConstraint(constraint)
             } else {
                 let _ = self.parse_keyword(Keyword::COLUMN);
-                let column_def = self.parse_column()?;
+                let column_def = self.parse_column_def()?;
                 AlterTableOperation::AddColumn { column_def }
             }
         } else if self.parse_keyword(Keyword::RENAME) {

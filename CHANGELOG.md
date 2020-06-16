@@ -16,6 +16,7 @@ Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented 
 - Use Token::EOF instead of Option<Token> (#195)
 - Make the units keyword following `INTERVAL '...'` optional (#184) - thanks @maxcountryman!
 - Generalize `DATE`/`TIME`/`TIMESTAMP` literals representation in the AST (`TypedString { data_type, value }`) and allow `DATE` and other keywords to be used as identifiers when not followed by a string (#187) - thanks @maxcountryman!
+- Output DataType capitalized (`fmt::Display`) (#202) - thanks @Dandandan!
 
 ### Added
 - Support MSSQL `TOP (<N>) [ PERCENT ] [ WITH TIES ]` (#150) - thanks @alexkyllo!
@@ -29,9 +30,11 @@ Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented 
 - Support the string concatentation operator `||` (#178) - thanks @Dandandan!
 - Support bitwise AND (`&`), OR (`|`), XOR (`^`) (#181) - thanks @Dandandan!
 - Add serde support to AST structs and enums (#196) - thanks @panarch!
+- Support `ALTER TABLE ADD COLUMN`, `RENAME COLUMN`, and `RENAME TO` (#203) - thanks @mashuai!
 
 ### Fixed
 - Report an error for unterminated string literals (#165)
+- Make file format (`STORED AS`) case insensitive (#200) and don't allow quoting it (#201) - thanks @Dandandan!
 
 ## [0.5.0] - 2019-10-10
 

@@ -1391,6 +1391,14 @@ fn parse_alter_table_constraints() {
 #[test]
 fn parse_alter_table_drop_column() {
     check_one("DROP COLUMN IF EXISTS is_active CASCADE");
+    one_statement_parses_to(
+        "ALTER TABLE tab DROP IF EXISTS is_active CASCADE",
+        "ALTER TABLE tab DROP COLUMN IF EXISTS is_active CASCADE",
+    );
+    one_statement_parses_to(
+        "ALTER TABLE tab DROP is_active CASCADE",
+        "ALTER TABLE tab DROP COLUMN is_active CASCADE",
+    );
 
     fn check_one(constraint_text: &str) {
         match verified_stmt(&format!("ALTER TABLE tab {}", constraint_text)) {

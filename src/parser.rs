@@ -1133,7 +1133,7 @@ impl Parser {
         let mut options = vec![];
         loop {
             match self.peek_token() {
-                Token::EOF => break,
+                Token::EOF | Token::Comma | Token::RParen => break,
                 _ => options.push(self.parse_column_option_def()?),
             }
         }
@@ -1155,28 +1155,9 @@ impl Parser {
         loop {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
                 constraints.push(constraint);
-            } else if let Token::Word(column_name) = self.peek_token() {
-                self.next_token();
-                let data_type = self.parse_data_type()?;
-                let collation = if self.parse_keyword(Keyword::COLLATE) {
-                    Some(self.parse_object_name()?)
-                } else {
-                    None
-                };
-                let mut options = vec![];
-                loop {
-                    match self.peek_token() {
-                        Token::EOF | Token::Comma | Token::RParen => break,
-                        _ => options.push(self.parse_column_option_def()?),
-                    }
-                }
-
-                columns.push(ColumnDef {
-                    name: column_name.to_ident(),
-                    data_type,
-                    collation,
-                    options,
-                });
+            } else if let Token::Word(_) = self.peek_token() {
+                let column_def = self.parse_column()?;
+                columns.push(column_def);
             } else {
                 return self.expected("column name or constraint definition", self.peek_token());
             }

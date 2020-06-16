@@ -23,16 +23,16 @@ use std::fmt;
 pub enum AlterTableOperation {
     /// `ADD <table_constraint>`
     AddConstraint(TableConstraint),
-    /// `ADD [ COLUMN ] <column-def>`
+    /// `ADD [ COLUMN ] <column_def>`
     AddColumn { column_def: ColumnDef },
     /// TODO: implement `DROP CONSTRAINT <name>`
     DropConstraint { name: Ident },
-    /// `RENAME [ COLUMN ] <column-name> TO <column-name>`
+    /// `RENAME [ COLUMN ] <old_column_name> TO <new_column_name>`
     RenameColumn {
         old_column_name: Ident,
         new_column_name: Ident,
     },
-    /// `RENAME TO <table-name>`
+    /// `RENAME TO <table_name>`
     RenameTable { table_name: Ident },
 }
 

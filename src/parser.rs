@@ -1020,6 +1020,7 @@ impl Parser {
             external: true,
             file_format: Some(file_format),
             location: Some(location),
+            query: None,
         })
     }
 
@@ -1110,6 +1111,12 @@ impl Parser {
         let (columns, constraints) = self.parse_columns()?;
         let with_options = self.parse_with_options()?;
 
+        let query = if self.parse_keyword(Keyword::AS) {
+            Some(Box::new(self.parse_query()?))
+        } else {
+            None
+        };
+
         Ok(Statement::CreateTable {
             name: table_name,
             columns,
@@ -1119,6 +1126,7 @@ impl Parser {
             external: false,
             file_format: None,
             location: None,
+            query,
         })
     }
 

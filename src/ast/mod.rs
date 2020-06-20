@@ -481,6 +481,7 @@ pub enum Statement {
         external: bool,
         file_format: Option<FileFormat>,
         location: Option<String>,
+        query: Option<Box<Query>>,
     },
     /// CREATE INDEX
     CreateIndex {
@@ -645,19 +646,24 @@ impl fmt::Display for Statement {
                 external,
                 file_format,
                 location,
+                query,
             } => {
+                let include_parens = query.is_none() || !columns.is_empty();
                 write!(
                     f,
-                    "CREATE {}TABLE {}{} ({}",
-                    if *external { "EXTERNAL " } else { "" },
-                    if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                    name,
-                    display_comma_separated(columns)
+                    "CREATE {external}TABLE {if_not_exists}{name} {lparen}{columns}",
+                    external = if *external { "EXTERNAL " } else { "" },
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    name = name,
+                    lparen = if include_parens { "(" } else { "" },
+                    columns = display_comma_separated(columns),
                 )?;
                 if !constraints.is_empty() {
                     write!(f, ", {}", display_comma_separated(constraints))?;
                 }
-                write!(f, ")")?;
+                if include_parens {
+                    write!(f, ")")?;
+                }
 
                 if *external {
                     write!(
@@ -669,6 +675,9 @@ impl fmt::Display for Statement {
                 }
                 if !with_options.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_options))?;
+                }
+                if let Some(query) = query {
+                    write!(f, "AS {}", query);
                 }
                 Ok(())
             }

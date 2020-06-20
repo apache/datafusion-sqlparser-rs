@@ -1044,6 +1044,7 @@ fn parse_create_table() {
             external: false,
             file_format: None,
             location: None,
+            query: _query,
         } => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
@@ -1178,6 +1179,19 @@ fn parse_drop_schema() {
 }
 
 #[test]
+fn parse_create_table_as() {
+    let sql = "CREATE TABLE t AS SELECT * FROM a";
+
+    match verified_stmt(sql) {
+        Statement::CreateTable { name, query, .. } => {
+            assert_eq!(name.to_string(), "t".to_string());
+            assert_eq!(query, Some(Box::new(verified_query("SELECT * FROM a"))));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_with_on_delete_on_update_2in_any_order() -> Result<(), ParserError> {
     let sql = |options: &str| -> String {
         format!("create table X (y_id int references Y (id) {})", options)
@@ -1245,6 +1259,7 @@ fn parse_create_external_table() {
             external,
             file_format,
             location,
+            query,
         } => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(

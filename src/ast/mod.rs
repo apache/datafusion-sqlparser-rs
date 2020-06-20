@@ -677,7 +677,7 @@ impl fmt::Display for Statement {
                     write!(f, " WITH ({})", display_comma_separated(with_options))?;
                 }
                 if let Some(query) = query {
-                    write!(f, "AS {}", query);
+                    write!(f, "AS {}", query)?;
                 }
                 Ok(())
             }

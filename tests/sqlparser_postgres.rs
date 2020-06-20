@@ -43,7 +43,7 @@ fn parse_create_table_with_defaults() {
             external: false,
             file_format: None,
             location: None,
-            query,
+            query: _query,
         } => {
             assert_eq!("public.customer", name.to_string());
             assert_eq!(
@@ -242,7 +242,7 @@ fn parse_create_table_if_not_exists() {
             external: false,
             file_format: None,
             location: None,
-            query,
+            query: _query,
         } => {
             assert_eq!("uk_cities", name.to_string());
             assert!(constraints.is_empty());

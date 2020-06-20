@@ -1259,7 +1259,7 @@ fn parse_create_external_table() {
             external,
             file_format,
             location,
-            query,
+            query: _query,
         } => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(

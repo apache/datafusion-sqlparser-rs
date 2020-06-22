@@ -1010,6 +1010,7 @@ impl Parser {
 
         self.expect_keyword(Keyword::LOCATION)?;
         let location = self.parse_literal_string()?;
+        let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
 
         Ok(Statement::CreateTable {
             name: table_name,
@@ -1021,6 +1022,7 @@ impl Parser {
             file_format: Some(file_format),
             location: Some(location),
             query: None,
+            without_rowid: Some(without_rowid),
         })
     }
 
@@ -1120,6 +1122,8 @@ impl Parser {
             None
         };
 
+        // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
+        let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
         Ok(Statement::CreateTable {
             name: table_name,
             columns,
@@ -1130,6 +1134,7 @@ impl Parser {
             file_format: None,
             location: None,
             query,
+            without_rowid: Some(without_rowid),
         })
     }
 

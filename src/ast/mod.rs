@@ -482,6 +482,7 @@ pub enum Statement {
         file_format: Option<FileFormat>,
         location: Option<String>,
         query: Option<Box<Query>>,
+        without_rowid: Option<bool>,
     },
     /// CREATE INDEX
     CreateIndex {
@@ -647,6 +648,7 @@ impl fmt::Display for Statement {
                 file_format,
                 location,
                 query,
+                without_rowid,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -686,6 +688,11 @@ impl fmt::Display for Statement {
                 }
                 if let Some(query) = query {
                     write!(f, " AS {}", query)?;
+                }
+                if let Some(without_rowid) = *without_rowid {
+                    if without_rowid {
+                        write!(f, "WITHOUT ROWID")?;
+                    }
                 }
                 Ok(())
             }

@@ -44,6 +44,7 @@ fn parse_create_table_with_defaults() {
             file_format: None,
             location: None,
             query: _query,
+            without_rowid: _,
         } => {
             assert_eq!("public.customer", name.to_string());
             assert_eq!(

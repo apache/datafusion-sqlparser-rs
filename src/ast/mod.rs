@@ -648,6 +648,13 @@ impl fmt::Display for Statement {
                 location,
                 query,
             } => {
+                // We want to allow the following options
+                // Empty column list, allowed by PostgreSQL:
+                //   CREATE TABLE t ()
+                // No columns provided for CREATE TABLE AS:
+                //   CREATE TABLE t AS SELECT a from t2
+                // Columns provided for CREATE TABLE AS:
+                //   CREATE TABLE t (a INT) AS SELECT a from t2
                 let include_parens = query.is_none() || !columns.is_empty();
                 write!(
                     f,

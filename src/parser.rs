@@ -1109,13 +1109,14 @@ impl Parser {
         let table_name = self.parse_object_name()?;
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
-        let with_options = self.parse_with_options()?;
 
         let query = if self.parse_keyword(Keyword::AS) {
             Some(Box::new(self.parse_query()?))
         } else {
             None
         };
+
+        let with_options = self.parse_with_options()?;
 
         Ok(Statement::CreateTable {
             name: table_name,

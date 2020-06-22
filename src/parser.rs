@@ -1110,13 +1110,15 @@ impl Parser {
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
 
+        // PostgreSQL supports `WITH ( options )`, before `AS`
+        let with_options = self.parse_with_options()?;
+
+        // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
             Some(Box::new(self.parse_query()?))
         } else {
             None
         };
-
-        let with_options = self.parse_with_options()?;
 
         Ok(Statement::CreateTable {
             name: table_name,

@@ -43,6 +43,7 @@ fn parse_create_table_with_defaults() {
             external: false,
             file_format: None,
             location: None,
+            query: _query,
         } => {
             assert_eq!("public.customer", name.to_string());
             assert_eq!(
@@ -227,24 +228,46 @@ fn parse_create_table_with_inherit() {
 }
 
 #[test]
-fn parse_create_table_if_not_exists() {
-    let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
-    let ast =
-        pg_and_generic().one_statement_parses_to(sql, "CREATE TABLE IF NOT EXISTS uk_cities ()");
+fn parse_create_table_empty() {
+    // Zero-column tables are weird, but supported by at least PostgreSQL.
+    // <https://github.com/andygrove/sqlparser-rs/pull/94>
+    let _ = pg_and_generic().verified_stmt("CREATE TABLE t ()");
+}
+
+#[test]
+fn parse_create_table_constraints_only() {
+    // Zero-column tables can also have constraints in PostgreSQL
+    let sql = "CREATE TABLE t (CONSTRAINT positive CHECK (2 > 1))";
+    let ast = pg_and_generic().verified_stmt(sql);
     match ast {
         Statement::CreateTable {
             name,
-            columns: _columns,
+            columns,
             constraints,
-            with_options,
+            ..
+        } => {
+            assert_eq!("t", name.to_string());
+            assert!(columns.is_empty());
+            assert_eq!(
+                only(constraints).to_string(),
+                "CONSTRAINT positive CHECK (2 > 1)"
+            );
+        }
+        _ => unreachable!(),
+    };
+}
+
+#[test]
+fn parse_create_table_if_not_exists() {
+    let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
+    let ast = pg_and_generic().verified_stmt(sql);
+    match ast {
+        Statement::CreateTable {
+            name,
             if_not_exists: true,
-            external: false,
-            file_format: None,
-            location: None,
+            ..
         } => {
             assert_eq!("uk_cities", name.to_string());
-            assert!(constraints.is_empty());
-            assert_eq!(with_options, vec![]);
         }
         _ => unreachable!(),
     }

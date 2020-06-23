@@ -481,6 +481,7 @@ pub enum Statement {
         external: bool,
         file_format: Option<FileFormat>,
         location: Option<String>,
+        query: Option<Box<Query>>,
     },
     /// CREATE INDEX
     CreateIndex {
@@ -645,19 +646,32 @@ impl fmt::Display for Statement {
                 external,
                 file_format,
                 location,
+                query,
             } => {
+                // We want to allow the following options
+                // Empty column list, allowed by PostgreSQL:
+                //   `CREATE TABLE t ()`
+                // No columns provided for CREATE TABLE AS:
+                //   `CREATE TABLE t AS SELECT a from t2`
+                // Columns provided for CREATE TABLE AS:
+                //   `CREATE TABLE t (a INT) AS SELECT a from t2`
                 write!(
                     f,
-                    "CREATE {}TABLE {}{} ({}",
-                    if *external { "EXTERNAL " } else { "" },
-                    if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                    name,
-                    display_comma_separated(columns)
+                    "CREATE {external}TABLE {if_not_exists}{name}",
+                    external = if *external { "EXTERNAL " } else { "" },
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    name = name,
                 )?;
-                if !constraints.is_empty() {
-                    write!(f, ", {}", display_comma_separated(constraints))?;
+                if !columns.is_empty() || !constraints.is_empty() {
+                    write!(f, " ({}", display_comma_separated(columns))?;
+                    if !columns.is_empty() && !constraints.is_empty() {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{})", display_comma_separated(constraints))?;
+                } else if query.is_none() {
+                    // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
+                    write!(f, " ()")?;
                 }
-                write!(f, ")")?;
 
                 if *external {
                     write!(
@@ -669,6 +683,9 @@ impl fmt::Display for Statement {
                 }
                 if !with_options.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_options))?;
+                }
+                if let Some(query) = query {
+                    write!(f, " AS {}", query)?;
                 }
                 Ok(())
             }

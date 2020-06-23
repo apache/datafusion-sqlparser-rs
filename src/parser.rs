@@ -1020,6 +1020,7 @@ impl Parser {
             external: true,
             file_format: Some(file_format),
             location: Some(location),
+            query: None,
         })
     }
 
@@ -1108,7 +1109,16 @@ impl Parser {
         let table_name = self.parse_object_name()?;
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
+
+        // PostgreSQL supports `WITH ( options )`, before `AS`
         let with_options = self.parse_with_options()?;
+
+        // Parse optional `AS ( query )`
+        let query = if self.parse_keyword(Keyword::AS) {
+            Some(Box::new(self.parse_query()?))
+        } else {
+            None
+        };
 
         Ok(Statement::CreateTable {
             name: table_name,
@@ -1119,6 +1129,7 @@ impl Parser {
             external: false,
             file_format: None,
             location: None,
+            query,
         })
     }
 

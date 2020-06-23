@@ -77,7 +77,7 @@ fn parse_show_columns() {
         Statement::ShowColumns {
             extended: false,
             full: false,
-            table_name: table_name,
+            table_name,
             filter: Some(ShowStatementFilter::Where(
                 mysql_and_generic().verified_expr("1 = 2")
             )),

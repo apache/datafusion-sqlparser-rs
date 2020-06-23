@@ -1044,6 +1044,7 @@ fn parse_create_table() {
             external: false,
             file_format: None,
             location: None,
+            query: _query,
         } => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
@@ -1178,6 +1179,36 @@ fn parse_drop_schema() {
 }
 
 #[test]
+fn parse_create_table_as() {
+    let sql = "CREATE TABLE t AS SELECT * FROM a";
+
+    match verified_stmt(sql) {
+        Statement::CreateTable { name, query, .. } => {
+            assert_eq!(name.to_string(), "t".to_string());
+            assert_eq!(query, Some(Box::new(verified_query("SELECT * FROM a"))));
+        }
+        _ => unreachable!(),
+    }
+
+    // BigQuery allows specifying table schema in CTAS
+    // ANSI SQL and PostgreSQL let you only specify the list of columns
+    // (without data types) in a CTAS, but we have yet to support that.
+    let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
+    match verified_stmt(sql) {
+        Statement::CreateTable { columns, query, .. } => {
+            assert_eq!(columns.len(), 2);
+            assert_eq!(columns[0].to_string(), "a INT".to_string());
+            assert_eq!(columns[1].to_string(), "b INT".to_string());
+            assert_eq!(
+                query,
+                Some(Box::new(verified_query("SELECT 1 AS b, 2 AS a")))
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_with_on_delete_on_update_2in_any_order() -> Result<(), ParserError> {
     let sql = |options: &str| -> String {
         format!("create table X (y_id int references Y (id) {})", options)
@@ -1245,6 +1276,7 @@ fn parse_create_external_table() {
             external,
             file_format,
             location,
+            query: _query,
         } => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
@@ -1305,12 +1337,6 @@ fn parse_create_external_table_lowercase() {
          STORED AS PARQUET LOCATION '/tmp/example.csv'",
     );
     assert_matches!(ast, Statement::CreateTable{..});
-}
-
-#[test]
-fn parse_create_table_empty() {
-    // Zero-column tables are weird, but supported by at least PostgreSQL.
-    let _ = verified_stmt("CREATE TABLE t ()");
 }
 
 #[test]

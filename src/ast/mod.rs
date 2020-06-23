@@ -669,10 +669,10 @@ impl fmt::Display for Statement {
                     }
                     write!(f, "{})", display_comma_separated(constraints))?;
                 } else if query.is_none() {
-                     // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
+                    // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
                     write!(f, "()")?;
                 }
-                
+
                 if *external {
                     write!(
                         f,

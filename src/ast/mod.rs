@@ -650,28 +650,29 @@ impl fmt::Display for Statement {
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
-                //   CREATE TABLE t ()
+                //   `CREATE TABLE t ()`
                 // No columns provided for CREATE TABLE AS:
-                //   CREATE TABLE t AS SELECT a from t2
+                //   `CREATE TABLE t AS SELECT a from t2`
                 // Columns provided for CREATE TABLE AS:
-                //   CREATE TABLE t (a INT) AS SELECT a from t2
-                let include_parens = query.is_none() || !columns.is_empty();
+                //   `CREATE TABLE t (a INT) AS SELECT a from t2`
                 write!(
                     f,
-                    "CREATE {external}TABLE {if_not_exists}{name} {lparen}{columns}",
+                    "CREATE {external}TABLE {if_not_exists}{name} ",
                     external = if *external { "EXTERNAL " } else { "" },
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     name = name,
-                    lparen = if include_parens { "(" } else { "" },
-                    columns = display_comma_separated(columns),
                 )?;
-                if !constraints.is_empty() {
-                    write!(f, ", {}", display_comma_separated(constraints))?;
+                if !columns.is_empty() || !constraints.is_empty() {
+                    write!(f, "({}", display_comma_separated(columns))?;
+                    if !columns.is_empty() && !constraints.is_empty() {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{})", display_comma_separated(constraints))?;
+                } else if query.is_none() {
+                     // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
+                    write!(f, "()")?;
                 }
-                if include_parens {
-                    write!(f, ")")?;
-                }
-
+                
                 if *external {
                     write!(
                         f,

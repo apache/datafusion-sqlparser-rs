@@ -691,7 +691,7 @@ impl fmt::Display for Statement {
                 }
                 if let Some(without_rowid) = *without_rowid {
                     if without_rowid {
-                        write!(f, "WITHOUT ROWID")?;
+                        write!(f, " WITHOUT ROWID")?;
                     }
                 }
                 Ok(())

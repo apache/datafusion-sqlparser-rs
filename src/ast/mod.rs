@@ -674,6 +674,10 @@ impl fmt::Display for Statement {
                     // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
                     write!(f, " ()")?;
                 }
+                // Only for SQLite
+                if *without_rowid {
+                    write!(f, " WITHOUT ROWID")?;
+                }
 
                 if *external {
                     write!(
@@ -688,9 +692,6 @@ impl fmt::Display for Statement {
                 }
                 if let Some(query) = query {
                     write!(f, " AS {}", query)?;
-                }
-                if *without_rowid {
-                    write!(f, " WITHOUT ROWID")?;
                 }
                 Ok(())
             }

@@ -11,7 +11,7 @@
 // limitations under the License.
 
 #![warn(clippy::all)]
-//! Test SQL syntax specific to PostgreSQL. The parser based on the
+//! Test SQL syntax specific to SQLite. The parser based on the
 //! generic dialect is also tested (on the inputs it can handle).
 
 use sqlparser::ast::*;
@@ -19,51 +19,23 @@ use sqlparser::dialect::GenericDialect;
 use sqlparser::test_utils::*;
 
 #[test]
-fn parse_create_table() {
-    let sql = "CREATE TABLE groups (
-                       group_id INTEGER NOT NULL,
-                       name TEXT NOT NULL
-                    ) WITHOUT ROWID";
-    match sqlite().one_statement_parses_to(sql, "") {
+fn parse_create_table_without_rowid() {
+    let sql = "CREATE TABLE t(a INT) WITHOUT ROWID";
+    match sqlite_and_generic().one_statement_parses_to(sql, "") {
         Statement::CreateTable {
             name,
-            columns,
             without_rowid: true,
-            constraints,
             ..
         } => {
-            assert_eq!("groups", name.to_string());
-            assert_eq!(
-                columns,
-                vec![
-                    ColumnDef {
-                        name: "group_id".into(),
-                        data_type: DataType::Int,
-                        collation: None,
-                        options: vec![ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::NotNull,
-                        }],
-                    },
-                    ColumnDef {
-                        name: "name".into(),
-                        data_type: DataType::Text,
-                        collation: None,
-                        options: vec![ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::NotNull,
-                        }],
-                    },
-                ]
-            );
-            assert!(constraints.is_empty());
+            assert_eq!("t", name.to_string());
         }
         _ => unreachable!(),
     }
 }
 
-fn sqlite() -> TestedDialects {
+fn sqlite_and_generic() -> TestedDialects {
     TestedDialects {
+        // we don't have a separate SQLite dialect, so test only the generic dialect for now
         dialects: vec![Box::new(GenericDialect {})],
     }
 }

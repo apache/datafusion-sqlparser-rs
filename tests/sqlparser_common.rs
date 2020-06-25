@@ -1023,7 +1023,7 @@ fn parse_create_table() {
                constrained INT NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0),
                ref INT REFERENCES othertable (a, b),\
                ref2 INT references othertable2 on delete cascade on update no action\
-               ) WITHOUT ROWID";
+               )";
     let ast = one_statement_parses_to(
         sql,
         "CREATE TABLE uk_cities (\
@@ -1032,7 +1032,7 @@ fn parse_create_table() {
          lng DOUBLE, \
          constrained INT NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0), \
          ref INT REFERENCES othertable (a, b), \
-         ref2 INT REFERENCES othertable2 ON DELETE CASCADE ON UPDATE NO ACTION) WITHOUT ROWID",
+         ref2 INT REFERENCES othertable2 ON DELETE CASCADE ON UPDATE NO ACTION)",
     );
     match ast {
         Statement::CreateTable {
@@ -1276,8 +1276,7 @@ fn parse_create_external_table() {
             external,
             file_format,
             location,
-            query: _query,
-            without_rowid: _,
+            ..
         } => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(

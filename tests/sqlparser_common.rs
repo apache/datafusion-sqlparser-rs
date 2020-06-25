@@ -1044,8 +1044,7 @@ fn parse_create_table() {
             external: false,
             file_format: None,
             location: None,
-            query: _query,
-            without_rowid,
+            ..
         } => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
@@ -1134,7 +1133,6 @@ fn parse_create_table() {
             );
             assert!(constraints.is_empty());
             assert_eq!(with_options, vec![]);
-            assert_eq!(without_rowid, Some(true));
         }
         _ => unreachable!(),
     }

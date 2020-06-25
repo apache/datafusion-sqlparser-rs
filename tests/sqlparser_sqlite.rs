@@ -28,14 +28,9 @@ fn parse_create_table() {
         Statement::CreateTable {
             name,
             columns,
-            constraints,
-            with_options: _with_options,
-            if_not_exists: false,
-            external: false,
-            file_format: None,
-            location: None,
-            query: _query,
             without_rowid: true,
+            constraints,
+            ..
         } => {
             assert_eq!("groups", name.to_string());
             assert_eq!(

@@ -482,6 +482,7 @@ pub enum Statement {
         file_format: Option<FileFormat>,
         location: Option<String>,
         query: Option<Box<Query>>,
+        without_rowid: bool,
     },
     /// CREATE INDEX
     CreateIndex {
@@ -647,6 +648,7 @@ impl fmt::Display for Statement {
                 file_format,
                 location,
                 query,
+                without_rowid,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -671,6 +673,10 @@ impl fmt::Display for Statement {
                 } else if query.is_none() {
                     // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
                     write!(f, " ()")?;
+                }
+                // Only for SQLite
+                if *without_rowid {
+                    write!(f, " WITHOUT ROWID")?;
                 }
 
                 if *external {

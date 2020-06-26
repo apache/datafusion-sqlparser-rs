@@ -351,6 +351,7 @@ define_keywords!(
     ROLLBACK,
     ROLLUP,
     ROW,
+    ROWID,
     ROWS,
     ROW_NUMBER,
     SAVEPOINT,

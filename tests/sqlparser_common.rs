@@ -1044,7 +1044,7 @@ fn parse_create_table() {
             external: false,
             file_format: None,
             location: None,
-            query: _query,
+            ..
         } => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
@@ -1276,7 +1276,7 @@ fn parse_create_external_table() {
             external,
             file_format,
             location,
-            query: _query,
+            ..
         } => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(

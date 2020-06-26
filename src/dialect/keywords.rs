@@ -438,6 +438,7 @@ define_keywords!(
     VAR_SAMP,
     VERSIONING,
     VIEW,
+    VIRTUAL,
     WHEN,
     WHENEVER,
     WHERE,

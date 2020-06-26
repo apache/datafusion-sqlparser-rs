@@ -55,6 +55,7 @@ pub enum IsLateral {
     Lateral,
     NotLateral,
 }
+use crate::ast::Statement::CreateVirtualTable;
 use IsLateral::*;
 
 impl From<TokenizerError> for ParserError {
@@ -986,14 +987,31 @@ impl Parser {
             self.parse_create_view()
         } else if self.parse_keyword(Keyword::EXTERNAL) {
             self.parse_create_external_table()
+        } else if self.parse_keyword(Keyword::VIRTUAL) {
+            self.parse_create_virtual_table()
         } else if self.parse_keyword(Keyword::SCHEMA) {
             self.parse_create_schema()
         } else {
             self.expected(
-                "TABLE, VIEW, INDEX or SCHEMA after CREATE",
+                "TABLE, VIEW, INDEX, SCHEMA or VIRTUAL after CREATE",
                 self.peek_token(),
             )
         }
+    }
+
+    pub fn parse_create_virtual_table(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::TABLE)?;
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let table_name = self.parse_object_name()?;
+        self.expect_keyword(Keyword::USING)?;
+        let module_name = self.parse_identifier()?;
+        let module_args = self.parse_parenthesized_column_list(Optional)?;
+        Ok(CreateVirtualTable {
+            name: table_name,
+            if_not_exists,
+            module_name,
+            module_args,
+        })
     }
 
     pub fn parse_create_schema(&mut self) -> Result<Statement, ParserError> {

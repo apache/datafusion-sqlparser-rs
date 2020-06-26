@@ -484,6 +484,14 @@ pub enum Statement {
         query: Option<Box<Query>>,
         without_rowid: bool,
     },
+    // CREATE VIRTUAL TABLE
+    CreateVirtualTable {
+        /// Virtual Table name
+        name: ObjectName,
+        if_not_exists: bool,
+        module_name: Ident,
+        module_args: Vec<Ident>,
+    },
     /// CREATE INDEX
     CreateIndex {
         /// index name
@@ -692,6 +700,24 @@ impl fmt::Display for Statement {
                 }
                 if let Some(query) = query {
                     write!(f, " AS {}", query)?;
+                }
+                Ok(())
+            }
+            Statement::CreateVirtualTable {
+                name,
+                if_not_exists,
+                module_name,
+                module_args,
+            } => {
+                write!(
+                    f,
+                    "CREATE VIRTUAL TABLE {if_not_exists}{name} USING {module_name}",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    name = name,
+                    module_name = module_name
+                )?;
+                if !module_args.is_empty() {
+                    write!(f, " ({})", display_comma_separated(module_args))?;
                 }
                 Ok(())
             }

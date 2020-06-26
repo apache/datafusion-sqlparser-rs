@@ -20,8 +20,8 @@ use sqlparser::test_utils::*;
 
 #[test]
 fn parse_create_table_without_rowid() {
-    let sql = "CREATE TABLE t(a INT) WITHOUT ROWID";
-    match sqlite_and_generic().one_statement_parses_to(sql, "") {
+    let sql = "CREATE TABLE t (a INT) WITHOUT ROWID";
+    match sqlite_and_generic().verified_stmt(sql) {
         Statement::CreateTable {
             name,
             without_rowid: true,

@@ -9,6 +9,19 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented changes.
 
 ### Changed
+
+### Added
+
+### Fixed
+
+
+## [0.5.1] - 2020-06-26
+This release should have been called `0.6`, as it introduces multiple incompatible changes to the API. If you don't want to upgrade yet, you can revert to the previous version by changing your `Cargo.toml` to:
+
+    sqlparser = "= 0.5.0"
+
+
+### Changed
 - **`Parser::parse_sql` now accepts a `&str` instead of `String` (#182)** - thanks @Dandandan!
 - Change `Ident` (previously a simple `String`) to store the parsed (unquoted) `value` of the identifier and the `quote_style` separately (#143) - thanks @apparebit!
 - Support Snowflake's `FROM (table_name)` (#155) - thanks @eyalleshem!

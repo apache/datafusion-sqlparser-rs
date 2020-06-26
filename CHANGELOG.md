@@ -11,6 +11,7 @@ Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented 
 ### Changed
 
 ### Added
+- Support SQLite's `CREATE TABLE (...) WITHOUT ROWID` (#208) - thanks @mashuai!
 
 ### Fixed
 

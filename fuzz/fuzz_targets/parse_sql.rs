@@ -3,10 +3,8 @@ use libfuzzer_sys::fuzz_target;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 
-fuzz_target!(|data: &[u8]| {
+fuzz_target!(|data: String| {
     let dialect = GenericDialect {};
 
-    if let Ok(s) = std::str::from_utf8(data) {
-        let _ = Parser::parse_sql(&dialect, s);
-    }
+    let _ = Parser::parse_sql(&dialect, &data);
 });

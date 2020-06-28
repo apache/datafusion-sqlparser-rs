@@ -992,19 +992,21 @@ impl Parser {
         } else if self.parse_keyword(Keyword::SCHEMA) {
             self.parse_create_schema()
         } else {
-            self.expected(
-                "TABLE, VIEW, INDEX, SCHEMA or VIRTUAL after CREATE",
-                self.peek_token(),
-            )
+            self.expected("an object type after CREATE", self.peek_token())
         }
     }
 
+    /// SQLite-specific `CREATE VIRTUAL TABLE`
     pub fn parse_create_virtual_table(&mut self) -> Result<Statement, ParserError> {
         self.expect_keyword(Keyword::TABLE)?;
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name()?;
         self.expect_keyword(Keyword::USING)?;
         let module_name = self.parse_identifier()?;
+        // SQLite docs note that module "arguments syntax is sufficiently
+        // general that the arguments can be made to appear as column
+        // definitions in a traditional CREATE TABLE statement", but
+        // we don't implement that.
         let module_args = self.parse_parenthesized_column_list(Optional)?;
         Ok(CreateVirtualTable {
             name: table_name,

@@ -484,9 +484,8 @@ pub enum Statement {
         query: Option<Box<Query>>,
         without_rowid: bool,
     },
-    // CREATE VIRTUAL TABLE
+    /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
-        /// Virtual Table name
         name: ObjectName,
         if_not_exists: bool,
         module_name: Ident,

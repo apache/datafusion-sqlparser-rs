@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 Given that the parser produces a typed AST, any changes to the AST will technically be breaking and thus will result in a `0.(N+1)` version. We document changes that break via addition as "Added".
 
 ## [Unreleased]
-Check https://github.com/andygrove/sqlparser-rs/commits/main for undocumented changes.
+Check https://github.com/ballista-compute/sqlparser-rs/commits/main for undocumented changes.
 
 ### Changed
 
@@ -166,3 +166,4 @@ We don't have a changelog for the changes made in 2018, but thanks to @crw5996, 
 
 ## [0.1.0] - 2018-09-03
 Initial release
+

@@ -36,10 +36,7 @@ fn parse_create_table_without_rowid() {
 #[test]
 fn parse_create_virtual_table() {
     let sql = "CREATE VIRTUAL TABLE IF NOT EXISTS t USING module_name (arg1, arg2)";
-    match sqlite_and_generic().one_statement_parses_to(
-        sql,
-        "CREATE VIRTUAL TABLE IF NOT EXISTS t USING module_name (arg1, arg2)",
-    ) {
+    match sqlite_and_generic().verified_stmt(sql) {
         Statement::CreateVirtualTable {
             name,
             if_not_exists: true,
@@ -55,7 +52,7 @@ fn parse_create_virtual_table() {
     }
 
     let sql = "CREATE VIRTUAL TABLE t USING module_name";
-    sqlite_and_generic().one_statement_parses_to(sql, "CREATE VIRTUAL TABLE t USING module_name");
+    sqlite_and_generic().verified_stmt(sql);
 }
 
 fn sqlite_and_generic() -> TestedDialects {

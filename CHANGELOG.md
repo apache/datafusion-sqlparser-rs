@@ -12,6 +12,7 @@ Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented 
 
 ### Added
 - Support SQLite's `CREATE TABLE (...) WITHOUT ROWID` (#208) - thanks @mashuai!
+- Support SQLite's `CREATE VIRTUAL TABLE` (#209) - thanks @mashuai!
 
 ### Fixed
 

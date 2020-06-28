@@ -33,6 +33,28 @@ fn parse_create_table_without_rowid() {
     }
 }
 
+#[test]
+fn parse_create_virtual_table() {
+    let sql = "CREATE VIRTUAL TABLE IF NOT EXISTS t USING module_name (arg1, arg2)";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::CreateVirtualTable {
+            name,
+            if_not_exists: true,
+            module_name,
+            module_args,
+        } => {
+            let args = vec![Ident::new("arg1"), Ident::new("arg2")];
+            assert_eq!("t", name.to_string());
+            assert_eq!("module_name", module_name.to_string());
+            assert_eq!(args, module_args);
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE VIRTUAL TABLE t USING module_name";
+    sqlite_and_generic().verified_stmt(sql);
+}
+
 fn sqlite_and_generic() -> TestedDialects {
     TestedDialects {
         // we don't have a separate SQLite dialect, so test only the generic dialect for now

@@ -47,9 +47,9 @@ fn basic_queries(c: &mut Criterion) {
 I FROM(((((((SELECT
 I FROM
 ";
-group.bench_function("sqlparser::nested_query", |b| {
-    b.iter(|| Parser::parse_sql(&dialect, nested_query));
-});
+    group.bench_function("sqlparser::nested_query", |b| {
+        b.iter(|| Parser::parse_sql(&dialect, nested_query));
+    });
 }
 
 criterion_group!(benches, basic_queries);

@@ -2071,8 +2071,8 @@ impl Parser {
                 return_ok_if_some!(
                     self.maybe_parse(|parser| parser.parse_derived_table_factor(NotLateral))
                 );
+                self.memoize_parse_derived_table_factor.insert(self.index);
             }
-            self.memoize_parse_derived_table_factor.insert(self.index);
 
             // A parsing error from `parse_derived_table_factor` indicates that the '(' we've
             // recently consumed does not start a derived table (cases 1, 2, or 4).

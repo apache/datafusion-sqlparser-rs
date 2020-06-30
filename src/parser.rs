@@ -19,9 +19,9 @@ use super::dialect::keywords;
 use super::dialect::keywords::Keyword;
 use super::dialect::Dialect;
 use super::tokenizer::*;
+use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
-use std::collections::HashSet;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParserError {
     TokenizerError(String),
@@ -94,7 +94,11 @@ pub struct Parser {
 impl Parser {
     /// Parse the specified tokens
     pub fn new(tokens: Vec<Token>) -> Self {
-        Parser { tokens, index: 0, memoize_parse_derived_table_factor: HashSet::new() }
+        Parser {
+            tokens,
+            index: 0,
+            memoize_parse_derived_table_factor: HashSet::new(),
+        }
     }
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
@@ -2057,7 +2061,10 @@ impl Parser {
             // `parse_derived_table_factor` below will return success after parsing the
             // subquery, followed by the closing ')', and the alias of the derived table.
             // In the example above this is case (3).const
-            if !self.memoize_parse_derived_table_factor.contains(&self.index) {
+            if !self
+                .memoize_parse_derived_table_factor
+                .contains(&self.index)
+            {
                 return_ok_if_some!(
                     self.maybe_parse(|parser| parser.parse_derived_table_factor(NotLateral))
                 );

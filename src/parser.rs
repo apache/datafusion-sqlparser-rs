@@ -2060,7 +2060,10 @@ impl Parser {
             // If the recently consumed '(' starts a derived table, the call to
             // `parse_derived_table_factor` below will return success after parsing the
             // subquery, followed by the closing ')', and the alias of the derived table.
-            // In the example above this is case (3).const
+            // In the example above this is case (3).
+
+            // We will only try to parse `parse_derived_table_factor` if it wasn't tried in a
+            // previous attempt for the same index
             if !self
                 .memoize_parse_derived_table_factor
                 .contains(&self.index)

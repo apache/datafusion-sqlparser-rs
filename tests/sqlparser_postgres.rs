@@ -230,7 +230,7 @@ fn parse_create_table_with_inherit() {
 #[test]
 fn parse_create_table_empty() {
     // Zero-column tables are weird, but supported by at least PostgreSQL.
-    // <https://github.com/andygrove/sqlparser-rs/pull/94>
+    // <https://github.com/ballista-compute/sqlparser-rs/pull/94>
     let _ = pg_and_generic().verified_stmt("CREATE TABLE t ()");
 }
 

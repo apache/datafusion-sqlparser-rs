@@ -2,8 +2,8 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Version](https://img.shields.io/crates/v/sqlparser.svg)](https://crates.io/crates/sqlparser)
-[![Build Status](https://travis-ci.org/andygrove/sqlparser-rs.svg?branch=master)](https://travis-ci.org/andygrove/sqlparser-rs)
-[![Coverage Status](https://coveralls.io/repos/github/andygrove/sqlparser-rs/badge.svg?branch=master)](https://coveralls.io/github/andygrove/sqlparser-rs?branch=master)
+[![Build Status](https://travis-ci.org/ballista-compute/sqlparser-rs.svg?branch=main)](https://travis-ci.org/ballista-computee/sqlparser-rs)
+[![Coverage Status](https://coveralls.io/repos/github/ballista-compute/sqlparser-rs/badge.svg?branch=main)](https://coveralls.io/github/ballista-compute/sqlparser-rs?branch=main)
 [![Gitter Chat](https://badges.gitter.im/sqlparser-rs/community.svg)](https://gitter.im/sqlparser-rs/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 The goal of this project is to build a SQL lexer and parser capable of parsing
@@ -123,7 +123,7 @@ resources.
 
 [tdop-tutorial]: https://eli.thegreenplace.net/2010/01/02/top-down-operator-precedence-parsing
 [`cargo fmt`]: https://github.com/rust-lang/rustfmt#on-the-stable-toolchain
-[current issues]: https://github.com/andygrove/sqlparser-rs/issues
+[current issues]: https://github.com/ballista-compute/sqlparser-rs/issues
 [DataFusion]: https://github.com/apache/arrow/tree/master/rust/datafusion
 [LocustDB]: https://github.com/cswinter/LocustDB
 [Pratt Parser]: https://tdop.github.io/

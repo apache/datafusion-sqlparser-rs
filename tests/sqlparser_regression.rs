@@ -17,7 +17,7 @@ macro_rules! tpch_tests {
             let dialect = GenericDialect {};
 
             let res = Parser::parse_sql(&dialect, QUERIES[$value -1]);
-    
+
             assert!(res.is_ok());
         }
     )*
@@ -50,4 +50,3 @@ tpch_tests! {
     tpch_21: 21,
     //tpch_22: 22,
 }
-

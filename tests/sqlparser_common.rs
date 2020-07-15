@@ -1184,7 +1184,7 @@ fn parse_assert_message() {
         Statement::Assert {
             condition: _condition,
             message: Some(message),
-            separator
+            separator,
         } => {
             assert_eq!(separator, "AS");
             match *message {

@@ -148,6 +148,7 @@ impl Parser {
                 Keyword::BEGIN => Ok(self.parse_begin()?),
                 Keyword::COMMIT => Ok(self.parse_commit()?),
                 Keyword::ROLLBACK => Ok(self.parse_rollback()?),
+                Keyword::ASSERT => Ok(self.parse_assert()?),
                 _ => self.expected("an SQL statement", Token::Word(w)),
             },
             Token::LParen => {
@@ -178,6 +179,18 @@ impl Parser {
             expr = self.parse_infix(expr, next_precedence)?;
         }
         Ok(expr)
+    }
+    pub fn parse_assert(&mut self) -> Result<Statement, ParserError> {
+        let condition = self.parse_expr()?;
+        let mut message = None;
+        if self.consume_token(&Token::Comma) {
+            message = Some(Box::new(self.parse_expr()?));
+        }
+
+        Ok(Statement::Assert {
+            condition: Box::new(condition),
+            message,
+        })
     }
 
     /// Parse an expression prefix

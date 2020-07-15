@@ -1157,6 +1157,42 @@ fn parse_create_table_with_multiple_on_delete_fails() {
 }
 
 #[test]
+fn parse_assert() {
+    let sql = "ASSERT (SELECT COUNT(*) FROM table) > 0";
+    let ast = one_statement_parses_to(sql, "ASSERT (SELECT COUNT(*) FROM table) > 0");
+    match ast {
+        Statement::Assert {
+            condition: _condition,
+            message,
+        } => {
+            assert!(message.is_none());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_assert_message() {
+    let sql = "ASSERT (SELECT COUNT(*) FROM table) > 0, 'No rows in table'";
+    let ast = one_statement_parses_to(
+        sql,
+        "ASSERT (SELECT COUNT(*) FROM table) > 0, 'No rows in table'",
+    );
+    match ast {
+        Statement::Assert {
+            condition: _condition,
+            message: Some(message),
+        } => {
+            match *message {
+                Expr::Value(Value::SingleQuotedString(s)) => assert_eq!(s, "No rows in table"),
+                _ => unreachable!(),
+            };
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_schema() {
     let sql = "CREATE SCHEMA X";
 

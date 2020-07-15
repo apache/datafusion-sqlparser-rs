@@ -79,6 +79,7 @@ define_keywords!(
     AS,
     ASC,
     ASENSITIVE,
+    ASSERT,
     ASYMMETRIC,
     AT,
     ATOMIC,

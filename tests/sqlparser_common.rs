@@ -1173,10 +1173,10 @@ fn parse_assert() {
 
 #[test]
 fn parse_assert_message() {
-    let sql = "ASSERT (SELECT COUNT(*) FROM table) > 0, 'No rows in table'";
+    let sql = "ASSERT (SELECT COUNT(*) FROM table) > 0 AS 'No rows in table'";
     let ast = one_statement_parses_to(
         sql,
-        "ASSERT (SELECT COUNT(*) FROM table) > 0, 'No rows in table'",
+        "ASSERT (SELECT COUNT(*) FROM table) > 0 AS 'No rows in table'",
     );
     match ast {
         Statement::Assert {

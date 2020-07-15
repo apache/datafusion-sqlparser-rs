@@ -552,9 +552,11 @@ pub enum Statement {
     /// CREATE SCHEMA
     CreateSchema { schema_name: ObjectName },
 
-    // ASSERT <condition> [, <message>]
+    /// ASSERT <condition> [AS <message>]
     Assert {
         condition: Box<Expr>,
+        // AS or ,
+        separator: String,
         message: Option<Box<Expr>>,
     },
 }
@@ -816,11 +818,15 @@ impl fmt::Display for Statement {
                 write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" },)
             }
             Statement::CreateSchema { schema_name } => write!(f, "CREATE SCHEMA {}", schema_name),
-            Statement::Assert { condition, message } => {
+            Statement::Assert {
+                condition,
+                separator,
+                message,
+            } => {
                 write!(f, "ASSERT {}", condition)?;
 
                 if let Some(m) = message {
-                    write!(f, ", {}", m)?;
+                    write!(f, " {} {}", separator, m)?;
                 }
                 Ok(())
             }

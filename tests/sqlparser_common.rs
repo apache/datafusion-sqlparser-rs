@@ -1163,9 +1163,11 @@ fn parse_assert() {
     match ast {
         Statement::Assert {
             condition: _condition,
+            separator,
             message,
         } => {
-            assert!(message.is_none());
+            assert_eq!(message, None);
+            assert_eq!(separator, "");
         }
         _ => unreachable!(),
     }
@@ -1182,7 +1184,9 @@ fn parse_assert_message() {
         Statement::Assert {
             condition: _condition,
             message: Some(message),
+            separator
         } => {
+            assert_eq!(separator, "AS");
             match *message {
                 Expr::Value(Value::SingleQuotedString(s)) => assert_eq!(s, "No rows in table"),
                 _ => unreachable!(),

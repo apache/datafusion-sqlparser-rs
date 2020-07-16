@@ -554,10 +554,10 @@ pub enum Statement {
 
     /// ASSERT <condition> [AS <message>]
     Assert {
-        condition: Box<Expr>,
+        condition: Expr,
         // AS or ,
         separator: String,
-        message: Option<Box<Expr>>,
+        message: Option<Expr>,
     },
 }
 

@@ -1187,7 +1187,7 @@ fn parse_assert_message() {
             separator,
         } => {
             assert_eq!(separator, "AS");
-            match *message {
+            match message {
                 Expr::Value(Value::SingleQuotedString(s)) => assert_eq!(s, "No rows in table"),
                 _ => unreachable!(),
             };

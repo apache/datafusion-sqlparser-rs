@@ -182,19 +182,13 @@ impl Parser {
     }
     pub fn parse_assert(&mut self) -> Result<Statement, ParserError> {
         let condition = self.parse_expr()?;
-        let (separator, message) = if self.consume_token(&Token::Comma) {
-            (",".to_string(), Some(self.parse_expr()?))
-        } else if self.parse_keyword(Keyword::AS) {
-            ("AS".to_string(), Some(self.parse_expr()?))
+        let message = if self.parse_keyword(Keyword::AS) {
+            Some(self.parse_expr()?)
         } else {
-            ("".to_string(), None)
+            None
         };
 
-        Ok(Statement::Assert {
-            condition,
-            separator,
-            message,
-        })
+        Ok(Statement::Assert { condition, message })
     }
 
     /// Parse an expression prefix

@@ -555,7 +555,6 @@ pub enum Statement {
     /// ASSERT <condition> [AS <message>]
     Assert {
         condition: Expr,
-        // AS or ,
         message: Option<Expr>,
     },
 }

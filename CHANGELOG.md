@@ -11,11 +11,15 @@ Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented 
 ### Changed
 
 ### Added
-- Support SQLite's `CREATE TABLE (...) WITHOUT ROWID` (#208) - thanks @mashuai!
-- Support SQLite's `CREATE VIRTUAL TABLE` (#209) - thanks @mashuai!
 
 ### Fixed
 
+## [0.6.0] - 2020-07-20
+
+### Added
+- Support SQLite's `CREATE TABLE (...) WITHOUT ROWID` (#208) - thanks @mashuai!
+- Support SQLite's `CREATE VIRTUAL TABLE` (#209) - thanks @mashuai!
+- Support BigQuery `ASSERT` statement (#226)
 
 ## [0.5.1] - 2020-06-26
 This release should have been called `0.6`, as it introduces multiple incompatible changes to the API. If you don't want to upgrade yet, you can revert to the previous version by changing your `Cargo.toml` to:

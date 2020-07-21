@@ -90,7 +90,7 @@ fn parse_insert_invalid() {
     let sql = "INSERT public.customer (id, name, active) VALUES (1, 2, 3)";
     let res = parse_sql_statements(sql);
     assert_eq!(
-        ParserError::ParserError("Expected INTO, found: public".to_string()),
+        ParserError::ParserError("Expected one of INTO or OVERWRITE, found: public".to_string()),
         res.unwrap_err()
     );
 }
@@ -3193,7 +3193,7 @@ fn all_keywords_sorted() {
     // assert!(ALL_KEYWORDS.is_sorted())
     let mut copy = Vec::from(ALL_KEYWORDS);
     copy.sort();
-    assert!(copy == ALL_KEYWORDS)
+    assert_eq!(copy, ALL_KEYWORDS)
 }
 
 fn parse_sql_statements(sql: &str) -> Result<Vec<Statement>, ParserError> {

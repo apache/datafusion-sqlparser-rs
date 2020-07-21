@@ -132,6 +132,7 @@ impl Parser {
                     self.prev_token();
                     Ok(Statement::Query(Box::new(self.parse_query()?)))
                 }
+                Keyword::ANALYZE => Ok(self.parse_analyze()?),
                 Keyword::CREATE => Ok(self.parse_create()?),
                 Keyword::DROP => Ok(self.parse_drop()?),
                 Keyword::DELETE => Ok(self.parse_delete()?),
@@ -157,6 +158,45 @@ impl Parser {
             }
             unexpected => self.expected("an SQL statement", unexpected),
         }
+    }
+
+    pub fn parse_analyze(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::TABLE)?;
+        let table_name = self.parse_object_name()?;
+        let mut for_columns = false;
+        let mut cache_metadata = false;
+        let mut noscan = false;
+        let mut partitions = None;
+        let mut compute_statistics = false;
+
+        loop {
+            match self.parse_one_of_keywords(&[Keyword::PARTITION, Keyword::FOR, Keyword::CACHE, Keyword::NOSCAN, Keyword::COMPUTE]) {
+                Some(Keyword::PARTITION) => partitions = Some(self.parse_comma_separated(Parser::parse_expr)?),
+                Some(Keyword::NOSCAN) => noscan = true,
+                Some(Keyword::FOR) => {
+                    self.expect_keyword(Keyword::COLUMNS)?;
+                    for_columns = true
+                }
+                Some(Keyword::CACHE) => {
+                    self.expect_keyword(Keyword::METADATA)?;
+                    cache_metadata = true
+                }
+                Some(Keyword::COMPUTE) => {
+                    self.expect_keyword(Keyword::STATISTICS)?;
+                    compute_statistics = true
+                }
+                _ => break
+            }
+        }
+
+        Ok(Statement::Analyze {
+            table_name,
+            for_columns,
+            partitions,
+            cache_metadata,
+            noscan,
+            compute_statistics
+        })
     }
 
     /// Parse a new expression
@@ -865,7 +905,7 @@ impl Parser {
         let index = self.index;
         for &keyword in keywords {
             if !self.parse_keyword(keyword) {
-                //println!("parse_keywords aborting .. did not find {}", keyword);
+                println!("parse_keywords aborting .. did not find {:?}", keyword);
                 // reset index and return immediately
                 self.index = index;
                 return false;
@@ -1038,13 +1078,30 @@ impl Parser {
         Ok(Statement::CreateSchema { schema_name })
     }
 
-    pub fn parse_create_external_table(
-        &mut self,
-        or_replace: bool,
-    ) -> Result<Statement, ParserError> {
+
+    pub fn parse_create_database(&mut self) -> Result<Statement, ParserError> {
+        let ine = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let db_name = self.parse_object_name()?;
+        let mut location = None;
+        let mut managed_location = None;
+        loop {
+            match self.parse_one_of_keywords(&[Keyword::LOCATION, Keyword::MANAGEDLOCATION]) {
+                Some(Keyword::LOCATION) => location = Some(self.parse_literal_string()?),
+                Some(Keyword::MANAGEDLOCATION) => managed_location = Some(self.parse_literal_string()?),
+                _ => break
+            }
+        }
+        Ok(Statement::CreateDatabase { db_name, ine, location, managed_location })
+    }
+
+        pub fn parse_create_external_table(
+            &mut self,
+            or_replace: bool,
+        ) -> Result<Statement, ParserError> {
         self.expect_keyword(Keyword::TABLE)?;
         let table_name = self.parse_object_name()?;
         let (columns, constraints) = self.parse_columns()?;
+        let hive_distribution = self.parse_hive_distribution()?;
         self.expect_keywords(&[Keyword::STORED, Keyword::AS])?;
         let file_format = self.parse_file_format()?;
 
@@ -1055,6 +1112,8 @@ impl Parser {
             name: table_name,
             columns,
             constraints,
+            hive_distribution,
+            hive_formats: None,
             with_options: vec![],
             or_replace,
             if_not_exists: false,
@@ -1147,6 +1206,61 @@ impl Parser {
         })
     }
 
+    //TODO: Implement parsing for Skewed and Clustered
+    pub fn parse_hive_distribution(&mut self) -> Result<HiveDistributionStyle, ParserError> {
+        if self.parse_keywords(&[Keyword::PARTITIONED, Keyword::BY]) {
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(Parser::parse_column_def)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(HiveDistributionStyle::PARTITIONED {
+                columns
+            })
+        } else {
+            Ok(HiveDistributionStyle::NONE)
+        }
+    }
+
+    pub fn parse_hive_formats(&mut self) -> Result<HiveFormat, ParserError> {
+        let mut hive_format = HiveFormat::default();
+        loop {
+            match self.parse_one_of_keywords(&[Keyword::ROW, Keyword::STORED, Keyword::LOCATION]) {
+                Some(Keyword::ROW) => {
+                    hive_format.row_format = Some(self.parse_row_format()?);
+                }
+                Some(Keyword::STORED) => {
+                    self.expect_keyword(Keyword::AS)?;
+                    if self.parse_keyword(Keyword::INPUTFORMAT) {
+                        let input_format = self.parse_expr()?;
+                        self.expect_keyword(Keyword::OUTPUTFORMAT)?;
+                        let output_format = self.parse_expr()?;
+                        hive_format.storage = Some(HiveIOFormat::IOF {input_format, output_format});
+                    } else {
+                        let format = self.parse_file_format()?;
+                        hive_format.storage = Some(HiveIOFormat::FileFormat { format });
+                    }
+                }
+                Some(Keyword::LOCATION) => {
+                    hive_format.location = Some(self.parse_literal_string()?);
+                },
+                None => break,
+                _ => break
+            }
+        }
+
+        Ok(hive_format)
+    }
+
+    pub fn parse_row_format(&mut self) -> Result<HiveRowFormat, ParserError> {
+        self.expect_keyword(Keyword::FORMAT)?;
+        match self.parse_one_of_keywords(&[Keyword::SERDE, Keyword::DELIMITED]) {
+            Some(Keyword::SERDE) => {
+                let class = self.parse_literal_string()?;
+                Ok(HiveRowFormat::SERDE { class })
+            }
+            _ => Ok(HiveRowFormat::DELIMITED),
+        }
+    }
+
     pub fn parse_create_table(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name()?;
@@ -1156,6 +1270,8 @@ impl Parser {
         // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
 
+        let hive_distribution = self.parse_hive_distribution()?;
+        let hive_formats = self.parse_hive_formats()?;
         // PostgreSQL supports `WITH ( options )`, before `AS`
         let with_options = self.parse_with_options()?;
 
@@ -1173,6 +1289,8 @@ impl Parser {
             with_options,
             or_replace,
             if_not_exists,
+            hive_distribution,
+            hive_formats: Some(hive_formats),
             external: false,
             file_format: None,
             location: None,
@@ -1564,6 +1682,7 @@ impl Parser {
                 // parse_interval_literal for a taste.
                 Keyword::INTERVAL => Ok(DataType::Interval),
                 Keyword::REGCLASS => Ok(DataType::Regclass),
+                Keyword::STRING => Ok(DataType::String),
                 Keyword::TEXT => {
                     if self.consume_token(&Token::LBracket) {
                         // Note: this is postgresql-specific
@@ -1901,15 +2020,20 @@ impl Parser {
     }
 
     pub fn parse_set(&mut self) -> Result<Statement, ParserError> {
-        let modifier = self.parse_one_of_keywords(&[Keyword::SESSION, Keyword::LOCAL]);
+        let modifier = self.parse_one_of_keywords(&[Keyword::SESSION, Keyword::LOCAL, Keyword::HIVEVAR]);
+        if let Some(Keyword::HIVEVAR) = modifier {
+            self.expect_token(&Token::Colon)?;
+        }
         let variable = self.parse_identifier()?;
         if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
+
             let token = self.peek_token();
             let value = match (self.parse_value(), token) {
                 (Ok(value), _) => SetVariableValue::Literal(value),
                 (Err(_), Token::Word(ident)) => SetVariableValue::Ident(ident.to_ident()),
                 (Err(_), unexpected) => self.expected("variable value", unexpected)?,
             };
+            println!("{:?}", value);
             Ok(Statement::SetVariable {
                 local: modifier == Some(Keyword::LOCAL),
                 variable,
@@ -2155,12 +2279,23 @@ impl Parser {
 
     /// Parse an INSERT statement
     pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::INTO)?;
+        let action = self.expect_one_of_keywords(&[Keyword::INTO, Keyword::OVERWRITE])?;
+        let overwrite = if action == Keyword::OVERWRITE { true } else { false };
+        if overwrite {
+            self.expect_keyword(Keyword::TABLE)?;
+        }
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
+        let partitioned = if self.parse_keywords(&[Keyword::PARTITION]) {
+            Some(self.parse_comma_separated(Parser::parse_expr)?)
+        } else {
+            None
+        };
         let source = Box::new(self.parse_query()?);
         Ok(Statement::Insert {
             table_name,
+            overwrite,
+            partitioned,
             columns,
             source,
         })

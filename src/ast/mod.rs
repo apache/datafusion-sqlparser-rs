@@ -425,6 +425,15 @@ impl fmt::Display for WindowFrameBound {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Statement {
+    /// Analyze (Hive)
+    Analyze {
+        table_name: ObjectName,
+        partitions: Option<Vec<Expr>>,
+        for_columns: bool,
+        cache_metadata: bool,
+        noscan: bool,
+        compute_statistics: bool
+    },
     /// SELECT
     Query(Box<Query>),
     /// INSERT
@@ -433,8 +442,12 @@ pub enum Statement {
         table_name: ObjectName,
         /// COLUMNS
         columns: Vec<Ident>,
+        /// Overwrite (Hive)
+        overwrite: bool,
         /// A SQL query that specifies what to insert
         source: Box<Query>,
+        /// partitioned insert (Hive)
+        partitioned: Option<Vec<Expr>>
     },
     Copy {
         /// TABLE
@@ -480,6 +493,8 @@ pub enum Statement {
         /// Optional schema
         columns: Vec<ColumnDef>,
         constraints: Vec<TableConstraint>,
+        hive_distribution: HiveDistributionStyle,
+        hive_formats: Option<HiveFormat>,
         with_options: Vec<SqlOption>,
         file_format: Option<FileFormat>,
         location: Option<String>,
@@ -553,7 +568,12 @@ pub enum Statement {
     Rollback { chain: bool },
     /// CREATE SCHEMA
     CreateSchema { schema_name: ObjectName },
-
+    /// CREATE DATABASE
+    CreateDatabase {
+        db_name: ObjectName,
+        ine: bool, location: Option<String>,
+        managed_location: Option<String>
+    },
     /// ASSERT <condition> [AS <message>]
     Assert {
         condition: Expr,
@@ -568,12 +588,17 @@ impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Statement::Query(s) => write!(f, "{}", s),
+            Statement::Analyze { table_name, partitions, for_columns, cache_metadata, noscan, compute_statistics } => {
+                Ok(())
+            }
             Statement::Insert {
                 table_name,
+                overwrite,
+                partitioned,
                 columns,
                 source,
             } => {
-                write!(f, "INSERT INTO {} ", table_name)?;
+                write!(f, "INSERT {act} {table_name} ", table_name = table_name, act = if *overwrite { "OVERWRITE" } else { "INTO" })?;
                 if !columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(columns))?;
                 }
@@ -629,6 +654,20 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::CreateDatabase { db_name, ine, location, managed_location } => {
+                write!(f, "CREATE")?;
+                if *ine {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " {}", db_name)?;
+                if let Some(l) = location {
+                    write!(f, " LOCATION '{}'", l)?;
+                }
+                if let Some(ml) = managed_location {
+                    write!(f, " MANAGEDLOCATION '{}'", ml)?;
+                }
+                Ok(())
+            }
             Statement::CreateView {
                 name,
                 or_replace,
@@ -666,6 +705,8 @@ impl fmt::Display for Statement {
                 with_options,
                 or_replace,
                 if_not_exists,
+                hive_distribution,
+                hive_formats,
                 external,
                 file_format,
                 location,
@@ -702,6 +743,42 @@ impl fmt::Display for Statement {
                     write!(f, " WITHOUT ROWID")?;
                 }
 
+                match hive_distribution {
+                    HiveDistributionStyle::PARTITIONED { columns } => write!(f, " PARTITIONED BY ({})", display_comma_separated(&columns))?,
+                    HiveDistributionStyle::CLUSTERED { columns, sorted_by, num_buckets } => {
+                        write!(f, " CLUSTERED BY ({})", display_comma_separated(&columns))?;
+                        if !sorted_by.is_empty() {
+                            write!(f, " SORTED BY ({})", display_comma_separated(&sorted_by))?;
+                        }
+                        if *num_buckets > 0 {
+                            write!(f, " INTO {} BUCKETS", num_buckets)?;
+                        }
+                    }
+                    HiveDistributionStyle::SKEWED { columns, on, stored_as_directories } => {
+                        write!(f, " SKEWED BY ({})) ON ({})", display_comma_separated(&columns), display_comma_separated(&on))?;
+                        if *stored_as_directories {
+                            write!(f, " STORED AS DIRECTORIES")?;
+                        }
+                    },
+                    _ => ()
+                }
+
+                if let Some(HiveFormat { row_format, storage, location }) = hive_formats {
+
+                    match row_format {
+                        Some(HiveRowFormat::SERDE { class }) => write!(f, " ROW FORMAT SERDE '{}'", class)?,
+                        Some(HiveRowFormat::DELIMITED) => write!(f, " ROW FORMAT DELIMITED")?,
+                        None => ()
+                    }
+                    match storage {
+                        Some(HiveIOFormat::IOF { input_format, output_format }) => write!(f, " STORED AS INPUTFORMAT {} OUTPUTFORMAT {}", input_format, output_format)?,
+                        Some(HiveIOFormat::FileFormat { format }) => write!(f, " STORED AS {}", format)?,
+                        None => ()
+                    }
+                    if let Some(loc) = location {
+                        write!(f, " LOCATION '{}'", loc)?;
+                    }
+                }
                 if *external {
                     write!(
                         f,
@@ -997,6 +1074,64 @@ impl fmt::Display for ObjectType {
             ObjectType::Index => "INDEX",
             ObjectType::Schema => "SCHEMA",
         })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum HiveDistributionStyle {
+    PARTITIONED {
+        columns: Vec<ColumnDef>
+    },
+    CLUSTERED {
+        columns: Vec<Ident>,
+        sorted_by: Vec<ColumnDef>,
+        num_buckets: i32
+    },
+    SKEWED {
+        columns: Vec<ColumnDef>,
+        on: Vec<ColumnDef>,
+        stored_as_directories: bool
+    },
+    NONE
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum HiveRowFormat {
+    SERDE {
+        class: String
+    },
+    DELIMITED
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum HiveIOFormat {
+    IOF {
+         input_format: Expr,
+         output_format: Expr,
+    },
+    FileFormat {
+        format: FileFormat
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct HiveFormat {
+    pub row_format: Option<HiveRowFormat>,
+    pub storage: Option<HiveIOFormat>,
+    pub location: Option<String>
+}
+
+impl Default for HiveFormat {
+    fn default() -> Self {
+        HiveFormat {
+            row_format: None,
+            location: None,
+            storage: None
+        }
     }
 }
 

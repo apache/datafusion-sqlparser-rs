@@ -440,6 +440,19 @@ pub enum Statement {
         noscan: bool,
         compute_statistics: bool
     },
+    /// Truncate (Hive)
+    Truncate {
+        table_name: ObjectName,
+        partitions: Option<Vec<Expr>>
+    },
+    /// Msck (Hive)
+    Msck {
+        table_name: ObjectName,
+        repair: bool,
+        add_partitions: bool,
+        drop_partitions: bool,
+        sync_partitions: bool
+    },
     /// SELECT
     Query(Box<Query>),
     /// INSERT
@@ -453,7 +466,7 @@ pub enum Statement {
         /// A SQL query that specifies what to insert
         source: Box<Query>,
         /// partitioned insert (Hive)
-        partitioned: Option<Vec<Expr>>
+        partitioned: Option<Vec<Ident>>
     },
     Copy {
         /// TABLE
@@ -548,8 +561,9 @@ pub enum Statement {
     /// supported yet.
     SetVariable {
         local: bool,
+        hivevar: bool,
         variable: Ident,
-        value: SetVariableValue,
+        value: Vec<SetVariableValue>,
     },
     /// SHOW <variable>
     ///
@@ -613,7 +627,40 @@ impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Statement::Query(s) => write!(f, "{}", s),
-            Statement::Analyze { table_name, partitions, for_columns, cache_metadata, noscan, compute_statistics } => {
+            Statement::Msck { table_name, repair, add_partitions, drop_partitions, sync_partitions } => {
+                write!(f, "MSCK {repair}TABLE {table}", repair = if *repair { "REPAIR " } else { "" }, table = table_name)?;
+                write!(f, "{add}{drop}{sync}",
+                       add = if *add_partitions { " ADD PARTITIONS" } else { "" },
+                       drop = if *drop_partitions { " DROP PARTITIONS" } else { "" },
+                       sync = if *sync_partitions { " SYNC PARTITIONS" } else { "" }
+                )
+            }
+            Statement::Truncate { table_name, partitions } => {
+                write!(f, "TRUNCATE TABLE {}", table_name)?;
+                if let Some(ref parts) = partitions {
+                    if !parts.is_empty() {
+                        write!(f, " PARTITION ({})", display_comma_separated(parts))?;
+                    }
+                }
+                Ok(())
+            }
+            Statement::Analyze { table_name, partitions, for_columns: _, cache_metadata, noscan, compute_statistics } => {
+                write!(f, "ANALYZE TABLE {}", table_name)?;
+                if let Some(ref parts) = partitions {
+                    if !parts.is_empty() {
+                        write!(f, " PARTITION ({})", display_comma_separated(parts))?;
+                    }
+                }
+                //TODO: Add for columns
+                if *compute_statistics {
+                    write!(f, " COMPUTE STATISTICS")?;
+                }
+                if *noscan {
+                    write!(f, " NOSCAN")?;
+                }
+                if *cache_metadata {
+                    write!(f, " CACHE METADATA")?;
+                }
                 Ok(())
             }
             Statement::Insert {
@@ -623,9 +670,14 @@ impl fmt::Display for Statement {
                 columns,
                 source,
             } => {
-                write!(f, "INSERT {act} {table_name} ", table_name = table_name, act = if *overwrite { "OVERWRITE" } else { "INTO" })?;
+                write!(f, "INSERT {act} {table_name} ", table_name = table_name, act = if *overwrite { "OVERWRITE TABLE" } else { "INTO" })?;
                 if !columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(columns))?;
+                }
+                if let Some(ref parts) = partitioned {
+                    if !parts.is_empty() {
+                        write!(f, "PARTITION ({}) ", display_comma_separated(parts))?;
+                    }
                 }
                 write!(f, "{}", source)
             }
@@ -864,14 +916,15 @@ impl fmt::Display for Statement {
             Statement::SetVariable {
                 local,
                 variable,
+                hivevar,
                 value,
-            } => write!(
-                f,
-                "SET{local} {variable} = {value}",
-                local = if *local { " LOCAL" } else { "" },
-                variable = variable,
-                value = value
-            ),
+            } => {
+                f.write_str("SET ")?;
+                if *local {
+                    f.write_str("LOCAL ")?;
+                }
+                write!(f, "{hivevar}{name} = {value}", hivevar = if *hivevar { "HIVEVAR:" } else { "" }, name = variable, value = display_comma_separated(value))
+            }
             Statement::ShowVariable { variable } => write!(f, "SHOW {}", variable),
             Statement::ShowColumns {
                 extended,

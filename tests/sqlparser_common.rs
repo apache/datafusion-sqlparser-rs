@@ -92,7 +92,7 @@ fn parse_insert_invalid() {
     let sql = "INSERT public.customer (id, name, active) VALUES (1, 2, 3)";
     let res = parse_sql_statements(sql);
     assert_eq!(
-        ParserError::ParserError("Expected INTO, found: public".to_string()),
+        ParserError::ParserError("Expected one of INTO or OVERWRITE, found: public".to_string()),
         res.unwrap_err()
     );
 }

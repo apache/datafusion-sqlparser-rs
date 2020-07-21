@@ -133,6 +133,8 @@ impl Parser {
                     Ok(Statement::Query(Box::new(self.parse_query()?)))
                 }
                 Keyword::ANALYZE => Ok(self.parse_analyze()?),
+                Keyword::TRUNCATE => Ok(self.parse_truncate()?),
+                Keyword::MSCK => Ok(self.parse_msck()?),
                 Keyword::CREATE => Ok(self.parse_create()?),
                 Keyword::DROP => Ok(self.parse_drop()?),
                 Keyword::DELETE => Ok(self.parse_delete()?),
@@ -160,6 +162,37 @@ impl Parser {
         }
     }
 
+    pub fn parse_msck(&mut self) -> Result<Statement, ParserError> {
+        let repair = self.parse_keyword(Keyword::REPAIR);
+        self.expect_keyword(Keyword::TABLE)?;
+        let table_name = self.parse_object_name()?;
+        let (mut add, mut drop, mut sync) = (false, false, false);
+        match self.parse_one_of_keywords(&[Keyword::ADD, Keyword::DROP, Keyword::SYNC]) {
+            Some(Keyword::ADD) => { add = true; }
+            Some(Keyword::DROP) => { drop = true; }
+            Some(Keyword::SYNC) => { sync = true; }
+            _ => ()
+        }
+        self.expect_keyword(Keyword::PARTITIONS)?;
+        Ok(Statement::Msck {
+            repair, table_name, add_partitions: add, drop_partitions: drop, sync_partitions: sync
+        })
+    }
+
+    pub fn parse_truncate(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::TABLE)?;
+        let table_name = self.parse_object_name()?;
+        let mut partitions = None;
+        if self.parse_keyword(Keyword::PARTITION) {
+            self.expect_token(&Token::LParen)?;
+            partitions = Some(self.parse_comma_separated(Parser::parse_expr)?);
+            self.expect_token(&Token::RParen)?;
+        }
+        Ok(Statement::Truncate {
+            table_name, partitions
+        })
+    }
+
     pub fn parse_analyze(&mut self) -> Result<Statement, ParserError> {
         self.expect_keyword(Keyword::TABLE)?;
         let table_name = self.parse_object_name()?;
@@ -171,7 +204,11 @@ impl Parser {
 
         loop {
             match self.parse_one_of_keywords(&[Keyword::PARTITION, Keyword::FOR, Keyword::CACHE, Keyword::NOSCAN, Keyword::COMPUTE]) {
-                Some(Keyword::PARTITION) => partitions = Some(self.parse_comma_separated(Parser::parse_expr)?),
+                Some(Keyword::PARTITION) => {
+                    self.expect_token(&Token::LParen)?;
+                    partitions = Some(self.parse_comma_separated(Parser::parse_expr)?);
+                    self.expect_token(&Token::RParen)?;
+                },
                 Some(Keyword::NOSCAN) => noscan = true,
                 Some(Keyword::FOR) => {
                     self.expect_keyword(Keyword::COLUMNS)?;
@@ -905,7 +942,7 @@ impl Parser {
         let index = self.index;
         for &keyword in keywords {
             if !self.parse_keyword(keyword) {
-                println!("parse_keywords aborting .. did not find {:?}", keyword);
+                // println!("parse_keywords aborting .. did not find {:?}", keyword);
                 // reset index and return immediately
                 self.index = index;
                 return false;
@@ -2026,25 +2063,31 @@ impl Parser {
         }
         let variable = self.parse_identifier()?;
         if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
-
-            let token = self.peek_token();
-            let value = match (self.parse_value(), token) {
-                (Ok(value), _) => SetVariableValue::Literal(value),
-                (Err(_), Token::Word(ident)) => SetVariableValue::Ident(ident.to_ident()),
-                (Err(_), unexpected) => self.expected("variable value", unexpected)?,
-            };
-            println!("{:?}", value);
-            Ok(Statement::SetVariable {
-                local: modifier == Some(Keyword::LOCAL),
-                variable,
-                value,
-            })
+            let mut values = vec![];
+            loop {
+                let token = self.peek_token();
+                let value = match (self.parse_value(), token) {
+                    (Ok(value), _) => SetVariableValue::Literal(value),
+                    (Err(_), Token::Word(ident)) => SetVariableValue::Ident(ident.to_ident()),
+                    (Err(_), unexpected) => self.expected("variable value", unexpected)?,
+                };
+                values.push(value);
+                if self.consume_token(&Token::Comma) {
+                    continue;
+                }
+                return Ok(Statement::SetVariable {
+                    local: modifier == Some(Keyword::LOCAL),
+                    hivevar: Some(Keyword::HIVEVAR) == modifier,
+                    variable,
+                    value: values,
+                })
+            }
         } else if variable.value == "TRANSACTION" && modifier.is_none() {
-            Ok(Statement::SetTransaction {
+            return Ok(Statement::SetTransaction {
                 modes: self.parse_transaction_modes()?,
             })
         } else {
-            self.expected("equals sign or TO", self.peek_token())
+            return self.expected("equals sign or TO", self.peek_token())
         }
     }
 
@@ -2286,8 +2329,12 @@ impl Parser {
         }
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
-        let partitioned = if self.parse_keywords(&[Keyword::PARTITION]) {
-            Some(self.parse_comma_separated(Parser::parse_expr)?)
+
+        let partitioned = if self.parse_keyword(Keyword::PARTITION) {
+            self.expect_token(&Token::LParen)?;
+            let r = Some(self.parse_comma_separated(Parser::parse_identifier)?);
+            self.expect_token(&Token::RParen)?;
+            r
         } else {
             None
         };

@@ -59,6 +59,12 @@ fn parse_set() {
     hive().verified_stmt(set);
 }
 
+#[test]
+fn parse_with_cte() {
+    let with = "WITH a AS (SELECT * FROM table) INSERT INTO TABLE db.table_table PARTITION (a) SELECT * FROM a";
+    hive().verified_stmt(with);
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

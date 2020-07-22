@@ -2002,11 +2002,16 @@ impl<'a> Parser<'a> {
             name: self.parse_identifier()?,
             columns: self.parse_parenthesized_column_list(Optional)?,
         };
-        self.expect_keyword(Keyword::AS)?;
-        self.expect_token(&Token::LParen)?;
-        let query = self.parse_query()?;
-        self.expect_token(&Token::RParen)?;
-        Ok(Cte { alias, query })
+
+        if self.parse_keyword(Keyword::AS) {
+            self.expect_token(&Token::LParen)?;
+            let query = self.parse_query()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Cte { alias, query })
+        } else {
+            let query = self.parse_query()?;
+            Ok(Cte { alias, query })
+        }
     }
 
     /// Parse a "query body", which is an expression with roughly the
@@ -2441,9 +2446,8 @@ impl<'a> Parser<'a> {
     pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
         let action = self.expect_one_of_keywords(&[Keyword::INTO, Keyword::OVERWRITE])?;
         let overwrite = if action == Keyword::OVERWRITE { true } else { false };
-        if overwrite {
-            self.expect_keyword(Keyword::TABLE)?;
-        }
+        // Hive lets you put table here regardless
+        self.parse_keyword(Keyword::TABLE);
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
 

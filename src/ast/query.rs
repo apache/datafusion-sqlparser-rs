@@ -73,6 +73,7 @@ pub enum SetExpr {
         right: Box<SetExpr>,
     },
     Values(Values),
+    Insert(Statement),
     // TODO: ANSI SQL supports `TABLE` here.
 }
 
@@ -82,6 +83,7 @@ impl fmt::Display for SetExpr {
             SetExpr::Select(s) => write!(f, "{}", s),
             SetExpr::Query(q) => write!(f, "({})", q),
             SetExpr::Values(v) => write!(f, "{}", v),
+            SetExpr::Insert(v) => write!(f, "{}", v),
             SetExpr::SetOperation {
                 left,
                 right,

@@ -1892,40 +1892,52 @@ impl Parser {
             vec![]
         };
 
-        let body = self.parse_query_body(0)?;
+        if !self.parse_keyword(Keyword::INSERT) {
+            let body = self.parse_query_body(0)?;
 
-        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-            self.parse_comma_separated(Parser::parse_order_by_expr)?
+            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                self.parse_comma_separated(Parser::parse_order_by_expr)?
+            } else {
+                vec![]
+            };
+
+            let limit = if self.parse_keyword(Keyword::LIMIT) {
+                self.parse_limit()?
+            } else {
+                None
+            };
+
+            let offset = if self.parse_keyword(Keyword::OFFSET) {
+                Some(self.parse_offset()?)
+            } else {
+                None
+            };
+
+            let fetch = if self.parse_keyword(Keyword::FETCH) {
+                Some(self.parse_fetch()?)
+            } else {
+                None
+            };
+
+            Ok(Query {
+                ctes,
+                body,
+                limit,
+                order_by,
+                offset,
+                fetch,
+            })
         } else {
-            vec![]
-        };
-
-        let limit = if self.parse_keyword(Keyword::LIMIT) {
-            self.parse_limit()?
-        } else {
-            None
-        };
-
-        let offset = if self.parse_keyword(Keyword::OFFSET) {
-            Some(self.parse_offset()?)
-        } else {
-            None
-        };
-
-        let fetch = if self.parse_keyword(Keyword::FETCH) {
-            Some(self.parse_fetch()?)
-        } else {
-            None
-        };
-
-        Ok(Query {
-            ctes,
-            body,
-            limit,
-            order_by,
-            offset,
-            fetch,
-        })
+            let insert = self.parse_insert()?;
+            Ok(Query {
+                ctes,
+                body: SetExpr::Insert(insert),
+                limit: None,
+                order_by: vec![],
+                offset: None,
+                fetch: None
+            })
+        }
     }
 
     /// Parse a CTE (`alias [( col1, col2, ... )] AS (subquery)`)
@@ -1934,11 +1946,16 @@ impl Parser {
             name: self.parse_identifier()?,
             columns: self.parse_parenthesized_column_list(Optional)?,
         };
-        self.expect_keyword(Keyword::AS)?;
-        self.expect_token(&Token::LParen)?;
-        let query = self.parse_query()?;
-        self.expect_token(&Token::RParen)?;
-        Ok(Cte { alias, query })
+
+        if self.parse_keyword(Keyword::AS) {
+            self.expect_token(&Token::LParen)?;
+            let query = self.parse_query()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Cte { alias, query })
+        } else {
+            let query = self.parse_query()?;
+            Ok(Cte { alias, query })
+        }
     }
 
     /// Parse a "query body", which is an expression with roughly the
@@ -2324,9 +2341,8 @@ impl Parser {
     pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
         let action = self.expect_one_of_keywords(&[Keyword::INTO, Keyword::OVERWRITE])?;
         let overwrite = if action == Keyword::OVERWRITE { true } else { false };
-        if overwrite {
-            self.expect_keyword(Keyword::TABLE)?;
-        }
+        // Hive lets you put table here regardless
+        self.parse_keyword(Keyword::TABLE);
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
 

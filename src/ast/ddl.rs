@@ -214,6 +214,7 @@ pub enum ColumnOption {
     },
     // `CHECK (<expr>)`
     Check(Expr),
+    AutoIncrement,
 }
 
 impl fmt::Display for ColumnOption {
@@ -245,6 +246,7 @@ impl fmt::Display for ColumnOption {
                 Ok(())
             }
             Check(expr) => write!(f, "CHECK ({})", expr),
+            AutoIncrement => write!(f, "AUTO_INCREMENT"),
         }
     }
 }

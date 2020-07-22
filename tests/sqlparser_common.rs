@@ -1288,6 +1288,12 @@ fn parse_create_table_trailing_comma() {
 }
 
 #[test]
+fn parse_create_table_auto_increment() {
+    let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTO_INCREMENT)";
+    all_dialects().verified_stmt(sql);
+}
+
+#[test]
 fn parse_create_external_table() {
     let sql = "CREATE EXTERNAL TABLE uk_cities (\
                name VARCHAR(100) NOT NULL,\

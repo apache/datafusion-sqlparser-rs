@@ -1266,6 +1266,8 @@ impl Parser {
             let expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
             ColumnOption::Check(expr)
+        } else if self.parse_keyword(Keyword::AUTO_INCREMENT) {
+            ColumnOption::AutoIncrement
         } else {
             return self.expected("column option", self.peek_token());
         };

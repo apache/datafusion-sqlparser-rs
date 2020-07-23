@@ -44,6 +44,8 @@ pub enum Token {
     Comma,
     /// Whitespace (space, tab, etc)
     Whitespace(Whitespace),
+    /// Double equals sign `==`
+    DoubleEq,
     /// Equality operator `=`
     Eq,
     /// Not Equals operator `<>` (or `!=` in some dialects)
@@ -110,6 +112,7 @@ impl fmt::Display for Token {
             Token::HexStringLiteral(ref s) => write!(f, "X'{}'", s),
             Token::Comma => f.write_str(","),
             Token::Whitespace(ws) => write!(f, "{}", ws),
+            Token::DoubleEq => f.write_str("=="),
             Token::Eq => f.write_str("="),
             Token::Neq => f.write_str("<>"),
             Token::Lt => f.write_str("<"),
@@ -395,7 +398,13 @@ impl<'a> Tokenizer<'a> {
                         _ => Ok(Some(Token::Pipe)),
                     }
                 }
-                '=' => self.consume_and_return(chars, Token::Eq),
+                '=' => {
+                    chars.next();
+                    match chars.peek() {
+                        Some('=') => self.consume_and_return(chars, Token::DoubleEq),
+                        _ => Ok(Some(Token::Eq))
+                    }
+                },
                 '.' => self.consume_and_return(chars, Token::Period),
                 '!' => {
                     chars.next(); // consume

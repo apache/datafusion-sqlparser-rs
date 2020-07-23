@@ -2358,7 +2358,7 @@ impl Parser {
 
         let partitioned = if self.parse_keyword(Keyword::PARTITION) {
             self.expect_token(&Token::LParen)?;
-            let r = Some(self.parse_comma_separated(Parser::parse_identifier)?);
+            let r = Some(self.parse_comma_separated(Parser::parse_expr)?);
             self.expect_token(&Token::RParen)?;
             r
         } else {

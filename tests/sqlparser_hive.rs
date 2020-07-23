@@ -15,10 +15,8 @@
 //! Test SQL syntax specific to Hive. The parser based on the generic dialect
 //! is also tested (on the inputs it can handle).
 
-
 use sqlparser::dialect::{GenericDialect, HiveDialect};
 use sqlparser::test_utils::*;
-
 
 #[test]
 fn parse_table_create() {

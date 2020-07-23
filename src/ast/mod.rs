@@ -432,12 +432,12 @@ pub enum Statement {
         for_columns: bool,
         cache_metadata: bool,
         noscan: bool,
-        compute_statistics: bool
+        compute_statistics: bool,
     },
     /// Truncate (Hive)
     Truncate {
         table_name: ObjectName,
-        partitions: Option<Vec<Expr>>
+        partitions: Option<Vec<Expr>>,
     },
     /// Msck (Hive)
     Msck {
@@ -445,7 +445,7 @@ pub enum Statement {
         repair: bool,
         add_partitions: bool,
         drop_partitions: bool,
-        sync_partitions: bool
+        sync_partitions: bool,
     },
     /// SELECT
     Query(Box<Query>),
@@ -460,7 +460,7 @@ pub enum Statement {
         /// A SQL query that specifies what to insert
         source: Box<Query>,
         /// partitioned insert (Hive)
-        partitioned: Option<Vec<Expr>>
+        partitioned: Option<Vec<Expr>>,
     },
     Copy {
         /// TABLE
@@ -585,8 +585,9 @@ pub enum Statement {
     /// CREATE DATABASE
     CreateDatabase {
         db_name: ObjectName,
-        ine: bool, location: Option<String>,
-        managed_location: Option<String>
+        ine: bool,
+        location: Option<String>,
+        managed_location: Option<String>,
     },
     /// ASSERT <condition> [AS <message>]
     Assert {
@@ -602,15 +603,43 @@ impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Statement::Query(s) => write!(f, "{}", s),
-            Statement::Msck { table_name, repair, add_partitions, drop_partitions, sync_partitions } => {
-                write!(f, "MSCK {repair}TABLE {table}", repair = if *repair { "REPAIR " } else { "" }, table = table_name)?;
-                write!(f, "{add}{drop}{sync}",
-                       add = if *add_partitions { " ADD PARTITIONS" } else { "" },
-                       drop = if *drop_partitions { " DROP PARTITIONS" } else { "" },
-                       sync = if *sync_partitions { " SYNC PARTITIONS" } else { "" }
+            Statement::Msck {
+                table_name,
+                repair,
+                add_partitions,
+                drop_partitions,
+                sync_partitions,
+            } => {
+                write!(
+                    f,
+                    "MSCK {repair}TABLE {table}",
+                    repair = if *repair { "REPAIR " } else { "" },
+                    table = table_name
+                )?;
+                write!(
+                    f,
+                    "{add}{drop}{sync}",
+                    add = if *add_partitions {
+                        " ADD PARTITIONS"
+                    } else {
+                        ""
+                    },
+                    drop = if *drop_partitions {
+                        " DROP PARTITIONS"
+                    } else {
+                        ""
+                    },
+                    sync = if *sync_partitions {
+                        " SYNC PARTITIONS"
+                    } else {
+                        ""
+                    }
                 )
             }
-            Statement::Truncate { table_name, partitions } => {
+            Statement::Truncate {
+                table_name,
+                partitions,
+            } => {
                 write!(f, "TRUNCATE TABLE {}", table_name)?;
                 if let Some(ref parts) = partitions {
                     if !parts.is_empty() {
@@ -619,7 +648,14 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Analyze { table_name, partitions, for_columns: _, cache_metadata, noscan, compute_statistics } => {
+            Statement::Analyze {
+                table_name,
+                partitions,
+                for_columns: _,
+                cache_metadata,
+                noscan,
+                compute_statistics,
+            } => {
                 write!(f, "ANALYZE TABLE {}", table_name)?;
                 if let Some(ref parts) = partitions {
                     if !parts.is_empty() {
@@ -645,7 +681,16 @@ impl fmt::Display for Statement {
                 columns,
                 source,
             } => {
-                write!(f, "INSERT {act} {table_name} ", table_name = table_name, act = if *overwrite { "OVERWRITE TABLE" } else { "INTO" })?;
+                write!(
+                    f,
+                    "INSERT {act} {table_name} ",
+                    table_name = table_name,
+                    act = if *overwrite {
+                        "OVERWRITE TABLE"
+                    } else {
+                        "INTO"
+                    }
+                )?;
                 if !columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(columns))?;
                 }
@@ -706,7 +751,12 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateDatabase { db_name, ine, location, managed_location } => {
+            Statement::CreateDatabase {
+                db_name,
+                ine,
+                location,
+                managed_location,
+            } => {
                 write!(f, "CREATE")?;
                 if *ine {
                     write!(f, " IF NOT EXISTS")?;
@@ -796,8 +846,14 @@ impl fmt::Display for Statement {
                 }
 
                 match hive_distribution {
-                    HiveDistributionStyle::PARTITIONED { columns } => write!(f, " PARTITIONED BY ({})", display_comma_separated(&columns))?,
-                    HiveDistributionStyle::CLUSTERED { columns, sorted_by, num_buckets } => {
+                    HiveDistributionStyle::PARTITIONED { columns } => {
+                        write!(f, " PARTITIONED BY ({})", display_comma_separated(&columns))?
+                    }
+                    HiveDistributionStyle::CLUSTERED {
+                        columns,
+                        sorted_by,
+                        num_buckets,
+                    } => {
                         write!(f, " CLUSTERED BY ({})", display_comma_separated(&columns))?;
                         if !sorted_by.is_empty() {
                             write!(f, " SORTED BY ({})", display_comma_separated(&sorted_by))?;
@@ -806,26 +862,50 @@ impl fmt::Display for Statement {
                             write!(f, " INTO {} BUCKETS", num_buckets)?;
                         }
                     }
-                    HiveDistributionStyle::SKEWED { columns, on, stored_as_directories } => {
-                        write!(f, " SKEWED BY ({})) ON ({})", display_comma_separated(&columns), display_comma_separated(&on))?;
+                    HiveDistributionStyle::SKEWED {
+                        columns,
+                        on,
+                        stored_as_directories,
+                    } => {
+                        write!(
+                            f,
+                            " SKEWED BY ({})) ON ({})",
+                            display_comma_separated(&columns),
+                            display_comma_separated(&on)
+                        )?;
                         if *stored_as_directories {
                             write!(f, " STORED AS DIRECTORIES")?;
                         }
-                    },
-                    _ => ()
+                    }
+                    _ => (),
                 }
 
-                if let Some(HiveFormat { row_format, storage, location }) = hive_formats {
-
+                if let Some(HiveFormat {
+                    row_format,
+                    storage,
+                    location,
+                }) = hive_formats
+                {
                     match row_format {
-                        Some(HiveRowFormat::SERDE { class }) => write!(f, " ROW FORMAT SERDE '{}'", class)?,
+                        Some(HiveRowFormat::SERDE { class }) => {
+                            write!(f, " ROW FORMAT SERDE '{}'", class)?
+                        }
                         Some(HiveRowFormat::DELIMITED) => write!(f, " ROW FORMAT DELIMITED")?,
-                        None => ()
+                        None => (),
                     }
                     match storage {
-                        Some(HiveIOFormat::IOF { input_format, output_format }) => write!(f, " STORED AS INPUTFORMAT {} OUTPUTFORMAT {}", input_format, output_format)?,
-                        Some(HiveIOFormat::FileFormat { format }) => write!(f, " STORED AS {}", format)?,
-                        None => ()
+                        Some(HiveIOFormat::IOF {
+                            input_format,
+                            output_format,
+                        }) => write!(
+                            f,
+                            " STORED AS INPUTFORMAT {} OUTPUTFORMAT {}",
+                            input_format, output_format
+                        )?,
+                        Some(HiveIOFormat::FileFormat { format }) => {
+                            write!(f, " STORED AS {}", format)?
+                        }
+                        None => (),
                     }
                     if let Some(loc) = location {
                         write!(f, " LOCATION '{}'", loc)?;
@@ -913,7 +993,13 @@ impl fmt::Display for Statement {
                 if *local {
                     f.write_str("LOCAL ")?;
                 }
-                write!(f, "{hivevar}{name} = {value}", hivevar = if *hivevar { "HIVEVAR:" } else { "" }, name = variable, value = display_comma_separated(value))
+                write!(
+                    f,
+                    "{hivevar}{name} = {value}",
+                    hivevar = if *hivevar { "HIVEVAR:" } else { "" },
+                    name = variable,
+                    value = display_comma_separated(value)
+                )
             }
             Statement::ShowVariable { variable } => write!(f, "SHOW {}", variable),
             Statement::ShowColumns {
@@ -1134,40 +1220,38 @@ impl fmt::Display for ObjectType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum HiveDistributionStyle {
     PARTITIONED {
-        columns: Vec<ColumnDef>
+        columns: Vec<ColumnDef>,
     },
     CLUSTERED {
         columns: Vec<Ident>,
         sorted_by: Vec<ColumnDef>,
-        num_buckets: i32
+        num_buckets: i32,
     },
     SKEWED {
         columns: Vec<ColumnDef>,
         on: Vec<ColumnDef>,
-        stored_as_directories: bool
+        stored_as_directories: bool,
     },
-    NONE
+    NONE,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum HiveRowFormat {
-    SERDE {
-        class: String
-    },
-    DELIMITED
+    SERDE { class: String },
+    DELIMITED,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum HiveIOFormat {
     IOF {
-         input_format: Expr,
-         output_format: Expr,
+        input_format: Expr,
+        output_format: Expr,
     },
     FileFormat {
-        format: FileFormat
-    }
+        format: FileFormat,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1175,7 +1259,7 @@ pub enum HiveIOFormat {
 pub struct HiveFormat {
     pub row_format: Option<HiveRowFormat>,
     pub storage: Option<HiveIOFormat>,
-    pub location: Option<String>
+    pub location: Option<String>,
 }
 
 impl Default for HiveFormat {
@@ -1183,7 +1267,7 @@ impl Default for HiveFormat {
         HiveFormat {
             row_format: None,
             location: None,
-            storage: None
+            storage: None,
         }
     }
 }

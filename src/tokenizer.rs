@@ -405,9 +405,9 @@ impl<'a> Tokenizer<'a> {
                     chars.next();
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::DoubleEq),
-                        _ => Ok(Some(Token::Eq))
+                        _ => Ok(Some(Token::Eq)),
                     }
-                },
+                }
                 '.' => self.consume_and_return(chars, Token::Period),
                 '!' => {
                     chars.next(); // consume
@@ -423,9 +423,9 @@ impl<'a> Tokenizer<'a> {
                             chars.next();
                             match chars.peek() {
                                 Some('>') => self.consume_and_return(chars, Token::Spaceship),
-                                _ => Ok(Some(Token::LtEq))
+                                _ => Ok(Some(Token::LtEq)),
                             }
-                        },
+                        }
                         Some('>') => self.consume_and_return(chars, Token::Neq),
                         _ => Ok(Some(Token::Lt)),
                     }

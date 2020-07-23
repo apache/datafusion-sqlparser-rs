@@ -347,7 +347,9 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variable: "a".into(),
-            value: vec![SetVariableValue::Literal(Value::SingleQuotedString("b".into()))],
+            value: vec![SetVariableValue::Literal(Value::SingleQuotedString(
+                "b".into()
+            ))],
         }
     );
 

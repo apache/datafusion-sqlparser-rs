@@ -466,7 +466,7 @@ pub enum Statement {
         /// A SQL query that specifies what to insert
         source: Box<Query>,
         /// partitioned insert (Hive)
-        partitioned: Option<Vec<Ident>>
+        partitioned: Option<Vec<Expr>>
     },
     Copy {
         /// TABLE

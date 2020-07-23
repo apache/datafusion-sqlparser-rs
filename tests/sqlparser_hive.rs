@@ -31,7 +31,7 @@ fn parse_table_create() {
 
 #[test]
 fn parse_insert_overwrite() {
-    let insert_partitions = r#"INSERT OVERWRITE TABLE db.new_table PARTITION (a, b) SELECT a, b, c FROM db.table"#;
+    let insert_partitions = r#"INSERT OVERWRITE TABLE db.new_table PARTITION (a = '1', b) SELECT a, b, c FROM db.table"#;
     hive().verified_stmt(insert_partitions);
 }
 

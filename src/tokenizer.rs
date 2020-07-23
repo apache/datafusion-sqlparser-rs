@@ -471,9 +471,9 @@ impl<'a> Tokenizer<'a> {
                             chars.next();
                             match chars.peek() {
                                 Some('>') => self.consume_and_return(chars, Token::Spaceship),
-                                _ => Ok(Some(Token::LtEq))
+                                _ => Ok(Some(Token::LtEq)),
                             }
-                        },
+                        }
                         Some('>') => self.consume_and_return(chars, Token::Neq),
                         Some('<') => self.consume_and_return(chars, Token::ShiftLeft),
                         _ => Ok(Some(Token::Lt)),

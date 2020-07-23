@@ -12,25 +12,25 @@
 
 mod ansi;
 mod generic;
+mod hive;
 pub mod keywords;
 mod mssql;
 mod mysql;
 mod postgresql;
 mod snowflake;
 mod sqlite;
-mod hive;
 
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
 
 pub use self::ansi::AnsiDialect;
 pub use self::generic::GenericDialect;
+pub use self::hive::HiveDialect;
 pub use self::mssql::MsSqlDialect;
 pub use self::mysql::MySqlDialect;
 pub use self::postgresql::PostgreSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
-pub use self::hive::HiveDialect;
 
 /// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
 /// to `true` iff `parser.dialect` is one of the `Dialect`s specified.

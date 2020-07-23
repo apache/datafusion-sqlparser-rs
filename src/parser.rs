@@ -57,7 +57,6 @@ pub enum IsLateral {
 use crate::ast::Statement::CreateVirtualTable;
 use IsLateral::*;
 
-
 impl From<TokenizerError> for ParserError {
     fn from(e: TokenizerError) -> Self {
         ParserError::TokenizerError(format!(
@@ -177,14 +176,24 @@ impl<'a> Parser<'a> {
         let table_name = self.parse_object_name()?;
         let (mut add, mut drop, mut sync) = (false, false, false);
         match self.parse_one_of_keywords(&[Keyword::ADD, Keyword::DROP, Keyword::SYNC]) {
-            Some(Keyword::ADD) => { add = true; }
-            Some(Keyword::DROP) => { drop = true; }
-            Some(Keyword::SYNC) => { sync = true; }
-            _ => ()
+            Some(Keyword::ADD) => {
+                add = true;
+            }
+            Some(Keyword::DROP) => {
+                drop = true;
+            }
+            Some(Keyword::SYNC) => {
+                sync = true;
+            }
+            _ => (),
         }
         self.expect_keyword(Keyword::PARTITIONS)?;
         Ok(Statement::Msck {
-            repair, table_name, add_partitions: add, drop_partitions: drop, sync_partitions: sync
+            repair,
+            table_name,
+            add_partitions: add,
+            drop_partitions: drop,
+            sync_partitions: sync,
         })
     }
 
@@ -198,7 +207,8 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
         }
         Ok(Statement::Truncate {
-            table_name, partitions
+            table_name,
+            partitions,
         })
     }
 
@@ -212,12 +222,18 @@ impl<'a> Parser<'a> {
         let mut compute_statistics = false;
 
         loop {
-            match self.parse_one_of_keywords(&[Keyword::PARTITION, Keyword::FOR, Keyword::CACHE, Keyword::NOSCAN, Keyword::COMPUTE]) {
+            match self.parse_one_of_keywords(&[
+                Keyword::PARTITION,
+                Keyword::FOR,
+                Keyword::CACHE,
+                Keyword::NOSCAN,
+                Keyword::COMPUTE,
+            ]) {
                 Some(Keyword::PARTITION) => {
                     self.expect_token(&Token::LParen)?;
                     partitions = Some(self.parse_comma_separated(Parser::parse_expr)?);
                     self.expect_token(&Token::RParen)?;
-                },
+                }
                 Some(Keyword::NOSCAN) => noscan = true,
                 Some(Keyword::FOR) => {
                     self.expect_keyword(Keyword::COLUMNS)?;
@@ -231,7 +247,7 @@ impl<'a> Parser<'a> {
                     self.expect_keyword(Keyword::STATISTICS)?;
                     compute_statistics = true
                 }
-                _ => break
+                _ => break,
             }
         }
 
@@ -241,7 +257,7 @@ impl<'a> Parser<'a> {
             partitions,
             cache_metadata,
             noscan,
-            compute_statistics
+            compute_statistics,
         })
     }
 
@@ -898,7 +914,14 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
-            Token::Eq | Token::Lt | Token::LtEq | Token::Neq | Token::Gt | Token::GtEq | Token::DoubleEq | Token::Spaceship => Ok(20),
+            Token::Eq
+            | Token::Lt
+            | Token::LtEq
+            | Token::Neq
+            | Token::Gt
+            | Token::GtEq
+            | Token::DoubleEq
+            | Token::Spaceship => Ok(20),
             Token::Pipe => Ok(21),
             Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(22),
             Token::Ampersand => Ok(23),
@@ -1175,11 +1198,18 @@ impl<'a> Parser<'a> {
         loop {
             match self.parse_one_of_keywords(&[Keyword::LOCATION, Keyword::MANAGEDLOCATION]) {
                 Some(Keyword::LOCATION) => location = Some(self.parse_literal_string()?),
-                Some(Keyword::MANAGEDLOCATION) => managed_location = Some(self.parse_literal_string()?),
-                _ => break
+                Some(Keyword::MANAGEDLOCATION) => {
+                    managed_location = Some(self.parse_literal_string()?)
+                }
+                _ => break,
             }
         }
-        Ok(Statement::CreateDatabase { db_name, ine, location, managed_location })
+        Ok(Statement::CreateDatabase {
+            db_name,
+            ine,
+            location,
+            managed_location,
+        })
     }
 
         pub fn parse_create_external_table(
@@ -1302,9 +1332,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::LParen)?;
             let columns = self.parse_comma_separated(Parser::parse_column_def)?;
             self.expect_token(&Token::RParen)?;
-            Ok(HiveDistributionStyle::PARTITIONED {
-                columns
-            })
+            Ok(HiveDistributionStyle::PARTITIONED { columns })
         } else {
             Ok(HiveDistributionStyle::NONE)
         }
@@ -1323,7 +1351,10 @@ impl<'a> Parser<'a> {
                         let input_format = self.parse_expr()?;
                         self.expect_keyword(Keyword::OUTPUTFORMAT)?;
                         let output_format = self.parse_expr()?;
-                        hive_format.storage = Some(HiveIOFormat::IOF {input_format, output_format});
+                        hive_format.storage = Some(HiveIOFormat::IOF {
+                            input_format,
+                            output_format,
+                        });
                     } else {
                         let format = self.parse_file_format()?;
                         hive_format.storage = Some(HiveIOFormat::FileFormat { format });
@@ -1331,9 +1362,9 @@ impl<'a> Parser<'a> {
                 }
                 Some(Keyword::LOCATION) => {
                     hive_format.location = Some(self.parse_literal_string()?);
-                },
+                }
                 None => break,
-                _ => break
+                _ => break,
             }
         }
 
@@ -2133,7 +2164,8 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_set(&mut self) -> Result<Statement, ParserError> {
-        let modifier = self.parse_one_of_keywords(&[Keyword::SESSION, Keyword::LOCAL, Keyword::HIVEVAR]);
+        let modifier =
+            self.parse_one_of_keywords(&[Keyword::SESSION, Keyword::LOCAL, Keyword::HIVEVAR]);
         if let Some(Keyword::HIVEVAR) = modifier {
             self.expect_token(&Token::Colon)?;
         }
@@ -2156,14 +2188,14 @@ impl<'a> Parser<'a> {
                     hivevar: Some(Keyword::HIVEVAR) == modifier,
                     variable,
                     value: values,
-                })
+                });
             }
         } else if variable.value == "TRANSACTION" && modifier.is_none() {
             return Ok(Statement::SetTransaction {
                 modes: self.parse_transaction_modes()?,
-            })
+            });
         } else {
-            return self.expected("equals sign or TO", self.peek_token())
+            return self.expected("equals sign or TO", self.peek_token());
         }
     }
 
@@ -2448,7 +2480,11 @@ impl<'a> Parser<'a> {
     /// Parse an INSERT statement
     pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
         let action = self.expect_one_of_keywords(&[Keyword::INTO, Keyword::OVERWRITE])?;
-        let overwrite = if action == Keyword::OVERWRITE { true } else { false };
+        let overwrite = if action == Keyword::OVERWRITE {
+            true
+        } else {
+            false
+        };
         // Hive lets you put table here regardless
         self.parse_keyword(Keyword::TABLE);
         let table_name = self.parse_object_name()?;

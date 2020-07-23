@@ -385,7 +385,10 @@ impl Parser {
                 self.prev_token();
                 self.prev_token();
                 self.prev_token();
-                self.expected(format!("an expression: {} - {} {} {}", self.index, self.next_token().to_string(), self.next_token().to_string(), self.next_token().to_string()).as_str(), unexpected)
+                let t1 = self.next_token().to_string();
+                let t2 = self.next_token().to_string();
+                let t3 = self.next_token().to_string();
+                self.expected(format!("an expression: {} - {} {} {}", self.index, &t1, &t2, &t3).as_str(), unexpected)
             },
         }?;
 

@@ -15,10 +15,10 @@
 //! Test SQL syntax specific to Hive. The parser based on the generic dialect
 //! is also tested (on the inputs it can handle).
 
-use sqlparser::ast::*;
+
 use sqlparser::dialect::{GenericDialect, HiveDialect};
 use sqlparser::test_utils::*;
-use sqlparser::parser::ParserError;
+
 
 #[test]
 fn parse_table_create() {
@@ -57,6 +57,12 @@ fn parse_msck() {
 fn parse_set() {
     let set = "SET HIVEVAR:name = a, b, c_d";
     hive().verified_stmt(set);
+}
+
+#[test]
+fn test_spaceship() {
+    let spaceship = "SELECT * FROM db.table WHERE a <=> b";
+    hive().verified_stmt(spaceship);
 }
 
 #[test]

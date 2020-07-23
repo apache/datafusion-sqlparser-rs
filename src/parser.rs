@@ -57,7 +57,7 @@ pub enum IsLateral {
 }
 use crate::ast::Statement::CreateVirtualTable;
 use IsLateral::*;
-use crate::ast::Expr::BinaryOp;
+
 
 impl From<TokenizerError> for ParserError {
     fn from(e: TokenizerError) -> Self {
@@ -382,15 +382,7 @@ impl Parser {
                 self.expect_token(&Token::RParen)?;
                 Ok(expr)
             }
-            unexpected => {
-                self.prev_token();
-                self.prev_token();
-                self.prev_token();
-                let t1 = self.next_token().to_string();
-                let t2 = self.next_token().to_string();
-                let t3 = self.next_token().to_string();
-                self.expected(format!("an expression: {} - {} {} {}", self.index, &t1, &t2, &t3).as_str(), unexpected)
-            },
+            unexpected => self.expected("an expression:", unexpected),
         }?;
 
         if self.parse_keyword(Keyword::COLLATE) {
@@ -721,6 +713,7 @@ impl Parser {
     pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
         let tok = self.next_token();
         let regular_binary_operator = match &tok {
+            Token::Spaceship => Some(BinaryOperator::Spaceship),
             Token::DoubleEq => Some(BinaryOperator::Eq),
             Token::Eq => Some(BinaryOperator::Eq),
             Token::Neq => Some(BinaryOperator::NotEq),
@@ -862,7 +855,7 @@ impl Parser {
             Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
-            Token::Eq | Token::Lt | Token::LtEq | Token::Neq | Token::Gt | Token::GtEq | Token::DoubleEq => Ok(20),
+            Token::Eq | Token::Lt | Token::LtEq | Token::Neq | Token::Gt | Token::GtEq | Token::DoubleEq | Token::Spaceship => Ok(20),
             Token::Pipe => Ok(21),
             Token::Caret => Ok(22),
             Token::Ampersand => Ok(23),

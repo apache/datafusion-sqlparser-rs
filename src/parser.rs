@@ -57,6 +57,7 @@ pub enum IsLateral {
 }
 use crate::ast::Statement::CreateVirtualTable;
 use IsLateral::*;
+use crate::ast::Expr::BinaryOp;
 
 impl From<TokenizerError> for ParserError {
     fn from(e: TokenizerError) -> Self {
@@ -720,6 +721,7 @@ impl Parser {
     pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
         let tok = self.next_token();
         let regular_binary_operator = match &tok {
+            Token::DoubleEq => Some(BinaryOperator::Eq),
             Token::Eq => Some(BinaryOperator::Eq),
             Token::Neq => Some(BinaryOperator::NotEq),
             Token::Gt => Some(BinaryOperator::Gt),

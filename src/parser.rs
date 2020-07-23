@@ -409,7 +409,12 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::RParen)?;
                 Ok(expr)
             }
-            unexpected => self.expected("an expression", unexpected),
+            unexpected => {
+                self.prev_token();
+                self.prev_token();
+                self.prev_token();
+                self.expected(format!("an expression: {} - {} {} {}", self.index, self.next_token().to_string(), self.next_token().to_string(), self.next_token().to_string()).as_str(), unexpected)
+            },
         }?;
 
         if self.parse_keyword(Keyword::COLLATE) {

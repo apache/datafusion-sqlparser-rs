@@ -75,14 +75,14 @@ fn drop_table_purge() {
     hive().verified_stmt(purge);
 }
 
+#[test]
+fn create_table_like() {
+    let like = "CREATE TABLE db.table_name LIKE db.other_table";
+    hive().verified_stmt(like);
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],
-    }
-}
-
-fn hive_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(HiveDialect {}), Box::new(GenericDialect {})],
     }
 }

@@ -1192,7 +1192,7 @@ impl Parser {
             location: Some(location),
             query: None,
             without_rowid: false,
-            like: None
+            like: None,
         })
     }
 
@@ -1340,7 +1340,9 @@ impl Parser {
         let table_name = self.parse_object_name()?;
         let like = if self.parse_keyword(Keyword::LIKE) {
             self.parse_object_name().ok()
-        } else { None };
+        } else {
+            None
+        };
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
 
@@ -1373,7 +1375,7 @@ impl Parser {
             location: None,
             query,
             without_rowid,
-            like
+            like,
         })
     }
 

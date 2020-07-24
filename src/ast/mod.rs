@@ -521,6 +521,7 @@ pub enum Statement {
         location: Option<String>,
         query: Option<Box<Query>>,
         without_rowid: bool,
+        like: Option<ObjectName>
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -834,6 +835,7 @@ impl fmt::Display for Statement {
                 location,
                 query,
                 without_rowid,
+                like
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -856,7 +858,7 @@ impl fmt::Display for Statement {
                         write!(f, ", ")?;
                     }
                     write!(f, "{})", display_comma_separated(constraints))?;
-                } else if query.is_none() {
+                } else if query.is_none() && like.is_none() {
                     // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
                     write!(f, " ()")?;
                 }
@@ -865,9 +867,13 @@ impl fmt::Display for Statement {
                     write!(f, " WITHOUT ROWID")?;
                 }
 
+                // Only for Hive
+                if let Some(l) = like {
+                    write!(f, " LIKE {}", l)?;
+                }
                 match hive_distribution {
                     HiveDistributionStyle::PARTITIONED { columns } => {
-                        write!(f, " PARTITIONED BY ({})", display_comma_separated(&columns))?
+                        write!(f, " PARTITIONED BY ({})", display_comma_separated(&columns))?;
                     }
                     HiveDistributionStyle::CLUSTERED {
                         columns,

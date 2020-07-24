@@ -1240,6 +1240,7 @@ impl<'a> Parser<'a> {
             location: Some(location),
             query: None,
             without_rowid: false,
+            like: None
         })
     }
 
@@ -1387,6 +1388,9 @@ impl<'a> Parser<'a> {
     pub fn parse_create_table(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name()?;
+        let like = if self.parse_keyword(Keyword::LIKE) {
+            self.parse_object_name().ok()
+        } else { None };
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
 
@@ -1419,6 +1423,7 @@ impl<'a> Parser<'a> {
             location: None,
             query,
             without_rowid,
+            like
         })
     }
 

@@ -1298,6 +1298,7 @@ impl<'a> Parser<'a> {
         let names = self.parse_comma_separated(Parser::parse_object_name)?;
         let cascade = self.parse_keyword(Keyword::CASCADE);
         let restrict = self.parse_keyword(Keyword::RESTRICT);
+        let purge = self.parse_keyword(Keyword::PURGE);
         if cascade && restrict {
             return parser_err!("Cannot specify both CASCADE and RESTRICT in DROP");
         }
@@ -1306,6 +1307,7 @@ impl<'a> Parser<'a> {
             if_exists,
             names,
             cascade,
+            purge,
         })
     }
 
@@ -2191,11 +2193,11 @@ impl<'a> Parser<'a> {
                 });
             }
         } else if variable.value == "TRANSACTION" && modifier.is_none() {
-            return Ok(Statement::SetTransaction {
+            Ok(Statement::SetTransaction {
                 modes: self.parse_transaction_modes()?,
-            });
+            })
         } else {
-            return self.expected("equals sign or TO", self.peek_token());
+            self.expected("equals sign or TO", self.peek_token())
         }
     }
 
@@ -2480,13 +2482,9 @@ impl<'a> Parser<'a> {
     /// Parse an INSERT statement
     pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
         let action = self.expect_one_of_keywords(&[Keyword::INTO, Keyword::OVERWRITE])?;
-        let overwrite = if action == Keyword::OVERWRITE {
-            true
-        } else {
-            false
-        };
+        let overwrite = action == Keyword::OVERWRITE;
         // Hive lets you put table here regardless
-        self.parse_keyword(Keyword::TABLE);
+        let table = self.parse_keyword(Keyword::TABLE);
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
 
@@ -2505,6 +2503,7 @@ impl<'a> Parser<'a> {
             partitioned,
             columns,
             source,
+            table,
         })
     }
 

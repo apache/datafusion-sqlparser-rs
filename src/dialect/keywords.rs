@@ -336,6 +336,7 @@ define_keywords!(
     PREPARE,
     PRIMARY,
     PROCEDURE,
+    PURGE,
     RANGE,
     RANK,
     RCFILE,

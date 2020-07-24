@@ -69,6 +69,12 @@ fn parse_with_cte() {
     hive().verified_stmt(with);
 }
 
+#[test]
+fn drop_table_purge() {
+    let purge = "DROP TABLE db.table_name PURGE";
+    hive().verified_stmt(purge);
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

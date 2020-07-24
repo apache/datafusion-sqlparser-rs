@@ -461,6 +461,8 @@ pub enum Statement {
         source: Box<Query>,
         /// partitioned insert (Hive)
         partitioned: Option<Vec<Expr>>,
+        /// whether the insert has the table keyword (Hive)
+        table: bool,
     },
     Copy {
         /// TABLE
@@ -547,6 +549,9 @@ pub enum Statement {
         /// Whether `CASCADE` was specified. This will be `false` when
         /// `RESTRICT` or no drop behavior at all was specified.
         cascade: bool,
+        /// Hive allows you specify whether the table's stored data will be
+        /// deleted along with the dropped table
+        purge: bool,
     },
     /// SET <variable>
     ///
@@ -680,16 +685,14 @@ impl fmt::Display for Statement {
                 partitioned,
                 columns,
                 source,
+                table,
             } => {
                 write!(
                     f,
-                    "INSERT {act} {table_name} ",
+                    "INSERT {act}{tbl} {table_name} ",
                     table_name = table_name,
-                    act = if *overwrite {
-                        "OVERWRITE TABLE"
-                    } else {
-                        "INTO"
-                    }
+                    act = if *overwrite { "OVERWRITE" } else { "INTO" },
+                    tbl = if *table { " TABLE" } else { "" }
                 )?;
                 if !columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(columns))?;
@@ -975,13 +978,15 @@ impl fmt::Display for Statement {
                 if_exists,
                 names,
                 cascade,
+                purge,
             } => write!(
                 f,
-                "DROP {}{} {}{}",
+                "DROP {}{} {}{}{}",
                 object_type,
                 if *if_exists { " IF EXISTS" } else { "" },
                 display_comma_separated(names),
                 if *cascade { " CASCADE" } else { "" },
+                if *purge { " PURGE" } else { "" }
             ),
             Statement::SetVariable {
                 local,

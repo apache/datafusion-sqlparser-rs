@@ -521,7 +521,7 @@ pub enum Statement {
         location: Option<String>,
         query: Option<Box<Query>>,
         without_rowid: bool,
-        like: Option<ObjectName>
+        like: Option<ObjectName>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -835,7 +835,7 @@ impl fmt::Display for Statement {
                 location,
                 query,
                 without_rowid,
-                like
+                like,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:

@@ -61,7 +61,7 @@ pub enum DataType {
     Regclass,
     /// Text
     Text,
-    /// String (Hive)
+    /// String
     String,
     /// Bytea
     Bytea,

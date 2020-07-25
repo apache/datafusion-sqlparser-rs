@@ -174,26 +174,18 @@ impl<'a> Parser<'a> {
         let repair = self.parse_keyword(Keyword::REPAIR);
         self.expect_keyword(Keyword::TABLE)?;
         let table_name = self.parse_object_name()?;
-        let (mut add, mut drop, mut sync) = (false, false, false);
-        match self.parse_one_of_keywords(&[Keyword::ADD, Keyword::DROP, Keyword::SYNC]) {
-            Some(Keyword::ADD) => {
-                add = true;
-            }
-            Some(Keyword::DROP) => {
-                drop = true;
-            }
-            Some(Keyword::SYNC) => {
-                sync = true;
-            }
-            _ => (),
-        }
+        let partition_action =
+            match self.parse_one_of_keywords(&[Keyword::ADD, Keyword::DROP, Keyword::SYNC]) {
+                Some(Keyword::ADD) => Some(PartitionAction::ADD),
+                Some(Keyword::DROP) => Some(PartitionAction::DROP),
+                Some(Keyword::SYNC) => Some(PartitionAction::SYNC),
+                _ => None,
+            };
         self.expect_keyword(Keyword::PARTITIONS)?;
         Ok(Statement::Msck {
             repair,
             table_name,
-            add_partitions: add,
-            drop_partitions: drop,
-            sync_partitions: sync,
+            partition_action,
         })
     }
 
@@ -1206,7 +1198,7 @@ impl<'a> Parser<'a> {
         }
         Ok(Statement::CreateDatabase {
             db_name,
-            ine,
+            if_not_exists: ine,
             location,
             managed_location,
         })

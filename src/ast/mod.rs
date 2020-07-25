@@ -426,6 +426,24 @@ impl fmt::Display for WindowFrameBound {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum PartitionAction {
+    ADD,
+    DROP,
+    SYNC,
+}
+
+impl fmt::Display for PartitionAction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PartitionAction::SYNC => f.write_str("SYNC PARTITIONS"),
+            PartitionAction::DROP => f.write_str("DROP PARTITIONS"),
+            PartitionAction::ADD => f.write_str("ADD PARTITIONS"),
+        }
+    }
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -449,9 +467,7 @@ pub enum Statement {
     Msck {
         table_name: ObjectName,
         repair: bool,
-        add_partitions: bool,
-        drop_partitions: bool,
-        sync_partitions: bool,
+        partition_action: Option<PartitionAction>,
     },
     /// SELECT
     Query(Box<Query>),
@@ -600,7 +616,7 @@ pub enum Statement {
     /// CREATE DATABASE
     CreateDatabase {
         db_name: ObjectName,
-        ine: bool,
+        if_not_exists: bool,
         location: Option<String>,
         managed_location: Option<String>,
     },
@@ -637,9 +653,7 @@ impl fmt::Display for Statement {
             Statement::Msck {
                 table_name,
                 repair,
-                add_partitions,
-                drop_partitions,
-                sync_partitions,
+                partition_action,
             } => {
                 write!(
                     f,
@@ -647,25 +661,10 @@ impl fmt::Display for Statement {
                     repair = if *repair { "REPAIR " } else { "" },
                     table = table_name
                 )?;
-                write!(
-                    f,
-                    "{add}{drop}{sync}",
-                    add = if *add_partitions {
-                        " ADD PARTITIONS"
-                    } else {
-                        ""
-                    },
-                    drop = if *drop_partitions {
-                        " DROP PARTITIONS"
-                    } else {
-                        ""
-                    },
-                    sync = if *sync_partitions {
-                        " SYNC PARTITIONS"
-                    } else {
-                        ""
-                    }
-                )
+                if let Some(pa) = partition_action {
+                    write!(f, " {}", pa)?;
+                }
+                Ok(())
             }
             Statement::Truncate {
                 table_name,
@@ -781,12 +780,12 @@ impl fmt::Display for Statement {
             }
             Statement::CreateDatabase {
                 db_name,
-                ine,
+                if_not_exists,
                 location,
                 managed_location,
             } => {
                 write!(f, "CREATE")?;
-                if *ine {
+                if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
                 write!(f, " {}", db_name)?;

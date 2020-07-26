@@ -464,6 +464,7 @@ pub enum Statement {
     CreateView {
         /// View name
         name: ObjectName,
+        or_replace: bool,
         columns: Vec<Ident>,
         query: Box<Query>,
         materialized: bool,
@@ -630,12 +631,18 @@ impl fmt::Display for Statement {
             }
             Statement::CreateView {
                 name,
+                or_replace,
                 columns,
                 query,
                 materialized,
                 with_options,
             } => {
                 write!(f, "CREATE")?;
+
+                if *or_replace {
+                    write!(f, " OR REPLACE")?;
+                }
+
                 if *materialized {
                     write!(f, " MATERIALIZED")?;
                 }

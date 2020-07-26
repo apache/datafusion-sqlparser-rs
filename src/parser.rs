@@ -997,7 +997,12 @@ impl Parser {
             self.parse_create_index(true)
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
-            self.parse_create_view()
+            self.parse_create_view(false)
+        } else if self.parse_keywords(&[Keyword::OR, Keyword::REPLACE])
+            && (self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW))
+        {
+            self.prev_token();
+            self.parse_create_view(true)
         } else if self.parse_keyword(Keyword::EXTERNAL) {
             self.parse_create_external_table(false)
         } else if self.parse_keywords(&[Keyword::OR, Keyword::REPLACE, Keyword::EXTERNAL]) {
@@ -1080,7 +1085,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_create_view(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_view(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         self.expect_keyword(Keyword::VIEW)?;
         // Many dialects support `OR REPLACE` | `OR ALTER` right after `CREATE`, but we don't (yet).
@@ -1093,6 +1098,7 @@ impl Parser {
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
         Ok(Statement::CreateView {
             name,
+            or_replace,
             columns,
             query,
             materialized,

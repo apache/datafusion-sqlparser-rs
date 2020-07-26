@@ -2520,6 +2520,7 @@ fn parse_create_view() {
             name,
             columns,
             query,
+            or_replace,
             materialized,
             with_options,
         } => {
@@ -2527,6 +2528,7 @@ fn parse_create_view() {
             assert_eq!(Vec::<Ident>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(!materialized);
+            assert!(!or_replace);
             assert_eq!(with_options, vec![]);
         }
         _ => unreachable!(),
@@ -2563,6 +2565,7 @@ fn parse_create_view_with_columns() {
         Statement::CreateView {
             name,
             columns,
+            or_replace,
             with_options,
             query,
             materialized,
@@ -2572,6 +2575,29 @@ fn parse_create_view_with_columns() {
             assert_eq!(with_options, vec![]);
             assert_eq!("SELECT 1, 2", query.to_string());
             assert!(!materialized);
+            assert!(!or_replace)
+        }
+        _ => unreachable!(),
+    }
+}
+#[test]
+fn parse_create_or_replace_view() {
+    let sql = "CREATE OR REPLACE VIEW v AS SELECT 1";
+    match verified_stmt(sql) {
+        Statement::CreateView {
+            name,
+            columns,
+            or_replace,
+            with_options,
+            query,
+            materialized,
+        } => {
+            assert_eq!("v", name.to_string());
+            assert_eq!(columns, vec![]);
+            assert_eq!(with_options, vec![]);
+            assert_eq!("SELECT 1", query.to_string());
+            assert!(!materialized);
+            assert!(or_replace)
         }
         _ => unreachable!(),
     }
@@ -2583,6 +2609,7 @@ fn parse_create_materialized_view() {
     match verified_stmt(sql) {
         Statement::CreateView {
             name,
+            or_replace,
             columns,
             query,
             materialized,
@@ -2593,6 +2620,7 @@ fn parse_create_materialized_view() {
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(materialized);
             assert_eq!(with_options, vec![]);
+            assert!(!or_replace);
         }
         _ => unreachable!(),
     }

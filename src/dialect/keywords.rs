@@ -343,6 +343,7 @@ define_keywords!(
     RELEASE,
     RENAME,
     REPEATABLE,
+    REPLACE,
     RESTRICT,
     RESULT,
     RETURN,

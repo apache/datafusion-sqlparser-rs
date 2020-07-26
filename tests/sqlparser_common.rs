@@ -1245,6 +1245,35 @@ fn parse_create_table_as() {
 }
 
 #[test]
+fn parse_create_or_replace_table() {
+    let sql = "CREATE OR REPLACE TABLE t (a INT)";
+
+    match verified_stmt(sql) {
+        Statement::CreateTable {
+            name, or_replace, ..
+        } => {
+            assert_eq!(name.to_string(), "t".to_string());
+            assert!(or_replace);
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
+    match verified_stmt(sql) {
+        Statement::CreateTable { columns, query, .. } => {
+            assert_eq!(columns.len(), 2);
+            assert_eq!(columns[0].to_string(), "a INT".to_string());
+            assert_eq!(columns[1].to_string(), "b INT".to_string());
+            assert_eq!(
+                query,
+                Some(Box::new(verified_query("SELECT 1 AS b, 2 AS a")))
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_with_on_delete_on_update_2in_any_order() -> Result<(), ParserError> {
     let sql = |options: &str| -> String {
         format!("create table X (y_id int references Y (id) {})", options)

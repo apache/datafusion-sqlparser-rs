@@ -477,6 +477,7 @@ pub enum Statement {
         columns: Vec<ColumnDef>,
         constraints: Vec<TableConstraint>,
         with_options: Vec<SqlOption>,
+        or_replace: bool,
         if_not_exists: bool,
         external: bool,
         file_format: Option<FileFormat>,
@@ -656,6 +657,7 @@ impl fmt::Display for Statement {
                 columns,
                 constraints,
                 with_options,
+                or_replace,
                 if_not_exists,
                 external,
                 file_format,
@@ -672,7 +674,8 @@ impl fmt::Display for Statement {
                 //   `CREATE TABLE t (a INT) AS SELECT a from t2`
                 write!(
                     f,
-                    "CREATE {external}TABLE {if_not_exists}{name}",
+                    "CREATE {or_replace}{external}TABLE {if_not_exists}{name}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     external = if *external { "EXTERNAL " } else { "" },
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     name = name,

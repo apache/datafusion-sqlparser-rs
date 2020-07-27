@@ -1133,7 +1133,6 @@ impl Parser {
         Ok(Statement::CreateSchema { schema_name })
     }
 
-
     pub fn parse_create_database(&mut self) -> Result<Statement, ParserError> {
         let ine = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let db_name = self.parse_object_name()?;
@@ -1156,10 +1155,10 @@ impl Parser {
         })
     }
 
-        pub fn parse_create_external_table(
-            &mut self,
-            or_replace: bool,
-        ) -> Result<Statement, ParserError> {
+    pub fn parse_create_external_table(
+        &mut self,
+        or_replace: bool,
+    ) -> Result<Statement, ParserError> {
         self.expect_keyword(Keyword::TABLE)?;
         let table_name = self.parse_object_name()?;
         let (columns, constraints) = self.parse_columns()?;

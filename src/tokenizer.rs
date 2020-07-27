@@ -25,6 +25,7 @@ use std::fmt;
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Token {
     /// An end-of-file marker, not a real token
     EOF,

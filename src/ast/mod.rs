@@ -462,25 +462,25 @@ pub enum Statement {
     },
     /// CREATE VIEW
     CreateView {
+        or_replace: bool,
+        materialized: bool,
         /// View name
         name: ObjectName,
         columns: Vec<Ident>,
         query: Box<Query>,
-        materialized: bool,
-        or_replace: bool,
         with_options: Vec<SqlOption>,
     },
     /// CREATE TABLE
     CreateTable {
+        or_replace: bool,
+        external: bool,
+        if_not_exists: bool,
         /// Table name
         name: ObjectName,
         /// Optional schema
         columns: Vec<ColumnDef>,
         constraints: Vec<TableConstraint>,
         with_options: Vec<SqlOption>,
-        or_replace: bool,
-        if_not_exists: bool,
-        external: bool,
         file_format: Option<FileFormat>,
         location: Option<String>,
         query: Option<Box<Query>>,

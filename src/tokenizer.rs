@@ -22,6 +22,7 @@ use std::str::Chars;
 use super::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 use super::dialect::Dialect;
 use std::fmt;
+use serde::{Deserialize, Serialize};
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -162,6 +163,7 @@ impl Token {
 
 /// A keyword (like SELECT) or an optionally quoted SQL identifier
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Word {
     /// The value of the token, without the enclosing quotes, and with the
     /// escape sequences (if any) processed (TODO: escapes are not handled)
@@ -198,6 +200,7 @@ impl Word {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Whitespace {
     Space,
     Newline,

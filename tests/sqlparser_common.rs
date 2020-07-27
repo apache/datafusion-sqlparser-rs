@@ -1387,6 +1387,62 @@ fn parse_create_external_table() {
 }
 
 #[test]
+fn parse_create_or_replace_external_table() {
+    // Supported by at least Snowflake
+    // https://docs.snowflake.com/en/sql-reference/sql/create-external-table.html
+    let sql = "CREATE OR REPLACE EXTERNAL TABLE uk_cities (\
+               name VARCHAR(100) NOT NULL)\
+               STORED AS TEXTFILE LOCATION '/tmp/example.csv'";
+    let ast = one_statement_parses_to(
+        sql,
+        "CREATE OR REPLACE EXTERNAL TABLE uk_cities (\
+         name CHARACTER VARYING(100) NOT NULL) \
+         STORED AS TEXTFILE LOCATION '/tmp/example.csv'",
+    );
+    match ast {
+        Statement::CreateTable {
+            name,
+            columns,
+            constraints,
+            with_options,
+            if_not_exists,
+            external,
+            file_format,
+            location,
+            or_replace,
+            ..
+        } => {
+            assert_eq!("uk_cities", name.to_string());
+            assert_eq!(
+                columns,
+                vec![
+                    ColumnDef {
+                        name: "name".into(),
+                        data_type: DataType::Varchar(Some(100)),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull
+                        }],
+                    },
+                ]
+            );
+            assert!(constraints.is_empty());
+
+            assert!(external);
+            assert_eq!(FileFormat::TEXTFILE, file_format.unwrap());
+            assert_eq!("/tmp/example.csv", location.unwrap());
+
+            assert_eq!(with_options, vec![]);
+            assert!(!if_not_exists);
+            assert!(or_replace);
+        }
+        _ => unreachable!(),
+    }
+}
+
+
+#[test]
 fn parse_create_external_table_lowercase() {
     let sql = "create external table uk_cities (\
                name varchar(100) not null,\
@@ -2597,6 +2653,33 @@ fn parse_create_or_replace_view() {
             assert_eq!(with_options, vec![]);
             assert_eq!("SELECT 1", query.to_string());
             assert!(!materialized);
+            assert!(or_replace)
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_or_replace_materialized_view() {
+    // Supported in BigQuery (Beta)
+    // https://cloud.google.com/bigquery/docs/materialized-views-intro
+    // and Snowflake:
+    // https://docs.snowflake.com/en/sql-reference/sql/create-materialized-view.html
+    let sql = "CREATE OR REPLACE MATERIALIZED VIEW v AS SELECT 1";
+    match verified_stmt(sql) {
+        Statement::CreateView {
+            name,
+            columns,
+            or_replace,
+            with_options,
+            query,
+            materialized,
+        } => {
+            assert_eq!("v", name.to_string());
+            assert_eq!(columns, vec![]);
+            assert_eq!(with_options, vec![]);
+            assert_eq!("SELECT 1", query.to_string());
+            assert!(materialized);
             assert!(or_replace)
         }
         _ => unreachable!(),

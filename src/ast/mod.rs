@@ -551,11 +551,33 @@ pub enum Statement {
     Rollback { chain: bool },
     /// CREATE SCHEMA
     CreateSchema { schema_name: ObjectName },
-
     /// ASSERT <condition> [AS <message>]
     Assert {
         condition: Expr,
         message: Option<Expr>,
+    },
+    /// DEALLOCATE [ PREPARE ] { name | ALL }
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    Deallocate {
+        name: Option<ObjectName>,
+        all: bool,
+        prepare: bool,
+    },
+    /// EXECUTE name [ ( parameter [, ...] ) ]
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    Execute {
+        name: ObjectName,
+        parameters: Vec<Expr>,
+    },
+    /// PREPARE name [ ( data_type [, ...] ) ] AS statement
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    Prepare {
+        name: ObjectName,
+        data_types: Vec<DataType>,
+        statement: Box<Statement>,
     },
 }
 
@@ -823,6 +845,36 @@ impl fmt::Display for Statement {
                     write!(f, " AS {}", m)?;
                 }
                 Ok(())
+            }
+            Statement::Deallocate { name, all, prepare } => {
+                f.write_str("DEALLOCATE ")?;
+                if *prepare {
+                    f.write_str("PREPARE ")?;
+                }
+                if *all {
+                    f.write_str("ALL")
+                } else {
+                    write!(f, "{}", name.as_ref().unwrap())
+                }
+            }
+            Statement::Execute { name, parameters } => {
+                write!(f, "EXECUTE {}", name)?;
+                if !parameters.is_empty() {
+                    write!(f, "({})", display_comma_separated(parameters))?;
+                }
+                Ok(())
+            }
+            Statement::Prepare {
+                name,
+                data_types,
+                statement,
+            } => {
+                write!(f, "PREPARE {} ", name)?;
+                if !data_types.is_empty() {
+                    write!(f, "({}) ", display_comma_separated(data_types))?;
+                }
+
+                write!(f, "AS {}", statement)
             }
         }
     }

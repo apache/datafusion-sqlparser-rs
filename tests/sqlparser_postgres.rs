@@ -423,6 +423,137 @@ fn parse_show() {
     )
 }
 
+#[test]
+fn parse_deallocate() {
+    let stmt = pg().verified_stmt("DEALLOCATE a");
+    assert_eq!(
+        stmt,
+        Statement::Deallocate {
+            name: Some(ObjectName(vec!["a".into()])),
+            all: false,
+            prepare: false,
+        }
+    );
+
+    let stmt = pg().verified_stmt("DEALLOCATE ALL");
+    assert_eq!(
+        stmt,
+        Statement::Deallocate {
+            name: None,
+            all: true,
+            prepare: false,
+        }
+    );
+
+    let stmt = pg().verified_stmt("DEALLOCATE PREPARE a");
+    assert_eq!(
+        stmt,
+        Statement::Deallocate {
+            name: Some(ObjectName(vec!["a".into()])),
+            all: false,
+            prepare: true,
+        }
+    );
+
+    let stmt = pg().verified_stmt("DEALLOCATE PREPARE ALL");
+    assert_eq!(
+        stmt,
+        Statement::Deallocate {
+            name: None,
+            all: true,
+            prepare: true,
+        }
+    );
+}
+
+#[test]
+fn parse_execute() {
+    let stmt = pg().verified_stmt("EXECUTE a");
+    assert_eq!(
+        stmt,
+        Statement::Execute {
+            name: ObjectName(vec!["a".into()]),
+            parameters: vec![],
+        }
+    );
+
+    let stmt = pg().verified_stmt("EXECUTE a(1, 't')");
+    assert_eq!(
+        stmt,
+        Statement::Execute {
+            name: ObjectName(vec!["a".into()]),
+            parameters: vec![
+                Expr::Value(Value::Number("1".to_string())),
+                Expr::Value(Value::SingleQuotedString("t".to_string()))
+            ],
+        }
+    );
+}
+
+#[test]
+fn parse_prepare() {
+    let stmt = pg().verified_stmt("PREPARE a AS INSERT INTO customers VALUES ($1, $2, $3)");
+    let sub_stmt = match stmt {
+        Statement::Prepare {
+            name,
+            data_types,
+            statement,
+            ..
+        } => {
+            assert_eq!(name, ObjectName(vec!["a".into()]));
+            assert!(data_types.is_empty());
+
+            statement
+        }
+        _ => unreachable!(),
+    };
+    match sub_stmt.as_ref() {
+        Statement::Insert {
+            table_name,
+            columns,
+            source,
+            ..
+        } => {
+            assert_eq!(table_name.to_string(), "customers");
+            assert!(columns.is_empty());
+
+            let expected_values = [vec![
+                Expr::Identifier("$1".into()),
+                Expr::Identifier("$2".into()),
+                Expr::Identifier("$3".into()),
+            ]];
+            match &source.body {
+                SetExpr::Values(Values(values)) => assert_eq!(values.as_slice(), &expected_values),
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    };
+
+    let stmt = pg()
+        .verified_stmt("PREPARE a (INT, TEXT) AS SELECT * FROM customers WHERE customers.id = $1");
+    let sub_stmt = match stmt {
+        Statement::Prepare {
+            name,
+            data_types,
+            statement,
+            ..
+        } => {
+            assert_eq!(name, ObjectName(vec!["a".into()]));
+            assert_eq!(data_types, vec![DataType::Int, DataType::Text]);
+
+            statement
+        }
+        _ => unreachable!(),
+    };
+    assert_eq!(
+        sub_stmt,
+        Box::new(Statement::Query(Box::new(pg().verified_query(
+            "SELECT * FROM customers WHERE customers.id = $1"
+        ))))
+    );
+}
+
 fn pg() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {})],

@@ -20,7 +20,7 @@ impl Dialect for PostgreSqlDialect {
         // See https://www.postgresql.org/docs/11/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
         // We don't yet support identifiers beginning with "letters with
         // diacritical marks and non-Latin letters"
-        (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
+        (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_' || ch == '$'
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {

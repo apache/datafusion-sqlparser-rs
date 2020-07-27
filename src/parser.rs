@@ -149,6 +149,11 @@ impl Parser {
                 Keyword::COMMIT => Ok(self.parse_commit()?),
                 Keyword::ROLLBACK => Ok(self.parse_rollback()?),
                 Keyword::ASSERT => Ok(self.parse_assert()?),
+                // `PREPARE`, `EXECUTE` and `DEALLOCATE` are Postgres-specific
+                // syntaxes. They are used for Postgres prepared statement.
+                Keyword::DEALLOCATE => Ok(self.parse_deallocate()?),
+                Keyword::EXECUTE => Ok(self.parse_execute()?),
+                Keyword::PREPARE => Ok(self.parse_prepare()?),
                 _ => self.expected("an SQL statement", Token::Word(w)),
             },
             Token::LParen => {
@@ -2385,6 +2390,49 @@ impl Parser {
         } else {
             Ok(false)
         }
+    }
+
+    fn parse_deallocate(&mut self) -> Result<Statement, ParserError> {
+        let prepare = self.parse_keyword(Keyword::PREPARE);
+        let all = self.parse_keyword(Keyword::ALL);
+
+        let name = if all {
+            None
+        } else {
+            Some(self.parse_object_name()?)
+        };
+
+        Ok(Statement::Deallocate { name, all, prepare })
+    }
+
+    fn parse_execute(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name()?;
+
+        let mut parameters = vec![];
+        if self.expect_token(&Token::LParen).is_ok() {
+            parameters = self.parse_comma_separated(Parser::parse_expr)?;
+            self.expect_token(&Token::RParen)?;
+        }
+
+        Ok(Statement::Execute { name, parameters })
+    }
+
+    fn parse_prepare(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name()?;
+
+        let mut data_types = vec![];
+        if self.expect_token(&Token::LParen).is_ok() {
+            data_types = self.parse_comma_separated(Parser::parse_data_type)?;
+            self.expect_token(&Token::RParen)?;
+        }
+
+        self.expect_keyword(Keyword::AS)?;
+        let statement = Box::new(self.parse_statement()?);
+        Ok(Statement::Prepare {
+            name,
+            data_types,
+            statement,
+        })
     }
 }
 

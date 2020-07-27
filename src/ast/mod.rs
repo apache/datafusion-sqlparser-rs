@@ -464,10 +464,10 @@ pub enum Statement {
     CreateView {
         /// View name
         name: ObjectName,
-        or_replace: bool,
         columns: Vec<Ident>,
         query: Box<Query>,
         materialized: bool,
+        or_replace: bool,
         with_options: Vec<SqlOption>,
     },
     /// CREATE TABLE

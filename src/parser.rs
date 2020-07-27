@@ -987,26 +987,18 @@ impl Parser {
 
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
+        let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
         if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table(false)
-        } else if self.parse_keywords(&[Keyword::OR, Keyword::REPLACE, Keyword::TABLE]) {
-            self.parse_create_table(true)
+            self.parse_create_table(or_replace)
         } else if self.parse_keyword(Keyword::INDEX) {
             self.parse_create_index(false)
         } else if self.parse_keywords(&[Keyword::UNIQUE, Keyword::INDEX]) {
             self.parse_create_index(true)
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
-            self.parse_create_view(false)
-        } else if self.parse_keywords(&[Keyword::OR, Keyword::REPLACE])
-            && (self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW))
-        {
-            self.prev_token();
-            self.parse_create_view(true)
+            self.parse_create_view(or_replace)
         } else if self.parse_keyword(Keyword::EXTERNAL) {
-            self.parse_create_external_table(false)
-        } else if self.parse_keywords(&[Keyword::OR, Keyword::REPLACE, Keyword::EXTERNAL]) {
-            self.parse_create_external_table(true)
+            self.parse_create_external_table(or_replace)
         } else if self.parse_keyword(Keyword::VIRTUAL) {
             self.parse_create_virtual_table()
         } else if self.parse_keyword(Keyword::SCHEMA) {
@@ -1098,10 +1090,10 @@ impl Parser {
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
         Ok(Statement::CreateView {
             name,
-            or_replace,
             columns,
             query,
             materialized,
+            or_replace,
             with_options,
         })
     }

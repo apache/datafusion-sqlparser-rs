@@ -987,17 +987,23 @@ impl Parser {
 
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
+        let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
         if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table()
+            self.parse_create_table(or_replace)
+        } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
+            self.prev_token();
+            self.parse_create_view(or_replace)
+        } else if self.parse_keyword(Keyword::EXTERNAL) {
+            self.parse_create_external_table(or_replace)
+        } else if or_replace {
+            self.expected(
+                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW after CREATE OR REPLACE",
+                self.peek_token(),
+            )
         } else if self.parse_keyword(Keyword::INDEX) {
             self.parse_create_index(false)
         } else if self.parse_keywords(&[Keyword::UNIQUE, Keyword::INDEX]) {
             self.parse_create_index(true)
-        } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
-            self.prev_token();
-            self.parse_create_view()
-        } else if self.parse_keyword(Keyword::EXTERNAL) {
-            self.parse_create_external_table()
         } else if self.parse_keyword(Keyword::VIRTUAL) {
             self.parse_create_virtual_table()
         } else if self.parse_keyword(Keyword::SCHEMA) {
@@ -1032,7 +1038,10 @@ impl Parser {
         Ok(Statement::CreateSchema { schema_name })
     }
 
-    pub fn parse_create_external_table(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_external_table(
+        &mut self,
+        or_replace: bool,
+    ) -> Result<Statement, ParserError> {
         self.expect_keyword(Keyword::TABLE)?;
         let table_name = self.parse_object_name()?;
         let (columns, constraints) = self.parse_columns()?;
@@ -1047,6 +1056,7 @@ impl Parser {
             columns,
             constraints,
             with_options: vec![],
+            or_replace,
             if_not_exists: false,
             external: true,
             file_format: Some(file_format),
@@ -1072,10 +1082,10 @@ impl Parser {
         }
     }
 
-    pub fn parse_create_view(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_view(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         self.expect_keyword(Keyword::VIEW)?;
-        // Many dialects support `OR REPLACE` | `OR ALTER` right after `CREATE`, but we don't (yet).
+        // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
@@ -1088,6 +1098,7 @@ impl Parser {
             columns,
             query,
             materialized,
+            or_replace,
             with_options,
         })
     }
@@ -1136,7 +1147,7 @@ impl Parser {
         })
     }
 
-    pub fn parse_create_table(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_table(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name()?;
         // parse optional column list (schema)
@@ -1160,6 +1171,7 @@ impl Parser {
             columns,
             constraints,
             with_options,
+            or_replace,
             if_not_exists,
             external: false,
             file_format: None,

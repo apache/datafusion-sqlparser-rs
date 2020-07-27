@@ -462,23 +462,25 @@ pub enum Statement {
     },
     /// CREATE VIEW
     CreateView {
+        or_replace: bool,
+        materialized: bool,
         /// View name
         name: ObjectName,
         columns: Vec<Ident>,
         query: Box<Query>,
-        materialized: bool,
         with_options: Vec<SqlOption>,
     },
     /// CREATE TABLE
     CreateTable {
+        or_replace: bool,
+        external: bool,
+        if_not_exists: bool,
         /// Table name
         name: ObjectName,
         /// Optional schema
         columns: Vec<ColumnDef>,
         constraints: Vec<TableConstraint>,
         with_options: Vec<SqlOption>,
-        if_not_exists: bool,
-        external: bool,
         file_format: Option<FileFormat>,
         location: Option<String>,
         query: Option<Box<Query>>,
@@ -629,12 +631,18 @@ impl fmt::Display for Statement {
             }
             Statement::CreateView {
                 name,
+                or_replace,
                 columns,
                 query,
                 materialized,
                 with_options,
             } => {
                 write!(f, "CREATE")?;
+
+                if *or_replace {
+                    write!(f, " OR REPLACE")?;
+                }
+
                 if *materialized {
                     write!(f, " MATERIALIZED")?;
                 }
@@ -656,6 +664,7 @@ impl fmt::Display for Statement {
                 columns,
                 constraints,
                 with_options,
+                or_replace,
                 if_not_exists,
                 external,
                 file_format,
@@ -672,7 +681,8 @@ impl fmt::Display for Statement {
                 //   `CREATE TABLE t (a INT) AS SELECT a from t2`
                 write!(
                     f,
-                    "CREATE {external}TABLE {if_not_exists}{name}",
+                    "CREATE {or_replace}{external}TABLE {if_not_exists}{name}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     external = if *external { "EXTERNAL " } else { "" },
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     name = name,

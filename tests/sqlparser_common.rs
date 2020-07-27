@@ -1245,6 +1245,35 @@ fn parse_create_table_as() {
 }
 
 #[test]
+fn parse_create_or_replace_table() {
+    let sql = "CREATE OR REPLACE TABLE t (a INT)";
+
+    match verified_stmt(sql) {
+        Statement::CreateTable {
+            name, or_replace, ..
+        } => {
+            assert_eq!(name.to_string(), "t".to_string());
+            assert!(or_replace);
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
+    match verified_stmt(sql) {
+        Statement::CreateTable { columns, query, .. } => {
+            assert_eq!(columns.len(), 2);
+            assert_eq!(columns[0].to_string(), "a INT".to_string());
+            assert_eq!(columns[1].to_string(), "b INT".to_string());
+            assert_eq!(
+                query,
+                Some(Box::new(verified_query("SELECT 1 AS b, 2 AS a")))
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_with_on_delete_on_update_2in_any_order() -> Result<(), ParserError> {
     let sql = |options: &str| -> String {
         format!("create table X (y_id int references Y (id) {})", options)
@@ -1352,6 +1381,59 @@ fn parse_create_external_table() {
 
             assert_eq!(with_options, vec![]);
             assert!(!if_not_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_or_replace_external_table() {
+    // Supported by at least Snowflake
+    // https://docs.snowflake.com/en/sql-reference/sql/create-external-table.html
+    let sql = "CREATE OR REPLACE EXTERNAL TABLE uk_cities (\
+               name VARCHAR(100) NOT NULL)\
+               STORED AS TEXTFILE LOCATION '/tmp/example.csv'";
+    let ast = one_statement_parses_to(
+        sql,
+        "CREATE OR REPLACE EXTERNAL TABLE uk_cities (\
+         name CHARACTER VARYING(100) NOT NULL) \
+         STORED AS TEXTFILE LOCATION '/tmp/example.csv'",
+    );
+    match ast {
+        Statement::CreateTable {
+            name,
+            columns,
+            constraints,
+            with_options,
+            if_not_exists,
+            external,
+            file_format,
+            location,
+            or_replace,
+            ..
+        } => {
+            assert_eq!("uk_cities", name.to_string());
+            assert_eq!(
+                columns,
+                vec![ColumnDef {
+                    name: "name".into(),
+                    data_type: DataType::Varchar(Some(100)),
+                    collation: None,
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::NotNull
+                    }],
+                },]
+            );
+            assert!(constraints.is_empty());
+
+            assert!(external);
+            assert_eq!(FileFormat::TEXTFILE, file_format.unwrap());
+            assert_eq!("/tmp/example.csv", location.unwrap());
+
+            assert_eq!(with_options, vec![]);
+            assert!(!if_not_exists);
+            assert!(or_replace);
         }
         _ => unreachable!(),
     }
@@ -2491,6 +2573,7 @@ fn parse_create_view() {
             name,
             columns,
             query,
+            or_replace,
             materialized,
             with_options,
         } => {
@@ -2498,6 +2581,7 @@ fn parse_create_view() {
             assert_eq!(Vec::<Ident>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(!materialized);
+            assert!(!or_replace);
             assert_eq!(with_options, vec![]);
         }
         _ => unreachable!(),
@@ -2534,6 +2618,7 @@ fn parse_create_view_with_columns() {
         Statement::CreateView {
             name,
             columns,
+            or_replace,
             with_options,
             query,
             materialized,
@@ -2543,6 +2628,56 @@ fn parse_create_view_with_columns() {
             assert_eq!(with_options, vec![]);
             assert_eq!("SELECT 1, 2", query.to_string());
             assert!(!materialized);
+            assert!(!or_replace)
+        }
+        _ => unreachable!(),
+    }
+}
+#[test]
+fn parse_create_or_replace_view() {
+    let sql = "CREATE OR REPLACE VIEW v AS SELECT 1";
+    match verified_stmt(sql) {
+        Statement::CreateView {
+            name,
+            columns,
+            or_replace,
+            with_options,
+            query,
+            materialized,
+        } => {
+            assert_eq!("v", name.to_string());
+            assert_eq!(columns, vec![]);
+            assert_eq!(with_options, vec![]);
+            assert_eq!("SELECT 1", query.to_string());
+            assert!(!materialized);
+            assert!(or_replace)
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_or_replace_materialized_view() {
+    // Supported in BigQuery (Beta)
+    // https://cloud.google.com/bigquery/docs/materialized-views-intro
+    // and Snowflake:
+    // https://docs.snowflake.com/en/sql-reference/sql/create-materialized-view.html
+    let sql = "CREATE OR REPLACE MATERIALIZED VIEW v AS SELECT 1";
+    match verified_stmt(sql) {
+        Statement::CreateView {
+            name,
+            columns,
+            or_replace,
+            with_options,
+            query,
+            materialized,
+        } => {
+            assert_eq!("v", name.to_string());
+            assert_eq!(columns, vec![]);
+            assert_eq!(with_options, vec![]);
+            assert_eq!("SELECT 1", query.to_string());
+            assert!(materialized);
+            assert!(or_replace)
         }
         _ => unreachable!(),
     }
@@ -2554,6 +2689,7 @@ fn parse_create_materialized_view() {
     match verified_stmt(sql) {
         Statement::CreateView {
             name,
+            or_replace,
             columns,
             query,
             materialized,
@@ -2564,6 +2700,7 @@ fn parse_create_materialized_view() {
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(materialized);
             assert_eq!(with_options, vec![]);
+            assert!(!or_replace);
         }
         _ => unreachable!(),
     }

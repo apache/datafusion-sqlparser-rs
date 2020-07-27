@@ -24,7 +24,7 @@ use super::dialect::Dialect;
 use std::fmt;
 
 /// SQL Token enumeration
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Token {
     /// An end-of-file marker, not a real token
     EOF,
@@ -160,7 +160,7 @@ impl Token {
 }
 
 /// A keyword (like SELECT) or an optionally quoted SQL identifier
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Word {
     /// The value of the token, without the enclosing quotes, and with the
     /// escape sequences (if any) processed (TODO: escapes are not handled)
@@ -196,7 +196,7 @@ impl Word {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Whitespace {
     Space,
     Newline,

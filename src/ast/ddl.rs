@@ -13,6 +13,8 @@
 //! AST types specific to CREATE/ALTER variants of [Statement]
 //! (commonly referred to as Data Definition Language, or DDL)
 use super::{display_comma_separated, DataType, Expr, Ident, ObjectName};
+use crate::ast::display_separated;
+use crate::tokenizer::Token;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -215,9 +217,8 @@ pub enum ColumnOption {
     // `CHECK (<expr>)`
     Check(Expr),
     // Support AUTO_INCREMENT for MySQL
-    MySQLAutoIncrement,
     // Support AUTOINCREMENT for SQLite
-    SQLiteAutoIncrement,
+    DialectSpecific(Vec<Token>),
 }
 
 impl fmt::Display for ColumnOption {
@@ -249,8 +250,7 @@ impl fmt::Display for ColumnOption {
                 Ok(())
             }
             Check(expr) => write!(f, "CHECK ({})", expr),
-            MySQLAutoIncrement => write!(f, "AUTO_INCREMENT"),
-            SQLiteAutoIncrement => write!(f, "AUTOINCREMENT"),
+            DialectSpecific(val) => write!(f, "{}", display_separated(val, " ")),
         }
     }
 }

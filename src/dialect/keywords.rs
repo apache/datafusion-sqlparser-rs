@@ -41,7 +41,7 @@ macro_rules! define_keywords {
     ($(
         $ident:ident $(= $string_keyword:expr)?
     ),*) => {
-        #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
+        #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
         #[allow(non_camel_case_types)]
         pub enum Keyword {
             NoKeyword,

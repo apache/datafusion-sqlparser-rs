@@ -16,8 +16,10 @@
 //! is also tested (on the inputs it can handle).
 
 use sqlparser::ast::*;
+use sqlparser::dialect::keywords::Keyword;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
 use sqlparser::test_utils::*;
+use sqlparser::tokenizer::{Token, Word};
 
 #[test]
 fn parse_identifiers() {
@@ -100,6 +102,14 @@ fn parse_show_columns() {
 #[test]
 fn parse_create_table_auto_increment() {
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTO_INCREMENT)";
+    let word = Word {
+        value: "AUTO_INCREMENT".to_string(),
+        quote_style: None,
+        keyword: Keyword::AUTO_INCREMENT,
+    };
+    let token = Token::Word(word);
+    let mut vec = vec![];
+    vec.push(token);
     match mysql().verified_stmt(sql) {
         Statement::CreateTable { name, columns, .. } => {
             assert_eq!(name.to_string(), "foo");
@@ -115,7 +125,7 @@ fn parse_create_table_auto_increment() {
                         },
                         ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::MySQLAutoIncrement
+                            option: ColumnOption::DialectSpecific(vec)
                         }
                     ],
                 }],

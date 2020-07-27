@@ -1268,10 +1268,26 @@ impl Parser {
             ColumnOption::Check(expr)
         } else if self.parse_keyword(Keyword::AUTO_INCREMENT) {
             // Support AUTO_INCREMENT for MySQL
-            ColumnOption::MySQLAutoIncrement
+            let word = Word {
+                value: "AUTO_INCREMENT".to_string(),
+                quote_style: None,
+                keyword: Keyword::AUTO_INCREMENT,
+            };
+            let token = Token::Word(word);
+            let mut vec = vec![];
+            vec.push(token);
+            ColumnOption::DialectSpecific(vec)
         } else if self.parse_keyword(Keyword::AUTOINCREMENT) {
             // Support AUTOINCREMENT for SQLite
-            ColumnOption::SQLiteAutoIncrement
+            let word = Word {
+                value: "AUTOINCREMENT".to_string(),
+                quote_style: None,
+                keyword: Keyword::AUTOINCREMENT,
+            };
+            let token = Token::Word(word);
+            let mut vec = vec![];
+            vec.push(token);
+            ColumnOption::DialectSpecific(vec)
         } else {
             return self.expected("column option", self.peek_token());
         };

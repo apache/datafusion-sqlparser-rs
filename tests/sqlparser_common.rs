@@ -1415,17 +1415,15 @@ fn parse_create_or_replace_external_table() {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
                 columns,
-                vec![
-                    ColumnDef {
-                        name: "name".into(),
-                        data_type: DataType::Varchar(Some(100)),
-                        collation: None,
-                        options: vec![ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::NotNull
-                        }],
-                    },
-                ]
+                vec![ColumnDef {
+                    name: "name".into(),
+                    data_type: DataType::Varchar(Some(100)),
+                    collation: None,
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::NotNull
+                    }],
+                },]
             );
             assert!(constraints.is_empty());
 
@@ -1440,7 +1438,6 @@ fn parse_create_or_replace_external_table() {
         _ => unreachable!(),
     }
 }
-
 
 #[test]
 fn parse_create_external_table_lowercase() {

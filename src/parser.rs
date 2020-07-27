@@ -168,9 +168,9 @@ impl Parser {
         let table_name = self.parse_object_name()?;
         let partition_action =
             match self.parse_one_of_keywords(&[Keyword::ADD, Keyword::DROP, Keyword::SYNC]) {
-                Some(Keyword::ADD) => Some(PartitionAction::ADD),
-                Some(Keyword::DROP) => Some(PartitionAction::DROP),
-                Some(Keyword::SYNC) => Some(PartitionAction::SYNC),
+                Some(Keyword::ADD) => Some(AddDropSync::ADD),
+                Some(Keyword::DROP) => Some(AddDropSync::DROP),
+                Some(Keyword::SYNC) => Some(AddDropSync::SYNC),
                 _ => None,
             };
         self.expect_keyword(Keyword::PARTITIONS)?;

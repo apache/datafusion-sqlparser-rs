@@ -23,6 +23,7 @@
 ///     and could be removed.
 /// 3) a `RESERVED_FOR_TABLE_ALIAS` array with keywords reserved in a
 /// "table alias" context.
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Defines a string constant for a single keyword: `kw_def!(SELECT);`

@@ -21,6 +21,7 @@ use std::str::Chars;
 
 use super::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 use super::dialect::Dialect;
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
 

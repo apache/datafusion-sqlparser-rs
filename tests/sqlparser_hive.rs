@@ -81,6 +81,12 @@ fn create_table_like() {
     hive().verified_stmt(like);
 }
 
+#[test]
+fn test_identifier() {
+    let between = "SELECT a AS 3_barrr_asdf FROM db.table_name";
+    hive().verified_stmt(between);
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

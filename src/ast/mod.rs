@@ -428,18 +428,18 @@ impl fmt::Display for WindowFrameBound {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum PartitionAction {
+pub enum AddDropSync {
     ADD,
     DROP,
     SYNC,
 }
 
-impl fmt::Display for PartitionAction {
+impl fmt::Display for AddDropSync {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            PartitionAction::SYNC => f.write_str("SYNC PARTITIONS"),
-            PartitionAction::DROP => f.write_str("DROP PARTITIONS"),
-            PartitionAction::ADD => f.write_str("ADD PARTITIONS"),
+            AddDropSync::SYNC => f.write_str("SYNC PARTITIONS"),
+            AddDropSync::DROP => f.write_str("DROP PARTITIONS"),
+            AddDropSync::ADD => f.write_str("ADD PARTITIONS"),
         }
     }
 }
@@ -467,7 +467,7 @@ pub enum Statement {
     Msck {
         table_name: ObjectName,
         repair: bool,
-        partition_action: Option<PartitionAction>,
+        partition_action: Option<AddDropSync>,
     },
     /// SELECT
     Query(Box<Query>),

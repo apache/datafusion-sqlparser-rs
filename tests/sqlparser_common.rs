@@ -1288,35 +1288,6 @@ fn parse_create_table_trailing_comma() {
 }
 
 #[test]
-fn parse_create_table_auto_increment() {
-    let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTO_INCREMENT)";
-    match verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
-            assert_eq!(name.to_string(), "foo");
-            assert_eq!(
-                vec![ColumnDef {
-                    name: "bar".into(),
-                    data_type: DataType::Int,
-                    collation: None,
-                    options: vec![
-                        ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::Unique { is_primary: true }
-                        },
-                        ColumnOptionDef {
-                            name: None,
-                            option: ColumnOption::AutoIncrement
-                        }
-                    ],
-                }],
-                columns
-            );
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
 fn parse_create_external_table() {
     let sql = "CREATE EXTERNAL TABLE uk_cities (\
                name VARCHAR(100) NOT NULL,\

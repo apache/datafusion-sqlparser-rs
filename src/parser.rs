@@ -1267,7 +1267,11 @@ impl Parser {
             self.expect_token(&Token::RParen)?;
             ColumnOption::Check(expr)
         } else if self.parse_keyword(Keyword::AUTO_INCREMENT) {
-            ColumnOption::AutoIncrement
+            // Support AUTO_INCREMENT for MySQL
+            ColumnOption::MySQLAutoIncrement
+        } else if self.parse_keyword(Keyword::AUTOINCREMENT) {
+            // Support AUTOINCREMENT for SQLite
+            ColumnOption::SQLiteAutoIncrement
         } else {
             return self.expected("column option", self.peek_token());
         };

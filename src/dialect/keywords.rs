@@ -84,6 +84,7 @@ define_keywords!(
     AT,
     ATOMIC,
     AUTHORIZATION,
+    AUTOINCREMENT,
     AUTO_INCREMENT,
     AVG,
     AVRO,

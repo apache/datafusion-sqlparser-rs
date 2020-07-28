@@ -87,6 +87,24 @@ fn test_identifier() {
     hive().verified_stmt(between);
 }
 
+#[test]
+fn test_alter_partition() {
+    let alter = "ALTER TABLE db.table PARTITION (a = 2) RENAME TO PARTITION (a = 1)";
+    hive().verified_stmt(alter);
+}
+
+#[test]
+fn test_add_partition() {
+    let add = "ALTER TABLE db.table ADD IF NOT EXISTS PARTITION (a = 'asdf', b = 2)";
+    hive().verified_stmt(add);
+}
+
+#[test]
+fn test_drop_partition() {
+    let drop = "ALTER TABLE db.table DROP PARTITION (a = 1)";
+    hive().verified_stmt(drop);
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

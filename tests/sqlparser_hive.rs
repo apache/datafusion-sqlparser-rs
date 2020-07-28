@@ -105,6 +105,12 @@ fn test_drop_partition() {
     hive().verified_stmt(drop);
 }
 
+#[test]
+fn test_drop_if_exists() {
+    let drop = "ALTER TABLE db.table DROP IF EXISTS PARTITION (a = 'b', c = 'd')";
+    hive().verified_stmt(drop);
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

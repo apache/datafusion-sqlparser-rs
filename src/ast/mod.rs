@@ -750,7 +750,7 @@ impl fmt::Display for Statement {
                 if_not_exists,
             } => write!(
                 f,
-                "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}({columns});",
+                "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}({columns})",
                 unique = if *unique { "UNIQUE " } else { "" },
                 if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                 name = name,

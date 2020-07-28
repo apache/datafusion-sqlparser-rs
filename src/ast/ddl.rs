@@ -214,10 +214,11 @@ pub enum ColumnOption {
         on_delete: Option<ReferentialAction>,
         on_update: Option<ReferentialAction>,
     },
-    // `CHECK (<expr>)`
+    /// `CHECK (<expr>)`
     Check(Expr),
-    // Support AUTO_INCREMENT for MySQL
-    // Support AUTOINCREMENT for SQLite
+    /// Dialect-specific options, such as:
+    /// - MySQL's `AUTO_INCREMENT` or SQLite's `AUTOINCREMENT`
+    /// - ...
     DialectSpecific(Vec<Token>),
 }
 

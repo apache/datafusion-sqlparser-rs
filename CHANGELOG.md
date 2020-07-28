@@ -11,6 +11,9 @@ Check https://github.com/ballista-compute/sqlparser-rs/commits/main for undocume
 ### Changed
 
 ### Added
+- Support `CREATE OR REPLACE VIEW`/`TABLE` (#239)  - thanks @Dandandan!
+- Support PostgreSQL `PREPARE`, `EXECUTE`, and `DEALLOCATE` (#243) - thanks @silathdiir!
+- Support SQLite `AUTOINCREMENT` and MySQL `AUTO_INCREMENT` column option in `CREATE TABLE` - thanks @mashuai!
 
 ### Fixed
 

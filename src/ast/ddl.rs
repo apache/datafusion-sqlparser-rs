@@ -24,14 +24,31 @@ pub enum AlterTableOperation {
     /// `ADD <table_constraint>`
     AddConstraint(TableConstraint),
     /// `ADD [ COLUMN ] <column_def>`
-    AddColumn { column_def: ColumnDef },
+    AddColumn {
+        column_def: ColumnDef,
+    },
     /// TODO: implement `DROP CONSTRAINT <name>`
-    DropConstraint { name: Ident },
+    DropConstraint {
+        name: Ident,
+    },
     /// `DROP [ COLUMN ] [ IF EXISTS ] <column_name> [ CASCADE ]`
     DropColumn {
         column_name: Ident,
         if_exists: bool,
         cascade: bool,
+    },
+    /// `RENAME TO PARTITION (partition=val)`
+    RenamePartitions {
+        old_partitions: Vec<Expr>,
+        new_partitions: Vec<Expr>,
+    },
+    /// Add Partitions
+    AddPartitions {
+        if_not_exists: bool,
+        new_partitions: Vec<Expr>,
+    },
+    DropPartitions {
+        partitions: Vec<Expr>,
     },
     /// `RENAME [ COLUMN ] <old_column_name> TO <new_column_name>`
     RenameColumn {
@@ -39,16 +56,32 @@ pub enum AlterTableOperation {
         new_column_name: Ident,
     },
     /// `RENAME TO <table_name>`
-    RenameTable { table_name: Ident },
+    RenameTable {
+        table_name: Ident,
+    },
 }
 
 impl fmt::Display for AlterTableOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            AlterTableOperation::AddPartitions {
+                if_not_exists,
+                new_partitions,
+            } => write!(
+                f,
+                "ADD{ine} PARTITION ({})",
+                display_comma_separated(new_partitions),
+                ine = if *if_not_exists { " IF NOT EXISTS" } else { "" }
+            ),
             AlterTableOperation::AddConstraint(c) => write!(f, "ADD {}", c),
             AlterTableOperation::AddColumn { column_def } => {
                 write!(f, "ADD COLUMN {}", column_def.to_string())
             }
+            AlterTableOperation::DropPartitions { partitions } => write!(
+                f,
+                "DROP PARTITION ({})",
+                display_comma_separated(partitions)
+            ),
             AlterTableOperation::DropConstraint { name } => write!(f, "DROP CONSTRAINT {}", name),
             AlterTableOperation::DropColumn {
                 column_name,
@@ -60,6 +93,15 @@ impl fmt::Display for AlterTableOperation {
                 if *if_exists { "IF EXISTS " } else { "" },
                 column_name,
                 if *cascade { " CASCADE" } else { "" }
+            ),
+            AlterTableOperation::RenamePartitions {
+                old_partitions,
+                new_partitions,
+            } => write!(
+                f,
+                "PARTITION ({}) RENAME TO PARTITION ({})",
+                display_comma_separated(old_partitions),
+                display_comma_separated(new_partitions)
             ),
             AlterTableOperation::RenameColumn {
                 old_column_name,

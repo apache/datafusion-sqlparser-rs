@@ -1570,9 +1570,21 @@ impl Parser {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
                 AlterTableOperation::AddConstraint(constraint)
             } else {
-                let _ = self.parse_keyword(Keyword::COLUMN);
-                let column_def = self.parse_column_def()?;
-                AlterTableOperation::AddColumn { column_def }
+                let if_not_exists =
+                    self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+                if self.parse_keyword(Keyword::PARTITION) {
+                    self.expect_token(&Token::LParen)?;
+                    let partitions = self.parse_comma_separated(Parser::parse_expr)?;
+                    self.expect_token(&Token::RParen)?;
+                    AlterTableOperation::AddPartitions {
+                        if_not_exists,
+                        new_partitions: partitions,
+                    }
+                } else {
+                    let _ = self.parse_keyword(Keyword::COLUMN);
+                    let column_def = self.parse_column_def()?;
+                    AlterTableOperation::AddColumn { column_def }
+                }
             }
         } else if self.parse_keyword(Keyword::RENAME) {
             if self.parse_keyword(Keyword::TO) {
@@ -1589,17 +1601,40 @@ impl Parser {
                 }
             }
         } else if self.parse_keyword(Keyword::DROP) {
-            let _ = self.parse_keyword(Keyword::COLUMN);
-            let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-            let column_name = self.parse_identifier()?;
-            let cascade = self.parse_keyword(Keyword::CASCADE);
-            AlterTableOperation::DropColumn {
-                column_name,
-                if_exists,
-                cascade,
+            if self.parse_keyword(Keyword::PARTITION) {
+                self.expect_token(&Token::LParen)?;
+                let partitions = self.parse_comma_separated(Parser::parse_expr)?;
+                self.expect_token(&Token::RParen)?;
+                AlterTableOperation::DropPartitions { partitions }
+            } else {
+                let _ = self.parse_keyword(Keyword::COLUMN);
+                let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+                let column_name = self.parse_identifier()?;
+                let cascade = self.parse_keyword(Keyword::CASCADE);
+                AlterTableOperation::DropColumn {
+                    column_name,
+                    if_exists,
+                    cascade,
+                }
+            }
+        } else if self.parse_keyword(Keyword::PARTITION) {
+            self.expect_token(&Token::LParen)?;
+            let before = self.parse_comma_separated(Parser::parse_expr)?;
+            self.expect_token(&Token::RParen)?;
+            self.expect_keyword(Keyword::RENAME)?;
+            self.expect_keywords(&[Keyword::TO, Keyword::PARTITION])?;
+            self.expect_token(&Token::LParen)?;
+            let renames = self.parse_comma_separated(Parser::parse_expr)?;
+            self.expect_token(&Token::RParen)?;
+            AlterTableOperation::RenamePartitions {
+                old_partitions: before,
+                new_partitions: renames,
             }
         } else {
-            return self.expected("ADD, RENAME, or DROP after ALTER TABLE", self.peek_token());
+            return self.expected(
+                "ADD, RENAME, PARTITION or DROP after ALTER TABLE",
+                self.peek_token(),
+            );
         };
         Ok(Statement::AlterTable {
             name: table_name,

@@ -133,6 +133,8 @@ pub struct Select {
     pub selection: Option<Expr>,
     /// GROUP BY
     pub group_by: Vec<Expr>,
+    /// CLUSTER BY (Hive)
+    pub cluster_by: Vec<Expr>,
     /// HAVING
     pub having: Option<Expr>,
 }
@@ -152,6 +154,13 @@ impl fmt::Display for Select {
         }
         if !self.group_by.is_empty() {
             write!(f, " GROUP BY {}", display_comma_separated(&self.group_by))?;
+        }
+        if !self.cluster_by.is_empty() {
+            write!(
+                f,
+                " CLUSTER BY {}",
+                display_comma_separated(&self.cluster_by)
+            )?;
         }
         if let Some(ref having) = self.having {
             write!(f, " HAVING {}", having)?;
@@ -420,6 +429,7 @@ pub enum JoinConstraint {
     On(Expr),
     Using(Vec<Ident>),
     Natural,
+    None,
 }
 
 /// An `ORDER BY` expression

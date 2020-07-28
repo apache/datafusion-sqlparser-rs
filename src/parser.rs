@@ -1088,8 +1088,11 @@ impl Parser {
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
         let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
+        let temporary = self
+            .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
+            .is_some();
         if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table(or_replace)
+            self.parse_create_table(or_replace, temporary)
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
             self.parse_create_view(or_replace)
@@ -1184,6 +1187,7 @@ impl Parser {
             or_replace,
             if_not_exists: false,
             external: true,
+            temporary: false,
             file_format: Some(file_format),
             location: Some(location),
             query: None,
@@ -1331,7 +1335,11 @@ impl Parser {
         }
     }
 
-    pub fn parse_create_table(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
+    pub fn parse_create_table(
+        &mut self,
+        or_replace: bool,
+        temporary: bool,
+    ) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name()?;
         let like = if self.parse_keyword(Keyword::LIKE) {
@@ -1359,6 +1367,7 @@ impl Parser {
 
         Ok(Statement::CreateTable {
             name: table_name,
+            temporary,
             columns,
             constraints,
             with_options,

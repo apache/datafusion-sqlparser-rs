@@ -520,6 +520,7 @@ pub enum Statement {
     /// CREATE TABLE
     CreateTable {
         or_replace: bool,
+        temporary: bool,
         external: bool,
         if_not_exists: bool,
         /// Table name
@@ -824,6 +825,7 @@ impl fmt::Display for Statement {
                 hive_distribution,
                 hive_formats,
                 external,
+                temporary,
                 file_format,
                 location,
                 query,
@@ -839,10 +841,11 @@ impl fmt::Display for Statement {
                 //   `CREATE TABLE t (a INT) AS SELECT a from t2`
                 write!(
                     f,
-                    "CREATE {or_replace}{external}TABLE {if_not_exists}{name}",
+                    "CREATE {or_replace}{external}{temporary}TABLE {if_not_exists}{name}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     external = if *external { "EXTERNAL " } else { "" },
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    temporary = if *temporary { "TEMPORARY " } else { "" },
                     name = name,
                 )?;
                 if !columns.is_empty() || !constraints.is_empty() {

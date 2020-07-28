@@ -1667,11 +1667,22 @@ impl<'a> Parser<'a> {
                 }
             }
         } else if self.parse_keyword(Keyword::DROP) {
-            if self.parse_keyword(Keyword::PARTITION) {
+            if self.parse_keywords(&[Keyword::IF, Keyword::EXISTS, Keyword::PARTITION]) {
                 self.expect_token(&Token::LParen)?;
                 let partitions = self.parse_comma_separated(Parser::parse_expr)?;
                 self.expect_token(&Token::RParen)?;
-                AlterTableOperation::DropPartitions { partitions }
+                AlterTableOperation::DropPartitions {
+                    partitions,
+                    if_exists: true,
+                }
+            } else if self.parse_keyword(Keyword::PARTITION) {
+                self.expect_token(&Token::LParen)?;
+                let partitions = self.parse_comma_separated(Parser::parse_expr)?;
+                self.expect_token(&Token::RParen)?;
+                AlterTableOperation::DropPartitions {
+                    partitions,
+                    if_exists: false,
+                }
             } else {
                 let _ = self.parse_keyword(Keyword::COLUMN);
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);

@@ -26,13 +26,9 @@ pub enum AlterTableOperation {
     /// `ADD <table_constraint>`
     AddConstraint(TableConstraint),
     /// `ADD [ COLUMN ] <column_def>`
-    AddColumn {
-        column_def: ColumnDef,
-    },
+    AddColumn { column_def: ColumnDef },
     /// TODO: implement `DROP CONSTRAINT <name>`
-    DropConstraint {
-        name: Ident,
-    },
+    DropConstraint { name: Ident },
     /// `DROP [ COLUMN ] [ IF EXISTS ] <column_name> [ CASCADE ]`
     DropColumn {
         column_name: Ident,
@@ -51,6 +47,7 @@ pub enum AlterTableOperation {
     },
     DropPartitions {
         partitions: Vec<Expr>,
+        if_exists: bool,
     },
     /// `RENAME [ COLUMN ] <old_column_name> TO <new_column_name>`
     RenameColumn {
@@ -58,9 +55,7 @@ pub enum AlterTableOperation {
         new_column_name: Ident,
     },
     /// `RENAME TO <table_name>`
-    RenameTable {
-        table_name: Ident,
-    },
+    RenameTable { table_name: Ident },
 }
 
 impl fmt::Display for AlterTableOperation {
@@ -79,10 +74,14 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::AddColumn { column_def } => {
                 write!(f, "ADD COLUMN {}", column_def.to_string())
             }
-            AlterTableOperation::DropPartitions { partitions } => write!(
+            AlterTableOperation::DropPartitions {
+                partitions,
+                if_exists,
+            } => write!(
                 f,
-                "DROP PARTITION ({})",
-                display_comma_separated(partitions)
+                "DROP{ie} PARTITION ({})",
+                display_comma_separated(partitions),
+                ie = if *if_exists { " IF EXISTS" } else { "" }
             ),
             AlterTableOperation::DropConstraint { name } => write!(f, "DROP CONSTRAINT {}", name),
             AlterTableOperation::DropColumn {

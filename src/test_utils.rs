@@ -154,7 +154,7 @@ pub fn expr_from_projection(item: &SelectItem) -> &Expr {
 }
 
 pub fn number(n: &'static str) -> Value {
-    Value::Number(n.parse().unwrap())
+    Value::Number(n.parse().unwrap(), false)
 }
 
 pub fn table_alias(name: impl Into<String>) -> Option<TableAlias> {

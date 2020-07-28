@@ -22,9 +22,9 @@ use std::fmt;
 pub enum Value {
     /// Numeric literal
     #[cfg(not(feature = "bigdecimal"))]
-    Number(String),
+    Number(String, bool),
     #[cfg(feature = "bigdecimal")]
-    Number(BigDecimal),
+    Number(BigDecimal, bool),
     /// 'string value'
     SingleQuotedString(String),
     /// N'string value'
@@ -59,7 +59,7 @@ pub enum Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Value::Number(v) => write!(f, "{}", v),
+            Value::Number(v, l) => write!(f, "{}{long}", v, long = if *l { "L" } else { "" }),
             Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
             Value::NationalStringLiteral(v) => write!(f, "N'{}'", v),
             Value::HexStringLiteral(v) => write!(f, "X'{}'", v),

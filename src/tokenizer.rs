@@ -35,7 +35,7 @@ pub enum Token {
     /// A keyword (like SELECT) or an optionally quoted SQL identifier
     Word(Word),
     /// An unsigned numeric literal
-    Number(String),
+    Number(String, bool),
     /// A character that could not be tokenized
     Char(char),
     /// Single quoted string: i.e: 'string'
@@ -131,7 +131,7 @@ impl fmt::Display for Token {
         match self {
             Token::EOF => f.write_str("EOF"),
             Token::Word(ref w) => write!(f, "{}", w),
-            Token::Number(ref n) => f.write_str(n),
+            Token::Number(ref n, l) => write!(f, "{}{long}", n, long = if *l { "L" } else { "" }),
             Token::Char(ref c) => write!(f, "{}", c),
             Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
@@ -302,7 +302,7 @@ impl<'a> Tokenizer<'a> {
                 Token::Whitespace(Whitespace::Tab) => self.col += 4,
                 Token::Word(w) if w.quote_style == None => self.col += w.value.len() as u64,
                 Token::Word(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
-                Token::Number(s) => self.col += s.len() as u64,
+                Token::Number(s, _) => self.col += s.len() as u64,
                 Token::SingleQuotedString(s) => self.col += s.len() as u64,
                 _ => self.col += 1,
             }
@@ -388,8 +388,17 @@ impl<'a> Tokenizer<'a> {
                 // numbers
                 '0'..='9' => {
                     // TODO: https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#unsigned-numeric-literal
-                    let s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
-                    Ok(Some(Token::Number(s)))
+                    let s = peeking_take_while(chars, |ch| match ch {
+                        '0'..='9' | '.' => true,
+                        _ => false,
+                    });
+                    let long = if chars.peek() == Some(&'L') {
+                        chars.next();
+                        true
+                    } else {
+                        false
+                    };
+                    Ok(Some(Token::Number(s, long)))
                 }
                 // punctuation
                 '(' => self.consume_and_return(chars, Token::LParen),
@@ -646,7 +655,7 @@ mod tests {
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1")),
+            Token::Number(String::from("1"), false),
         ];
 
         compare(expected, tokens);
@@ -664,7 +673,7 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_word("sqrt", None),
             Token::LParen,
-            Token::Number(String::from("1")),
+            Token::Number(String::from("1"), false),
             Token::RParen,
         ];
 
@@ -736,11 +745,11 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::Eq,
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1")),
+            Token::Number(String::from("1"), false),
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("LIMIT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("5")),
+            Token::Number(String::from("5"), false),
         ];
 
         compare(expected, tokens);
@@ -893,12 +902,12 @@ mod tests {
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![
-            Token::Number("0".to_string()),
+            Token::Number("0".to_string(), false),
             Token::Whitespace(Whitespace::SingleLineComment {
                 prefix: "--".to_string(),
                 comment: "this is a comment\n".to_string(),
             }),
-            Token::Number("1".to_string()),
+            Token::Number("1".to_string(), false),
         ];
         compare(expected, tokens);
     }
@@ -925,11 +934,11 @@ mod tests {
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![
-            Token::Number("0".to_string()),
+            Token::Number("0".to_string(), false),
             Token::Whitespace(Whitespace::MultiLineComment(
                 "multi-line\n* /comment".to_string(),
             )),
-            Token::Number("1".to_string()),
+            Token::Number("1".to_string(), false),
         ];
         compare(expected, tokens);
     }
@@ -996,7 +1005,7 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("TOP"),
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("5")),
+            Token::Number(String::from("5"), false),
             Token::Whitespace(Whitespace::Space),
             Token::make_word("bar", Some('[')),
             Token::Whitespace(Whitespace::Space),

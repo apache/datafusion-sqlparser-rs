@@ -46,6 +46,12 @@ fn parse_analyze() {
 }
 
 #[test]
+fn parse_analyze_for_columns() {
+    let analyze = r#"ANALYZE TABLE db.table_name PARTITION (a = '1234', b) COMPUTE STATISTICS FOR COLUMNS a, b, c"#;
+    hive().verified_stmt(analyze);
+}
+
+#[test]
 fn parse_msck() {
     let msck = r#"MSCK REPAIR TABLE db.table_name ADD PARTITIONS"#;
     hive().verified_stmt(msck);

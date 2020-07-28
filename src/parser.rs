@@ -212,7 +212,7 @@ impl<'a> Parser<'a> {
         let mut noscan = false;
         let mut partitions = None;
         let mut compute_statistics = false;
-
+        let mut columns = vec![];
         loop {
             match self.parse_one_of_keywords(&[
                 Keyword::PARTITION,
@@ -229,6 +229,10 @@ impl<'a> Parser<'a> {
                 Some(Keyword::NOSCAN) => noscan = true,
                 Some(Keyword::FOR) => {
                     self.expect_keyword(Keyword::COLUMNS)?;
+                    columns = self.parse_comma_separated(Parser::parse_identifier)?;
+                    if columns.is_empty() {
+                        self.expected("columns identifiers", self.peek_token())?;
+                    }
                     for_columns = true
                 }
                 Some(Keyword::CACHE) => {
@@ -246,6 +250,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Analyze {
             table_name,
             for_columns,
+            columns,
             partitions,
             cache_metadata,
             noscan,

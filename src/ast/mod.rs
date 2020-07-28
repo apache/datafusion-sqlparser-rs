@@ -923,7 +923,7 @@ impl fmt::Display for FileFormat {
             PARQUET => "PARQUET",
             AVRO => "AVRO",
             RCFILE => "RCFILE",
-            JSONFILE => "TEXTFILE",
+            JSONFILE => "JSONFILE",
         })
     }
 }

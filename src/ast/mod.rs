@@ -483,6 +483,8 @@ pub enum Statement {
         source: Box<Query>,
         /// partitioned insert (Hive)
         partitioned: Option<Vec<Expr>>,
+        /// Columns defined after PARTITION
+        after_columns: Vec<Ident>,
         /// whether the insert has the table keyword (Hive)
         table: bool,
     },
@@ -709,6 +711,7 @@ impl fmt::Display for Statement {
                 overwrite,
                 partitioned,
                 columns,
+                after_columns,
                 source,
                 table,
             } => {
@@ -726,6 +729,9 @@ impl fmt::Display for Statement {
                     if !parts.is_empty() {
                         write!(f, "PARTITION ({}) ", display_comma_separated(parts))?;
                     }
+                }
+                if !after_columns.is_empty() {
+                    write!(f, "({}) ", display_comma_separated(after_columns))?;
                 }
                 write!(f, "{}", source)
             }

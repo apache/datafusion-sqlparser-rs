@@ -2548,12 +2548,17 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+
+        // Hive allows you to specify columns after partitions as well if you want.
+        let after_columns = self.parse_parenthesized_column_list(Optional)?;
+
         let source = Box::new(self.parse_query()?);
         Ok(Statement::Insert {
             table_name,
             overwrite,
             partitioned,
             columns,
+            after_columns,
             source,
             table,
         })

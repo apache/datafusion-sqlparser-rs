@@ -123,6 +123,12 @@ fn no_join_condition() {
     hive().verified_stmt(join);
 }
 
+#[test]
+fn columns_after_partition() {
+    let query = "INSERT INTO db.table_name PARTITION (a, b) (c, d) SELECT a, b, c, d FROM db.table";
+    hive().verified_stmt(query);
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

@@ -448,6 +448,7 @@ pub enum Statement {
         table_name: ObjectName,
         partitions: Option<Vec<Expr>>,
         for_columns: bool,
+        columns: Vec<Ident>,
         cache_metadata: bool,
         noscan: bool,
         compute_statistics: bool,
@@ -658,7 +659,8 @@ impl fmt::Display for Statement {
             Statement::Analyze {
                 table_name,
                 partitions,
-                for_columns: _,
+                for_columns,
+                columns,
                 cache_metadata,
                 noscan,
                 compute_statistics,
@@ -669,7 +671,7 @@ impl fmt::Display for Statement {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;
                     }
                 }
-                //TODO: Add for columns
+
                 if *compute_statistics {
                     write!(f, " COMPUTE STATISTICS")?;
                 }
@@ -678,6 +680,9 @@ impl fmt::Display for Statement {
                 }
                 if *cache_metadata {
                     write!(f, " CACHE METADATA")?;
+                }
+                if *for_columns {
+                    write!(f, " FOR COLUMNS {}", display_comma_separated(columns))?;
                 }
                 Ok(())
             }

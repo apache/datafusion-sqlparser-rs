@@ -111,6 +111,18 @@ fn test_drop_if_exists() {
     hive().verified_stmt(drop);
 }
 
+#[test]
+fn test_cluster_by() {
+    let cluster = "SELECT a FROM db.table CLUSTER BY a, b";
+    hive().verified_stmt(cluster);
+}
+
+#[test]
+fn no_join_condition() {
+    let join = "SELECT a, b FROM db.table_name JOIN a";
+    hive().verified_stmt(join);
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

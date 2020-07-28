@@ -2136,6 +2136,12 @@ impl Parser {
             vec![]
         };
 
+        let cluster_by = if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_expr)?
+        } else {
+            vec![]
+        };
+
         let having = if self.parse_keyword(Keyword::HAVING) {
             Some(self.parse_expr()?)
         } else {
@@ -2149,6 +2155,7 @@ impl Parser {
             from,
             selection,
             group_by,
+            cluster_by,
             having,
         })
     }
@@ -2414,7 +2421,8 @@ impl Parser {
             let columns = self.parse_parenthesized_column_list(Mandatory)?;
             Ok(JoinConstraint::Using(columns))
         } else {
-            self.expected("ON, or USING after JOIN", self.peek_token())
+            Ok(JoinConstraint::None)
+            //self.expected("ON, or USING after JOIN", self.peek_token())
         }
     }
 

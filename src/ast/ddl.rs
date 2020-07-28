@@ -200,9 +200,7 @@ pub enum ColumnOption {
     /// `DEFAULT <restricted-expr>`
     Default(Expr),
     /// `{ PRIMARY KEY | UNIQUE }`
-    Unique {
-        is_primary: bool,
-    },
+    Unique { is_primary: bool },
     /// A referential integrity constraint (`[FOREIGN KEY REFERENCES
     /// <foreign_table> (<referred_columns>)
     /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |

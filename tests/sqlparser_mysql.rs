@@ -18,6 +18,7 @@
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
 use sqlparser::test_utils::*;
+use sqlparser::tokenizer::Token;
 
 #[test]
 fn parse_identifiers() {
@@ -94,6 +95,37 @@ fn parse_show_columns() {
     match mysql_and_generic().parse_sql_statements("SHOW COLUMNS FROM mytable FROM mydb") {
         Err(_) => {}
         Ok(val) => panic!("unexpected successful parse: {:?}", val),
+    }
+}
+
+#[test]
+fn parse_create_table_auto_increment() {
+    let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTO_INCREMENT)";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: "bar".into(),
+                    data_type: DataType::Int,
+                    collation: None,
+                    options: vec![
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Unique { is_primary: true }
+                        },
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
+                                "AUTO_INCREMENT"
+                            )])
+                        }
+                    ],
+                }],
+                columns
+            );
+        }
+        _ => unreachable!(),
     }
 }
 

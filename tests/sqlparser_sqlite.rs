@@ -17,6 +17,7 @@
 use sqlparser::ast::*;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::test_utils::*;
+use sqlparser::tokenizer::Token;
 
 #[test]
 fn parse_create_table_without_rowid() {
@@ -53,6 +54,37 @@ fn parse_create_virtual_table() {
 
     let sql = "CREATE VIRTUAL TABLE t USING module_name";
     sqlite_and_generic().verified_stmt(sql);
+}
+
+#[test]
+fn parse_create_table_auto_increment() {
+    let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTOINCREMENT)";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: "bar".into(),
+                    data_type: DataType::Int,
+                    collation: None,
+                    options: vec![
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Unique { is_primary: true }
+                        },
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
+                                "AUTOINCREMENT"
+                            )])
+                        }
+                    ],
+                }],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 fn sqlite_and_generic() -> TestedDialects {

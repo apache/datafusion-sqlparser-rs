@@ -1283,6 +1283,12 @@ impl Parser {
             let expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
             ColumnOption::Check(expr)
+        } else if self.parse_keyword(Keyword::AUTO_INCREMENT) {
+            // Support AUTO_INCREMENT for MySQL
+            ColumnOption::DialectSpecific(vec![Token::make_keyword("AUTO_INCREMENT")])
+        } else if self.parse_keyword(Keyword::AUTOINCREMENT) {
+            // Support AUTOINCREMENT for SQLite
+            ColumnOption::DialectSpecific(vec![Token::make_keyword("AUTOINCREMENT")])
         } else {
             return self.expected("column option", self.peek_token());
         };

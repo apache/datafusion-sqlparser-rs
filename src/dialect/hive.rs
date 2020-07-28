@@ -12,7 +12,6 @@ impl Dialect for HiveDialect {
         (ch >= 'a' && ch <= 'z')
             || (ch >= 'A' && ch <= 'Z')
             || ch == '$'
-            || (ch >= '0' && ch <= '9')
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {

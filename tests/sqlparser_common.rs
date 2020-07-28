@@ -455,7 +455,7 @@ fn parse_number() {
     );
 
     #[cfg(not(feature = "bigdecimal"))]
-    assert_eq!(expr, Expr::Value(Value::Number("1.0".into())));
+    assert_eq!(expr, Expr::Value(Value::Number("1.0".into(), false)));
 }
 
 #[test]

@@ -479,7 +479,7 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: ObjectName(vec!["a".into()]),
+            name: "a".into(),
             parameters: vec![
                 Expr::Value(Value::Number(bigdecimal::BigDecimal::from(1))),
                 Expr::Value(Value::SingleQuotedString("t".to_string()))

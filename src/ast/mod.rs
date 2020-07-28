@@ -553,11 +553,26 @@ pub enum Statement {
     Rollback { chain: bool },
     /// CREATE SCHEMA
     CreateSchema { schema_name: ObjectName },
-
-    /// ASSERT <condition> [AS <message>]
+    /// `ASSERT <condition> [AS <message>]`
     Assert {
         condition: Expr,
         message: Option<Expr>,
+    },
+    /// `DEALLOCATE [ PREPARE ] { name | ALL }`
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    Deallocate { name: Ident, prepare: bool },
+    /// `EXECUTE name [ ( parameter [, ...] ) ]`
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    Execute { name: Ident, parameters: Vec<Expr> },
+    /// `PREPARE name [ ( data_type [, ...] ) ] AS statement`
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    Prepare {
+        name: Ident,
+        data_types: Vec<DataType>,
+        statement: Box<Statement>,
     },
 }
 
@@ -833,6 +848,30 @@ impl fmt::Display for Statement {
                     write!(f, " AS {}", m)?;
                 }
                 Ok(())
+            }
+            Statement::Deallocate { name, prepare } => write!(
+                f,
+                "DEALLOCATE {prepare}{name}",
+                prepare = if *prepare { "PREPARE " } else { "" },
+                name = name,
+            ),
+            Statement::Execute { name, parameters } => {
+                write!(f, "EXECUTE {}", name)?;
+                if !parameters.is_empty() {
+                    write!(f, "({})", display_comma_separated(parameters))?;
+                }
+                Ok(())
+            }
+            Statement::Prepare {
+                name,
+                data_types,
+                statement,
+            } => {
+                write!(f, "PREPARE {} ", name)?;
+                if !data_types.is_empty() {
+                    write!(f, "({}) ", display_comma_separated(data_types))?;
+                }
+                write!(f, "AS {}", statement)
             }
         }
     }

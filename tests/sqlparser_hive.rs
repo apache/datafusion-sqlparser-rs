@@ -142,6 +142,22 @@ fn long_numerics() {
     hive().verified_stmt(query);
 }
 
+#[test]
+fn decimal_precision() {
+    let query = "SELECT CAST(a AS DECIMAL(18,2)) FROM db.table";
+    let expected = "SELECT CAST(a AS NUMERIC(18,2)) FROM db.table";
+    hive().one_statement_parses_to(query, expected);
+}
+
+#[test]
+fn create_temp_table() {
+    let query = "CREATE TEMPORARY TABLE db.table (a INT NOT NULL)";
+    let query2 = "CREATE TEMP TABLE db.table (a INT NOT NULL)";
+
+    hive().verified_stmt(query);
+    hive().one_statement_parses_to(query2, query);
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

@@ -425,6 +425,8 @@ define_keywords!(
     SYSTEM_USER,
     TABLE,
     TABLESAMPLE,
+    TEMP,
+    TEMPORARY,
     TEXT,
     TEXTFILE,
     THEN,

@@ -425,42 +425,38 @@ fn parse_show() {
 
 #[test]
 fn parse_deallocate() {
-    let stmt = pg().verified_stmt("DEALLOCATE a");
+    let stmt = pg_and_generic().verified_stmt("DEALLOCATE a");
     assert_eq!(
         stmt,
         Statement::Deallocate {
-            name: Some(ObjectName(vec!["a".into()])),
-            all: false,
+            name: "a".into(),
             prepare: false,
         }
     );
 
-    let stmt = pg().verified_stmt("DEALLOCATE ALL");
+    let stmt = pg_and_generic().verified_stmt("DEALLOCATE ALL");
     assert_eq!(
         stmt,
         Statement::Deallocate {
-            name: None,
-            all: true,
+            name: "ALL".into(),
             prepare: false,
         }
     );
 
-    let stmt = pg().verified_stmt("DEALLOCATE PREPARE a");
+    let stmt = pg_and_generic().verified_stmt("DEALLOCATE PREPARE a");
     assert_eq!(
         stmt,
         Statement::Deallocate {
-            name: Some(ObjectName(vec!["a".into()])),
-            all: false,
+            name: "a".into(),
             prepare: true,
         }
     );
 
-    let stmt = pg().verified_stmt("DEALLOCATE PREPARE ALL");
+    let stmt = pg_and_generic().verified_stmt("DEALLOCATE PREPARE ALL");
     assert_eq!(
         stmt,
         Statement::Deallocate {
-            name: None,
-            all: true,
+            name: "ALL".into(),
             prepare: true,
         }
     );
@@ -468,16 +464,16 @@ fn parse_deallocate() {
 
 #[test]
 fn parse_execute() {
-    let stmt = pg().verified_stmt("EXECUTE a");
+    let stmt = pg_and_generic().verified_stmt("EXECUTE a");
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: ObjectName(vec!["a".into()]),
+            name: "a".into(),
             parameters: vec![],
         }
     );
 
-    let stmt = pg().verified_stmt("EXECUTE a(1, 't')");
+    let stmt = pg_and_generic().verified_stmt("EXECUTE a(1, 't')");
 
     #[cfg(feature = "bigdecimal")]
     assert_eq!(
@@ -494,7 +490,8 @@ fn parse_execute() {
 
 #[test]
 fn parse_prepare() {
-    let stmt = pg().verified_stmt("PREPARE a AS INSERT INTO customers VALUES ($1, $2, $3)");
+    let stmt =
+        pg_and_generic().verified_stmt("PREPARE a AS INSERT INTO customers VALUES (a1, a2, a3)");
     let sub_stmt = match stmt {
         Statement::Prepare {
             name,
@@ -502,7 +499,7 @@ fn parse_prepare() {
             statement,
             ..
         } => {
-            assert_eq!(name, ObjectName(vec!["a".into()]));
+            assert_eq!(name, "a".into());
             assert!(data_types.is_empty());
 
             statement
@@ -520,9 +517,9 @@ fn parse_prepare() {
             assert!(columns.is_empty());
 
             let expected_values = [vec![
-                Expr::Identifier("$1".into()),
-                Expr::Identifier("$2".into()),
-                Expr::Identifier("$3".into()),
+                Expr::Identifier("a1".into()),
+                Expr::Identifier("a2".into()),
+                Expr::Identifier("a3".into()),
             ]];
             match &source.body {
                 SetExpr::Values(Values(values)) => assert_eq!(values.as_slice(), &expected_values),
@@ -532,8 +529,8 @@ fn parse_prepare() {
         _ => unreachable!(),
     };
 
-    let stmt = pg()
-        .verified_stmt("PREPARE a (INT, TEXT) AS SELECT * FROM customers WHERE customers.id = $1");
+    let stmt = pg_and_generic()
+        .verified_stmt("PREPARE a (INT, TEXT) AS SELECT * FROM customers WHERE customers.id = a1");
     let sub_stmt = match stmt {
         Statement::Prepare {
             name,
@@ -541,7 +538,7 @@ fn parse_prepare() {
             statement,
             ..
         } => {
-            assert_eq!(name, ObjectName(vec!["a".into()]));
+            assert_eq!(name, "a".into());
             assert_eq!(data_types, vec![DataType::Int, DataType::Text]);
 
             statement
@@ -550,8 +547,8 @@ fn parse_prepare() {
     };
     assert_eq!(
         sub_stmt,
-        Box::new(Statement::Query(Box::new(pg().verified_query(
-            "SELECT * FROM customers WHERE customers.id = $1"
+        Box::new(Statement::Query(Box::new(pg_and_generic().verified_query(
+            "SELECT * FROM customers WHERE customers.id = a1"
         ))))
     );
 }

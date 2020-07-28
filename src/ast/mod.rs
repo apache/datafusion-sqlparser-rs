@@ -551,31 +551,24 @@ pub enum Statement {
     Rollback { chain: bool },
     /// CREATE SCHEMA
     CreateSchema { schema_name: ObjectName },
-    /// ASSERT <condition> [AS <message>]
+    /// `ASSERT <condition> [AS <message>]`
     Assert {
         condition: Expr,
         message: Option<Expr>,
     },
-    /// DEALLOCATE [ PREPARE ] { name | ALL }
+    /// `DEALLOCATE [ PREPARE ] { name | ALL }`
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Deallocate {
-        name: Option<ObjectName>,
-        all: bool,
-        prepare: bool,
-    },
-    /// EXECUTE name [ ( parameter [, ...] ) ]
+    Deallocate { name: Ident, prepare: bool },
+    /// `EXECUTE name [ ( parameter [, ...] ) ]`
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Execute {
-        name: ObjectName,
-        parameters: Vec<Expr>,
-    },
-    /// PREPARE name [ ( data_type [, ...] ) ] AS statement
+    Execute { name: Ident, parameters: Vec<Expr> },
+    /// `PREPARE name [ ( data_type [, ...] ) ] AS statement`
     ///
     /// Note: this is a PostgreSQL-specific statement.
     Prepare {
-        name: ObjectName,
+        name: Ident,
         data_types: Vec<DataType>,
         statement: Box<Statement>,
     },
@@ -846,17 +839,12 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Deallocate { name, all, prepare } => {
-                f.write_str("DEALLOCATE ")?;
-                if *prepare {
-                    f.write_str("PREPARE ")?;
-                }
-                if *all {
-                    f.write_str("ALL")
-                } else {
-                    write!(f, "{}", name.as_ref().unwrap())
-                }
-            }
+            Statement::Deallocate { name, prepare } => write!(
+                f,
+                "DEALLOCATE {prepare}{name}",
+                prepare = if *prepare { "PREPARE " } else { "" },
+                name = name,
+            ),
             Statement::Execute { name, parameters } => {
                 write!(f, "EXECUTE {}", name)?;
                 if !parameters.is_empty() {
@@ -873,7 +861,6 @@ impl fmt::Display for Statement {
                 if !data_types.is_empty() {
                     write!(f, "({}) ", display_comma_separated(data_types))?;
                 }
-
                 write!(f, "AS {}", statement)
             }
         }

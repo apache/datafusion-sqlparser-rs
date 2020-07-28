@@ -2394,22 +2394,15 @@ impl Parser {
 
     fn parse_deallocate(&mut self) -> Result<Statement, ParserError> {
         let prepare = self.parse_keyword(Keyword::PREPARE);
-        let all = self.parse_keyword(Keyword::ALL);
-
-        let name = if all {
-            None
-        } else {
-            Some(self.parse_object_name()?)
-        };
-
-        Ok(Statement::Deallocate { name, all, prepare })
+        let name = self.parse_identifier()?;
+        Ok(Statement::Deallocate { name, prepare })
     }
 
     fn parse_execute(&mut self) -> Result<Statement, ParserError> {
-        let name = self.parse_object_name()?;
+        let name = self.parse_identifier()?;
 
         let mut parameters = vec![];
-        if self.expect_token(&Token::LParen).is_ok() {
+        if self.consume_token(&Token::LParen) {
             parameters = self.parse_comma_separated(Parser::parse_expr)?;
             self.expect_token(&Token::RParen)?;
         }
@@ -2418,10 +2411,10 @@ impl Parser {
     }
 
     fn parse_prepare(&mut self) -> Result<Statement, ParserError> {
-        let name = self.parse_object_name()?;
+        let name = self.parse_identifier()?;
 
         let mut data_types = vec![];
-        if self.expect_token(&Token::LParen).is_ok() {
+        if self.consume_token(&Token::LParen) {
             data_types = self.parse_comma_separated(Parser::parse_data_type)?;
             self.expect_token(&Token::RParen)?;
         }

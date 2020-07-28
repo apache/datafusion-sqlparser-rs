@@ -299,7 +299,7 @@ impl fmt::Display for Expr {
                 results,
                 else_result,
             } => {
-                f.write_str("CASE")?;
+                write!(f, "CASE")?;
                 if let Some(operand) = operand {
                     write!(f, " {}", operand)?;
                 }
@@ -310,7 +310,7 @@ impl fmt::Display for Expr {
                 if let Some(else_result) = else_result {
                     write!(f, " ELSE {}", else_result)?;
                 }
-                f.write_str(" END")
+                write!(f, " END")
             }
             Expr::Exists(s) => write!(f, "EXISTS ({})", s),
             Expr::Subquery(s) => write!(f, "({})", s),
@@ -626,8 +626,7 @@ impl fmt::Display for Statement {
             } => {
                 write!(f, "UPDATE {}", table_name)?;
                 if !assignments.is_empty() {
-                    write!(f, " SET ")?;
-                    write!(f, "{}", display_comma_separated(assignments))?;
+                    write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
                 if let Some(selection) = selection {
                     write!(f, " WHERE {}", selection)?;
@@ -652,26 +651,19 @@ impl fmt::Display for Statement {
                 materialized,
                 with_options,
             } => {
-                write!(f, "CREATE")?;
-
-                if *or_replace {
-                    write!(f, " OR REPLACE")?;
-                }
-
-                if *materialized {
-                    write!(f, " MATERIALIZED")?;
-                }
-
-                write!(f, " VIEW {}", name)?;
-
+                write!(
+                    f,
+                    "CREATE {or_replace}{materialized}VIEW {name}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                    materialized = if *materialized { "MATERIALIZED " } else { "" },
+                    name = name
+                )?;
                 if !with_options.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_options))?;
                 }
-
                 if !columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(columns))?;
                 }
-
                 write!(f, " AS {}", query)
             }
             Statement::CreateTable {
@@ -716,7 +708,6 @@ impl fmt::Display for Statement {
                 if *without_rowid {
                     write!(f, " WITHOUT ROWID")?;
                 }
-
                 if *external {
                     write!(
                         f,
@@ -757,22 +748,15 @@ impl fmt::Display for Statement {
                 columns,
                 unique,
                 if_not_exists,
-            } => {
-                write!(
-                    f,
-                    "CREATE{}INDEX{}{} ON {}({}",
-                    if *unique { " UNIQUE " } else { " " },
-                    if *if_not_exists {
-                        " IF NOT EXISTS "
-                    } else {
-                        " "
-                    },
-                    name,
-                    table_name,
-                    display_separated(columns, ",")
-                )?;
-                write!(f, ");")
-            }
+            } => write!(
+                f,
+                "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}({columns})",
+                unique = if *unique { "UNIQUE " } else { "" },
+                if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                name = name,
+                table_name = table_name,
+                columns = display_separated(columns, ",")
+            ),
             Statement::AlterTable { name, operation } => {
                 write!(f, "ALTER TABLE {} {}", name, operation)
             }
@@ -793,13 +777,13 @@ impl fmt::Display for Statement {
                 local,
                 variable,
                 value,
-            } => {
-                f.write_str("SET ")?;
-                if *local {
-                    f.write_str("LOCAL ")?;
-                }
-                write!(f, "{} = {}", variable, value)
-            }
+            } => write!(
+                f,
+                "SET{local} {variable} = {value}",
+                local = if *local { " LOCAL" } else { "" },
+                variable = variable,
+                value = value
+            ),
             Statement::ShowVariable { variable } => write!(f, "SHOW {}", variable),
             Statement::ShowColumns {
                 extended,
@@ -807,14 +791,13 @@ impl fmt::Display for Statement {
                 table_name,
                 filter,
             } => {
-                f.write_str("SHOW ")?;
-                if *extended {
-                    f.write_str("EXTENDED ")?;
-                }
-                if *full {
-                    f.write_str("FULL ")?;
-                }
-                write!(f, "COLUMNS FROM {}", table_name)?;
+                write!(
+                    f,
+                    "SHOW {extended}{full}COLUMNS FROM {table_name}",
+                    extended = if *extended { "EXTENDED " } else { "" },
+                    full = if *full { "FULL " } else { "" },
+                    table_name = table_name,
+                )?;
                 if let Some(filter) = filter {
                     write!(f, " {}", filter)?;
                 }
@@ -843,7 +826,6 @@ impl fmt::Display for Statement {
             Statement::CreateSchema { schema_name } => write!(f, "CREATE SCHEMA {}", schema_name),
             Statement::Assert { condition, message } => {
                 write!(f, "ASSERT {}", condition)?;
-
                 if let Some(m) = message {
                     write!(f, " AS {}", m)?;
                 }
@@ -941,7 +923,7 @@ impl fmt::Display for FileFormat {
             PARQUET => "PARQUET",
             AVRO => "AVRO",
             RCFILE => "RCFILE",
-            JSONFILE => "TEXTFILE",
+            JSONFILE => "JSONFILE",
         })
     }
 }

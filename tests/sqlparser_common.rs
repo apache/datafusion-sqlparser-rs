@@ -3152,7 +3152,7 @@ fn ensure_multiple_dialects_are_tested() {
 
 #[test]
 fn parse_create_index() {
-    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test(name,age);";
+    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test(name,age)";
     let ident_vec = vec![Ident::new("name"), Ident::new("age")];
     match verified_stmt(sql) {
         Statement::CreateIndex {

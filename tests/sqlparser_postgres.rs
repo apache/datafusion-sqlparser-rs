@@ -474,14 +474,12 @@ fn parse_execute() {
     );
 
     let stmt = pg_and_generic().verified_stmt("EXECUTE a(1, 't')");
-
-    #[cfg(feature = "bigdecimal")]
     assert_eq!(
         stmt,
         Statement::Execute {
             name: "a".into(),
             parameters: vec![
-                Expr::Value(Value::Number(bigdecimal::BigDecimal::from(1))),
+                Expr::Value(number("1")),
                 Expr::Value(Value::SingleQuotedString("t".to_string()))
             ],
         }

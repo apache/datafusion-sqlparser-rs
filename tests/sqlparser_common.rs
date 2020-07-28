@@ -22,7 +22,7 @@ use matches::assert_matches;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::keywords::ALL_KEYWORDS;
-use sqlparser::parser::{Parser, ParserError};
+use sqlparser::parser::ParserError;
 use sqlparser::test_utils::{all_dialects, expr_from_projection, number, only};
 
 #[test]
@@ -147,13 +147,14 @@ fn parse_update() {
 
 #[test]
 fn parse_invalid_table_name() {
-    let ast = all_dialects().run_parser_method("db.public..customer", Parser::parse_object_name);
+    let ast = all_dialects()
+        .run_parser_method("db.public..customer", |parser| parser.parse_object_name());
     assert!(ast.is_err());
 }
 
 #[test]
 fn parse_no_table_name() {
-    let ast = all_dialects().run_parser_method("", Parser::parse_object_name);
+    let ast = all_dialects().run_parser_method("", |parser| parser.parse_object_name());
     assert!(ast.is_err());
 }
 
@@ -2273,19 +2274,12 @@ fn parse_join_nesting() {
         vec![join(nest!(nest!(nest!(table("b"), table("c")))))]
     );
 
-    // Parenthesized table names are non-standard, but supported in Snowflake SQL
-    let sql = "SELECT * FROM (a NATURAL JOIN (b))";
-    let select = verified_only_select(sql);
-    let from = only(select.from);
-
-    assert_eq!(from.relation, nest!(table("a"), nest!(table("b"))));
-
-    // Double parentheses around table names are non-standard, but supported in Snowflake SQL
-    let sql = "SELECT * FROM (a NATURAL JOIN ((b)))";
-    let select = verified_only_select(sql);
-    let from = only(select.from);
-
-    assert_eq!(from.relation, nest!(table("a"), nest!(nest!(table("b")))));
+    // Nesting a subquery in parentheses is non-standard, but supported in Snowflake SQL
+    let res = parse_sql_statements("SELECT * FROM ((SELECT 1) AS t)");
+    assert_eq!(
+        ParserError::ParserError("Expected joined table, found: EOF".to_string()),
+        res.unwrap_err()
+    );
 }
 
 #[test]
@@ -2425,26 +2419,6 @@ fn parse_derived_tables() {
                 },
                 join_operator: JoinOperator::Inner(JoinConstraint::Natural),
             }],
-        }))
-    );
-
-    // Nesting a subquery in parentheses is non-standard, but supported in Snowflake SQL
-    let sql = "SELECT * FROM ((SELECT 1) AS t)";
-    let select = verified_only_select(sql);
-    let from = only(select.from);
-
-    assert_eq!(
-        from.relation,
-        TableFactor::NestedJoin(Box::new(TableWithJoins {
-            relation: TableFactor::Derived {
-                lateral: false,
-                subquery: Box::new(verified_query("SELECT 1")),
-                alias: Some(TableAlias {
-                    name: "t".into(),
-                    columns: vec![],
-                })
-            },
-            joins: Vec::new(),
         }))
     );
 }

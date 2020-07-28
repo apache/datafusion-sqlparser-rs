@@ -83,23 +83,28 @@ impl fmt::Display for ParserError {
 impl Error for ParserError {}
 
 /// SQL Parser
-pub struct Parser {
+pub struct Parser<'a> {
     tokens: Vec<Token>,
     /// The index of the first unprocessed token in `self.tokens`
     index: usize,
+    dialect: &'a dyn Dialect,
 }
 
-impl Parser {
+impl<'a> Parser<'a> {
     /// Parse the specified tokens
-    pub fn new(tokens: Vec<Token>) -> Self {
-        Parser { tokens, index: 0 }
+    pub fn new(tokens: Vec<Token>, dialect: &'a dyn Dialect) -> Self {
+        Parser {
+            tokens,
+            index: 0,
+            dialect,
+        }
     }
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
     pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, &sql);
         let tokens = tokenizer.tokenize()?;
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::new(tokens, dialect);
         let mut stmts = Vec::new();
         let mut expecting_statement_delimiter = false;
         debug!("Parsing sql '{}'...", sql);
@@ -950,7 +955,7 @@ impl Parser {
     /// Parse a comma-separated list of 1+ items accepted by `F`
     pub fn parse_comma_separated<T, F>(&mut self, mut f: F) -> Result<Vec<T>, ParserError>
     where
-        F: FnMut(&mut Parser) -> Result<T, ParserError>,
+        F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
     {
         let mut values = vec![];
         loop {
@@ -2056,7 +2061,89 @@ impl Parser {
             };
             joins.push(join);
         }
+
         Ok(TableWithJoins { relation, joins })
+    }
+
+    fn add_alias_to_single_table_in_parenthesis(
+        &self,
+        table_facor: TableFactor,
+        consumed_alias: TableAlias,
+    ) -> Result<TableFactor, ParserError> {
+        match table_facor {
+            // Add the alias to dervied table
+            TableFactor::Derived {
+                lateral,
+                subquery,
+                alias,
+            } => match alias {
+                None => Ok(TableFactor::Derived {
+                    lateral,
+                    subquery,
+                    alias: Some(consumed_alias),
+                }),
+                // "Select * from (table1 as alias1) as alias1" - it prohabited
+                Some(alias) => Err(ParserError::ParserError(format!(
+                    "duplicate alias {}",
+                    alias
+                ))),
+            },
+            // Add The alias to the table
+            TableFactor::Table {
+                name,
+                alias,
+                args,
+                with_hints,
+            } => match alias {
+                None => Ok(TableFactor::Table {
+                    name,
+                    alias: Some(consumed_alias),
+                    args,
+                    with_hints,
+                }),
+                // "Select * from (table1 as alias1) as alias1" - it prohabited
+                Some(alias) => Err(ParserError::ParserError(format!(
+                    "duplicate alias {}",
+                    alias
+                ))),
+            },
+            TableFactor::NestedJoin(_) => Err(ParserError::ParserError(
+                "aliasing joins is not allowed".to_owned(),
+            )),
+        }
+    }
+
+    fn remove_redundent_parenthesis(
+        &mut self,
+        table_and_joins: TableWithJoins,
+    ) -> Result<TableFactor, ParserError> {
+        let table_factor = table_and_joins.relation;
+
+        // check if we have alias after the parenthesis
+        let alias = match self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)? {
+            None => {
+                return Ok(table_factor);
+            }
+            Some(alias) => alias,
+        };
+
+        // if we have alias, we attached it to the single table that inside parenthesis
+        self.add_alias_to_single_table_in_parenthesis(table_factor, alias)
+    }
+
+    fn validate_nested_join(&self, table_and_joins: &TableWithJoins) -> Result<(), ParserError> {
+        match table_and_joins.relation {
+            TableFactor::NestedJoin { .. } => (),
+            _ => {
+                if table_and_joins.joins.is_empty() {
+                    // validate thats indeed join and not dervied
+                    // or nested table
+                    self.expected("joined table", self.peek_token())?
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
@@ -2102,10 +2189,28 @@ impl Parser {
             // followed by some joins or another level of nesting.
             let table_and_joins = self.parse_table_and_joins()?;
             self.expect_token(&Token::RParen)?;
+
             // The SQL spec prohibits derived and bare tables from appearing
-            // alone in parentheses. We don't enforce this as some databases
-            // (e.g. Snowflake) allow such syntax.
-            Ok(TableFactor::NestedJoin(Box::new(table_and_joins)))
+            // alone in parentheses. But as some databases
+            // (e.g. Snowflake) allow such syntax - it's can be allowed
+            // for specfic dialect.
+            if self.dialect.alllow_single_table_in_parenthesis() {
+                if table_and_joins.joins.is_empty() {
+                    // In case the DB's like snowflake that allowed single dervied or bare
+                    // table in parenthesis (for example : `Select * from (a) as b` )
+                    // the parser will parse it as Nested join, but if it's actually a single table
+                    // we don't want to treat such case as join , because we don't actually join
+                    // any tables.
+                    let table_factor = self.remove_redundent_parenthesis(table_and_joins)?;
+                    Ok(table_factor)
+                } else {
+                    Ok(TableFactor::NestedJoin(Box::new(table_and_joins)))
+                }
+            } else {
+                // Defualt behaviuor
+                self.validate_nested_join(&table_and_joins)?;
+                Ok(TableFactor::NestedJoin(Box::new(table_and_joins)))
+            }
         } else {
             let name = self.parse_object_name()?;
             // Postgres, MSSQL: table-valued functions:

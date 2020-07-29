@@ -1240,7 +1240,7 @@ impl<'a> Parser<'a> {
             None
         };
         let location = hive_formats.location.clone();
-        let table_properties = self.parse_options(Keyword::TABLEPROPERTIES)?;
+        let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
         Ok(Statement::CreateTable {
             name: table_name,
             columns,
@@ -1424,7 +1424,7 @@ impl<'a> Parser<'a> {
         let hive_formats = self.parse_hive_formats()?;
         // PostgreSQL supports `WITH ( options )`, before `AS`
         let with_options = self.parse_options(Keyword::WITH)?;
-        let table_properties = self.parse_options(Keyword::TABLEPROPERTIES)?;
+        let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
             Some(Box::new(self.parse_query()?))

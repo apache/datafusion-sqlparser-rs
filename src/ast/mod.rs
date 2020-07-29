@@ -995,7 +995,7 @@ impl fmt::Display for Statement {
                 if !table_properties.is_empty() {
                     write!(
                         f,
-                        " TABLEPROPERTIES ({})",
+                        " TBLPROPERTIES ({})",
                         display_comma_separated(table_properties)
                     )?;
                 }

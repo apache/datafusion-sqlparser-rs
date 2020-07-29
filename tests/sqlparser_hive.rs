@@ -125,6 +125,12 @@ fn test_cluster_by() {
 }
 
 #[test]
+fn test_distribute_by() {
+    let cluster = "SELECT a FROM db.table DISTRIBUTE BY a, b";
+    hive().verified_stmt(cluster);
+}
+
+#[test]
 fn no_join_condition() {
     let join = "SELECT a, b FROM db.table_name JOIN a";
     hive().verified_stmt(join);
@@ -160,8 +166,15 @@ fn create_temp_table() {
 
 #[test]
 fn create_local_directory() {
-    let query = "INSERT OVERWRITE LOCAL DIRECTORY '/home/blah' STORED AS TEXTFILE SELECT * FROM db.table";
+    let query =
+        "INSERT OVERWRITE LOCAL DIRECTORY '/home/blah' STORED AS TEXTFILE SELECT * FROM db.table";
     hive().verified_stmt(query);
+}
+
+#[test]
+fn lateral_view() {
+    let view = "SELECT a FROM db.table LATERAL VIEW explode(a) t WHERE a = 1";
+    hive().verified_stmt(view);
 }
 
 fn hive() -> TestedDialects {

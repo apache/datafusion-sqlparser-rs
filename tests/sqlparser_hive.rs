@@ -88,7 +88,7 @@ fn create_table_like() {
 }
 
 // Turning off this test until we can parse identifiers starting with numbers :(
-#[ignore]
+#[test]
 fn test_identifier() {
     let between = "SELECT a AS 3_barrr_asdf FROM db.table_name";
     hive().verified_stmt(between);

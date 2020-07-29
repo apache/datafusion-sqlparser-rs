@@ -364,6 +364,19 @@ impl<'a> Tokenizer<'a> {
                 ch if self.dialect.is_identifier_start(ch) => {
                     chars.next(); // consume the first char
                     let s = self.tokenize_word(ch, chars);
+
+                    if s.chars().all(|x| x >= '0' && x <= '9' || x == '.') {
+                        let mut s = peeking_take_while(&mut s.chars().peekable(), |ch| match ch {
+                            '0'..='9' | '.' => true,
+                            _ => false,
+                        });
+                        let s2 = peeking_take_while(chars, |ch| match ch {
+                            '0'..='9' | '.' => true,
+                            _ => false,
+                        });
+                        s += s2.as_str();
+                        return Ok(Some(Token::Number(s, false)));
+                    }
                     Ok(Some(Token::make_word(&s, None)))
                 }
                 // string

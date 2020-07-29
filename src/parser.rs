@@ -2496,8 +2496,11 @@ impl Parser {
                 Token::SingleQuotedString(w) => w,
                 _ => self.expected("A file path", self.peek_token())?,
             };
-            let _ = self.expect_keywords(&[Keyword::STORED, Keyword::AS]);
-            let file_format = Some(self.parse_file_format()?);
+            let file_format = if self.parse_keywords(&[Keyword::STORED, Keyword::AS]) {
+                Some(self.parse_file_format()?)
+            } else {
+                None
+            };
             let source = Box::new(self.parse_query()?);
             Ok(Statement::Directory {
                 local,

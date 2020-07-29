@@ -2138,6 +2138,32 @@ impl Parser {
             vec![]
         };
 
+        let lateral_view = if self
+            .expect_keywords(&[Keyword::LATERAL, Keyword::VIEW])
+            .is_ok()
+        {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        let lateral_view_name = if lateral_view.is_some() {
+            Some(self.parse_object_name()?)
+        } else {
+            None
+        };
+
+        let lateral_col_alias = if lateral_view_name.is_some() {
+            self.parse_optional_alias(&[
+                Keyword::WHERE,
+                Keyword::GROUP,
+                Keyword::CLUSTER,
+                Keyword::HAVING,
+            ])?
+        } else {
+            None
+        };
+
         let selection = if self.parse_keyword(Keyword::WHERE) {
             Some(self.parse_expr()?)
         } else {
@@ -2156,6 +2182,12 @@ impl Parser {
             vec![]
         };
 
+        let distribute_by = if self.parse_keywords(&[Keyword::DISTRIBUTE, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_expr)?
+        } else {
+            vec![]
+        };
+
         let having = if self.parse_keyword(Keyword::HAVING) {
             Some(self.parse_expr()?)
         } else {
@@ -2168,8 +2200,12 @@ impl Parser {
             projection,
             from,
             selection,
+            lateral_view,
+            lateral_view_name,
+            lateral_col_alias,
             group_by,
             cluster_by,
+            distribute_by,
             having,
         })
     }
@@ -2459,7 +2495,7 @@ impl Parser {
                 path,
                 overwrite,
                 file_format,
-                source
+                source,
             })
         } else {
             // Hive lets you put table here regardless

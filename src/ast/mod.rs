@@ -489,7 +489,7 @@ pub enum Statement {
         local: bool,
         path: String,
         file_format: Option<FileFormat>,
-        source: Box<Query>
+        source: Box<Query>,
     },
     Copy {
         /// TABLE
@@ -642,7 +642,7 @@ impl fmt::Display for Statement {
                 local,
                 path,
                 file_format,
-                source
+                source,
             } => {
                 write!(
                     f,

@@ -173,6 +173,7 @@ define_keywords!(
     DIRECTORY,
     DISCONNECT,
     DISTINCT,
+    DISTRIBUTE,
     DOUBLE,
     DROP,
     DYNAMIC,
@@ -492,6 +493,8 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::HAVING,
     Keyword::ORDER,
     Keyword::TOP,
+    Keyword::LATERAL,
+    Keyword::VIEW,
     Keyword::LIMIT,
     Keyword::OFFSET,
     Keyword::FETCH,
@@ -509,6 +512,7 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::NATURAL,
     Keyword::USING,
     Keyword::CLUSTER,
+    Keyword::DISTRIBUTE,
     // for MSSQL-specific OUTER APPLY (seems reserved in most dialects)
     Keyword::OUTER,
 ];
@@ -524,6 +528,8 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::HAVING,
     Keyword::ORDER,
     Keyword::TOP,
+    Keyword::LATERAL,
+    Keyword::VIEW,
     Keyword::LIMIT,
     Keyword::OFFSET,
     Keyword::FETCH,
@@ -531,6 +537,7 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::EXCEPT,
     Keyword::INTERSECT,
     Keyword::CLUSTER,
+    Keyword::DISTRIBUTE,
     // Reserved only as a column alias in the `SELECT` clause
     Keyword::FROM,
 ];

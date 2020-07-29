@@ -129,12 +129,20 @@ pub struct Select {
     pub projection: Vec<SelectItem>,
     /// FROM
     pub from: Vec<TableWithJoins>,
+    /// LATERAL VIEW
+    pub lateral_view: Option<Expr>,
+    /// LATERAL VIEW optional name
+    pub lateral_view_name: Option<ObjectName>,
+    /// LATERAL VIEW optional column aliases
+    pub lateral_col_alias: Option<Ident>,
     /// WHERE
     pub selection: Option<Expr>,
     /// GROUP BY
     pub group_by: Vec<Expr>,
     /// CLUSTER BY (Hive)
     pub cluster_by: Vec<Expr>,
+    /// DISTRIBUTE BY (Hive)
+    pub distribute_by: Vec<Expr>,
     /// HAVING
     pub having: Option<Expr>,
 }
@@ -149,6 +157,15 @@ impl fmt::Display for Select {
         if !self.from.is_empty() {
             write!(f, " FROM {}", display_comma_separated(&self.from))?;
         }
+        if let Some(ref lv) = self.lateral_view {
+            write!(f, " LATERAL VIEW {}", lv)?;
+            if let Some(ref a) = self.lateral_view_name {
+                write!(f, " {}", a)?;
+            }
+            if let Some(ref c) = self.lateral_col_alias {
+                write!(f, " AS {}", c)?;
+            }
+        }
         if let Some(ref selection) = self.selection {
             write!(f, " WHERE {}", selection)?;
         }
@@ -160,6 +177,13 @@ impl fmt::Display for Select {
                 f,
                 " CLUSTER BY {}",
                 display_comma_separated(&self.cluster_by)
+            )?;
+        }
+        if !self.distribute_by.is_empty() {
+            write!(
+                f,
+                " DISTRIBUTE BY {}",
+                display_comma_separated(&self.distribute_by)
             )?;
         }
         if let Some(ref having) = self.having {

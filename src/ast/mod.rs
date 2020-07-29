@@ -1184,6 +1184,7 @@ pub struct Function {
     pub over: Option<WindowSpec>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
+    pub array_element: Option<Value>,
 }
 
 impl fmt::Display for Function {
@@ -1197,6 +1198,9 @@ impl fmt::Display for Function {
         )?;
         if let Some(o) = &self.over {
             write!(f, " OVER ({})", o)?;
+        }
+        if let Some(ae) = &self.array_element {
+            write!(f, "[{}]", ae)?;
         }
         Ok(())
     }

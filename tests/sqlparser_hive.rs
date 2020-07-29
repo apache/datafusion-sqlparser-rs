@@ -158,6 +158,12 @@ fn create_temp_table() {
     hive().one_statement_parses_to(query2, query);
 }
 
+#[test]
+fn create_local_directory() {
+    let query = "INSERT OVERWRITE LOCAL DIRECTORY '/home/blah' STORED AS TEXTFILE SELECT * FROM db.table";
+    hive().verified_stmt(query);
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

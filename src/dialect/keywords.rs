@@ -175,6 +175,7 @@ define_keywords!(
     DESC,
     DESCRIBE,
     DETERMINISTIC,
+    DIRECTORY,
     DISCONNECT,
     DISTINCT,
     DOUBLE,

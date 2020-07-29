@@ -1459,8 +1459,8 @@ fn parse_create_external_table_lowercase() {
 
 #[test]
 fn parse_alter_table() {
-    let add_column = "ALTER TABLE tab ADD COLUMN foo TEXT";
-    match verified_stmt(add_column) {
+    let add_column = "ALTER TABLE tab ADD COLUMN foo TEXT;";
+    match one_statement_parses_to(add_column, "ALTER TABLE tab ADD COLUMN foo TEXT") {
         Statement::AlterTable {
             name,
             operation: AlterTableOperation::AddColumn { column_def },

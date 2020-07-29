@@ -100,13 +100,13 @@ fn parse_show_columns() {
 
 #[test]
 fn parse_create_table_auto_increment() {
-    let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTO_INCREMENT)";
+    let sql = "CREATE TABLE `foo` (`bar` INT PRIMARY KEY AUTO_INCREMENT)";
     match mysql().verified_stmt(sql) {
         Statement::CreateTable { name, columns, .. } => {
-            assert_eq!(name.to_string(), "foo");
+            assert_eq!(name.to_string(), "`foo`");
             assert_eq!(
                 vec![ColumnDef {
-                    name: "bar".into(),
+                    name: Ident::with_quote('`', "bar"),
                     data_type: DataType::Int,
                     collation: None,
                     options: vec![

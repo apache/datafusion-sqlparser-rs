@@ -1179,26 +1179,32 @@ impl Parser {
         self.expect_keyword(Keyword::TABLE)?;
         let table_name = self.parse_object_name()?;
         let (columns, constraints) = self.parse_columns()?;
+
         let hive_distribution = self.parse_hive_distribution()?;
-        self.expect_keywords(&[Keyword::STORED, Keyword::AS])?;
-        let file_format = self.parse_file_format()?;
+        let hive_formats = self.parse_hive_formats()?;
 
-        self.expect_keyword(Keyword::LOCATION)?;
-        let location = self.parse_literal_string()?;
-
+        let file_format = if let Some(ff) = &hive_formats.storage {
+            match ff {
+                HiveIOFormat::FileFormat { format } => Some(format.clone()),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let location = hive_formats.location.clone();
         Ok(Statement::CreateTable {
             name: table_name,
             columns,
             constraints,
             hive_distribution,
-            hive_formats: None,
+            hive_formats: Some(hive_formats),
             with_options: vec![],
             or_replace,
             if_not_exists: false,
             external: true,
             temporary: false,
-            file_format: Some(file_format),
-            location: Some(location),
+            file_format,
+            location,
             query: None,
             without_rowid: false,
             like: None,
@@ -2147,37 +2153,34 @@ impl Parser {
             vec![]
         };
 
-        let lateral_view = if self
-            .expect_keywords(&[Keyword::LATERAL, Keyword::VIEW])
-            .is_ok()
-        {
-            Some(self.parse_expr()?)
-        } else {
-            None
-        };
+        let mut lateral_views = vec![];
+        loop {
+            if self.parse_keywords(&[Keyword::LATERAL, Keyword::VIEW]) {
+                let lateral_view = self.parse_expr()?;
+                let lateral_view_name = self.parse_object_name()?;
+                let lateral_col_alias = self
+                    .parse_comma_separated(|parser| {
+                        parser.parse_optional_alias(&[
+                            Keyword::WHERE,
+                            Keyword::GROUP,
+                            Keyword::CLUSTER,
+                            Keyword::HAVING,
+                        ]) // This couldn't possibly be a bad idea
+                    })?
+                    .into_iter()
+                    .filter(|i| i.is_some())
+                    .map(|i| i.unwrap())
+                    .collect();
 
-        let lateral_view_name = if lateral_view.is_some() {
-            Some(self.parse_object_name()?)
-        } else {
-            None
-        };
-
-        let lateral_col_alias = if lateral_view_name.is_some() {
-            self.parse_comma_separated(|parser| {
-                parser.parse_optional_alias(&[
-                    Keyword::WHERE,
-                    Keyword::GROUP,
-                    Keyword::CLUSTER,
-                    Keyword::HAVING,
-                ]) // This couldn't possibly be a bad idea
-            })?
-            .into_iter()
-            .filter(|i| i.is_some())
-            .map(|i| i.unwrap())
-            .collect()
-        } else {
-            vec![]
-        };
+                lateral_views.push(LateralView {
+                    lateral_view,
+                    lateral_view_name,
+                    lateral_col_alias,
+                });
+            } else {
+                break;
+            }
+        }
 
         let selection = if self.parse_keyword(Keyword::WHERE) {
             Some(self.parse_expr()?)
@@ -2215,9 +2218,7 @@ impl Parser {
             projection,
             from,
             selection,
-            lateral_view,
-            lateral_view_name,
-            lateral_col_alias,
+            lateral_views,
             group_by,
             cluster_by,
             distribute_by,

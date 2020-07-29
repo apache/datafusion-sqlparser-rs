@@ -29,8 +29,9 @@ pub use self::ddl::{
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    Cte, Fetch, Join, JoinConstraint, JoinOperator, Offset, OffsetRows, OrderByExpr, Query, Select,
-    SelectItem, SetExpr, SetOperator, TableAlias, TableFactor, TableWithJoins, Top, Values,
+    Cte, Fetch, Join, JoinConstraint, JoinOperator, LateralView, Offset, OffsetRows, OrderByExpr,
+    Query, Select, SelectItem, SetExpr, SetOperator, TableAlias, TableFactor, TableWithJoins, Top,
+    Values,
 };
 pub use self::value::{DateTimeField, Value};
 
@@ -951,13 +952,15 @@ impl fmt::Display for Statement {
                             " STORED AS INPUTFORMAT {} OUTPUTFORMAT {}",
                             input_format, output_format
                         )?,
-                        Some(HiveIOFormat::FileFormat { format }) => {
+                        Some(HiveIOFormat::FileFormat { format }) if !*external => {
                             write!(f, " STORED AS {}", format)?
                         }
-                        None => (),
+                        _ => (),
                     }
-                    if let Some(loc) = location {
-                        write!(f, " LOCATION '{}'", loc)?;
+                    if !*external {
+                        if let Some(loc) = location {
+                            write!(f, " LOCATION '{}'", loc)?;
+                        }
                     }
                 }
                 if *external {

@@ -15,7 +15,7 @@
 //! generic dialect is also tested (on the inputs it can handle).
 
 use sqlparser::ast::*;
-use sqlparser::dialect::GenericDialect;
+use sqlparser::dialect::{GenericDialect, SQLiteDialect};
 use sqlparser::test_utils::*;
 use sqlparser::tokenizer::Token;
 
@@ -87,9 +87,49 @@ fn parse_create_table_auto_increment() {
     }
 }
 
+#[test]
+fn parse_create_sqlite_quote() {
+    let sql = "CREATE TABLE `foo` ('a' INT, \"b\" INT, [c] INT)";
+    match sqlite().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "`foo`");
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::with_quote('\'', "a"),
+                        data_type: DataType::Int,
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::with_quote('"', "b"),
+                        data_type: DataType::Int,
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::with_quote('[', "c"),
+                        data_type: DataType::Int,
+                        collation: None,
+                        options: vec![],
+                    },
+                ],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn sqlite() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(SQLiteDialect {})],
+    }
+}
+
 fn sqlite_and_generic() -> TestedDialects {
     TestedDialects {
         // we don't have a separate SQLite dialect, so test only the generic dialect for now
-        dialects: vec![Box::new(GenericDialect {})],
+        dialects: vec![Box::new(SQLiteDialect {}), Box::new(GenericDialect {})],
     }
 }

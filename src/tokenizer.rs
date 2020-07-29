@@ -181,7 +181,7 @@ pub struct Word {
 impl fmt::Display for Word {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.quote_style {
-            Some(s) if s == '"' || s == '[' || s == '`' => {
+            Some(s) if s == '"' || s == '[' || s == '`' || s == '\'' => {
                 write!(f, "{}{}{}", s, self.value, Word::matching_end_quote(s))
             }
             None => f.write_str(&self.value),
@@ -192,9 +192,10 @@ impl fmt::Display for Word {
 impl Word {
     fn matching_end_quote(ch: char) -> char {
         match ch {
-            '"' => '"', // ANSI and most dialects
-            '[' => ']', // MS SQL
-            '`' => '`', // MySQL
+            '"' => '"',   // ANSI and most dialects
+            '[' => ']',   // MS SQL
+            '`' => '`',   // MySQL
+            '\'' => '\'', // SQLite
             _ => panic!("unexpected quoting style!"),
         }
     }
@@ -329,11 +330,6 @@ impl<'a> Tokenizer<'a> {
                     let s = self.tokenize_word(ch, chars);
                     Ok(Some(Token::make_word(&s, None)))
                 }
-                // string
-                '\'' => {
-                    let s = self.tokenize_single_quoted_string(chars)?;
-                    Ok(Some(Token::SingleQuotedString(s)))
-                }
                 // delimited (quoted) identifier
                 quote_start if self.dialect.is_delimited_identifier_start(quote_start) => {
                     chars.next(); // consume the opening quote
@@ -347,6 +343,11 @@ impl<'a> Tokenizer<'a> {
                                 .as_str(),
                         )
                     }
+                }
+                // string
+                '\'' => {
+                    let s = self.tokenize_single_quoted_string(chars)?;
+                    Ok(Some(Token::SingleQuotedString(s)))
                 }
                 // numbers
                 '0'..='9' => {

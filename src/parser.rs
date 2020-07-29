@@ -443,11 +443,20 @@ impl Parser {
             None
         };
 
+        let array_element = if self.consume_token(&Token::LBracket) {
+            let num = Some(self.parse_number_value()?);
+            self.expect_token(&Token::RBracket)?;
+            num
+        } else {
+            None
+        };
+
         Ok(Expr::Function(Function {
             name,
             args,
             over,
             distinct,
+            array_element,
         }))
     }
 

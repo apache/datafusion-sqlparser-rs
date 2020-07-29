@@ -177,6 +177,12 @@ fn lateral_view() {
     hive().verified_stmt(view);
 }
 
+#[test]
+fn test_array_elements() {
+    let elements = "SELECT collect_list(a)[0] FROM db.table";
+    hive().verified_stmt(elements);
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

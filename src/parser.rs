@@ -1846,6 +1846,7 @@ impl<'a> Parser<'a> {
     /// Parse a literal string
     pub fn parse_literal_string(&mut self) -> Result<String, ParserError> {
         match self.next_token() {
+            Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => Ok(value),
             Token::SingleQuotedString(s) => Ok(s),
             unexpected => self.expected("literal string", unexpected),
         }
@@ -2604,10 +2605,7 @@ impl<'a> Parser<'a> {
         let local = self.parse_keyword(Keyword::LOCAL);
 
         if self.parse_keyword(Keyword::DIRECTORY) {
-            let path = match self.next_token() {
-                Token::SingleQuotedString(w) => w,
-                _ => self.expected("A file path", self.peek_token())?,
-            };
+            let path = self.parse_literal_string()?;
             let file_format = if self.parse_keywords(&[Keyword::STORED, Keyword::AS]) {
                 Some(self.parse_file_format()?)
             } else {

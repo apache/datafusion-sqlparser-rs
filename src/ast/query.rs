@@ -129,12 +129,8 @@ pub struct Select {
     pub projection: Vec<SelectItem>,
     /// FROM
     pub from: Vec<TableWithJoins>,
-    /// LATERAL VIEW
-    pub lateral_view: Option<Expr>,
-    /// LATERAL VIEW optional name
-    pub lateral_view_name: Option<ObjectName>,
-    /// LATERAL VIEW optional column aliases
-    pub lateral_col_alias: Vec<Ident>,
+    /// LATERAL VIEWs
+    pub lateral_views: Vec<LateralView>,
     /// WHERE
     pub selection: Option<Expr>,
     /// GROUP BY
@@ -157,17 +153,9 @@ impl fmt::Display for Select {
         if !self.from.is_empty() {
             write!(f, " FROM {}", display_comma_separated(&self.from))?;
         }
-        if let Some(ref lv) = self.lateral_view {
-            write!(f, " LATERAL VIEW {}", lv)?;
-            if let Some(ref a) = self.lateral_view_name {
-                write!(f, " {}", a)?;
-            }
-            if !self.lateral_col_alias.is_empty() {
-                write!(
-                    f,
-                    " AS {}",
-                    display_comma_separated(&self.lateral_col_alias)
-                )?;
+        if !self.lateral_views.is_empty() {
+            for lv in &self.lateral_views {
+                write!(f, "{}", lv)?;
             }
         }
         if let Some(ref selection) = self.selection {
@@ -192,6 +180,36 @@ impl fmt::Display for Select {
         }
         if let Some(ref having) = self.having {
             write!(f, " HAVING {}", having)?;
+        }
+        Ok(())
+    }
+}
+
+/// A hive LATERAL VIEW with potential column aliases
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct LateralView {
+    /// LATERAL VIEW
+    pub lateral_view: Expr,
+    /// LATERAL VIEW table name
+    pub lateral_view_name: ObjectName,
+    /// LATERAL VIEW optional column aliases
+    pub lateral_col_alias: Vec<Ident>,
+}
+
+impl fmt::Display for LateralView {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            " LATERAL VIEW {} {}",
+            self.lateral_view, self.lateral_view_name
+        )?;
+        if !self.lateral_col_alias.is_empty() {
+            write!(
+                f,
+                " AS {}",
+                display_comma_separated(&self.lateral_col_alias)
+            )?;
         }
         Ok(())
     }

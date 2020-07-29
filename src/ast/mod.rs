@@ -483,6 +483,14 @@ pub enum Statement {
         /// whether the insert has the table keyword (Hive)
         table: bool,
     },
+    // TODO: Support ROW FORMAT
+    Directory {
+        overwrite: bool,
+        local: bool,
+        path: String,
+        file_format: Option<FileFormat>,
+        source: Box<Query>
+    },
     Copy {
         /// TABLE
         table_name: ObjectName,
@@ -629,6 +637,25 @@ impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Statement::Query(s) => write!(f, "{}", s),
+            Statement::Directory {
+                overwrite,
+                local,
+                path,
+                file_format,
+                source
+            } => {
+                write!(
+                    f,
+                    "INSERT{overwrite}{local} DIRECTORY '{path}'",
+                    overwrite = if *overwrite { " OVERWRITE" } else { "" },
+                    local = if *local { " LOCAL" } else { "" },
+                    path = path
+                )?;
+                if let Some(ref ff) = file_format {
+                    write!(f, " STORED AS {}", ff)?
+                }
+                write!(f, " {}", source)
+            }
             Statement::Msck {
                 table_name,
                 repair,

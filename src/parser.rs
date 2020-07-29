@@ -2444,33 +2444,52 @@ impl Parser {
     pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
         let action = self.expect_one_of_keywords(&[Keyword::INTO, Keyword::OVERWRITE])?;
         let overwrite = action == Keyword::OVERWRITE;
-        // Hive lets you put table here regardless
-        let table = self.parse_keyword(Keyword::TABLE);
-        let table_name = self.parse_object_name()?;
-        let columns = self.parse_parenthesized_column_list(Optional)?;
+        let local = self.parse_keyword(Keyword::LOCAL);
 
-        let partitioned = if self.parse_keyword(Keyword::PARTITION) {
-            self.expect_token(&Token::LParen)?;
-            let r = Some(self.parse_comma_separated(Parser::parse_expr)?);
-            self.expect_token(&Token::RParen)?;
-            r
+        if self.parse_keyword(Keyword::DIRECTORY) {
+            let path = match self.next_token() {
+                Token::SingleQuotedString(w) => w,
+                _ => self.expected("A file path", self.peek_token())?,
+            };
+            let _ = self.expect_keywords(&[Keyword::STORED, Keyword::AS]);
+            let file_format = Some(self.parse_file_format()?);
+            let source = Box::new(self.parse_query()?);
+            Ok(Statement::Directory {
+                local,
+                path,
+                overwrite,
+                file_format,
+                source
+            })
         } else {
-            None
-        };
+            // Hive lets you put table here regardless
+            let table = self.parse_keyword(Keyword::TABLE);
+            let table_name = self.parse_object_name()?;
+            let columns = self.parse_parenthesized_column_list(Optional)?;
 
-        // Hive allows you to specify columns after partitions as well if you want.
-        let after_columns = self.parse_parenthesized_column_list(Optional)?;
+            let partitioned = if self.parse_keyword(Keyword::PARTITION) {
+                self.expect_token(&Token::LParen)?;
+                let r = Some(self.parse_comma_separated(Parser::parse_expr)?);
+                self.expect_token(&Token::RParen)?;
+                r
+            } else {
+                None
+            };
 
-        let source = Box::new(self.parse_query()?);
-        Ok(Statement::Insert {
-            table_name,
-            overwrite,
-            partitioned,
-            columns,
-            after_columns,
-            source,
-            table,
-        })
+            // Hive allows you to specify columns after partitions as well if you want.
+            let after_columns = self.parse_parenthesized_column_list(Optional)?;
+
+            let source = Box::new(self.parse_query()?);
+            Ok(Statement::Insert {
+                table_name,
+                overwrite,
+                partitioned,
+                columns,
+                after_columns,
+                source,
+                table,
+            })
+        }
     }
 
     pub fn parse_update(&mut self) -> Result<Statement, ParserError> {

@@ -3152,19 +3152,30 @@ fn ensure_multiple_dialects_are_tested() {
 
 #[test]
 fn parse_create_index() {
-    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test(name,age)";
-    let ident_vec = vec![Ident::new("name"), Ident::new("age")];
+    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test(name,age DESC)";
+    let columns = vec![
+        IndexedColumn {
+            name: Ident::new("name"),
+            collation: None,
+            asc: None,
+        },
+        IndexedColumn {
+            name: Ident::new("age"),
+            collation: None,
+            asc: Some(false),
+        },
+    ];
     match verified_stmt(sql) {
         Statement::CreateIndex {
             name,
             table_name,
-            columns,
+            indexed_columns,
             unique,
             if_not_exists,
         } => {
             assert_eq!("idx_name", name.to_string());
             assert_eq!("test", table_name.to_string());
-            assert_eq!(ident_vec, columns);
+            assert_eq!(indexed_columns, columns);
             assert_eq!(true, unique);
             assert_eq!(true, if_not_exists)
         }

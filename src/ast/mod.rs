@@ -24,8 +24,8 @@ use std::fmt;
 
 pub use self::data_type::DataType;
 pub use self::ddl::{
-    AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, ReferentialAction,
-    TableConstraint,
+    AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, IndexedColumn,
+    ReferentialAction, TableConstraint,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
@@ -498,7 +498,7 @@ pub enum Statement {
         /// index name
         name: ObjectName,
         table_name: ObjectName,
-        columns: Vec<Ident>,
+        indexed_columns: Vec<IndexedColumn>,
         unique: bool,
         if_not_exists: bool,
     },
@@ -745,17 +745,17 @@ impl fmt::Display for Statement {
             Statement::CreateIndex {
                 name,
                 table_name,
-                columns,
+                indexed_columns,
                 unique,
                 if_not_exists,
             } => write!(
                 f,
-                "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}({columns})",
+                "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}({indexed_columns})",
                 unique = if *unique { "UNIQUE " } else { "" },
                 if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                 name = name,
                 table_name = table_name,
-                columns = display_separated(columns, ",")
+                indexed_columns = display_separated(indexed_columns, ",")
             ),
             Statement::AlterTable { name, operation } => {
                 write!(f, "ALTER TABLE {} {}", name, operation)

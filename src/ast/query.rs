@@ -134,7 +134,7 @@ pub struct Select {
     /// LATERAL VIEW optional name
     pub lateral_view_name: Option<ObjectName>,
     /// LATERAL VIEW optional column aliases
-    pub lateral_col_alias: Option<Ident>,
+    pub lateral_col_alias: Vec<Ident>,
     /// WHERE
     pub selection: Option<Expr>,
     /// GROUP BY
@@ -162,8 +162,12 @@ impl fmt::Display for Select {
             if let Some(ref a) = self.lateral_view_name {
                 write!(f, " {}", a)?;
             }
-            if let Some(ref c) = self.lateral_col_alias {
-                write!(f, " AS {}", c)?;
+            if !self.lateral_col_alias.is_empty() {
+                write!(
+                    f,
+                    " AS {}",
+                    display_comma_separated(&self.lateral_col_alias)
+                )?;
             }
         }
         if let Some(ref selection) = self.selection {

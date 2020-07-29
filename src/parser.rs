@@ -2163,14 +2163,20 @@ impl Parser {
         };
 
         let lateral_col_alias = if lateral_view_name.is_some() {
-            self.parse_optional_alias(&[
-                Keyword::WHERE,
-                Keyword::GROUP,
-                Keyword::CLUSTER,
-                Keyword::HAVING,
-            ])?
+            self.parse_comma_separated(|parser| {
+                parser.parse_optional_alias(&[
+                    Keyword::WHERE,
+                    Keyword::GROUP,
+                    Keyword::CLUSTER,
+                    Keyword::HAVING,
+                ]) // This couldn't possibly be a bad idea
+            })?
+            .into_iter()
+            .filter(|i| i.is_some())
+            .map(|i| i.unwrap())
+            .collect()
         } else {
-            None
+            vec![]
         };
 
         let selection = if self.parse_keyword(Keyword::WHERE) {

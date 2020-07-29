@@ -421,6 +421,7 @@ define_keywords!(
     SYSTEM_TIME,
     SYSTEM_USER,
     TABLE,
+    TABLEPROPERTIES,
     TABLESAMPLE,
     TEMP,
     TEMPORARY,

@@ -1192,6 +1192,7 @@ impl Parser {
             None
         };
         let location = hive_formats.location.clone();
+        let table_properties = self.parse_options(Keyword::TABLEPROPERTIES)?;
         Ok(Statement::CreateTable {
             name: table_name,
             columns,
@@ -1199,6 +1200,7 @@ impl Parser {
             hive_distribution,
             hive_formats: Some(hive_formats),
             with_options: vec![],
+            table_properties,
             or_replace,
             if_not_exists: false,
             external: true,
@@ -1234,7 +1236,7 @@ impl Parser {
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
-        let with_options = self.parse_with_options()?;
+        let with_options = self.parse_options(Keyword::WITH)?;
         self.expect_keyword(Keyword::AS)?;
         let query = Box::new(self.parse_query()?);
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
@@ -1371,8 +1373,8 @@ impl Parser {
         let hive_distribution = self.parse_hive_distribution()?;
         let hive_formats = self.parse_hive_formats()?;
         // PostgreSQL supports `WITH ( options )`, before `AS`
-        let with_options = self.parse_with_options()?;
-
+        let with_options = self.parse_options(Keyword::WITH)?;
+        let table_properties = self.parse_options(Keyword::TABLEPROPERTIES)?;
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
             Some(Box::new(self.parse_query()?))
@@ -1386,6 +1388,7 @@ impl Parser {
             columns,
             constraints,
             with_options,
+            table_properties,
             or_replace,
             if_not_exists,
             hive_distribution,
@@ -1573,8 +1576,8 @@ impl Parser {
         }
     }
 
-    pub fn parse_with_options(&mut self) -> Result<Vec<SqlOption>, ParserError> {
-        if self.parse_keyword(Keyword::WITH) {
+    pub fn parse_options(&mut self, keyword: Keyword) -> Result<Vec<SqlOption>, ParserError> {
+        if self.parse_keyword(keyword) {
             self.expect_token(&Token::LParen)?;
             let options = self.parse_comma_separated(Parser::parse_sql_option)?;
             self.expect_token(&Token::RParen)?;
@@ -1741,6 +1744,11 @@ impl Parser {
                 Keyword::TRUE => Ok(Value::Boolean(true)),
                 Keyword::FALSE => Ok(Value::Boolean(false)),
                 Keyword::NULL => Ok(Value::Null),
+                Keyword::NoKeyword => Ok(Value::LiteralString(format!(
+                    "{quote}{}{quote}",
+                    w.value,
+                    quote = w.quote_style.map(|q| q.to_string()).unwrap_or("".into())
+                ))),
                 _ => self.expected("a concrete value", Token::Word(w)),
             },
             // The call to n.parse() returns a bigdecimal when the

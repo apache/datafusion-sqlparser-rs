@@ -539,6 +539,7 @@ pub enum Statement {
         constraints: Vec<TableConstraint>,
         hive_distribution: HiveDistributionStyle,
         hive_formats: Option<HiveFormat>,
+        table_properties: Vec<SqlOption>,
         with_options: Vec<SqlOption>,
         file_format: Option<FileFormat>,
         location: Option<String>,
@@ -847,6 +848,7 @@ impl fmt::Display for Statement {
                 name,
                 columns,
                 constraints,
+                table_properties,
                 with_options,
                 or_replace,
                 if_not_exists,
@@ -969,6 +971,13 @@ impl fmt::Display for Statement {
                         " STORED AS {} LOCATION '{}'",
                         file_format.as_ref().unwrap(),
                         location.as_ref().unwrap()
+                    )?;
+                }
+                if !table_properties.is_empty() {
+                    write!(
+                        f,
+                        " TABLEPROPERTIES ({})",
+                        display_comma_separated(table_properties)
                     )?;
                 }
                 if !with_options.is_empty() {

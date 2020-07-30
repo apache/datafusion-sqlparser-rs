@@ -3154,15 +3154,15 @@ fn ensure_multiple_dialects_are_tested() {
 fn parse_create_index() {
     let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test(name,age DESC)";
     let columns = vec![
-        IndexedColumn {
-            name: Ident::new("name"),
-            collation: None,
+        OrderByExpr {
+            expr: Expr::Identifier(Ident::new("name")),
             asc: None,
+            nulls_first: None,
         },
-        IndexedColumn {
-            name: Ident::new("age"),
-            collation: None,
+        OrderByExpr {
+            expr: Expr::Identifier(Ident::new("age")),
             asc: Some(false),
+            nulls_first: None,
         },
     ];
     match verified_stmt(sql) {

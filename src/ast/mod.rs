@@ -24,8 +24,8 @@ use std::fmt;
 
 pub use self::data_type::DataType;
 pub use self::ddl::{
-    AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, IndexedColumn,
-    ReferentialAction, TableConstraint,
+    AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, ReferentialAction,
+    TableConstraint,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
@@ -498,7 +498,7 @@ pub enum Statement {
         /// index name
         name: ObjectName,
         table_name: ObjectName,
-        indexed_columns: Vec<IndexedColumn>,
+        indexed_columns: Vec<OrderByExpr>,
         unique: bool,
         if_not_exists: bool,
     },

@@ -139,31 +139,6 @@ impl fmt::Display for TableConstraint {
     }
 }
 
-/// SQL indexed column definition
-/// https://www.sqlite.org/syntax/indexed-column.html
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct IndexedColumn {
-    pub name: Ident,
-    pub collation: Option<ObjectName>,
-    pub asc: Option<bool>,
-}
-
-impl fmt::Display for IndexedColumn {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.name)?;
-        if let Some(collation_name) = &self.collation {
-            write!(f, " COLLATE {}", collation_name)?;
-        }
-        match self.asc {
-            Some(true) => write!(f, " ASC")?,
-            Some(false) => write!(f, " DESC")?,
-            None => (),
-        }
-        Ok(())
-    }
-}
-
 /// SQL column definition
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

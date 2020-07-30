@@ -1142,61 +1142,15 @@ impl Parser {
         let index_name = self.parse_object_name()?;
         self.expect_keyword(Keyword::ON)?;
         let table_name = self.parse_object_name()?;
-        let indexed_columns = self.parse_indexed_columns()?;
+        self.expect_token(&Token::LParen)?;
+        let indexed_columns = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+        self.expect_token(&Token::RParen)?;
         Ok(Statement::CreateIndex {
             name: index_name,
             table_name,
             indexed_columns,
             unique,
             if_not_exists,
-        })
-    }
-
-    fn parse_indexed_columns(&mut self) -> Result<Vec<IndexedColumn>, ParserError> {
-        let mut indexed_columns = vec![];
-        if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
-            return Ok(indexed_columns);
-        }
-
-        loop {
-            if let Token::Word(_) = self.peek_token() {
-                let indexed_column_def = self.parse_indexed_column_def()?;
-                indexed_columns.push(indexed_column_def);
-            } else {
-                return self.expected("column name", self.peek_token());
-            }
-            let comma = self.consume_token(&Token::Comma);
-            if self.consume_token(&Token::RParen) {
-                // allow a trailing comma, even though it's not in standard
-                break;
-            } else if !comma {
-                return self.expected(
-                    "',' or ')' after indexed column definition",
-                    self.peek_token(),
-                );
-            }
-        }
-        Ok(indexed_columns)
-    }
-
-    fn parse_indexed_column_def(&mut self) -> Result<IndexedColumn, ParserError> {
-        let name = self.parse_identifier()?;
-        let collation = if self.parse_keyword(Keyword::COLLATE) {
-            Some(self.parse_object_name()?)
-        } else {
-            None
-        };
-        let asc = if self.parse_keyword(Keyword::ASC) {
-            Some(true)
-        } else if self.parse_keyword(Keyword::DESC) {
-            Some(false)
-        } else {
-            None
-        };
-        Ok(IndexedColumn {
-            name,
-            collation,
-            asc,
         })
     }
 

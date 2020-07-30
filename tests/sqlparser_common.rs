@@ -3153,7 +3153,7 @@ fn ensure_multiple_dialects_are_tested() {
 #[test]
 fn parse_create_index() {
     let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test(name,age DESC)";
-    let columns = vec![
+    let indexed_columns = vec![
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("name")),
             asc: None,
@@ -3169,7 +3169,7 @@ fn parse_create_index() {
         Statement::CreateIndex {
             name,
             table_name,
-            indexed_columns,
+            columns,
             unique,
             if_not_exists,
         } => {

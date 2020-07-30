@@ -498,7 +498,7 @@ pub enum Statement {
         /// index name
         name: ObjectName,
         table_name: ObjectName,
-        indexed_columns: Vec<OrderByExpr>,
+        columns: Vec<OrderByExpr>,
         unique: bool,
         if_not_exists: bool,
     },
@@ -745,17 +745,17 @@ impl fmt::Display for Statement {
             Statement::CreateIndex {
                 name,
                 table_name,
-                indexed_columns,
+                columns,
                 unique,
                 if_not_exists,
             } => write!(
                 f,
-                "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}({indexed_columns})",
+                "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}({columns})",
                 unique = if *unique { "UNIQUE " } else { "" },
                 if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                 name = name,
                 table_name = table_name,
-                indexed_columns = display_separated(indexed_columns, ",")
+                columns = display_separated(columns, ",")
             ),
             Statement::AlterTable { name, operation } => {
                 write!(f, "ALTER TABLE {} {}", name, operation)

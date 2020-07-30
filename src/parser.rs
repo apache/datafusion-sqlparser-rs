@@ -2230,6 +2230,7 @@ impl<'a> Parser<'a> {
                             Keyword::GROUP,
                             Keyword::CLUSTER,
                             Keyword::HAVING,
+                            Keyword::LATERAL
                         ]) // This couldn't possibly be a bad idea
                     })?
                     .into_iter()

@@ -498,7 +498,7 @@ pub enum Statement {
         /// index name
         name: ObjectName,
         table_name: ObjectName,
-        columns: Vec<Ident>,
+        columns: Vec<OrderByExpr>,
         unique: bool,
         if_not_exists: bool,
     },

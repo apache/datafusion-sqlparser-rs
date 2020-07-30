@@ -2174,6 +2174,7 @@ impl Parser {
                             Keyword::GROUP,
                             Keyword::CLUSTER,
                             Keyword::HAVING,
+                            Keyword::LATERAL
                         ]) // This couldn't possibly be a bad idea
                     })?
                     .into_iter()

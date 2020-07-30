@@ -30,4 +30,8 @@ impl Dialect for MySqlDialect {
     fn is_identifier_part(&self, ch: char) -> bool {
         self.is_identifier_start(ch) || (ch >= '0' && ch <= '9')
     }
+
+    fn is_delimited_identifier_start(&self, ch: char) -> bool {
+        ch == '`'
+    }
 }

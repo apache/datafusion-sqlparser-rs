@@ -106,7 +106,7 @@ fn parse_create_table_auto_increment() {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
-                    name: "bar".into(),
+                    name: Ident::new("bar"),
                     data_type: DataType::Int,
                     collation: None,
                     options: vec![
@@ -121,6 +121,29 @@ fn parse_create_table_auto_increment() {
                             )])
                         }
                     ],
+                }],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_quote_identifiers() {
+    let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INT PRIMARY KEY)";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "`PRIMARY`");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::with_quote('`', "BEGIN"),
+                    data_type: DataType::Int,
+                    collation: None,
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::Unique { is_primary: true }
+                    }],
                 }],
                 columns
             );

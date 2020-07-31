@@ -17,7 +17,7 @@ instance:
 git tag -a '0.6.0' -m '(cargo-release) sqlparser version 0.6.0'
 ```
 
-This will create a new tag, `0.6.0` which the message,
+This will create a new tag, `0.6.0` with the message,
 `(cargo-release) sqlparser version 0.6.0`.
 
 Once the tag is created, pushing the tag upstream will trigger a publishing

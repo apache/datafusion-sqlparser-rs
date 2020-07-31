@@ -55,7 +55,9 @@ fn parse_analyze_for_columns() {
 #[test]
 fn parse_msck() {
     let msck = r#"MSCK REPAIR TABLE db.table_name ADD PARTITIONS"#;
+    let msck2 = r#"MSCK REPAIR TABLE db.table_name"#;
     hive().verified_stmt(msck);
+    hive().verified_stmt(msck2);
 }
 
 #[test]

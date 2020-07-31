@@ -9,7 +9,10 @@ impl Dialect for HiveDialect {
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {
-        (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')
+        (ch >= 'a' && ch <= 'z')
+            || (ch >= 'A' && ch <= 'Z')
+            || (ch >= '0' && ch <= '9')
+            || ch == '$'
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
@@ -17,5 +20,7 @@ impl Dialect for HiveDialect {
             || (ch >= 'A' && ch <= 'Z')
             || (ch >= '0' && ch <= '9')
             || ch == '_'
+            || ch == '{'
+            || ch == '}'
     }
 }

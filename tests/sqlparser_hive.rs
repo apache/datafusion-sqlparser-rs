@@ -174,7 +174,7 @@ fn create_local_directory() {
 
 #[test]
 fn lateral_view() {
-    let view = "SELECT a FROM db.table LATERAL VIEW explode(a) t LATERAL VIEW explode(a) t AS a, b WHERE a = 1";
+    let view = "SELECT a FROM db.table LATERAL VIEW explode(a) t LATERAL VIEW OUTER explode(a) t AS a, b WHERE a = 1";
     hive().verified_stmt(view);
 }
 

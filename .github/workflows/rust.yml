@@ -15,7 +15,7 @@ jobs:
           # it's an unstable feature.
           rust-version: nightly
       - uses: actions/checkout@v2
-      - run: cargo fmt -- --check --config-path <(echo 'license_template_path = "HEADER"')
+      - run: cargo +nightly fmt -- --check --config-path <(echo 'license_template_path = "HEADER"')
 
   lint:
     runs-on: ubuntu-latest

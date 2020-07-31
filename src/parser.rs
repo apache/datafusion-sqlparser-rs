@@ -229,10 +229,12 @@ impl<'a> Parser<'a> {
                 Some(Keyword::NOSCAN) => noscan = true,
                 Some(Keyword::FOR) => {
                     self.expect_keyword(Keyword::COLUMNS)?;
-                    columns = self.parse_comma_separated(Parser::parse_identifier)?;
-                    if columns.is_empty() {
-                        self.expected("columns identifiers", self.peek_token())?;
-                    }
+
+                    columns = self
+                        .maybe_parse(|parser| {
+                            parser.parse_comma_separated(Parser::parse_identifier)
+                        })
+                        .unwrap_or_default();
                     for_columns = true
                 }
                 Some(Keyword::CACHE) => {
@@ -471,20 +473,11 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let array_element = if self.consume_token(&Token::LBracket) {
-            let num = Some(self.parse_number_value()?);
-            self.expect_token(&Token::RBracket)?;
-            num
-        } else {
-            None
-        };
-
         Ok(Expr::Function(Function {
             name,
             args,
             over,
             distinct,
-            array_element,
         }))
     }
 
@@ -1810,11 +1803,11 @@ impl<'a> Parser<'a> {
                 Keyword::TRUE => Ok(Value::Boolean(true)),
                 Keyword::FALSE => Ok(Value::Boolean(false)),
                 Keyword::NULL => Ok(Value::Null),
-                Keyword::NoKeyword => Ok(Value::LiteralString(format!(
-                    "{quote}{}{quote}",
-                    w.value,
-                    quote = w.quote_style.map(|q| q.to_string()).unwrap_or("".into())
-                ))),
+                Keyword::NoKeyword if w.quote_style.is_some() => match w.quote_style {
+                    Some('"') => Ok(Value::DoubleQuotedString(w.value)),
+                    Some('\'') => Ok(Value::SingleQuotedString(w.value)),
+                    _ => self.expected("A value?", Token::Word(w))?,
+                },
                 _ => self.expected("a concrete value", Token::Word(w)),
             },
             // The call to n.parse() returns a bigdecimal when the
@@ -2002,6 +1995,7 @@ impl<'a> Parser<'a> {
     pub fn parse_identifier(&mut self) -> Result<Ident, ParserError> {
         match self.next_token() {
             Token::Word(w) => Ok(w.to_ident()),
+            Token::SingleQuotedString(s) => Ok(Ident::with_quote('\'', s)),
             unexpected => self.expected("identifier", unexpected),
         }
     }
@@ -2230,7 +2224,7 @@ impl<'a> Parser<'a> {
                             Keyword::GROUP,
                             Keyword::CLUSTER,
                             Keyword::HAVING,
-                            Keyword::LATERAL
+                            Keyword::LATERAL,
                         ]) // This couldn't possibly be a bad idea
                     })?
                     .into_iter()

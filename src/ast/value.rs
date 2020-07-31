@@ -32,7 +32,7 @@ pub enum Value {
     /// X'hex value'
     HexStringLiteral(String),
 
-    LiteralString(String),
+    DoubleQuotedString(String),
     /// Boolean value true or false
     Boolean(bool),
     /// INTERVAL literals, roughly in the following format:
@@ -62,7 +62,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Number(v, l) => write!(f, "{}{long}", v, long = if *l { "L" } else { "" }),
-            Value::LiteralString(v) => write!(f, "{}", v),
+            Value::DoubleQuotedString(v) => write!(f, "\"{}\"", v),
             Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
             Value::NationalStringLiteral(v) => write!(f, "N'{}'", v),
             Value::HexStringLiteral(v) => write!(f, "X'{}'", v),

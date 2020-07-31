@@ -20,7 +20,7 @@ use sqlparser::test_utils::*;
 
 #[test]
 fn parse_table_create() {
-    let sql = r#"CREATE TABLE IF NOT EXISTS db.table (a BIGINT, b STRING, c TIMESTAMP) PARTITIONED BY (d STRING, e TIMESTAMP) STORED AS ORC LOCATION 's3://...' TBLPROPERTIES ("prop" = "2")"#;
+    let sql = r#"CREATE TABLE IF NOT EXISTS db.table (a BIGINT, b STRING, c TIMESTAMP) PARTITIONED BY (d STRING, e TIMESTAMP) STORED AS ORC LOCATION 's3://...' TBLPROPERTIES ("prop" = "2", "asdf" = '1234', 'asdf' = "1234", "asdf" = 2)"#;
     let iof = r#"CREATE TABLE IF NOT EXISTS db.table (a BIGINT, b STRING, c TIMESTAMP) PARTITIONED BY (d STRING, e TIMESTAMP) STORED AS INPUTFORMAT 'org.apache.hadoop.hive.ql.io.orc.OrcInputFormat' OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat' LOCATION 's3://...'"#;
 
     hive().verified_stmt(sql);
@@ -47,7 +47,8 @@ fn parse_analyze() {
 
 #[test]
 fn parse_analyze_for_columns() {
-    let analyze = r#"ANALYZE TABLE db.table_name PARTITION (a = '1234', b) COMPUTE STATISTICS FOR COLUMNS a, b, c"#;
+    let analyze =
+        r#"ANALYZE TABLE db.table_name PARTITION (a = '1234', b) COMPUTE STATISTICS FOR COLUMNS"#;
     hive().verified_stmt(analyze);
 }
 
@@ -175,12 +176,6 @@ fn create_local_directory() {
 fn lateral_view() {
     let view = "SELECT a FROM db.table LATERAL VIEW explode(a) t LATERAL VIEW explode(a) t AS a, b WHERE a = 1";
     hive().verified_stmt(view);
-}
-
-#[test]
-fn test_array_elements() {
-    let elements = "SELECT collect_list(a)[0] FROM db.table";
-    hive().verified_stmt(elements);
 }
 
 fn hive() -> TestedDialects {

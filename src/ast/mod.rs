@@ -300,7 +300,7 @@ impl fmt::Display for Expr {
                 results,
                 else_result,
             } => {
-                f.write_str("CASE")?;
+                write!(f, "CASE")?;
                 if let Some(operand) = operand {
                     write!(f, " {}", operand)?;
                 }
@@ -311,7 +311,7 @@ impl fmt::Display for Expr {
                 if let Some(else_result) = else_result {
                     write!(f, " ELSE {}", else_result)?;
                 }
-                f.write_str(" END")
+                write!(f, " END")
             }
             Expr::Exists(s) => write!(f, "EXISTS ({})", s),
             Expr::Subquery(s) => write!(f, "({})", s),
@@ -559,7 +559,7 @@ pub enum Statement {
         /// index name
         name: ObjectName,
         table_name: ObjectName,
-        columns: Vec<Ident>,
+        columns: Vec<OrderByExpr>,
         unique: bool,
         if_not_exists: bool,
     },
@@ -625,10 +625,26 @@ pub enum Statement {
         location: Option<String>,
         managed_location: Option<String>,
     },
-    /// ASSERT <condition> [AS <message>]
+    /// `ASSERT <condition> [AS <message>]`
     Assert {
         condition: Expr,
         message: Option<Expr>,
+    },
+    /// `DEALLOCATE [ PREPARE ] { name | ALL }`
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    Deallocate { name: Ident, prepare: bool },
+    /// `EXECUTE name [ ( parameter [, ...] ) ]`
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    Execute { name: Ident, parameters: Vec<Expr> },
+    /// `PREPARE name [ ( data_type [, ...] ) ] AS statement`
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    Prepare {
+        name: Ident,
+        data_types: Vec<DataType>,
+        statement: Box<Statement>,
     },
 }
 
@@ -780,8 +796,7 @@ impl fmt::Display for Statement {
             } => {
                 write!(f, "UPDATE {}", table_name)?;
                 if !assignments.is_empty() {
-                    write!(f, " SET ")?;
-                    write!(f, "{}", display_comma_separated(assignments))?;
+                    write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
                 if let Some(selection) = selection {
                     write!(f, " WHERE {}", selection)?;
@@ -825,26 +840,19 @@ impl fmt::Display for Statement {
                 materialized,
                 with_options,
             } => {
-                write!(f, "CREATE")?;
-
-                if *or_replace {
-                    write!(f, " OR REPLACE")?;
-                }
-
-                if *materialized {
-                    write!(f, " MATERIALIZED")?;
-                }
-
-                write!(f, " VIEW {}", name)?;
-
+                write!(
+                    f,
+                    "CREATE {or_replace}{materialized}VIEW {name}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                    materialized = if *materialized { "MATERIALIZED " } else { "" },
+                    name = name
+                )?;
                 if !with_options.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_options))?;
                 }
-
                 if !columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(columns))?;
                 }
-
                 write!(f, " AS {}", query)
             }
             Statement::CreateTable {
@@ -895,6 +903,7 @@ impl fmt::Display for Statement {
                 if *without_rowid {
                     write!(f, " WITHOUT ROWID")?;
                 }
+
 
                 // Only for Hive
                 if let Some(l) = like {
@@ -1015,22 +1024,15 @@ impl fmt::Display for Statement {
                 columns,
                 unique,
                 if_not_exists,
-            } => {
-                write!(
-                    f,
-                    "CREATE{}INDEX{}{} ON {}({}",
-                    if *unique { " UNIQUE " } else { " " },
-                    if *if_not_exists {
-                        " IF NOT EXISTS "
-                    } else {
-                        " "
-                    },
-                    name,
-                    table_name,
-                    display_separated(columns, ",")
-                )?;
-                write!(f, ");")
-            }
+            } => write!(
+                f,
+                "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}({columns})",
+                unique = if *unique { "UNIQUE " } else { "" },
+                if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                name = name,
+                table_name = table_name,
+                columns = display_separated(columns, ",")
+            ),
             Statement::AlterTable { name, operation } => {
                 write!(f, "ALTER TABLE {} {}", name, operation)
             }
@@ -1074,14 +1076,13 @@ impl fmt::Display for Statement {
                 table_name,
                 filter,
             } => {
-                f.write_str("SHOW ")?;
-                if *extended {
-                    f.write_str("EXTENDED ")?;
-                }
-                if *full {
-                    f.write_str("FULL ")?;
-                }
-                write!(f, "COLUMNS FROM {}", table_name)?;
+                write!(
+                    f,
+                    "SHOW {extended}{full}COLUMNS FROM {table_name}",
+                    extended = if *extended { "EXTENDED " } else { "" },
+                    full = if *full { "FULL " } else { "" },
+                    table_name = table_name,
+                )?;
                 if let Some(filter) = filter {
                     write!(f, " {}", filter)?;
                 }
@@ -1110,11 +1111,34 @@ impl fmt::Display for Statement {
             Statement::CreateSchema { schema_name } => write!(f, "CREATE SCHEMA {}", schema_name),
             Statement::Assert { condition, message } => {
                 write!(f, "ASSERT {}", condition)?;
-
                 if let Some(m) = message {
                     write!(f, " AS {}", m)?;
                 }
                 Ok(())
+            }
+            Statement::Deallocate { name, prepare } => write!(
+                f,
+                "DEALLOCATE {prepare}{name}",
+                prepare = if *prepare { "PREPARE " } else { "" },
+                name = name,
+            ),
+            Statement::Execute { name, parameters } => {
+                write!(f, "EXECUTE {}", name)?;
+                if !parameters.is_empty() {
+                    write!(f, "({})", display_comma_separated(parameters))?;
+                }
+                Ok(())
+            }
+            Statement::Prepare {
+                name,
+                data_types,
+                statement,
+            } => {
+                write!(f, "PREPARE {} ", name)?;
+                if !data_types.is_empty() {
+                    write!(f, "({}) ", display_comma_separated(data_types))?;
+                }
+                write!(f, "AS {}", statement)
             }
         }
     }
@@ -1184,7 +1208,7 @@ impl fmt::Display for FileFormat {
             PARQUET => "PARQUET",
             AVRO => "AVRO",
             RCFILE => "RCFILE",
-            JSONFILE => "TEXTFILE",
+            JSONFILE => "JSONFILE",
         })
     }
 }

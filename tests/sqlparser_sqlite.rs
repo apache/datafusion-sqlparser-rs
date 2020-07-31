@@ -15,8 +15,9 @@
 //! generic dialect is also tested (on the inputs it can handle).
 
 use sqlparser::ast::*;
-use sqlparser::dialect::GenericDialect;
+use sqlparser::dialect::{GenericDialect, SQLiteDialect};
 use sqlparser::test_utils::*;
+use sqlparser::tokenizer::Token;
 
 #[test]
 fn parse_create_table_without_rowid() {
@@ -55,9 +56,74 @@ fn parse_create_virtual_table() {
     sqlite_and_generic().verified_stmt(sql);
 }
 
+#[test]
+fn parse_create_table_auto_increment() {
+    let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTOINCREMENT)";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: "bar".into(),
+                    data_type: DataType::Int,
+                    collation: None,
+                    options: vec![
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Unique { is_primary: true }
+                        },
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
+                                "AUTOINCREMENT"
+                            )])
+                        }
+                    ],
+                }],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_sqlite_quote() {
+    let sql = "CREATE TABLE `PRIMARY` (\"KEY\" INT, [INDEX] INT)";
+    match sqlite().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "`PRIMARY`");
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::with_quote('"', "KEY"),
+                        data_type: DataType::Int,
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::with_quote('[', "INDEX"),
+                        data_type: DataType::Int,
+                        collation: None,
+                        options: vec![],
+                    },
+                ],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn sqlite() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(SQLiteDialect {})],
+    }
+}
+
 fn sqlite_and_generic() -> TestedDialects {
     TestedDialects {
         // we don't have a separate SQLite dialect, so test only the generic dialect for now
-        dialects: vec![Box::new(GenericDialect {})],
+        dialects: vec![Box::new(SQLiteDialect {}), Box::new(GenericDialect {})],
     }
 }

@@ -152,6 +152,11 @@ impl Parser {
                 Keyword::COMMIT => Ok(self.parse_commit()?),
                 Keyword::ROLLBACK => Ok(self.parse_rollback()?),
                 Keyword::ASSERT => Ok(self.parse_assert()?),
+                // `PREPARE`, `EXECUTE` and `DEALLOCATE` are Postgres-specific
+                // syntaxes. They are used for Postgres prepared statement.
+                Keyword::DEALLOCATE => Ok(self.parse_deallocate()?),
+                Keyword::EXECUTE => Ok(self.parse_execute()?),
+                Keyword::PREPARE => Ok(self.parse_prepare()?),
                 _ => self.expected("an SQL statement", Token::Word(w)),
             },
             Token::LParen => {
@@ -1279,7 +1284,9 @@ impl Parser {
         let index_name = self.parse_object_name()?;
         self.expect_keyword(Keyword::ON)?;
         let table_name = self.parse_object_name()?;
-        let columns = self.parse_parenthesized_column_list(Mandatory)?;
+        self.expect_token(&Token::LParen)?;
+        let columns = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+        self.expect_token(&Token::RParen)?;
         Ok(Statement::CreateIndex {
             name: index_name,
             table_name,
@@ -1406,7 +1413,7 @@ impl Parser {
         let mut options = vec![];
         loop {
             match self.peek_token() {
-                Token::EOF | Token::Comma | Token::RParen => break,
+                Token::EOF | Token::Comma | Token::RParen | Token::SemiColon => break,
                 _ => options.push(self.parse_column_option_def()?),
             }
         }
@@ -1492,6 +1499,12 @@ impl Parser {
             let expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
             ColumnOption::Check(expr)
+        } else if self.parse_keyword(Keyword::AUTO_INCREMENT) {
+            // Support AUTO_INCREMENT for MySQL
+            ColumnOption::DialectSpecific(vec![Token::make_keyword("AUTO_INCREMENT")])
+        } else if self.parse_keyword(Keyword::AUTOINCREMENT) {
+            // Support AUTOINCREMENT for SQLite
+            ColumnOption::DialectSpecific(vec![Token::make_keyword("AUTOINCREMENT")])
         } else {
             return self.expected("column option", self.peek_token());
         };
@@ -2779,6 +2792,42 @@ impl Parser {
         } else {
             Ok(false)
         }
+    }
+
+    fn parse_deallocate(&mut self) -> Result<Statement, ParserError> {
+        let prepare = self.parse_keyword(Keyword::PREPARE);
+        let name = self.parse_identifier()?;
+        Ok(Statement::Deallocate { name, prepare })
+    }
+
+    fn parse_execute(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_identifier()?;
+
+        let mut parameters = vec![];
+        if self.consume_token(&Token::LParen) {
+            parameters = self.parse_comma_separated(Parser::parse_expr)?;
+            self.expect_token(&Token::RParen)?;
+        }
+
+        Ok(Statement::Execute { name, parameters })
+    }
+
+    fn parse_prepare(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_identifier()?;
+
+        let mut data_types = vec![];
+        if self.consume_token(&Token::LParen) {
+            data_types = self.parse_comma_separated(Parser::parse_data_type)?;
+            self.expect_token(&Token::RParen)?;
+        }
+
+        self.expect_keyword(Keyword::AS)?;
+        let statement = Box::new(self.parse_statement()?);
+        Ok(Statement::Prepare {
+            name,
+            data_types,
+            statement,
+        })
     }
 }
 

@@ -1459,8 +1459,8 @@ fn parse_create_external_table_lowercase() {
 
 #[test]
 fn parse_alter_table() {
-    let add_column = "ALTER TABLE tab ADD COLUMN foo TEXT";
-    match verified_stmt(add_column) {
+    let add_column = "ALTER TABLE tab ADD COLUMN foo TEXT;";
+    match one_statement_parses_to(add_column, "ALTER TABLE tab ADD COLUMN foo TEXT") {
         Statement::AlterTable {
             name,
             operation: AlterTableOperation::AddColumn { column_def },
@@ -3154,8 +3154,19 @@ fn ensure_multiple_dialects_are_tested() {
 
 #[test]
 fn parse_create_index() {
-    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test(name,age);";
-    let ident_vec = vec![Ident::new("name"), Ident::new("age")];
+    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test(name,age DESC)";
+    let indexed_columns = vec![
+        OrderByExpr {
+            expr: Expr::Identifier(Ident::new("name")),
+            asc: None,
+            nulls_first: None,
+        },
+        OrderByExpr {
+            expr: Expr::Identifier(Ident::new("age")),
+            asc: Some(false),
+            nulls_first: None,
+        },
+    ];
     match verified_stmt(sql) {
         Statement::CreateIndex {
             name,
@@ -3166,7 +3177,7 @@ fn parse_create_index() {
         } => {
             assert_eq!("idx_name", name.to_string());
             assert_eq!("test", table_name.to_string());
-            assert_eq!(ident_vec, columns);
+            assert_eq!(indexed_columns, columns);
             assert_eq!(true, unique);
             assert_eq!(true, if_not_exists)
         }

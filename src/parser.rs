@@ -2215,6 +2215,7 @@ impl<'a> Parser<'a> {
         let mut lateral_views = vec![];
         loop {
             if self.parse_keywords(&[Keyword::LATERAL, Keyword::VIEW]) {
+                let outer = self.parse_keyword(Keyword::OUTER);
                 let lateral_view = self.parse_expr()?;
                 let lateral_view_name = self.parse_object_name()?;
                 let lateral_col_alias = self
@@ -2236,6 +2237,7 @@ impl<'a> Parser<'a> {
                     lateral_view,
                     lateral_view_name,
                     lateral_col_alias,
+                    outer
                 });
             } else {
                 break;

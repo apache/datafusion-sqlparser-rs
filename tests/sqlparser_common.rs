@@ -454,7 +454,7 @@ fn parse_number() {
     #[cfg(feature = "bigdecimal")]
     assert_eq!(
         expr,
-        Expr::Value(Value::Number(bigdecimal::BigDecimal::from(1)))
+        Expr::Value(Value::Number(bigdecimal::BigDecimal::from(1), false))
     );
 
     #[cfg(not(feature = "bigdecimal"))]

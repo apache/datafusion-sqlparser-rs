@@ -904,7 +904,6 @@ impl fmt::Display for Statement {
                     write!(f, " WITHOUT ROWID")?;
                 }
 
-
                 // Only for Hive
                 if let Some(l) = like {
                     write!(f, " LIKE {}", l)?;

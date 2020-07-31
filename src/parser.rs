@@ -2194,7 +2194,7 @@ impl Parser {
                     lateral_view,
                     lateral_view_name,
                     lateral_col_alias,
-                    outer
+                    outer,
                 });
             } else {
                 break;

@@ -235,11 +235,11 @@ pub enum TableFactor {
         subquery: Box<Query>,
         alias: Option<TableAlias>,
     },
-    /// Represents a parenthesized table factor. The SQL spec only allows a
-    /// join expression (`(foo <JOIN> bar [ <JOIN> baz ... ])`) to be nested,
-    /// possibly several times, but the parser also accepts the non-standard
-    /// nesting of bare tables (`table_with_joins.joins.is_empty()`), so the
-    /// name `NestedJoin` is a bit of misnomer.
+    /// The inner `TableWithJoins` can have no joins only if its
+    /// `relation` is itself a `TableFactor::NestedJoin`.
+    /// Some dialects allow nesting lone `Table`/`Derived` in parens,
+    /// e.g. `FROM (mytable)`, but we don't expose the presence of these
+    /// extraneous parens in the AST.
     NestedJoin(Box<TableWithJoins>),
 }
 

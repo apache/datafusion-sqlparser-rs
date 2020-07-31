@@ -2277,7 +2277,7 @@ fn parse_join_nesting() {
     // Nesting a subquery in parentheses is non-standard, but supported in Snowflake SQL
     let res = parse_sql_statements("SELECT * FROM ((SELECT 1) AS t)");
     assert_eq!(
-        ParserError::ParserError("Expected joined table, found: EOF".to_string()),
+        ParserError::ParserError("Expected joined table, found: )".to_string()),
         res.unwrap_err()
     );
 }

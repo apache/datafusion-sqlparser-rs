@@ -2065,87 +2065,6 @@ impl<'a> Parser<'a> {
         Ok(TableWithJoins { relation, joins })
     }
 
-    fn add_alias_to_single_table_in_parenthesis(
-        &self,
-        table_facor: TableFactor,
-        consumed_alias: TableAlias,
-    ) -> Result<TableFactor, ParserError> {
-        match table_facor {
-            // Add the alias to dervied table
-            TableFactor::Derived {
-                lateral,
-                subquery,
-                alias,
-            } => match alias {
-                None => Ok(TableFactor::Derived {
-                    lateral,
-                    subquery,
-                    alias: Some(consumed_alias),
-                }),
-                // "Select * from (table1 as alias1) as alias1" - it prohabited
-                Some(alias) => Err(ParserError::ParserError(format!(
-                    "duplicate alias {}",
-                    alias
-                ))),
-            },
-            // Add The alias to the table
-            TableFactor::Table {
-                name,
-                alias,
-                args,
-                with_hints,
-            } => match alias {
-                None => Ok(TableFactor::Table {
-                    name,
-                    alias: Some(consumed_alias),
-                    args,
-                    with_hints,
-                }),
-                // "Select * from (table1 as alias1) as alias1" - it prohabited
-                Some(alias) => Err(ParserError::ParserError(format!(
-                    "duplicate alias {}",
-                    alias
-                ))),
-            },
-            TableFactor::NestedJoin(_) => Err(ParserError::ParserError(
-                "aliasing joins is not allowed".to_owned(),
-            )),
-        }
-    }
-
-    fn remove_redundent_parenthesis(
-        &mut self,
-        table_and_joins: TableWithJoins,
-    ) -> Result<TableFactor, ParserError> {
-        let table_factor = table_and_joins.relation;
-
-        // check if we have alias after the parenthesis
-        let alias = match self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)? {
-            None => {
-                return Ok(table_factor);
-            }
-            Some(alias) => alias,
-        };
-
-        // if we have alias, we attached it to the single table that inside parenthesis
-        self.add_alias_to_single_table_in_parenthesis(table_factor, alias)
-    }
-
-    fn validate_nested_join(&self, table_and_joins: &TableWithJoins) -> Result<(), ParserError> {
-        match table_and_joins.relation {
-            TableFactor::NestedJoin { .. } => (),
-            _ => {
-                if table_and_joins.joins.is_empty() {
-                    // validate thats indeed join and not dervied
-                    // or nested table
-                    self.expected("joined table", self.peek_token())?
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
     pub fn parse_table_factor(&mut self) -> Result<TableFactor, ParserError> {
         if self.parse_keyword(Keyword::LATERAL) {
@@ -2185,31 +2104,55 @@ impl<'a> Parser<'a> {
             // recently consumed does not start a derived table (cases 1, 2, or 4).
             // `maybe_parse` will ignore such an error and rewind to be after the opening '('.
 
-            // Inside the parentheses we expect to find a table factor
-            // followed by some joins or another level of nesting.
-            let table_and_joins = self.parse_table_and_joins()?;
-            self.expect_token(&Token::RParen)?;
+            // Inside the parentheses we expect to find an (A) table factor
+            // followed by some joins or (B) another level of nesting.
+            let mut table_and_joins = self.parse_table_and_joins()?;
 
-            // The SQL spec prohibits derived and bare tables from appearing
-            // alone in parentheses. But as some databases
-            // (e.g. Snowflake) allow such syntax - it's can be allowed
-            // for specfic dialect.
-            if self.dialect.alllow_single_table_in_parenthesis() {
-                if table_and_joins.joins.is_empty() {
-                    // In case the DB's like snowflake that allowed single dervied or bare
-                    // table in parenthesis (for example : `Select * from (a) as b` )
-                    // the parser will parse it as Nested join, but if it's actually a single table
-                    // we don't want to treat such case as join , because we don't actually join
-                    // any tables.
-                    let table_factor = self.remove_redundent_parenthesis(table_and_joins)?;
-                    Ok(table_factor)
-                } else {
-                    Ok(TableFactor::NestedJoin(Box::new(table_and_joins)))
-                }
-            } else {
-                // Defualt behaviuor
-                self.validate_nested_join(&table_and_joins)?;
+            if !table_and_joins.joins.is_empty() {
+                self.expect_token(&Token::RParen)?;
+                Ok(TableFactor::NestedJoin(Box::new(table_and_joins))) // (A)
+            } else if let TableFactor::NestedJoin(_) = &table_and_joins.relation {
+                // (B): `table_and_joins` (what we found inside the parentheses)
+                // is a nested join `(foo JOIN bar)`, not followed by other joins.
+                self.expect_token(&Token::RParen)?;
                 Ok(TableFactor::NestedJoin(Box::new(table_and_joins)))
+            } else if self.dialect.alllow_single_table_in_parenthesis() {
+                // Dialect-specific behavior: Snowflake diverges from the
+                // standard and most of other implementations by allowing
+                // extra parentheses not only around a join (B), but around
+                // lone table names (e.g. `FROM (mytable [AS alias])`) and
+                // around derived tables (e.g. `FROM ((SELECT ...) [AS alias])`
+                // as well.
+                self.expect_token(&Token::RParen)?;
+
+                if let Some(outer_alias) =
+                    self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?
+                {
+                    // Snowflake also allows specifying an alias *after* parens
+                    // e.g. `FROM (mytable) AS alias`
+                    match &mut table_and_joins.relation {
+                        TableFactor::Derived { alias, .. } | TableFactor::Table { alias, .. } => {
+                            // but not `FROM (mytable AS alias1) AS alias2`.
+                            if let Some(inner_alias) = alias {
+                                return Err(ParserError::ParserError(format!(
+                                    "duplicate alias {}",
+                                    inner_alias
+                                )));
+                            }
+                            // Act as if the alias was specified normally next
+                            // to the table name: `(mytable) AS alias` ->
+                            // `(mytable AS alias)`
+                            alias.replace(outer_alias);
+                        }
+                        TableFactor::NestedJoin(_) => unreachable!(),
+                    };
+                }
+                // Do not store the extra set of parens in the AST
+                Ok(table_and_joins.relation)
+            } else {
+                // The SQL spec prohibits derived tables and bare tables from
+                // appearing alone in parentheses (e.g. `FROM (mytable)`)
+                self.expected("joined table", self.peek_token())
             }
         } else {
             let name = self.parse_object_name()?;

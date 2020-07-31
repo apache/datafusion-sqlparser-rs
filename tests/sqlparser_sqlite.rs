@@ -89,26 +89,20 @@ fn parse_create_table_auto_increment() {
 
 #[test]
 fn parse_create_sqlite_quote() {
-    let sql = "CREATE TABLE `foo` ('a' INT, \"b\" INT, [c] INT)";
+    let sql = "CREATE TABLE `PRIMARY` (\"KEY\" INT, [INDEX] INT)";
     match sqlite().verified_stmt(sql) {
         Statement::CreateTable { name, columns, .. } => {
-            assert_eq!(name.to_string(), "`foo`");
+            assert_eq!(name.to_string(), "`PRIMARY`");
             assert_eq!(
                 vec![
                     ColumnDef {
-                        name: Ident::with_quote('\'', "a"),
+                        name: Ident::with_quote('"', "KEY"),
                         data_type: DataType::Int,
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::with_quote('"', "b"),
-                        data_type: DataType::Int,
-                        collation: None,
-                        options: vec![],
-                    },
-                    ColumnDef {
-                        name: Ident::with_quote('[', "c"),
+                        name: Ident::with_quote('[', "INDEX"),
                         data_type: DataType::Int,
                         collation: None,
                         options: vec![],

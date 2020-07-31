@@ -12,16 +12,15 @@
 
 use crate::dialect::Dialect;
 
-/// For resilience when confronted with historical SQL statements, SQLite will sometimes bend the quoting rules above:
-///     * If a keyword in single quotes (ex: 'key' or 'glob') is used in a context where an identifier is allowed but where a string literal is not allowed, then the token is understood to be an identifier instead of a string literal.
-///     * If a keyword in double quotes (ex: "key" or "glob") is used in a context where it cannot be resolved to an identifier but where a string literal is allowed, then the token is understood to be a string literal instead of an identifier.
 #[derive(Debug)]
 pub struct SQLiteDialect {}
 
 impl Dialect for SQLiteDialect {
     // see https://www.sqlite.org/lang_keywords.html
+    // parse `...`, [...] and "..." as identifier
+    // TODO: support depending on the context tread '...' as identifier too.
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
-        ch == '`' || ch == '\'' || ch == '"' || ch == '['
+        ch == '`' || ch == '"' || ch == '['
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {

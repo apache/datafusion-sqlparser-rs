@@ -1191,6 +1191,33 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
+        let mut columns = vec![];
+        let mut constraints = vec![];
+        if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
+            return Ok((columns, constraints));
+        }
+
+        loop {
+            if let Some(constraint) = self.parse_optional_table_constraint()? {
+                constraints.push(constraint);
+            } else if let Token::Word(_) = self.peek_token() {
+                columns.push(self.parse_column_def()?);
+            } else {
+                return self.expected("column name or constraint definition", self.peek_token());
+            }
+            let comma = self.consume_token(&Token::Comma);
+            if self.consume_token(&Token::RParen) {
+                // allow a trailing comma, even though it's not in standard
+                break;
+            } else if !comma {
+                return self.expected("',' or ')' after column definition", self.peek_token());
+            }
+        }
+
+        Ok((columns, constraints))
+    }
+
     fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
         let name = self.parse_identifier()?;
         let data_type = self.parse_data_type()?;
@@ -1212,34 +1239,6 @@ impl<'a> Parser<'a> {
             collation,
             options,
         })
-    }
-
-    fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
-        let mut columns = vec![];
-        let mut constraints = vec![];
-        if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
-            return Ok((columns, constraints));
-        }
-
-        loop {
-            if let Some(constraint) = self.parse_optional_table_constraint()? {
-                constraints.push(constraint);
-            } else if let Token::Word(_) = self.peek_token() {
-                let column_def = self.parse_column_def()?;
-                columns.push(column_def);
-            } else {
-                return self.expected("column name or constraint definition", self.peek_token());
-            }
-            let comma = self.consume_token(&Token::Comma);
-            if self.consume_token(&Token::RParen) {
-                // allow a trailing comma, even though it's not in standard
-                break;
-            } else if !comma {
-                return self.expected("',' or ')' after column definition", self.peek_token());
-            }
-        }
-
-        Ok((columns, constraints))
     }
 
     pub fn parse_column_option_def(&mut self) -> Result<ColumnOptionDef, ParserError> {

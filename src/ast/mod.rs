@@ -712,7 +712,10 @@ impl fmt::Display for Statement {
                     write!(f, " CACHE METADATA")?;
                 }
                 if *for_columns {
-                    write!(f, " FOR COLUMNS {}", display_comma_separated(columns))?;
+                    write!(f, " FOR COLUMNS")?;
+                    if !columns.is_empty() {
+                        write!(f, " {}", display_comma_separated(columns))?;
+                    }
                 }
                 Ok(())
             }
@@ -1140,7 +1143,6 @@ pub struct Function {
     pub over: Option<WindowSpec>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
-    pub array_element: Option<Value>,
 }
 
 impl fmt::Display for Function {
@@ -1154,9 +1156,6 @@ impl fmt::Display for Function {
         )?;
         if let Some(o) = &self.over {
             write!(f, " OVER ({})", o)?;
-        }
-        if let Some(ae) = &self.array_element {
-            write!(f, "[{}]", ae)?;
         }
         Ok(())
     }

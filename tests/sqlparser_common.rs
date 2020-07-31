@@ -328,7 +328,6 @@ fn parse_select_count_wildcard() {
             args: vec![Expr::Wildcard],
             over: None,
             distinct: false,
-            array_element: None
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -347,7 +346,6 @@ fn parse_select_count_distinct() {
             }],
             over: None,
             distinct: true,
-            array_element: None
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -888,7 +886,6 @@ fn parse_select_having() {
                 args: vec![Expr::Wildcard],
                 over: None,
                 distinct: false,
-                array_element: None
             })),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Value(number("1")))
@@ -1595,7 +1592,6 @@ fn parse_scalar_function_in_projection() {
             args: vec![Expr::Identifier(Ident::new("id"))],
             over: None,
             distinct: false,
-            array_element: None
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -1629,7 +1625,6 @@ fn parse_window_functions() {
                 window_frame: None,
             }),
             distinct: false,
-            array_element: None
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -1880,7 +1875,6 @@ fn parse_delimited_identifiers() {
             args: vec![],
             over: None,
             distinct: false,
-            array_element: None
         }),
         expr_from_projection(&select.projection[1]),
     );

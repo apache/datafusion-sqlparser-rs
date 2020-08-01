@@ -32,6 +32,7 @@ impl Dialect for HiveDialect {
             || (ch >= 'A' && ch <= 'Z')
             || (ch >= '0' && ch <= '9')
             || ch == '_'
+            || ch == '$'
             || ch == '{'
             || ch == '}'
     }

@@ -2,20 +2,25 @@
 
 Releasing, i.e. crate publishing, has been automated via GitHub Actions.
 
-In order to author a new release, you simply tag the desired revision and push
-the resulting tag.
+We use the [`cargo release`](https://github.com/sunng87/cargo-release)
+subcommand to ensure correct versioning. Install via:
 
-**Before releasing** ensure `CHANGELOG.md` is updated appropriately as well as
-`Cargo.toml`.
+```
+$ cargo install cargo-release
+```
+
+**Before releasing** ensure `CHANGELOG.md` is updated appropriately.
 
 ## Process
 
-Please ensure you follow the correct format when creating new tags. For
-instance:
+Using `cargo-release` we can author a new minor release like so:
 
 ```
-git tag -a '0.6.0' -m '(cargo-release) sqlparser version 0.6.0'
+$ cargo release minor --skip-publish
 ```
+
+**Ensure publishing is skipped** since pushing the resulting tag upstream will
+handle crate publishing automatically.
 
 This will create a new tag, `0.6.0` with the message,
 `(cargo-release) sqlparser version 0.6.0`.

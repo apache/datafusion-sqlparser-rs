@@ -22,7 +22,7 @@ use matches::assert_matches;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::keywords::ALL_KEYWORDS;
-use sqlparser::parser::{Parser, ParserError};
+use sqlparser::parser::ParserError;
 use sqlparser::test_utils::{all_dialects, expr_from_projection, number, only};
 
 #[test]
@@ -147,13 +147,14 @@ fn parse_update() {
 
 #[test]
 fn parse_invalid_table_name() {
-    let ast = all_dialects().run_parser_method("db.public..customer", Parser::parse_object_name);
+    let ast = all_dialects()
+        .run_parser_method("db.public..customer", |parser| parser.parse_object_name());
     assert!(ast.is_err());
 }
 
 #[test]
 fn parse_no_table_name() {
-    let ast = all_dialects().run_parser_method("", Parser::parse_object_name);
+    let ast = all_dialects().run_parser_method("", |parser| parser.parse_object_name());
     assert!(ast.is_err());
 }
 

@@ -53,7 +53,7 @@ impl TestedDialects {
         self.one_of_identical_results(|dialect| {
             let mut tokenizer = Tokenizer::new(dialect, sql);
             let tokens = tokenizer.tokenize().unwrap();
-            f(&mut Parser::new(tokens))
+            f(&mut Parser::new(tokens, dialect))
         })
     }
 
@@ -104,7 +104,9 @@ impl TestedDialects {
     /// Ensures that `sql` parses as an expression, and is not modified
     /// after a serialization round-trip.
     pub fn verified_expr(&self, sql: &str) -> Expr {
-        let ast = self.run_parser_method(sql, Parser::parse_expr).unwrap();
+        let ast = self
+            .run_parser_method(sql, |parser| parser.parse_expr())
+            .unwrap();
         assert_eq!(sql, &ast.to_string(), "round-tripping without changes");
         ast
     }

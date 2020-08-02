@@ -15,9 +15,8 @@
 use log::debug;
 
 use super::ast::*;
-use super::dialect::keywords;
 use super::dialect::keywords::Keyword;
-use super::dialect::Dialect;
+use super::dialect::*;
 use super::tokenizer::*;
 use std::error::Error;
 use std::fmt;
@@ -82,24 +81,28 @@ impl fmt::Display for ParserError {
 
 impl Error for ParserError {}
 
-/// SQL Parser
-pub struct Parser {
+pub struct Parser<'a> {
     tokens: Vec<Token>,
     /// The index of the first unprocessed token in `self.tokens`
     index: usize,
+    dialect: &'a dyn Dialect,
 }
 
-impl Parser {
+impl<'a> Parser<'a> {
     /// Parse the specified tokens
-    pub fn new(tokens: Vec<Token>) -> Self {
-        Parser { tokens, index: 0 }
+    pub fn new(tokens: Vec<Token>, dialect: &'a dyn Dialect) -> Self {
+        Parser {
+            tokens,
+            index: 0,
+            dialect,
+        }
     }
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
     pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, &sql);
         let tokens = tokenizer.tokenize()?;
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::new(tokens, dialect);
         let mut stmts = Vec::new();
         let mut expecting_statement_delimiter = false;
         debug!("Parsing sql '{}'...", sql);
@@ -950,7 +953,7 @@ impl Parser {
     /// Parse a comma-separated list of 1+ items accepted by `F`
     pub fn parse_comma_separated<T, F>(&mut self, mut f: F) -> Result<Vec<T>, ParserError>
     where
-        F: FnMut(&mut Parser) -> Result<T, ParserError>,
+        F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
     {
         let mut values = vec![];
         loop {
@@ -1285,10 +1288,14 @@ impl Parser {
             let expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
             ColumnOption::Check(expr)
-        } else if self.parse_keyword(Keyword::AUTO_INCREMENT) {
+        } else if self.parse_keyword(Keyword::AUTO_INCREMENT)
+            && dialect_of!(self is MySqlDialect |  GenericDialect)
+        {
             // Support AUTO_INCREMENT for MySQL
             ColumnOption::DialectSpecific(vec![Token::make_keyword("AUTO_INCREMENT")])
-        } else if self.parse_keyword(Keyword::AUTOINCREMENT) {
+        } else if self.parse_keyword(Keyword::AUTOINCREMENT)
+            && dialect_of!(self is SQLiteDialect |  GenericDialect)
+        {
             // Support AUTOINCREMENT for SQLite
             ColumnOption::DialectSpecific(vec![Token::make_keyword("AUTOINCREMENT")])
         } else {

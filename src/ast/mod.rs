@@ -873,12 +873,28 @@ impl fmt::Display for Assignment {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum FunctionArg {
+    Named { name: Ident, arg: Expr },
+    Unnamed(Expr),
+}
+
+impl fmt::Display for FunctionArg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FunctionArg::Named { name, arg } => write!(f, "{} => {}", name, arg),
+            FunctionArg::Unnamed(unnamed_arg) => write!(f, "{}", unnamed_arg),
+        }
+    }
+}
+
 /// A function call
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Function {
     pub name: ObjectName,
-    pub args: Vec<Expr>,
+    pub args: Vec<FunctionArg>,
     pub over: Option<WindowSpec>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,

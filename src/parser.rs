@@ -2203,11 +2203,24 @@ impl Parser {
         Ok(Assignment { id, value })
     }
 
-    pub fn parse_optional_args(&mut self) -> Result<Vec<Expr>, ParserError> {
+    fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
+        if self.peek_nth_token(1) == Token::RArrow {
+            let name = self.parse_identifier()?;
+
+            self.expect_token(&Token::RArrow)?;
+            let arg = self.parse_expr()?;
+
+            Ok(FunctionArg::Named { name, arg })
+        } else {
+            Ok(FunctionArg::Unnamed(self.parse_expr()?))
+        }
+    }
+
+    pub fn parse_optional_args(&mut self) -> Result<Vec<FunctionArg>, ParserError> {
         if self.consume_token(&Token::RParen) {
             Ok(vec![])
         } else {
-            let args = self.parse_comma_separated(Parser::parse_expr)?;
+            let args = self.parse_comma_separated(Parser::parse_function_args)?;
             self.expect_token(&Token::RParen)?;
             Ok(args)
         }

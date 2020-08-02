@@ -2233,6 +2233,12 @@ impl Parser {
             vec![]
         };
 
+        let sort_by = if self.parse_keywords(&[Keyword::SORT, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_expr)?
+        } else {
+            vec![]
+        };
+
         let having = if self.parse_keyword(Keyword::HAVING) {
             Some(self.parse_expr()?)
         } else {
@@ -2249,6 +2255,7 @@ impl Parser {
             group_by,
             cluster_by,
             distribute_by,
+            sort_by,
             having,
         })
     }

@@ -139,6 +139,8 @@ pub struct Select {
     pub cluster_by: Vec<Expr>,
     /// DISTRIBUTE BY (Hive)
     pub distribute_by: Vec<Expr>,
+    /// SORT BY (Hive)
+    pub sort_by: Vec<Expr>,
     /// HAVING
     pub having: Option<Expr>,
 }
@@ -177,6 +179,9 @@ impl fmt::Display for Select {
                 " DISTRIBUTE BY {}",
                 display_comma_separated(&self.distribute_by)
             )?;
+        }
+        if !self.sort_by.is_empty() {
+            write!(f, " SORT BY {}", display_comma_separated(&self.sort_by))?;
         }
         if let Some(ref having) = self.having {
             write!(f, " HAVING {}", having)?;

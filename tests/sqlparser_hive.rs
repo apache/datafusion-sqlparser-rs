@@ -180,6 +180,12 @@ fn lateral_view() {
     hive().verified_stmt(view);
 }
 
+#[test]
+fn sort_by() {
+    let sort_by = "SELECT * FROM db.table SORT BY a";
+    hive().verified_stmt(sort_by);
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

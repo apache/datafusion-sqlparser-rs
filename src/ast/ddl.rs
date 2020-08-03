@@ -55,7 +55,7 @@ pub enum AlterTableOperation {
         new_column_name: Ident,
     },
     /// `RENAME TO <table_name>`
-    RenameTable { table_name: Ident },
+    RenameTable { table_name: ObjectName },
 }
 
 impl fmt::Display for AlterTableOperation {

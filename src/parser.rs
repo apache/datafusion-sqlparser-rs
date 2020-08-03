@@ -1226,6 +1226,7 @@ impl<'a> Parser<'a> {
         or_replace: bool,
     ) -> Result<Statement, ParserError> {
         self.expect_keyword(Keyword::TABLE)?;
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name()?;
         let (columns, constraints) = self.parse_columns()?;
 
@@ -1251,7 +1252,7 @@ impl<'a> Parser<'a> {
             with_options: vec![],
             table_properties,
             or_replace,
-            if_not_exists: false,
+            if_not_exists,
             external: true,
             temporary: false,
             file_format,
@@ -1687,7 +1688,7 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keyword(Keyword::RENAME) {
             if self.parse_keyword(Keyword::TO) {
-                let table_name = self.parse_identifier()?;
+                let table_name = self.parse_object_name()?;
                 AlterTableOperation::RenameTable { table_name }
             } else {
                 let _ = self.parse_keyword(Keyword::COLUMN);

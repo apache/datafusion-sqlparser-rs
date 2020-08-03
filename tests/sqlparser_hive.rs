@@ -176,7 +176,7 @@ fn create_local_directory() {
 
 #[test]
 fn lateral_view() {
-    let view = "SELECT a FROM db.table LATERAL VIEW explode(a) t LATERAL VIEW OUTER explode(a) t AS a, b WHERE a = 1";
+    let view = "SELECT a FROM db.table LATERAL VIEW explode(a) t AS j, P LATERAL VIEW OUTER explode(a) t AS a, b WHERE a = 1";
     hive().verified_stmt(view);
 }
 
@@ -184,6 +184,12 @@ fn lateral_view() {
 fn sort_by() {
     let sort_by = "SELECT * FROM db.table SORT BY a";
     hive().verified_stmt(sort_by);
+}
+
+#[test]
+fn rename_table() {
+    let rename = "ALTER TABLE db.table_name RENAME TO db.table_2";
+    hive().verified_stmt(rename);
 }
 
 fn hive() -> TestedDialects {

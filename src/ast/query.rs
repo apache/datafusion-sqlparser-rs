@@ -235,6 +235,11 @@ pub enum TableFactor {
         subquery: Box<Query>,
         alias: Option<TableAlias>,
     },
+    /// `TABLE(<expr>)[ AS <alias> ]`
+    TableFunction {
+        expr: Expr,
+        alias: Option<TableAlias>,
+    },
     /// Represents a parenthesized table factor. The SQL spec only allows a
     /// join expression (`(foo <JOIN> bar [ <JOIN> baz ... ])`) to be nested,
     /// possibly several times, but the parser also accepts the non-standard
@@ -273,6 +278,13 @@ impl fmt::Display for TableFactor {
                     write!(f, "LATERAL ")?;
                 }
                 write!(f, "({})", subquery)?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {}", alias)?;
+                }
+                Ok(())
+            }
+            TableFactor::TableFunction { expr, alias } => {
+                write!(f, "TABLE({})", expr)?;
                 if let Some(alias) = alias {
                     write!(f, " AS {}", alias)?;
                 }

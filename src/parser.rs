@@ -2066,10 +2066,15 @@ impl Parser {
             if !self.consume_token(&Token::LParen) {
                 self.expected("subquery after LATERAL", self.peek_token())?;
             }
-            return self.parse_derived_table_factor(Lateral);
-        }
-
-        if self.consume_token(&Token::LParen) {
+            self.parse_derived_table_factor(Lateral)
+        } else if self.parse_keyword(Keyword::TABLE) {
+            // parse table function (SELECT * FROM TABLE (<expr>) [ AS <alias> ])
+            self.expect_token(&Token::LParen)?;
+            let expr = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+            Ok(TableFactor::TableFunction { expr, alias })
+        } else if self.consume_token(&Token::LParen) {
             // A left paren introduces either a derived table (i.e., a subquery)
             // or a nested join. It's nearly impossible to determine ahead of
             // time which it is... so we just try to parse both.

@@ -1158,8 +1158,8 @@ fn parse_create_table_with_multiple_on_delete_fails() {
 
 #[test]
 fn parse_assert() {
-    let sql = "ASSERT (SELECT COUNT(*) FROM table) > 0";
-    let ast = one_statement_parses_to(sql, "ASSERT (SELECT COUNT(*) FROM table) > 0");
+    let sql = "ASSERT (SELECT COUNT(*) FROM my_table) > 0";
+    let ast = one_statement_parses_to(sql, "ASSERT (SELECT COUNT(*) FROM my_table) > 0");
     match ast {
         Statement::Assert {
             condition: _condition,
@@ -1173,10 +1173,10 @@ fn parse_assert() {
 
 #[test]
 fn parse_assert_message() {
-    let sql = "ASSERT (SELECT COUNT(*) FROM table) > 0 AS 'No rows in table'";
+    let sql = "ASSERT (SELECT COUNT(*) FROM my_table) > 0 AS 'No rows in my_table'";
     let ast = one_statement_parses_to(
         sql,
-        "ASSERT (SELECT COUNT(*) FROM table) > 0 AS 'No rows in table'",
+        "ASSERT (SELECT COUNT(*) FROM my_table) > 0 AS 'No rows in my_table'",
     );
     match ast {
         Statement::Assert {
@@ -1184,7 +1184,7 @@ fn parse_assert_message() {
             message: Some(message),
         } => {
             match message {
-                Expr::Value(Value::SingleQuotedString(s)) => assert_eq!(s, "No rows in table"),
+                Expr::Value(Value::SingleQuotedString(s)) => assert_eq!(s, "No rows in my_table"),
                 _ => unreachable!(),
             };
         }
@@ -1862,6 +1862,39 @@ fn parse_simple_math_expr_plus() {
 fn parse_simple_math_expr_minus() {
     let sql = "SELECT a - b, 2 - a, 2.5 - a, a_f - b_f, 2 - a_f, 2.5 - a_f FROM c";
     verified_only_select(sql);
+}
+
+#[test]
+fn parse_table_function() {
+    let select = verified_only_select("SELECT * FROM TABLE(FUN('1')) AS a");
+
+    match only(select.from).relation {
+        TableFactor::TableFunction { expr, alias } => {
+            let expected_expr = Expr::Function(Function {
+                name: ObjectName(vec![Ident::new("FUN")]),
+                args: vec![FunctionArg::Unnamed(Expr::Value(
+                    Value::SingleQuotedString("1".to_owned()),
+                ))],
+                over: None,
+                distinct: false,
+            });
+            assert_eq!(expr, expected_expr);
+            assert_eq!(alias, table_alias("a"))
+        }
+        _ => panic!("Expecting TableFactor::TableFunction"),
+    }
+
+    let res = parse_sql_statements("SELECT * FROM TABLE '1' AS a");
+    assert_eq!(
+        ParserError::ParserError("Expected (, found: \'1\'".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("SELECT * FROM TABLE (FUN(a) AS a");
+    assert_eq!(
+        ParserError::ParserError("Expected ), found: AS".to_string()),
+        res.unwrap_err()
+    );
 }
 
 #[test]

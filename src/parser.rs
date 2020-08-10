@@ -1191,29 +1191,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
-        let name = self.parse_identifier()?;
-        let data_type = self.parse_data_type()?;
-        let collation = if self.parse_keyword(Keyword::COLLATE) {
-            Some(self.parse_object_name()?)
-        } else {
-            None
-        };
-        let mut options = vec![];
-        loop {
-            match self.peek_token() {
-                Token::EOF | Token::Comma | Token::RParen | Token::SemiColon => break,
-                _ => options.push(self.parse_column_option_def()?),
-            }
-        }
-        Ok(ColumnDef {
-            name,
-            data_type,
-            collation,
-            options,
-        })
-    }
-
     fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
         let mut columns = vec![];
         let mut constraints = vec![];
@@ -1225,8 +1202,7 @@ impl<'a> Parser<'a> {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
                 constraints.push(constraint);
             } else if let Token::Word(_) = self.peek_token() {
-                let column_def = self.parse_column_def()?;
-                columns.push(column_def);
+                columns.push(self.parse_column_def()?);
             } else {
                 return self.expected("column name or constraint definition", self.peek_token());
             }
@@ -1242,23 +1218,51 @@ impl<'a> Parser<'a> {
         Ok((columns, constraints))
     }
 
-    pub fn parse_column_option_def(&mut self) -> Result<ColumnOptionDef, ParserError> {
-        let name = if self.parse_keyword(Keyword::CONSTRAINT) {
-            Some(self.parse_identifier()?)
+    fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
+        let name = self.parse_identifier()?;
+        let data_type = self.parse_data_type()?;
+        let collation = if self.parse_keyword(Keyword::COLLATE) {
+            Some(self.parse_object_name()?)
         } else {
             None
         };
+        let mut options = vec![];
+        loop {
+            if self.parse_keyword(Keyword::CONSTRAINT) {
+                let name = Some(self.parse_identifier()?);
+                if let Some(option) = self.parse_optional_column_option()? {
+                    options.push(ColumnOptionDef { name, option });
+                } else {
+                    return self.expected(
+                        "constraint details after CONSTRAINT <name>",
+                        self.peek_token(),
+                    );
+                }
+            } else if let Some(option) = self.parse_optional_column_option()? {
+                options.push(ColumnOptionDef { name: None, option });
+            } else {
+                break;
+            };
+        }
+        Ok(ColumnDef {
+            name,
+            data_type,
+            collation,
+            options,
+        })
+    }
 
-        let option = if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
-            ColumnOption::NotNull
+    pub fn parse_optional_column_option(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+        if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
+            Ok(Some(ColumnOption::NotNull))
         } else if self.parse_keyword(Keyword::NULL) {
-            ColumnOption::Null
+            Ok(Some(ColumnOption::Null))
         } else if self.parse_keyword(Keyword::DEFAULT) {
-            ColumnOption::Default(self.parse_expr()?)
+            Ok(Some(ColumnOption::Default(self.parse_expr()?)))
         } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY]) {
-            ColumnOption::Unique { is_primary: true }
+            Ok(Some(ColumnOption::Unique { is_primary: true }))
         } else if self.parse_keyword(Keyword::UNIQUE) {
-            ColumnOption::Unique { is_primary: false }
+            Ok(Some(ColumnOption::Unique { is_primary: false }))
         } else if self.parse_keyword(Keyword::REFERENCES) {
             let foreign_table = self.parse_object_name()?;
             // PostgreSQL allows omitting the column list and
@@ -1277,32 +1281,34 @@ impl<'a> Parser<'a> {
                     break;
                 }
             }
-            ColumnOption::ForeignKey {
+            Ok(Some(ColumnOption::ForeignKey {
                 foreign_table,
                 referred_columns,
                 on_delete,
                 on_update,
-            }
+            }))
         } else if self.parse_keyword(Keyword::CHECK) {
             self.expect_token(&Token::LParen)?;
             let expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
-            ColumnOption::Check(expr)
+            Ok(Some(ColumnOption::Check(expr)))
         } else if self.parse_keyword(Keyword::AUTO_INCREMENT)
             && dialect_of!(self is MySqlDialect |  GenericDialect)
         {
             // Support AUTO_INCREMENT for MySQL
-            ColumnOption::DialectSpecific(vec![Token::make_keyword("AUTO_INCREMENT")])
+            Ok(Some(ColumnOption::DialectSpecific(vec![
+                Token::make_keyword("AUTO_INCREMENT"),
+            ])))
         } else if self.parse_keyword(Keyword::AUTOINCREMENT)
             && dialect_of!(self is SQLiteDialect |  GenericDialect)
         {
             // Support AUTOINCREMENT for SQLite
-            ColumnOption::DialectSpecific(vec![Token::make_keyword("AUTOINCREMENT")])
+            Ok(Some(ColumnOption::DialectSpecific(vec![
+                Token::make_keyword("AUTOINCREMENT"),
+            ])))
         } else {
-            return self.expected("column option", self.peek_token());
-        };
-
-        Ok(ColumnOptionDef { name, option })
+            Ok(None)
+        }
     }
 
     pub fn parse_referential_action(&mut self) -> Result<ReferentialAction, ParserError> {

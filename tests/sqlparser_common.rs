@@ -1142,7 +1142,13 @@ fn parse_create_table() {
     assert!(res
         .unwrap_err()
         .to_string()
-        .contains("Expected column option, found: GARBAGE"));
+        .contains("Expected \',\' or \')\' after column definition, found: GARBAGE"));
+
+    let res = parse_sql_statements("CREATE TABLE t (a int NOT NULL CONSTRAINT foo)");
+    assert!(res
+        .unwrap_err()
+        .to_string()
+        .contains("Expected constraint details after CONSTRAINT <name>"));
 }
 
 #[test]

@@ -18,6 +18,7 @@ mod mysql;
 mod postgresql;
 mod sqlite;
 
+use std::any::{Any, TypeId};
 use std::fmt::Debug;
 
 pub use self::ansi::AnsiDialect;
@@ -27,7 +28,15 @@ pub use self::mysql::MySqlDialect;
 pub use self::postgresql::PostgreSqlDialect;
 pub use self::sqlite::SQLiteDialect;
 
-pub trait Dialect: Debug {
+/// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
+/// to `true` iff `parser.dialect` is one of the `Dialect`s specified.
+macro_rules! dialect_of {
+    ( $parsed_dialect: ident is $($dialect_type: ty)|+ ) => {
+        ($($parsed_dialect.dialect.is::<$dialect_type>())||+)
+    };
+}
+
+pub trait Dialect: Debug + Any {
     /// Determine if a character starts a quoted identifier. The default
     /// implementation, accepting "double quoted" ids is both ANSI-compliant
     /// and appropriate for most dialects (with the notable exception of
@@ -40,4 +49,52 @@ pub trait Dialect: Debug {
     fn is_identifier_start(&self, ch: char) -> bool;
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
+}
+
+impl dyn Dialect {
+    #[inline]
+    pub fn is<T: Dialect>(&self) -> bool {
+        // borrowed from `Any` implementation
+        TypeId::of::<T>() == self.type_id()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ansi::AnsiDialect;
+    use super::generic::GenericDialect;
+    use super::*;
+
+    struct DialectHolder<'a> {
+        dialect: &'a dyn Dialect,
+    }
+
+    #[test]
+    fn test_is_dialect() {
+        let generic_dialect: &dyn Dialect = &GenericDialect {};
+        let ansi_dialect: &dyn Dialect = &AnsiDialect {};
+
+        let generic_holder = DialectHolder {
+            dialect: generic_dialect,
+        };
+        let ansi_holder = DialectHolder {
+            dialect: ansi_dialect,
+        };
+
+        assert_eq!(
+            dialect_of!(generic_holder is GenericDialect |  AnsiDialect),
+            true
+        );
+        assert_eq!(dialect_of!(generic_holder is  AnsiDialect), false);
+
+        assert_eq!(dialect_of!(ansi_holder is  AnsiDialect), true);
+        assert_eq!(
+            dialect_of!(ansi_holder is  GenericDialect | AnsiDialect),
+            true
+        );
+        assert_eq!(
+            dialect_of!(ansi_holder is  GenericDialect | MsSqlDialect),
+            false
+        );
+    }
 }

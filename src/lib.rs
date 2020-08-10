@@ -35,6 +35,7 @@
 #![warn(clippy::all)]
 
 pub mod ast;
+#[macro_use]
 pub mod dialect;
 pub mod parser;
 pub mod tokenizer;

@@ -293,13 +293,18 @@ pub enum TableFactor {
         /// Arguments of a table-valued function, as supported by Postgres
         /// and MSSQL. Note that deprecated MSSQL `FROM foo (NOLOCK)` syntax
         /// will also be parsed as `args`.
-        args: Vec<Expr>,
+        args: Vec<FunctionArg>,
         /// MSSQL-specific `WITH (...)` hints such as NOLOCK.
         with_hints: Vec<Expr>,
     },
     Derived {
         lateral: bool,
         subquery: Box<Query>,
+        alias: Option<TableAlias>,
+    },
+    /// `TABLE(<expr>)[ AS <alias> ]`
+    TableFunction {
+        expr: Expr,
         alias: Option<TableAlias>,
     },
     /// Represents a parenthesized table factor. The SQL spec only allows a
@@ -340,6 +345,13 @@ impl fmt::Display for TableFactor {
                     write!(f, "LATERAL ")?;
                 }
                 write!(f, "({})", subquery)?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {}", alias)?;
+                }
+                Ok(())
+            }
+            TableFactor::TableFunction { expr, alias } => {
+                write!(f, "TABLE({})", expr)?;
                 if let Some(alias) = alias {
                     write!(f, " AS {}", alias)?;
                 }

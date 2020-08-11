@@ -15,9 +15,8 @@
 use log::debug;
 
 use super::ast::*;
-use super::dialect::keywords;
 use super::dialect::keywords::Keyword;
-use super::dialect::Dialect;
+use super::dialect::*;
 use super::tokenizer::*;
 use std::error::Error;
 use std::fmt;
@@ -82,24 +81,28 @@ impl fmt::Display for ParserError {
 
 impl Error for ParserError {}
 
-/// SQL Parser
-pub struct Parser {
+pub struct Parser<'a> {
     tokens: Vec<Token>,
     /// The index of the first unprocessed token in `self.tokens`
     index: usize,
+    dialect: &'a dyn Dialect,
 }
 
-impl Parser {
+impl<'a> Parser<'a> {
     /// Parse the specified tokens
-    pub fn new(tokens: Vec<Token>) -> Self {
-        Parser { tokens, index: 0 }
+    pub fn new(tokens: Vec<Token>, dialect: &'a dyn Dialect) -> Self {
+        Parser {
+            tokens,
+            index: 0,
+            dialect,
+        }
     }
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
     pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, &sql);
         let tokens = tokenizer.tokenize()?;
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::new(tokens, dialect);
         let mut stmts = Vec::new();
         let mut expecting_statement_delimiter = false;
         debug!("Parsing sql '{}'...", sql);
@@ -1060,7 +1063,7 @@ impl Parser {
     /// Parse a comma-separated list of 1+ items accepted by `F`
     pub fn parse_comma_separated<T, F>(&mut self, mut f: F) -> Result<Vec<T>, ParserError>
     where
-        F: FnMut(&mut Parser) -> Result<T, ParserError>,
+        F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
     {
         let mut values = vec![];
         loop {
@@ -1411,29 +1414,6 @@ impl Parser {
         })
     }
 
-    fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
-        let name = self.parse_identifier()?;
-        let data_type = self.parse_data_type()?;
-        let collation = if self.parse_keyword(Keyword::COLLATE) {
-            Some(self.parse_object_name()?)
-        } else {
-            None
-        };
-        let mut options = vec![];
-        loop {
-            match self.peek_token() {
-                Token::EOF | Token::Comma | Token::RParen | Token::SemiColon => break,
-                _ => options.push(self.parse_column_option_def()?),
-            }
-        }
-        Ok(ColumnDef {
-            name,
-            data_type,
-            collation,
-            options,
-        })
-    }
-
     fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
         let mut columns = vec![];
         let mut constraints = vec![];
@@ -1445,8 +1425,7 @@ impl Parser {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
                 constraints.push(constraint);
             } else if let Token::Word(_) = self.peek_token() {
-                let column_def = self.parse_column_def()?;
-                columns.push(column_def);
+                columns.push(self.parse_column_def()?);
             } else {
                 return self.expected("column name or constraint definition", self.peek_token());
             }
@@ -1462,23 +1441,51 @@ impl Parser {
         Ok((columns, constraints))
     }
 
-    pub fn parse_column_option_def(&mut self) -> Result<ColumnOptionDef, ParserError> {
-        let name = if self.parse_keyword(Keyword::CONSTRAINT) {
-            Some(self.parse_identifier()?)
+    fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
+        let name = self.parse_identifier()?;
+        let data_type = self.parse_data_type()?;
+        let collation = if self.parse_keyword(Keyword::COLLATE) {
+            Some(self.parse_object_name()?)
         } else {
             None
         };
+        let mut options = vec![];
+        loop {
+            if self.parse_keyword(Keyword::CONSTRAINT) {
+                let name = Some(self.parse_identifier()?);
+                if let Some(option) = self.parse_optional_column_option()? {
+                    options.push(ColumnOptionDef { name, option });
+                } else {
+                    return self.expected(
+                        "constraint details after CONSTRAINT <name>",
+                        self.peek_token(),
+                    );
+                }
+            } else if let Some(option) = self.parse_optional_column_option()? {
+                options.push(ColumnOptionDef { name: None, option });
+            } else {
+                break;
+            };
+        }
+        Ok(ColumnDef {
+            name,
+            data_type,
+            collation,
+            options,
+        })
+    }
 
-        let option = if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
-            ColumnOption::NotNull
+    pub fn parse_optional_column_option(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+        if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
+            Ok(Some(ColumnOption::NotNull))
         } else if self.parse_keyword(Keyword::NULL) {
-            ColumnOption::Null
+            Ok(Some(ColumnOption::Null))
         } else if self.parse_keyword(Keyword::DEFAULT) {
-            ColumnOption::Default(self.parse_expr()?)
+            Ok(Some(ColumnOption::Default(self.parse_expr()?)))
         } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY]) {
-            ColumnOption::Unique { is_primary: true }
+            Ok(Some(ColumnOption::Unique { is_primary: true }))
         } else if self.parse_keyword(Keyword::UNIQUE) {
-            ColumnOption::Unique { is_primary: false }
+            Ok(Some(ColumnOption::Unique { is_primary: false }))
         } else if self.parse_keyword(Keyword::REFERENCES) {
             let foreign_table = self.parse_object_name()?;
             // PostgreSQL allows omitting the column list and
@@ -1497,28 +1504,34 @@ impl Parser {
                     break;
                 }
             }
-            ColumnOption::ForeignKey {
+            Ok(Some(ColumnOption::ForeignKey {
                 foreign_table,
                 referred_columns,
                 on_delete,
                 on_update,
-            }
+            }))
         } else if self.parse_keyword(Keyword::CHECK) {
             self.expect_token(&Token::LParen)?;
             let expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
-            ColumnOption::Check(expr)
-        } else if self.parse_keyword(Keyword::AUTO_INCREMENT) {
+            Ok(Some(ColumnOption::Check(expr)))
+        } else if self.parse_keyword(Keyword::AUTO_INCREMENT)
+            && dialect_of!(self is MySqlDialect |  GenericDialect)
+        {
             // Support AUTO_INCREMENT for MySQL
-            ColumnOption::DialectSpecific(vec![Token::make_keyword("AUTO_INCREMENT")])
-        } else if self.parse_keyword(Keyword::AUTOINCREMENT) {
+            Ok(Some(ColumnOption::DialectSpecific(vec![
+                Token::make_keyword("AUTO_INCREMENT"),
+            ])))
+        } else if self.parse_keyword(Keyword::AUTOINCREMENT)
+            && dialect_of!(self is SQLiteDialect |  GenericDialect)
+        {
             // Support AUTOINCREMENT for SQLite
-            ColumnOption::DialectSpecific(vec![Token::make_keyword("AUTOINCREMENT")])
+            Ok(Some(ColumnOption::DialectSpecific(vec![
+                Token::make_keyword("AUTOINCREMENT"),
+            ])))
         } else {
-            return self.expected("column option", self.peek_token());
-        };
-
-        Ok(ColumnOptionDef { name, option })
+            Ok(None)
+        }
     }
 
     pub fn parse_referential_action(&mut self) -> Result<ReferentialAction, ParserError> {
@@ -2426,10 +2439,15 @@ impl Parser {
             if !self.consume_token(&Token::LParen) {
                 self.expected("subquery after LATERAL", self.peek_token())?;
             }
-            return self.parse_derived_table_factor(Lateral);
-        }
-
-        if self.consume_token(&Token::LParen) {
+            self.parse_derived_table_factor(Lateral)
+        } else if self.parse_keyword(Keyword::TABLE) {
+            // parse table function (SELECT * FROM TABLE (<expr>) [ AS <alias> ])
+            self.expect_token(&Token::LParen)?;
+            let expr = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+            Ok(TableFactor::TableFunction { expr, alias })
+        } else if self.consume_token(&Token::LParen) {
             // A left paren introduces either a derived table (i.e., a subquery)
             // or a nested join. It's nearly impossible to determine ahead of
             // time which it is... so we just try to parse both.
@@ -2603,11 +2621,24 @@ impl Parser {
         Ok(Assignment { id, value })
     }
 
-    pub fn parse_optional_args(&mut self) -> Result<Vec<Expr>, ParserError> {
+    fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
+        if self.peek_nth_token(1) == Token::RArrow {
+            let name = self.parse_identifier()?;
+
+            self.expect_token(&Token::RArrow)?;
+            let arg = self.parse_expr()?;
+
+            Ok(FunctionArg::Named { name, arg })
+        } else {
+            Ok(FunctionArg::Unnamed(self.parse_expr()?))
+        }
+    }
+
+    pub fn parse_optional_args(&mut self) -> Result<Vec<FunctionArg>, ParserError> {
         if self.consume_token(&Token::RParen) {
             Ok(vec![])
         } else {
-            let args = self.parse_comma_separated(Parser::parse_expr)?;
+            let args = self.parse_comma_separated(Parser::parse_function_args)?;
             self.expect_token(&Token::RParen)?;
             Ok(args)
         }

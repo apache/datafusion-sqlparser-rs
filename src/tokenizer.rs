@@ -103,6 +103,8 @@ pub enum Token {
     LBrace,
     /// Right brace `}`
     RBrace,
+    /// Right Arrow `=>`
+    RArrow,
 }
 
 impl fmt::Display for Token {
@@ -145,6 +147,7 @@ impl fmt::Display for Token {
             Token::Pipe => f.write_str("|"),
             Token::LBrace => f.write_str("{"),
             Token::RBrace => f.write_str("}"),
+            Token::RArrow => f.write_str("=>"),
         }
     }
 }
@@ -429,6 +432,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next();
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::DoubleEq),
+                        Some('>') => self.consume_and_return(chars, Token::RArrow),
                         _ => Ok(Some(Token::Eq)),
                     }
                 }
@@ -799,6 +803,23 @@ mod tests {
             Token::Char('ف'),
             Token::Char('ى'),
             Token::make_word("h", None),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_right_arrow() {
+        let sql = String::from("FUNCTION(key=>value)");
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::make_word("FUNCTION", None),
+            Token::LParen,
+            Token::make_word("key", None),
+            Token::RArrow,
+            Token::make_word("value", None),
+            Token::RParen,
         ];
         compare(expected, tokens);
     }

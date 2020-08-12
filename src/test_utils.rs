@@ -119,6 +119,7 @@ pub fn all_dialects() -> TestedDialects {
             Box::new(PostgreSqlDialect {}),
             Box::new(MsSqlDialect {}),
             Box::new(AnsiDialect {}),
+            Box::new(SnowflakeDialect {}),
         ],
     }
 }

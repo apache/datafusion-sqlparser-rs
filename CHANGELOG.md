@@ -9,13 +9,24 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 Check https://github.com/ballista-compute/sqlparser-rs/commits/main for undocumented changes.
 
 ### Changed
+- Change the MySQL dialect to support `` `identifiers` `` quoted with backticks instead of the standard `"double-quoted"` identifiers (#247) - thanks @mashuai!
 
 ### Added
-- Support `CREATE OR REPLACE VIEW`/`TABLE` (#239)  - thanks @Dandandan!
+- Enable dialect-specific behaviours in the parser (`dialect_of!()`) (#254) - thanks @eyalleshem!
+- Support named arguments in function invocations (`ARG_NAME => val`) (#250) - thanks @eyalleshem!
+- Support `TABLE()` functions in `FROM` (#253) - thanks @eyalleshem!
 - Support PostgreSQL `PREPARE`, `EXECUTE`, and `DEALLOCATE` (#243) - thanks @silathdiir!
-- Support SQLite `AUTOINCREMENT` and MySQL `AUTO_INCREMENT` column option in `CREATE TABLE` - thanks @mashuai!
+- Add SQLite dialect (#248) - thanks @mashuai!
+- Add Snowflake dialect (#259) - thanks @eyalleshem!
+- DDL:
+    - Support `OR REPLACE` in `CREATE VIEW`/`TABLE` (#239)  - thanks @Dandandan!
+    - Support specifying `ASC`/`DESC` in index columns (#249) - thanks @mashuai!
+    - Support SQLite `AUTOINCREMENT` and MySQL `AUTO_INCREMENT` column option in `CREATE TABLE` (#234) - thanks @mashuai!
 
 ### Fixed
+- Fix a typo in `JSONFILE` serialization, introduced in 0.3.1 (#237)
+- Change `CREATE INDEX` serialization to not end with a semicolon, introduced in 0.5.1 (#245)
+- Don't fail parsing `ALTER TABLE ADD COLUMN` ending with a semicolon, introduced in 0.5.1 (#246) - thanks @mashuai
 
 ## [0.6.1] - 2020-07-20
 

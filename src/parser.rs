@@ -312,6 +312,16 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::RParen)?;
                 Ok(expr)
             }
+            Token::Dollar if dialect_of!(self is SnowflakeDialect) => {
+                // Snowflake user defined variables starts with $
+                let name = self.parse_identifier()?;
+                Ok(Expr::SqlVariable { prefix: '$', name })
+            }
+            Token::At if dialect_of!(self is MySqlDialect) => {
+                // Mysql user defined variables starts with @
+                let name = self.parse_identifier()?;
+                Ok(Expr::SqlVariable { prefix: '@', name })
+            }
             unexpected => self.expected("an expression", unexpected),
         }?;
 

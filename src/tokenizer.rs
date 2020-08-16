@@ -101,6 +101,10 @@ pub enum Token {
     RBrace,
     /// Right Arrow `=>`
     RArrow,
+    /// Dollar sign `$`
+    Dollar,
+    /// At sign `@`
+    At,
 }
 
 impl fmt::Display for Token {
@@ -142,6 +146,8 @@ impl fmt::Display for Token {
             Token::LBrace => f.write_str("{"),
             Token::RBrace => f.write_str("}"),
             Token::RArrow => f.write_str("=>"),
+            Token::Dollar => f.write_str("$"),
+            Token::At => f.write_str("@"),
         }
     }
 }
@@ -448,6 +454,8 @@ impl<'a> Tokenizer<'a> {
                 '^' => self.consume_and_return(chars, Token::Caret),
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
+                '$' => self.consume_and_return(chars, Token::Dollar),
+                '@' => self.consume_and_return(chars, Token::At),
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),

@@ -235,6 +235,10 @@ pub enum Expr {
     Subquery(Box<Query>),
     /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
     ListAgg(ListAgg),
+    /// Embed variable inside a query is supported by some databases:
+    /// - Mysql: https://dev.mysql.com/doc/refman/8.0/en/user-variables.html
+    /// - Snowflake: https://docs.snowflake.com/en/sql-reference/session-variables.html
+    SqlVariable { prefix: char, name: Ident },
 }
 
 impl fmt::Display for Expr {
@@ -315,6 +319,7 @@ impl fmt::Display for Expr {
             Expr::Exists(s) => write!(f, "EXISTS ({})", s),
             Expr::Subquery(s) => write!(f, "({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
+            Expr::SqlVariable { prefix, name } => write!(f, "{}{}", prefix, name),
         }
     }
 }

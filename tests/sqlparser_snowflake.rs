@@ -24,6 +24,45 @@ fn test_snowflake_create_table() {
     }
 }
 
+#[test]
+fn test_query_with_variable_name() {
+    let sql = "SELECT $var1";
+    let select = snowflake().verified_only_select(sql);
+
+    assert_eq!(
+        only(select.projection),
+        SelectItem::UnnamedExpr(Expr::SqlVariable {
+            prefix: '$',
+            name: Ident::new("var1")
+        },)
+    );
+
+    let sql = "SELECT c1 FROM t1 WHERE num BETWEEN $min AND $max";
+    let select = snowflake().verified_only_select(sql);
+
+    assert_eq!(
+        select.selection.unwrap(),
+        Expr::Between {
+            expr: Box::new(Expr::Identifier("num".into())),
+            low: Box::new(Expr::SqlVariable {
+                prefix: '$',
+                name: Ident::new("min")
+            }),
+            high: Box::new(Expr::SqlVariable {
+                prefix: '$',
+                name: Ident::new("max")
+            }),
+            negated: false,
+        }
+    );
+}
+
+fn snowflake() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(SnowflakeDialect {})],
+    }
+}
+
 fn snowflake_and_generic() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SnowflakeDialect {}), Box::new(GenericDialect {})],

@@ -12,6 +12,7 @@
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SnowflakeDialect};
 use sqlparser::test_utils::*;
+use sqlparser::tokenizer::*;
 
 #[test]
 fn test_snowflake_create_table() {
@@ -22,6 +23,44 @@ fn test_snowflake_create_table() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_snowflake_single_line_tokenize() {
+    let sql = "CREATE TABLE# this is a comment \ntable_1";
+    let dialect = SnowflakeDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, &sql);
+    let tokens = tokenizer.tokenize().unwrap();
+
+    let expected = vec![
+        Token::make_keyword("CREATE"),
+        Token::Whitespace(Whitespace::Space),
+        Token::make_keyword("TABLE"),
+        Token::Whitespace(Whitespace::SingleLineComment {
+            prefix: "#".to_string(),
+            comment: " this is a comment \n".to_string(),
+        }),
+        Token::make_word("table_1", None),
+    ];
+
+    assert_eq!(expected, tokens);
+
+    let sql = "CREATE TABLE// this is a comment \ntable_1";
+    let mut tokenizer = Tokenizer::new(&dialect, &sql);
+    let tokens = tokenizer.tokenize().unwrap();
+
+    let expected = vec![
+        Token::make_keyword("CREATE"),
+        Token::Whitespace(Whitespace::Space),
+        Token::make_keyword("TABLE"),
+        Token::Whitespace(Whitespace::SingleLineComment {
+            prefix: "//".to_string(),
+            comment: " this is a comment \n".to_string(),
+        }),
+        Token::make_word("table_1", None),
+    ];
+
+    assert_eq!(expected, tokens);
 }
 
 fn snowflake_and_generic() -> TestedDialects {

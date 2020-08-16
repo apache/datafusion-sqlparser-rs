@@ -21,6 +21,7 @@ use std::str::Chars;
 
 use super::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 use super::dialect::Dialect;
+use super::dialect::SnowflakeDialect;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -209,7 +210,7 @@ pub enum Whitespace {
     Space,
     Newline,
     Tab,
-    SingleLineComment(String),
+    SingleLineComment { comment: String, prefix: String },
     MultiLineComment(String),
 }
 
@@ -219,7 +220,7 @@ impl fmt::Display for Whitespace {
             Whitespace::Space => f.write_str(" "),
             Whitespace::Newline => f.write_str("\n"),
             Whitespace::Tab => f.write_str("\t"),
-            Whitespace::SingleLineComment(s) => write!(f, "--{}", s),
+            Whitespace::SingleLineComment { prefix, comment } => write!(f, "{}{}", prefix, comment),
             Whitespace::MultiLineComment(s) => write!(f, "/*{}*/", s),
         }
     }
@@ -370,12 +371,11 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('-') => {
                             chars.next(); // consume the second '-', starting a single-line comment
-                            let mut s = peeking_take_while(chars, |ch| ch != '\n');
-                            if let Some(ch) = chars.next() {
-                                assert_eq!(ch, '\n');
-                                s.push(ch);
-                            }
-                            Ok(Some(Token::Whitespace(Whitespace::SingleLineComment(s))))
+                            let comment = self.tokenize_single_line_comment(chars);
+                            Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
+                                prefix: "--".to_owned(),
+                                comment,
+                            })))
                         }
                         // a regular '-' operator
                         _ => Ok(Some(Token::Minus)),
@@ -387,6 +387,14 @@ impl<'a> Tokenizer<'a> {
                         Some('*') => {
                             chars.next(); // consume the '*', starting a multi-line comment
                             self.tokenize_multiline_comment(chars)
+                        }
+                        Some('/') if dialect_of!(self is SnowflakeDialect) => {
+                            chars.next(); // consume the second '/', starting a snowflake single-line comment
+                            let comment = self.tokenize_single_line_comment(chars);
+                            Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
+                                prefix: "//".to_owned(),
+                                comment,
+                            })))
                         }
                         // a regular '/' operator
                         _ => Ok(Some(Token::Div)),
@@ -448,6 +456,14 @@ impl<'a> Tokenizer<'a> {
                 '^' => self.consume_and_return(chars, Token::Caret),
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
+                '#' if dialect_of!(self is SnowflakeDialect) => {
+                    chars.next(); // consume the '#', starting a snowflake single-line comment
+                    let comment = self.tokenize_single_line_comment(chars);
+                    Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
+                        prefix: "#".to_owned(),
+                        comment,
+                    })))
+                }
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),
@@ -460,6 +476,16 @@ impl<'a> Tokenizer<'a> {
             col: self.col,
             line: self.line,
         })
+    }
+
+    // Consume characters until newline
+    fn tokenize_single_line_comment(&self, chars: &mut Peekable<Chars<'_>>) -> String {
+        let mut comment = peeking_take_while(chars, |ch| ch != '\n');
+        if let Some(ch) = chars.next() {
+            assert_eq!(ch, '\n');
+            comment.push(ch);
+        }
+        comment
     }
 
     /// Tokenize an identifier or keyword, after the first char is already consumed.
@@ -819,9 +845,10 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![
             Token::Number("0".to_string()),
-            Token::Whitespace(Whitespace::SingleLineComment(
-                "this is a comment\n".to_string(),
-            )),
+            Token::Whitespace(Whitespace::SingleLineComment {
+                prefix: "--".to_string(),
+                comment: "this is a comment\n".to_string(),
+            }),
             Token::Number("1".to_string()),
         ];
         compare(expected, tokens);
@@ -834,9 +861,10 @@ mod tests {
         let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
-        let expected = vec![Token::Whitespace(Whitespace::SingleLineComment(
-            "this is a comment".to_string(),
-        ))];
+        let expected = vec![Token::Whitespace(Whitespace::SingleLineComment {
+            prefix: "--".to_string(),
+            comment: "this is a comment".to_string(),
+        })];
         compare(expected, tokens);
     }
 

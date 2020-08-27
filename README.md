@@ -11,8 +11,8 @@ SQL that conforms with the [ANSI/ISO SQL standard][sql-standard] while also
 making it easy to support custom dialects so that this crate can be used as a
 foundation for vendor-specific parsers.
 
-This parser is currently being used by the [DataFusion] query engine and
-[LocustDB].
+This parser is currently being used by the [DataFusion] query engine,
+[LocustDB], and [Ballista].
 
 ## Example
 
@@ -126,6 +126,7 @@ resources.
 [current issues]: https://github.com/ballista-compute/sqlparser-rs/issues
 [DataFusion]: https://github.com/apache/arrow/tree/master/rust/datafusion
 [LocustDB]: https://github.com/cswinter/LocustDB
+[Ballista]: https://github.com/ballista-compute/ballista
 [Pratt Parser]: https://tdop.github.io/
 [sql-2016-grammar]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html
 [sql-standard]: https://en.wikipedia.org/wiki/ISO/IEC_9075

@@ -2388,8 +2388,7 @@ fn parse_ctes() {
     );
 
     fn assert_ctes_in_select(expected: &[&str], sel: &Query) {
-        let mut i = 0;
-        for exp in expected {
+        for (i, exp) in expected.iter().enumerate() {
             let Cte { alias, query } = &sel.ctes[i];
             assert_eq!(*exp, query.to_string());
             assert_eq!(
@@ -2401,7 +2400,6 @@ fn parse_ctes() {
                 alias.name
             );
             assert!(alias.columns.is_empty());
-            i += 1;
         }
     }
 

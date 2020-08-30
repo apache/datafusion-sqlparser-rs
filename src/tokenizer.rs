@@ -54,7 +54,7 @@ pub enum Token {
     Neq,
     /// Less Than operator `<`
     Lt,
-    /// Greater han operator `>`
+    /// Greater Than operator `>`
     Gt,
     /// Less Than Or Equals operator `<=`
     LtEq,
@@ -102,6 +102,24 @@ pub enum Token {
     RBrace,
     /// Right Arrow `=>`
     RArrow,
+    /// Sharp `#` use for PostgreSQL Bitwise XOR operator
+    Sharp,
+    /// Tilde `~` use for PostgreSQL Bitwise NOT operator
+    Tilde,
+    /// Bitwise left operator `<<` use for PostgreSQL
+    ShiftLeft,
+    /// Bitwise right operator `>>` use for PostgreSQL
+    ShiftRight,
+    /// Exclamation Mark `!` use for PostgreSQL factorial operator
+    ExclamationMark,
+    /// Exclamation Mark `!!` use for PostgreSQL prefix factorial operator
+    DoubleExclamationMark,
+    /// Ampersat `@` use for PostgreSQL abs operator
+    Ampersat,
+    /// PostgreSQL square root math operator
+    SquareRoot,
+    /// PostgreSQL cube root math operator
+    CubeRoot,
 }
 
 impl fmt::Display for Token {
@@ -143,6 +161,15 @@ impl fmt::Display for Token {
             Token::LBrace => f.write_str("{"),
             Token::RBrace => f.write_str("}"),
             Token::RArrow => f.write_str("=>"),
+            Token::Sharp => f.write_str("#"),
+            Token::ExclamationMark => f.write_str("!"),
+            Token::DoubleExclamationMark => f.write_str("!!"),
+            Token::Tilde => f.write_str("~"),
+            Token::Ampersat => f.write_str("@"),
+            Token::ShiftLeft => f.write_str("<<"),
+            Token::ShiftRight => f.write_str(">>"),
+            Token::SquareRoot => f.write_str("|/"),
+            Token::CubeRoot => f.write_str("||/"),
         }
     }
 }
@@ -406,7 +433,14 @@ impl<'a> Tokenizer<'a> {
                 '|' => {
                     chars.next(); // consume the '|'
                     match chars.peek() {
-                        Some('|') => self.consume_and_return(chars, Token::StringConcat),
+                        Some('/') => self.consume_and_return(chars, Token::SquareRoot),
+                        Some('|') => {
+                            chars.next(); // consume the second '|'
+                            match chars.peek() {
+                                Some('/') => self.consume_and_return(chars, Token::CubeRoot),
+                                _ => Ok(Some(Token::StringConcat)),
+                            }
+                        }
                         // Bitshift '|' operator
                         _ => Ok(Some(Token::Pipe)),
                     }
@@ -423,7 +457,8 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::Neq),
-                        _ => self.tokenizer_error("Expected to see '=' after '!' character"),
+                        Some('!') => self.consume_and_return(chars, Token::DoubleExclamationMark),
+                        _ => Ok(Some(Token::ExclamationMark)),
                     }
                 }
                 '<' => {
@@ -431,6 +466,7 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::LtEq),
                         Some('>') => self.consume_and_return(chars, Token::Neq),
+                        Some('<') => self.consume_and_return(chars, Token::ShiftLeft),
                         _ => Ok(Some(Token::Lt)),
                     }
                 }
@@ -438,6 +474,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::GtEq),
+                        Some('>') => self.consume_and_return(chars, Token::ShiftRight),
                         _ => Ok(Some(Token::Gt)),
                     }
                 }
@@ -464,6 +501,9 @@ impl<'a> Tokenizer<'a> {
                         comment,
                     })))
                 }
+                '~' => self.consume_and_return(chars, Token::Tilde),
+                '#' => self.consume_and_return(chars, Token::Sharp),
+                '@' => self.consume_and_return(chars, Token::Ampersat),
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),
@@ -586,6 +626,7 @@ mod tests {
     use super::super::dialect::GenericDialect;
     use super::super::dialect::MsSqlDialect;
     use super::*;
+    use crate::dialect::PostgreSqlDialect;
 
     #[test]
     fn tokenize_select_1() {
@@ -955,6 +996,65 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_word("foo", None),
         ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_postgresql_bitwise_operations() {
+        let sql = String::from("SELECT ~one << two # three >> four");
+        let dialect = PostgreSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Tilde,
+            Token::make_word("one", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::ShiftLeft,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("two", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::Sharp,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("three", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::ShiftRight,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("four", None),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_postgresql_math_operations() {
+        let sql = String::from("SELECT !!5 5! @-6 |/4 ||/8");
+        let dialect = PostgreSqlDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::DoubleExclamationMark,
+            Token::Number("5".to_string()),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number("5".to_string()),
+            Token::ExclamationMark,
+            Token::Whitespace(Whitespace::Space),
+            Token::Ampersat,
+            Token::Minus,
+            Token::Number("6".to_string()),
+            Token::Whitespace(Whitespace::Space),
+            Token::SquareRoot,
+            Token::Number("4".to_string()),
+            Token::Whitespace(Whitespace::Space),
+            Token::CubeRoot,
+            Token::Number("8".to_string()),
+        ];
+
         compare(expected, tokens);
     }
 

@@ -21,6 +21,12 @@ pub enum UnaryOperator {
     Plus,
     Minus,
     Not,
+    PGBitwiseNot,
+    PGSqrt,
+    PGCbrt,
+    PGFactorial,
+    PGInfixFactorial,
+    PGAbs,
 }
 
 impl fmt::Display for UnaryOperator {
@@ -29,6 +35,12 @@ impl fmt::Display for UnaryOperator {
             UnaryOperator::Plus => "+",
             UnaryOperator::Minus => "-",
             UnaryOperator::Not => "NOT",
+            UnaryOperator::PGBitwiseNot => "~",
+            UnaryOperator::PGSqrt => "|/",
+            UnaryOperator::PGCbrt => "||/",
+            UnaryOperator::PGFactorial => "!",
+            UnaryOperator::PGInfixFactorial => "!!",
+            UnaryOperator::PGAbs => "@",
         })
     }
 }
@@ -56,6 +68,9 @@ pub enum BinaryOperator {
     BitwiseOr,
     BitwiseAnd,
     BitwiseXor,
+    PGBitwiseXor,
+    PGBitwiseShiftLeft,
+    PGBitwiseShiftRight,
 }
 
 impl fmt::Display for BinaryOperator {
@@ -80,6 +95,9 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::BitwiseOr => "|",
             BinaryOperator::BitwiseAnd => "&",
             BinaryOperator::BitwiseXor => "^",
+            BinaryOperator::PGBitwiseXor => "#",
+            BinaryOperator::PGBitwiseShiftLeft => "<<",
+            BinaryOperator::PGBitwiseShiftRight => ">>",
         })
     }
 }

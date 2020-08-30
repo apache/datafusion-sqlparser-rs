@@ -551,6 +551,83 @@ fn parse_prepare() {
     );
 }
 
+#[test]
+fn parse_pg_bitwise_binary_ops() {
+    let bitwise_ops = &[
+        ("#", BinaryOperator::PGBitwiseXor),
+        (">>", BinaryOperator::PGBitwiseShiftRight),
+        ("<<", BinaryOperator::PGBitwiseShiftLeft),
+    ];
+
+    for (str_op, op) in bitwise_ops {
+        let select = pg().verified_only_select(&format!("SELECT a {} b", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: op.clone(),
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }),
+            select.projection[0]
+        );
+    }
+}
+
+#[test]
+fn parse_pg_bitwise_unary_ops() {
+    let bitwise_ops = &[("~", UnaryOperator::PGBitwiseNot)];
+
+    for (str_op, op) in bitwise_ops {
+        let select = pg().verified_only_select(&format!("SELECT {} a", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::UnaryOp {
+                op: op.clone(),
+                expr: Box::new(Expr::Identifier(Ident::new("a"))),
+                infix: false,
+            }),
+            select.projection[0]
+        );
+    }
+}
+
+#[test]
+fn parse_pg_infix_math_ops() {
+    let bitwise_ops = &[
+        ("|/", UnaryOperator::PGSqrt),
+        ("||/", UnaryOperator::PGCbrt),
+        ("!!", UnaryOperator::PGInfixFactorial),
+        ("@", UnaryOperator::PGAbs),
+    ];
+
+    for (str_op, op) in bitwise_ops {
+        let select = pg().verified_only_select(&format!("SELECT {} a", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::UnaryOp {
+                op: op.clone(),
+                expr: Box::new(Expr::Identifier(Ident::new("a"))),
+                infix: false,
+            }),
+            select.projection[0]
+        );
+    }
+}
+
+#[test]
+fn parse_pg_math_ops() {
+    let bitwise_ops = &[("!", UnaryOperator::PGFactorial)];
+
+    for (str_op, op) in bitwise_ops {
+        let select = pg().verified_only_select(&format!("SELECT a{}", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::UnaryOp {
+                op: op.clone(),
+                expr: Box::new(Expr::Identifier(Ident::new("a"))),
+                infix: true,
+            }),
+            select.projection[0]
+        );
+    }
+}
+
 fn pg() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {})],

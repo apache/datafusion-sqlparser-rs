@@ -343,7 +343,8 @@ fn parse_select_count_distinct() {
             name: ObjectName(vec![Ident::new("COUNT")]),
             args: vec![FunctionArg::Unnamed(Expr::UnaryOp {
                 op: UnaryOperator::Plus,
-                expr: Box::new(Expr::Identifier(Ident::new("x")))
+                expr: Box::new(Expr::Identifier(Ident::new("x"))),
+                infix: false,
             })],
             over: None,
             distinct: true,
@@ -506,11 +507,13 @@ fn parse_unary_math() {
             left: Box::new(UnaryOp {
                 op: UnaryOperator::Minus,
                 expr: Box::new(Identifier(Ident::new("a"))),
+                infix: false,
             }),
             op: BinaryOperator::Plus,
             right: Box::new(UnaryOp {
                 op: UnaryOperator::Minus,
                 expr: Box::new(Identifier(Ident::new("b"))),
+                infix: false,
             }),
         },
         verified_expr(sql)
@@ -565,6 +568,7 @@ fn parse_not_precedence() {
                 high: Box::new(Expr::Value(number("2"))),
                 negated: true,
             }),
+            infix: false,
         },
     );
 
@@ -579,6 +583,7 @@ fn parse_not_precedence() {
                 op: BinaryOperator::NotLike,
                 right: Box::new(Expr::Value(Value::SingleQuotedString("b".into()))),
             }),
+            infix: false,
         },
     );
 
@@ -593,6 +598,7 @@ fn parse_not_precedence() {
                 list: vec![Expr::Value(Value::SingleQuotedString("a".into()))],
                 negated: true,
             }),
+            infix: false,
         },
     );
 }
@@ -2604,6 +2610,7 @@ fn parse_exists_subquery() {
         Expr::UnaryOp {
             op: UnaryOperator::Not,
             expr: Box::new(Expr::Exists(Box::new(expected_inner))),
+            infix: false,
         },
         select.selection.unwrap(),
     );

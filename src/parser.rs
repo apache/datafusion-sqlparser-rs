@@ -250,6 +250,7 @@ impl<'a> Parser<'a> {
                 Keyword::NOT => Ok(Expr::UnaryOp {
                     op: UnaryOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
+                    infix: false,
                 }),
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
@@ -283,6 +284,31 @@ impl<'a> Parser<'a> {
                 },
             }, // End of Token::Word
             Token::Mult => Ok(Expr::Wildcard),
+            Token::Tilde => Ok(Expr::UnaryOp {
+                op: UnaryOperator::PGBitwiseNot,
+                expr: Box::new(self.parse_subexpr(0)?),
+                infix: false,
+            }),
+            Token::DoubleExclamationMark => Ok(Expr::UnaryOp {
+                op: UnaryOperator::PGInfixFactorial,
+                expr: Box::new(self.parse_subexpr(0)?),
+                infix: false,
+            }),
+            Token::SquareRoot => Ok(Expr::UnaryOp {
+                op: UnaryOperator::PGSqrt,
+                expr: Box::new(self.parse_subexpr(0)?),
+                infix: false,
+            }),
+            Token::CubeRoot => Ok(Expr::UnaryOp {
+                op: UnaryOperator::PGCbrt,
+                expr: Box::new(self.parse_subexpr(0)?),
+                infix: false,
+            }),
+            Token::Ampersat => Ok(Expr::UnaryOp {
+                op: UnaryOperator::PGAbs,
+                expr: Box::new(self.parse_subexpr(0)?),
+                infix: false,
+            }),
             tok @ Token::Minus | tok @ Token::Plus => {
                 let op = if tok == Token::Plus {
                     UnaryOperator::Plus
@@ -292,6 +318,7 @@ impl<'a> Parser<'a> {
                 Ok(Expr::UnaryOp {
                     op,
                     expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
+                    infix: false,
                 })
             }
             Token::Number(_)
@@ -658,6 +685,9 @@ impl<'a> Parser<'a> {
             Token::Caret => Some(BinaryOperator::BitwiseXor),
             Token::Ampersand => Some(BinaryOperator::BitwiseAnd),
             Token::Div => Some(BinaryOperator::Divide),
+            Token::ShiftLeft => Some(BinaryOperator::PGBitwiseShiftLeft),
+            Token::ShiftRight => Some(BinaryOperator::PGBitwiseShiftRight),
+            Token::Sharp => Some(BinaryOperator::PGBitwiseXor),
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
@@ -707,6 +737,13 @@ impl<'a> Parser<'a> {
             }
         } else if Token::DoubleColon == tok {
             self.parse_pg_cast(expr)
+        } else if Token::ExclamationMark == tok {
+            // PostgreSQL factorial operation
+            Ok(Expr::UnaryOp {
+                op: UnaryOperator::PGFactorial,
+                expr: Box::new(expr),
+                infix: true,
+            })
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             panic!("No infix parser for token {:?}", tok)
@@ -785,11 +822,12 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
             Token::Eq | Token::Lt | Token::LtEq | Token::Neq | Token::Gt | Token::GtEq => Ok(20),
             Token::Pipe => Ok(21),
-            Token::Caret => Ok(22),
+            Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(22),
             Token::Ampersand => Ok(23),
             Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
             Token::Mult | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
+            Token::ExclamationMark => Ok(50),
             _ => Ok(0),
         }
     }

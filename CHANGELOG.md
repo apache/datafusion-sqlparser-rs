@@ -10,11 +10,13 @@ Check https://github.com/ballista-compute/sqlparser-rs/commits/main for undocume
 
 ### Changed
 - Change the MySQL dialect to support `` `identifiers` `` quoted with backticks instead of the standard `"double-quoted"` identifiers (#247) - thanks @mashuai!
+- Update bigdecimal requirement from 0.1 to 0.2 (#268)
 
 ### Added
 - Enable dialect-specific behaviours in the parser (`dialect_of!()`) (#254) - thanks @eyalleshem!
 - Support named arguments in function invocations (`ARG_NAME => val`) (#250) - thanks @eyalleshem!
 - Support `TABLE()` functions in `FROM` (#253) - thanks @eyalleshem!
+- Support Snowflake's single-line comments starting with '#' or '//' (#264) - thanks @eyalleshem!
 - Support PostgreSQL `PREPARE`, `EXECUTE`, and `DEALLOCATE` (#243) - thanks @silathdiir!
 - Add SQLite dialect (#248) - thanks @mashuai!
 - Add Snowflake dialect (#259) - thanks @eyalleshem!

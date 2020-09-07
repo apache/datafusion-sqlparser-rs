@@ -16,11 +16,11 @@
 /// Run with `cargo run --example cli`
 use std::fs;
 
+use simple_logger::SimpleLogger;
 use sqlparser::dialect::*;
 use sqlparser::parser::Parser;
-
 fn main() {
-    simple_logger::init().unwrap();
+    SimpleLogger::new().init().unwrap();
 
     let filename = std::env::args().nth(1).expect(
         r#"

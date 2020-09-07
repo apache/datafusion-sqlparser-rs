@@ -21,6 +21,7 @@ use std::str::Chars;
 
 use super::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 use super::dialect::Dialect;
+use super::dialect::PostgreSqlDialect;
 use super::dialect::SnowflakeDialect;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -433,11 +434,15 @@ impl<'a> Tokenizer<'a> {
                 '|' => {
                     chars.next(); // consume the '|'
                     match chars.peek() {
-                        Some('/') => self.consume_and_return(chars, Token::SquareRoot),
+                        Some('/') if dialect_of!(self is PostgreSqlDialect) => {
+                            self.consume_and_return(chars, Token::SquareRoot)
+                        }
                         Some('|') => {
                             chars.next(); // consume the second '|'
                             match chars.peek() {
-                                Some('/') => self.consume_and_return(chars, Token::CubeRoot),
+                                Some('/') if dialect_of!(self is PostgreSqlDialect) => {
+                                    self.consume_and_return(chars, Token::CubeRoot)
+                                }
                                 _ => Ok(Some(Token::StringConcat)),
                             }
                         }
@@ -457,7 +462,9 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::Neq),
-                        Some('!') => self.consume_and_return(chars, Token::DoubleExclamationMark),
+                        Some('!') if dialect_of!(self is PostgreSqlDialect) => {
+                            self.consume_and_return(chars, Token::DoubleExclamationMark)
+                        }
                         _ => Ok(Some(Token::ExclamationMark)),
                     }
                 }
@@ -466,7 +473,9 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::LtEq),
                         Some('>') => self.consume_and_return(chars, Token::Neq),
-                        Some('<') => self.consume_and_return(chars, Token::ShiftLeft),
+                        Some('<') if dialect_of!(self is PostgreSqlDialect) => {
+                            self.consume_and_return(chars, Token::ShiftLeft)
+                        }
                         _ => Ok(Some(Token::Lt)),
                     }
                 }
@@ -501,9 +510,15 @@ impl<'a> Tokenizer<'a> {
                         comment,
                     })))
                 }
-                '~' => self.consume_and_return(chars, Token::Tilde),
-                '#' => self.consume_and_return(chars, Token::Sharp),
-                '@' => self.consume_and_return(chars, Token::Ampersat),
+                '~' if dialect_of!(self is PostgreSqlDialect) => {
+                    self.consume_and_return(chars, Token::Tilde)
+                }
+                '#' if dialect_of!(self is PostgreSqlDialect) => {
+                    self.consume_and_return(chars, Token::Sharp)
+                }
+                '@' if dialect_of!(self is PostgreSqlDialect) => {
+                    self.consume_and_return(chars, Token::Ampersat)
+                }
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),

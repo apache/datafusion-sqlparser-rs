@@ -16,9 +16,9 @@
 /// Run with `cargo run --example cli`
 use std::fs;
 
+use simple_logger::SimpleLogger;
 use sqlparser::dialect::*;
 use sqlparser::parser::Parser;
-use simple_logger::SimpleLogger;
 fn main() {
     let _ = SimpleLogger::new().init();
 

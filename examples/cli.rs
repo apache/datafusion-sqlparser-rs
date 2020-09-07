@@ -18,9 +18,9 @@ use std::fs;
 
 use sqlparser::dialect::*;
 use sqlparser::parser::Parser;
-
+use simple_logger::SimpleLogger;
 fn main() {
-    simple_logger::init().unwrap();
+    let _ = SimpleLogger::new().init();
 
     let filename = std::env::args().nth(1).expect(
         r#"

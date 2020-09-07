@@ -43,7 +43,7 @@ AST: [Query(Query { ctes: [], body: Select(Select { distinct: false, projection:
 ## Command line
 To parse a file and dump the results as JSON:
 ```
-$ cargo run --feature json_example --example cli FILENAME.sql [--dialectname]
+$ cargo run --features json_example --example cli FILENAME.sql [--dialectname]
 ```
 
 ## SQL compliance

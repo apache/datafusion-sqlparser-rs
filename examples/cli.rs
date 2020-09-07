@@ -20,7 +20,7 @@ use simple_logger::SimpleLogger;
 use sqlparser::dialect::*;
 use sqlparser::parser::Parser;
 fn main() {
-    let _ = SimpleLogger::new().init();
+    SimpleLogger::new().init().unwrap();
 
     let filename = std::env::args().nth(1).expect(
         r#"

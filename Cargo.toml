@@ -36,6 +36,7 @@ simple_logger = "1.6"
 matches = "0.1"
 
 [package.metadata.release]
-# We want to ensure we don't publish via `cargo release` since Actions
-# handles this for us.
+# Instruct `cargo release` to not run `cargo publish` locally:
+# https://github.com/sunng87/cargo-release/blob/master/docs/reference.md#config-fields
+# See docs/releasing.md for details.
 disable-publish = true

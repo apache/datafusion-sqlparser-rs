@@ -21,11 +21,17 @@ pub enum UnaryOperator {
     Plus,
     Minus,
     Not,
+    /// Bitwise Not, e.g. `~9` (PostgreSQL-specific)
     PGBitwiseNot,
-    PGSqrt,
-    PGCbrt,
-    PGFactorial,
-    PGInfixFactorial,
+    /// Square root, e.g. `|/9` (PostgreSQL-specific)
+    PGSquareRoot,
+    /// Cube root, e.g. `||/27` (PostgreSQL-specific)
+    PGCubeRoot,
+    /// Factorial, e.g. `9!` (PostgreSQL-specific)
+    PGPostfixFactorial,
+    /// Factorial, e.g. `!!9` (PostgreSQL-specific)
+    PGPrefixFactorial,
+    /// Absolute value, e.g. `@ -9` (PostgreSQL-specific)
     PGAbs,
 }
 
@@ -36,10 +42,10 @@ impl fmt::Display for UnaryOperator {
             UnaryOperator::Minus => "-",
             UnaryOperator::Not => "NOT",
             UnaryOperator::PGBitwiseNot => "~",
-            UnaryOperator::PGSqrt => "|/",
-            UnaryOperator::PGCbrt => "||/",
-            UnaryOperator::PGFactorial => "!",
-            UnaryOperator::PGInfixFactorial => "!!",
+            UnaryOperator::PGSquareRoot => "|/",
+            UnaryOperator::PGCubeRoot => "||/",
+            UnaryOperator::PGPostfixFactorial => "!",
+            UnaryOperator::PGPrefixFactorial => "!!",
             UnaryOperator::PGAbs => "@",
         })
     }

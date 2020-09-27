@@ -21,7 +21,6 @@ use std::str::Chars;
 
 use super::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 use super::dialect::Dialect;
-use super::dialect::PostgreSqlDialect;
 use super::dialect::SnowflakeDialect;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -103,24 +102,24 @@ pub enum Token {
     RBrace,
     /// Right Arrow `=>`
     RArrow,
-    /// Sharp `#` use for PostgreSQL Bitwise XOR operator
+    /// Sharp `#` used for PostgreSQL Bitwise XOR operator
     Sharp,
-    /// Tilde `~` use for PostgreSQL Bitwise NOT operator
+    /// Tilde `~` used for PostgreSQL Bitwise NOT operator
     Tilde,
-    /// Bitwise left operator `<<` use for PostgreSQL
+    /// `<<`, a bitwise shift left operator in PostgreSQL
     ShiftLeft,
-    /// Bitwise right operator `>>` use for PostgreSQL
+    /// `>>`, a bitwise shift right operator in PostgreSQL
     ShiftRight,
-    /// Exclamation Mark `!` use for PostgreSQL factorial operator
+    /// Exclamation Mark `!` used for PostgreSQL factorial operator
     ExclamationMark,
-    /// Exclamation Mark `!!` use for PostgreSQL prefix factorial operator
+    /// Double Exclamation Mark `!!` used for PostgreSQL prefix factorial operator
     DoubleExclamationMark,
-    /// Ampersat `@` use for PostgreSQL abs operator
-    Ampersat,
-    /// PostgreSQL square root math operator
-    SquareRoot,
-    /// PostgreSQL cube root math operator
-    CubeRoot,
+    /// AtSign `@` used for PostgreSQL abs operator
+    AtSign,
+    /// `|/`, a square root math operator in PostgreSQL
+    PGSquareRoot,
+    /// `||/` , a cube root math operator in PostgreSQL
+    PGCubeRoot,
 }
 
 impl fmt::Display for Token {
@@ -166,11 +165,11 @@ impl fmt::Display for Token {
             Token::ExclamationMark => f.write_str("!"),
             Token::DoubleExclamationMark => f.write_str("!!"),
             Token::Tilde => f.write_str("~"),
-            Token::Ampersat => f.write_str("@"),
+            Token::AtSign => f.write_str("@"),
             Token::ShiftLeft => f.write_str("<<"),
             Token::ShiftRight => f.write_str(">>"),
-            Token::SquareRoot => f.write_str("|/"),
-            Token::CubeRoot => f.write_str("||/"),
+            Token::PGSquareRoot => f.write_str("|/"),
+            Token::PGCubeRoot => f.write_str("||/"),
         }
     }
 }
@@ -434,15 +433,11 @@ impl<'a> Tokenizer<'a> {
                 '|' => {
                     chars.next(); // consume the '|'
                     match chars.peek() {
-                        Some('/') if dialect_of!(self is PostgreSqlDialect) => {
-                            self.consume_and_return(chars, Token::SquareRoot)
-                        }
+                        Some('/') => self.consume_and_return(chars, Token::PGSquareRoot),
                         Some('|') => {
                             chars.next(); // consume the second '|'
                             match chars.peek() {
-                                Some('/') if dialect_of!(self is PostgreSqlDialect) => {
-                                    self.consume_and_return(chars, Token::CubeRoot)
-                                }
+                                Some('/') => self.consume_and_return(chars, Token::PGCubeRoot),
                                 _ => Ok(Some(Token::StringConcat)),
                             }
                         }
@@ -462,9 +457,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::Neq),
-                        Some('!') if dialect_of!(self is PostgreSqlDialect) => {
-                            self.consume_and_return(chars, Token::DoubleExclamationMark)
-                        }
+                        Some('!') => self.consume_and_return(chars, Token::DoubleExclamationMark),
                         _ => Ok(Some(Token::ExclamationMark)),
                     }
                 }
@@ -473,9 +466,7 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::LtEq),
                         Some('>') => self.consume_and_return(chars, Token::Neq),
-                        Some('<') if dialect_of!(self is PostgreSqlDialect) => {
-                            self.consume_and_return(chars, Token::ShiftLeft)
-                        }
+                        Some('<') => self.consume_and_return(chars, Token::ShiftLeft),
                         _ => Ok(Some(Token::Lt)),
                     }
                 }
@@ -510,15 +501,9 @@ impl<'a> Tokenizer<'a> {
                         comment,
                     })))
                 }
-                '~' if dialect_of!(self is PostgreSqlDialect) => {
-                    self.consume_and_return(chars, Token::Tilde)
-                }
-                '#' if dialect_of!(self is PostgreSqlDialect) => {
-                    self.consume_and_return(chars, Token::Sharp)
-                }
-                '@' if dialect_of!(self is PostgreSqlDialect) => {
-                    self.consume_and_return(chars, Token::Ampersat)
-                }
+                '~' => self.consume_and_return(chars, Token::Tilde),
+                '#' => self.consume_and_return(chars, Token::Sharp),
+                '@' => self.consume_and_return(chars, Token::AtSign),
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),
@@ -641,7 +626,6 @@ mod tests {
     use super::super::dialect::GenericDialect;
     use super::super::dialect::MsSqlDialect;
     use super::*;
-    use crate::dialect::PostgreSqlDialect;
 
     #[test]
     fn tokenize_select_1() {
@@ -1011,65 +995,6 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_word("foo", None),
         ];
-        compare(expected, tokens);
-    }
-
-    #[test]
-    fn tokenize_postgresql_bitwise_operations() {
-        let sql = String::from("SELECT ~one << two # three >> four");
-        let dialect = PostgreSqlDialect {};
-        let mut tokenizer = Tokenizer::new(&dialect, &sql);
-        let tokens = tokenizer.tokenize().unwrap();
-
-        let expected = vec![
-            Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
-            Token::Tilde,
-            Token::make_word("one", None),
-            Token::Whitespace(Whitespace::Space),
-            Token::ShiftLeft,
-            Token::Whitespace(Whitespace::Space),
-            Token::make_word("two", None),
-            Token::Whitespace(Whitespace::Space),
-            Token::Sharp,
-            Token::Whitespace(Whitespace::Space),
-            Token::make_word("three", None),
-            Token::Whitespace(Whitespace::Space),
-            Token::ShiftRight,
-            Token::Whitespace(Whitespace::Space),
-            Token::make_word("four", None),
-        ];
-
-        compare(expected, tokens);
-    }
-
-    #[test]
-    fn tokenize_postgresql_math_operations() {
-        let sql = String::from("SELECT !!5 5! @-6 |/4 ||/8");
-        let dialect = PostgreSqlDialect {};
-        let mut tokenizer = Tokenizer::new(&dialect, &sql);
-        let tokens = tokenizer.tokenize().unwrap();
-
-        let expected = vec![
-            Token::make_keyword("SELECT"),
-            Token::Whitespace(Whitespace::Space),
-            Token::DoubleExclamationMark,
-            Token::Number("5".to_string()),
-            Token::Whitespace(Whitespace::Space),
-            Token::Number("5".to_string()),
-            Token::ExclamationMark,
-            Token::Whitespace(Whitespace::Space),
-            Token::Ampersat,
-            Token::Minus,
-            Token::Number("6".to_string()),
-            Token::Whitespace(Whitespace::Space),
-            Token::SquareRoot,
-            Token::Number("4".to_string()),
-            Token::Whitespace(Whitespace::Space),
-            Token::CubeRoot,
-            Token::Number("8".to_string()),
-        ];
-
         compare(expected, tokens);
     }
 

@@ -573,38 +573,21 @@ fn parse_pg_bitwise_binary_ops() {
 }
 
 #[test]
-fn parse_pg_bitwise_unary_ops() {
-    let bitwise_ops = &[("~", UnaryOperator::PGBitwiseNot)];
-
-    for (str_op, op) in bitwise_ops {
-        let select = pg().verified_only_select(&format!("SELECT {} a", &str_op));
-        assert_eq!(
-            SelectItem::UnnamedExpr(Expr::UnaryOp {
-                op: op.clone(),
-                expr: Box::new(Expr::Identifier(Ident::new("a"))),
-                infix: false,
-            }),
-            select.projection[0]
-        );
-    }
-}
-
-#[test]
-fn parse_pg_infix_math_ops() {
-    let bitwise_ops = &[
-        ("|/", UnaryOperator::PGSqrt),
-        ("||/", UnaryOperator::PGCbrt),
-        ("!!", UnaryOperator::PGInfixFactorial),
+fn parse_pg_unary_ops() {
+    let pg_unary_ops = &[
+        ("~", UnaryOperator::PGBitwiseNot),
+        ("|/", UnaryOperator::PGSquareRoot),
+        ("||/", UnaryOperator::PGCubeRoot),
+        ("!!", UnaryOperator::PGPrefixFactorial),
         ("@", UnaryOperator::PGAbs),
     ];
 
-    for (str_op, op) in bitwise_ops {
+    for (str_op, op) in pg_unary_ops {
         let select = pg().verified_only_select(&format!("SELECT {} a", &str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: op.clone(),
                 expr: Box::new(Expr::Identifier(Ident::new("a"))),
-                infix: false,
             }),
             select.projection[0]
         );
@@ -612,16 +595,15 @@ fn parse_pg_infix_math_ops() {
 }
 
 #[test]
-fn parse_pg_math_ops() {
-    let bitwise_ops = &[("!", UnaryOperator::PGFactorial)];
+fn parse_pg_postfix_factorial() {
+    let postfix_factorial = &[("!", UnaryOperator::PGPostfixFactorial)];
 
-    for (str_op, op) in bitwise_ops {
+    for (str_op, op) in postfix_factorial {
         let select = pg().verified_only_select(&format!("SELECT a{}", &str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: op.clone(),
                 expr: Box::new(Expr::Identifier(Ident::new("a"))),
-                infix: true,
             }),
             select.projection[0]
         );

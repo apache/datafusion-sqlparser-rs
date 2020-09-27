@@ -191,11 +191,7 @@ pub enum Expr {
         right: Box<Expr>,
     },
     /// Unary operation e.g. `NOT foo`
-    UnaryOp {
-        op: UnaryOperator,
-        expr: Box<Expr>,
-        infix: bool,
-    },
+    UnaryOp { op: UnaryOperator, expr: Box<Expr> },
     /// CAST an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
     Cast {
         expr: Box<Expr>,
@@ -286,8 +282,8 @@ impl fmt::Display for Expr {
                 high
             ),
             Expr::BinaryOp { left, op, right } => write!(f, "{} {} {}", left, op, right),
-            Expr::UnaryOp { op, expr, infix } => {
-                if *infix {
+            Expr::UnaryOp { op, expr } => {
+                if op == &UnaryOperator::PGPostfixFactorial {
                     write!(f, "{}{}", expr, op)
                 } else {
                     write!(f, "{} {}", op, expr)

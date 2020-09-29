@@ -283,29 +283,30 @@ impl<'a> Parser<'a> {
                 },
             }, // End of Token::Word
             Token::Mult => Ok(Expr::Wildcard),
-            tok @ Token::Plus
-            | tok @ Token::Minus
-            | tok @ Token::DoubleExclamationMark
+            tok @ Token::Minus | tok @ Token::Plus => {
+                let op = if tok == Token::Plus {
+                    UnaryOperator::Plus
+                } else {
+                    UnaryOperator::Minus
+                };
+                Ok(Expr::UnaryOp {
+                    op,
+                    expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
+                })
+            }
+            tok @ Token::DoubleExclamationMark
             | tok @ Token::PGSquareRoot
             | tok @ Token::PGCubeRoot
             | tok @ Token::AtSign
-            | tok @ Token::Tilde => {
+            | tok @ Token::Tilde
+                if dialect_of!(self is PostgreSqlDialect) =>
+            {
                 let op = match tok {
-                    Token::Plus => UnaryOperator::Plus,
-                    Token::Minus => UnaryOperator::Minus,
-                    Token::DoubleExclamationMark if dialect_of!(self is PostgreSqlDialect) => {
-                        UnaryOperator::PGPrefixFactorial
-                    }
-                    Token::PGSquareRoot if dialect_of!(self is PostgreSqlDialect) => {
-                        UnaryOperator::PGSquareRoot
-                    }
-                    Token::PGCubeRoot if dialect_of!(self is PostgreSqlDialect) => {
-                        UnaryOperator::PGCubeRoot
-                    }
-                    Token::AtSign if dialect_of!(self is PostgreSqlDialect) => UnaryOperator::PGAbs,
-                    Token::Tilde if dialect_of!(self is PostgreSqlDialect) => {
-                        UnaryOperator::PGBitwiseNot
-                    }
+                    Token::DoubleExclamationMark => UnaryOperator::PGPrefixFactorial,
+                    Token::PGSquareRoot => UnaryOperator::PGSquareRoot,
+                    Token::PGCubeRoot => UnaryOperator::PGCubeRoot,
+                    Token::AtSign => UnaryOperator::PGAbs,
+                    Token::Tilde => UnaryOperator::PGBitwiseNot,
                     _ => unreachable!(),
                 };
                 Ok(Expr::UnaryOp {

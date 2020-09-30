@@ -343,7 +343,7 @@ fn parse_select_count_distinct() {
             name: ObjectName(vec![Ident::new("COUNT")]),
             args: vec![FunctionArg::Unnamed(Expr::UnaryOp {
                 op: UnaryOperator::Plus,
-                expr: Box::new(Expr::Identifier(Ident::new("x")))
+                expr: Box::new(Expr::Identifier(Ident::new("x"))),
             })],
             over: None,
             distinct: true,

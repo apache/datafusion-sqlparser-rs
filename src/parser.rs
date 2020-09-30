@@ -294,6 +294,26 @@ impl<'a> Parser<'a> {
                     expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
                 })
             }
+            tok @ Token::DoubleExclamationMark
+            | tok @ Token::PGSquareRoot
+            | tok @ Token::PGCubeRoot
+            | tok @ Token::AtSign
+            | tok @ Token::Tilde
+                if dialect_of!(self is PostgreSqlDialect) =>
+            {
+                let op = match tok {
+                    Token::DoubleExclamationMark => UnaryOperator::PGPrefixFactorial,
+                    Token::PGSquareRoot => UnaryOperator::PGSquareRoot,
+                    Token::PGCubeRoot => UnaryOperator::PGCubeRoot,
+                    Token::AtSign => UnaryOperator::PGAbs,
+                    Token::Tilde => UnaryOperator::PGBitwiseNot,
+                    _ => unreachable!(),
+                };
+                Ok(Expr::UnaryOp {
+                    op,
+                    expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
+                })
+            }
             Token::Number(_)
             | Token::SingleQuotedString(_)
             | Token::NationalStringLiteral(_)
@@ -658,6 +678,15 @@ impl<'a> Parser<'a> {
             Token::Caret => Some(BinaryOperator::BitwiseXor),
             Token::Ampersand => Some(BinaryOperator::BitwiseAnd),
             Token::Div => Some(BinaryOperator::Divide),
+            Token::ShiftLeft if dialect_of!(self is PostgreSqlDialect) => {
+                Some(BinaryOperator::PGBitwiseShiftLeft)
+            }
+            Token::ShiftRight if dialect_of!(self is PostgreSqlDialect) => {
+                Some(BinaryOperator::PGBitwiseShiftRight)
+            }
+            Token::Sharp if dialect_of!(self is PostgreSqlDialect) => {
+                Some(BinaryOperator::PGBitwiseXor)
+            }
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
@@ -707,6 +736,12 @@ impl<'a> Parser<'a> {
             }
         } else if Token::DoubleColon == tok {
             self.parse_pg_cast(expr)
+        } else if Token::ExclamationMark == tok {
+            // PostgreSQL factorial operation
+            Ok(Expr::UnaryOp {
+                op: UnaryOperator::PGPostfixFactorial,
+                expr: Box::new(expr),
+            })
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             panic!("No infix parser for token {:?}", tok)
@@ -785,11 +820,12 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
             Token::Eq | Token::Lt | Token::LtEq | Token::Neq | Token::Gt | Token::GtEq => Ok(20),
             Token::Pipe => Ok(21),
-            Token::Caret => Ok(22),
+            Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(22),
             Token::Ampersand => Ok(23),
             Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
             Token::Mult | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
+            Token::ExclamationMark => Ok(50),
             _ => Ok(0),
         }
     }

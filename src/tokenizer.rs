@@ -54,7 +54,7 @@ pub enum Token {
     Neq,
     /// Less Than operator `<`
     Lt,
-    /// Greater han operator `>`
+    /// Greater Than operator `>`
     Gt,
     /// Less Than Or Equals operator `<=`
     LtEq,
@@ -102,6 +102,24 @@ pub enum Token {
     RBrace,
     /// Right Arrow `=>`
     RArrow,
+    /// Sharp `#` used for PostgreSQL Bitwise XOR operator
+    Sharp,
+    /// Tilde `~` used for PostgreSQL Bitwise NOT operator
+    Tilde,
+    /// `<<`, a bitwise shift left operator in PostgreSQL
+    ShiftLeft,
+    /// `>>`, a bitwise shift right operator in PostgreSQL
+    ShiftRight,
+    /// Exclamation Mark `!` used for PostgreSQL factorial operator
+    ExclamationMark,
+    /// Double Exclamation Mark `!!` used for PostgreSQL prefix factorial operator
+    DoubleExclamationMark,
+    /// AtSign `@` used for PostgreSQL abs operator
+    AtSign,
+    /// `|/`, a square root math operator in PostgreSQL
+    PGSquareRoot,
+    /// `||/` , a cube root math operator in PostgreSQL
+    PGCubeRoot,
 }
 
 impl fmt::Display for Token {
@@ -143,6 +161,15 @@ impl fmt::Display for Token {
             Token::LBrace => f.write_str("{"),
             Token::RBrace => f.write_str("}"),
             Token::RArrow => f.write_str("=>"),
+            Token::Sharp => f.write_str("#"),
+            Token::ExclamationMark => f.write_str("!"),
+            Token::DoubleExclamationMark => f.write_str("!!"),
+            Token::Tilde => f.write_str("~"),
+            Token::AtSign => f.write_str("@"),
+            Token::ShiftLeft => f.write_str("<<"),
+            Token::ShiftRight => f.write_str(">>"),
+            Token::PGSquareRoot => f.write_str("|/"),
+            Token::PGCubeRoot => f.write_str("||/"),
         }
     }
 }
@@ -406,7 +433,14 @@ impl<'a> Tokenizer<'a> {
                 '|' => {
                     chars.next(); // consume the '|'
                     match chars.peek() {
-                        Some('|') => self.consume_and_return(chars, Token::StringConcat),
+                        Some('/') => self.consume_and_return(chars, Token::PGSquareRoot),
+                        Some('|') => {
+                            chars.next(); // consume the second '|'
+                            match chars.peek() {
+                                Some('/') => self.consume_and_return(chars, Token::PGCubeRoot),
+                                _ => Ok(Some(Token::StringConcat)),
+                            }
+                        }
                         // Bitshift '|' operator
                         _ => Ok(Some(Token::Pipe)),
                     }
@@ -423,7 +457,8 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::Neq),
-                        _ => self.tokenizer_error("Expected to see '=' after '!' character"),
+                        Some('!') => self.consume_and_return(chars, Token::DoubleExclamationMark),
+                        _ => Ok(Some(Token::ExclamationMark)),
                     }
                 }
                 '<' => {
@@ -431,6 +466,7 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::LtEq),
                         Some('>') => self.consume_and_return(chars, Token::Neq),
+                        Some('<') => self.consume_and_return(chars, Token::ShiftLeft),
                         _ => Ok(Some(Token::Lt)),
                     }
                 }
@@ -438,6 +474,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::GtEq),
+                        Some('>') => self.consume_and_return(chars, Token::ShiftRight),
                         _ => Ok(Some(Token::Gt)),
                     }
                 }
@@ -464,6 +501,9 @@ impl<'a> Tokenizer<'a> {
                         comment,
                     })))
                 }
+                '~' => self.consume_and_return(chars, Token::Tilde),
+                '#' => self.consume_and_return(chars, Token::Sharp),
+                '@' => self.consume_and_return(chars, Token::AtSign),
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),

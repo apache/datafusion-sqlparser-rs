@@ -282,7 +282,13 @@ impl fmt::Display for Expr {
                 high
             ),
             Expr::BinaryOp { left, op, right } => write!(f, "{} {} {}", left, op, right),
-            Expr::UnaryOp { op, expr } => write!(f, "{} {}", op, expr),
+            Expr::UnaryOp { op, expr } => {
+                if op == &UnaryOperator::PGPostfixFactorial {
+                    write!(f, "{}{}", expr, op)
+                } else {
+                    write!(f, "{} {}", op, expr)
+                }
+            }
             Expr::Cast { expr, data_type } => write!(f, "CAST({} AS {})", expr, data_type),
             Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
             Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),

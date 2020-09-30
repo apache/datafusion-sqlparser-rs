@@ -551,6 +551,65 @@ fn parse_prepare() {
     );
 }
 
+#[test]
+fn parse_pg_bitwise_binary_ops() {
+    let bitwise_ops = &[
+        ("#", BinaryOperator::PGBitwiseXor),
+        (">>", BinaryOperator::PGBitwiseShiftRight),
+        ("<<", BinaryOperator::PGBitwiseShiftLeft),
+    ];
+
+    for (str_op, op) in bitwise_ops {
+        let select = pg().verified_only_select(&format!("SELECT a {} b", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: op.clone(),
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }),
+            select.projection[0]
+        );
+    }
+}
+
+#[test]
+fn parse_pg_unary_ops() {
+    let pg_unary_ops = &[
+        ("~", UnaryOperator::PGBitwiseNot),
+        ("|/", UnaryOperator::PGSquareRoot),
+        ("||/", UnaryOperator::PGCubeRoot),
+        ("!!", UnaryOperator::PGPrefixFactorial),
+        ("@", UnaryOperator::PGAbs),
+    ];
+
+    for (str_op, op) in pg_unary_ops {
+        let select = pg().verified_only_select(&format!("SELECT {} a", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::UnaryOp {
+                op: op.clone(),
+                expr: Box::new(Expr::Identifier(Ident::new("a"))),
+            }),
+            select.projection[0]
+        );
+    }
+}
+
+#[test]
+fn parse_pg_postfix_factorial() {
+    let postfix_factorial = &[("!", UnaryOperator::PGPostfixFactorial)];
+
+    for (str_op, op) in postfix_factorial {
+        let select = pg().verified_only_select(&format!("SELECT a{}", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::UnaryOp {
+                op: op.clone(),
+                expr: Box::new(Expr::Identifier(Ident::new("a"))),
+            }),
+            select.projection[0]
+        );
+    }
+}
+
 fn pg() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {})],

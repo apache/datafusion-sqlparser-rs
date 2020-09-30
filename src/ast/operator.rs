@@ -21,6 +21,18 @@ pub enum UnaryOperator {
     Plus,
     Minus,
     Not,
+    /// Bitwise Not, e.g. `~9` (PostgreSQL-specific)
+    PGBitwiseNot,
+    /// Square root, e.g. `|/9` (PostgreSQL-specific)
+    PGSquareRoot,
+    /// Cube root, e.g. `||/27` (PostgreSQL-specific)
+    PGCubeRoot,
+    /// Factorial, e.g. `9!` (PostgreSQL-specific)
+    PGPostfixFactorial,
+    /// Factorial, e.g. `!!9` (PostgreSQL-specific)
+    PGPrefixFactorial,
+    /// Absolute value, e.g. `@ -9` (PostgreSQL-specific)
+    PGAbs,
 }
 
 impl fmt::Display for UnaryOperator {
@@ -29,6 +41,12 @@ impl fmt::Display for UnaryOperator {
             UnaryOperator::Plus => "+",
             UnaryOperator::Minus => "-",
             UnaryOperator::Not => "NOT",
+            UnaryOperator::PGBitwiseNot => "~",
+            UnaryOperator::PGSquareRoot => "|/",
+            UnaryOperator::PGCubeRoot => "||/",
+            UnaryOperator::PGPostfixFactorial => "!",
+            UnaryOperator::PGPrefixFactorial => "!!",
+            UnaryOperator::PGAbs => "@",
         })
     }
 }
@@ -56,6 +74,9 @@ pub enum BinaryOperator {
     BitwiseOr,
     BitwiseAnd,
     BitwiseXor,
+    PGBitwiseXor,
+    PGBitwiseShiftLeft,
+    PGBitwiseShiftRight,
 }
 
 impl fmt::Display for BinaryOperator {
@@ -80,6 +101,9 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::BitwiseOr => "|",
             BinaryOperator::BitwiseAnd => "&",
             BinaryOperator::BitwiseXor => "^",
+            BinaryOperator::PGBitwiseXor => "#",
+            BinaryOperator::PGBitwiseShiftLeft => "<<",
+            BinaryOperator::PGBitwiseShiftRight => ">>",
         })
     }
 }

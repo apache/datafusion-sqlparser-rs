@@ -301,6 +301,33 @@ fn parse_bad_if_not_exists() {
 }
 
 #[test]
+fn parse_create_schema_if_not_exists() {
+    let sql = "CREATE SCHEMA IF NOT EXISTS schema_name";
+    let ast = pg().verified_stmt(sql);
+    match ast {
+        Statement::CreateSchema {
+            if_not_exists: true,
+            schema_name,
+        } => assert_eq!("schema_name", schema_name.to_string()),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_drop_schema_if_exists() {
+    let sql = "DROP SCHEMA IF EXISTS schema_name";
+    let ast = pg().verified_stmt(sql);
+    match ast {
+        Statement::Drop {
+            object_type,
+            if_exists: true,
+            ..
+        } => assert_eq!(object_type, ObjectType::Schema),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_copy_example() {
     let sql = r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM stdin;
 1	PENELOPE	GUINESS	2006-02-15 09:34:33 0.11111

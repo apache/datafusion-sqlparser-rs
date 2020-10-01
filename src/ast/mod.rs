@@ -558,7 +558,10 @@ pub enum Statement {
     /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
     Rollback { chain: bool },
     /// CREATE SCHEMA
-    CreateSchema { schema_name: ObjectName },
+    CreateSchema {
+        schema_name: ObjectName,
+        if_not_exists: bool,
+    },
     /// `ASSERT <condition> [AS <message>]`
     Assert {
         condition: Expr,
@@ -829,7 +832,19 @@ impl fmt::Display for Statement {
             Statement::Rollback { chain } => {
                 write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" },)
             }
-            Statement::CreateSchema { schema_name } => write!(f, "CREATE SCHEMA {}", schema_name),
+            Statement::CreateSchema {
+                schema_name,
+                if_not_exists,
+            } => write!(
+                f,
+                "CREATE SCHEMA{if_not_exists}{name}",
+                if_not_exists = if *if_not_exists {
+                    " IF NOT EXISTS "
+                } else {
+                    " "
+                },
+                name = schema_name
+            ),
             Statement::Assert { condition, message } => {
                 write!(f, "ASSERT {}", condition)?;
                 if let Some(m) = message {

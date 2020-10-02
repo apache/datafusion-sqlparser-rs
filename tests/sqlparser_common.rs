@@ -1204,7 +1204,7 @@ fn parse_create_schema() {
     let sql = "CREATE SCHEMA X";
 
     match verified_stmt(sql) {
-        Statement::CreateSchema { schema_name } => {
+        Statement::CreateSchema { schema_name, .. } => {
             assert_eq!(schema_name.to_string(), "X".to_owned())
         }
         _ => unreachable!(),

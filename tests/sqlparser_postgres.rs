@@ -303,7 +303,7 @@ fn parse_bad_if_not_exists() {
 #[test]
 fn parse_create_schema_if_not_exists() {
     let sql = "CREATE SCHEMA IF NOT EXISTS schema_name";
-    let ast = pg().verified_stmt(sql);
+    let ast = pg_and_generic().verified_stmt(sql);
     match ast {
         Statement::CreateSchema {
             if_not_exists: true,

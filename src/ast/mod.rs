@@ -837,12 +837,8 @@ impl fmt::Display for Statement {
                 if_not_exists,
             } => write!(
                 f,
-                "CREATE SCHEMA{if_not_exists}{name}",
-                if_not_exists = if *if_not_exists {
-                    " IF NOT EXISTS "
-                } else {
-                    " "
-                },
+                "CREATE SCHEMA {if_not_exists}{name}",
+                if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                 name = schema_name
             ),
             Statement::Assert { condition, message } => {

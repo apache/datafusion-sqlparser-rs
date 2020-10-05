@@ -18,12 +18,14 @@ Check https://github.com/ballista-compute/sqlparser-rs/commits/main for undocume
 - Support `TABLE()` functions in `FROM` (#253) - thanks @eyalleshem!
 - Support Snowflake's single-line comments starting with '#' or '//' (#264) - thanks @eyalleshem!
 - Support PostgreSQL `PREPARE`, `EXECUTE`, and `DEALLOCATE` (#243) - thanks @silathdiir!
+- Support PostgreSQL math operators (#267) - thanks @alex-dukhno!
 - Add SQLite dialect (#248) - thanks @mashuai!
 - Add Snowflake dialect (#259) - thanks @eyalleshem!
 - DDL:
     - Support `OR REPLACE` in `CREATE VIEW`/`TABLE` (#239)  - thanks @Dandandan!
     - Support specifying `ASC`/`DESC` in index columns (#249) - thanks @mashuai!
     - Support SQLite `AUTOINCREMENT` and MySQL `AUTO_INCREMENT` column option in `CREATE TABLE` (#234) - thanks @mashuai!
+    - Support PostgreSQL `IF NOT EXISTS` for `CREATE SCHEMA` (#276) - thanks @alex-dukhno!
 
 ### Fixed
 - Fix a typo in `JSONFILE` serialization, introduced in 0.3.1 (#237)

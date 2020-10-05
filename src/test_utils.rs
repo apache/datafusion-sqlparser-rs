@@ -143,3 +143,19 @@ pub fn expr_from_projection(item: &SelectItem) -> &Expr {
 pub fn number(n: &'static str) -> Value {
     Value::Number(n.parse().unwrap())
 }
+
+pub fn table(name: impl Into<String>) -> TableFactor {
+    TableFactor::Table {
+        name: ObjectName(vec![Ident::new(name.into())]),
+        alias: None,
+        args: vec![],
+        with_hints: vec![],
+    }
+}
+
+pub fn join(relation: TableFactor) -> Join {
+    Join {
+        relation,
+        join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+    }
+}

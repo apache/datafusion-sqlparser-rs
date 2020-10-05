@@ -19,14 +19,13 @@
 //! dialect-specific parsing rules).
 
 #[macro_use]
-#[path = "macros/mod.rs"]
-mod macros;
+mod test_utils;
+use test_utils::{all_dialects, expr_from_projection, join, number, only, table};
 
 use matches::assert_matches;
 use sqlparser::ast::*;
 use sqlparser::dialect::keywords::ALL_KEYWORDS;
 use sqlparser::parser::ParserError;
-use sqlparser::test_utils::{all_dialects, expr_from_projection, join, number, only, table};
 
 #[test]
 fn parse_insert_values() {

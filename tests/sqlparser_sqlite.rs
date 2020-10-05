@@ -14,9 +14,12 @@
 //! Test SQL syntax specific to SQLite. The parser based on the
 //! generic dialect is also tested (on the inputs it can handle).
 
+#[macro_use]
+mod test_utils;
+use test_utils::*;
+
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SQLiteDialect};
-use sqlparser::test_utils::*;
 use sqlparser::tokenizer::Token;
 
 #[test]

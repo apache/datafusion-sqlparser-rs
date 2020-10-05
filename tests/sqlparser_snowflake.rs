@@ -10,11 +10,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-#[path = "macros/mod.rs"]
-mod macros;
+#![warn(clippy::all)]
+//! Test SQL syntax specific to Snowflake. The parser based on the
+//! generic dialect is also tested (on the inputs it can handle).
 
-use sqlparser::test_utils::*;
+#[macro_use]
+mod test_utils;
+use test_utils::*;
+
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SnowflakeDialect};
 use sqlparser::tokenizer::*;

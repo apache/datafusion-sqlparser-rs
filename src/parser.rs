@@ -1795,11 +1795,14 @@ impl<'a> Parser<'a> {
     /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
     /// expect the initial keyword to be already consumed
     pub fn parse_query(&mut self) -> Result<Query, ParserError> {
-        let ctes = if self.parse_keyword(Keyword::WITH) {
+        let with = if self.parse_keyword(Keyword::WITH) {
             // TODO: optional RECURSIVE
-            self.parse_comma_separated(Parser::parse_cte)?
+            Some(With {
+                recursive: self.parse_keyword(Keyword::RECURSIVE),
+                cte_tables: self.parse_comma_separated(Parser::parse_cte)?
+            })
         } else {
-            vec![]
+            None
         };
 
         let body = self.parse_query_body(0)?;
@@ -1829,7 +1832,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Query {
-            ctes,
+            with,
             body,
             limit,
             order_by,

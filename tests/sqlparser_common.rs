@@ -2389,7 +2389,7 @@ fn parse_ctes() {
 
     fn assert_ctes_in_select(expected: &[&str], sel: &Query) {
         for (i, exp) in expected.iter().enumerate() {
-            let Cte { alias, query } = &sel.ctes[i];
+            let Cte { alias, query } = &sel.with.as_ref().unwrap().cte_tables[i];
             assert_eq!(*exp, query.to_string());
             assert_eq!(
                 if i == 0 {
@@ -2432,7 +2432,7 @@ fn parse_ctes() {
     // CTE in a CTE...
     let sql = &format!("WITH outer_cte AS ({}) SELECT * FROM outer_cte", with);
     let select = verified_query(sql);
-    assert_ctes_in_select(&cte_sqls, &only(&select.ctes).query);
+    assert_ctes_in_select(&cte_sqls, &only(&select.with.unwrap().cte_tables).query);
 }
 
 #[test]
@@ -2441,8 +2441,32 @@ fn parse_cte_renamed_columns() {
     let query = all_dialects().verified_query(sql);
     assert_eq!(
         vec![Ident::new("col1"), Ident::new("col2")],
-        query.ctes.first().unwrap().alias.columns
+        query.with.unwrap().cte_tables.first().unwrap().alias.columns
     );
+}
+
+#[test]
+fn parse_recursive_cte() {
+    let cte_query = "SELECT 1 UNION ALL SELECT val + 1 FROM nums WHERE val < 10".to_owned();
+    let sql = &format!("WITH RECURSIVE nums (val) AS ({}) SELECT * FROM nums", cte_query);
+
+    let cte_query = verified_query(&cte_query);
+    let query = verified_query(sql);
+
+    let with = query.with.as_ref().unwrap();
+    assert!(with.recursive);
+    assert_eq!(with.cte_tables.len(), 1);
+    let expected = Cte {
+        alias: TableAlias {
+            name: Ident {
+                value: "nums".to_string(),
+                quote_style: None
+            },
+            columns: vec![Ident { value: "val".to_string(), quote_style: None }]
+        },
+        query: cte_query,
+    };
+    assert_eq!(with.cte_tables.first().unwrap(), &expected);
 }
 
 #[test]

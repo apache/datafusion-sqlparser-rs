@@ -167,7 +167,8 @@ pub struct With {
 impl fmt::Display for With {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
-            f, "WITH {}{}",
+            f,
+            "WITH {}{}",
             if self.recursive { "RECURSIVE " } else { "" },
             display_comma_separated(&self.cte_tables)
         )

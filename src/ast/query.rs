@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 pub struct Query {
     /// WITH (common table expressions, or CTEs)
     pub with: Option<With>,
-    /// SELECT or UNION / EXCEPT / INTECEPT
+    /// SELECT or UNION / EXCEPT / INTERSECT
     pub body: SetExpr,
     /// ORDER BY
     pub order_by: Vec<OrderByExpr>,
@@ -35,8 +35,8 @@ pub struct Query {
 
 impl fmt::Display for Query {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.with.is_some() {
-            write!(f, "{}", self.with.as_ref().unwrap())?;
+        if let Some(ref with) = self.with {
+            write!(f, "{} ", with)?;
         }
         write!(f, "{}", self.body)?;
         if !self.order_by.is_empty() {
@@ -166,17 +166,11 @@ pub struct With {
 
 impl fmt::Display for With {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "WITH ")?;
-        if self.recursive {
-            write!(f, "RECURSIVE ")?;
-        }
-        let s = self
-            .cte_tables
-            .iter()
-            .map(|cte| format!("{}", cte))
-            .collect::<Vec<String>>()
-            .join(", ");
-        write!(f, "{} ", s)
+        write!(
+            f, "WITH {}{}",
+            if self.recursive { "RECURSIVE " } else { "" },
+            display_comma_separated(&self.cte_tables)
+        )
     }
 }
 

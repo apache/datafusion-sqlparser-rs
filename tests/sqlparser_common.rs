@@ -3303,8 +3303,8 @@ fn parse_drop_index() {
 fn all_keywords_sorted() {
     // assert!(ALL_KEYWORDS.is_sorted())
     let mut copy = Vec::from(ALL_KEYWORDS);
-    copy.sort();
-    assert!(copy == ALL_KEYWORDS)
+    copy.sort_unstable();
+    assert_eq!(copy, ALL_KEYWORDS)
 }
 
 fn parse_sql_statements(sql: &str) -> Result<Vec<Statement>, ParserError> {

@@ -382,10 +382,7 @@ impl<'a> Tokenizer<'a> {
                 // numbers
                 '0'..='9' => {
                     // TODO: https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#unsigned-numeric-literal
-                    let s = peeking_take_while(chars, |ch| match ch {
-                        '0'..='9' | '.' => true,
-                        _ => false,
-                    });
+                    let s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
                     Ok(Some(Token::Number(s)))
                 }
                 // punctuation

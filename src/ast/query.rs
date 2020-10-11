@@ -20,8 +20,8 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Query {
     /// WITH (common table expressions, or CTEs)
-    pub ctes: Vec<Cte>,
-    /// SELECT or UNION / EXCEPT / INTECEPT
+    pub with: Option<With>,
+    /// SELECT or UNION / EXCEPT / INTERSECT
     pub body: SetExpr,
     /// ORDER BY
     pub order_by: Vec<OrderByExpr>,
@@ -35,8 +35,8 @@ pub struct Query {
 
 impl fmt::Display for Query {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if !self.ctes.is_empty() {
-            write!(f, "WITH {} ", display_comma_separated(&self.ctes))?;
+        if let Some(ref with) = self.with {
+            write!(f, "{} ", with)?;
         }
         write!(f, "{}", self.body)?;
         if !self.order_by.is_empty() {
@@ -154,6 +154,24 @@ impl fmt::Display for Select {
             write!(f, " HAVING {}", having)?;
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct With {
+    pub recursive: bool,
+    pub cte_tables: Vec<Cte>,
+}
+
+impl fmt::Display for With {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "WITH {}{}",
+            if self.recursive { "RECURSIVE " } else { "" },
+            display_comma_separated(&self.cte_tables)
+        )
     }
 }
 

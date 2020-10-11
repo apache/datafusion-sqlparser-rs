@@ -170,9 +170,10 @@ impl fmt::Display for With {
         if self.recursive {
             write!(f, "RECURSIVE ")?;
         }
-        let s = self.cte_tables
+        let s = self
+            .cte_tables
             .iter()
-            .map(|cte| { format!("{}", cte) })
+            .map(|cte| format!("{}", cte))
             .collect::<Vec<String>>()
             .join(", ");
         write!(f, "{} ", s)

@@ -2441,14 +2441,24 @@ fn parse_cte_renamed_columns() {
     let query = all_dialects().verified_query(sql);
     assert_eq!(
         vec![Ident::new("col1"), Ident::new("col2")],
-        query.with.unwrap().cte_tables.first().unwrap().alias.columns
+        query
+            .with
+            .unwrap()
+            .cte_tables
+            .first()
+            .unwrap()
+            .alias
+            .columns
     );
 }
 
 #[test]
 fn parse_recursive_cte() {
     let cte_query = "SELECT 1 UNION ALL SELECT val + 1 FROM nums WHERE val < 10".to_owned();
-    let sql = &format!("WITH RECURSIVE nums (val) AS ({}) SELECT * FROM nums", cte_query);
+    let sql = &format!(
+        "WITH RECURSIVE nums (val) AS ({}) SELECT * FROM nums",
+        cte_query
+    );
 
     let cte_query = verified_query(&cte_query);
     let query = verified_query(sql);
@@ -2460,9 +2470,12 @@ fn parse_recursive_cte() {
         alias: TableAlias {
             name: Ident {
                 value: "nums".to_string(),
-                quote_style: None
+                quote_style: None,
             },
-            columns: vec![Ident { value: "val".to_string(), quote_style: None }]
+            columns: vec![Ident {
+                value: "val".to_string(),
+                quote_style: None,
+            }],
         },
         query: cte_query,
     };

@@ -1799,7 +1799,7 @@ impl<'a> Parser<'a> {
             // TODO: optional RECURSIVE
             Some(With {
                 recursive: self.parse_keyword(Keyword::RECURSIVE),
-                cte_tables: self.parse_comma_separated(Parser::parse_cte)?
+                cte_tables: self.parse_comma_separated(Parser::parse_cte)?,
             })
         } else {
             None

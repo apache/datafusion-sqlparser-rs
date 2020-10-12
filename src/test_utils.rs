@@ -69,12 +69,18 @@ impl TestedDialects {
         // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)
     }
 
-    /// Ensures that `sql` parses as a single statement, optionally checking
-    /// that converting AST back to string equals to `canonical` (unless an
-    /// empty canonical string is provided).
+    /// Ensures that `sql` parses as a single statement and returns it.
+    /// If non-empty `canonical` SQL representation is provided,
+    /// additionally asserts that parsing `sql` results in the same parse
+    /// tree as parsing `canonical`, and that serializing it back to string
+    /// results in the `canonical` representation.
     pub fn one_statement_parses_to(&self, sql: &str, canonical: &str) -> Statement {
         let mut statements = self.parse_sql_statements(&sql).unwrap();
         assert_eq!(statements.len(), 1);
+
+        if !canonical.is_empty() && sql != canonical {
+            assert_eq!(self.parse_sql_statements(&canonical).unwrap(), statements);
+        }
 
         let only_statement = statements.pop().unwrap();
         if !canonical.is_empty() {

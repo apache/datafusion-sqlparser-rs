@@ -18,12 +18,14 @@
 //! sqlparser regardless of the chosen dialect (i.e. it doesn't conflict with
 //! dialect-specific parsing rules).
 
-use matches::assert_matches;
+#[macro_use]
+mod test_utils;
+use test_utils::{all_dialects, expr_from_projection, join, number, only, table, table_alias};
 
+use matches::assert_matches;
 use sqlparser::ast::*;
 use sqlparser::dialect::keywords::ALL_KEYWORDS;
 use sqlparser::parser::ParserError;
-use sqlparser::test_utils::{all_dialects, expr_from_projection, number, only};
 
 #[test]
 fn parse_insert_values() {
@@ -2128,13 +2130,6 @@ fn parse_cross_join() {
     );
 }
 
-fn table_alias(name: impl Into<String>) -> Option<TableAlias> {
-    Some(TableAlias {
-        name: Ident::new(name),
-        columns: vec![],
-    })
-}
-
 #[test]
 fn parse_joins_on() {
     fn join_with_constraint(
@@ -2282,31 +2277,6 @@ fn parse_complex_join() {
 
 #[test]
 fn parse_join_nesting() {
-    fn table(name: impl Into<String>) -> TableFactor {
-        TableFactor::Table {
-            name: ObjectName(vec![Ident::new(name.into())]),
-            alias: None,
-            args: vec![],
-            with_hints: vec![],
-        }
-    }
-
-    fn join(relation: TableFactor) -> Join {
-        Join {
-            relation,
-            join_operator: JoinOperator::Inner(JoinConstraint::Natural),
-        }
-    }
-
-    macro_rules! nest {
-        ($base:expr $(, $join:expr)*) => {
-            TableFactor::NestedJoin(Box::new(TableWithJoins {
-                relation: $base,
-                joins: vec![$(join($join)),*]
-            }))
-        };
-    }
-
     let sql = "SELECT * FROM a NATURAL JOIN (b NATURAL JOIN (c NATURAL JOIN d NATURAL JOIN e)) \
                NATURAL JOIN (f NATURAL JOIN (g NATURAL JOIN h))";
     assert_eq!(
@@ -2337,20 +2307,6 @@ fn parse_join_nesting() {
         from.joins,
         vec![join(nest!(nest!(nest!(table("b"), table("c")))))]
     );
-
-    // Parenthesized table names are non-standard, but supported in Snowflake SQL
-    let sql = "SELECT * FROM (a NATURAL JOIN (b))";
-    let select = verified_only_select(sql);
-    let from = only(select.from);
-
-    assert_eq!(from.relation, nest!(table("a"), nest!(table("b"))));
-
-    // Double parentheses around table names are non-standard, but supported in Snowflake SQL
-    let sql = "SELECT * FROM (a NATURAL JOIN ((b)))";
-    let select = verified_only_select(sql);
-    let from = only(select.from);
-
-    assert_eq!(from.relation, nest!(table("a"), nest!(nest!(table("b")))));
 }
 
 #[test]
@@ -2525,26 +2481,6 @@ fn parse_derived_tables() {
                 },
                 join_operator: JoinOperator::Inner(JoinConstraint::Natural),
             }],
-        }))
-    );
-
-    // Nesting a subquery in parentheses is non-standard, but supported in Snowflake SQL
-    let sql = "SELECT * FROM ((SELECT 1) AS t)";
-    let select = verified_only_select(sql);
-    let from = only(select.from);
-
-    assert_eq!(
-        from.relation,
-        TableFactor::NestedJoin(Box::new(TableWithJoins {
-            relation: TableFactor::Derived {
-                lateral: false,
-                subquery: Box::new(verified_query("SELECT 1")),
-                alias: Some(TableAlias {
-                    name: "t".into(),
-                    columns: vec![],
-                })
-            },
-            joins: Vec::new(),
         }))
     );
 }

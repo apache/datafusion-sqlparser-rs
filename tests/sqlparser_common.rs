@@ -20,7 +20,7 @@
 
 #[macro_use]
 mod test_utils;
-use test_utils::{all_dialects, expr_from_projection, join, number, only, table};
+use test_utils::{all_dialects, expr_from_projection, join, number, only, table, table_alias};
 
 use matches::assert_matches;
 use sqlparser::ast::*;
@@ -2128,13 +2128,6 @@ fn parse_cross_join() {
         },
         only(only(select.from).joins),
     );
-}
-
-fn table_alias(name: impl Into<String>) -> Option<TableAlias> {
-    Some(TableAlias {
-        name: Ident::new(name),
-        columns: vec![],
-    })
 }
 
 #[test]

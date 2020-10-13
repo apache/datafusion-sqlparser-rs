@@ -20,6 +20,7 @@ use test_utils::*;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SnowflakeDialect};
+use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::*;
 
 #[test]
@@ -72,42 +73,81 @@ fn test_snowflake_single_line_tokenize() {
 }
 
 #[test]
-fn test_sf_derives_single_table_in_parenthesis() {
-    // Nesting a subquery in parentheses is non-standard, but supported in Snowflake SQL
-    let sql = "SELECT * FROM ((SELECT 1) AS t)";
-    let select = snowflake_and_generic().verified_only_select(sql);
-    let from = only(select.from);
-    assert_eq!(
-        from.relation,
-        TableFactor::NestedJoin(Box::new(TableWithJoins {
-            relation: TableFactor::Derived {
-                lateral: false,
-                subquery: Box::new(snowflake_and_generic().verified_query("SELECT 1")),
-                alias: Some(TableAlias {
-                    name: "t".into(),
-                    columns: vec![],
-                })
-            },
-            joins: Vec::new(),
-        }))
+fn test_sf_derived_table_in_parenthesis() {
+    // Nesting a subquery in an extra set of parentheses is non-standard,
+    // but supported in Snowflake SQL
+    snowflake_and_generic().one_statement_parses_to(
+        "SELECT * FROM ((SELECT 1) AS t)",
+        "SELECT * FROM (SELECT 1) AS t",
+    );
+    snowflake_and_generic().one_statement_parses_to(
+        "SELECT * FROM (((SELECT 1) AS t))",
+        "SELECT * FROM (SELECT 1) AS t",
     );
 }
 
 #[test]
 fn test_single_table_in_parenthesis() {
     // Parenthesized table names are non-standard, but supported in Snowflake SQL
-    let sql = "SELECT * FROM (a NATURAL JOIN (b))";
-    let select = snowflake_and_generic().verified_only_select(sql);
-    let from = only(select.from);
+    snowflake_and_generic().one_statement_parses_to(
+        "SELECT * FROM (a NATURAL JOIN (b))",
+        "SELECT * FROM (a NATURAL JOIN b)",
+    );
+    snowflake_and_generic().one_statement_parses_to(
+        "SELECT * FROM (a NATURAL JOIN ((b)))",
+        "SELECT * FROM (a NATURAL JOIN b)",
+    );
+}
 
-    assert_eq!(from.relation, nest!(table("a"), nest!(table("b"))));
+#[test]
+fn test_single_table_in_parenthesis_with_alias() {
+    snowflake_and_generic().one_statement_parses_to(
+        "SELECT * FROM (a NATURAL JOIN (b) c )",
+        "SELECT * FROM (a NATURAL JOIN b AS c)",
+    );
 
-    // Double parentheses around table names are non-standard, but supported in Snowflake SQL
-    let sql = "SELECT * FROM (a NATURAL JOIN ((b)))";
-    let select = snowflake_and_generic().verified_only_select(sql);
-    let from = only(select.from);
+    snowflake_and_generic().one_statement_parses_to(
+        "SELECT * FROM (a NATURAL JOIN ((b)) c )",
+        "SELECT * FROM (a NATURAL JOIN b AS c)",
+    );
 
-    assert_eq!(from.relation, nest!(table("a"), nest!(nest!(table("b")))));
+    snowflake_and_generic().one_statement_parses_to(
+        "SELECT * FROM (a NATURAL JOIN ( (b) c ) )",
+        "SELECT * FROM (a NATURAL JOIN b AS c)",
+    );
+
+    snowflake_and_generic().one_statement_parses_to(
+        "SELECT * FROM (a NATURAL JOIN ( (b) as c ) )",
+        "SELECT * FROM (a NATURAL JOIN b AS c)",
+    );
+
+    snowflake_and_generic().one_statement_parses_to(
+        "SELECT * FROM (a alias1 NATURAL JOIN ( (b) c ) )",
+        "SELECT * FROM (a AS alias1 NATURAL JOIN b AS c)",
+    );
+
+    snowflake_and_generic().one_statement_parses_to(
+        "SELECT * FROM (a as alias1 NATURAL JOIN ( (b) as c ) )",
+        "SELECT * FROM (a AS alias1 NATURAL JOIN b AS c)",
+    );
+
+    let res = snowflake_and_generic().parse_sql_statements("SELECT * FROM (a NATURAL JOIN b) c");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: c".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = snowflake().parse_sql_statements("SELECT * FROM (a b) c");
+    assert_eq!(
+        ParserError::ParserError("duplicate alias b".to_string()),
+        res.unwrap_err()
+    );
+}
+
+fn snowflake() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(SnowflakeDialect {})],
+    }
 }
 
 fn snowflake_and_generic() -> TestedDialects {

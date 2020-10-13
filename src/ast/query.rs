@@ -242,9 +242,10 @@ pub enum TableFactor {
     },
     /// Represents a parenthesized table factor. The SQL spec only allows a
     /// join expression (`(foo <JOIN> bar [ <JOIN> baz ... ])`) to be nested,
-    /// possibly several times, but the parser also accepts the non-standard
-    /// nesting of bare tables (`table_with_joins.joins.is_empty()`), so the
-    /// name `NestedJoin` is a bit of misnomer.
+    /// possibly several times.
+    ///
+    /// The parser may also accept non-standard nesting of bare tables for some
+    /// dialects, but the information about such nesting is stripped from AST.
     NestedJoin(Box<TableWithJoins>),
 }
 

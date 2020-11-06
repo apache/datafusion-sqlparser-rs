@@ -486,6 +486,8 @@ pub enum Statement {
     Query(Box<Query>),
     /// INSERT
     Insert {
+        /// Only for Sqlite
+        or: Option<SqliteOnConflict>,
         /// TABLE
         table_name: ObjectName,
         /// COLUMNS
@@ -782,6 +784,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Insert {
+                or,
                 table_name,
                 overwrite,
                 partitioned,
@@ -790,13 +793,17 @@ impl fmt::Display for Statement {
                 source,
                 table,
             } => {
-                write!(
-                    f,
-                    "INSERT {act}{tbl} {table_name} ",
-                    table_name = table_name,
-                    act = if *overwrite { "OVERWRITE" } else { "INTO" },
-                    tbl = if *table { " TABLE" } else { "" }
-                )?;
+                if let Some(action) = or {
+                    write!(f, "INSERT OR {} INTO {} ", action, table_name)?;
+                } else {
+                    write!(
+                        f,
+                        "INSERT {act}{tbl} {table_name} ",
+                        table_name = table_name,
+                        act = if *overwrite { "OVERWRITE" } else { "INTO" },
+                        tbl = if *table { " TABLE" } else { "" }
+                    )?;
+                }
                 if !columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(columns))?;
                 }
@@ -810,6 +817,7 @@ impl fmt::Display for Statement {
                 }
                 write!(f, "{}", source)
             }
+
             Statement::Copy {
                 table_name,
                 columns,
@@ -1529,6 +1537,32 @@ impl fmt::Display for SetVariableValue {
         match self {
             Ident(ident) => write!(f, "{}", ident),
             Literal(literal) => write!(f, "{}", literal),
+        }
+    }
+}
+
+/// Sqlite specific syntax
+///
+/// https://sqlite.org/lang_conflict.html
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum SqliteOnConflict {
+    Rollback,
+    Abort,
+    Fail,
+    Ignore,
+    Replace,
+}
+
+impl fmt::Display for SqliteOnConflict {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use SqliteOnConflict::*;
+        match self {
+            Rollback => write!(f, "ROLLBACK"),
+            Abort => write!(f, "ABORT"),
+            Fail => write!(f, "FAIL"),
+            Ignore => write!(f, "IGNORE"),
+            Replace => write!(f, "REPLACE"),
         }
     }
 }

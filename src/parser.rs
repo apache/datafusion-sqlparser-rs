@@ -163,6 +163,10 @@ impl<'a> Parser<'a> {
                 Keyword::DEALLOCATE => Ok(self.parse_deallocate()?),
                 Keyword::EXECUTE => Ok(self.parse_execute()?),
                 Keyword::PREPARE => Ok(self.parse_prepare()?),
+                Keyword::REPLACE if dialect_of!(self is SQLiteDialect ) => {
+                    self.prev_token();
+                    Ok(self.parse_insert()?)
+                }
                 _ => self.expected("an SQL statement", Token::Word(w)),
             },
             Token::LParen => {
@@ -2684,6 +2688,23 @@ impl<'a> Parser<'a> {
 
     /// Parse an INSERT statement
     pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
+        let or = if !dialect_of!(self is SQLiteDialect) {
+            None
+        } else if self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]) {
+            Some(SqliteOnConflict::Replace)
+        } else if self.parse_keywords(&[Keyword::OR, Keyword::ROLLBACK]) {
+            Some(SqliteOnConflict::Rollback)
+        } else if self.parse_keywords(&[Keyword::OR, Keyword::ABORT]) {
+            Some(SqliteOnConflict::Abort)
+        } else if self.parse_keywords(&[Keyword::OR, Keyword::FAIL]) {
+            Some(SqliteOnConflict::Fail)
+        } else if self.parse_keywords(&[Keyword::OR, Keyword::IGNORE]) {
+            Some(SqliteOnConflict::Ignore)
+        } else if self.parse_keyword(Keyword::REPLACE) {
+            Some(SqliteOnConflict::Replace)
+        } else {
+            None
+        };
         let action = self.expect_one_of_keywords(&[Keyword::INTO, Keyword::OVERWRITE])?;
         let overwrite = action == Keyword::OVERWRITE;
         let local = self.parse_keyword(Keyword::LOCAL);
@@ -2723,6 +2744,7 @@ impl<'a> Parser<'a> {
 
             let source = Box::new(self.parse_query()?);
             Ok(Statement::Insert {
+                or,
                 table_name,
                 overwrite,
                 partitioned,

@@ -2119,18 +2119,27 @@ impl<'a> Parser<'a> {
 
     /// Parse a CTE (`alias [( col1, col2, ... )] AS (subquery)`)
     fn parse_cte(&mut self) -> Result<Cte, ParserError> {
-        let alias = TableAlias {
-            name: self.parse_identifier()?,
-            columns: self.parse_parenthesized_column_list(Optional)?,
-        };
+        let name = self.parse_identifier()?;
 
         if self.parse_keyword(Keyword::AS) {
             self.expect_token(&Token::LParen)?;
             let query = self.parse_query()?;
             self.expect_token(&Token::RParen)?;
+            let alias = TableAlias {
+                name,
+                columns: vec![],
+            };
             Ok(Cte { alias, query })
         } else {
+            let columns = self.parse_parenthesized_column_list(Optional)?;
+            self.expect_keyword(Keyword::AS)?;
+            self.expect_token(&Token::LParen)?;
             let query = self.parse_query()?;
+            self.expect_token(&Token::RParen)?;
+            let alias = TableAlias {
+                name,
+                columns,
+            };
             Ok(Cte { alias, query })
         }
     }
@@ -2220,7 +2229,6 @@ impl<'a> Parser<'a> {
         } else {
             vec![]
         };
-
         let mut lateral_views = vec![];
         loop {
             if self.parse_keywords(&[Keyword::LATERAL, Keyword::VIEW]) {

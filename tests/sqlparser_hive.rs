@@ -74,7 +74,7 @@ fn test_spaceship() {
 
 #[test]
 fn parse_with_cte() {
-    let with = "WITH a AS (SELECT * FROM table) INSERT INTO TABLE db.table_table PARTITION (a) SELECT * FROM a";
+    let with = "WITH a AS (SELECT * FROM b) INSERT INTO TABLE db.table_table PARTITION (a) SELECT * FROM b";
     hive().verified_stmt(with);
 }
 

@@ -366,7 +366,9 @@ impl<'a> Tokenizer<'a> {
                     let s = self.tokenize_word(ch, chars);
 
                     if s.chars().all(|x| x >= '0' && x <= '9' || x == '.') {
-                        let mut s = peeking_take_while(&mut s.chars().peekable(), |ch| matches!(ch, '0'..='9' | '.'));
+                        let mut s = peeking_take_while(&mut s.chars().peekable(), |ch| {
+                            matches!(ch, '0'..='9' | '.')
+                        });
                         let s2 = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
                         s += s2.as_str();
                         return Ok(Some(Token::Number(s, false)));

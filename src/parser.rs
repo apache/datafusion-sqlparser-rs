@@ -2081,40 +2081,52 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let body = self.parse_query_body(0)?;
+        if !self.parse_keyword(Keyword::INSERT) {
+            let body = self.parse_query_body(0)?;
 
-        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-            self.parse_comma_separated(Parser::parse_order_by_expr)?
+            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                self.parse_comma_separated(Parser::parse_order_by_expr)?
+            } else {
+                vec![]
+            };
+
+            let limit = if self.parse_keyword(Keyword::LIMIT) {
+                self.parse_limit()?
+            } else {
+                None
+            };
+
+            let offset = if self.parse_keyword(Keyword::OFFSET) {
+                Some(self.parse_offset()?)
+            } else {
+                None
+            };
+
+            let fetch = if self.parse_keyword(Keyword::FETCH) {
+                Some(self.parse_fetch()?)
+            } else {
+                None
+            };
+
+            Ok(Query {
+                with,
+                body,
+                limit,
+                order_by,
+                offset,
+                fetch,
+            })
         } else {
-            vec![]
-        };
-
-        let limit = if self.parse_keyword(Keyword::LIMIT) {
-            self.parse_limit()?
-        } else {
-            None
-        };
-
-        let offset = if self.parse_keyword(Keyword::OFFSET) {
-            Some(self.parse_offset()?)
-        } else {
-            None
-        };
-
-        let fetch = if self.parse_keyword(Keyword::FETCH) {
-            Some(self.parse_fetch()?)
-        } else {
-            None
-        };
-
-        Ok(Query {
-            with,
-            body,
-            limit,
-            order_by,
-            offset,
-            fetch,
-        })
+            let insert = self.parse_insert()?;
+            Ok(Query {
+                with,
+                body: SetExpr::Insert(insert),
+                limit: None,
+                order_by: vec![],
+                offset: None,
+                fetch: None,
+            })
+        }
     }
 
     /// Parse a CTE (`alias [( col1, col2, ... )] AS (subquery)`)
@@ -2136,10 +2148,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::LParen)?;
             let query = self.parse_query()?;
             self.expect_token(&Token::RParen)?;
-            let alias = TableAlias {
-                name,
-                columns,
-            };
+            let alias = TableAlias { name, columns };
             Ok(Cte { alias, query })
         }
     }

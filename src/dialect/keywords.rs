@@ -274,6 +274,7 @@ define_keywords!(
     MERGE,
     METHOD,
     MIN,
+    MINUS,
     MINUTE,
     MOD,
     MODIFIES,

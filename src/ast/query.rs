@@ -99,6 +99,7 @@ impl fmt::Display for SetExpr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SetOperator {
     Union,
+    Minus,
     Except,
     Intersect,
 }
@@ -107,6 +108,7 @@ impl fmt::Display for SetOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
             SetOperator::Union => "UNION",
+            SetOperator::Minus => "MINUS",
             SetOperator::Except => "EXCEPT",
             SetOperator::Intersect => "INTERSECT",
         })

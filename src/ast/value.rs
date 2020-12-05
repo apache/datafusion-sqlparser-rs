@@ -113,22 +113,42 @@ impl fmt::Display for Value {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DateTimeField {
     Year,
+    YearOfWeek,
+    YearOfWeekIso,
+    Quarter,
     Month,
+    Week,
+    WeekOfYear,
+    WeekIso,
     Day,
+    DayOfWeek,
+    DayOfWeekIso,
+    DayOfYear,
     Hour,
     Minute,
     Second,
+    Epoch,
 }
 
 impl fmt::Display for DateTimeField {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
             DateTimeField::Year => "YEAR",
+            DateTimeField::YearOfWeek => "YEAROFWEEK",
+            DateTimeField::YearOfWeekIso => "YEAROFWEEKISO",
+            DateTimeField::Quarter => "QUARTER",
             DateTimeField::Month => "MONTH",
+            DateTimeField::Week => "WEEK",
+            DateTimeField::WeekOfYear => "WEEKOFYEAR",
+            DateTimeField::WeekIso => "WEEKISO",
             DateTimeField::Day => "DAY",
+            DateTimeField::DayOfWeek => "DAYOFWEEK",
+            DateTimeField::DayOfWeekIso => "DAYOFWEEKISO",
+            DateTimeField::DayOfYear => "DAYOFYEAR",
             DateTimeField::Hour => "HOUR",
             DateTimeField::Minute => "MINUTE",
             DateTimeField::Second => "SECOND",
+            DateTimeField::Epoch => "EPOCH",
         })
     }
 }

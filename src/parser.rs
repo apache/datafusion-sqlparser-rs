@@ -730,9 +730,12 @@ impl<'a> Parser<'a> {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
                 Keyword::LIKE => Some(BinaryOperator::Like),
+                Keyword::ILIKE => Some(BinaryOperator::Ilike),
                 Keyword::NOT => {
                     if self.parse_keyword(Keyword::LIKE) {
                         Some(BinaryOperator::NotLike)
+                    } else if self.parse_keyword(Keyword::ILIKE) {
+                        Some(BinaryOperator::NotIlike)
                     } else {
                         None
                     }
@@ -850,13 +853,17 @@ impl<'a> Parser<'a> {
                 // precedence.
                 Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
                 Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
-                Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
+                Token::Word(w) if w.keyword == Keyword::LIKE || w.keyword == Keyword::ILIKE => {
+                    Ok(Self::BETWEEN_PREC)
+                }
                 _ => Ok(0),
             },
             Token::Word(w) if w.keyword == Keyword::IS => Ok(17),
             Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
+            Token::Word(w) if w.keyword == Keyword::LIKE || w.keyword == Keyword::ILIKE => {
+                Ok(Self::BETWEEN_PREC)
+            }
             Token::Eq | Token::Lt | Token::LtEq | Token::Neq | Token::Gt | Token::GtEq => Ok(20),
             Token::Pipe => Ok(21),
             Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(22),

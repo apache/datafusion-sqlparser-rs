@@ -1157,10 +1157,10 @@ fn parse_create_table() {
 fn parse_create_table_with_multiple_on_delete_fails() {
     parse_sql_statements(
         "\
-        create table X (\
-            y_id int references Y (id) \
-            on delete cascade on update cascade on delete no action\
-        )",
+         create table X (\
+         y_id int references Y (id) \
+         on delete cascade on update cascade on delete no action\
+         )",
     )
     .expect_err("should have failed");
 }

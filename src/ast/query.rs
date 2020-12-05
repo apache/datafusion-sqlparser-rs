@@ -370,6 +370,7 @@ impl fmt::Display for Join {
                 fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                     match self.0 {
                         JoinConstraint::On(expr) => write!(f, " ON {}", expr),
+                        JoinConstraint::Where(expr) => write!(f, " WHERE {}", expr),
                         JoinConstraint::Using(attrs) => {
                             write!(f, " USING({})", display_comma_separated(attrs))
                         }
@@ -433,6 +434,8 @@ pub enum JoinOperator {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum JoinConstraint {
     On(Expr),
+    /// snowflake-specific: https://docs.snowflake.com/en/sql-reference/constructs/where.html#joins-in-the-where-clause
+    Where(Expr),
     Using(Vec<Ident>),
     Natural,
 }

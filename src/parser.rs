@@ -2328,6 +2328,9 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::ON) {
             let constraint = self.parse_expr()?;
             Ok(JoinConstraint::On(constraint))
+        } else if dialect_of!(self is SnowflakeDialect) && self.parse_keyword(Keyword::WHERE) {
+            let constraint = self.parse_expr()?;
+            Ok(JoinConstraint::Where(constraint))
         } else if self.parse_keyword(Keyword::USING) {
             let columns = self.parse_parenthesized_column_list(Mandatory)?;
             Ok(JoinConstraint::Using(columns))

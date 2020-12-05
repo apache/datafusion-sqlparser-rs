@@ -24,13 +24,16 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParserError {
     TokenizerError(String),
-    ParserError(String),
+    ParserError(String, String),
 }
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
-    ($MSG:expr) => {
-        Err(ParserError::ParserError($MSG.to_string()))
+    ($parser:expr, $MSG:expr) => {
+        Err(ParserError::ParserError(
+            $parser.preceding_toks(),
+            $MSG.to_string(),
+        ))
     };
 }
 
@@ -68,14 +71,12 @@ impl From<TokenizerError> for ParserError {
 
 impl fmt::Display for ParserError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "sql parser error: {}",
-            match self {
-                ParserError::TokenizerError(s) => s,
-                ParserError::ParserError(s) => s,
+        match self {
+            ParserError::TokenizerError(s) => write!(f, "sql tokenizer error: {}", s,),
+            ParserError::ParserError(preceding, s) => {
+                write!(f, "sql parser error after \"{}\": {}", preceding, s,)
             }
-        )
+        }
     }
 }
 
@@ -227,7 +228,7 @@ impl<'a> Parser<'a> {
                 // name, resulting in `NOT 'a'` being recognized as a `TypedString` instead of
                 // an unary negation `NOT ('a' LIKE 'b')`. To solve this, we don't accept the
                 // `type 'string'` syntax for the custom data types at all.
-                DataType::Custom(..) => parser_err!("dummy"),
+                DataType::Custom(..) => parser_err!(parser, "dummy"),
                 data_type => Ok(Expr::TypedString {
                     data_type,
                     value: parser.parse_literal_string()?,
@@ -900,7 +901,7 @@ impl<'a> Parser<'a> {
 
     /// Report unexpected token
     fn expected<T>(&self, expected: &str, found: Token) -> Result<T, ParserError> {
-        parser_err!(format!("Expected {}, found: {}", expected, found))
+        parser_err!(self, format!("Expected {}, found: {}", expected, found))
     }
 
     /// Look for an expected keyword and consume it if it exists
@@ -1035,7 +1036,7 @@ impl<'a> Parser<'a> {
         let all = self.parse_keyword(Keyword::ALL);
         let distinct = self.parse_keyword(Keyword::DISTINCT);
         if all && distinct {
-            return parser_err!("Cannot specify both ALL and DISTINCT".to_string());
+            return parser_err!(self, "Cannot specify both ALL and DISTINCT".to_string());
         } else {
             Ok(distinct)
         }
@@ -1182,7 +1183,7 @@ impl<'a> Parser<'a> {
         let cascade = self.parse_keyword(Keyword::CASCADE);
         let restrict = self.parse_keyword(Keyword::RESTRICT);
         if cascade && restrict {
-            return parser_err!("Cannot specify both CASCADE and RESTRICT in DROP");
+            return parser_err!(self, "Cannot specify both CASCADE and RESTRICT in DROP");
         }
         Ok(Statement::Drop {
             object_type,
@@ -1562,7 +1563,7 @@ impl<'a> Parser<'a> {
             // (i.e., it returns the input string).
             Token::Number(ref n) => match n.parse() {
                 Ok(n) => Ok(Value::Number(n)),
-                Err(e) => parser_err!(format!("Could not parse '{}' as number: {}", n, e)),
+                Err(e) => parser_err!(self, format!("Could not parse '{}' as number: {}", n, e)),
             },
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
@@ -1581,11 +1582,29 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn preceding_toks(&self) -> String {
+        let slice_start = if self.index < 20 { 0 } else { self.index - 20 };
+        let slice_end = if self.index >= self.tokens.len() {
+            self.tokens.len() - 1
+        } else {
+            self.index
+        };
+        let mut res = String::new();
+        let toks = &self.tokens[slice_start..slice_end];
+        for tok in toks.iter() {
+            res.push_str(&tok.to_string());
+        }
+        res
+    }
+
     /// Parse an unsigned literal integer/long
     pub fn parse_literal_uint(&mut self) -> Result<u64, ParserError> {
         match self.next_token() {
             Token::Number(s) => s.parse::<u64>().map_err(|e| {
-                ParserError::ParserError(format!("Could not parse '{}' as u64: {}", s, e))
+                ParserError::ParserError(
+                    self.preceding_toks(),
+                    format!("Could not parse '{}' as u64: {}", s, e),
+                )
             }),
             unexpected => self.expected("literal int", unexpected),
         }
@@ -2210,10 +2229,10 @@ impl<'a> Parser<'a> {
                         | TableFactor::Flatten { alias, .. } => {
                             // but not `FROM (mytable AS alias1) AS alias2`.
                             if let Some(inner_alias) = alias {
-                                return Err(ParserError::ParserError(format!(
-                                    "duplicate alias {}",
-                                    inner_alias
-                                )));
+                                return parser_err!(
+                                    self,
+                                    format!("duplicate alias {}", inner_alias)
+                                );
                             }
                             // Act as if the alias was specified normally next
                             // to the table name: `(mytable) AS alias` ->

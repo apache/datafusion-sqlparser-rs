@@ -336,6 +336,8 @@ impl<'a> Parser<'a> {
             unexpected => self.expected("an expression", unexpected),
         }?;
 
+        let expr = self.parse_bracket_indexes(expr)?;
+
         if self.parse_keyword(Keyword::COLLATE) {
             Ok(Expr::Collate {
                 expr: Box::new(expr),
@@ -678,6 +680,21 @@ impl<'a> Parser<'a> {
             last_field,
             fractional_seconds_precision: fsec_precision,
         }))
+    }
+
+    pub fn parse_bracket_indexes(&mut self, mut expr: Expr) -> Result<Expr, ParserError> {
+        loop {
+            if !self.consume_token(&Token::LBracket) {
+                break;
+            }
+            let index_expr = self.parse_expr()?;
+            expr = Expr::Index {
+                expr: Box::new(expr),
+                index_expr: Box::new(index_expr),
+            };
+            self.expect_token(&Token::RBracket)?;
+        }
+        Ok(expr)
     }
 
     /// Parse an operator following an expression

@@ -206,6 +206,11 @@ pub enum Expr {
         expr: Box<Expr>,
         collation: ObjectName,
     },
+    /// `json_col['json_key']`
+    Index {
+        expr: Box<Expr>,
+        index_expr: Box<Expr>,
+    },
     /// Nested expression e.g. `(foo > bar)` or `(1)`
     Nested(Box<Expr>),
     /// A literal value, such as string, number, date or NULL
@@ -292,6 +297,7 @@ impl fmt::Display for Expr {
             Expr::Cast { expr, data_type } => write!(f, "CAST({} AS {})", expr, data_type),
             Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
             Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),
+            Expr::Index { expr, index_expr } => write!(f, "{}[{}]", expr, index_expr),
             Expr::Nested(ast) => write!(f, "({})", ast),
             Expr::Value(v) => write!(f, "{}", v),
             Expr::TypedString { data_type, value } => {

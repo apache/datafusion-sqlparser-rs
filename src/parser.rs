@@ -1802,10 +1802,17 @@ impl<'a> Parser<'a> {
         &mut self,
         reserved_kwds: &[Keyword],
     ) -> Result<Option<TableAlias>, ParserError> {
+        let orig_index = self.index;
         match self.parse_optional_alias(reserved_kwds)? {
             Some(name) => {
-                let columns = self.parse_parenthesized_column_list(Optional)?;
-                Ok(Some(TableAlias { name, columns }))
+                if let Ok(columns) = self.parse_parenthesized_column_list(Optional) {
+                    Ok(Some(TableAlias { name, columns }))
+                } else {
+                    // if column list doesn't parse correctly, reset back to
+                    // original state
+                    self.index = orig_index;
+                    Ok(None)
+                }
             }
             None => Ok(None),
         }
@@ -2176,6 +2183,16 @@ impl<'a> Parser<'a> {
                     relation: self.parse_table_factor()?,
                     join_operator: JoinOperator::OuterApply,
                 }
+            } else if self.parse_keyword(Keyword::PIVOT) {
+                Join {
+                    relation: self.parse_pivot_body()?,
+                    join_operator: JoinOperator::Pivot,
+                }
+            } else if self.parse_keyword(Keyword::UNPIVOT) {
+                Join {
+                    relation: self.parse_pivot_body()?,
+                    join_operator: JoinOperator::Unpivot,
+                }
             } else {
                 let natural = self.parse_keyword(Keyword::NATURAL);
                 let peek_keyword = if let Token::Word(w) = self.peek_token() {
@@ -2315,6 +2332,7 @@ impl<'a> Parser<'a> {
                             // `(mytable AS alias)`
                             alias.replace(outer_alias);
                         }
+                        TableFactor::Pivot { .. } => unreachable!(),
                         TableFactor::NestedJoin(_) => unreachable!(),
                     };
                 }
@@ -2352,6 +2370,23 @@ impl<'a> Parser<'a> {
                 with_hints,
             })
         }
+    }
+
+    pub fn parse_pivot_body(&mut self) -> Result<TableFactor, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let expr = self.parse_expr()?;
+        self.expect_keyword(Keyword::FOR)?;
+        let val = self.parse_identifier()?;
+        self.expect_keyword(Keyword::IN)?;
+        self.expect_token(&Token::LParen)?;
+        let pivot_vals = self.parse_comma_separated(Parser::parse_expr)?;
+        self.expect_token(&Token::RParen)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(TableFactor::Pivot {
+            expr,
+            val,
+            pivot_vals,
+        })
     }
 
     pub fn parse_derived_table_factor(

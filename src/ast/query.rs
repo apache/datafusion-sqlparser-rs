@@ -267,6 +267,12 @@ pub enum TableFactor {
         expr: Expr,
         alias: Option<TableAlias>,
     },
+    /// https://docs.snowflake.com/en/sql-reference/constructs/pivot.html
+    Pivot {
+        expr: Expr,
+        val: Ident,
+        pivot_vals: Vec<Expr>,
+    },
     /// Represents a parenthesized table factor. The SQL spec only allows a
     /// join expression (`(foo <JOIN> bar [ <JOIN> baz ... ])`) to be nested,
     /// possibly several times.
@@ -331,6 +337,19 @@ impl fmt::Display for TableFactor {
                     write!(f, " AS {}", alias)?;
                 }
                 Ok(())
+            }
+            TableFactor::Pivot {
+                expr,
+                val,
+                pivot_vals,
+            } => {
+                write!(f, "({} FOR {} IN (", expr, val)?;
+                let mut delim = "";
+                for pivot_val in pivot_vals {
+                    write!(f, "{}{}", delim, pivot_val)?;
+                    delim = ", ";
+                }
+                write!(f, "))")
             }
             TableFactor::NestedJoin(table_reference) => write!(f, "({})", table_reference),
         }
@@ -414,6 +433,8 @@ impl fmt::Display for Join {
                 self.relation,
                 suffix(constraint)
             ),
+            JoinOperator::Pivot => write!(f, " PIVOT {}", self.relation),
+            JoinOperator::Unpivot => write!(f, " UNPIVOT {}", self.relation),
             JoinOperator::CrossJoin => write!(f, " CROSS JOIN {}", self.relation),
             JoinOperator::CrossApply => write!(f, " CROSS APPLY {}", self.relation),
             JoinOperator::OuterApply => write!(f, " OUTER APPLY {}", self.relation),
@@ -428,6 +449,11 @@ pub enum JoinOperator {
     LeftOuter(JoinConstraint),
     RightOuter(JoinConstraint),
     FullOuter(JoinConstraint),
+    /// [UN]PIVOT not actually a join but it seems to fit here syntactically
+    /// https://docs.snowflake.com/en/sql-reference/constructs/pivot.html
+    Pivot,
+    /// https://docs.snowflake.com/en/sql-reference/constructs/unpivot.html
+    Unpivot,
     CrossJoin,
     /// CROSS APPLY (non-standard)
     CrossApply,

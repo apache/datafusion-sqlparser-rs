@@ -471,6 +471,7 @@ pub enum JoinConstraint {
     Where(Expr),
     Using(Vec<Ident>),
     Natural,
+    Empty,
 }
 
 /// An `ORDER BY` expression

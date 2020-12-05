@@ -2471,7 +2471,7 @@ impl<'a> Parser<'a> {
             let columns = self.parse_parenthesized_column_list(Mandatory)?;
             Ok(JoinConstraint::Using(columns))
         } else {
-            self.expected("ON, or USING after JOIN", self.peek_token())
+            Ok(JoinConstraint::Empty)
         }
     }
 

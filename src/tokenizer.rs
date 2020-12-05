@@ -39,6 +39,8 @@ pub enum Token {
     /// A character that could not be tokenized
     Char(char),
     /// Single quoted string: i.e: 'string'
+    /// This should retains the escaped character sequences so that
+    /// .to_string() of the value will give the value that was in the input
     SingleQuotedString(String),
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
@@ -550,22 +552,28 @@ impl<'a> Tokenizer<'a> {
     ) -> Result<String, TokenizerError> {
         let mut s = String::new();
         chars.next(); // consume the opening quote
-        while let Some(&ch) = chars.peek() {
+        while let Some(ch) = chars.next() {
+            let next_char_is_quote = chars.peek().map(|c| *c == '\'').unwrap_or(false);
             match ch {
-                '\'' => {
-                    chars.next(); // consume
-                    let escaped_quote = chars.peek().map(|c| *c == '\'').unwrap_or(false);
-                    if escaped_quote {
-                        s.push('\'');
-                        chars.next();
-                    } else {
-                        return Ok(s);
+                // allow backslash to escape the next character, whatever it is
+                '\\' => {
+                    s.push('\\');
+                    if let Some(next_ch) = chars.next() {
+                        s.push(next_ch);
                     }
                 }
-                _ => {
-                    chars.next(); // consume
-                    s.push(ch);
+                // bq allows escaping only with backslash; other warehouses
+                // allow escaping the quote character by repeating it
+                _ if !dialect_of!(self is BigQueryDialect)
+                    && ch == '\''
+                    && next_char_is_quote =>
+                {
+                    s.push('\'');
+                    s.push('\'');
+                    chars.next(); // consume '
                 }
+                '\'' => return Ok(s),
+                _ => s.push(ch),
             }
         }
         self.tokenizer_error("Unterminated string literal")

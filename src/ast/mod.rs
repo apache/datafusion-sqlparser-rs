@@ -222,7 +222,8 @@ pub enum Expr {
         index_expr: Box<Expr>,
     },
     /// Nested expression e.g. `(foo > bar)` or `(1)`
-    Nested(Box<Expr>),
+    /// Snowflake allows multiple comma-separated expressions here
+    Nested(Vec<Expr>),
     /// A literal value, such as string, number, date or NULL
     Value(Value),
     /// A constant of form `<data_type> 'value'`.
@@ -339,7 +340,15 @@ impl fmt::Display for Expr {
             Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
             Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),
             Expr::Index { expr, index_expr } => write!(f, "{}[{}]", expr, index_expr),
-            Expr::Nested(ast) => write!(f, "({})", ast),
+            Expr::Nested(exprs) => {
+                write!(f, "(")?;
+                let mut delim = "";
+                for expr in exprs {
+                    write!(f, "{}{}", delim, expr)?;
+                    delim = ", ";
+                }
+                write!(f, ")")
+            }
             Expr::Value(v) => write!(f, "{}", v),
             Expr::TypedString { data_type, value } => {
                 write!(f, "{}", data_type)?;

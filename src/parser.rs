@@ -334,7 +334,7 @@ impl<'a> Parser<'a> {
                         self.prev_token();
                         Expr::Subquery(Box::new(self.parse_query()?))
                     } else {
-                        Expr::Nested(Box::new(self.parse_expr()?))
+                        Expr::Nested(self.parse_comma_separated(Parser::parse_expr)?)
                     };
                 self.expect_token(&Token::RParen)?;
                 Ok(expr)

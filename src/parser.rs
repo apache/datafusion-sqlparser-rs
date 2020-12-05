@@ -243,7 +243,8 @@ impl<'a> Parser<'a> {
                     Ok(Expr::Value(self.parse_value()?))
                 }
                 Keyword::CASE => self.parse_case_expr(),
-                Keyword::CAST => self.parse_cast_expr(),
+                Keyword::CAST => self.parse_cast_expr(false),
+                Keyword::TRY_CAST => self.parse_cast_expr(true),
                 Keyword::EXISTS => self.parse_exists_expr(),
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::INTERVAL => self.parse_literal_interval(),
@@ -481,13 +482,14 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
-    pub fn parse_cast_expr(&mut self) -> Result<Expr, ParserError> {
+    pub fn parse_cast_expr(&mut self, try_cast: bool) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
         self.expect_keyword(Keyword::AS)?;
         let data_type = self.parse_data_type()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Cast {
+            try_cast,
             expr: Box::new(expr),
             data_type,
         })
@@ -853,6 +855,7 @@ impl<'a> Parser<'a> {
     /// Parse a postgresql casting style which is in the form of `expr::datatype`
     pub fn parse_pg_cast(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         Ok(Expr::Cast {
+            try_cast: false,
             expr: Box::new(expr),
             data_type: self.parse_data_type()?,
         })

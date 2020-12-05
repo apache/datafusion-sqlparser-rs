@@ -202,6 +202,8 @@ pub enum Expr {
     UnaryOp { op: UnaryOperator, expr: Box<Expr> },
     /// CAST an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
     Cast {
+        /// try_cast is a snowflake feature
+        try_cast: bool,
         expr: Box<Expr>,
         data_type: DataType,
     },
@@ -323,7 +325,17 @@ impl fmt::Display for Expr {
                     write!(f, "{} {}", op, expr)
                 }
             }
-            Expr::Cast { expr, data_type } => write!(f, "CAST({} AS {})", expr, data_type),
+            Expr::Cast {
+                try_cast,
+                expr,
+                data_type,
+            } => write!(
+                f,
+                "{}CAST({} AS {})",
+                if *try_cast { "TRY_" } else { "" },
+                expr,
+                data_type
+            ),
             Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
             Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),
             Expr::Index { expr, index_expr } => write!(f, "{}[{}]", expr, index_expr),

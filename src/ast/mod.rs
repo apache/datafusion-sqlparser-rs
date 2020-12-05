@@ -912,6 +912,7 @@ impl fmt::Display for FunctionArg {
 pub struct Function {
     pub name: ObjectName,
     pub args: Vec<FunctionArg>,
+    pub within_group: Vec<OrderByExpr>,
     pub over: Option<WindowSpec>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
@@ -926,6 +927,13 @@ impl fmt::Display for Function {
             if self.distinct { "DISTINCT " } else { "" },
             display_comma_separated(&self.args),
         )?;
+        if !self.within_group.is_empty() {
+            write!(
+                f,
+                " WITHIN GROUP (ORDER BY {})",
+                display_comma_separated(&self.within_group)
+            )?;
+        }
         if let Some(o) = &self.over {
             write!(f, " OVER ({})", o)?;
         }

@@ -1789,7 +1789,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::BYTEA => Ok(DataType::Bytea),
-                Keyword::NUMERIC | Keyword::DECIMAL | Keyword::DEC => {
+                Keyword::NUMERIC | Keyword::NUMBER | Keyword::DECIMAL | Keyword::DEC => {
                     let (precision, scale) = self.parse_optional_precision_scale()?;
                     Ok(DataType::Decimal(precision, scale))
                 }

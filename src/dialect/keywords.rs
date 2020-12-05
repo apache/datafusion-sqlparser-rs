@@ -296,6 +296,7 @@ define_keywords!(
     NULL,
     NULLIF,
     NULLS,
+    NUMBER,
     NUMERIC,
     OBJECT,
     OCCURRENCES_REGEX,

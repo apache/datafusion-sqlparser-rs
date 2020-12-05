@@ -199,6 +199,7 @@ define_keywords!(
     FILTER,
     FIRST,
     FIRST_VALUE,
+    FLATTEN,
     FLOAT,
     FLOOR,
     FOLLOWING,

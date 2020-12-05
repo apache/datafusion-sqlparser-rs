@@ -253,6 +253,10 @@ pub enum TableFactor {
         subquery: Box<Query>,
         alias: Option<TableAlias>,
     },
+    Flatten {
+        args: Vec<FunctionArg>,
+        alias: Option<TableAlias>,
+    },
     /// `TABLE(<expr>)[ AS <alias> ]`
     TableFunction {
         expr: Expr,
@@ -297,6 +301,20 @@ impl fmt::Display for TableFactor {
                     write!(f, "LATERAL ")?;
                 }
                 write!(f, "({})", subquery)?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {}", alias)?;
+                }
+                Ok(())
+            }
+            TableFactor::Flatten { args, alias } => {
+                write!(f, "LATERAL FLATTEN (")?;
+                for (idx, arg) in args.iter().enumerate() {
+                    if idx != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", arg)?;
+                }
+                write!(f, ")")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {}", alias)?;
                 }

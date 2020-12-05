@@ -2119,11 +2119,18 @@ impl<'a> Parser<'a> {
     /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
     pub fn parse_table_factor(&mut self) -> Result<TableFactor, ParserError> {
         if self.parse_keyword(Keyword::LATERAL) {
-            // LATERAL must always be followed by a subquery.
-            if !self.consume_token(&Token::LParen) {
-                self.expected("subquery after LATERAL", self.peek_token())?;
+            if dialect_of!(self is SnowflakeDialect) && self.parse_keyword(Keyword::FLATTEN) {
+                self.expect_token(&Token::LParen)?;
+                let args = self.parse_optional_args()?;
+                let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+                Ok(TableFactor::Flatten { args, alias })
+            } else {
+                // if not snowflake, LATERAL must always be followed by a subquery.
+                if !self.consume_token(&Token::LParen) {
+                    self.expected("subquery after LATERAL", self.peek_token())?;
+                }
+                self.parse_derived_table_factor(Lateral)
             }
-            self.parse_derived_table_factor(Lateral)
         } else if self.parse_keyword(Keyword::TABLE) {
             // parse table function (SELECT * FROM TABLE (<expr>) [ AS <alias> ])
             self.expect_token(&Token::LParen)?;
@@ -2189,7 +2196,8 @@ impl<'a> Parser<'a> {
                     match &mut table_and_joins.relation {
                         TableFactor::Derived { alias, .. }
                         | TableFactor::Table { alias, .. }
-                        | TableFactor::TableFunction { alias, .. } => {
+                        | TableFactor::TableFunction { alias, .. }
+                        | TableFactor::Flatten { alias, .. } => {
                             // but not `FROM (mytable AS alias1) AS alias2`.
                             if let Some(inner_alias) = alias {
                                 return Err(ParserError::ParserError(format!(

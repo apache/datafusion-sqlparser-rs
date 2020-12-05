@@ -342,8 +342,6 @@ impl<'a> Parser<'a> {
             unexpected => self.expected("an expression", unexpected),
         }?;
 
-        let expr = self.parse_bracket_indexes(expr)?;
-
         if self.parse_keyword(Keyword::COLLATE) {
             Ok(Expr::Collate {
                 expr: Box::new(expr),
@@ -761,7 +759,7 @@ impl<'a> Parser<'a> {
             Token::Sharp if dialect_of!(self is PostgreSqlDialect) => {
                 Some(BinaryOperator::PGBitwiseXor)
             }
-            Token::Colon => Some(BinaryOperator::JsonIndex),
+            Token::Colon | Token::Period => Some(BinaryOperator::JsonIndex),
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
@@ -826,6 +824,9 @@ impl<'a> Parser<'a> {
             }
         } else if Token::DoubleColon == tok {
             Ok((self.parse_pg_cast(expr)?, true))
+        } else if Token::LBracket == tok {
+            self.prev_token();
+            Ok((self.parse_bracket_indexes(expr)?, true))
         } else if Token::ExclamationMark == tok {
             // PostgreSQL factorial operation
             Ok((
@@ -951,9 +952,9 @@ impl<'a> Parser<'a> {
             Token::Pipe => Ok(21),
             Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(22),
             Token::Ampersand => Ok(23),
-            Token::Colon => Ok(25),
             Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
             Token::Mult | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
+            Token::Colon | Token::LBracket | Token::Period => Ok(45),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
             _ => Ok(0),

@@ -363,6 +363,7 @@ define_keywords!(
     RETURNS,
     REVOKE,
     RIGHT,
+    RLIKE,
     ROLLBACK,
     ROLLUP,
     ROW,

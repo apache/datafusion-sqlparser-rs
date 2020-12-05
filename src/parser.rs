@@ -729,13 +729,10 @@ impl<'a> Parser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
-                Keyword::LIKE => Some(BinaryOperator::Like),
-                Keyword::ILIKE => Some(BinaryOperator::Ilike),
+                Keyword::RLIKE => Some(BinaryOperator::Rlike),
                 Keyword::NOT => {
-                    if self.parse_keyword(Keyword::LIKE) {
-                        Some(BinaryOperator::NotLike)
-                    } else if self.parse_keyword(Keyword::ILIKE) {
-                        Some(BinaryOperator::NotIlike)
+                    if self.parse_keyword(Keyword::RLIKE) {
+                        Some(BinaryOperator::NotRlike)
                     } else {
                         None
                     }
@@ -762,15 +759,19 @@ impl<'a> Parser<'a> {
                         self.expected("NULL or NOT NULL after IS", self.peek_token())
                     }
                 }
-                Keyword::NOT | Keyword::IN | Keyword::BETWEEN => {
+                Keyword::NOT | Keyword::IN | Keyword::BETWEEN | Keyword::LIKE | Keyword::ILIKE => {
                     self.prev_token();
                     let negated = self.parse_keyword(Keyword::NOT);
                     if self.parse_keyword(Keyword::IN) {
                         self.parse_in(expr, negated)
                     } else if self.parse_keyword(Keyword::BETWEEN) {
                         self.parse_between(expr, negated)
+                    } else if self.parse_keyword(Keyword::LIKE) {
+                        self.parse_like(expr, true, negated)
+                    } else if self.parse_keyword(Keyword::ILIKE) {
+                        self.parse_like(expr, false, negated)
                     } else {
-                        self.expected("IN or BETWEEN after NOT", self.peek_token())
+                        self.expected("IN or BETWEEN or [I]LIKE after NOT", self.peek_token())
                     }
                 }
                 // Can only happen if `get_next_precedence` got out of sync with this function
@@ -826,6 +827,29 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parses [I]LIKE <pattern> [ ESCAPE <escape> ]
+    /// https://docs.snowflake.com/en/sql-reference/functions/ilike.html
+    pub fn parse_like(
+        &mut self,
+        expr: Expr,
+        case_sensitive: bool,
+        negated: bool,
+    ) -> Result<Expr, ParserError> {
+        let pat = self.parse_expr()?;
+        let esc = if self.parse_keyword(Keyword::ESCAPE) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+        Ok(Expr::Like {
+            expr: Box::new(expr),
+            case_sensitive,
+            negated,
+            pat: Box::new(pat),
+            esc: esc.map(Box::new),
+        })
+    }
+
     /// Parse a postgresql casting style which is in the form of `expr::datatype`
     pub fn parse_pg_cast(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         Ok(Expr::Cast {
@@ -853,7 +877,11 @@ impl<'a> Parser<'a> {
                 // precedence.
                 Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
                 Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
-                Token::Word(w) if w.keyword == Keyword::LIKE || w.keyword == Keyword::ILIKE => {
+                Token::Word(w)
+                    if w.keyword == Keyword::LIKE
+                        || w.keyword == Keyword::ILIKE
+                        || w.keyword == Keyword::RLIKE =>
+                {
                     Ok(Self::BETWEEN_PREC)
                 }
                 _ => Ok(0),
@@ -861,7 +889,11 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::IS => Ok(17),
             Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::LIKE || w.keyword == Keyword::ILIKE => {
+            Token::Word(w)
+                if w.keyword == Keyword::LIKE
+                    || w.keyword == Keyword::ILIKE
+                    || w.keyword == Keyword::RLIKE =>
+            {
                 Ok(Self::BETWEEN_PREC)
             }
             Token::Eq | Token::Lt | Token::LtEq | Token::Neq | Token::Gt | Token::GtEq => Ok(20),

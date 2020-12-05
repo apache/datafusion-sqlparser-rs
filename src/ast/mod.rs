@@ -184,6 +184,14 @@ pub enum Expr {
         low: Box<Expr>,
         high: Box<Expr>,
     },
+    /// `<expr> [I]LIKE <pattern> [ ESCAPE <escape> ]`
+    Like {
+        expr: Box<Expr>,
+        case_sensitive: bool,
+        negated: bool,
+        pat: Box<Expr>,
+        esc: Option<Box<Expr>>,
+    },
     /// Binary operation e.g. `1 + 1` or `foo > bar`
     BinaryOp {
         left: Box<Expr>,
@@ -286,6 +294,27 @@ impl fmt::Display for Expr {
                 low,
                 high
             ),
+            Expr::Like {
+                expr,
+                case_sensitive,
+                negated,
+                pat,
+                esc,
+            } => {
+                write!(
+                    f,
+                    "{} {}{}LIKE {}",
+                    expr,
+                    if *negated { "NOT " } else { "" },
+                    if *case_sensitive { "" } else { "I" },
+                    pat,
+                )?;
+                if let Some(esc) = esc {
+                    write!(f, "ESCAPE {}", esc)
+                } else {
+                    Ok(())
+                }
+            }
             Expr::BinaryOp { left, op, right } => write!(f, "{} {} {}", left, op, right),
             Expr::UnaryOp { op, expr } => {
                 if op == &UnaryOperator::PGPostfixFactorial {

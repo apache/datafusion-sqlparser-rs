@@ -185,7 +185,11 @@ impl<'a> Parser<'a> {
                 break;
             }
 
-            expr = self.parse_infix(expr, next_precedence)?;
+            let (parsed_expr, success) = self.parse_infix(expr, next_precedence)?;
+            expr = parsed_expr;
+            if !success {
+                break;
+            }
         }
         Ok(expr)
     }
@@ -245,6 +249,7 @@ impl<'a> Parser<'a> {
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CAST => self.parse_cast_expr(false),
                 Keyword::TRY_CAST => self.parse_cast_expr(true),
+                Keyword::POSITION => self.parse_position(),
                 Keyword::EXISTS => self.parse_exists_expr(),
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::INTERVAL => self.parse_literal_interval(),
@@ -495,6 +500,33 @@ impl<'a> Parser<'a> {
         })
     }
 
+    // https://docs.snowflake.com/en/sql-reference/functions/position.html
+    pub fn parse_position(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let expr1 = self.parse_expr()?;
+        let mut args = vec![FunctionArg::Unnamed(expr1)];
+        if self.consume_token(&Token::Comma) {
+            let more_args = self.parse_comma_separated(Parser::parse_expr)?;
+            for arg in more_args {
+                args.push(FunctionArg::Unnamed(arg));
+            }
+        } else {
+            self.expect_keyword(Keyword::IN)?;
+            args.push(FunctionArg::Unnamed(self.parse_expr()?));
+        }
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::Function(Function {
+            name: ObjectName(vec![Ident {
+                value: "POSITION".to_owned(),
+                quote_style: None,
+            }]),
+            args,
+            within_group: vec![],
+            over: None,
+            distinct: false,
+        }))
+    }
+
     /// Parse a SQL EXISTS expression e.g. `WHERE EXISTS(SELECT ...)`.
     pub fn parse_exists_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
@@ -700,7 +732,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse an operator following an expression
-    pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
+    /// In the case where an infix operator wasn't successfully parsed, but we don't want to fail,
+    /// the bool will be false; otherwise it will be true
+    pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<(Expr, bool), ParserError> {
         let tok = self.next_token();
         let regular_binary_operator = match &tok {
             Token::Eq => Some(BinaryOperator::Eq),
@@ -745,33 +779,44 @@ impl<'a> Parser<'a> {
         };
 
         if let Some(op) = regular_binary_operator {
-            Ok(Expr::BinaryOp {
-                left: Box::new(expr),
-                op,
-                right: Box::new(self.parse_subexpr(precedence)?),
-            })
+            Ok((
+                Expr::BinaryOp {
+                    left: Box::new(expr),
+                    op,
+                    right: Box::new(self.parse_subexpr(precedence)?),
+                },
+                true,
+            ))
         } else if let Token::Word(w) = &tok {
             match w.keyword {
                 Keyword::IS => {
                     if self.parse_keyword(Keyword::NULL) {
-                        Ok(Expr::IsNull(Box::new(expr)))
+                        Ok((Expr::IsNull(Box::new(expr)), true))
                     } else if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
-                        Ok(Expr::IsNotNull(Box::new(expr)))
+                        Ok((Expr::IsNotNull(Box::new(expr)), true))
                     } else {
                         self.expected("NULL or NOT NULL after IS", self.peek_token())
                     }
                 }
                 Keyword::NOT | Keyword::IN | Keyword::BETWEEN | Keyword::LIKE | Keyword::ILIKE => {
                     self.prev_token();
+                    // allow backtracking if parsing IN doesn't work
+                    // https://docs.snowflake.com/en/sql-reference/functions/position.html
+                    let orig_index = self.index;
                     let negated = self.parse_keyword(Keyword::NOT);
                     if self.parse_keyword(Keyword::IN) {
-                        self.parse_in(expr, negated)
+                        if let Ok(in_expr) = self.parse_in(expr.clone(), negated) {
+                            Ok((in_expr, true))
+                        } else {
+                            self.index = orig_index;
+                            Ok((expr, false))
+                        }
                     } else if self.parse_keyword(Keyword::BETWEEN) {
-                        self.parse_between(expr, negated)
+                        Ok((self.parse_between(expr, negated)?, true))
                     } else if self.parse_keyword(Keyword::LIKE) {
-                        self.parse_like(expr, true, negated)
+                        Ok((self.parse_like(expr, true, negated)?, true))
                     } else if self.parse_keyword(Keyword::ILIKE) {
-                        self.parse_like(expr, false, negated)
+                        Ok((self.parse_like(expr, false, negated)?, true))
                     } else {
                         self.expected("IN or BETWEEN or [I]LIKE after NOT", self.peek_token())
                     }
@@ -780,13 +825,16 @@ impl<'a> Parser<'a> {
                 _ => panic!("No infix parser for token {:?}", tok),
             }
         } else if Token::DoubleColon == tok {
-            self.parse_pg_cast(expr)
+            Ok((self.parse_pg_cast(expr)?, true))
         } else if Token::ExclamationMark == tok {
             // PostgreSQL factorial operation
-            Ok(Expr::UnaryOp {
-                op: UnaryOperator::PGPostfixFactorial,
-                expr: Box::new(expr),
-            })
+            Ok((
+                Expr::UnaryOp {
+                    op: UnaryOperator::PGPostfixFactorial,
+                    expr: Box::new(expr),
+                },
+                true,
+            ))
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             panic!("No infix parser for token {:?}", tok)

@@ -385,6 +385,16 @@ impl<'a> Tokenizer<'a> {
                     let s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
                     Ok(Some(Token::Number(s)))
                 }
+                '.' => {
+                    let dot = self.consume_and_return(chars, Token::Period).unwrap();
+                    // try and see if this is a number
+                    let s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
+                    if s.len() > 0 {
+                        Ok(Some(Token::Number(format!(".{}", s))))
+                    } else {
+                        Ok(dot)
+                    }
+                }
                 // punctuation
                 '(' => self.consume_and_return(chars, Token::LParen),
                 ')' => self.consume_and_return(chars, Token::RParen),
@@ -449,7 +459,6 @@ impl<'a> Tokenizer<'a> {
                         _ => Ok(Some(Token::Eq)),
                     }
                 }
-                '.' => self.consume_and_return(chars, Token::Period),
                 '!' => {
                     chars.next(); // consume
                     match chars.peek() {

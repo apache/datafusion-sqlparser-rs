@@ -332,6 +332,7 @@ define_keywords!(
     PREPARE,
     PRIMARY,
     PROCEDURE,
+    QUALIFY,
     QUARTER,
     RANGE,
     RANK,

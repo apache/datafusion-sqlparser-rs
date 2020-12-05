@@ -2057,6 +2057,12 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let qualify = if self.parse_keyword(Keyword::QUALIFY) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
         Ok(Select {
             distinct,
             top,
@@ -2065,6 +2071,7 @@ impl<'a> Parser<'a> {
             selection,
             group_by,
             having,
+            qualify,
         })
     }
 

@@ -132,6 +132,8 @@ pub struct Select {
     pub group_by: Vec<Expr>,
     /// HAVING
     pub having: Option<Expr>,
+    /// QUALIFY https://docs.snowflake.com/en/sql-reference/constructs/qualify.html
+    pub qualify: Option<Expr>,
 }
 
 impl fmt::Display for Select {
@@ -152,6 +154,9 @@ impl fmt::Display for Select {
         }
         if let Some(ref having) = self.having {
             write!(f, " HAVING {}", having)?;
+        }
+        if let Some(ref qualify) = self.qualify {
+            write!(f, " QUALIFY {}", qualify)?;
         }
         Ok(())
     }

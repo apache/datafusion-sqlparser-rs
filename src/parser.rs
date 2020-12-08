@@ -610,21 +610,51 @@ impl<'a> Parser<'a> {
     // operator and interval qualifiers. EXTRACT supports a wider set of
     // date/time fields than interval qualifiers, so this function may need to
     // be split in two.
+    // https://docs.snowflake.com/en/sql-reference/functions-date-time.html#supported-date-and-time-parts
     pub fn parse_date_time_field(&mut self) -> Result<DateTimeField, ParserError> {
         match self.next_token() {
             Token::Word(w) => match w.keyword {
-                Keyword::YEAR => Ok(DateTimeField::Year),
+                Keyword::YEAR
+                | Keyword::Y
+                | Keyword::YY
+                | Keyword::YYY
+                | Keyword::YYYY
+                | Keyword::YR
+                | Keyword::YEARS
+                | Keyword::YRS => Ok(DateTimeField::Year),
                 Keyword::YEAROFWEEK => Ok(DateTimeField::YearOfWeek),
                 Keyword::YEAROFWEEKISO => Ok(DateTimeField::YearOfWeekIso),
-                Keyword::QUARTER => Ok(DateTimeField::Quarter),
-                Keyword::MONTH => Ok(DateTimeField::Month),
-                Keyword::WEEK => Ok(DateTimeField::Week),
-                Keyword::WEEKOFYEAR => Ok(DateTimeField::WeekOfYear),
-                Keyword::WEEKISO => Ok(DateTimeField::WeekIso),
-                Keyword::DAY | Keyword::DAYOFMONTH => Ok(DateTimeField::Day),
-                Keyword::DAYOFWEEK => Ok(DateTimeField::DayOfWeek),
-                Keyword::DAYOFWEEKISO => Ok(DateTimeField::DayOfWeekIso),
-                Keyword::DAYOFYEAR => Ok(DateTimeField::DayOfYear),
+                Keyword::QUARTER
+                | Keyword::Q
+                | Keyword::QTR
+                | Keyword::QTRS
+                | Keyword::QUARTERS => Ok(DateTimeField::Quarter),
+                Keyword::MONTH | Keyword::MM | Keyword::MON | Keyword::MONS | Keyword::MONTHS => {
+                    Ok(DateTimeField::Month)
+                }
+                Keyword::WEEK
+                | Keyword::W
+                | Keyword::WK
+                | Keyword::WEEKOFYEAR
+                | Keyword::WOY
+                | Keyword::WY => Ok(DateTimeField::Week),
+                Keyword::WEEKISO
+                | Keyword::WEEK_ISO
+                | Keyword::WEEKOFYEARISO
+                | Keyword::WEEKOFYEAR_ISO => Ok(DateTimeField::WeekIso),
+                Keyword::DAY | Keyword::D | Keyword::DD | Keyword::DAYS | Keyword::DAYOFMONTH => {
+                    Ok(DateTimeField::Day)
+                }
+                Keyword::DAYOFWEEK | Keyword::WEEKDAY | Keyword::DOW | Keyword::DW => {
+                    Ok(DateTimeField::DayOfWeek)
+                }
+                Keyword::DAYOFWEEKISO
+                | Keyword::WEEKDAY_ISO
+                | Keyword::DOW_ISO
+                | Keyword::DW_ISO => Ok(DateTimeField::DayOfWeekIso),
+                Keyword::DAYOFYEAR | Keyword::YEARDAY | Keyword::DOY | Keyword::DY => {
+                    Ok(DateTimeField::DayOfYear)
+                }
                 Keyword::HOUR => Ok(DateTimeField::Hour),
                 Keyword::MINUTE => Ok(DateTimeField::Minute),
                 Keyword::SECOND => Ok(DateTimeField::Second),

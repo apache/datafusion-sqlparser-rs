@@ -846,7 +846,12 @@ impl<'a> Parser<'a> {
                         self.expected("NULL or NOT NULL after IS", self.peek_token())
                     }
                 }
-                Keyword::NOT | Keyword::IN | Keyword::BETWEEN | Keyword::LIKE | Keyword::ILIKE => {
+                Keyword::NOT
+                | Keyword::IN
+                | Keyword::BETWEEN
+                | Keyword::LIKE
+                | Keyword::ILIKE
+                | Keyword::SIMILAR => {
                     self.prev_token();
                     // allow backtracking if parsing IN doesn't work
                     // https://docs.snowflake.com/en/sql-reference/functions/position.html
@@ -865,8 +870,13 @@ impl<'a> Parser<'a> {
                         Ok((self.parse_like(expr, true, negated)?, true))
                     } else if self.parse_keyword(Keyword::ILIKE) {
                         Ok((self.parse_like(expr, false, negated)?, true))
+                    } else if self.parse_keywords(&[Keyword::SIMILAR, Keyword::TO]) {
+                        Ok((self.parse_similar(expr, negated)?, true))
                     } else {
-                        self.expected("IN or BETWEEN or [I]LIKE after NOT", self.peek_token())
+                        self.expected(
+                            "IN or BETWEEN or [I]LIKE or SIMILAR TO after NOT",
+                            self.peek_token(),
+                        )
                     }
                 }
                 // Can only happen if `get_next_precedence` got out of sync with this function
@@ -951,6 +961,23 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parses SIMILAR TO <pattern> [ ESCAPE <escape> ]
+    /// https://www.postgresql.org/docs/9.0/functions-matching.html#FUNCTIONS-SIMILARTO-REGEXP
+    pub fn parse_similar(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
+        let pat = self.parse_expr()?;
+        let esc = if self.parse_keyword(Keyword::ESCAPE) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+        Ok(Expr::Similar {
+            expr: Box::new(expr),
+            pat: Box::new(pat),
+            negated,
+            esc: esc.map(Box::new),
+        })
+    }
+
     /// Parse a postgresql casting style which is in the form of `expr::datatype`
     pub fn parse_pg_cast(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         Ok(Expr::Cast {
@@ -998,7 +1025,8 @@ impl<'a> Parser<'a> {
             Token::Word(w)
                 if w.keyword == Keyword::LIKE
                     || w.keyword == Keyword::ILIKE
-                    || w.keyword == Keyword::RLIKE =>
+                    || w.keyword == Keyword::RLIKE
+                    || w.keyword == Keyword::SIMILAR =>
             {
                 Ok(Self::BETWEEN_PREC)
             }

@@ -192,6 +192,13 @@ pub enum Expr {
         pat: Box<Expr>,
         esc: Option<Box<Expr>>,
     },
+    /// `<expr> SIMILAR TO <pattern> [ ESCAPE <escape> ]`
+    Similar {
+        expr: Box<Expr>,
+        pat: Box<Expr>,
+        negated: bool,
+        esc: Option<Box<Expr>>,
+    },
     /// Binary operation e.g. `1 + 1` or `foo > bar`
     BinaryOp {
         left: Box<Expr>,
@@ -324,6 +331,25 @@ impl fmt::Display for Expr {
                     expr,
                     if *negated { "NOT " } else { "" },
                     if *case_sensitive { "" } else { "I" },
+                    pat,
+                )?;
+                if let Some(esc) = esc {
+                    write!(f, "ESCAPE {}", esc)
+                } else {
+                    Ok(())
+                }
+            }
+            Expr::Similar {
+                expr,
+                negated,
+                pat,
+                esc,
+            } => {
+                write!(
+                    f,
+                    "{} {}SIMILAR TO {}",
+                    expr,
+                    if *negated { "NOT " } else { "" },
                     pat,
                 )?;
                 if let Some(esc) = esc {

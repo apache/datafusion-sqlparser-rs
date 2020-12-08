@@ -239,8 +239,13 @@ pub enum Whitespace {
     Space,
     Newline,
     Tab,
-    SingleLineComment { comment: String, prefix: String },
+    SingleLineComment {
+        comment: String,
+        prefix: String,
+    },
     MultiLineComment(String),
+    /// https://en.wikipedia.org/wiki/Zero-width_space
+    Zwsp,
 }
 
 impl fmt::Display for Whitespace {
@@ -251,6 +256,7 @@ impl fmt::Display for Whitespace {
             Whitespace::Tab => f.write_str("\t"),
             Whitespace::SingleLineComment { prefix, comment } => write!(f, "{}{}", prefix, comment),
             Whitespace::MultiLineComment(s) => write!(f, "/*{}*/", s),
+            Whitespace::Zwsp => write!(f, "\u{feff}"),
         }
     }
 }
@@ -314,6 +320,7 @@ impl<'a> Tokenizer<'a> {
         match chars.peek() {
             Some(&ch) => match ch {
                 ' ' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Space)),
+                '\u{feff}' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Zwsp)),
                 '\t' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Tab)),
                 '\n' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Newline)),
                 '\r' => {

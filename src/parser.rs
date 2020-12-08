@@ -817,6 +817,16 @@ impl<'a> Parser<'a> {
             ))
         } else if let Token::Word(w) = &tok {
             match w.keyword {
+                Keyword::AT if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) => {
+                    let tz = self.parse_literal_string()?;
+                    Ok((
+                        Expr::AtTimeZone {
+                            expr: Box::new(expr),
+                            tz,
+                        },
+                        true,
+                    ))
+                }
                 Keyword::IS => {
                     if self.parse_keyword(Keyword::NULL) {
                         Ok((Expr::IsNull(Box::new(expr)), true))
@@ -969,6 +979,7 @@ impl<'a> Parser<'a> {
                 _ => Ok(0),
             },
             Token::Word(w) if w.keyword == Keyword::IS => Ok(17),
+            Token::Word(w) if w.keyword == Keyword::AT => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
             Token::Word(w)

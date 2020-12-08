@@ -199,7 +199,14 @@ pub enum Expr {
         right: Box<Expr>,
     },
     /// Unary operation e.g. `NOT foo`
-    UnaryOp { op: UnaryOperator, expr: Box<Expr> },
+    UnaryOp {
+        op: UnaryOperator,
+        expr: Box<Expr>,
+    },
+    AtTimeZone {
+        expr: Box<Expr>,
+        tz: String,
+    },
     /// CAST an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
     Cast {
         /// try_cast is a snowflake feature
@@ -229,7 +236,10 @@ pub enum Expr {
     /// A constant of form `<data_type> 'value'`.
     /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
     /// as well as constants of other types (a non-standard PostgreSQL extension).
-    TypedString { data_type: DataType, value: String },
+    TypedString {
+        data_type: DataType,
+        value: String,
+    },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
@@ -326,6 +336,8 @@ impl fmt::Display for Expr {
                     write!(f, "{} {}", op, expr)
                 }
             }
+            // rs/pg: https://docs.aws.amazon.com/redshift/latest/dg/r_AT_TIME_ZONE.html
+            Expr::AtTimeZone { expr, tz } => write!(f, "{} AT TIME ZONE '{}'", expr, tz),
             Expr::Cast {
                 try_cast,
                 expr,

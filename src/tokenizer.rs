@@ -382,20 +382,9 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 // numbers
-                '0'..='9' => {
+                '0'..='9' | '.' => {
                     // TODO: https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#unsigned-numeric-literal
-                    let s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
-                    Ok(Some(Token::Number(s)))
-                }
-                '.' => {
-                    let dot = self.consume_and_return(chars, Token::Period).unwrap();
-                    // try and see if this is a number
-                    let s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
-                    if s.len() > 0 {
-                        Ok(Some(Token::Number(format!(".{}", s))))
-                    } else {
-                        Ok(dot)
-                    }
+                    Ok(Some(consume_number_literal_or_dot(chars, ch)))
                 }
                 // punctuation
                 '(' => self.consume_and_return(chars, Token::LParen),
@@ -633,6 +622,59 @@ fn peeking_take_while(
         }
     }
     s
+}
+
+/// handle parsing numbers, including scientific notation
+/// https://docs.snowflake.com/en/sql-reference/data-types-numeric.html
+fn consume_number_literal_or_dot(chars: &mut Peekable<Chars<'_>>, first: char) -> Token {
+    let mut s = String::new();
+    chars.next(); // consume
+    s.push(first);
+    #[derive(PartialEq)]
+    enum NumState {
+        WholeNum,      // we look for digits or . or e
+        Decimal,       // we look for digits or e
+        ExponentStart, // we look for either a +- sign or digits
+        Exponent,      // we only look for digits
+    }
+    let mut num_state = if first == '.' {
+        NumState::Decimal
+    } else {
+        NumState::WholeNum
+    };
+    let mut is_second_char = true;
+    while let Some(&ch) = chars.peek() {
+        if num_state == NumState::Decimal && is_second_char && !matches!(ch, '0'..='9') {
+            return Token::Period;
+        }
+        let add_to_string = match num_state {
+            NumState::WholeNum | NumState::Decimal => match ch {
+                '0'..='9' => true,
+                '.' if num_state == NumState::WholeNum => {
+                    num_state = NumState::Decimal;
+                    true
+                }
+                'e' | 'E' => {
+                    num_state = NumState::ExponentStart;
+                    true
+                }
+                _ => false,
+            },
+            NumState::ExponentStart => {
+                num_state = NumState::Exponent;
+                matches!(ch, '0'..='9' | '-' | '+')
+            }
+            NumState::Exponent => matches!(ch, '0'..='9'),
+        };
+        if add_to_string {
+            chars.next(); // consume
+            s.push(ch);
+        } else {
+            break;
+        }
+        is_second_char = false;
+    }
+    Token::Number(s)
 }
 
 #[cfg(test)]

@@ -827,6 +827,16 @@ impl<'a> Parser<'a> {
                         true,
                     ))
                 }
+                Keyword::IGNORE | Keyword::RESPECT => {
+                    self.expect_keyword(Keyword::NULLS)?;
+                    Ok((
+                        Expr::IgnoreRespectNulls {
+                            expr: Box::new(expr),
+                            ignore: w.value == "IGNORE",
+                        },
+                        true,
+                    ))
+                }
                 Keyword::IS => {
                     if self.parse_keyword(Keyword::NULL) {
                         Ok((Expr::IsNull(Box::new(expr)), true))
@@ -959,6 +969,9 @@ impl<'a> Parser<'a> {
         let token = self.peek_token();
         debug!("get_next_precedence() {:?}", token);
         match token {
+            Token::Word(w) if w.keyword == Keyword::IGNORE || w.keyword == Keyword::RESPECT => {
+                Ok(4)
+            }
             Token::Word(w) if w.keyword == Keyword::OR => Ok(5),
             Token::Word(w) if w.keyword == Keyword::AND => Ok(10),
             Token::Word(w) if w.keyword == Keyword::NOT => match self.peek_nth_token(1) {

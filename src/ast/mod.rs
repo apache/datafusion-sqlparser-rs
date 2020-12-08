@@ -207,6 +207,10 @@ pub enum Expr {
         expr: Box<Expr>,
         tz: String,
     },
+    IgnoreRespectNulls {
+        expr: Box<Expr>,
+        ignore: bool,
+    },
     /// CAST an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
     Cast {
         /// try_cast is a snowflake feature
@@ -338,6 +342,13 @@ impl fmt::Display for Expr {
             }
             // rs/pg: https://docs.aws.amazon.com/redshift/latest/dg/r_AT_TIME_ZONE.html
             Expr::AtTimeZone { expr, tz } => write!(f, "{} AT TIME ZONE '{}'", expr, tz),
+            // rs: https://docs.aws.amazon.com/redshift/latest/dg/r_WF_first_value.html
+            Expr::IgnoreRespectNulls { expr, ignore } => write!(
+                f,
+                "{} {} NULLS",
+                expr,
+                if *ignore { "IGNORE" } else { "RESPECT " }
+            ),
             Expr::Cast {
                 try_cast,
                 expr,

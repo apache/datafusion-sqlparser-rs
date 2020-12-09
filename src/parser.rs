@@ -809,6 +809,16 @@ impl<'a> Parser<'a> {
                 }
                 _ => None,
             },
+            tok @ Token::PgJsonGetIndex
+            | tok @ Token::PgJsonGetIndexText
+            | tok @ Token::PgJsonGetPath
+            | tok @ Token::PgJsonGetPathText
+            | tok @ Token::PgJsonGt
+            | tok @ Token::PgJsonLt
+            | tok @ Token::PgJsonKeyExists
+            | tok @ Token::PgJsonAnyKeyExists
+            | tok @ Token::PgJsonAllKeysExist
+            | tok @ Token::PgJsonMinus => Some(BinaryOperator::PgJsonBinOp(tok.to_string())),
             _ => None,
         };
 
@@ -1038,6 +1048,9 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::IS => Ok(17),
             Token::Word(w) if w.keyword == Keyword::AT => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
+            Token::PgJsonKeyExists | Token::PgJsonAnyKeyExists | Token::PgJsonAllKeysExist => {
+                Ok(Self::BETWEEN_PREC)
+            }
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
             Token::Word(w)
                 if w.keyword == Keyword::LIKE
@@ -1047,13 +1060,26 @@ impl<'a> Parser<'a> {
             {
                 Ok(Self::BETWEEN_PREC)
             }
-            Token::Eq | Token::Lt | Token::LtEq | Token::Neq | Token::Gt | Token::GtEq => Ok(20),
+            Token::Eq
+            | Token::Lt
+            | Token::LtEq
+            | Token::Neq
+            | Token::Gt
+            | Token::GtEq
+            | Token::PgJsonGt
+            | Token::PgJsonLt => Ok(20),
             Token::Pipe => Ok(21),
             Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(22),
             Token::Ampersand => Ok(23),
-            Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
+            Token::Plus | Token::Minus | Token::PgJsonMinus => Ok(Self::PLUS_MINUS_PREC),
             Token::Mult | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
-            Token::Colon | Token::LBracket | Token::Period => Ok(45),
+            Token::Colon
+            | Token::LBracket
+            | Token::Period
+            | Token::PgJsonGetIndex
+            | Token::PgJsonGetIndexText
+            | Token::PgJsonGetPath
+            | Token::PgJsonGetPathText => Ok(45),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
             _ => Ok(0),

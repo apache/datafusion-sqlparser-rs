@@ -21,6 +21,7 @@ use std::str::Chars;
 
 use super::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 use super::dialect::Dialect;
+use super::dialect::PostgreSqlDialect;
 use super::dialect::SnowflakeDialect;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -104,6 +105,31 @@ pub enum Token {
     RBrace,
     /// Right Arrow `=>`
     RArrow,
+    /// https://www.postgresql.org/docs/9.5/functions-json.html
+    /// various PostgreSQL JSON index operators:
+    /// `->`
+    PgJsonGetIndex,
+    /// `->>`
+    PgJsonGetIndexText,
+    /// `#>` Get JSON object at specified path
+    PgJsonGetPath,
+    /// `#>>` Get JSON object at specified path as text
+    PgJsonGetPathText,
+    /// `@>` Does the left JSON value contain the right JSON path/value entries
+    /// at the top level?
+    PgJsonGt,
+    /// <@` Are the left JSON path/value entries contained at the top level
+    /// within the right JSON value?
+    PgJsonLt,
+    /// `?` Does the string exist as a top-level key within the JSON value?
+    PgJsonKeyExists,
+    /// `?|` Do any of these array strings exist as top-level keys?
+    PgJsonAnyKeyExists,
+    /// `?&` Do all of these array strings exist as top-level keys?
+    PgJsonAllKeysExist,
+    /// `#-` Delete the field or element with specified path (for JSON arrays,
+    /// negative integers count from the end)
+    PgJsonMinus,
     /// Sharp `#` used for PostgreSQL Bitwise XOR operator
     Sharp,
     /// Tilde `~` used for PostgreSQL Bitwise NOT operator
@@ -163,6 +189,16 @@ impl fmt::Display for Token {
             Token::LBrace => f.write_str("{"),
             Token::RBrace => f.write_str("}"),
             Token::RArrow => f.write_str("=>"),
+            Token::PgJsonGetIndex => f.write_str("->"),
+            Token::PgJsonGetIndexText => f.write_str("->>"),
+            Token::PgJsonGetPath => f.write_str("#>"),
+            Token::PgJsonGetPathText => f.write_str("#>>"),
+            Token::PgJsonGt => f.write_str("@>"),
+            Token::PgJsonLt => f.write_str("@<"),
+            Token::PgJsonKeyExists => f.write_str("?"),
+            Token::PgJsonAnyKeyExists => f.write_str("?|"),
+            Token::PgJsonAllKeysExist => f.write_str("?&"),
+            Token::PgJsonMinus => f.write_str("#-"),
             Token::Sharp => f.write_str("#"),
             Token::ExclamationMark => f.write_str("!"),
             Token::DoubleExclamationMark => f.write_str("!!"),
@@ -409,6 +445,15 @@ impl<'a> Tokenizer<'a> {
                                 comment,
                             })))
                         }
+                        Some('>') if dialect_of!(self is PostgreSqlDialect) => {
+                            chars.next(); // consume >
+                            if let Some('>') = chars.peek() {
+                                chars.next(); // consume >
+                                Ok(Some(Token::PgJsonGetIndexText))
+                            } else {
+                                Ok(Some(Token::PgJsonGetIndex))
+                            }
+                        }
                         // a regular '-' operator
                         _ => Ok(Some(Token::Minus)),
                     }
@@ -505,9 +550,66 @@ impl<'a> Tokenizer<'a> {
                         comment,
                     })))
                 }
+                '#' => {
+                    chars.next(); // consume #
+                    if dialect_of!(self is PostgreSqlDialect) {
+                        match chars.peek() {
+                            Some('>') => {
+                                chars.next(); // consume >
+                                if let Some('>') = chars.peek() {
+                                    chars.next(); // consume >
+                                    Ok(Some(Token::PgJsonGetPathText))
+                                } else {
+                                    Ok(Some(Token::PgJsonGetPath))
+                                }
+                            }
+                            Some('-') => {
+                                chars.next(); // consume -
+                                Ok(Some(Token::PgJsonMinus))
+                            }
+                            _ => Ok(Some(Token::Sharp)),
+                        }
+                    } else {
+                        Ok(Some(Token::Sharp))
+                    }
+                }
                 '~' => self.consume_and_return(chars, Token::Tilde),
-                '#' => self.consume_and_return(chars, Token::Sharp),
-                '@' => self.consume_and_return(chars, Token::AtSign),
+                '@' => {
+                    chars.next(); // consume @
+                    if dialect_of!(self is PostgreSqlDialect) {
+                        match chars.peek() {
+                            Some('>') => {
+                                chars.next(); // consume >
+                                Ok(Some(Token::PgJsonGt))
+                            }
+                            Some('<') => {
+                                chars.next(); // consume <
+                                Ok(Some(Token::PgJsonLt))
+                            }
+                            _ => Ok(Some(Token::AtSign)),
+                        }
+                    } else {
+                        Ok(Some(Token::AtSign))
+                    }
+                }
+                '?' => {
+                    chars.next(); // consume ?
+                    if dialect_of!(self is PostgreSqlDialect) {
+                        match chars.peek() {
+                            Some('|') => {
+                                chars.next(); // consume |
+                                Ok(Some(Token::PgJsonAnyKeyExists))
+                            }
+                            Some('&') => {
+                                chars.next(); // consume &
+                                Ok(Some(Token::PgJsonAllKeysExist))
+                            }
+                            _ => Ok(Some(Token::PgJsonKeyExists)),
+                        }
+                    } else {
+                        Ok(Some(Token::Char('?')))
+                    }
+                }
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),

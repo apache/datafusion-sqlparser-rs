@@ -127,6 +127,7 @@ pub enum DateTimeField {
     Minute,
     Second,
     Epoch,
+    Literal(String),
 }
 
 impl fmt::Display for DateTimeField {
@@ -147,6 +148,7 @@ impl fmt::Display for DateTimeField {
             DateTimeField::Minute => "MINUTE",
             DateTimeField::Second => "SECOND",
             DateTimeField::Epoch => "EPOCH",
+            DateTimeField::Literal(ref s) => return write!(f, "'{}'", s),
         })
     }
 }

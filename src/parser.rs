@@ -666,6 +666,7 @@ impl<'a> Parser<'a> {
                 Keyword::EPOCH => Ok(DateTimeField::Epoch),
                 _ => self.expected("date/time field", Token::Word(w))?,
             },
+            Token::SingleQuotedString(w) => Ok(DateTimeField::Literal(w.clone())),
             unexpected => self.expected("date/time field", unexpected),
         }
     }

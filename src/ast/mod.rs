@@ -242,6 +242,10 @@ pub enum Expr {
     /// Nested expression e.g. `(foo > bar)` or `(1)`
     /// Snowflake allows multiple comma-separated expressions here
     Nested(Vec<Expr>),
+    /// redshift seems to allow brackets around identifiers, e.g.
+    /// select ["a"] from (select 1 a);
+    /// We preserve them even though it's not clear that they have any effect
+    Brackets(Box<Expr>),
     /// A literal value, such as string, number, date or NULL
     Value(Value),
     /// A constant of form `<data_type> 'value'`.
@@ -398,6 +402,7 @@ impl fmt::Display for Expr {
                 }
                 write!(f, ")")
             }
+            Expr::Brackets(expr) => write!(f, "[{}]", expr),
             Expr::Value(v) => write!(f, "{}", v),
             Expr::TypedString { data_type, value } => {
                 write!(f, "{}", data_type)?;

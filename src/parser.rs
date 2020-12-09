@@ -339,6 +339,11 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::RParen)?;
                 Ok(expr)
             }
+            Token::LBracket => {
+                let ident = self.parse_identifier()?;
+                self.expect_token(&Token::RBracket)?;
+                Ok(Expr::Brackets(Box::new(Expr::Identifier(ident))))
+            }
             unexpected => self.expected("an expression", unexpected),
         }?;
 

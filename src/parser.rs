@@ -844,13 +844,24 @@ impl<'a> Parser<'a> {
                     ))
                 }
                 Keyword::IS => {
-                    if self.parse_keyword(Keyword::NULL) {
-                        Ok((Expr::IsNull(Box::new(expr)), true))
-                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
-                        Ok((Expr::IsNotNull(Box::new(expr)), true))
-                    } else {
-                        self.expected("NULL or NOT NULL after IS", self.peek_token())
-                    }
+                    let negated = self.parse_keyword(Keyword::NOT);
+                    let check = match self.next_token() {
+                        Token::Word(w) if w.keyword == Keyword::NULL => "NULL",
+                        Token::Word(w) if w.keyword == Keyword::FALSE => "FALSE",
+                        Token::Word(w) if w.keyword == Keyword::TRUE => "TRUE",
+                        Token::Word(w) if w.keyword == Keyword::UNKNOWN => "UNKNOWN",
+                        unexpected => {
+                            return self.expected("NULL, FALSE, TRUE, or UNKNOWN", unexpected)
+                        }
+                    };
+                    Ok((
+                        Expr::Is {
+                            expr: Box::new(expr),
+                            check,
+                            negated,
+                        },
+                        true,
+                    ))
                 }
                 Keyword::NOT
                 | Keyword::IN

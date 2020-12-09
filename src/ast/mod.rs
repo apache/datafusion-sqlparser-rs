@@ -161,11 +161,12 @@ pub enum Expr {
     QualifiedWildcard(Vec<Ident>),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
-    /// `IS NULL` expression
-    IsNull(Box<Expr>),
-    /// `IS NOT NULL` expression
-    IsNotNull(Box<Expr>),
-    /// `[ NOT ] IN (val1, val2, ...)`
+    /// `IS [NOT] { NULL | FALSE | TRUE | UNKNOWN }` expression
+    Is {
+        expr: Box<Expr>,
+        check: &'static str,
+        negated: bool,
+    },
     InList {
         expr: Box<Expr>,
         list: Vec<Expr>,
@@ -285,8 +286,17 @@ impl fmt::Display for Expr {
             Expr::Wildcard => f.write_str("*"),
             Expr::QualifiedWildcard(q) => write!(f, "{}.*", display_separated(q, ".")),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
-            Expr::IsNull(ast) => write!(f, "{} IS NULL", ast),
-            Expr::IsNotNull(ast) => write!(f, "{} IS NOT NULL", ast),
+            Expr::Is {
+                expr,
+                check,
+                negated,
+            } => write!(
+                f,
+                "{} IS {}{}",
+                expr,
+                if *negated { "NOT " } else { "" },
+                check
+            ),
             Expr::InList {
                 expr,
                 list,

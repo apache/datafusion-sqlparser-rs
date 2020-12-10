@@ -20,6 +20,7 @@ use std::iter::Peekable;
 use std::str::Chars;
 
 use super::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
+use super::dialect::BigQueryDialect;
 use super::dialect::Dialect;
 use super::dialect::PostgreSqlDialect;
 use super::dialect::SnowflakeDialect;
@@ -465,7 +466,7 @@ impl<'a> Tokenizer<'a> {
                             chars.next(); // consume the '*', starting a multi-line comment
                             self.tokenize_multiline_comment(chars)
                         }
-                        Some('/') if dialect_of!(self is SnowflakeDialect) => {
+                        Some('/') if dialect_of!(self is SnowflakeDialect | BigQueryDialect) => {
                             chars.next(); // consume the second '/', starting a snowflake single-line comment
                             let comment = self.tokenize_single_line_comment(chars);
                             Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
@@ -542,7 +543,7 @@ impl<'a> Tokenizer<'a> {
                 '^' => self.consume_and_return(chars, Token::Caret),
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
-                '#' if dialect_of!(self is SnowflakeDialect) => {
+                '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect) => {
                     chars.next(); // consume the '#', starting a snowflake single-line comment
                     let comment = self.tokenize_single_line_comment(chars);
                     Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {

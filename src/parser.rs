@@ -2009,6 +2009,10 @@ impl<'a> Parser<'a> {
     pub fn parse_identifier(&mut self) -> Result<Ident, ParserError> {
         match self.next_token() {
             Token::Word(w) => Ok(w.to_ident()),
+            Token::BacktickQuotedString(s) if dialect_of!(self is BigQueryDialect) => Ok(Ident {
+                value: s,
+                quote_style: Some('`'),
+            }),
             unexpected => self.expected("identifier", unexpected),
         }
     }

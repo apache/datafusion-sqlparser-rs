@@ -44,6 +44,8 @@ pub enum Token {
     /// This should retains the escaped character sequences so that
     /// .to_string() of the value will give the value that was in the input
     SingleQuotedString(String),
+    /// Single quoted string: i.e: 'string'
+    BacktickQuotedString(String),
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
     /// Hexadecimal string literal: i.e.: X'deadbeef'
@@ -159,6 +161,7 @@ impl fmt::Display for Token {
             Token::Number(ref n) => f.write_str(n),
             Token::Char(ref c) => write!(f, "{}", c),
             Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
+            Token::BacktickQuotedString(ref s) => write!(f, "`{}`", s),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
             Token::HexStringLiteral(ref s) => write!(f, "X'{}'", s),
             Token::Comma => f.write_str(","),
@@ -343,6 +346,7 @@ impl<'a> Tokenizer<'a> {
                 Token::Word(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
                 Token::Number(s) => self.col += s.len() as u64,
                 Token::SingleQuotedString(s) => self.col += s.len() as u64,
+                Token::BacktickQuotedString(s) => self.col += s.len() as u64,
                 _ => self.col += 1,
             }
 
@@ -410,6 +414,18 @@ impl<'a> Tokenizer<'a> {
                 '\'' => {
                     let s = self.tokenize_single_quoted_string(chars)?;
                     Ok(Some(Token::SingleQuotedString(s)))
+                }
+                // string
+                '`' if dialect_of!(self is BigQueryDialect) => {
+                    chars.next(); // consume opening backtick
+                    let s = peeking_take_while(chars, |ch| ch != '`');
+                    match chars.peek() {
+                        Some('`') => {
+                            chars.next(); // consume closing backtick
+                            Ok(Some(Token::BacktickQuotedString(s)))
+                        }
+                        _ => self.tokenizer_error("Unterminated backtick literal"),
+                    }
                 }
                 // delimited (quoted) identifier
                 quote_start if self.dialect.is_delimited_identifier_start(quote_start) => {

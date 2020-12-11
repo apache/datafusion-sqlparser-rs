@@ -271,35 +271,12 @@ impl<'a> Parser<'a> {
                 }),
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
-                _ => match self.peek_token() {
-                    Token::LParen | Token::Period => {
-                        let mut id_parts: Vec<Ident> = vec![w.to_ident()];
-                        let mut ends_with_wildcard = false;
-                        while self.consume_token(&Token::Period) {
-                            match self.next_token() {
-                                Token::Word(w) => id_parts.push(w.to_ident()),
-                                Token::Mult => {
-                                    ends_with_wildcard = true;
-                                    break;
-                                }
-                                unexpected => {
-                                    return self
-                                        .expected("an identifier or a '*' after '.'", unexpected);
-                                }
-                            }
-                        }
-                        if ends_with_wildcard {
-                            Ok(Expr::QualifiedWildcard(id_parts))
-                        } else if self.consume_token(&Token::LParen) {
-                            self.prev_token();
-                            self.parse_function(ObjectName(id_parts))
-                        } else {
-                            Ok(Expr::CompoundIdentifier(id_parts))
-                        }
-                    }
-                    _ => Ok(Expr::Identifier(w.to_ident())),
-                },
+                _ => self.parse_ident(w.to_ident()),
             }, // End of Token::Word
+            Token::BacktickQuotedString(w) => self.parse_ident(Ident {
+                value: w.clone(),
+                quote_style: Some('`'),
+            }),
             Token::Mult => Ok(Expr::Wildcard),
             tok @ Token::Minus | tok @ Token::Plus => {
                 let op = if tok == Token::Plus {
@@ -422,6 +399,40 @@ impl<'a> Parser<'a> {
             order_by: args_res.order_by,
             limit: args_res.limit,
         }))
+    }
+
+    pub fn parse_ident(&mut self, ident: Ident) -> Result<Expr, ParserError> {
+        match self.peek_token() {
+            Token::LParen | Token::Period => {
+                let mut id_parts: Vec<Ident> = vec![ident];
+                let mut ends_with_wildcard = false;
+                while self.consume_token(&Token::Period) {
+                    match self.next_token() {
+                        Token::Word(w) => id_parts.push(w.to_ident()),
+                        Token::BacktickQuotedString(w) => id_parts.push(Ident {
+                            value: w.clone(),
+                            quote_style: Some('`'),
+                        }),
+                        Token::Mult => {
+                            ends_with_wildcard = true;
+                            break;
+                        }
+                        unexpected => {
+                            return self.expected("an identifier or a '*' after '.'", unexpected);
+                        }
+                    }
+                }
+                if ends_with_wildcard {
+                    Ok(Expr::QualifiedWildcard(id_parts))
+                } else if self.consume_token(&Token::LParen) {
+                    self.prev_token();
+                    self.parse_function(ObjectName(id_parts))
+                } else {
+                    Ok(Expr::CompoundIdentifier(id_parts))
+                }
+            }
+            _ => Ok(Expr::Identifier(ident)),
+        }
     }
 
     pub fn parse_window_frame_units(&mut self) -> Result<WindowFrameUnits, ParserError> {

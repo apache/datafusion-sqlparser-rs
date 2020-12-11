@@ -242,6 +242,9 @@ impl<'a> Parser<'a> {
 
         let expr = match self.next_token() {
             Token::Word(w) => match w.keyword {
+                Keyword::FROM if dialect_of!(self is BigQueryDialect) => {
+                    parser_err!(self, "FROM is a disallowed expr in BigQuery")
+                }
                 Keyword::TRUE | Keyword::FALSE | Keyword::NULL => {
                     self.prev_token();
                     Ok(Expr::Value(self.parse_value()?))
@@ -1249,7 +1252,20 @@ impl<'a> Parser<'a> {
     {
         let mut values = vec![];
         loop {
-            values.push(f(self)?);
+            // save the index so we can backtrack if necessary
+            let index_before_expr = self.index;
+            match f(self) {
+                Ok(expr) => values.push(expr),
+                Err(err) if dialect_of!(self is BigQueryDialect) => {
+                    debug!("invalid bq expression: {}", err);
+                    // in BigQuery there might just be a trailing comma in a
+                    // comma-separated list, and we can just reset the index,
+                    // bail, and try to continue parsing
+                    self.index = index_before_expr;
+                    break;
+                }
+                Err(err) => return Err(err),
+            }
             if !self.consume_token(&Token::Comma) {
                 break;
             }

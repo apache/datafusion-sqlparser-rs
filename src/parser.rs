@@ -82,6 +82,14 @@ impl fmt::Display for ParserError {
 
 impl Error for ParserError {}
 
+pub struct FunctionArgsRes {
+    pub args: Vec<FunctionArg>,
+    /// Some(true) for IGNORE NULLS, Some(false) for RESPECT NULLS
+    pub ignore_respect_nulls: Option<bool>,
+    pub order_by: Vec<OrderByExpr>,
+    pub limit: Option<Box<Expr>>,
+}
+
 pub struct Parser<'a> {
     tokens: Vec<Token>,
     /// The index of the first unprocessed token in `self.tokens`
@@ -363,7 +371,7 @@ impl<'a> Parser<'a> {
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let distinct = self.parse_all_or_distinct()?;
-        let args = self.parse_optional_args()?;
+        let args_res = self.parse_optional_args()?;
         let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
             self.expect_token(&Token::LParen)?;
             self.expect_keywords(&[Keyword::ORDER, Keyword::BY])?;
@@ -406,10 +414,13 @@ impl<'a> Parser<'a> {
 
         Ok(Expr::Function(Function {
             name,
-            args,
+            args: args_res.args,
             within_group,
             over,
             distinct,
+            ignore_respect_nulls: args_res.ignore_respect_nulls,
+            order_by: args_res.order_by,
+            limit: args_res.limit,
         }))
     }
 
@@ -530,6 +541,9 @@ impl<'a> Parser<'a> {
             within_group: vec![],
             over: None,
             distinct: false,
+            ignore_respect_nulls: None,
+            order_by: vec![],
+            limit: None,
         }))
     }
 
@@ -2440,7 +2454,8 @@ impl<'a> Parser<'a> {
         if self.parse_keyword(Keyword::LATERAL) {
             if dialect_of!(self is SnowflakeDialect) && self.parse_keyword(Keyword::FLATTEN) {
                 self.expect_token(&Token::LParen)?;
-                let args = self.parse_optional_args()?;
+                let args_res = self.parse_optional_args()?;
+                let args = self.strip_func_args_res(args_res)?;
                 let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
                 Ok(TableFactor::Flatten { args, alias })
             } else {
@@ -2544,7 +2559,8 @@ impl<'a> Parser<'a> {
             let name = self.parse_object_name()?;
             // Postgres, MSSQL: table-valued functions:
             let args = if self.consume_token(&Token::LParen) {
-                self.parse_optional_args()?
+                let args_res = self.parse_optional_args()?;
+                self.strip_func_args_res(args_res)?
             } else {
                 vec![]
             };
@@ -2670,13 +2686,84 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_optional_args(&mut self) -> Result<Vec<FunctionArg>, ParserError> {
+    pub fn parse_args_end(
+        &mut self,
+        args: Vec<FunctionArg>,
+        must_be_end: bool,
+    ) -> Result<Option<FunctionArgsRes>, ParserError> {
+        let mut is_end = must_be_end;
+        let ignore_respect_nulls = if dialect_of!(self is BigQueryDialect) {
+            if self.parse_keyword(Keyword::IGNORE) {
+                is_end = true;
+                Some(true)
+            } else if self.parse_keyword(Keyword::RESPECT) {
+                is_end = true;
+                Some(false)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let order_by = if dialect_of!(self is BigQueryDialect)
+            && self.parse_keywords(&[Keyword::ORDER, Keyword::BY])
+        {
+            is_end = true;
+            self.parse_comma_separated(Parser::parse_order_by_expr)?
+        } else {
+            vec![]
+        };
+
+        let limit = if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::LIMIT) {
+            is_end = true;
+            self.parse_limit()?.map(Box::new)
+        } else {
+            None
+        };
+
+        if is_end {
+            self.expect_token(&Token::RParen)?;
+            return Ok(Some(FunctionArgsRes {
+                args,
+                ignore_respect_nulls,
+                order_by,
+                limit,
+            }));
+        }
+
         if self.consume_token(&Token::RParen) {
-            Ok(vec![])
+            Ok(Some(FunctionArgsRes {
+                args,
+                ignore_respect_nulls,
+                order_by,
+                limit,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn strip_func_args_res(
+        &mut self,
+        args_res: FunctionArgsRes,
+    ) -> Result<Vec<FunctionArg>, ParserError> {
+        if args_res.ignore_respect_nulls.is_some() {
+            return parser_err!(self, format!("Unexpected IGNORE|RESPECT NULLS clause"));
+        } else if args_res.order_by.len() > 0 {
+            return parser_err!(self, format!("Unexpected ORDER BY clause"));
+        } else if args_res.limit.is_some() {
+            return parser_err!(self, format!("Unexpected LIMIT clause"));
+        }
+        return Ok(args_res.args);
+    }
+
+    pub fn parse_optional_args(&mut self) -> Result<FunctionArgsRes, ParserError> {
+        if let Some(args_res) = self.parse_args_end(vec![], false)? {
+            Ok(args_res)
         } else {
             let args = self.parse_comma_separated(Parser::parse_function_args)?;
-            self.expect_token(&Token::RParen)?;
-            Ok(args)
+            Ok(self.parse_args_end(args, true)?.unwrap())
         }
     }
 

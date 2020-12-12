@@ -445,16 +445,24 @@ impl fmt::Display for Expr {
     }
 }
 
+/// A window specification, either inline or named
+/// https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#window_clause
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum WindowSpec {
+    Inline(InlineWindowSpec),
+    Named(Ident),
+}
+
 /// A window specification (i.e. `OVER (PARTITION BY .. ORDER BY .. etc.)`)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct WindowSpec {
+pub struct InlineWindowSpec {
     pub partition_by: Vec<Expr>,
     pub order_by: Vec<OrderByExpr>,
     pub window_frame: Option<WindowFrame>,
 }
 
-impl fmt::Display for WindowSpec {
+impl fmt::Display for InlineWindowSpec {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut delim = "";
         if !self.partition_by.is_empty() {
@@ -1061,8 +1069,10 @@ impl fmt::Display for Function {
                 display_comma_separated(&self.within_group)
             )?;
         }
-        if let Some(o) = &self.over {
-            write!(f, " OVER ({})", o)?;
+        match &self.over {
+            Some(WindowSpec::Inline(over)) => write!(f, " OVER ({})", over)?,
+            Some(WindowSpec::Named(name)) => write!(f, " OVER {}", name)?,
+            None => {}
         }
         Ok(())
     }

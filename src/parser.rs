@@ -362,32 +362,7 @@ impl<'a> Parser<'a> {
             vec![]
         };
         let over = if self.parse_keyword(Keyword::OVER) {
-            // TBD: support window names (`OVER mywin`) in place of inline specification
-            self.expect_token(&Token::LParen)?;
-            let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
-                // a list of possibly-qualified column names
-                self.parse_comma_separated(Parser::parse_expr)?
-            } else {
-                vec![]
-            };
-            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                self.parse_comma_separated(Parser::parse_order_by_expr)?
-            } else {
-                vec![]
-            };
-            let window_frame = if !self.consume_token(&Token::RParen) {
-                let window_frame = self.parse_window_frame()?;
-                self.expect_token(&Token::RParen)?;
-                Some(window_frame)
-            } else {
-                None
-            };
-
-            Some(WindowSpec {
-                partition_by,
-                order_by,
-                window_frame,
-            })
+            Some(self.parse_window_spec()?)
         } else {
             None
         };
@@ -438,20 +413,68 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_window_frame_units(&mut self) -> Result<WindowFrameUnits, ParserError> {
-        match self.next_token() {
-            Token::Word(w) => match w.keyword {
-                Keyword::ROWS => Ok(WindowFrameUnits::Rows),
-                Keyword::RANGE => Ok(WindowFrameUnits::Range),
-                Keyword::GROUPS => Ok(WindowFrameUnits::Groups),
-                _ => self.expected("ROWS, RANGE, GROUPS", Token::Word(w))?,
-            },
-            unexpected => self.expected("ROWS, RANGE, GROUPS", unexpected),
+    pub fn parse_named_window_expr(&mut self) -> Result<(Ident, WindowSpec), ParserError> {
+        let ident = self.parse_identifier()?;
+        self.expect_keyword(Keyword::AS)?;
+        let spec = self.parse_window_spec()?;
+        return Ok((ident, spec));
+    }
+
+    pub fn parse_window_spec(&mut self) -> Result<WindowSpec, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
+                // a list of possibly-qualified column names
+                self.parse_comma_separated(Parser::parse_expr)?
+            } else {
+                vec![]
+            };
+            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                self.parse_comma_separated(Parser::parse_order_by_expr)?
+            } else {
+                vec![]
+            };
+            let window_frame = self.parse_window_frame()?;
+
+            let found_rparen = self.consume_token(&Token::RParen);
+            if partition_by.is_empty() && order_by.is_empty() && window_frame.is_none() && !found_rparen {
+                // try parsing a named window if we failed to parse any part of
+                // a window spec and we haven't reached the rparen yet
+                let ident = self.parse_identifier()?;
+                self.expect_token(&Token::RParen)?;
+                return Ok(WindowSpec::Named(ident));
+            }
+
+            Ok(WindowSpec::Inline(InlineWindowSpec {
+                partition_by,
+                order_by,
+                window_frame,
+            }))
+        } else {
+            // named windows don't need parens
+            Ok(WindowSpec::Named(self.parse_identifier()?))
         }
     }
 
-    pub fn parse_window_frame(&mut self) -> Result<WindowFrame, ParserError> {
-        let units = self.parse_window_frame_units()?;
+    pub fn consume_window_frame_units(&mut self) -> Result<Option<WindowFrameUnits>, ParserError> {
+        let units = match self.peek_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::ROWS => WindowFrameUnits::Rows,
+                Keyword::RANGE => WindowFrameUnits::Range,
+                Keyword::GROUPS => WindowFrameUnits::Groups,
+                _ => return Ok(None),
+            },
+            _ => return Ok(None),
+        };
+        self.next_token(); // consume token
+        Ok(Some(units))
+    }
+
+    pub fn parse_window_frame(&mut self) -> Result<Option<WindowFrame>, ParserError> {
+        let units = if let Some(units) = self.consume_window_frame_units()? {
+            units
+        } else {
+            return Ok(None);
+        };
         let (start_bound, end_bound) = if self.parse_keyword(Keyword::BETWEEN) {
             let start_bound = self.parse_window_frame_bound()?;
             self.expect_keyword(Keyword::AND)?;
@@ -460,11 +483,11 @@ impl<'a> Parser<'a> {
         } else {
             (self.parse_window_frame_bound()?, None)
         };
-        Ok(WindowFrame {
+        Ok(Some(WindowFrame {
             units,
             start_bound,
             end_bound,
-        })
+        }))
     }
 
     /// Parse `CURRENT ROW` or `{ <positive number> | UNBOUNDED } { PRECEDING | FOLLOWING }`
@@ -2324,6 +2347,13 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#window_clause
+        let windows = if self.parse_keyword(Keyword::WINDOW) {
+            self.parse_comma_separated(Parser::parse_named_window_expr)?
+        } else {
+            vec![]
+        };
+
         Ok(Select {
             distinct,
             top,
@@ -2333,6 +2363,7 @@ impl<'a> Parser<'a> {
             group_by,
             having,
             qualify,
+            windows,
         })
     }
 

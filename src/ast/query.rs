@@ -136,6 +136,8 @@ pub struct Select {
     pub having: Option<Expr>,
     /// QUALIFY https://docs.snowflake.com/en/sql-reference/constructs/qualify.html
     pub qualify: Option<Expr>,
+    /// WINDOW https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#window_clause
+    pub windows: Vec<(Ident, WindowSpec)>,
 }
 
 impl fmt::Display for Select {
@@ -159,6 +161,18 @@ impl fmt::Display for Select {
         }
         if let Some(ref qualify) = self.qualify {
             write!(f, " QUALIFY {}", qualify)?;
+        }
+        if !self.windows.is_empty() {
+            write!(f, " WINDOW ")?;
+            let mut delim = "";
+            for (ident, spec) in self.windows.iter() {
+                write!(f, "{}{} AS ", delim, ident)?;
+                match spec {
+                    WindowSpec::Inline(inline) => write!(f, "({})", inline)?,
+                    WindowSpec::Named(name) => write!(f, "{}", name)?,
+                }
+                delim = ", ";
+            }
         }
         Ok(())
     }

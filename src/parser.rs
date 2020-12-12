@@ -436,7 +436,11 @@ impl<'a> Parser<'a> {
             let window_frame = self.parse_window_frame()?;
 
             let found_rparen = self.consume_token(&Token::RParen);
-            if partition_by.is_empty() && order_by.is_empty() && window_frame.is_none() && !found_rparen {
+            if partition_by.is_empty()
+                && order_by.is_empty()
+                && window_frame.is_none()
+                && !found_rparen
+            {
                 // try parsing a named window if we failed to parse any part of
                 // a window spec and we haven't reached the rparen yet
                 let ident = self.parse_identifier()?;
@@ -1011,23 +1015,33 @@ impl<'a> Parser<'a> {
 
     /// Parses the parens following the `[ NOT ] IN` operator
     pub fn parse_in(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let in_op = if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
-            self.prev_token();
-            Expr::InSubquery {
-                expr: Box::new(expr),
-                subquery: Box::new(self.parse_query()?),
-                negated,
-            }
+        if self.consume_token(&Token::LParen) {
+            let in_op = if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH)
+            {
+                self.prev_token();
+                Expr::InSubquery {
+                    expr: Box::new(expr),
+                    subquery: Box::new(self.parse_query()?),
+                    negated,
+                }
+            } else {
+                Expr::InList {
+                    expr: Box::new(expr),
+                    list: self.parse_comma_separated(Parser::parse_expr)?,
+                    negated,
+                }
+            };
+            self.expect_token(&Token::RParen)?;
+            Ok(in_op)
         } else {
-            Expr::InList {
+            // parse an expr
+            let in_expr = self.parse_expr()?;
+            Ok(Expr::InExpr {
                 expr: Box::new(expr),
-                list: self.parse_comma_separated(Parser::parse_expr)?,
+                in_expr: Box::new(in_expr),
                 negated,
-            }
-        };
-        self.expect_token(&Token::RParen)?;
-        Ok(in_op)
+            })
+        }
     }
 
     /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed

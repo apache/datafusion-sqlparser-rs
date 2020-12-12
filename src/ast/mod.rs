@@ -178,6 +178,12 @@ pub enum Expr {
         subquery: Box<Query>,
         negated: bool,
     },
+    /// `[ NOT ] IN <in_expr>`
+    InExpr {
+        expr: Box<Expr>,
+        in_expr: Box<Expr>,
+        negated: bool,
+    },
     /// `<expr> [ NOT ] BETWEEN <low> AND <high>`
     Between {
         expr: Box<Expr>,
@@ -318,6 +324,17 @@ impl fmt::Display for Expr {
                 expr,
                 if *negated { "NOT " } else { "" },
                 subquery
+            ),
+            Expr::InExpr {
+                expr,
+                in_expr,
+                negated,
+            } => write!(
+                f,
+                "{} {}IN {}",
+                expr,
+                if *negated { "NOT " } else { "" },
+                in_expr,
             ),
             Expr::Between {
                 expr,

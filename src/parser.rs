@@ -718,6 +718,8 @@ impl<'a> Parser<'a> {
                 Keyword::DAYOFYEAR | Keyword::YEARDAY | Keyword::DOY | Keyword::DY => {
                     Ok(DateTimeField::DayOfYear)
                 }
+                Keyword::DATE => Ok(DateTimeField::Other("DATE")),
+                Keyword::DATETIME => Ok(DateTimeField::Other("DATETIME")),
                 Keyword::HOUR => Ok(DateTimeField::Hour),
                 Keyword::MINUTE => Ok(DateTimeField::Minute),
                 Keyword::SECOND => Ok(DateTimeField::Second),

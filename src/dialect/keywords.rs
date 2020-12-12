@@ -158,6 +158,7 @@ define_keywords!(
     CYCLE,
     D,
     DATE,
+    DATETIME,
     DAY,
     DAYOFMONTH,
     DAYOFWEEK,

@@ -2028,6 +2028,9 @@ impl<'a> Parser<'a> {
             //    ignore the <separator> and treat the multiple strings as
             //    a single <literal>."
             Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
+            Token::BacktickQuotedString(s) if dialect_of!(self is BigQueryDialect) => {
+                Ok(Some(Ident::with_quote('`', s)))
+            }
             not_an_ident => {
                 if after_as {
                     return self.expected("an identifier after AS", not_an_ident);

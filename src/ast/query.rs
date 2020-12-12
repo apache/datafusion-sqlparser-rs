@@ -207,10 +207,15 @@ pub enum SelectItem {
     UnnamedExpr(Expr),
     /// An expression, followed by `[ AS ] alias`
     ExprWithAlias { expr: Expr, alias: Ident },
-    /// `alias.*` or even `schema.table.*`
-    QualifiedWildcard(ObjectName),
-    /// An unqualified `*`
-    Wildcard,
+    /// if obj.is_some(), `alias.*` or even `schema.table.*`
+    /// else an unqualified `*`
+    /// except and replace are currently expected in bigquery
+    /// https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#modifiers_for_operator
+    Wildcard {
+        prefix: Option<ObjectName>,
+        except: Vec<Ident>,
+        replace: Vec<(Expr, Ident)>,
+    },
 }
 
 impl fmt::Display for SelectItem {
@@ -218,8 +223,36 @@ impl fmt::Display for SelectItem {
         match &self {
             SelectItem::UnnamedExpr(expr) => write!(f, "{}", expr),
             SelectItem::ExprWithAlias { expr, alias } => write!(f, "{} AS {}", expr, alias),
-            SelectItem::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
-            SelectItem::Wildcard => write!(f, "*"),
+            SelectItem::Wildcard {
+                prefix,
+                except,
+                replace,
+            } => {
+                if let Some(pre) = prefix {
+                    write!(f, "{}.*", pre)?;
+                } else {
+                    write!(f, "*")?;
+                }
+                let mut delim = "";
+                if !except.is_empty() {
+                    write!(f, " EXCEPT (")?;
+                    for col in except {
+                        write!(f, "{}{}", delim, col)?;
+                        delim = ", ";
+                    }
+                    write!(f, ")")?;
+                }
+                delim = "";
+                if !replace.is_empty() {
+                    write!(f, " REPLACE (")?;
+                    for &(ref expr, ref alias) in replace.iter() {
+                        write!(f, "{}{} AS {}", delim, expr, alias)?;
+                        delim = ", ";
+                    }
+                    write!(f, ")")?;
+                }
+                Ok(())
+            }
         }
     }
 }

@@ -2814,9 +2814,19 @@ impl<'a> Parser<'a> {
     pub fn parse_select_item(&mut self) -> Result<SelectItem, ParserError> {
         let expr = self.parse_expr()?;
         if let Expr::Wildcard = expr {
-            Ok(SelectItem::Wildcard)
+            let (except, replace) = self.parse_wildcard_modifiers()?;
+            Ok(SelectItem::Wildcard {
+                prefix: None,
+                except,
+                replace,
+            })
         } else if let Expr::QualifiedWildcard(prefix) = expr {
-            Ok(SelectItem::QualifiedWildcard(ObjectName(prefix)))
+            let (except, replace) = self.parse_wildcard_modifiers()?;
+            Ok(SelectItem::Wildcard {
+                prefix: Some(ObjectName(prefix)),
+                except,
+                replace,
+            })
         } else {
             // `expr` is a regular SQL expression and can be followed by an alias
             if let Some(alias) = self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)? {
@@ -2825,6 +2835,40 @@ impl<'a> Parser<'a> {
                 Ok(SelectItem::UnnamedExpr(expr))
             }
         }
+    }
+
+    /// Parse a comma-delimited list of projections after REPLACE
+    /// https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_replace
+    pub fn parse_replace_item(&mut self) -> Result<(Expr, Ident), ParserError> {
+        let expr = self.parse_expr()?;
+        // `expr` is a regular SQL expression and can be followed by an alias
+        if let Some(alias) = self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)? {
+            Ok((expr, alias))
+        } else {
+            parser_err!(self, "REPLACE expression must have alias")
+        }
+    }
+
+    pub fn parse_wildcard_modifiers(
+        &mut self,
+    ) -> Result<(Vec<Ident>, Vec<(Expr, Ident)>), ParserError> {
+        let except = if self.parse_keyword(Keyword::EXCEPT) {
+            self.expect_token(&Token::LParen)?;
+            let aliases = self.parse_comma_separated(Parser::parse_identifier)?;
+            self.expect_token(&Token::RParen)?;
+            aliases
+        } else {
+            vec![]
+        };
+        let replace = if self.parse_keyword(Keyword::EXCEPT) {
+            self.expect_token(&Token::LParen)?;
+            let replace = self.parse_comma_separated(Parser::parse_replace_item)?;
+            self.expect_token(&Token::RParen)?;
+            replace
+        } else {
+            vec![]
+        };
+        Ok((except, replace))
     }
 
     /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)

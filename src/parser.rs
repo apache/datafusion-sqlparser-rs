@@ -260,7 +260,6 @@ impl<'a> Parser<'a> {
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CAST => self.parse_cast_expr(false),
                 Keyword::TRY_CAST => self.parse_cast_expr(true),
-                Keyword::POSITION => self.parse_position(),
                 Keyword::EXISTS => self.parse_exists_expr(),
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::INTERVAL => self.parse_literal_interval(),
@@ -556,36 +555,6 @@ impl<'a> Parser<'a> {
             expr: Box::new(expr),
             data_type,
         })
-    }
-
-    // https://docs.snowflake.com/en/sql-reference/functions/position.html
-    pub fn parse_position(&mut self) -> Result<Expr, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let expr1 = self.parse_expr()?;
-        let mut args = vec![FunctionArg::Unnamed(expr1)];
-        if self.consume_token(&Token::Comma) {
-            let more_args = self.parse_comma_separated(Parser::parse_expr)?;
-            for arg in more_args {
-                args.push(FunctionArg::Unnamed(arg));
-            }
-        } else {
-            self.expect_keyword(Keyword::IN)?;
-            args.push(FunctionArg::Unnamed(self.parse_expr()?));
-        }
-        self.expect_token(&Token::RParen)?;
-        Ok(Expr::Function(Function {
-            name: ObjectName(vec![Ident {
-                value: "POSITION".to_owned(),
-                quote_style: None,
-            }]),
-            args,
-            within_group: vec![],
-            over: None,
-            distinct: false,
-            ignore_respect_nulls: None,
-            order_by: vec![],
-            limit: None,
-        }))
     }
 
     /// Parse a SQL EXISTS expression e.g. `WHERE EXISTS(SELECT ...)`.

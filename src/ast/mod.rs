@@ -1072,6 +1072,10 @@ pub struct Function {
     /// Some(true) for ASC, Some(false) for DESC
     pub order_by: Vec<OrderByExpr>,
     pub limit: Option<Box<Expr>>,
+    // for snowflake - this goes outside of the parens
+    // https://docs.snowflake.com/en/sql-reference/functions/first_value.html
+    /// Some(true) for IGNORE NULLS, Some(false) for RESPECT NULLS
+    pub outer_ignore_respect_nulls: Option<bool>,
 }
 
 impl fmt::Display for Function {
@@ -1084,7 +1088,7 @@ impl fmt::Display for Function {
             display_comma_separated(&self.args),
         )?;
         if let Some(b) = self.ignore_respect_nulls {
-             write!(f, " {} NULLS", if b { "IGNORE" } else { "RESPECT" })?;
+            write!(f, " {} NULLS", if b { "IGNORE" } else { "RESPECT" })?;
         }
         if !self.order_by.is_empty() {
             write!(f, " ORDER BY ")?;
@@ -1098,6 +1102,9 @@ impl fmt::Display for Function {
             write!(f, " LIMIT {}", lim)?;
         }
         write!(f, ")")?;
+        if let Some(b) = self.outer_ignore_respect_nulls {
+            write!(f, " {} NULLS", if b { "IGNORE" } else { "RESPECT" })?;
+        }
         if !self.within_group.is_empty() {
             write!(
                 f,

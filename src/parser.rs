@@ -363,6 +363,15 @@ impl<'a> Parser<'a> {
         } else {
             vec![]
         };
+        let outer_ignore_respect_nulls = if self.parse_keyword(Keyword::IGNORE) {
+            self.expect_keyword(Keyword::NULLS)?;
+            Some(true)
+        } else if self.parse_keyword(Keyword::RESPECT) {
+            self.expect_keyword(Keyword::NULLS)?;
+            Some(false)
+        } else {
+            None
+        };
         let over = if self.parse_keyword(Keyword::OVER) {
             Some(self.parse_window_spec()?)
         } else {
@@ -376,6 +385,7 @@ impl<'a> Parser<'a> {
             over,
             distinct,
             ignore_respect_nulls: args_res.ignore_respect_nulls,
+            outer_ignore_respect_nulls,
             order_by: args_res.order_by,
             limit: args_res.limit,
         }))

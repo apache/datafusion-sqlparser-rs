@@ -82,6 +82,7 @@ impl fmt::Display for ParserError {
 
 impl Error for ParserError {}
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionArgsRes {
     pub args: Vec<FunctionArg>,
     /// Some(true) for IGNORE NULLS, Some(false) for RESPECT NULLS

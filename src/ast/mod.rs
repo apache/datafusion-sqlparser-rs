@@ -1078,11 +1078,26 @@ impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{}({}{})",
+            "{}({}{}",
             self.name,
             if self.distinct { "DISTINCT " } else { "" },
             display_comma_separated(&self.args),
         )?;
+        if let Some(b) = self.ignore_respect_nulls {
+             write!(f, " {} NULLS", if b { "IGNORE" } else { "RESPECT" })?;
+        }
+        if !self.order_by.is_empty() {
+            write!(f, " ORDER BY ")?;
+            let mut delim = "";
+            for order_by in &self.order_by {
+                write!(f, "{}{}", delim, order_by)?;
+                delim = ", ";
+            }
+        }
+        if let Some(ref lim) = self.limit {
+            write!(f, " LIMIT {}", lim)?;
+        }
+        write!(f, ")")?;
         if !self.within_group.is_empty() {
             write!(
                 f,

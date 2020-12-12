@@ -27,6 +27,8 @@ pub enum Value {
     Number(BigDecimal),
     /// 'string value'
     SingleQuotedString(String),
+    /// r'string value'
+    RegexLiteral { value: String, quote: char },
     /// N'string value'
     NationalStringLiteral(String),
     /// X'hex value'
@@ -62,6 +64,7 @@ impl fmt::Display for Value {
         match self {
             Value::Number(v) => write!(f, "{}", v),
             Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
+            Value::RegexLiteral { ref value, quote } => write!(f, "{}{}{}", quote, value, quote),
             Value::NationalStringLiteral(v) => write!(f, "N'{}'", v),
             Value::HexStringLiteral(v) => write!(f, "X'{}'", v),
             Value::Boolean(v) => write!(f, "{}", v),

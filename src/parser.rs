@@ -277,6 +277,9 @@ impl<'a> Parser<'a> {
                 value: w.clone(),
                 quote_style: Some('`'),
             }),
+            Token::BqRegexQuotedString { value, quote } => {
+                Ok(Expr::Value(Value::RegexLiteral { value, quote }))
+            }
             Token::Mult => Ok(Expr::Wildcard),
             tok @ Token::Minus | tok @ Token::Plus => {
                 let op = if tok == Token::Plus {

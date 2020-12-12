@@ -46,6 +46,10 @@ pub enum Token {
     SingleQuotedString(String),
     /// Single quoted string: i.e: 'string'
     BacktickQuotedString(String),
+    BqRegexQuotedString {
+        value: String,
+        quote: char,
+    },
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
     /// Hexadecimal string literal: i.e.: X'deadbeef'
@@ -163,6 +167,9 @@ impl fmt::Display for Token {
             Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
             Token::BacktickQuotedString(ref s) => write!(f, "`{}`", s),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
+            Token::BqRegexQuotedString { ref value, quote } => {
+                write!(f, "r{}{}{}", quote, value, quote)
+            }
             Token::HexStringLiteral(ref s) => write!(f, "X'{}'", s),
             Token::Comma => f.write_str(","),
             Token::Whitespace(ws) => write!(f, "{}", ws),
@@ -371,6 +378,26 @@ impl<'a> Tokenizer<'a> {
                         chars.next();
                     }
                     Ok(Some(Token::Whitespace(Whitespace::Newline)))
+                }
+                r @ 'r' | r @ 'R' if dialect_of!(self is BigQueryDialect) => {
+                    chars.next(); // consume, to check the next char
+                    match chars.peek() {
+                        Some('\'') => {
+                            // r'...' - a regex literal
+                            let value = self.tokenize_single_quoted_string(chars)?;
+                            Ok(Some(Token::BqRegexQuotedString { value, quote: '\'' }))
+                        }
+                        Some('"') => {
+                            // r"..." - a regex literal
+                            let value = self.tokenize_double_quoted_string(chars)?;
+                            Ok(Some(Token::BqRegexQuotedString { value, quote: '"' }))
+                        }
+                        _ => {
+                            // regular identifier starting with an "r" or "R"
+                            let s = self.tokenize_word(r, chars);
+                            Ok(Some(Token::make_word(&s, None)))
+                        }
+                    }
                 }
                 'N' => {
                     chars.next(); // consume, to check the next char
@@ -665,10 +692,28 @@ impl<'a> Tokenizer<'a> {
         &self,
         chars: &mut Peekable<Chars<'_>>,
     ) -> Result<String, TokenizerError> {
+        self.tokenize_quoted_string(chars, '\'')
+    }
+
+    /// Read a double quoted string, starting with the opening quote.
+    fn tokenize_double_quoted_string(
+        &self,
+        chars: &mut Peekable<Chars<'_>>,
+    ) -> Result<String, TokenizerError> {
+        self.tokenize_quoted_string(chars, '"')
+    }
+
+    /// Read a quoted string (quoted by any character, typically ' or "),
+    /// starting with the opening quote.
+    fn tokenize_quoted_string(
+        &self,
+        chars: &mut Peekable<Chars<'_>>,
+        quote_ch: char,
+    ) -> Result<String, TokenizerError> {
         let mut s = String::new();
         chars.next(); // consume the opening quote
         while let Some(ch) = chars.next() {
-            let next_char_is_quote = chars.peek().map(|c| *c == '\'').unwrap_or(false);
+            let next_char_is_quote = chars.peek().map(|c| *c == quote_ch).unwrap_or(false);
             match ch {
                 // allow backslash to escape the next character, whatever it is
                 '\\' => {
@@ -680,14 +725,14 @@ impl<'a> Tokenizer<'a> {
                 // bq allows escaping only with backslash; other warehouses
                 // allow escaping the quote character by repeating it
                 _ if !dialect_of!(self is BigQueryDialect)
-                    && ch == '\''
+                    && ch == quote_ch
                     && next_char_is_quote =>
                 {
-                    s.push('\'');
-                    s.push('\'');
-                    chars.next(); // consume '
+                    s.push(quote_ch);
+                    s.push(quote_ch);
+                    chars.next(); // consume quote_ch
                 }
-                '\'' => return Ok(s),
+                ch if ch == quote_ch => return Ok(s),
                 _ => s.push(ch),
             }
         }

@@ -719,7 +719,13 @@ impl<'a> Parser<'a> {
 
         // The first token in an interval is a string literal which specifies
         // the duration of the interval.
-        let value = self.parse_literal_string()?;
+        let (value, value_quoting) = if dialect_of!(self is BigQueryDialect) {
+            // in BigQuery, the value is not quoted
+            // https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions
+            (self.parse_expr()?.to_string(), None)
+        } else {
+            (self.parse_literal_string()?, Some('\''))
+        };
 
         // Following the string literal is a qualifier which indicates the units
         // of the duration specified in the string literal.
@@ -771,6 +777,7 @@ impl<'a> Parser<'a> {
 
         Ok(Expr::Value(Value::Interval {
             value,
+            value_quoting,
             leading_field,
             leading_precision,
             last_field,

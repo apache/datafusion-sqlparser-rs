@@ -43,6 +43,7 @@ pub enum Value {
     /// so the user will have to reject intervals like `HOUR TO YEAR`.
     Interval {
         value: String,
+        value_quoting: Option<char>,
         leading_field: Option<DateTimeField>,
         leading_precision: Option<u64>,
         last_field: Option<DateTimeField>,
@@ -66,6 +67,7 @@ impl fmt::Display for Value {
             Value::Boolean(v) => write!(f, "{}", v),
             Value::Interval {
                 value,
+                value_quoting,
                 leading_field: Some(DateTimeField::Second),
                 leading_precision: Some(leading_precision),
                 last_field,
@@ -74,22 +76,32 @@ impl fmt::Display for Value {
                 // When the leading field is SECOND, the parser guarantees that
                 // the last field is None.
                 assert!(last_field.is_none());
+                write!(f, "INTERVAL ")?;
+                if let Some(ch) = value_quoting {
+                    write!(f, "{}{}{}", ch, escape_single_quote_string(value), ch)?;
+                } else {
+                    write!(f, "{}", value)?;
+                }
                 write!(
                     f,
-                    "INTERVAL '{}' SECOND ({}, {})",
-                    escape_single_quote_string(value),
-                    leading_precision,
-                    fractional_seconds_precision
+                    " SECOND ({}, {})",
+                    leading_precision, fractional_seconds_precision
                 )
             }
             Value::Interval {
                 value,
+                value_quoting,
                 leading_field,
                 leading_precision,
                 last_field,
                 fractional_seconds_precision,
             } => {
-                write!(f, "INTERVAL '{}'", escape_single_quote_string(value))?;
+                write!(f, "INTERVAL ")?;
+                if let Some(ch) = value_quoting {
+                    write!(f, "{}{}{}", ch, escape_single_quote_string(value), ch)?;
+                } else {
+                    write!(f, "{}", value)?;
+                }
                 if let Some(leading_field) = leading_field {
                     write!(f, " {}", leading_field)?;
                 }

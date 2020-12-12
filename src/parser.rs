@@ -669,11 +669,26 @@ impl<'a> Parser<'a> {
                     Ok(DateTimeField::Month)
                 }
                 Keyword::WEEK
+                    if dialect_of!(self is BigQueryDialect)
+                        && self.consume_token(&Token::LParen) =>
+                {
+                    use Keyword::*;
+                    let weekday = self.expect_one_of_keywords(&[
+                        SUNDAY, MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY,
+                    ])?;
+                    self.expect_token(&Token::RParen)?;
+                    Ok(DateTimeField::Week(Some(format!("{:?}", weekday))))
+                }
+                Keyword::WEEK
                 | Keyword::W
                 | Keyword::WK
                 | Keyword::WEEKOFYEAR
                 | Keyword::WOY
-                | Keyword::WY => Ok(DateTimeField::Week),
+                | Keyword::WY => Ok(DateTimeField::Week(None)),
+                Keyword::ISOWEEK => Ok(DateTimeField::Other("ISOWEEK")),
+                Keyword::ISOYEAR => Ok(DateTimeField::Other("ISOYEAR")),
+                Keyword::MICROSECOND => Ok(DateTimeField::Other("MICROSECOND")),
+                Keyword::MILLISECOND => Ok(DateTimeField::Other("MILLISECOND")),
                 Keyword::WEEKISO
                 | Keyword::WEEK_ISO
                 | Keyword::WEEKOFYEARISO
@@ -739,11 +754,15 @@ impl<'a> Parser<'a> {
             Token::Word(kw)
                 if [
                     Keyword::YEAR,
+                    Keyword::QUARTER,
                     Keyword::MONTH,
+                    Keyword::WEEK,
                     Keyword::DAY,
                     Keyword::HOUR,
                     Keyword::MINUTE,
                     Keyword::SECOND,
+                    Keyword::MILLISECOND,
+                    Keyword::MICROSECOND,
                 ]
                 .iter()
                 .any(|d| kw.keyword == *d) =>

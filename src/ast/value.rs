@@ -132,7 +132,7 @@ pub enum DateTimeField {
     YearOfWeekIso,
     Quarter,
     Month,
-    Week,
+    Week(Option<String>),
     WeekIso,
     Day,
     DayOfWeek,
@@ -142,6 +142,8 @@ pub enum DateTimeField {
     Minute,
     Second,
     Epoch,
+    // https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-and-operators#extract_2
+    Other(&'static str),
     Literal(String),
 }
 
@@ -153,7 +155,8 @@ impl fmt::Display for DateTimeField {
             DateTimeField::YearOfWeekIso => "YEAROFWEEKISO",
             DateTimeField::Quarter => "QUARTER",
             DateTimeField::Month => "MONTH",
-            DateTimeField::Week => "WEEK",
+            DateTimeField::Week(None) => "WEEK",
+            DateTimeField::Week(Some(ref weekday)) => return write!(f, "WEEK({})", weekday),
             DateTimeField::WeekIso => "WEEKISO",
             DateTimeField::Day => "DAY",
             DateTimeField::DayOfWeek => "DAYOFWEEK",
@@ -163,6 +166,7 @@ impl fmt::Display for DateTimeField {
             DateTimeField::Minute => "MINUTE",
             DateTimeField::Second => "SECOND",
             DateTimeField::Epoch => "EPOCH",
+            DateTimeField::Other(s) => return write!(f, "{}", s),
             DateTimeField::Literal(ref s) => return write!(f, "'{}'", s),
         })
     }

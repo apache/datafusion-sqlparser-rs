@@ -276,6 +276,7 @@ impl<'a> Parser<'a> {
                 value: w.clone(),
                 quote_style: Some('`'),
             }),
+            Token::DoubleQuotedString(s) => Ok(Expr::Value(Value::DoubleQuotedString(s))),
             Token::BqRegexQuotedString { value, quote } => {
                 Ok(Expr::Value(Value::RegexLiteral { value, quote }))
             }

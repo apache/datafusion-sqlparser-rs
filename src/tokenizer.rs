@@ -44,6 +44,10 @@ pub enum Token {
     /// This should retains the escaped character sequences so that
     /// .to_string() of the value will give the value that was in the input
     SingleQuotedString(String),
+    /// Double quoted string: i.e: "string"
+    /// This should retains the escaped character sequences so that
+    /// .to_string() of the value will give the value that was in the input
+    DoubleQuotedString(String),
     /// Single quoted string: i.e: 'string'
     BacktickQuotedString(String),
     BqRegexQuotedString {
@@ -165,6 +169,7 @@ impl fmt::Display for Token {
             Token::Number(ref n) => f.write_str(n),
             Token::Char(ref c) => write!(f, "{}", c),
             Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
+            Token::DoubleQuotedString(ref s) => write!(f, "\"{}\"", s),
             Token::BacktickQuotedString(ref s) => write!(f, "`{}`", s),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
             Token::BqRegexQuotedString { ref value, quote } => {
@@ -353,6 +358,7 @@ impl<'a> Tokenizer<'a> {
                 Token::Word(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
                 Token::Number(s) => self.col += s.len() as u64,
                 Token::SingleQuotedString(s) => self.col += s.len() as u64,
+                Token::DoubleQuotedString(s) => self.col += s.len() as u64,
                 Token::BacktickQuotedString(s) => self.col += s.len() as u64,
                 _ => self.col += 1,
             }
@@ -441,6 +447,11 @@ impl<'a> Tokenizer<'a> {
                 '\'' => {
                     let s = self.tokenize_single_quoted_string(chars)?;
                     Ok(Some(Token::SingleQuotedString(s)))
+                }
+                // string
+                '"' if dialect_of!(self is BigQueryDialect) => {
+                    let s = self.tokenize_double_quoted_string(chars)?;
+                    Ok(Some(Token::DoubleQuotedString(s)))
                 }
                 // string
                 '`' if dialect_of!(self is BigQueryDialect) => {

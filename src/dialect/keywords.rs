@@ -430,6 +430,7 @@ define_keywords!(
     STDDEV_SAMP,
     STDIN,
     STORED,
+    STRUCT,
     SUBMULTISET,
     SUBSTRING,
     SUBSTRING_REGEX,

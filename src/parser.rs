@@ -264,6 +264,7 @@ impl<'a> Parser<'a> {
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::INTERVAL => self.parse_literal_interval(),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
+                Keyword::STRUCT if dialect_of!(self is BigQueryDialect) => self.parse_struct(),
                 Keyword::NOT => Ok(Expr::UnaryOp {
                     op: UnaryOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
@@ -637,6 +638,20 @@ impl<'a> Parser<'a> {
             on_overflow,
             within_group,
         }))
+    }
+
+    /// bigquery structs https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
+    pub fn parse_struct(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let fields = self.parse_comma_separated(Parser::parse_struct_field)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::Struct(Struct { fields }))
+    }
+
+    pub fn parse_struct_field(&mut self) -> Result<(Expr, Option<Ident>), ParserError> {
+        let expr = self.parse_expr()?;
+        let maybe_alias = self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)?;
+        Ok((expr, maybe_alias))
     }
 
     // This function parses date/time fields for both the EXTRACT function-like

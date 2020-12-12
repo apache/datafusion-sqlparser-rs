@@ -283,6 +283,9 @@ pub enum Expr {
     Subquery(Box<Query>),
     /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
     ListAgg(ListAgg),
+    /// bigquery structs https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
+    /// `STRUCT( expr1 [AS field_name] [, ... ])`
+    Struct(Struct),
 }
 
 impl fmt::Display for Expr {
@@ -458,6 +461,7 @@ impl fmt::Display for Expr {
             Expr::Exists(s) => write!(f, "EXISTS ({})", s),
             Expr::Subquery(s) => write!(f, "({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
+            Expr::Struct(strct) => write!(f, "{}", strct),
         }
     }
 }
@@ -1158,6 +1162,28 @@ impl fmt::Display for ListAgg {
             )?;
         }
         Ok(())
+    }
+}
+
+/// A `STRUCT` invocation `STRUCT( expr1 [AS field_name] [, ... ])`
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Struct {
+    pub fields: Vec<(Expr, Option<Ident>)>,
+}
+
+impl fmt::Display for Struct {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "STRUCT(")?;
+        let mut delim = "";
+        for (expr, maybe_alias) in self.fields.iter() {
+            write!(f, "{}{}", delim, expr)?;
+            if let Some(alias) = maybe_alias {
+                write!(f, " AS {}", alias)?;
+            }
+            delim = ", ";
+        }
+        write!(f, ")")
     }
 }
 

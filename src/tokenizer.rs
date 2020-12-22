@@ -735,6 +735,68 @@ mod tests {
     }
 
     #[test]
+    fn tokenize_explain_select() {
+        let sql = String::from("EXPLAIN SELECT * FROM customer WHERE id = 1");
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("EXPLAIN"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Mult,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("FROM"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("customer", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("WHERE"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("id", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::Eq,
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1")),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_explain_analyze_select() {
+        let sql = String::from("EXPLAIN ANALYZE SELECT * FROM customer WHERE id = 1");
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("EXPLAIN"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("ANALYZE"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Mult,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("FROM"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("customer", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("WHERE"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("id", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::Eq,
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1")),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
     fn tokenize_string_predicate() {
         let sql = String::from("SELECT * FROM customer WHERE salary != 'Not Provided'");
         let dialect = GenericDialect {};

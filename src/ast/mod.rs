@@ -431,6 +431,12 @@ impl fmt::Display for WindowFrameBound {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Statement {
+    //
+    Explain {
+        analyze: bool,
+        /// A SQL query that specifies what to explain
+        query: Box<Query>,
+    },
     /// SELECT
     Query(Box<Query>),
     /// INSERT
@@ -591,6 +597,15 @@ impl fmt::Display for Statement {
     #[allow(clippy::cognitive_complexity)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Statement::Explain { analyze, query } => {
+                write!(f, "EXPLAIN ")?;
+
+                if *analyze {
+                    write!(f, "ANALYZE ")?;
+                }
+
+                write!(f, "{}", query)
+            }
             Statement::Query(s) => write!(f, "{}", s),
             Statement::Insert {
                 table_name,

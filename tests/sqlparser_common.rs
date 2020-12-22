@@ -1607,6 +1607,32 @@ fn parse_scalar_function_in_projection() {
 }
 
 #[test]
+fn parse_explain_with_simple_select() {
+    let sql = "EXPLAIN SELECT sqrt(id) FROM foo";
+
+    match verified_stmt(sql) {
+        Statement::Explain { analyze, query } => {
+            assert_eq!(analyze, false);
+            assert_eq!("SELECT sqrt(id) FROM foo", query.to_string());
+        }
+        _ => panic!("Expected EXPLAIN"),
+    }
+}
+
+#[test]
+fn parse_explain_analyze_with_simple_select() {
+    let sql = "EXPLAIN ANALYZE SELECT sqrt(id) FROM foo";
+
+    match verified_stmt(sql) {
+        Statement::Explain { analyze, query } => {
+            assert_eq!(analyze, true);
+            assert_eq!("SELECT sqrt(id) FROM foo", query.to_string());
+        }
+        _ => panic!("Expected EXPLAIN"),
+    }
+}
+
+#[test]
 fn parse_named_argument_function() {
     let sql = "SELECT FUN(a => '1', b => '2') FROM foo";
     let select = verified_only_select(sql);

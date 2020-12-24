@@ -1612,30 +1612,31 @@ fn parse_scalar_function_in_projection() {
     );
 }
 
-#[test]
-fn parse_explain_with_simple_select() {
-    let sql = "EXPLAIN SELECT sqrt(id) FROM foo";
-
-    match verified_stmt(sql) {
-        Statement::Explain { analyze, query } => {
-            assert_eq!(analyze, false);
-            assert_eq!("SELECT sqrt(id) FROM foo", query.to_string());
+fn run_explain_analyze(query: &str, expected_verbose: bool, expected_analyze: bool) {
+    match verified_stmt(query) {
+        Statement::Explain {
+            analyze,
+            verbose,
+            statement,
+        } => {
+            assert_eq!(verbose, expected_verbose);
+            assert_eq!(analyze, expected_analyze);
+            assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
         }
-        _ => panic!("Expected EXPLAIN"),
+        _ => panic!("Unexpected Statement, must be Explain"),
     }
 }
 
 #[test]
 fn parse_explain_analyze_with_simple_select() {
-    let sql = "EXPLAIN ANALYZE SELECT sqrt(id) FROM foo";
-
-    match verified_stmt(sql) {
-        Statement::Explain { analyze, query } => {
-            assert_eq!(analyze, true);
-            assert_eq!("SELECT sqrt(id) FROM foo", query.to_string());
-        }
-        _ => panic!("Expected EXPLAIN"),
-    }
+    run_explain_analyze("EXPLAIN SELECT sqrt(id) FROM foo", false, false);
+    run_explain_analyze("EXPLAIN VERBOSE SELECT sqrt(id) FROM foo", true, false);
+    run_explain_analyze("EXPLAIN ANALYZE SELECT sqrt(id) FROM foo", false, true);
+    run_explain_analyze(
+        "EXPLAIN ANALYZE VERBOSE SELECT sqrt(id) FROM foo",
+        true,
+        true,
+    );
 }
 
 #[test]

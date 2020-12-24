@@ -445,6 +445,7 @@ define_keywords!(
     VARYING,
     VAR_POP,
     VAR_SAMP,
+    VERBOSE,
     VERSIONING,
     VIEW,
     VIRTUAL,

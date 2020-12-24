@@ -1793,9 +1793,15 @@ impl<'a> Parser<'a> {
 
     pub fn parse_explain(&mut self) -> Result<Statement, ParserError> {
         let analyze = self.parse_keyword(Keyword::ANALYZE);
-        let query = Box::new(self.parse_query()?);
+        let verbose = self.parse_keyword(Keyword::VERBOSE);
 
-        Ok(Statement::Explain { analyze, query })
+        let statement = Box::new(self.parse_statement()?);
+
+        Ok(Statement::Explain {
+            analyze,
+            verbose,
+            statement,
+        })
     }
 
     /// Parse a query expression, i.e. a `SELECT` statement optionally

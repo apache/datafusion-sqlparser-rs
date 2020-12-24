@@ -431,11 +431,14 @@ impl fmt::Display for WindowFrameBound {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Statement {
-    //
+    // EXPLAIN
     Explain {
+        // Carry out the command and show actual run times and other statistics.
         analyze: bool,
+        // Display additional information regarding the plan.
+        verbose: bool,
         /// A SQL query that specifies what to explain
-        query: Box<Query>,
+        statement: Box<Statement>,
     },
     /// SELECT
     Query(Box<Query>),
@@ -597,14 +600,22 @@ impl fmt::Display for Statement {
     #[allow(clippy::cognitive_complexity)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Statement::Explain { analyze, query } => {
+            Statement::Explain {
+                verbose,
+                analyze,
+                statement,
+            } => {
                 write!(f, "EXPLAIN ")?;
 
                 if *analyze {
                     write!(f, "ANALYZE ")?;
                 }
 
-                write!(f, "{}", query)
+                if *verbose {
+                    write!(f, "VERBOSE ")?;
+                }
+
+                write!(f, "{}", statement)
             }
             Statement::Query(s) => write!(f, "{}", s),
             Statement::Insert {

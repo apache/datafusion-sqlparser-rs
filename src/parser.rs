@@ -1807,16 +1807,11 @@ impl<'a> Parser<'a> {
 
     pub fn parse_analyze(&mut self) -> Result<Statement, ParserError> {
         // ANALYZE TABLE table_name
-        let t = self.expect_keyword(Keyword::TABLE)?;
+        self.expect_keyword(Keyword::TABLE)?;
 
         let table_name = self.parse_object_name()?;
-        println!("{:?}", t);
 
-        println!("{:?}", table_name);
-
-        Ok(Statement::Analyze {
-            table_name,
-        })
+        Ok(Statement::Analyze { table_name })
     }
 
     /// Parse a query expression, i.e. a `SELECT` statement optionally

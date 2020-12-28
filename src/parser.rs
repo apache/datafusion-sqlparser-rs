@@ -132,6 +132,7 @@ impl<'a> Parser<'a> {
         match self.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::EXPLAIN => Ok(self.parse_explain()?),
+                Keyword::ANALYZE => Ok(self.parse_analyze()?),
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES => {
                     self.prev_token();
                     Ok(Statement::Query(Box::new(self.parse_query()?)))
@@ -1801,6 +1802,20 @@ impl<'a> Parser<'a> {
             analyze,
             verbose,
             statement,
+        })
+    }
+
+    pub fn parse_analyze(&mut self) -> Result<Statement, ParserError> {
+        // ANALYZE TABLE table_name
+        let t = self.expect_keyword(Keyword::TABLE)?;
+
+        let table_name = self.parse_object_name()?;
+        println!("{:?}", t);
+
+        println!("{:?}", table_name);
+
+        Ok(Statement::Analyze {
+            table_name,
         })
     }
 

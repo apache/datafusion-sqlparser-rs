@@ -1640,6 +1640,18 @@ fn parse_explain_analyze_with_simple_select() {
 }
 
 #[test]
+fn parse_simple_analyze() {
+    let sql = "ANALYZE TABLE t";
+    let stmt = verified_stmt(sql);
+    assert_eq!(
+        stmt,
+        Statement::Analyze {
+            table_name: ObjectName(vec![Ident::new("t")])
+        }
+    );
+}
+
+#[test]
 fn parse_named_argument_function() {
     let sql = "SELECT FUN(a => '1', b => '2') FROM foo";
     let select = verified_only_select(sql);

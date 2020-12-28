@@ -431,15 +431,6 @@ impl fmt::Display for WindowFrameBound {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Statement {
-    // EXPLAIN
-    Explain {
-        // Carry out the command and show actual run times and other statistics.
-        analyze: bool,
-        // Display additional information regarding the plan.
-        verbose: bool,
-        /// A SQL query that specifies what to explain
-        statement: Box<Statement>,
-    },
     /// SELECT
     Query(Box<Query>),
     /// INSERT
@@ -592,6 +583,20 @@ pub enum Statement {
         data_types: Vec<DataType>,
         statement: Box<Statement>,
     },
+    /// EXPLAIN
+    Explain {
+        /// Carry out the command and show actual run times and other statistics.
+        analyze: bool,
+        // Display additional information regarding the plan.
+        verbose: bool,
+        /// A SQL query that specifies what to explain
+        statement: Box<Statement>,
+    },
+    /// ANALYZE
+    Analyze {
+        /// Name of table
+        table_name: ObjectName,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -617,6 +622,7 @@ impl fmt::Display for Statement {
 
                 write!(f, "{}", statement)
             }
+            Statement::Analyze { table_name } => write!(f, "ANALYZE TABLE {}", table_name),
             Statement::Query(s) => write!(f, "{}", s),
             Statement::Insert {
                 table_name,

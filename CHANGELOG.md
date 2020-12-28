@@ -8,7 +8,7 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/ballista-compute/sqlparser-rs/commits/main for undocumented changes.
 
-## [0.6.2] 2020-12-28
+## [0.7.0] 2020-12-28
 
 ### Changed
 - Change the MySQL dialect to support `` `identifiers` `` quoted with backticks instead of the standard `"double-quoted"` identifiers (#247) - thanks @mashuai!

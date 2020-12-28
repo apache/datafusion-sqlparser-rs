@@ -72,6 +72,7 @@ define_keywords!(
     ALL,
     ALLOCATE,
     ALTER,
+    ANALYZE,
     AND,
     ANY,
     APPLY,
@@ -190,6 +191,7 @@ define_keywords!(
     EXECUTE,
     EXISTS,
     EXP,
+    EXPLAIN,
     EXTENDED,
     EXTERNAL,
     EXTRACT,
@@ -443,6 +445,7 @@ define_keywords!(
     VARYING,
     VAR_POP,
     VAR_SAMP,
+    VERBOSE,
     VERSIONING,
     VIEW,
     VIRTUAL,
@@ -465,6 +468,8 @@ define_keywords!(
 pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     // Reserved as both a table and a column alias:
     Keyword::WITH,
+    Keyword::EXPLAIN,
+    Keyword::ANALYZE,
     Keyword::SELECT,
     Keyword::WHERE,
     Keyword::GROUP,
@@ -496,6 +501,8 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
 pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     // Reserved as both a table and a column alias:
     Keyword::WITH,
+    Keyword::EXPLAIN,
+    Keyword::ANALYZE,
     Keyword::SELECT,
     Keyword::WHERE,
     Keyword::GROUP,

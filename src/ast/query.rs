@@ -346,7 +346,7 @@ impl fmt::Display for Join {
                 _ => "",
             }
         }
-        fn suffix<'a>(constraint: &'a JoinConstraint) -> impl fmt::Display + 'a {
+        fn suffix(constraint: &'_ JoinConstraint) -> impl fmt::Display + '_ {
             struct Suffix<'a>(&'a JoinConstraint);
             impl<'a> fmt::Display for Suffix<'a> {
                 fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

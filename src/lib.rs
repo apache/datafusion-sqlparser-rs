@@ -33,7 +33,9 @@
 //! println!("AST: {:?}", ast);
 //! ```
 #![warn(clippy::all)]
-
+#![cfg_attr(not(feature = "std"), no_std)]
+extern crate alloc;
+extern crate core;
 pub mod ast;
 #[macro_use]
 pub mod dialect;

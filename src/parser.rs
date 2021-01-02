@@ -18,8 +18,17 @@ use super::ast::*;
 use super::dialect::keywords::Keyword;
 use super::dialect::*;
 use super::tokenizer::*;
+#[cfg(not(feature = "std"))]
+use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::fmt;
+#[cfg(feature = "std")]
 use std::error::Error;
-use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParserError {
@@ -79,6 +88,7 @@ impl fmt::Display for ParserError {
     }
 }
 
+#[cfg(feature = "std")]
 impl Error for ParserError {}
 
 pub struct Parser<'a> {

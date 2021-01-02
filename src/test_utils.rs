@@ -10,13 +10,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(not(feature = "std"))]
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 /// This module contains internal utilities used for testing the library.
 /// While technically public, the library's users are not supposed to rely
 /// on this module, as it will change without notice.
 //
 // Integration tests (i.e. everything under `tests/`) import this
 // via `tests/test_utils/mod.rs`.
-use std::fmt::Debug;
+use core::fmt::Debug;
 
 use super::ast::*;
 use super::dialect::*;

@@ -18,9 +18,15 @@ mod operator;
 mod query;
 mod value;
 
+#[cfg(not(feature = "std"))]
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 pub use self::data_type::DataType;
 pub use self::ddl::{

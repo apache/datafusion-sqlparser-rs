@@ -21,6 +21,8 @@ path = "src/lib.rs"
 [features]
 # Enable JSON output in the `cli` example:
 json_example = ["serde_json", "serde"]
+std = []
+default = ["std"]
 
 [dependencies]
 bigdecimal = { version = "0.2", features = ["serde"], optional = true }

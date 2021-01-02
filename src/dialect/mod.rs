@@ -19,8 +19,8 @@ mod postgresql;
 mod snowflake;
 mod sqlite;
 
-use std::any::{Any, TypeId};
-use std::fmt::Debug;
+use core::any::{Any, TypeId};
+use core::fmt::Debug;
 
 pub use self::ansi::AnsiDialect;
 pub use self::generic::GenericDialect;

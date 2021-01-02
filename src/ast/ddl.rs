@@ -15,9 +15,11 @@
 use super::{display_comma_separated, DataType, Expr, Ident, ObjectName};
 use crate::ast::display_separated;
 use crate::tokenizer::Token;
+#[cfg(not(feature = "std"))]
+use alloc::{boxed::Box, string::ToString, vec::Vec};
+use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

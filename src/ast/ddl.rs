@@ -254,7 +254,7 @@ impl fmt::Display for ColumnOption {
     }
 }
 
-fn display_constraint_name<'a>(name: &'a Option<Ident>) -> impl fmt::Display + 'a {
+fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
     struct ConstraintName<'a>(&'a Option<Ident>);
     impl<'a> fmt::Display for ConstraintName<'a> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

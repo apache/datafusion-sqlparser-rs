@@ -357,16 +357,14 @@ impl<'a> Tokenizer<'a> {
 
         let mut tokens: Vec<TokenWithLocation> = vec![];
 
+        let mut location = state.location();
         while let Some(token) = self.next_token(&mut state)? {
-            let location = Location {
-                line: state.line,
-                column: state.col,
-            };
-
             tokens.push(TokenWithLocation {
                 token: token,
-                location: location,
+                location: location.clone(),
             });
+
+            location = state.location();
         }
         Ok(tokens)
     }
@@ -374,7 +372,7 @@ impl<'a> Tokenizer<'a> {
     /// Get the next token or return None
     fn next_token(&self, state: &mut State) -> Result<Option<Token>, TokenizerError> {
         //println!("next_token: {:?}", chars.peek());
-        match state.peekable.peek() {
+        match state.peek() {
             Some(&ch) => match ch {
                 ' ' => self.consume_and_return(state, Token::Whitespace(Whitespace::Space)),
                 '\t' => self.consume_and_return(state, Token::Whitespace(Whitespace::Tab)),
@@ -673,7 +671,7 @@ fn peeking_take_while(state: &mut State, mut predicate: impl FnMut(char) -> bool
     let mut s = String::new();
     while let Some(&ch) = state.peek() {
         if predicate(ch) {
-            state.peekable.next(); // consume
+            state.next(); // consume
             s.push(ch);
         } else {
             break;
@@ -930,7 +928,7 @@ mod tests {
             Err(TokenizerError {
                 message: "Unterminated string literal".to_string(),
                 line: 1,
-                col: 8
+                col: 12
             })
         );
     }
@@ -1074,7 +1072,7 @@ mod tests {
             Err(TokenizerError {
                 message: "Expected close delimiter '\"' before EOF.".to_string(),
                 line: 1,
-                col: 1
+                col: 5,
             })
         );
     }
@@ -1145,29 +1143,9 @@ mod tests {
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize_with_location().unwrap();
         let expected = vec![
-            TokenWithLocation::new(Token::make_word("some\nthing", None), 1, 1),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 2, 1),
-            TokenWithLocation::new(Token::make_word("foo", None), 2, 2),
-        ];
-        compare_with_location(expected, tokens);
-    }
-
-    #[test]
-    fn tokenize_location_newlines() {
-        let sql = String::from("line1\nline2\rline3\r\nline4\r");
-
-        let dialect = GenericDialect {};
-        let mut tokenizer = Tokenizer::new(&dialect, &sql);
-        let tokens = tokenizer.tokenize_with_location().unwrap();
-        let expected = vec![
-            TokenWithLocation::new(Token::make_word("line1", None), 1, 1),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Newline), 1, 6),
-            TokenWithLocation::new(Token::make_word("line2", None), 2, 1),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Newline), 2, 6),
-            TokenWithLocation::new(Token::make_word("line3", None), 3, 1),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Newline), 3, 6),
-            TokenWithLocation::new(Token::make_word("line4", None), 4, 1),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Newline), 4, 6),
+            TokenWithLocation::new(Token::SingleQuotedString("some\nthing".to_string()), 1, 1),
+            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 2, 7),
+            TokenWithLocation::new(Token::make_word("foo", None), 2, 8),
         ];
         compare_with_location(expected, tokens);
     }

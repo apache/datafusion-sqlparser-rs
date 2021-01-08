@@ -256,8 +256,8 @@ impl fmt::Display for Whitespace {
 /// Location in input string
 #[derive(Debug, PartialEq)]
 pub struct Location {
-    pub line: usize,
-    pub position: usize,
+    pub line: u64,
+    pub column: u64,
 }
 
 /// A [Token] with [Location] attached to it
@@ -265,6 +265,15 @@ pub struct Location {
 pub struct TokenWithLocation {
     pub token: Token,
     pub location: Location,
+}
+
+impl TokenWithLocation {
+    pub fn new(token: Token, line: u64, column: u64) -> TokenWithLocation {
+        TokenWithLocation {
+            token,
+            location: Location { line, column },
+        }
+    }
 }
 
 /// Tokenizer error
@@ -296,11 +305,27 @@ impl<'a> Tokenizer<'a> {
 
     /// Tokenize the statement and produce a vector of tokens
     pub fn tokenize(&mut self) -> Result<Vec<Token>, TokenizerError> {
-        let mut peekable = self.query.chars().peekable();
-
+        let twl = self.tokenize_with_location()?;
         let mut tokens: Vec<Token> = vec![];
 
+        tokens.reserve(twl.len());
+        for token_with_location in twl {
+            tokens.push(token_with_location.token);
+        }
+        Ok(tokens)
+    }
+
+    /// Tokenize the statement and produce a vector of tokens
+    pub fn tokenize_with_location(&mut self) -> Result<Vec<TokenWithLocation>, TokenizerError> {
+        let mut peekable = self.query.chars().peekable();
+
+        let mut tokens: Vec<TokenWithLocation> = vec![];
+
         while let Some(token) = self.next_token(&mut peekable)? {
+            let location = Location {
+                line: self.line,
+                column: self.col,
+            };
             match &token {
                 Token::Whitespace(Whitespace::Newline) => {
                     self.line += 1;
@@ -315,7 +340,10 @@ impl<'a> Tokenizer<'a> {
                 _ => self.col += 1,
             }
 
-            tokens.push(token);
+            tokens.push(TokenWithLocation {
+                token: token,
+                location: location,
+            });
         }
         Ok(tokens)
     }
@@ -1077,5 +1105,33 @@ mod tests {
         //println!("expected = {:?}", expected);
         //println!("------------------------------");
         assert_eq!(expected, actual);
+    }
+
+    fn compare_with_location(expected: Vec<TokenWithLocation>, actual: Vec<TokenWithLocation>) {
+        //println!("------------------------------");
+        //println!("tokens   = {:?}", actual);
+        //println!("expected = {:?}", expected);
+        //println!("------------------------------");
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn tokenize_location_newlines() {
+        let sql = String::from("line1\nline2\rline3\r\nline4\r");
+
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize_with_location().unwrap();
+        let expected = vec![
+            TokenWithLocation::new(Token::make_word("line1", None), 1, 1),
+            TokenWithLocation::new(Token::Whitespace(Whitespace::Newline), 1, 6),
+            TokenWithLocation::new(Token::make_word("line2", None), 2, 1),
+            TokenWithLocation::new(Token::Whitespace(Whitespace::Newline), 2, 6),
+            TokenWithLocation::new(Token::make_word("line3", None), 3, 1),
+            TokenWithLocation::new(Token::Whitespace(Whitespace::Newline), 3, 6),
+            TokenWithLocation::new(Token::make_word("line4", None), 4, 1),
+            TokenWithLocation::new(Token::Whitespace(Whitespace::Newline), 4, 6),
+        ];
+        compare_with_location(expected, tokens);
     }
 }

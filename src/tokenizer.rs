@@ -253,6 +253,20 @@ impl fmt::Display for Whitespace {
     }
 }
 
+/// Location in input string
+#[derive(Debug, PartialEq)]
+pub struct Location {
+    pub line: usize,
+    pub position: usize,
+}
+
+/// A [Token] with [Location] attached to it
+#[derive(Debug, PartialEq)]
+pub struct TokenWithLocation {
+    pub token: Token,
+    pub location: Location,
+}
+
 /// Tokenizer error
 #[derive(Debug, PartialEq)]
 pub struct TokenizerError {

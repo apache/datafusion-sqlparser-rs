@@ -254,14 +254,16 @@ impl fmt::Display for Whitespace {
 }
 
 /// Location in input string
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Location {
+    /// Line number, starting from 1
     pub line: u64,
+    /// Line column, starting from 1
     pub column: u64,
 }
 
 /// A [Token] with [Location] attached to it
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct TokenWithLocation {
     pub token: Token,
     pub location: Location,

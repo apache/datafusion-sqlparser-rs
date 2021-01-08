@@ -344,7 +344,7 @@ impl<'a> Tokenizer<'a> {
         Ok(tokens)
     }
 
-    /// Tokenize the statement and produce a vector of tokens
+    /// Tokenize the statement and produce a vector of tokens with location information
     pub fn tokenize_with_location(&mut self) -> Result<Vec<TokenWithLocation>, TokenizerError> {
         let mut state = State {
             peekable: self.query.chars().peekable(),

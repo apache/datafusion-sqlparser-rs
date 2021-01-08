@@ -357,7 +357,7 @@ impl<'a> Tokenizer<'a> {
         let mut location = state.location();
         while let Some(token) = self.next_token(&mut state)? {
             tokens.push(TokenWithLocation {
-                token: token,
+                token,
                 location: location.clone(),
             });
 

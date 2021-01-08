@@ -323,16 +323,13 @@ impl<'a> State<'a> {
 /// SQL Tokenizer
 pub struct Tokenizer<'a> {
     dialect: &'a dyn Dialect,
-    pub query: String,
+    pub query: &'a str,
 }
 
 impl<'a> Tokenizer<'a> {
     /// Create a new SQL tokenizer for the specified SQL statement
-    pub fn new(dialect: &'a dyn Dialect, query: &str) -> Self {
-        Self {
-            dialect,
-            query: query.to_string(),
-        }
+    pub fn new(dialect: &'a dyn Dialect, query: &'a str) -> Self {
+        Self { dialect, query }
     }
 
     /// Tokenize the statement and produce a vector of tokens

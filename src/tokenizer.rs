@@ -286,12 +286,44 @@ pub struct TokenizerError {
     pub col: u64,
 }
 
+struct State<'a> {
+    peekable: Peekable<Chars<'a>>,
+    pub line: u64,
+    pub col: u64,
+}
+
+impl<'a> State<'a> {
+    pub fn next(&mut self) -> Option<char> {
+        match self.peekable.next() {
+            None => None,
+            Some(s) => {
+                if s == '\n' {
+                    self.line += 1;
+                    self.col = 1;
+                } else {
+                    self.col += 1;
+                }
+                Some(s)
+            }
+        }
+    }
+
+    pub fn peek(&mut self) -> Option<&char> {
+        self.peekable.peek()
+    }
+
+    pub fn location(&self) -> Location {
+        Location {
+            line: self.line,
+            column: self.col,
+        }
+    }
+}
+
 /// SQL Tokenizer
 pub struct Tokenizer<'a> {
     dialect: &'a dyn Dialect,
     pub query: String,
-    pub line: u64,
-    pub col: u64,
 }
 
 impl<'a> Tokenizer<'a> {
@@ -300,8 +332,6 @@ impl<'a> Tokenizer<'a> {
         Self {
             dialect,
             query: query.to_string(),
-            line: 1,
-            col: 1,
         }
     }
 
@@ -319,28 +349,19 @@ impl<'a> Tokenizer<'a> {
 
     /// Tokenize the statement and produce a vector of tokens
     pub fn tokenize_with_location(&mut self) -> Result<Vec<TokenWithLocation>, TokenizerError> {
-        let mut peekable = self.query.chars().peekable();
+        let mut state = State {
+            peekable: self.query.chars().peekable(),
+            line: 1,
+            col: 1,
+        };
 
         let mut tokens: Vec<TokenWithLocation> = vec![];
 
-        while let Some(token) = self.next_token(&mut peekable)? {
+        while let Some(token) = self.next_token(&mut state)? {
             let location = Location {
-                line: self.line,
-                column: self.col,
+                line: state.line,
+                column: state.col,
             };
-            match &token {
-                Token::Whitespace(Whitespace::Newline) => {
-                    self.line += 1;
-                    self.col = 1;
-                }
-
-                Token::Whitespace(Whitespace::Tab) => self.col += 4,
-                Token::Word(w) if w.quote_style == None => self.col += w.value.len() as u64,
-                Token::Word(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
-                Token::Number(s) => self.col += s.len() as u64,
-                Token::SingleQuotedString(s) => self.col += s.len() as u64,
-                _ => self.col += 1,
-            }
 
             tokens.push(TokenWithLocation {
                 token: token,
@@ -351,32 +372,32 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Get the next token or return None
-    fn next_token(&self, chars: &mut Peekable<Chars<'_>>) -> Result<Option<Token>, TokenizerError> {
+    fn next_token(&self, state: &mut State) -> Result<Option<Token>, TokenizerError> {
         //println!("next_token: {:?}", chars.peek());
-        match chars.peek() {
+        match state.peekable.peek() {
             Some(&ch) => match ch {
-                ' ' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Space)),
-                '\t' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Tab)),
-                '\n' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Newline)),
+                ' ' => self.consume_and_return(state, Token::Whitespace(Whitespace::Space)),
+                '\t' => self.consume_and_return(state, Token::Whitespace(Whitespace::Tab)),
+                '\n' => self.consume_and_return(state, Token::Whitespace(Whitespace::Newline)),
                 '\r' => {
                     // Emit a single Whitespace::Newline token for \r and \r\n
-                    chars.next();
-                    if let Some('\n') = chars.peek() {
-                        chars.next();
+                    state.next();
+                    if let Some('\n') = state.peek() {
+                        state.next();
                     }
                     Ok(Some(Token::Whitespace(Whitespace::Newline)))
                 }
                 'N' => {
-                    chars.next(); // consume, to check the next char
-                    match chars.peek() {
+                    state.next(); // consume, to check the next char
+                    match state.peek() {
                         Some('\'') => {
                             // N'...' - a <national character string literal>
-                            let s = self.tokenize_single_quoted_string(chars)?;
+                            let s = self.tokenize_single_quoted_string(state)?;
                             Ok(Some(Token::NationalStringLiteral(s)))
                         }
                         _ => {
                             // regular identifier starting with an "N"
-                            let s = self.tokenize_word('N', chars);
+                            let s = self.tokenize_word('N', state);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -384,40 +405,41 @@ impl<'a> Tokenizer<'a> {
                 // The spec only allows an uppercase 'X' to introduce a hex
                 // string, but PostgreSQL, at least, allows a lowercase 'x' too.
                 x @ 'x' | x @ 'X' => {
-                    chars.next(); // consume, to check the next char
-                    match chars.peek() {
+                    state.next(); // consume, to check the next char
+                    match state.peek() {
                         Some('\'') => {
                             // X'...' - a <binary string literal>
-                            let s = self.tokenize_single_quoted_string(chars)?;
+                            let s = self.tokenize_single_quoted_string(state)?;
                             Ok(Some(Token::HexStringLiteral(s)))
                         }
                         _ => {
                             // regular identifier starting with an "X"
-                            let s = self.tokenize_word(x, chars);
+                            let s = self.tokenize_word(x, state);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
                 }
                 // identifier or keyword
                 ch if self.dialect.is_identifier_start(ch) => {
-                    chars.next(); // consume the first char
-                    let s = self.tokenize_word(ch, chars);
+                    state.next(); // consume the first char
+                    let s = self.tokenize_word(ch, state);
                     Ok(Some(Token::make_word(&s, None)))
                 }
                 // string
                 '\'' => {
-                    let s = self.tokenize_single_quoted_string(chars)?;
+                    let s = self.tokenize_single_quoted_string(state)?;
                     Ok(Some(Token::SingleQuotedString(s)))
                 }
                 // delimited (quoted) identifier
                 quote_start if self.dialect.is_delimited_identifier_start(quote_start) => {
-                    chars.next(); // consume the opening quote
+                    state.next(); // consume the opening quote
                     let quote_end = Word::matching_end_quote(quote_start);
-                    let s = peeking_take_while(chars, |ch| ch != quote_end);
-                    if chars.next() == Some(quote_end) {
+                    let s = peeking_take_while(state, |ch| ch != quote_end);
+                    if state.next() == Some(quote_end) {
                         Ok(Some(Token::make_word(&s, Some(quote_start))))
                     } else {
                         self.tokenizer_error(
+                            state,
                             format!("Expected close delimiter '{}' before EOF.", quote_end)
                                 .as_str(),
                         )
@@ -426,20 +448,20 @@ impl<'a> Tokenizer<'a> {
                 // numbers
                 '0'..='9' => {
                     // TODO: https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#unsigned-numeric-literal
-                    let s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
+                    let s = peeking_take_while(state, |ch| matches!(ch, '0'..='9' | '.'));
                     Ok(Some(Token::Number(s)))
                 }
                 // punctuation
-                '(' => self.consume_and_return(chars, Token::LParen),
-                ')' => self.consume_and_return(chars, Token::RParen),
-                ',' => self.consume_and_return(chars, Token::Comma),
+                '(' => self.consume_and_return(state, Token::LParen),
+                ')' => self.consume_and_return(state, Token::RParen),
+                ',' => self.consume_and_return(state, Token::Comma),
                 // operators
                 '-' => {
-                    chars.next(); // consume the '-'
-                    match chars.peek() {
+                    state.next(); // consume the '-'
+                    match state.peek() {
                         Some('-') => {
-                            chars.next(); // consume the second '-', starting a single-line comment
-                            let comment = self.tokenize_single_line_comment(chars);
+                            state.next(); // consume the second '-', starting a single-line comment
+                            let comment = self.tokenize_single_line_comment(state);
                             Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
                                 prefix: "--".to_owned(),
                                 comment,
@@ -450,15 +472,15 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 '/' => {
-                    chars.next(); // consume the '/'
-                    match chars.peek() {
+                    state.next(); // consume the '/'
+                    match state.peek() {
                         Some('*') => {
-                            chars.next(); // consume the '*', starting a multi-line comment
-                            self.tokenize_multiline_comment(chars)
+                            state.next(); // consume the '*', starting a multi-line comment
+                            self.tokenize_multiline_comment(state)
                         }
                         Some('/') if dialect_of!(self is SnowflakeDialect) => {
-                            chars.next(); // consume the second '/', starting a snowflake single-line comment
-                            let comment = self.tokenize_single_line_comment(chars);
+                            state.next(); // consume the second '/', starting a snowflake single-line comment
+                            let comment = self.tokenize_single_line_comment(state);
                             Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
                                 prefix: "//".to_owned(),
                                 comment,
@@ -468,17 +490,17 @@ impl<'a> Tokenizer<'a> {
                         _ => Ok(Some(Token::Div)),
                     }
                 }
-                '+' => self.consume_and_return(chars, Token::Plus),
-                '*' => self.consume_and_return(chars, Token::Mult),
-                '%' => self.consume_and_return(chars, Token::Mod),
+                '+' => self.consume_and_return(state, Token::Plus),
+                '*' => self.consume_and_return(state, Token::Mult),
+                '%' => self.consume_and_return(state, Token::Mod),
                 '|' => {
-                    chars.next(); // consume the '|'
-                    match chars.peek() {
-                        Some('/') => self.consume_and_return(chars, Token::PGSquareRoot),
+                    state.next(); // consume the '|'
+                    match state.peek() {
+                        Some('/') => self.consume_and_return(state, Token::PGSquareRoot),
                         Some('|') => {
-                            chars.next(); // consume the second '|'
-                            match chars.peek() {
-                                Some('/') => self.consume_and_return(chars, Token::PGCubeRoot),
+                            state.next(); // consume the second '|'
+                            match state.peek() {
+                                Some('/') => self.consume_and_return(state, Token::PGCubeRoot),
                                 _ => Ok(Some(Token::StringConcat)),
                             }
                         }
@@ -487,82 +509,83 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 '=' => {
-                    chars.next(); // consume
-                    match chars.peek() {
-                        Some('>') => self.consume_and_return(chars, Token::RArrow),
+                    state.next(); // consume
+                    match state.peek() {
+                        Some('>') => self.consume_and_return(state, Token::RArrow),
                         _ => Ok(Some(Token::Eq)),
                     }
                 }
-                '.' => self.consume_and_return(chars, Token::Period),
+                '.' => self.consume_and_return(state, Token::Period),
                 '!' => {
-                    chars.next(); // consume
-                    match chars.peek() {
-                        Some('=') => self.consume_and_return(chars, Token::Neq),
-                        Some('!') => self.consume_and_return(chars, Token::DoubleExclamationMark),
+                    state.next(); // consume
+                    match state.peek() {
+                        Some('=') => self.consume_and_return(state, Token::Neq),
+                        Some('!') => self.consume_and_return(state, Token::DoubleExclamationMark),
                         _ => Ok(Some(Token::ExclamationMark)),
                     }
                 }
                 '<' => {
-                    chars.next(); // consume
-                    match chars.peek() {
-                        Some('=') => self.consume_and_return(chars, Token::LtEq),
-                        Some('>') => self.consume_and_return(chars, Token::Neq),
-                        Some('<') => self.consume_and_return(chars, Token::ShiftLeft),
+                    state.next(); // consume
+                    match state.peek() {
+                        Some('=') => self.consume_and_return(state, Token::LtEq),
+                        Some('>') => self.consume_and_return(state, Token::Neq),
+                        Some('<') => self.consume_and_return(state, Token::ShiftLeft),
                         _ => Ok(Some(Token::Lt)),
                     }
                 }
                 '>' => {
-                    chars.next(); // consume
-                    match chars.peek() {
-                        Some('=') => self.consume_and_return(chars, Token::GtEq),
-                        Some('>') => self.consume_and_return(chars, Token::ShiftRight),
+                    state.next(); // consume
+                    match state.peek() {
+                        Some('=') => self.consume_and_return(state, Token::GtEq),
+                        Some('>') => self.consume_and_return(state, Token::ShiftRight),
                         _ => Ok(Some(Token::Gt)),
                     }
                 }
                 ':' => {
-                    chars.next();
-                    match chars.peek() {
-                        Some(':') => self.consume_and_return(chars, Token::DoubleColon),
+                    state.next();
+                    match state.peek() {
+                        Some(':') => self.consume_and_return(state, Token::DoubleColon),
                         _ => Ok(Some(Token::Colon)),
                     }
                 }
-                ';' => self.consume_and_return(chars, Token::SemiColon),
-                '\\' => self.consume_and_return(chars, Token::Backslash),
-                '[' => self.consume_and_return(chars, Token::LBracket),
-                ']' => self.consume_and_return(chars, Token::RBracket),
-                '&' => self.consume_and_return(chars, Token::Ampersand),
-                '^' => self.consume_and_return(chars, Token::Caret),
-                '{' => self.consume_and_return(chars, Token::LBrace),
-                '}' => self.consume_and_return(chars, Token::RBrace),
+                ';' => self.consume_and_return(state, Token::SemiColon),
+                '\\' => self.consume_and_return(state, Token::Backslash),
+                '[' => self.consume_and_return(state, Token::LBracket),
+                ']' => self.consume_and_return(state, Token::RBracket),
+                '&' => self.consume_and_return(state, Token::Ampersand),
+                '^' => self.consume_and_return(state, Token::Caret),
+                '{' => self.consume_and_return(state, Token::LBrace),
+                '}' => self.consume_and_return(state, Token::RBrace),
                 '#' if dialect_of!(self is SnowflakeDialect) => {
-                    chars.next(); // consume the '#', starting a snowflake single-line comment
-                    let comment = self.tokenize_single_line_comment(chars);
+                    state.next(); // consume the '#', starting a snowflake single-line comment
+                    let comment = self.tokenize_single_line_comment(state);
                     Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
                         prefix: "#".to_owned(),
                         comment,
                     })))
                 }
-                '~' => self.consume_and_return(chars, Token::Tilde),
-                '#' => self.consume_and_return(chars, Token::Sharp),
-                '@' => self.consume_and_return(chars, Token::AtSign),
-                other => self.consume_and_return(chars, Token::Char(other)),
+                '~' => self.consume_and_return(state, Token::Tilde),
+                '#' => self.consume_and_return(state, Token::Sharp),
+                '@' => self.consume_and_return(state, Token::AtSign),
+                other => self.consume_and_return(state, Token::Char(other)),
             },
             None => Ok(None),
         }
     }
 
-    fn tokenizer_error<R>(&self, message: &str) -> Result<R, TokenizerError> {
+    fn tokenizer_error<R>(&self, state: &State, message: &str) -> Result<R, TokenizerError> {
+        let loc = state.location();
         Err(TokenizerError {
             message: message.to_string(),
-            col: self.col,
-            line: self.line,
+            col: loc.column,
+            line: loc.line,
         })
     }
 
     // Consume characters until newline
-    fn tokenize_single_line_comment(&self, chars: &mut Peekable<Chars<'_>>) -> String {
-        let mut comment = peeking_take_while(chars, |ch| ch != '\n');
-        if let Some(ch) = chars.next() {
+    fn tokenize_single_line_comment(&self, state: &mut State) -> String {
+        let mut comment = peeking_take_while(state, |ch| ch != '\n');
+        if let Some(ch) = state.next() {
             assert_eq!(ch, '\n');
             comment.push(ch);
         }
@@ -570,51 +593,48 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Tokenize an identifier or keyword, after the first char is already consumed.
-    fn tokenize_word(&self, first_char: char, chars: &mut Peekable<Chars<'_>>) -> String {
+    fn tokenize_word(&self, first_char: char, state: &mut State) -> String {
         let mut s = first_char.to_string();
-        s.push_str(&peeking_take_while(chars, |ch| {
+        s.push_str(&peeking_take_while(state, |ch| {
             self.dialect.is_identifier_part(ch)
         }));
         s
     }
 
     /// Read a single quoted string, starting with the opening quote.
-    fn tokenize_single_quoted_string(
-        &self,
-        chars: &mut Peekable<Chars<'_>>,
-    ) -> Result<String, TokenizerError> {
+    fn tokenize_single_quoted_string(&self, state: &mut State) -> Result<String, TokenizerError> {
         let mut s = String::new();
-        chars.next(); // consume the opening quote
-        while let Some(&ch) = chars.peek() {
+        state.next(); // consume the opening quote
+        while let Some(&ch) = state.peek() {
             match ch {
                 '\'' => {
-                    chars.next(); // consume
-                    let escaped_quote = chars.peek().map(|c| *c == '\'').unwrap_or(false);
+                    state.next(); // consume
+                    let escaped_quote = state.peek().map(|c| *c == '\'').unwrap_or(false);
                     if escaped_quote {
                         s.push('\'');
-                        chars.next();
+                        state.next();
                     } else {
                         return Ok(s);
                     }
                 }
                 _ => {
-                    chars.next(); // consume
+                    state.next(); // consume
                     s.push(ch);
                 }
             }
         }
-        self.tokenizer_error("Unterminated string literal")
+        self.tokenizer_error(state, "Unterminated string literal")
     }
 
     fn tokenize_multiline_comment(
         &self,
-        chars: &mut Peekable<Chars<'_>>,
+        state: &mut State,
     ) -> Result<Option<Token>, TokenizerError> {
         let mut s = String::new();
         let mut maybe_closing_comment = false;
         // TODO: deal with nested comments
         loop {
-            match chars.next() {
+            match state.next() {
                 Some(ch) => {
                     if maybe_closing_comment {
                         if ch == '/' {
@@ -628,17 +648,20 @@ impl<'a> Tokenizer<'a> {
                         s.push(ch);
                     }
                 }
-                None => break self.tokenizer_error("Unexpected EOF while in a multi-line comment"),
+                None => {
+                    break self
+                        .tokenizer_error(state, "Unexpected EOF while in a multi-line comment")
+                }
             }
         }
     }
 
     fn consume_and_return(
         &self,
-        chars: &mut Peekable<Chars<'_>>,
+        state: &mut State,
         t: Token,
     ) -> Result<Option<Token>, TokenizerError> {
-        chars.next();
+        state.next();
         Ok(Some(t))
     }
 }
@@ -646,14 +669,11 @@ impl<'a> Tokenizer<'a> {
 /// Read from `chars` until `predicate` returns `false` or EOF is hit.
 /// Return the characters read as String, and keep the first non-matching
 /// char available as `chars.next()`.
-fn peeking_take_while(
-    chars: &mut Peekable<Chars<'_>>,
-    mut predicate: impl FnMut(char) -> bool,
-) -> String {
+fn peeking_take_while(state: &mut State, mut predicate: impl FnMut(char) -> bool) -> String {
     let mut s = String::new();
-    while let Some(&ch) = chars.peek() {
+    while let Some(&ch) = state.peek() {
         if predicate(ch) {
-            chars.next(); // consume
+            state.peekable.next(); // consume
             s.push(ch);
         } else {
             break;
@@ -1115,6 +1135,21 @@ mod tests {
         //println!("expected = {:?}", expected);
         //println!("------------------------------");
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn tokenize_location_multiline_string_literal() {
+        let sql = String::from("'some\nthing' foo");
+
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize_with_location().unwrap();
+        let expected = vec![
+            TokenWithLocation::new(Token::make_word("some\nthing", None), 1, 1),
+            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 2, 1),
+            TokenWithLocation::new(Token::make_word("foo", None), 2, 2),
+        ];
+        compare_with_location(expected, tokens);
     }
 
     #[test]

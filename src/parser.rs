@@ -2043,6 +2043,19 @@ impl<'a> Parser<'a> {
         Ok(ObjectName(idents))
     }
 
+    /// Parse identifiers
+    pub fn parse_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
+        let mut idents = vec![];
+        loop {
+            match self.next_token() {
+                Token::Word(w) => idents.push(w.to_ident()),
+                Token::EOF => break,
+                _ => {}
+            }
+        }
+        Ok(idents)
+    }
+
     /// Parse a simple one-word identifier (possibly quoted, possibly a keyword)
     pub fn parse_identifier(&mut self) -> Result<Ident, ParserError> {
         match self.next_token() {
@@ -2439,7 +2452,7 @@ impl<'a> Parser<'a> {
             self.parse_show_columns()
         } else {
             Ok(Statement::ShowVariable {
-                variable: self.parse_identifier()?,
+                variable: self.parse_identifiers()?,
             })
         }
     }

@@ -637,7 +637,7 @@ pub enum Statement {
     /// SHOW <variable>
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    ShowVariable { variable: Ident },
+    ShowVariable { variable: Vec<Ident> },
     /// SHOW COLUMNS
     ///
     /// Note: this is a MySQL-specific statement.
@@ -1136,7 +1136,13 @@ impl fmt::Display for Statement {
                     value = display_comma_separated(value)
                 )
             }
-            Statement::ShowVariable { variable } => write!(f, "SHOW {}", variable),
+            Statement::ShowVariable { variable } => {
+                write!(f, "SHOW")?;
+                if !variable.is_empty() {
+                    write!(f, " {}", display_separated(variable, " "))?;
+                }
+                Ok(())
+            }
             Statement::ShowColumns {
                 extended,
                 full,

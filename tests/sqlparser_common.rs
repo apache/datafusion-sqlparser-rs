@@ -543,23 +543,17 @@ fn parse_is_not_null() {
 fn parse_not_precedence() {
     // NOT has higher precedence than OR/AND, so the following must parse as (NOT true) OR true
     let sql = "NOT true OR true";
-    assert_matches!(
-        verified_expr(sql),
-        Expr::BinaryOp {
-            op: BinaryOperator::Or,
-            ..
-        }
-    );
+    assert_matches!(verified_expr(sql), Expr::BinaryOp {
+        op: BinaryOperator::Or,
+        ..
+    });
 
     // But NOT has lower precedence than comparison operators, so the following parses as NOT (a IS NULL)
     let sql = "NOT a IS NULL";
-    assert_matches!(
-        verified_expr(sql),
-        Expr::UnaryOp {
-            op: UnaryOperator::Not,
-            ..
-        }
-    );
+    assert_matches!(verified_expr(sql), Expr::UnaryOp {
+        op: UnaryOperator::Not,
+        ..
+    });
 
     // NOT has lower precedence than BETWEEN, so the following parses as NOT (1 NOT BETWEEN 1 AND 2)
     let sql = "NOT 1 NOT BETWEEN 1 AND 2";
@@ -1469,7 +1463,7 @@ fn parse_create_external_table_lowercase() {
          lng DOUBLE) \
          STORED AS PARQUET LOCATION '/tmp/example.csv'",
     );
-    assert_matches!(ast, Statement::CreateTable { .. });
+    assert_matches!(ast, Statement::CreateTable{..});
 }
 
 #[test]
@@ -2588,9 +2582,7 @@ fn parse_multiple_statements() {
 #[test]
 fn parse_scalar_subqueries() {
     let sql = "(SELECT 1) + (SELECT 2)";
-    assert_matches!(
-        verified_expr(sql),
-        Expr::BinaryOp {
+    assert_matches!(verified_expr(sql), Expr::BinaryOp {
         op: BinaryOperator::Plus, ..
         //left: box Subquery { .. },
         //right: box Subquery { .. },

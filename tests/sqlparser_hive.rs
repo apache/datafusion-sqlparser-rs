@@ -192,6 +192,12 @@ fn rename_table() {
     hive().verified_stmt(rename);
 }
 
+#[test]
+fn map_access() {
+    let rename = "SELECT a.b[\"asdf\"] FROM db.table WHERE a = 2";
+    hive().verified_stmt(rename);
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

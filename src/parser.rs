@@ -48,12 +48,14 @@ pub enum IsOptional {
     Optional,
     Mandatory,
 }
+
 use IsOptional::*;
 
 pub enum IsLateral {
     Lateral,
     NotLateral,
 }
+
 use crate::ast::Statement::CreateVirtualTable;
 use IsLateral::*;
 
@@ -281,6 +283,7 @@ impl<'a> Parser<'a> {
         loop {
             let next_precedence = self.get_next_precedence()?;
             debug!("next precedence: {:?}", next_precedence);
+
             if precedence >= next_precedence {
                 break;
             }
@@ -422,6 +425,7 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
+
             Token::LParen => {
                 let expr =
                     if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
@@ -845,9 +849,24 @@ impl<'a> Parser<'a> {
                 op: UnaryOperator::PGPostfixFactorial,
                 expr: Box::new(expr),
             })
+        } else if Token::LBracket == tok {
+            self.parse_map_access(expr)
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             panic!("No infix parser for token {:?}", tok)
+        }
+    }
+
+    pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+        let key = self.parse_literal_string()?;
+        let tok = self.consume_token(&Token::RBracket);
+        debug!("Tok: {}", tok);
+        match expr {
+            e @ Expr::Identifier(_) | e @ Expr::CompoundIdentifier(_) => Ok(Expr::MapAccess {
+                column: Box::new(e),
+                key,
+            }),
+            _ => Ok(expr),
         }
     }
 
@@ -936,6 +955,7 @@ impl<'a> Parser<'a> {
             Token::Mult | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
+            Token::LBracket | Token::RBracket => Ok(10),
             _ => Ok(0),
         }
     }
@@ -2460,7 +2480,7 @@ impl<'a> Parser<'a> {
                         }
                     }
                     Keyword::OUTER => {
-                        return self.expected("LEFT, RIGHT, or FULL", self.peek_token())
+                        return self.expected("LEFT, RIGHT, or FULL", self.peek_token());
                     }
                     _ if natural => {
                         return self.expected("a join type after NATURAL", self.peek_token());

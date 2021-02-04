@@ -198,6 +198,13 @@ fn map_access() {
     hive().verified_stmt(rename);
 }
 
+#[test]
+fn from_cte() {
+    let rename =
+        "WITH cte AS (SELECT * FROM a.b) FROM cte INSERT INTO TABLE a.b PARTITION (a) SELECT *";
+    println!("{}", hive().verified_stmt(rename));
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

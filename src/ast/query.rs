@@ -251,11 +251,16 @@ impl fmt::Display for With {
 pub struct Cte {
     pub alias: TableAlias,
     pub query: Query,
+    pub from: Option<Ident>,
 }
 
 impl fmt::Display for Cte {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} AS ({})", self.alias, self.query)
+        write!(f, "{} AS ({})", self.alias, self.query)?;
+        if let Some(ref fr) = self.from {
+            write!(f, " FROM {}", fr)?;
+        }
+        Ok(())
     }
 }
 

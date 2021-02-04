@@ -2153,7 +2153,7 @@ impl<'a> Parser<'a> {
     fn parse_cte(&mut self) -> Result<Cte, ParserError> {
         let name = self.parse_identifier()?;
 
-        if self.parse_keyword(Keyword::AS) {
+        let mut cte = if self.parse_keyword(Keyword::AS) {
             self.expect_token(&Token::LParen)?;
             let query = self.parse_query()?;
             self.expect_token(&Token::RParen)?;
@@ -2161,7 +2161,11 @@ impl<'a> Parser<'a> {
                 name,
                 columns: vec![],
             };
-            Ok(Cte { alias, query })
+            Cte {
+                alias,
+                query,
+                from: None,
+            }
         } else {
             let columns = self.parse_parenthesized_column_list(Optional)?;
             self.expect_keyword(Keyword::AS)?;
@@ -2169,8 +2173,16 @@ impl<'a> Parser<'a> {
             let query = self.parse_query()?;
             self.expect_token(&Token::RParen)?;
             let alias = TableAlias { name, columns };
-            Ok(Cte { alias, query })
+            Cte {
+                alias,
+                query,
+                from: None,
+            }
+        };
+        if self.parse_keyword(Keyword::FROM) {
+            cte.from = Some(self.parse_identifier()?);
         }
+        Ok(cte)
     }
 
     /// Parse a "query body", which is an expression with roughly the

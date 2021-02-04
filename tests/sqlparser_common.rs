@@ -2345,7 +2345,7 @@ fn parse_ctes() {
 
     fn assert_ctes_in_select(expected: &[&str], sel: &Query) {
         for (i, exp) in expected.iter().enumerate() {
-            let Cte { alias, query } = &sel.with.as_ref().unwrap().cte_tables[i];
+            let Cte { alias, query, .. } = &sel.with.as_ref().unwrap().cte_tables[i];
             assert_eq!(*exp, query.to_string());
             assert_eq!(
                 if i == 0 {
@@ -2434,6 +2434,7 @@ fn parse_recursive_cte() {
             }],
         },
         query: cte_query,
+        from: None,
     };
     assert_eq!(with.cte_tables.first().unwrap(), &expected);
 }

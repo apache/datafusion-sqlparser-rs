@@ -92,7 +92,7 @@ fn parse_insert_invalid() {
     let sql = "INSERT public.customer (id, name, active) VALUES (1, 2, 3)";
     let res = parse_sql_statements(sql);
     assert_eq!(
-        ParserError::ParserError("Expected INTO, found: public".to_string()),
+        ParserError::ParserError("Expected one of INTO or OVERWRITE, found: public".to_string()),
         res.unwrap_err()
     );
 }
@@ -454,11 +454,11 @@ fn parse_number() {
     #[cfg(feature = "bigdecimal")]
     assert_eq!(
         expr,
-        Expr::Value(Value::Number(bigdecimal::BigDecimal::from(1)))
+        Expr::Value(Value::Number(bigdecimal::BigDecimal::from(1), false))
     );
 
     #[cfg(not(feature = "bigdecimal"))]
-    assert_eq!(expr, Expr::Value(Value::Number("1.0".into())));
+    assert_eq!(expr, Expr::Value(Value::Number("1.0".into(), false)));
 }
 
 #[test]
@@ -894,7 +894,7 @@ fn parse_select_having() {
                 name: ObjectName(vec![Ident::new("COUNT")]),
                 args: vec![FunctionArg::Unnamed(Expr::Wildcard)],
                 over: None,
-                distinct: false
+                distinct: false,
             })),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Value(number("1")))
@@ -1640,18 +1640,6 @@ fn parse_explain_analyze_with_simple_select() {
 }
 
 #[test]
-fn parse_simple_analyze() {
-    let sql = "ANALYZE TABLE t";
-    let stmt = verified_stmt(sql);
-    assert_eq!(
-        stmt,
-        Statement::Analyze {
-            table_name: ObjectName(vec![Ident::new("t")])
-        }
-    );
-}
-
-#[test]
 fn parse_named_argument_function() {
     let sql = "SELECT FUN(a => '1', b => '2') FROM foo";
     let select = verified_only_select(sql);
@@ -2390,7 +2378,7 @@ fn parse_ctes() {
 
     fn assert_ctes_in_select(expected: &[&str], sel: &Query) {
         for (i, exp) in expected.iter().enumerate() {
-            let Cte { alias, query } = &sel.with.as_ref().unwrap().cte_tables[i];
+            let Cte { alias, query, .. } = &sel.with.as_ref().unwrap().cte_tables[i];
             assert_eq!(*exp, query.to_string());
             assert_eq!(
                 if i == 0 {
@@ -2479,6 +2467,7 @@ fn parse_recursive_cte() {
             }],
         },
         query: cte_query,
+        from: None,
     };
     assert_eq!(with.cte_tables.first().unwrap(), &expected);
 }
@@ -2799,6 +2788,7 @@ fn parse_drop_table() {
             if_exists,
             names,
             cascade,
+            purge: _,
         } => {
             assert_eq!(false, if_exists);
             assert_eq!(ObjectType::Table, object_type);
@@ -2818,6 +2808,7 @@ fn parse_drop_table() {
             if_exists,
             names,
             cascade,
+            purge: _,
         } => {
             assert_eq!(true, if_exists);
             assert_eq!(ObjectType::Table, object_type);

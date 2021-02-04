@@ -365,7 +365,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume the first char
                     let s = self.tokenize_word(ch, chars);
 
-                    if s.chars().all(|x| x >= '0' && x <= '9' || x == '.') {
+                    if s.chars().all(|x| ('0'..='9').contains(&x) || x == '.') {
                         let mut s = peeking_take_while(&mut s.chars().peekable(), |ch| {
                             matches!(ch, '0'..='9' | '.')
                         });

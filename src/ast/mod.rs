@@ -666,6 +666,20 @@ pub enum Statement {
         data_types: Vec<DataType>,
         statement: Box<Statement>,
     },
+    /// EXPLAIN
+    Explain {
+        /// Carry out the command and show actual run times and other statistics.
+        analyze: bool,
+        // Display additional information regarding the plan.
+        verbose: bool,
+        /// A SQL query that specifies what to explain
+        statement: Box<Statement>,
+    },
+    /// ANALYZE
+    Analyze {
+        /// Name of table
+        table_name: ObjectName,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -674,6 +688,24 @@ impl fmt::Display for Statement {
     #[allow(clippy::cognitive_complexity)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Statement::Explain {
+                verbose,
+                analyze,
+                statement,
+            } => {
+                write!(f, "EXPLAIN ")?;
+
+                if *analyze {
+                    write!(f, "ANALYZE ")?;
+                }
+
+                if *verbose {
+                    write!(f, "VERBOSE ")?;
+                }
+
+                write!(f, "{}", statement)
+            }
+            Statement::Analyze { table_name } => write!(f, "ANALYZE TABLE {}", table_name),
             Statement::Query(s) => write!(f, "{}", s),
             Statement::Directory {
                 overwrite,

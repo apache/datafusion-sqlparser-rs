@@ -543,17 +543,23 @@ fn parse_is_not_null() {
 fn parse_not_precedence() {
     // NOT has higher precedence than OR/AND, so the following must parse as (NOT true) OR true
     let sql = "NOT true OR true";
-    assert_matches!(verified_expr(sql), Expr::BinaryOp {
-        op: BinaryOperator::Or,
-        ..
-    });
+    assert_matches!(
+        verified_expr(sql),
+        Expr::BinaryOp {
+            op: BinaryOperator::Or,
+            ..
+        }
+    );
 
     // But NOT has lower precedence than comparison operators, so the following parses as NOT (a IS NULL)
     let sql = "NOT a IS NULL";
-    assert_matches!(verified_expr(sql), Expr::UnaryOp {
-        op: UnaryOperator::Not,
-        ..
-    });
+    assert_matches!(
+        verified_expr(sql),
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            ..
+        }
+    );
 
     // NOT has lower precedence than BETWEEN, so the following parses as NOT (1 NOT BETWEEN 1 AND 2)
     let sql = "NOT 1 NOT BETWEEN 1 AND 2";
@@ -1463,7 +1469,7 @@ fn parse_create_external_table_lowercase() {
          lng DOUBLE) \
          STORED AS PARQUET LOCATION '/tmp/example.csv'",
     );
-    assert_matches!(ast, Statement::CreateTable{..});
+    assert_matches!(ast, Statement::CreateTable { .. });
 }
 
 #[test]
@@ -1603,6 +1609,45 @@ fn parse_scalar_function_in_projection() {
             distinct: false,
         }),
         expr_from_projection(only(&select.projection))
+    );
+}
+
+fn run_explain_analyze(query: &str, expected_verbose: bool, expected_analyze: bool) {
+    match verified_stmt(query) {
+        Statement::Explain {
+            analyze,
+            verbose,
+            statement,
+        } => {
+            assert_eq!(verbose, expected_verbose);
+            assert_eq!(analyze, expected_analyze);
+            assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
+        }
+        _ => panic!("Unexpected Statement, must be Explain"),
+    }
+}
+
+#[test]
+fn parse_explain_analyze_with_simple_select() {
+    run_explain_analyze("EXPLAIN SELECT sqrt(id) FROM foo", false, false);
+    run_explain_analyze("EXPLAIN VERBOSE SELECT sqrt(id) FROM foo", true, false);
+    run_explain_analyze("EXPLAIN ANALYZE SELECT sqrt(id) FROM foo", false, true);
+    run_explain_analyze(
+        "EXPLAIN ANALYZE VERBOSE SELECT sqrt(id) FROM foo",
+        true,
+        true,
+    );
+}
+
+#[test]
+fn parse_simple_analyze() {
+    let sql = "ANALYZE TABLE t";
+    let stmt = verified_stmt(sql);
+    assert_eq!(
+        stmt,
+        Statement::Analyze {
+            table_name: ObjectName(vec![Ident::new("t")])
+        }
     );
 }
 
@@ -2555,11 +2600,14 @@ fn parse_multiple_statements() {
 #[test]
 fn parse_scalar_subqueries() {
     let sql = "(SELECT 1) + (SELECT 2)";
-    assert_matches!(verified_expr(sql), Expr::BinaryOp {
+    assert_matches!(
+        verified_expr(sql),
+        Expr::BinaryOp {
         op: BinaryOperator::Plus, ..
         //left: box Subquery { .. },
         //right: box Subquery { .. },
-    });
+    }
+    );
 }
 
 #[test]

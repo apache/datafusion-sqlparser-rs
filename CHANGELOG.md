@@ -8,6 +8,8 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/ballista-compute/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.7.0] 2020-12-28
+
 ### Changed
 - Change the MySQL dialect to support `` `identifiers` `` quoted with backticks instead of the standard `"double-quoted"` identifiers (#247) - thanks @mashuai!
 - Update bigdecimal requirement from 0.1 to 0.2 (#268)
@@ -21,6 +23,10 @@ Check https://github.com/ballista-compute/sqlparser-rs/commits/main for undocume
 - Support PostgreSQL math operators (#267) - thanks @alex-dukhno!
 - Add SQLite dialect (#248) - thanks @mashuai!
 - Add Snowflake dialect (#259) - thanks @eyalleshem!
+- Support for Recursive CTEs - thanks @rhanqtl!
+- Support `FROM (table_name) alias` syntax - thanks @eyalleshem!
+- Support for `EXPLAIN [ANALYZE] VERBOSE` - thanks @ovr!
+- Support `ANALYZE TABLE`
 - DDL:
     - Support `OR REPLACE` in `CREATE VIEW`/`TABLE` (#239)  - thanks @Dandandan!
     - Support specifying `ASC`/`DESC` in index columns (#249) - thanks @mashuai!

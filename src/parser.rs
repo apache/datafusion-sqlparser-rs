@@ -133,6 +133,8 @@ impl<'a> Parser<'a> {
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
         match self.next_token() {
             Token::Word(w) => match w.keyword {
+                Keyword::EXPLAIN => Ok(self.parse_explain()?),
+                Keyword::ANALYZE => Ok(self.parse_analyze()?),
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES => {
                     self.prev_token();
                     Ok(Statement::Query(Box::new(self.parse_query()?)))
@@ -2085,6 +2087,28 @@ impl<'a> Parser<'a> {
             table_name,
             selection,
         })
+    }
+
+    pub fn parse_explain(&mut self) -> Result<Statement, ParserError> {
+        let analyze = self.parse_keyword(Keyword::ANALYZE);
+        let verbose = self.parse_keyword(Keyword::VERBOSE);
+
+        let statement = Box::new(self.parse_statement()?);
+
+        Ok(Statement::Explain {
+            analyze,
+            verbose,
+            statement,
+        })
+    }
+
+    pub fn parse_analyze(&mut self) -> Result<Statement, ParserError> {
+        // ANALYZE TABLE table_name
+        self.expect_keyword(Keyword::TABLE)?;
+
+        let table_name = self.parse_object_name()?;
+
+        Ok(Statement::Analyze { table_name })
     }
 
     /// Parse a query expression, i.e. a `SELECT` statement optionally

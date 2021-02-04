@@ -675,11 +675,6 @@ pub enum Statement {
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
     },
-    /// ANALYZE
-    Analyze {
-        /// Name of table
-        table_name: ObjectName,
-    },
 }
 
 impl fmt::Display for Statement {
@@ -705,7 +700,6 @@ impl fmt::Display for Statement {
 
                 write!(f, "{}", statement)
             }
-            Statement::Analyze { table_name } => write!(f, "ANALYZE TABLE {}", table_name),
             Statement::Query(s) => write!(f, "{}", s),
             Statement::Directory {
                 overwrite,

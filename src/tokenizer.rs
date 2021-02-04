@@ -785,7 +785,7 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::Eq,
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1")),
+            Token::Number(String::from("1"), false),
         ];
 
         compare(expected, tokens);
@@ -817,7 +817,7 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::Eq,
             Token::Whitespace(Whitespace::Space),
-            Token::Number(String::from("1")),
+            Token::Number(String::from("1"), false),
         ];
 
         compare(expected, tokens);

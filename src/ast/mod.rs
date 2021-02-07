@@ -201,9 +201,16 @@ pub enum Expr {
         expr: Box<Expr>,
         data_type: DataType,
     },
+    /// EXTRACT(DateTimeField FROM <expr>)
     Extract {
         field: DateTimeField,
         expr: Box<Expr>,
+    },
+    /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
+    Substring {
+        expr: Box<Expr>,
+        substring_from: Option<Box<Expr>>,
+        substring_for: Option<Box<Expr>>,
     },
     /// `expr COLLATE collation`
     Collate {
@@ -333,6 +340,21 @@ impl fmt::Display for Expr {
             Expr::Exists(s) => write!(f, "EXISTS ({})", s),
             Expr::Subquery(s) => write!(f, "({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+            } => {
+                write!(f, "SUBSTRING({}", expr)?;
+                if let Some(from_part) = substring_from {
+                    write!(f, " FROM {}", from_part)?;
+                }
+                if let Some(from_part) = substring_for {
+                    write!(f, " FOR {}", from_part)?;
+                }
+
+                write!(f, ")")
+            }
         }
     }
 }

@@ -395,16 +395,25 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 // numbers
-                '0'..='9' => {
-                    // TODO: https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#unsigned-numeric-literal
-                    let s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
+                '0'..='9' | '.' => {
+                    let mut s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
+                    if let Some('.') = chars.peek() {
+                        s.push('.');
+                        chars.next();
+                    }
+                    s += &peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
+
                     let long = if chars.peek() == Some(&'L') {
                         chars.next();
                         true
                     } else {
                         false
                     };
-                    Ok(Some(Token::Number(s, long)))
+                    if s == "." {
+                        Ok(Some(Token::Period))
+                    } else {
+                        Ok(Some(Token::Number(s, long)))
+                    }
                 }
                 // punctuation
                 '(' => self.consume_and_return(chars, Token::LParen),
@@ -470,7 +479,6 @@ impl<'a> Tokenizer<'a> {
                         _ => Ok(Some(Token::Eq)),
                     }
                 }
-                '.' => self.consume_and_return(chars, Token::Period),
                 '!' => {
                     chars.next(); // consume
                     match chars.peek() {
@@ -662,6 +670,22 @@ mod tests {
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("1"), false),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_select_float() {
+        let sql = String::from("SELECT .1");
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from(".1"), false),
         ];
 
         compare(expected, tokens);

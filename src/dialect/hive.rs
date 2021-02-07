@@ -13,21 +13,27 @@
 use crate::dialect::Dialect;
 
 #[derive(Debug)]
-pub struct PostgreSqlDialect {}
+pub struct HiveDialect {}
 
-impl Dialect for PostgreSqlDialect {
+impl Dialect for HiveDialect {
+    fn is_delimited_identifier_start(&self, ch: char) -> bool {
+        (ch == '"') || (ch == '`')
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
-        // See https://www.postgresql.org/docs/11/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
-        // We don't yet support identifiers beginning with "letters with
-        // diacritical marks and non-Latin letters"
-        ('a'..='z').contains(&ch) || ('A'..='Z').contains(&ch) || ch == '_'
+        ('a'..='z').contains(&ch)
+            || ('A'..='Z').contains(&ch)
+            || ('0'..='9').contains(&ch)
+            || ch == '$'
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
         ('a'..='z').contains(&ch)
             || ('A'..='Z').contains(&ch)
             || ('0'..='9').contains(&ch)
-            || ch == '$'
             || ch == '_'
+            || ch == '$'
+            || ch == '{'
+            || ch == '}'
     }
 }

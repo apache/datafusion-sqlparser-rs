@@ -57,6 +57,7 @@ impl fmt::Display for Query {
 
 /// A node in a tree, representing a "query body" expression, roughly:
 /// `SELECT ... [ {UNION|EXCEPT|INTERSECT} SELECT ...]`
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SetExpr {
@@ -73,6 +74,7 @@ pub enum SetExpr {
         right: Box<SetExpr>,
     },
     Values(Values),
+    Insert(Statement),
     // TODO: ANSI SQL supports `TABLE` here.
 }
 
@@ -82,6 +84,7 @@ impl fmt::Display for SetExpr {
             SetExpr::Select(s) => write!(f, "{}", s),
             SetExpr::Query(q) => write!(f, "({})", q),
             SetExpr::Values(v) => write!(f, "{}", v),
+            SetExpr::Insert(v) => write!(f, "{}", v),
             SetExpr::SetOperation {
                 left,
                 right,
@@ -126,10 +129,18 @@ pub struct Select {
     pub projection: Vec<SelectItem>,
     /// FROM
     pub from: Vec<TableWithJoins>,
+    /// LATERAL VIEWs
+    pub lateral_views: Vec<LateralView>,
     /// WHERE
     pub selection: Option<Expr>,
     /// GROUP BY
     pub group_by: Vec<Expr>,
+    /// CLUSTER BY (Hive)
+    pub cluster_by: Vec<Expr>,
+    /// DISTRIBUTE BY (Hive)
+    pub distribute_by: Vec<Expr>,
+    /// SORT BY (Hive)
+    pub sort_by: Vec<Expr>,
     /// HAVING
     pub having: Option<Expr>,
 }
@@ -144,14 +155,70 @@ impl fmt::Display for Select {
         if !self.from.is_empty() {
             write!(f, " FROM {}", display_comma_separated(&self.from))?;
         }
+        if !self.lateral_views.is_empty() {
+            for lv in &self.lateral_views {
+                write!(f, "{}", lv)?;
+            }
+        }
         if let Some(ref selection) = self.selection {
             write!(f, " WHERE {}", selection)?;
         }
         if !self.group_by.is_empty() {
             write!(f, " GROUP BY {}", display_comma_separated(&self.group_by))?;
         }
+        if !self.cluster_by.is_empty() {
+            write!(
+                f,
+                " CLUSTER BY {}",
+                display_comma_separated(&self.cluster_by)
+            )?;
+        }
+        if !self.distribute_by.is_empty() {
+            write!(
+                f,
+                " DISTRIBUTE BY {}",
+                display_comma_separated(&self.distribute_by)
+            )?;
+        }
+        if !self.sort_by.is_empty() {
+            write!(f, " SORT BY {}", display_comma_separated(&self.sort_by))?;
+        }
         if let Some(ref having) = self.having {
             write!(f, " HAVING {}", having)?;
+        }
+        Ok(())
+    }
+}
+
+/// A hive LATERAL VIEW with potential column aliases
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct LateralView {
+    /// LATERAL VIEW
+    pub lateral_view: Expr,
+    /// LATERAL VIEW table name
+    pub lateral_view_name: ObjectName,
+    /// LATERAL VIEW optional column aliases
+    pub lateral_col_alias: Vec<Ident>,
+    /// LATERAL VIEW OUTER
+    pub outer: bool,
+}
+
+impl fmt::Display for LateralView {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            " LATERAL VIEW{outer} {} {}",
+            self.lateral_view,
+            self.lateral_view_name,
+            outer = if self.outer { " OUTER" } else { "" }
+        )?;
+        if !self.lateral_col_alias.is_empty() {
+            write!(
+                f,
+                " AS {}",
+                display_comma_separated(&self.lateral_col_alias)
+            )?;
         }
         Ok(())
     }
@@ -184,11 +251,16 @@ impl fmt::Display for With {
 pub struct Cte {
     pub alias: TableAlias,
     pub query: Query,
+    pub from: Option<Ident>,
 }
 
 impl fmt::Display for Cte {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} AS ({})", self.alias, self.query)
+        write!(f, "{} AS ({})", self.alias, self.query)?;
+        if let Some(ref fr) = self.from {
+            write!(f, " FROM {}", fr)?;
+        }
+        Ok(())
     }
 }
 
@@ -346,7 +418,7 @@ impl fmt::Display for Join {
                 _ => "",
             }
         }
-        fn suffix<'a>(constraint: &'a JoinConstraint) -> impl fmt::Display + 'a {
+        fn suffix(constraint: &'_ JoinConstraint) -> impl fmt::Display + '_ {
             struct Suffix<'a>(&'a JoinConstraint);
             impl<'a> fmt::Display for Suffix<'a> {
                 fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -417,6 +489,7 @@ pub enum JoinConstraint {
     On(Expr),
     Using(Vec<Ident>),
     Natural,
+    None,
 }
 
 /// An `ORDER BY` expression

@@ -12,6 +12,7 @@
 
 mod ansi;
 mod generic;
+mod hive;
 pub mod keywords;
 mod mssql;
 mod mysql;
@@ -24,6 +25,7 @@ use std::fmt::Debug;
 
 pub use self::ansi::AnsiDialect;
 pub use self::generic::GenericDialect;
+pub use self::hive::HiveDialect;
 pub use self::mssql::MsSqlDialect;
 pub use self::mysql::MySqlDialect;
 pub use self::postgresql::PostgreSqlDialect;

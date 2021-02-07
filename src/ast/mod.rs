@@ -29,8 +29,9 @@ pub use self::ddl::{
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    Cte, Fetch, Join, JoinConstraint, JoinOperator, Offset, OffsetRows, OrderByExpr, Query, Select,
-    SelectItem, SetExpr, SetOperator, TableAlias, TableFactor, TableWithJoins, Top, Values, With,
+    Cte, Fetch, Join, JoinConstraint, JoinOperator, LateralView, Offset, OffsetRows, OrderByExpr,
+    Query, Select, SelectItem, SetExpr, SetOperator, TableAlias, TableFactor, TableWithJoins, Top,
+    Values, With,
 };
 pub use self::value::{DateTimeField, Value};
 
@@ -191,7 +192,10 @@ pub enum Expr {
         right: Box<Expr>,
     },
     /// Unary operation e.g. `NOT foo`
-    UnaryOp { op: UnaryOperator, expr: Box<Expr> },
+    UnaryOp {
+        op: UnaryOperator,
+        expr: Box<Expr>,
+    },
     /// CAST an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
     Cast {
         expr: Box<Expr>,
@@ -220,7 +224,14 @@ pub enum Expr {
     /// A constant of form `<data_type> 'value'`.
     /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
     /// as well as constants of other types (a non-standard PostgreSQL extension).
-    TypedString { data_type: DataType, value: String },
+    TypedString {
+        data_type: DataType,
+        value: String,
+    },
+    MapAccess {
+        column: Box<Expr>,
+        key: String,
+    },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
@@ -248,6 +259,7 @@ impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Expr::Identifier(s) => write!(f, "{}", s),
+            Expr::MapAccess { column, key } => write!(f, "{}[\"{}\"]", column, key),
             Expr::Wildcard => f.write_str("*"),
             Expr::QualifiedWildcard(q) => write!(f, "{}.*", display_separated(q, ".")),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
@@ -481,11 +493,50 @@ impl fmt::Display for SubstringFor {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum AddDropSync {
+    ADD,
+    DROP,
+    SYNC,
+}
+
+impl fmt::Display for AddDropSync {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AddDropSync::SYNC => f.write_str("SYNC PARTITIONS"),
+            AddDropSync::DROP => f.write_str("DROP PARTITIONS"),
+            AddDropSync::ADD => f.write_str("ADD PARTITIONS"),
+        }
+    }
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Statement {
+    /// Analyze (Hive)
+    Analyze {
+        table_name: ObjectName,
+        partitions: Option<Vec<Expr>>,
+        for_columns: bool,
+        columns: Vec<Ident>,
+        cache_metadata: bool,
+        noscan: bool,
+        compute_statistics: bool,
+    },
+    /// Truncate (Hive)
+    Truncate {
+        table_name: ObjectName,
+        partitions: Option<Vec<Expr>>,
+    },
+    /// Msck (Hive)
+    Msck {
+        table_name: ObjectName,
+        repair: bool,
+        partition_action: Option<AddDropSync>,
+    },
     /// SELECT
     Query(Box<Query>),
     /// INSERT
@@ -494,7 +545,23 @@ pub enum Statement {
         table_name: ObjectName,
         /// COLUMNS
         columns: Vec<Ident>,
+        /// Overwrite (Hive)
+        overwrite: bool,
         /// A SQL query that specifies what to insert
+        source: Box<Query>,
+        /// partitioned insert (Hive)
+        partitioned: Option<Vec<Expr>>,
+        /// Columns defined after PARTITION
+        after_columns: Vec<Ident>,
+        /// whether the insert has the table keyword (Hive)
+        table: bool,
+    },
+    // TODO: Support ROW FORMAT
+    Directory {
+        overwrite: bool,
+        local: bool,
+        path: String,
+        file_format: Option<FileFormat>,
         source: Box<Query>,
     },
     Copy {
@@ -534,6 +601,7 @@ pub enum Statement {
     /// CREATE TABLE
     CreateTable {
         or_replace: bool,
+        temporary: bool,
         external: bool,
         if_not_exists: bool,
         /// Table name
@@ -541,11 +609,15 @@ pub enum Statement {
         /// Optional schema
         columns: Vec<ColumnDef>,
         constraints: Vec<TableConstraint>,
+        hive_distribution: HiveDistributionStyle,
+        hive_formats: Option<HiveFormat>,
+        table_properties: Vec<SqlOption>,
         with_options: Vec<SqlOption>,
         file_format: Option<FileFormat>,
         location: Option<String>,
         query: Option<Box<Query>>,
         without_rowid: bool,
+        like: Option<ObjectName>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -580,6 +652,9 @@ pub enum Statement {
         /// Whether `CASCADE` was specified. This will be `false` when
         /// `RESTRICT` or no drop behavior at all was specified.
         cascade: bool,
+        /// Hive allows you specify whether the table's stored data will be
+        /// deleted along with the dropped table
+        purge: bool,
     },
     /// SET <variable>
     ///
@@ -588,8 +663,9 @@ pub enum Statement {
     /// supported yet.
     SetVariable {
         local: bool,
+        hivevar: bool,
         variable: Ident,
-        value: SetVariableValue,
+        value: Vec<SetVariableValue>,
     },
     /// SHOW <variable>
     ///
@@ -616,6 +692,13 @@ pub enum Statement {
     CreateSchema {
         schema_name: ObjectName,
         if_not_exists: bool,
+    },
+    /// CREATE DATABASE
+    CreateDatabase {
+        db_name: ObjectName,
+        if_not_exists: bool,
+        location: Option<String>,
+        managed_location: Option<String>,
     },
     /// `ASSERT <condition> [AS <message>]`
     Assert {
@@ -647,11 +730,6 @@ pub enum Statement {
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
     },
-    /// ANALYZE
-    Analyze {
-        /// Name of table
-        table_name: ObjectName,
-    },
 }
 
 impl fmt::Display for Statement {
@@ -677,16 +755,113 @@ impl fmt::Display for Statement {
 
                 write!(f, "{}", statement)
             }
-            Statement::Analyze { table_name } => write!(f, "ANALYZE TABLE {}", table_name),
             Statement::Query(s) => write!(f, "{}", s),
-            Statement::Insert {
-                table_name,
-                columns,
+            Statement::Directory {
+                overwrite,
+                local,
+                path,
+                file_format,
                 source,
             } => {
-                write!(f, "INSERT INTO {} ", table_name)?;
+                write!(
+                    f,
+                    "INSERT{overwrite}{local} DIRECTORY '{path}'",
+                    overwrite = if *overwrite { " OVERWRITE" } else { "" },
+                    local = if *local { " LOCAL" } else { "" },
+                    path = path
+                )?;
+                if let Some(ref ff) = file_format {
+                    write!(f, " STORED AS {}", ff)?
+                }
+                write!(f, " {}", source)
+            }
+            Statement::Msck {
+                table_name,
+                repair,
+                partition_action,
+            } => {
+                write!(
+                    f,
+                    "MSCK {repair}TABLE {table}",
+                    repair = if *repair { "REPAIR " } else { "" },
+                    table = table_name
+                )?;
+                if let Some(pa) = partition_action {
+                    write!(f, " {}", pa)?;
+                }
+                Ok(())
+            }
+            Statement::Truncate {
+                table_name,
+                partitions,
+            } => {
+                write!(f, "TRUNCATE TABLE {}", table_name)?;
+                if let Some(ref parts) = partitions {
+                    if !parts.is_empty() {
+                        write!(f, " PARTITION ({})", display_comma_separated(parts))?;
+                    }
+                }
+                Ok(())
+            }
+            Statement::Analyze {
+                table_name,
+                partitions,
+                for_columns,
+                columns,
+                cache_metadata,
+                noscan,
+                compute_statistics,
+            } => {
+                write!(f, "ANALYZE TABLE {}", table_name)?;
+                if let Some(ref parts) = partitions {
+                    if !parts.is_empty() {
+                        write!(f, " PARTITION ({})", display_comma_separated(parts))?;
+                    }
+                }
+
+                if *compute_statistics {
+                    write!(f, " COMPUTE STATISTICS")?;
+                }
+                if *noscan {
+                    write!(f, " NOSCAN")?;
+                }
+                if *cache_metadata {
+                    write!(f, " CACHE METADATA")?;
+                }
+                if *for_columns {
+                    write!(f, " FOR COLUMNS")?;
+                    if !columns.is_empty() {
+                        write!(f, " {}", display_comma_separated(columns))?;
+                    }
+                }
+                Ok(())
+            }
+            Statement::Insert {
+                table_name,
+                overwrite,
+                partitioned,
+                columns,
+                after_columns,
+                source,
+                table,
+            } => {
+                write!(
+                    f,
+                    "INSERT {act}{tbl} {table_name} ",
+                    table_name = table_name,
+                    act = if *overwrite { "OVERWRITE" } else { "INTO" },
+                    tbl = if *table { " TABLE" } else { "" }
+                )?;
                 if !columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(columns))?;
+                }
+                if let Some(ref parts) = partitioned {
+                    if !parts.is_empty() {
+                        write!(f, "PARTITION ({}) ", display_comma_separated(parts))?;
+                    }
+                }
+                if !after_columns.is_empty() {
+                    write!(f, "({}) ", display_comma_separated(after_columns))?;
                 }
                 write!(f, "{}", source)
             }
@@ -739,6 +914,25 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::CreateDatabase {
+                db_name,
+                if_not_exists,
+                location,
+                managed_location,
+            } => {
+                write!(f, "CREATE")?;
+                if *if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " {}", db_name)?;
+                if let Some(l) = location {
+                    write!(f, " LOCATION '{}'", l)?;
+                }
+                if let Some(ml) = managed_location {
+                    write!(f, " MANAGEDLOCATION '{}'", ml)?;
+                }
+                Ok(())
+            }
             Statement::CreateView {
                 name,
                 or_replace,
@@ -766,14 +960,19 @@ impl fmt::Display for Statement {
                 name,
                 columns,
                 constraints,
+                table_properties,
                 with_options,
                 or_replace,
                 if_not_exists,
+                hive_distribution,
+                hive_formats,
                 external,
+                temporary,
                 file_format,
                 location,
                 query,
                 without_rowid,
+                like,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -784,10 +983,11 @@ impl fmt::Display for Statement {
                 //   `CREATE TABLE t (a INT) AS SELECT a from t2`
                 write!(
                     f,
-                    "CREATE {or_replace}{external}TABLE {if_not_exists}{name}",
+                    "CREATE {or_replace}{external}{temporary}TABLE {if_not_exists}{name}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     external = if *external { "EXTERNAL " } else { "" },
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    temporary = if *temporary { "TEMPORARY " } else { "" },
                     name = name,
                 )?;
                 if !columns.is_empty() || !constraints.is_empty() {
@@ -796,7 +996,7 @@ impl fmt::Display for Statement {
                         write!(f, ", ")?;
                     }
                     write!(f, "{})", display_comma_separated(constraints))?;
-                } else if query.is_none() {
+                } else if query.is_none() && like.is_none() {
                     // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
                     write!(f, " ()")?;
                 }
@@ -804,12 +1004,92 @@ impl fmt::Display for Statement {
                 if *without_rowid {
                     write!(f, " WITHOUT ROWID")?;
                 }
+
+                // Only for Hive
+                if let Some(l) = like {
+                    write!(f, " LIKE {}", l)?;
+                }
+                match hive_distribution {
+                    HiveDistributionStyle::PARTITIONED { columns } => {
+                        write!(f, " PARTITIONED BY ({})", display_comma_separated(&columns))?;
+                    }
+                    HiveDistributionStyle::CLUSTERED {
+                        columns,
+                        sorted_by,
+                        num_buckets,
+                    } => {
+                        write!(f, " CLUSTERED BY ({})", display_comma_separated(&columns))?;
+                        if !sorted_by.is_empty() {
+                            write!(f, " SORTED BY ({})", display_comma_separated(&sorted_by))?;
+                        }
+                        if *num_buckets > 0 {
+                            write!(f, " INTO {} BUCKETS", num_buckets)?;
+                        }
+                    }
+                    HiveDistributionStyle::SKEWED {
+                        columns,
+                        on,
+                        stored_as_directories,
+                    } => {
+                        write!(
+                            f,
+                            " SKEWED BY ({})) ON ({})",
+                            display_comma_separated(&columns),
+                            display_comma_separated(&on)
+                        )?;
+                        if *stored_as_directories {
+                            write!(f, " STORED AS DIRECTORIES")?;
+                        }
+                    }
+                    _ => (),
+                }
+
+                if let Some(HiveFormat {
+                    row_format,
+                    storage,
+                    location,
+                }) = hive_formats
+                {
+                    match row_format {
+                        Some(HiveRowFormat::SERDE { class }) => {
+                            write!(f, " ROW FORMAT SERDE '{}'", class)?
+                        }
+                        Some(HiveRowFormat::DELIMITED) => write!(f, " ROW FORMAT DELIMITED")?,
+                        None => (),
+                    }
+                    match storage {
+                        Some(HiveIOFormat::IOF {
+                            input_format,
+                            output_format,
+                        }) => write!(
+                            f,
+                            " STORED AS INPUTFORMAT {} OUTPUTFORMAT {}",
+                            input_format, output_format
+                        )?,
+                        Some(HiveIOFormat::FileFormat { format }) if !*external => {
+                            write!(f, " STORED AS {}", format)?
+                        }
+                        _ => (),
+                    }
+                    if !*external {
+                        if let Some(loc) = location {
+                            write!(f, " LOCATION '{}'", loc)?;
+                        }
+                    }
+                }
                 if *external {
                     write!(
                         f,
                         " STORED AS {} LOCATION '{}'",
                         file_format.as_ref().unwrap(),
                         location.as_ref().unwrap()
+                    )?;
+                }
+                if !table_properties.is_empty() {
+                    write!(
+                        f,
+                        " TBLPROPERTIES ({})",
+                        display_comma_separated(table_properties)
                     )?;
                 }
                 if !with_options.is_empty() {
@@ -861,25 +1141,34 @@ impl fmt::Display for Statement {
                 if_exists,
                 names,
                 cascade,
+                purge,
             } => write!(
                 f,
-                "DROP {}{} {}{}",
+                "DROP {}{} {}{}{}",
                 object_type,
                 if *if_exists { " IF EXISTS" } else { "" },
                 display_comma_separated(names),
                 if *cascade { " CASCADE" } else { "" },
+                if *purge { " PURGE" } else { "" }
             ),
             Statement::SetVariable {
                 local,
                 variable,
+                hivevar,
                 value,
-            } => write!(
-                f,
-                "SET{local} {variable} = {value}",
-                local = if *local { " LOCAL" } else { "" },
-                variable = variable,
-                value = value
-            ),
+            } => {
+                f.write_str("SET ")?;
+                if *local {
+                    f.write_str("LOCAL ")?;
+                }
+                write!(
+                    f,
+                    "{hivevar}{name} = {value}",
+                    hivevar = if *hivevar { "HIVEVAR:" } else { "" },
+                    name = variable,
+                    value = display_comma_separated(value)
+                )
+            }
             Statement::ShowVariable { variable } => write!(f, "SHOW {}", variable),
             Statement::ShowColumns {
                 extended,
@@ -1138,6 +1427,62 @@ impl fmt::Display for ObjectType {
             ObjectType::Index => "INDEX",
             ObjectType::Schema => "SCHEMA",
         })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum HiveDistributionStyle {
+    PARTITIONED {
+        columns: Vec<ColumnDef>,
+    },
+    CLUSTERED {
+        columns: Vec<Ident>,
+        sorted_by: Vec<ColumnDef>,
+        num_buckets: i32,
+    },
+    SKEWED {
+        columns: Vec<ColumnDef>,
+        on: Vec<ColumnDef>,
+        stored_as_directories: bool,
+    },
+    NONE,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum HiveRowFormat {
+    SERDE { class: String },
+    DELIMITED,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum HiveIOFormat {
+    IOF {
+        input_format: Expr,
+        output_format: Expr,
+    },
+    FileFormat {
+        format: FileFormat,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct HiveFormat {
+    pub row_format: Option<HiveRowFormat>,
+    pub storage: Option<HiveIOFormat>,
+    pub location: Option<String>,
+}
+
+impl Default for HiveFormat {
+    fn default() -> Self {
+        HiveFormat {
+            row_format: None,
+            location: None,
+            storage: None,
+        }
     }
 }
 

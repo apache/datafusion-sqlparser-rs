@@ -2610,6 +2610,23 @@ fn parse_scalar_subqueries() {
 }
 
 #[test]
+fn parse_substring() {
+    one_statement_parses_to("SELECT SUBSTRING('1')", "SELECT SUBSTRING('1')");
+
+    one_statement_parses_to(
+        "SELECT SUBSTRING('1' FROM 1)",
+        "SELECT SUBSTRING('1' FROM 1)",
+    );
+
+    one_statement_parses_to(
+        "SELECT SUBSTRING('1' FROM 1 FOR 3)",
+        "SELECT SUBSTRING('1' FROM 1 FOR 3)",
+    );
+
+    one_statement_parses_to("SELECT SUBSTRING('1' FOR 3)", "SELECT SUBSTRING('1' FOR 3)");
+}
+
+#[test]
 fn parse_exists_subquery() {
     let expected_inner = verified_query("SELECT 1");
     let sql = "SELECT * FROM t WHERE EXISTS (SELECT 1)";

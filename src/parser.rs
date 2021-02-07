@@ -247,6 +247,7 @@ impl<'a> Parser<'a> {
                 Keyword::CAST => self.parse_cast_expr(),
                 Keyword::EXISTS => self.parse_exists_expr(),
                 Keyword::EXTRACT => self.parse_extract_expr(),
+                Keyword::SUBSTRING => self.parse_substring_expr(),
                 Keyword::INTERVAL => self.parse_literal_interval(),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
                 Keyword::NOT => Ok(Expr::UnaryOp {
@@ -499,6 +500,27 @@ impl<'a> Parser<'a> {
         Ok(Expr::Extract {
             field,
             expr: Box::new(expr),
+        })
+    }
+
+    pub fn parse_substring_expr(&mut self) -> Result<Expr, ParserError> {
+        // PARSE SUBSTRING (EXPR [FROM 1] [FOR 3])
+        self.expect_token(&Token::LParen)?;
+        let expr = self.parse_expr()?;
+        let mut from_expr = None;
+        let mut to_expr = None;
+        if self.parse_keyword(Keyword::FROM) {
+            from_expr = Some(self.parse_expr()?);
+        }
+        if self.parse_keyword(Keyword::FOR) {
+            to_expr = Some(self.parse_expr()?);
+        }
+        self.expect_token(&Token::RParen)?;
+
+        Ok(Expr::Substring {
+            expr: Box::new(expr),
+            substring_from: from_expr.map(|x| SubstringFrom::FromExpr(Box::new(x))),
+            substring_for: to_expr.map(|x| SubstringFor::ForExpr(Box::new(x))),
         })
     }
 

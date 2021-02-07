@@ -197,9 +197,16 @@ pub enum Expr {
         expr: Box<Expr>,
         data_type: DataType,
     },
+    /// EXTRACT(DateTimeField FROM <expr>)
     Extract {
         field: DateTimeField,
         expr: Box<Expr>,
+    },
+    /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
+    Substring {
+        expr: Box<Expr>,
+        substring_from: Option<SubstringFrom>,
+        substring_for: Option<SubstringFor>,
     },
     /// `expr COLLATE collation`
     Collate {
@@ -321,6 +328,21 @@ impl fmt::Display for Expr {
             Expr::Exists(s) => write!(f, "EXISTS ({})", s),
             Expr::Subquery(s) => write!(f, "({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+            } => {
+                write!(f, "SUBSTRING({}", expr)?;
+                if let Some(from_part) = substring_from {
+                    write!(f, " {}", from_part)?;
+                }
+                if let Some(from_part) = substring_for {
+                    write!(f, " {}", from_part)?;
+                }
+
+                write!(f, ")")
+            }
         }
     }
 }
@@ -422,6 +444,39 @@ impl fmt::Display for WindowFrameBound {
             WindowFrameBound::Following(None) => f.write_str("UNBOUNDED FOLLOWING"),
             WindowFrameBound::Preceding(Some(n)) => write!(f, "{} PRECEDING", n),
             WindowFrameBound::Following(Some(n)) => write!(f, "{} FOLLOWING", n),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// FROM part of SUBSTRING(<expr> [FROM <expr>])
+pub enum SubstringFrom {
+    ///
+    FromExpr(Box<Expr>),
+}
+
+impl fmt::Display for SubstringFrom {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SubstringFrom::FromExpr(expr) => {
+                write!(f, "FROM {}", expr)
+            }
+        }
+    }
+}
+
+/// FROM part of SUBSTRING(<expr> [TO <expr>])
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SubstringFor {
+    ForExpr(Box<Expr>),
+}
+
+impl fmt::Display for SubstringFor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SubstringFor::ForExpr(expr) => {
+                write!(f, "FOR {}", expr)
+            }
         }
     }
 }

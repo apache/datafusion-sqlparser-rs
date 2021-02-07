@@ -623,8 +623,8 @@ impl<'a> Parser<'a> {
 
         Ok(Expr::Substring {
             expr: Box::new(expr),
-            substring_from: from_expr.map(|x| SubstringFrom::FromExpr(Box::new(x))),
-            substring_for: to_expr.map(|x| SubstringFor::ForExpr(Box::new(x))),
+            substring_from: from_expr.map(Box::new),
+            substring_for: to_expr.map(Box::new),
         })
     }
 

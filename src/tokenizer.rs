@@ -394,15 +394,17 @@ impl<'a> Tokenizer<'a> {
                         )
                     }
                 }
-                // numbers
+                // numbers and period
                 '0'..='9' | '.' => {
                     let mut s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
+                    // match one period
                     if let Some('.') = chars.peek() {
                         s.push('.');
                         chars.next();
                     }
                     s += &peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
 
+                    // No number -> Token::Period
                     if s == "." {
                         return Ok(Some(Token::Period));
                     }

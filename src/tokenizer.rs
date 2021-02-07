@@ -403,17 +403,17 @@ impl<'a> Tokenizer<'a> {
                     }
                     s += &peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
 
+                    if s == "." {
+                        return Ok(Some(Token::Period));
+                    }
+
                     let long = if chars.peek() == Some(&'L') {
                         chars.next();
                         true
                     } else {
                         false
                     };
-                    if s == "." {
-                        Ok(Some(Token::Period))
-                    } else {
-                        Ok(Some(Token::Number(s, long)))
-                    }
+                    Ok(Some(Token::Number(s, long)))
                 }
                 // punctuation
                 '(' => self.consume_and_return(chars, Token::LParen),

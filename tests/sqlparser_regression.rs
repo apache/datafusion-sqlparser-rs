@@ -26,10 +26,7 @@ macro_rules! tpch_tests {
         fn $name() {
             let dialect = GenericDialect {};
             let res = Parser::parse_sql(&dialect, QUERIES[$value -1]);
-            // Ignore 6.sql
-            if $value != 6 {
                 assert!(res.is_ok());
-            }
         }
     )*
     }

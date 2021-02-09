@@ -8,6 +8,16 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/ballista-compute/sqlparser-rs/commits/main for undocumented changes.
 
+
+## [0.8.0] 2020-02-20
+
+### Added
+* Introduce Hive QL dialect `HiveDialect` and syntax (#235) - Thanks @hntd187!
+* Add `SUBSTRING(col [FROM <expr>] [FOR <expr>])` syntax (#293)
+* Support parsing floats without leading digits `.01` (#294)
+* Support parsing multiple show variables (#290) - Thanks @francis-du!
+* Support SQLite `INSERT OR [..]` syntax (#281) - Thanks @zhangli-pear!
+
 ## [0.7.0] 2020-12-28
 
 ### Changed

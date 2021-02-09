@@ -443,19 +443,19 @@ fn parse_set() {
 
 #[test]
 fn parse_show() {
-    let stmt = pg_and_generic().verified_stmt("SHOW a");
+    let stmt = pg_and_generic().verified_stmt("SHOW a a");
     assert_eq!(
         stmt,
         Statement::ShowVariable {
-            variable: "a".into()
+            variable: vec!["a".into(), "a".into()]
         }
     );
 
-    let stmt = pg_and_generic().verified_stmt("SHOW ALL");
+    let stmt = pg_and_generic().verified_stmt("SHOW ALL ALL");
     assert_eq!(
         stmt,
         Statement::ShowVariable {
-            variable: "ALL".into()
+            variable: vec!["ALL".into(), "ALL".into()]
         }
     )
 }

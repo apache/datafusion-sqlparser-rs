@@ -24,8 +24,8 @@ use test_utils::{all_dialects, expr_from_projection, join, number, only, table, 
 
 use matches::assert_matches;
 use sqlparser::ast::*;
-use sqlparser::dialect::keywords::ALL_KEYWORDS;
-use sqlparser::parser::ParserError;
+use sqlparser::dialect::{keywords::ALL_KEYWORDS, SQLiteDialect};
+use sqlparser::parser::{Parser, ParserError};
 
 #[test]
 fn parse_insert_values() {
@@ -95,6 +95,43 @@ fn parse_insert_invalid() {
         ParserError::ParserError("Expected one of INTO or OVERWRITE, found: public".to_string()),
         res.unwrap_err()
     );
+}
+
+#[test]
+fn parse_insert_sqlite() {
+    let dialect = SQLiteDialect {};
+
+    let check = |sql: &str, expected_action: Option<SqliteOnConflict>| match Parser::parse_sql(
+        &dialect, &sql,
+    )
+    .unwrap()
+    .pop()
+    .unwrap()
+    {
+        Statement::Insert { or, .. } => assert_eq!(or, expected_action),
+        _ => panic!(sql.to_string()),
+    };
+
+    let sql = "INSERT INTO test_table(id) VALUES(1)";
+    check(sql, None);
+
+    let sql = "REPLACE INTO test_table(id) VALUES(1)";
+    check(sql, Some(SqliteOnConflict::Replace));
+
+    let sql = "INSERT OR REPLACE INTO test_table(id) VALUES(1)";
+    check(sql, Some(SqliteOnConflict::Replace));
+
+    let sql = "INSERT OR ROLLBACK INTO test_table(id) VALUES(1)";
+    check(sql, Some(SqliteOnConflict::Rollback));
+
+    let sql = "INSERT OR ABORT INTO test_table(id) VALUES(1)";
+    check(sql, Some(SqliteOnConflict::Abort));
+
+    let sql = "INSERT OR FAIL INTO test_table(id) VALUES(1)";
+    check(sql, Some(SqliteOnConflict::Fail));
+
+    let sql = "INSERT OR IGNORE INTO test_table(id) VALUES(1)";
+    check(sql, Some(SqliteOnConflict::Ignore));
 }
 
 #[test]

@@ -659,7 +659,7 @@ pub enum Statement {
     /// `SET [SESSION] TRANSACTION ...`
     SetTransaction {
         session: bool,
-        modes: Vec<TransactionMode>
+        modes: Vec<TransactionMode>,
     },
     /// SET NAMES <variable>
     ///
@@ -673,7 +673,7 @@ pub enum Statement {
     /// `ROLLBACK [WORK] TO [SAVEPOINT] identifier`
     Rollback {
         chain: bool,
-        savepoint: Option<Ident>
+        savepoint: Option<Ident>,
     },
     /// RELEASE SAVEPOINT identifier
     Release { variable: Ident },
@@ -1201,7 +1201,11 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::SetTransaction { session, modes } => {
-                write!(f, "SET{} TRANSACTION", if *session { " SESSION" } else { "" })?;
+                write!(
+                    f,
+                    "SET{} TRANSACTION",
+                    if *session { " SESSION" } else { "" }
+                )?;
                 if !modes.is_empty() {
                     write!(f, " {}", display_comma_separated(modes))?;
                 }

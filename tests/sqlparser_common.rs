@@ -3216,7 +3216,7 @@ fn parse_set_transaction() {
     // TRANSACTION, so no need to duplicate the tests here. We just do a quick
     // sanity check.
     match verified_stmt("SET TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE") {
-        Statement::SetTransaction { modes } => assert_eq!(
+        Statement::SetTransaction { modes, .. } => assert_eq!(
             modes,
             vec![
                 TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
@@ -3252,12 +3252,12 @@ fn parse_commit() {
 #[test]
 fn parse_rollback() {
     match verified_stmt("ROLLBACK") {
-        Statement::Rollback { chain: false } => (),
+        Statement::Rollback { chain: false, .. } => (),
         _ => unreachable!(),
     }
 
     match verified_stmt("ROLLBACK AND CHAIN") {
-        Statement::Rollback { chain: true } => (),
+        Statement::Rollback { chain: true, .. } => (),
         _ => unreachable!(),
     }
 

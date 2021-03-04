@@ -57,8 +57,8 @@ pub enum IsLateral {
 }
 
 use crate::ast::Statement::CreateVirtualTable;
-use IsLateral::*;
 use crate::dialect::keywords::{NAMES, TRANSACTION};
+use IsLateral::*;
 
 impl From<TokenizerError> for ParserError {
     fn from(e: TokenizerError) -> Self {
@@ -3062,19 +3062,19 @@ impl<'a> Parser<'a> {
             let chain = !self.parse_keyword(Keyword::NO);
             self.expect_keyword(Keyword::CHAIN)?;
             Ok(Statement::Rollback {
-                chain: chain,
-                savepoint: None
+                chain,
+                savepoint: None,
             })
         } else if self.parse_keyword(Keyword::TO) {
             let _ = self.parse_one_of_keywords(&[Keyword::SAVEPOINT]);
             Ok(Statement::Rollback {
                 chain: false,
-                savepoint: Some(self.parse_identifier()?)
+                savepoint: Some(self.parse_identifier()?),
             })
         } else {
             Ok(Statement::Rollback {
                 chain: false,
-                savepoint: None
+                savepoint: None,
             })
         }
     }

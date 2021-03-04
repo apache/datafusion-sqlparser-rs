@@ -13,22 +13,108 @@
 //! AST types specific to CREATE/ALTER variants of [Statement]
 //! (commonly referred to as Data Definition Language, or DDL)
 use super::{display_comma_separated, DataType, Expr, Ident, ObjectName};
+use crate::ast::display_separated;
+use crate::tokenizer::Token;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AlterTableOperation {
     /// `ADD <table_constraint>`
     AddConstraint(TableConstraint),
+    /// `ADD [ COLUMN ] <column_def>`
+    AddColumn { column_def: ColumnDef },
     /// TODO: implement `DROP CONSTRAINT <name>`
     DropConstraint { name: Ident },
+    /// `DROP [ COLUMN ] [ IF EXISTS ] <column_name> [ CASCADE ]`
+    DropColumn {
+        column_name: Ident,
+        if_exists: bool,
+        cascade: bool,
+    },
+    /// `RENAME TO PARTITION (partition=val)`
+    RenamePartitions {
+        old_partitions: Vec<Expr>,
+        new_partitions: Vec<Expr>,
+    },
+    /// Add Partitions
+    AddPartitions {
+        if_not_exists: bool,
+        new_partitions: Vec<Expr>,
+    },
+    DropPartitions {
+        partitions: Vec<Expr>,
+        if_exists: bool,
+    },
+    /// `RENAME [ COLUMN ] <old_column_name> TO <new_column_name>`
+    RenameColumn {
+        old_column_name: Ident,
+        new_column_name: Ident,
+    },
+    /// `RENAME TO <table_name>`
+    RenameTable { table_name: ObjectName },
 }
 
 impl fmt::Display for AlterTableOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            AlterTableOperation::AddPartitions {
+                if_not_exists,
+                new_partitions,
+            } => write!(
+                f,
+                "ADD{ine} PARTITION ({})",
+                display_comma_separated(new_partitions),
+                ine = if *if_not_exists { " IF NOT EXISTS" } else { "" }
+            ),
             AlterTableOperation::AddConstraint(c) => write!(f, "ADD {}", c),
+            AlterTableOperation::AddColumn { column_def } => {
+                write!(f, "ADD COLUMN {}", column_def.to_string())
+            }
+            AlterTableOperation::DropPartitions {
+                partitions,
+                if_exists,
+            } => write!(
+                f,
+                "DROP{ie} PARTITION ({})",
+                display_comma_separated(partitions),
+                ie = if *if_exists { " IF EXISTS" } else { "" }
+            ),
             AlterTableOperation::DropConstraint { name } => write!(f, "DROP CONSTRAINT {}", name),
+            AlterTableOperation::DropColumn {
+                column_name,
+                if_exists,
+                cascade,
+            } => write!(
+                f,
+                "DROP COLUMN {}{}{}",
+                if *if_exists { "IF EXISTS " } else { "" },
+                column_name,
+                if *cascade { " CASCADE" } else { "" }
+            ),
+            AlterTableOperation::RenamePartitions {
+                old_partitions,
+                new_partitions,
+            } => write!(
+                f,
+                "PARTITION ({}) RENAME TO PARTITION ({})",
+                display_comma_separated(old_partitions),
+                display_comma_separated(new_partitions)
+            ),
+            AlterTableOperation::RenameColumn {
+                old_column_name,
+                new_column_name,
+            } => write!(
+                f,
+                "RENAME COLUMN {} TO {}",
+                old_column_name, new_column_name
+            ),
+            AlterTableOperation::RenameTable { table_name } => {
+                write!(f, "RENAME TO {}", table_name)
+            }
         }
     }
 }
@@ -36,6 +122,7 @@ impl fmt::Display for AlterTableOperation {
 /// A table-level constraint, specified in a `CREATE TABLE` or an
 /// `ALTER TABLE ADD <constraint>` statement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TableConstraint {
     /// `[ CONSTRAINT <name> ] { PRIMARY KEY | UNIQUE } (<columns>)`
     Unique {
@@ -95,6 +182,7 @@ impl fmt::Display for TableConstraint {
 
 /// SQL column definition
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ColumnDef {
     pub name: Ident,
     pub data_type: DataType,
@@ -129,6 +217,7 @@ impl fmt::Display for ColumnDef {
 /// non-constraint options, lumping them all together under the umbrella of
 /// "column options," and we allow any column option to be named.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ColumnOptionDef {
     pub name: Option<Ident>,
     pub option: ColumnOption,
@@ -143,6 +232,7 @@ impl fmt::Display for ColumnOptionDef {
 /// `ColumnOption`s are modifiers that follow a column definition in a `CREATE
 /// TABLE` statement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ColumnOption {
     /// `NULL`
     Null,
@@ -151,17 +241,24 @@ pub enum ColumnOption {
     /// `DEFAULT <restricted-expr>`
     Default(Expr),
     /// `{ PRIMARY KEY | UNIQUE }`
-    Unique {
-        is_primary: bool,
-    },
+    Unique { is_primary: bool },
     /// A referential integrity constraint (`[FOREIGN KEY REFERENCES
-    /// <foreign_table> (<referred_columns>)`).
+    /// <foreign_table> (<referred_columns>)
+    /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
+    ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
+    /// }`).
     ForeignKey {
         foreign_table: ObjectName,
         referred_columns: Vec<Ident>,
+        on_delete: Option<ReferentialAction>,
+        on_update: Option<ReferentialAction>,
     },
-    // `CHECK (<expr>)`
+    /// `CHECK (<expr>)`
     Check(Expr),
+    /// Dialect-specific options, such as:
+    /// - MySQL's `AUTO_INCREMENT` or SQLite's `AUTOINCREMENT`
+    /// - ...
+    DialectSpecific(Vec<Token>),
 }
 
 impl fmt::Display for ColumnOption {
@@ -177,18 +274,28 @@ impl fmt::Display for ColumnOption {
             ForeignKey {
                 foreign_table,
                 referred_columns,
-            } => write!(
-                f,
-                "REFERENCES {} ({})",
-                foreign_table,
-                display_comma_separated(referred_columns)
-            ),
+                on_delete,
+                on_update,
+            } => {
+                write!(f, "REFERENCES {}", foreign_table)?;
+                if !referred_columns.is_empty() {
+                    write!(f, " ({})", display_comma_separated(referred_columns))?;
+                }
+                if let Some(action) = on_delete {
+                    write!(f, " ON DELETE {}", action)?;
+                }
+                if let Some(action) = on_update {
+                    write!(f, " ON UPDATE {}", action)?;
+                }
+                Ok(())
+            }
             Check(expr) => write!(f, "CHECK ({})", expr),
+            DialectSpecific(val) => write!(f, "{}", display_separated(val, " ")),
         }
     }
 }
 
-fn display_constraint_name<'a>(name: &'a Option<Ident>) -> impl fmt::Display + 'a {
+fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
     struct ConstraintName<'a>(&'a Option<Ident>);
     impl<'a> fmt::Display for ConstraintName<'a> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -199,4 +306,30 @@ fn display_constraint_name<'a>(name: &'a Option<Ident>) -> impl fmt::Display + '
         }
     }
     ConstraintName(name)
+}
+
+/// `<referential_action> =
+/// { RESTRICT | CASCADE | SET NULL | NO ACTION | SET DEFAULT }`
+///
+/// Used in foreign key constraints in `ON UPDATE` and `ON DELETE` options.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ReferentialAction {
+    Restrict,
+    Cascade,
+    SetNull,
+    NoAction,
+    SetDefault,
+}
+
+impl fmt::Display for ReferentialAction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            ReferentialAction::Restrict => "RESTRICT",
+            ReferentialAction::Cascade => "CASCADE",
+            ReferentialAction::SetNull => "SET NULL",
+            ReferentialAction::NoAction => "NO ACTION",
+            ReferentialAction::SetDefault => "SET DEFAULT",
+        })
+    }
 }

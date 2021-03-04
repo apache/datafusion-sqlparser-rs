@@ -14,10 +14,13 @@
 //! Test SQL syntax specific to PostgreSQL. The parser based on the
 //! generic dialect is also tested (on the inputs it can handle).
 
+#[macro_use]
+mod test_utils;
+use test_utils::*;
+
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
-use sqlparser::test_utils::*;
 
 #[test]
 fn parse_create_table_with_defaults() {
@@ -39,9 +42,11 @@ fn parse_create_table_with_defaults() {
             columns,
             constraints,
             with_options,
+            if_not_exists: false,
             external: false,
             file_format: None,
             location: None,
+            ..
         } => {
             assert_eq!("public.customer", name.to_string());
             assert_eq!(
@@ -123,7 +128,7 @@ fn parse_create_table_with_defaults() {
                             ColumnOptionDef {
                                 name: None,
                                 option: ColumnOption::Default(
-                                    pg().verified_expr("CAST(now() AS text)")
+                                    pg().verified_expr("CAST(now() AS TEXT)")
                                 )
                             },
                             ColumnOptionDef {
@@ -191,25 +196,25 @@ fn parse_create_table_from_pg_dump() {
             info text[],
             address_id smallint NOT NULL,
             activebool boolean DEFAULT true NOT NULL,
-            create_date date DEFAULT now()::date NOT NULL,
-            create_date1 date DEFAULT 'now'::text::date NOT NULL,
+            create_date date DEFAULT now()::DATE NOT NULL,
+            create_date1 date DEFAULT 'now'::TEXT::date NOT NULL,
             last_update timestamp without time zone DEFAULT now(),
             release_year public.year,
             active integer
         )";
     pg().one_statement_parses_to(sql, "CREATE TABLE public.customer (\
-            customer_id int DEFAULT nextval(CAST('public.customer_customer_id_seq' AS regclass)) NOT NULL, \
-            store_id smallint NOT NULL, \
-            first_name character varying(45) NOT NULL, \
-            last_name character varying(45) NOT NULL, \
-            info text[], \
-            address_id smallint NOT NULL, \
-            activebool boolean DEFAULT true NOT NULL, \
-            create_date date DEFAULT CAST(now() AS date) NOT NULL, \
-            create_date1 date DEFAULT CAST(CAST('now' AS text) AS date) NOT NULL, \
-            last_update timestamp DEFAULT now(), \
+            customer_id INT DEFAULT nextval(CAST('public.customer_customer_id_seq' AS REGCLASS)) NOT NULL, \
+            store_id SMALLINT NOT NULL, \
+            first_name CHARACTER VARYING(45) NOT NULL, \
+            last_name CHARACTER VARYING(45) NOT NULL, \
+            info TEXT[], \
+            address_id SMALLINT NOT NULL, \
+            activebool BOOLEAN DEFAULT true NOT NULL, \
+            create_date DATE DEFAULT CAST(now() AS DATE) NOT NULL, \
+            create_date1 DATE DEFAULT CAST(CAST('now' AS TEXT) AS DATE) NOT NULL, \
+            last_update TIMESTAMP DEFAULT now(), \
             release_year public.year, \
-            active int\
+            active INT\
         )");
 }
 
@@ -217,12 +222,112 @@ fn parse_create_table_from_pg_dump() {
 fn parse_create_table_with_inherit() {
     let sql = "\
                CREATE TABLE bazaar.settings (\
-               settings_id uuid PRIMARY KEY DEFAULT uuid_generate_v4() NOT NULL, \
-               user_id uuid UNIQUE, \
-               value text[], \
-               use_metric boolean DEFAULT true\
+               settings_id UUID PRIMARY KEY DEFAULT uuid_generate_v4() NOT NULL, \
+               user_id UUID UNIQUE, \
+               value TEXT[], \
+               use_metric BOOLEAN DEFAULT true\
                )";
     pg().verified_stmt(sql);
+}
+
+#[test]
+fn parse_create_table_empty() {
+    // Zero-column tables are weird, but supported by at least PostgreSQL.
+    // <https://github.com/ballista-compute/sqlparser-rs/pull/94>
+    let _ = pg_and_generic().verified_stmt("CREATE TABLE t ()");
+}
+
+#[test]
+fn parse_create_table_constraints_only() {
+    // Zero-column tables can also have constraints in PostgreSQL
+    let sql = "CREATE TABLE t (CONSTRAINT positive CHECK (2 > 1))";
+    let ast = pg_and_generic().verified_stmt(sql);
+    match ast {
+        Statement::CreateTable {
+            name,
+            columns,
+            constraints,
+            ..
+        } => {
+            assert_eq!("t", name.to_string());
+            assert!(columns.is_empty());
+            assert_eq!(
+                only(constraints).to_string(),
+                "CONSTRAINT positive CHECK (2 > 1)"
+            );
+        }
+        _ => unreachable!(),
+    };
+}
+
+#[test]
+fn parse_create_table_if_not_exists() {
+    let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
+    let ast = pg_and_generic().verified_stmt(sql);
+    match ast {
+        Statement::CreateTable {
+            name,
+            if_not_exists: true,
+            ..
+        } => {
+            assert_eq!("uk_cities", name.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_bad_if_not_exists() {
+    let res = pg().parse_sql_statements("CREATE TABLE NOT EXISTS uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: EXISTS".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("CREATE TABLE IF EXISTS uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: EXISTS".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("CREATE TABLE IF uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: uk_cities".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("CREATE TABLE IF NOT uk_cities ()");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: NOT".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
+fn parse_create_schema_if_not_exists() {
+    let sql = "CREATE SCHEMA IF NOT EXISTS schema_name";
+    let ast = pg_and_generic().verified_stmt(sql);
+    match ast {
+        Statement::CreateSchema {
+            if_not_exists: true,
+            schema_name,
+        } => assert_eq!("schema_name", schema_name.to_string()),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_drop_schema_if_exists() {
+    let sql = "DROP SCHEMA IF EXISTS schema_name";
+    let ast = pg().verified_stmt(sql);
+    match ast {
+        Statement::Drop {
+            object_type,
+            if_exists: true,
+            ..
+        } => assert_eq!(object_type, ObjectType::Schema),
+        _ => unreachable!(),
+    }
 }
 
 #[test]
@@ -259,8 +364,9 @@ fn parse_set() {
         stmt,
         Statement::SetVariable {
             local: false,
+            hivevar: false,
             variable: "a".into(),
-            value: SetVariableValue::Ident("b".into()),
+            value: vec![SetVariableValue::Ident("b".into())],
         }
     );
 
@@ -269,8 +375,11 @@ fn parse_set() {
         stmt,
         Statement::SetVariable {
             local: false,
+            hivevar: false,
             variable: "a".into(),
-            value: SetVariableValue::Literal(Value::SingleQuotedString("b".into())),
+            value: vec![SetVariableValue::Literal(Value::SingleQuotedString(
+                "b".into()
+            ))],
         }
     );
 
@@ -279,8 +388,9 @@ fn parse_set() {
         stmt,
         Statement::SetVariable {
             local: false,
+            hivevar: false,
             variable: "a".into(),
-            value: SetVariableValue::Literal(number("0")),
+            value: vec![SetVariableValue::Literal(number("0"))],
         }
     );
 
@@ -289,8 +399,9 @@ fn parse_set() {
         stmt,
         Statement::SetVariable {
             local: false,
+            hivevar: false,
             variable: "a".into(),
-            value: SetVariableValue::Ident("DEFAULT".into()),
+            value: vec![SetVariableValue::Ident("DEFAULT".into())],
         }
     );
 
@@ -299,8 +410,9 @@ fn parse_set() {
         stmt,
         Statement::SetVariable {
             local: true,
+            hivevar: false,
             variable: "a".into(),
-            value: SetVariableValue::Ident("b".into()),
+            value: vec![SetVariableValue::Ident("b".into())],
         }
     );
 
@@ -331,21 +443,208 @@ fn parse_set() {
 
 #[test]
 fn parse_show() {
-    let stmt = pg_and_generic().verified_stmt("SHOW a");
+    let stmt = pg_and_generic().verified_stmt("SHOW a a");
     assert_eq!(
         stmt,
         Statement::ShowVariable {
-            variable: "a".into()
+            variable: vec!["a".into(), "a".into()]
         }
     );
 
-    let stmt = pg_and_generic().verified_stmt("SHOW ALL");
+    let stmt = pg_and_generic().verified_stmt("SHOW ALL ALL");
     assert_eq!(
         stmt,
         Statement::ShowVariable {
-            variable: "ALL".into()
+            variable: vec!["ALL".into(), "ALL".into()]
         }
     )
+}
+
+#[test]
+fn parse_deallocate() {
+    let stmt = pg_and_generic().verified_stmt("DEALLOCATE a");
+    assert_eq!(
+        stmt,
+        Statement::Deallocate {
+            name: "a".into(),
+            prepare: false,
+        }
+    );
+
+    let stmt = pg_and_generic().verified_stmt("DEALLOCATE ALL");
+    assert_eq!(
+        stmt,
+        Statement::Deallocate {
+            name: "ALL".into(),
+            prepare: false,
+        }
+    );
+
+    let stmt = pg_and_generic().verified_stmt("DEALLOCATE PREPARE a");
+    assert_eq!(
+        stmt,
+        Statement::Deallocate {
+            name: "a".into(),
+            prepare: true,
+        }
+    );
+
+    let stmt = pg_and_generic().verified_stmt("DEALLOCATE PREPARE ALL");
+    assert_eq!(
+        stmt,
+        Statement::Deallocate {
+            name: "ALL".into(),
+            prepare: true,
+        }
+    );
+}
+
+#[test]
+fn parse_execute() {
+    let stmt = pg_and_generic().verified_stmt("EXECUTE a");
+    assert_eq!(
+        stmt,
+        Statement::Execute {
+            name: "a".into(),
+            parameters: vec![],
+        }
+    );
+
+    let stmt = pg_and_generic().verified_stmt("EXECUTE a(1, 't')");
+    assert_eq!(
+        stmt,
+        Statement::Execute {
+            name: "a".into(),
+            parameters: vec![
+                Expr::Value(number("1")),
+                Expr::Value(Value::SingleQuotedString("t".to_string()))
+            ],
+        }
+    );
+}
+
+#[test]
+fn parse_prepare() {
+    let stmt =
+        pg_and_generic().verified_stmt("PREPARE a AS INSERT INTO customers VALUES (a1, a2, a3)");
+    let sub_stmt = match stmt {
+        Statement::Prepare {
+            name,
+            data_types,
+            statement,
+            ..
+        } => {
+            assert_eq!(name, "a".into());
+            assert!(data_types.is_empty());
+
+            statement
+        }
+        _ => unreachable!(),
+    };
+    match sub_stmt.as_ref() {
+        Statement::Insert {
+            table_name,
+            columns,
+            source,
+            ..
+        } => {
+            assert_eq!(table_name.to_string(), "customers");
+            assert!(columns.is_empty());
+
+            let expected_values = [vec![
+                Expr::Identifier("a1".into()),
+                Expr::Identifier("a2".into()),
+                Expr::Identifier("a3".into()),
+            ]];
+            match &source.body {
+                SetExpr::Values(Values(values)) => assert_eq!(values.as_slice(), &expected_values),
+                _ => unreachable!(),
+            }
+        }
+        _ => unreachable!(),
+    };
+
+    let stmt = pg_and_generic()
+        .verified_stmt("PREPARE a (INT, TEXT) AS SELECT * FROM customers WHERE customers.id = a1");
+    let sub_stmt = match stmt {
+        Statement::Prepare {
+            name,
+            data_types,
+            statement,
+            ..
+        } => {
+            assert_eq!(name, "a".into());
+            assert_eq!(data_types, vec![DataType::Int, DataType::Text]);
+
+            statement
+        }
+        _ => unreachable!(),
+    };
+    assert_eq!(
+        sub_stmt,
+        Box::new(Statement::Query(Box::new(pg_and_generic().verified_query(
+            "SELECT * FROM customers WHERE customers.id = a1"
+        ))))
+    );
+}
+
+#[test]
+fn parse_pg_bitwise_binary_ops() {
+    let bitwise_ops = &[
+        ("#", BinaryOperator::PGBitwiseXor),
+        (">>", BinaryOperator::PGBitwiseShiftRight),
+        ("<<", BinaryOperator::PGBitwiseShiftLeft),
+    ];
+
+    for (str_op, op) in bitwise_ops {
+        let select = pg().verified_only_select(&format!("SELECT a {} b", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: op.clone(),
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }),
+            select.projection[0]
+        );
+    }
+}
+
+#[test]
+fn parse_pg_unary_ops() {
+    let pg_unary_ops = &[
+        ("~", UnaryOperator::PGBitwiseNot),
+        ("|/", UnaryOperator::PGSquareRoot),
+        ("||/", UnaryOperator::PGCubeRoot),
+        ("!!", UnaryOperator::PGPrefixFactorial),
+        ("@", UnaryOperator::PGAbs),
+    ];
+
+    for (str_op, op) in pg_unary_ops {
+        let select = pg().verified_only_select(&format!("SELECT {} a", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::UnaryOp {
+                op: op.clone(),
+                expr: Box::new(Expr::Identifier(Ident::new("a"))),
+            }),
+            select.projection[0]
+        );
+    }
+}
+
+#[test]
+fn parse_pg_postfix_factorial() {
+    let postfix_factorial = &[("!", UnaryOperator::PGPostfixFactorial)];
+
+    for (str_op, op) in postfix_factorial {
+        let select = pg().verified_only_select(&format!("SELECT a{}", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::UnaryOp {
+                op: op.clone(),
+                expr: Box::new(Expr::Identifier(Ident::new("a"))),
+            }),
+            select.projection[0]
+        );
+    }
 }
 
 fn pg() -> TestedDialects {

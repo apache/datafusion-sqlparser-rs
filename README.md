@@ -2,8 +2,8 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Version](https://img.shields.io/crates/v/sqlparser.svg)](https://crates.io/crates/sqlparser)
-[![Build Status](https://travis-ci.org/andygrove/sqlparser-rs.svg?branch=master)](https://travis-ci.org/andygrove/sqlparser-rs)
-[![Coverage Status](https://coveralls.io/repos/github/andygrove/sqlparser-rs/badge.svg?branch=master)](https://coveralls.io/github/andygrove/sqlparser-rs?branch=master)
+[![Build Status](https://github.com/ballista-compute/sqlparser-rs/workflows/Rust/badge.svg?branch=main)](https://github.com/ballista-compute/sqlparser-rs/actions?query=workflow%3ARust+branch%3Amain)
+[![Coverage Status](https://coveralls.io/repos/github/ballista-compute/sqlparser-rs/badge.svg?branch=main)](https://coveralls.io/github/ballista-compute/sqlparser-rs?branch=main)
 [![Gitter Chat](https://badges.gitter.im/sqlparser-rs/community.svg)](https://gitter.im/sqlparser-rs/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 The goal of this project is to build a SQL lexer and parser capable of parsing
@@ -11,8 +11,8 @@ SQL that conforms with the [ANSI/ISO SQL standard][sql-standard] while also
 making it easy to support custom dialects so that this crate can be used as a
 foundation for vendor-specific parsers.
 
-This parser is currently being used by the [DataFusion] query engine and
-[LocustDB].
+This parser is currently being used by the [DataFusion] query engine,
+[LocustDB], and [Ballista].
 
 ## Example
 
@@ -29,7 +29,7 @@ let sql = "SELECT a, b, 123, myfunc(b) \
 
 let dialect = GenericDialect {}; // or AnsiDialect, or your own dialect ...
 
-let ast = Parser::parse_sql(&dialect, sql.to_string()).unwrap();
+let ast = Parser::parse_sql(&dialect, sql).unwrap();
 
 println!("AST: {:?}", ast);
 ```
@@ -40,17 +40,21 @@ This outputs
 AST: [Query(Query { ctes: [], body: Select(Select { distinct: false, projection: [UnnamedExpr(Identifier("a")), UnnamedExpr(Identifier("b")), UnnamedExpr(Value(Long(123))), UnnamedExpr(Function(Function { name: ObjectName(["myfunc"]), args: [Identifier("b")], over: None, distinct: false }))], from: [TableWithJoins { relation: Table { name: ObjectName(["table_1"]), alias: None, args: [], with_hints: [] }, joins: [] }], selection: Some(BinaryOp { left: BinaryOp { left: Identifier("a"), op: Gt, right: Identifier("b") }, op: And, right: BinaryOp { left: Identifier("b"), op: Lt, right: Value(Long(100)) } }), group_by: [], having: None }), order_by: [OrderByExpr { expr: Identifier("a"), asc: Some(false) }, OrderByExpr { expr: Identifier("b"), asc: None }], limit: None, offset: None, fetch: None })]
 ```
 
+## Command line
+To parse a file and dump the results as JSON:
+```
+$ cargo run --features json_example --example cli FILENAME.sql [--dialectname]
+```
+
 ## SQL compliance
 
 SQL was first standardized in 1987, and revisions of the standard have been
 published regularly since. Most revisions have added significant new features to
 the language, and as a result no database claims to support the full breadth of
 features. This parser currently supports most of the SQL-92 syntax, plus some
-syntax from newer versions that have been explicitly requested, plus some MSSQL-
-and PostgreSQL-specific syntax. Whenever possible, the [online SQL:2011
-grammar][sql-2011-grammar] is used to guide what syntax to accept. (We will
-happily accept changes that conform to the SQL:2016 syntax as well, but that
-edition's grammar is not yet available online.)
+syntax from newer versions that have been explicitly requested, plus some MSSQL,
+PostgreSQL, and other dialect-specific syntax. Whenever possible, the [online
+SQL:2016 grammar][sql-2016-grammar] is used to guide what syntax to accept.
 
 Unfortunately, stating anything more specific about compliance is difficult.
 There is no publicly available test suite that can assess compliance
@@ -105,8 +109,8 @@ If you are unable to submit a patch, feel free to file an issue instead. Please
 try to include:
 
   * some representative examples of the syntax you wish to support or fix;
-  * the relevant bits of the [SQL grammar][sql-2011-grammar], if the syntax is
-    part of SQL:2011; and
+  * the relevant bits of the [SQL grammar][sql-2016-grammar], if the syntax is
+    part of SQL:2016; and
   * links to documentation for the feature for a few of the most popular
     databases that support it.
 
@@ -119,9 +123,10 @@ resources.
 
 [tdop-tutorial]: https://eli.thegreenplace.net/2010/01/02/top-down-operator-precedence-parsing
 [`cargo fmt`]: https://github.com/rust-lang/rustfmt#on-the-stable-toolchain
-[current issues]: https://github.com/andygrove/sqlparser-rs/issues
+[current issues]: https://github.com/ballista-compute/sqlparser-rs/issues
 [DataFusion]: https://github.com/apache/arrow/tree/master/rust/datafusion
 [LocustDB]: https://github.com/cswinter/LocustDB
+[Ballista]: https://github.com/ballista-compute/ballista
 [Pratt Parser]: https://tdop.github.io/
-[sql-2011-grammar]: https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html
+[sql-2016-grammar]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html
 [sql-standard]: https://en.wikipedia.org/wiki/ISO/IEC_9075

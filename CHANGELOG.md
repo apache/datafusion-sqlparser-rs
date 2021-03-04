@@ -6,10 +6,96 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 Given that the parser produces a typed AST, any changes to the AST will technically be breaking and thus will result in a `0.(N+1)` version. We document changes that break via addition as "Added".
 
 ## [Unreleased]
-Nothing here yet! Check https://github.com/andygrove/sqlparser-rs/commits/master for undocumented changes.
+Check https://github.com/ballista-compute/sqlparser-rs/commits/main for undocumented changes.
 
 
-## [0.5.0] - 2019-10-10 
+## [0.8.0] 2020-02-20
+
+### Added
+* Introduce Hive QL dialect `HiveDialect` and syntax (#235) - Thanks @hntd187!
+* Add `SUBSTRING(col [FROM <expr>] [FOR <expr>])` syntax (#293)
+* Support parsing floats without leading digits `.01` (#294)
+* Support parsing multiple show variables (#290) - Thanks @francis-du!
+* Support SQLite `INSERT OR [..]` syntax (#281) - Thanks @zhangli-pear!
+
+## [0.7.0] 2020-12-28
+
+### Changed
+- Change the MySQL dialect to support `` `identifiers` `` quoted with backticks instead of the standard `"double-quoted"` identifiers (#247) - thanks @mashuai!
+- Update bigdecimal requirement from 0.1 to 0.2 (#268)
+
+### Added
+- Enable dialect-specific behaviours in the parser (`dialect_of!()`) (#254) - thanks @eyalleshem!
+- Support named arguments in function invocations (`ARG_NAME => val`) (#250) - thanks @eyalleshem!
+- Support `TABLE()` functions in `FROM` (#253) - thanks @eyalleshem!
+- Support Snowflake's single-line comments starting with '#' or '//' (#264) - thanks @eyalleshem!
+- Support PostgreSQL `PREPARE`, `EXECUTE`, and `DEALLOCATE` (#243) - thanks @silathdiir!
+- Support PostgreSQL math operators (#267) - thanks @alex-dukhno!
+- Add SQLite dialect (#248) - thanks @mashuai!
+- Add Snowflake dialect (#259) - thanks @eyalleshem!
+- Support for Recursive CTEs - thanks @rhanqtl!
+- Support `FROM (table_name) alias` syntax - thanks @eyalleshem!
+- Support for `EXPLAIN [ANALYZE] VERBOSE` - thanks @ovr!
+- Support `ANALYZE TABLE`
+- DDL:
+    - Support `OR REPLACE` in `CREATE VIEW`/`TABLE` (#239)  - thanks @Dandandan!
+    - Support specifying `ASC`/`DESC` in index columns (#249) - thanks @mashuai!
+    - Support SQLite `AUTOINCREMENT` and MySQL `AUTO_INCREMENT` column option in `CREATE TABLE` (#234) - thanks @mashuai!
+    - Support PostgreSQL `IF NOT EXISTS` for `CREATE SCHEMA` (#276) - thanks @alex-dukhno!
+
+### Fixed
+- Fix a typo in `JSONFILE` serialization, introduced in 0.3.1 (#237)
+- Change `CREATE INDEX` serialization to not end with a semicolon, introduced in 0.5.1 (#245)
+- Don't fail parsing `ALTER TABLE ADD COLUMN` ending with a semicolon, introduced in 0.5.1 (#246) - thanks @mashuai
+
+## [0.6.1] - 2020-07-20
+
+### Added
+- Support BigQuery `ASSERT` statement (#226)
+
+## [0.6.0] - 2020-07-20
+
+### Added
+- Support SQLite's `CREATE TABLE (...) WITHOUT ROWID` (#208) - thanks @mashuai!
+- Support SQLite's `CREATE VIRTUAL TABLE` (#209) - thanks @mashuai!
+
+## [0.5.1] - 2020-06-26
+This release should have been called `0.6`, as it introduces multiple incompatible changes to the API. If you don't want to upgrade yet, you can revert to the previous version by changing your `Cargo.toml` to:
+
+    sqlparser = "= 0.5.0"
+
+
+### Changed
+- **`Parser::parse_sql` now accepts a `&str` instead of `String` (#182)** - thanks @Dandandan!
+- Change `Ident` (previously a simple `String`) to store the parsed (unquoted) `value` of the identifier and the `quote_style` separately (#143) - thanks @apparebit!
+- Support Snowflake's `FROM (table_name)` (#155) - thanks @eyalleshem!
+- Add line and column number to TokenizerError (#194) - thanks @Dandandan!
+- Use Token::EOF instead of Option<Token> (#195)
+- Make the units keyword following `INTERVAL '...'` optional (#184) - thanks @maxcountryman!
+- Generalize `DATE`/`TIME`/`TIMESTAMP` literals representation in the AST (`TypedString { data_type, value }`) and allow `DATE` and other keywords to be used as identifiers when not followed by a string (#187) - thanks @maxcountryman!
+- Output DataType capitalized (`fmt::Display`) (#202) - thanks @Dandandan!
+
+### Added
+- Support MSSQL `TOP (<N>) [ PERCENT ] [ WITH TIES ]` (#150) - thanks @alexkyllo!
+- Support MySQL `LIMIT row_count OFFSET offset` (not followed by `ROW` or `ROWS`) and remember which variant was parsed (#158) - thanks @mjibson!
+- Support PostgreSQL `CREATE TABLE IF NOT EXISTS table_name` (#163) - thanks @alex-dukhno!
+- Support basic forms of `CREATE INDEX` and `DROP INDEX` (#167) - thanks @mashuai!
+- Support `ON { UPDATE | DELETE } { RESTRICT | CASCADE | SET NULL | NO ACTION | SET DEFAULT }` in `FOREIGN KEY` constraints (#170) - thanks @c7hm4r!
+- Support basic forms of `CREATE SCHEMA` and `DROP SCHEMA` (#173) - thanks @alex-dukhno!
+- Support `NULLS FIRST`/`LAST` in `ORDER BY` expressions (#176) - thanks @houqp!
+- Support `LISTAGG()` (#174) - thanks @maxcountryman!
+- Support the string concatentation operator `||` (#178) - thanks @Dandandan!
+- Support bitwise AND (`&`), OR (`|`), XOR (`^`) (#181) - thanks @Dandandan!
+- Add serde support to AST structs and enums (#196) - thanks @panarch!
+- Support `ALTER TABLE ADD COLUMN`, `RENAME COLUMN`, and `RENAME TO` (#203) - thanks @mashuai!
+- Support `ALTER TABLE DROP COLUMN` (#148) - thanks @ivanceras!
+- Support `CREATE TABLE ... AS ...` (#206) - thanks @Dandandan!
+
+### Fixed
+- Report an error for unterminated string literals (#165)
+- Make file format (`STORED AS`) case insensitive (#200) and don't allow quoting it (#201) - thanks @Dandandan!
+
+## [0.5.0] - 2019-10-10
 
 ### Changed
 - Replace the `Value::Long(u64)` and `Value::Double(f64)` variants with `Value::Number(String)` to avoid losing precision when parsing decimal literals (#130) - thanks @benesch!
@@ -122,3 +208,4 @@ We don't have a changelog for the changes made in 2018, but thanks to @crw5996, 
 
 ## [0.1.0] - 2018-09-03
 Initial release
+

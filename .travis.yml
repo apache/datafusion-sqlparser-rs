@@ -23,6 +23,16 @@ rust:
   - stable
 
 before_script:
+  # Travis installs rust with a non-default "minimal" profile, and advises us
+  # to add clippy manually:
+  - rustup component add clippy
+  # Unfortunately, this method often breaks on the nightly channel, where the
+  # most recent build might not have all the optional components.
+  # We explicitly specify `--profile default` to obtain the most recent nightly
+  # that has rustfmt (we don't care if it's a week old, as we need it only for
+  # an experimental flag):
+  - rustup toolchain install nightly --profile default
+
   - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
   - export PATH=$HOME/.cargo/bin:$PATH
   # `cargo install` fails if the specified binary is already installed, and
@@ -33,13 +43,9 @@ before_script:
   # rebuilds from scratch, ignoring the cache entirely.
   #
   # [0]: https://github.com/rust-lang/cargo/issues/2082
-  - cargo install cargo-update || echo "cargo-update already installed"
-  - cargo install cargo-travis || echo "cargo-travis already installed"
+  - cargo install cargo-update || echo "cargo-update already installed"  # for `cargo install-update`
+  - cargo install cargo-travis || echo "cargo-travis already installed"  # for `cargo coveralls`
   - cargo install-update -a  # updates cargo-travis, if the cached version is outdated
-  - rustup component add clippy
-  # The license_template_path setting we use to verify copyright headers is
-  # only available on the nightly rustfmt.
-  - rustup toolchain install nightly && rustup component add --toolchain nightly rustfmt
 
 script:
   # Clippy must be run first, as its lints are only triggered during
@@ -50,6 +56,8 @@ script:
   - travis-cargo build
   - travis-cargo test
   - travis-cargo test -- all-features
+  # The license_template_path setting we use to verify copyright headers is
+  # only available on the nightly rustfmt.
   - cargo +nightly fmt -- --check --config-path <(echo 'license_template_path = "HEADER"')
 
 after_success:

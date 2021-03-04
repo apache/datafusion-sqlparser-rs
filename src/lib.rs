@@ -28,13 +28,14 @@
 //!            WHERE a > b AND b < 100 \
 //!            ORDER BY a DESC, b";
 //!
-//! let ast = Parser::parse_sql(&dialect, sql.to_string()).unwrap();
+//! let ast = Parser::parse_sql(&dialect, sql).unwrap();
 //!
 //! println!("AST: {:?}", ast);
 //! ```
 #![warn(clippy::all)]
 
 pub mod ast;
+#[macro_use]
 pub mod dialect;
 pub mod parser;
 pub mod tokenizer;
@@ -42,4 +43,5 @@ pub mod tokenizer;
 #[doc(hidden)]
 // This is required to make utilities accessible by both the crate-internal
 // unit-tests and by the integration tests <https://stackoverflow.com/a/44541071/1026>
+// External users are not supposed to rely on this module.
 pub mod test_utils;

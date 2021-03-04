@@ -14,9 +14,12 @@
 //! Test SQL syntax specific to Microsoft's T-SQL. The parser based on the
 //! generic dialect is also tested (on the inputs it can handle).
 
+#[macro_use]
+mod test_utils;
+use test_utils::*;
+
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MsSqlDialect};
-use sqlparser::test_utils::*;
 
 #[test]
 fn parse_mssql_identifiers() {
@@ -66,6 +69,48 @@ fn parse_mssql_apply_join() {
         "SELECT * FROM foo \
          OUTER APPLY (SELECT foo.x + 1) AS bar",
     );
+}
+
+#[test]
+fn parse_mssql_top_paren() {
+    let sql = "SELECT TOP (5) * FROM foo";
+    let select = ms_and_generic().verified_only_select(sql);
+    let top = select.top.unwrap();
+    assert_eq!(Some(Expr::Value(number("5"))), top.quantity);
+    assert!(!top.percent);
+}
+
+#[test]
+fn parse_mssql_top_percent() {
+    let sql = "SELECT TOP (5) PERCENT * FROM foo";
+    let select = ms_and_generic().verified_only_select(sql);
+    let top = select.top.unwrap();
+    assert_eq!(Some(Expr::Value(number("5"))), top.quantity);
+    assert!(top.percent);
+}
+
+#[test]
+fn parse_mssql_top_with_ties() {
+    let sql = "SELECT TOP (5) WITH TIES * FROM foo";
+    let select = ms_and_generic().verified_only_select(sql);
+    let top = select.top.unwrap();
+    assert_eq!(Some(Expr::Value(number("5"))), top.quantity);
+    assert!(top.with_ties);
+}
+
+#[test]
+fn parse_mssql_top_percent_with_ties() {
+    let sql = "SELECT TOP (10) PERCENT WITH TIES * FROM foo";
+    let select = ms_and_generic().verified_only_select(sql);
+    let top = select.top.unwrap();
+    assert_eq!(Some(Expr::Value(number("10"))), top.quantity);
+    assert!(top.percent);
+}
+
+#[test]
+fn parse_mssql_top() {
+    let sql = "SELECT TOP 5 bar, baz FROM foo";
+    let _ = ms_and_generic().one_statement_parses_to(sql, "SELECT TOP (5) bar, baz FROM foo");
 }
 
 fn ms() -> TestedDialects {

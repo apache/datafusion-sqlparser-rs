@@ -28,6 +28,41 @@ fn parse_identifiers() {
 }
 
 #[test]
+fn parse_use() {
+    mysql().verified_stmt("USE `test`");
+}
+
+#[test]
+fn parse_set_names() {
+    mysql().verified_stmt("SET NAMES UTF8");
+}
+
+#[test]
+fn parse_identifiers_with_at() {
+    mysql().verified_stmt("SELECT @x, `@test` FROM `v`.`t`");
+}
+
+#[test]
+fn parse_savepoint() {
+    mysql().verified_stmt("SAVEPOINT `a6656450_c8fe_4cbc_a75c_37d60d266629`");
+}
+
+#[test]
+fn parse_rollback_to() {
+    mysql().verified_stmt("ROLLBACK TO SAVEPOINT `0105c3d0_2750_4d45_be35_f17952cbf389`");
+}
+
+#[test]
+fn parse_release() {
+    mysql().verified_stmt("RELEASE SAVEPOINT `0105c3d0_2750_4d45_be35_f17952cbf389`");
+}
+
+#[test]
+fn parse_set_session_transaction() {
+    mysql().verified_stmt("SET SESSION TRANSACTION READ ONLY");
+}
+
+#[test]
 fn parse_show_columns() {
     let table_name = ObjectName(vec![Ident::new("mytable")]);
     assert_eq!(

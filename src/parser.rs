@@ -1821,11 +1821,11 @@ impl<'a> Parser<'a> {
     /// Parse a tab separated values in
     /// COPY payload
     fn parse_tsv(&mut self) -> Result<Vec<Option<String>>, ParserError> {
-        let values = self.parse_tab_value()?;
+        let values = self.parse_tab_value();
         Ok(values)
     }
 
-    fn parse_tab_value(&mut self) -> Result<Vec<Option<String>>, ParserError> {
+    fn parse_tab_value(&mut self) -> Vec<Option<String>> {
         let mut values = vec![];
         let mut content = String::from("");
         while let Some(t) = self.next_token_no_skip() {
@@ -1840,7 +1840,7 @@ impl<'a> Parser<'a> {
                 }
                 Token::Backslash => {
                     if self.consume_token(&Token::Period) {
-                        return Ok(values);
+                        return values;
                     }
                     if let Token::Word(w) = self.next_token() {
                         if w.value == "N" {
@@ -1853,7 +1853,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Ok(values)
+        values
     }
 
     /// Parse a literal value (numbers, strings, date/time, booleans)
@@ -2439,7 +2439,7 @@ impl<'a> Parser<'a> {
             }
         } else if variable.value.to_uppercase() == TRANSACTION {
             Ok(Statement::SetTransaction {
-                session: !modifier.is_none(),
+                session: modifier.is_some(),
                 modes: self.parse_transaction_modes()?,
             })
         } else if variable.value.to_uppercase() == NAMES && modifier.is_none() {

@@ -550,6 +550,8 @@ pub enum Statement {
         assignments: Vec<Assignment>,
         /// WHERE
         selection: Option<Expr>,
+        /// `LIMIT { <N> | ALL }`
+        limit: Option<Expr>,
     },
     /// DELETE
     Delete {
@@ -889,6 +891,7 @@ impl fmt::Display for Statement {
                 table_name,
                 assignments,
                 selection,
+                limit,
             } => {
                 write!(f, "UPDATE {}", table_name)?;
                 if !assignments.is_empty() {
@@ -896,6 +899,9 @@ impl fmt::Display for Statement {
                 }
                 if let Some(selection) = selection {
                     write!(f, " WHERE {}", selection)?;
+                }
+                if let Some(ref limit) = limit {
+                    write!(f, " LIMIT {}", limit)?;
                 }
                 Ok(())
             }

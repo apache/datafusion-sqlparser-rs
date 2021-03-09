@@ -28,6 +28,11 @@ fn parse_identifiers() {
 }
 
 #[test]
+fn parse_update_limit() {
+    mysql().verified_stmt("UPDATE t SET c = 1 WHERE b = 2 LIMIT 1");
+}
+
+#[test]
 fn parse_use() {
     mysql().verified_stmt("USE `test`");
 }

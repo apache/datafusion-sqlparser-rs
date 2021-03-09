@@ -2815,10 +2815,16 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        let limit = if self.parse_keyword(Keyword::LIMIT) {
+            self.parse_limit()?
+        } else {
+            None
+        };
         Ok(Statement::Update {
             table_name,
             assignments,
             selection,
+            limit,
         })
     }
 

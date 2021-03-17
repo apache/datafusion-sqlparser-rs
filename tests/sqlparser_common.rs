@@ -1253,6 +1253,7 @@ fn parse_assert() {
 }
 
 #[test]
+#[allow(clippy::collapsible_match)]
 fn parse_assert_message() {
     let sql = "ASSERT (SELECT COUNT(*) FROM my_table) > 0 AS 'No rows in my_table'";
     let ast = one_statement_parses_to(

@@ -1820,7 +1820,7 @@ impl<'a> Parser<'a> {
         let columns = self.parse_parenthesized_column_list(Optional)?;
         self.expect_keywords(&[Keyword::FROM, Keyword::STDIN])?;
         self.expect_token(&Token::SemiColon)?;
-        let values = self.parse_tsv()?;
+        let values = self.parse_tsv();
         Ok(Statement::Copy {
             table_name,
             columns,
@@ -1830,9 +1830,8 @@ impl<'a> Parser<'a> {
 
     /// Parse a tab separated values in
     /// COPY payload
-    fn parse_tsv(&mut self) -> Result<Vec<Option<String>>, ParserError> {
-        let values = self.parse_tab_value();
-        Ok(values)
+    fn parse_tsv(&mut self) -> Vec<Option<String>> {
+        self.parse_tab_value()
     }
 
     fn parse_tab_value(&mut self) -> Vec<Option<String>> {

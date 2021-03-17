@@ -201,6 +201,12 @@ pub enum Expr {
         expr: Box<Expr>,
         data_type: DataType,
     },
+    /// TRY_CAST an expression to a different data type e.g. `TRY_CAST(foo AS VARCHAR(123))`
+    //  this differs from CAST in the choice of how to implement invalid conversions
+    TryCast {
+        expr: Box<Expr>,
+        data_type: DataType,
+    },
     /// EXTRACT(DateTimeField FROM <expr>)
     Extract {
         field: DateTimeField,
@@ -309,6 +315,7 @@ impl fmt::Display for Expr {
                 }
             }
             Expr::Cast { expr, data_type } => write!(f, "CAST({} AS {})", expr, data_type),
+            Expr::TryCast { expr, data_type } => write!(f, "TRY_CAST({} AS {})", expr, data_type),
             Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
             Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),
             Expr::Nested(ast) => write!(f, "({})", ast),

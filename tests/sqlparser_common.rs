@@ -982,6 +982,35 @@ fn parse_cast() {
 }
 
 #[test]
+fn parse_try_cast() {
+    let sql = "SELECT TRY_CAST(id AS BIGINT) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::TryCast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::BigInt
+        },
+        expr_from_projection(only(&select.projection))
+    );
+    one_statement_parses_to(
+        "SELECT TRY_CAST(id AS BIGINT) FROM customer",
+        "SELECT TRY_CAST(id AS BIGINT) FROM customer",
+    );
+
+    verified_stmt("SELECT TRY_CAST(id AS NUMERIC) FROM customer");
+
+    one_statement_parses_to(
+        "SELECT TRY_CAST(id AS DEC) FROM customer",
+        "SELECT TRY_CAST(id AS NUMERIC) FROM customer",
+    );
+
+    one_statement_parses_to(
+        "SELECT TRY_CAST(id AS DECIMAL) FROM customer",
+        "SELECT TRY_CAST(id AS NUMERIC) FROM customer",
+    );
+}
+
+#[test]
 fn parse_extract() {
     let sql = "SELECT EXTRACT(YEAR FROM d)";
     let select = verified_only_select(sql);

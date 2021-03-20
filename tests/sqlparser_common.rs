@@ -688,6 +688,51 @@ fn parse_like() {
 }
 
 #[test]
+fn parse_ilike() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}ILIKE '%a'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("name"))),
+                op: if negated {
+                    BinaryOperator::NotILike
+                } else {
+                    BinaryOperator::ILike
+                },
+                right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+            },
+            select.selection.unwrap()
+        );
+
+        // This statement tests that LIKE and NOT LIKE have the same precedence.
+        // This was previously mishandled (#81).
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}ILIKE '%a' IS NULL",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::IsNull(Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("name"))),
+                op: if negated {
+                    BinaryOperator::NotILike
+                } else {
+                    BinaryOperator::ILike
+                },
+                right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+            })),
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
+}
+
+#[test]
 fn parse_in_list() {
     fn chk(negated: bool) {
         let sql = &format!(

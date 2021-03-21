@@ -352,6 +352,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CAST => self.parse_cast_expr(),
+                Keyword::TRY_CAST => self.parse_try_cast_expr(),
                 Keyword::EXISTS => self.parse_exists_expr(),
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::SUBSTRING => self.parse_substring_expr(),
@@ -586,6 +587,19 @@ impl<'a> Parser<'a> {
         let data_type = self.parse_data_type()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Cast {
+            expr: Box::new(expr),
+            data_type,
+        })
+    }
+
+    /// Parse a SQL TRY_CAST function e.g. `TRY_CAST(expr AS FLOAT)`
+    pub fn parse_try_cast_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let expr = self.parse_expr()?;
+        self.expect_keyword(Keyword::AS)?;
+        let data_type = self.parse_data_type()?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::TryCast {
             expr: Box::new(expr),
             data_type,
         })
@@ -1806,7 +1820,7 @@ impl<'a> Parser<'a> {
         let columns = self.parse_parenthesized_column_list(Optional)?;
         self.expect_keywords(&[Keyword::FROM, Keyword::STDIN])?;
         self.expect_token(&Token::SemiColon)?;
-        let values = self.parse_tsv()?;
+        let values = self.parse_tsv();
         Ok(Statement::Copy {
             table_name,
             columns,
@@ -1816,12 +1830,11 @@ impl<'a> Parser<'a> {
 
     /// Parse a tab separated values in
     /// COPY payload
-    fn parse_tsv(&mut self) -> Result<Vec<Option<String>>, ParserError> {
-        let values = self.parse_tab_value()?;
-        Ok(values)
+    fn parse_tsv(&mut self) -> Vec<Option<String>> {
+        self.parse_tab_value()
     }
 
-    fn parse_tab_value(&mut self) -> Result<Vec<Option<String>>, ParserError> {
+    fn parse_tab_value(&mut self) -> Vec<Option<String>> {
         let mut values = vec![];
         let mut content = String::from("");
         while let Some(t) = self.next_token_no_skip() {
@@ -1836,7 +1849,7 @@ impl<'a> Parser<'a> {
                 }
                 Token::Backslash => {
                     if self.consume_token(&Token::Period) {
-                        return Ok(values);
+                        return values;
                     }
                     if let Token::Word(w) = self.next_token() {
                         if w.value == "N" {
@@ -1849,7 +1862,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Ok(values)
+        values
     }
 
     /// Parse a literal value (numbers, strings, date/time, booleans)

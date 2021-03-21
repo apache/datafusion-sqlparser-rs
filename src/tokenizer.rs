@@ -626,6 +626,7 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn consume_and_return(
         &self,
         chars: &mut Peekable<Chars<'_>>,

@@ -839,9 +839,12 @@ impl<'a> Parser<'a> {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
                 Keyword::LIKE => Some(BinaryOperator::Like),
+                Keyword::ILIKE => Some(BinaryOperator::ILike),
                 Keyword::NOT => {
                     if self.parse_keyword(Keyword::LIKE) {
                         Some(BinaryOperator::NotLike)
+                    } else if self.parse_keyword(Keyword::ILIKE) {
+                        Some(BinaryOperator::NotILike)
                     } else {
                         None
                     }
@@ -975,12 +978,14 @@ impl<'a> Parser<'a> {
                 Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
                 Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
                 Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
+                Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::BETWEEN_PREC),
                 _ => Ok(0),
             },
             Token::Word(w) if w.keyword == Keyword::IS => Ok(17),
             Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
+            Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::BETWEEN_PREC),
             Token::Eq
             | Token::Lt
             | Token::LtEq
@@ -1472,7 +1477,7 @@ impl<'a> Parser<'a> {
     ) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name()?;
-        let like = if self.parse_keyword(Keyword::LIKE) {
+        let like = if self.parse_keyword(Keyword::LIKE) || self.parse_keyword(Keyword::ILIKE) {
             self.parse_object_name().ok()
         } else {
             None
@@ -2495,6 +2500,10 @@ impl<'a> Parser<'a> {
     fn parse_show_statement_filter(&mut self) -> Result<Option<ShowStatementFilter>, ParserError> {
         if self.parse_keyword(Keyword::LIKE) {
             Ok(Some(ShowStatementFilter::Like(
+                self.parse_literal_string()?,
+            )))
+        } else if self.parse_keyword(Keyword::ILIKE) {
+            Ok(Some(ShowStatementFilter::ILike(
                 self.parse_literal_string()?,
             )))
         } else if self.parse_keyword(Keyword::WHERE) {

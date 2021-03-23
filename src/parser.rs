@@ -356,6 +356,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CAST => self.parse_cast_expr(),
+                Keyword::TRY_CAST => self.parse_try_cast_expr(),
                 Keyword::EXISTS => self.parse_exists_expr(),
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::SUBSTRING => self.parse_substring_expr(),
@@ -599,6 +600,19 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse a SQL TRY_CAST function e.g. `TRY_CAST(expr AS FLOAT)`
+    pub fn parse_try_cast_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let expr = self.parse_expr()?;
+        self.expect_keyword(Keyword::AS)?;
+        let data_type = self.parse_data_type()?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::TryCast {
+            expr: Box::new(expr),
+            data_type,
+        })
+    }
+
     /// Parse a SQL EXISTS expression e.g. `WHERE EXISTS(SELECT ...)`.
     pub fn parse_exists_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
@@ -833,9 +847,12 @@ impl<'a> Parser<'a> {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
                 Keyword::LIKE => Some(BinaryOperator::Like),
+                Keyword::ILIKE => Some(BinaryOperator::ILike),
                 Keyword::NOT => {
                     if self.parse_keyword(Keyword::LIKE) {
                         Some(BinaryOperator::NotLike)
+                    } else if self.parse_keyword(Keyword::ILIKE) {
+                        Some(BinaryOperator::NotILike)
                     } else {
                         None
                     }
@@ -969,12 +986,14 @@ impl<'a> Parser<'a> {
                 Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
                 Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
                 Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
+                Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::BETWEEN_PREC),
                 _ => Ok(0),
             },
             Token::Word(w) if w.keyword == Keyword::IS => Ok(17),
             Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
+            Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::BETWEEN_PREC),
             Token::Eq
             | Token::Lt
             | Token::LtEq
@@ -2501,6 +2520,10 @@ impl<'a> Parser<'a> {
     fn parse_show_statement_filter(&mut self) -> Result<Option<ShowStatementFilter>, ParserError> {
         if self.parse_keyword(Keyword::LIKE) {
             Ok(Some(ShowStatementFilter::Like(
+                self.parse_literal_string()?,
+            )))
+        } else if self.parse_keyword(Keyword::ILIKE) {
+            Ok(Some(ShowStatementFilter::ILike(
                 self.parse_literal_string()?,
             )))
         } else if self.parse_keyword(Keyword::WHERE) {

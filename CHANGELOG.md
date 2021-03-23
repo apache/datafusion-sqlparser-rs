@@ -9,6 +9,11 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 Check https://github.com/ballista-compute/sqlparser-rs/commits/main for undocumented changes.
 
 
+## [0.8.0] 2020-03-21
+
+### Added
+* Add support for `TRY_CAST` syntax (#299) - Thanks @seddonm1!
+
 ## [0.8.0] 2020-02-20
 
 ### Added

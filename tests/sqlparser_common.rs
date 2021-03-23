@@ -688,6 +688,51 @@ fn parse_like() {
 }
 
 #[test]
+fn parse_ilike() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}ILIKE '%a'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("name"))),
+                op: if negated {
+                    BinaryOperator::NotILike
+                } else {
+                    BinaryOperator::ILike
+                },
+                right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+            },
+            select.selection.unwrap()
+        );
+
+        // This statement tests that LIKE and NOT LIKE have the same precedence.
+        // This was previously mishandled (#81).
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}ILIKE '%a' IS NULL",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::IsNull(Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("name"))),
+                op: if negated {
+                    BinaryOperator::NotILike
+                } else {
+                    BinaryOperator::ILike
+                },
+                right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+            })),
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
+}
+
+#[test]
 fn parse_in_list() {
     fn chk(negated: bool) {
         let sql = &format!(
@@ -982,6 +1027,35 @@ fn parse_cast() {
 }
 
 #[test]
+fn parse_try_cast() {
+    let sql = "SELECT TRY_CAST(id AS BIGINT) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::TryCast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::BigInt
+        },
+        expr_from_projection(only(&select.projection))
+    );
+    one_statement_parses_to(
+        "SELECT TRY_CAST(id AS BIGINT) FROM customer",
+        "SELECT TRY_CAST(id AS BIGINT) FROM customer",
+    );
+
+    verified_stmt("SELECT TRY_CAST(id AS NUMERIC) FROM customer");
+
+    one_statement_parses_to(
+        "SELECT TRY_CAST(id AS DEC) FROM customer",
+        "SELECT TRY_CAST(id AS NUMERIC) FROM customer",
+    );
+
+    one_statement_parses_to(
+        "SELECT TRY_CAST(id AS DECIMAL) FROM customer",
+        "SELECT TRY_CAST(id AS NUMERIC) FROM customer",
+    );
+}
+
+#[test]
 fn parse_extract() {
     let sql = "SELECT EXTRACT(YEAR FROM d)";
     let select = verified_only_select(sql);
@@ -1224,6 +1298,7 @@ fn parse_assert() {
 }
 
 #[test]
+#[allow(clippy::collapsible_match)]
 fn parse_assert_message() {
     let sql = "ASSERT (SELECT COUNT(*) FROM my_table) > 0 AS 'No rows in my_table'";
     let ast = one_statement_parses_to(

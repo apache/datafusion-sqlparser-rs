@@ -384,7 +384,7 @@ impl<'a> Tokenizer<'a> {
                         return Ok(Some(Token::ParameterMark(self.parameter_mark_index)));
                     }
                     if s.starts_with('?') {
-                        self.tokenizer_error(format!("Expected quoted '{}'.", s).as_str(),)
+                        self.tokenizer_error(format!("Expected quoted '{}'.", s).as_str())
                     } else {
                         Ok(Some(Token::make_word(&s, None)))
                     }
@@ -554,7 +554,7 @@ impl<'a> Tokenizer<'a> {
                 '@' => self.consume_and_return(chars, Token::AtSign),
                 '?' => {
                     self.consume_and_return(chars, Token::ParameterMark(self.parameter_mark_index))
-                },
+                }
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),

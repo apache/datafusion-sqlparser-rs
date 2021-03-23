@@ -312,9 +312,8 @@ impl<'a> Tokenizer<'a> {
                 _ => self.col += 1,
             }
 
-            match &token {
-                Token::ParameterMark(_) => self.parameter_mark_index += 1,
-                _ => {}
+            if let Token::ParameterMark(_) = &token {
+                self.parameter_mark_index += 1
             }
             tokens.push(token);
         }
@@ -384,11 +383,8 @@ impl<'a> Tokenizer<'a> {
                     } else if s.eq("?") {
                         return Ok(Some(Token::ParameterMark(self.parameter_mark_index)));
                     }
-                    if s.starts_with("?") {
-                        self.tokenizer_error(
-                            format!("Expected quoted '{}'.", s)
-                                .as_str(),
-                        )
+                    if s.starts_with('?') {
+                        self.tokenizer_error(format!("Expected quoted '{}'.", s).as_str(),)
                     } else {
                         Ok(Some(Token::make_word(&s, None)))
                     }
@@ -556,7 +552,9 @@ impl<'a> Tokenizer<'a> {
                 '~' => self.consume_and_return(chars, Token::Tilde),
                 '#' => self.consume_and_return(chars, Token::Sharp),
                 '@' => self.consume_and_return(chars, Token::AtSign),
-                '?' => self.consume_and_return(chars, Token::ParameterMark(self.parameter_mark_index)),
+                '?' => {
+                    self.consume_and_return(chars, Token::ParameterMark(self.parameter_mark_index))
+                },
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),

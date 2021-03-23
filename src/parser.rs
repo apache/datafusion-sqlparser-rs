@@ -449,9 +449,7 @@ impl<'a> Parser<'a> {
                 Ok(expr)
             }
 
-            Token::ParameterMark(index) => {
-                Ok(Expr::ParameterMark(index))
-            }
+            Token::ParameterMark(index) => Ok(Expr::ParameterMark(index)),
             unexpected => self.expected("an expression:", unexpected),
         }?;
 
@@ -2195,7 +2193,8 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            let offset = if self.consume_token(&Token::Comma) || self.parse_keyword(Keyword::OFFSET) {
+            let offset = if self.consume_token(&Token::Comma) || self.parse_keyword(Keyword::OFFSET)
+            {
                 Some(self.parse_offset()?)
             } else {
                 None

@@ -364,10 +364,8 @@ impl fmt::Display for Expr {
                 }
 
                 write!(f, ")")
-            },
-            Expr::ParameterMark(_) => {
-                write!(f, "?")
-            },
+            }
+            Expr::ParameterMark(_) => write!(f, "?"),
         }
     }
 }

@@ -124,6 +124,8 @@ pub enum Token {
     PGSquareRoot,
     /// `||/` , a cube root math operator in PostgreSQL
     PGCubeRoot,
+    /// `?` Parameter Mark
+    ParameterMark(u32),
 }
 
 impl fmt::Display for Token {
@@ -176,6 +178,7 @@ impl fmt::Display for Token {
             Token::ShiftRight => f.write_str(">>"),
             Token::PGSquareRoot => f.write_str("|/"),
             Token::PGCubeRoot => f.write_str("||/"),
+            Token::ParameterMark(_) => f.write_str("?"),
         }
     }
 }
@@ -273,6 +276,7 @@ pub struct Tokenizer<'a> {
     pub query: String,
     pub line: u64,
     pub col: u64,
+    pub parameter_mark_index: u32,
 }
 
 impl<'a> Tokenizer<'a> {
@@ -283,6 +287,7 @@ impl<'a> Tokenizer<'a> {
             query: query.to_string(),
             line: 1,
             col: 1,
+            parameter_mark_index: 1,
         }
     }
 
@@ -307,6 +312,10 @@ impl<'a> Tokenizer<'a> {
                 _ => self.col += 1,
             }
 
+            match &token {
+                Token::ParameterMark(_) => self.parameter_mark_index += 1,
+                _ => {}
+            }
             tokens.push(token);
         }
         Ok(tokens)
@@ -372,8 +381,17 @@ impl<'a> Tokenizer<'a> {
                         let s2 = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
                         s += s2.as_str();
                         return Ok(Some(Token::Number(s, false)));
+                    } else if s.eq("?") {
+                        return Ok(Some(Token::ParameterMark(self.parameter_mark_index)));
                     }
-                    Ok(Some(Token::make_word(&s, None)))
+                    if s.starts_with("?") {
+                        self.tokenizer_error(
+                            format!("Expected quoted '{}'.", s)
+                                .as_str(),
+                        )
+                    } else {
+                        Ok(Some(Token::make_word(&s, None)))
+                    }
                 }
                 // string
                 '\'' => {
@@ -538,6 +556,7 @@ impl<'a> Tokenizer<'a> {
                 '~' => self.consume_and_return(chars, Token::Tilde),
                 '#' => self.consume_and_return(chars, Token::Sharp),
                 '@' => self.consume_and_return(chars, Token::AtSign),
+                '?' => self.consume_and_return(chars, Token::ParameterMark(self.parameter_mark_index)),
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),

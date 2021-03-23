@@ -28,6 +28,14 @@ fn parse_identifiers() {
 }
 
 #[test]
+fn parse_parameter_mark() {
+    mysql().verified_stmt("UPDATE t SET c = 1 WHERE b = ? LIMIT ?");
+    let actual = mysql().parse_sql_statements("SELECT *, ? FROM t WHERE c = '??' AND b = ? LIMIT ? , ?").unwrap().pop().unwrap();
+    let expected = mysql().parse_sql_statements("SELECT *, ? FROM t WHERE c = '??' AND b = ? LIMIT ? OFFSET ?").unwrap().pop().unwrap();
+    assert_eq!(actual.to_string(), expected.to_string())
+}
+
+#[test]
 fn parse_update_limit() {
     mysql().verified_stmt("UPDATE t SET c = 1 WHERE b = 2 LIMIT 1");
 }

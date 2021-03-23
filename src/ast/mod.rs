@@ -254,6 +254,8 @@ pub enum Expr {
     Subquery(Box<Query>),
     /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
     ListAgg(ListAgg),
+    /// `?` Parameter Mark
+    ParameterMark(u32),
 }
 
 impl fmt::Display for Expr {
@@ -355,7 +357,10 @@ impl fmt::Display for Expr {
                 }
 
                 write!(f, ")")
-            }
+            },
+            Expr::ParameterMark(_) => {
+                write!(f, "?")
+            },
         }
     }
 }

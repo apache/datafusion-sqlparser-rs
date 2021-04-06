@@ -1741,11 +1741,26 @@ impl<'a> Parser<'a> {
                 self.expect_keyword(Keyword::REFERENCES)?;
                 let foreign_table = self.parse_object_name()?;
                 let referred_columns = self.parse_parenthesized_column_list(Mandatory)?;
+                let mut on_delete = None;
+                let mut on_update = None;
+                loop {
+                    if on_delete.is_none() && self.parse_keywords(&[Keyword::ON, Keyword::DELETE]) {
+                        on_delete = Some(self.parse_referential_action()?);
+                    } else if on_update.is_none()
+                        && self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
+                    {
+                        on_update = Some(self.parse_referential_action()?);
+                    } else {
+                        break;
+                    }
+                }
                 Ok(Some(TableConstraint::ForeignKey {
                     name,
                     columns,
                     foreign_table,
                     referred_columns,
+                    on_delete,
+                    on_update,
                 }))
             }
             Token::Word(w) if w.keyword == Keyword::CHECK => {

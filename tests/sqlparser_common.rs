@@ -1162,7 +1162,9 @@ fn parse_create_table() {
                lng DOUBLE,
                constrained INT NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0),
                ref INT REFERENCES othertable (a, b),\
-               ref2 INT references othertable2 on delete cascade on update no action\
+               ref2 INT references othertable2 on delete cascade on update no action,\
+               constraint fkey foreign key (lat) references othertable3 (lat) on delete restrict,\
+               FOREIGN KEY (lng) REFERENCES othertable4 (longitude) ON UPDATE SET NULL
                )";
     let ast = one_statement_parses_to(
         sql,
@@ -1172,7 +1174,9 @@ fn parse_create_table() {
          lng DOUBLE, \
          constrained INT NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0), \
          ref INT REFERENCES othertable (a, b), \
-         ref2 INT REFERENCES othertable2 ON DELETE CASCADE ON UPDATE NO ACTION)",
+         ref2 INT REFERENCES othertable2 ON DELETE CASCADE ON UPDATE NO ACTION, \
+         CONSTRAINT fkey FOREIGN KEY (lat) REFERENCES othertable3(lat) ON DELETE RESTRICT, \
+         FOREIGN KEY (lng) REFERENCES othertable4(longitude) ON UPDATE SET NULL)",
     );
     match ast {
         Statement::CreateTable {
@@ -1271,7 +1275,27 @@ fn parse_create_table() {
                     }
                 ]
             );
-            assert!(constraints.is_empty());
+            assert_eq!(
+                constraints,
+                vec![
+                    TableConstraint::ForeignKey {
+                        name: Some("fkey".into()),
+                        columns: vec!["lat".into()],
+                        foreign_table: ObjectName(vec!["othertable3".into()]),
+                        referred_columns: vec!["lat".into()],
+                        on_delete: Some(ReferentialAction::Restrict),
+                        on_update: None
+                    },
+                    TableConstraint::ForeignKey {
+                        name: None,
+                        columns: vec!["lng".into()],
+                        foreign_table: ObjectName(vec!["othertable4".into()]),
+                        referred_columns: vec!["longitude".into()],
+                        on_delete: None,
+                        on_update: Some(ReferentialAction::SetNull)
+                    },
+                ]
+            );
             assert_eq!(with_options, vec![]);
         }
         _ => unreachable!(),

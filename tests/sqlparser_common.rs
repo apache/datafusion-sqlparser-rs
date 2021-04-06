@@ -1,4 +1,4 @@
-// Licensed under the Apache License, Version 2. name: (), columns: (), f columns: (), foreign_table: (), referred_columns: (), on_delete: (), on_update: ()oreign_table: (), referred_columns: (), on_delete: (), on_update: () name: (), columns: (), foreign_table: (), referred_columns: (), on_delete: (), on_update: ()0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //

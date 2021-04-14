@@ -835,6 +835,18 @@ impl<'a> Parser<'a> {
             Token::Sharp if dialect_of!(self is PostgreSqlDialect) => {
                 Some(BinaryOperator::PGBitwiseXor)
             }
+            Token::Tilde if dialect_of!(self is PostgreSqlDialect) => {
+                Some(BinaryOperator::PGRegexMatch)
+            }
+            Token::TildeAsterisk if dialect_of!(self is PostgreSqlDialect) => {
+                Some(BinaryOperator::PGRegexIMatch)
+            }
+            Token::ExclamationMarkTilde if dialect_of!(self is PostgreSqlDialect) => {
+                Some(BinaryOperator::PGRegexNotMatch)
+            }
+            Token::ExclamationMarkTildeAsterisk if dialect_of!(self is PostgreSqlDialect) => {
+                Some(BinaryOperator::PGRegexNotIMatch)
+            }
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
@@ -1002,6 +1014,10 @@ impl<'a> Parser<'a> {
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
             Token::LBracket | Token::RBracket => Ok(10),
+            Token::Tilde
+            | Token::TildeAsterisk
+            | Token::ExclamationMarkTilde
+            | Token::ExclamationMarkTildeAsterisk => Ok(19),
             _ => Ok(0),
         }
     }

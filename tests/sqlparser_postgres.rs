@@ -647,6 +647,28 @@ fn parse_pg_postfix_factorial() {
     }
 }
 
+#[test]
+fn parse_pg_regex_binary_ops() {
+    let regex_ops = &[
+        ("~", BinaryOperator::PGRegexMatch),
+        ("!~", BinaryOperator::PGRegexNotMatch),
+        ("~*", BinaryOperator::PGRegexIMatch),
+        ("!~*", BinaryOperator::PGRegexNotIMatch),
+    ];
+
+    for (str_op, op) in regex_ops {
+        let select = pg().verified_only_select(&format!("SELECT a {} b", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                op: op.clone(),
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }),
+            select.projection[0]
+        );
+    }
+}
+
 fn pg() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {})],

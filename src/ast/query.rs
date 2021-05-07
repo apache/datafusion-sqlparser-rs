@@ -407,10 +407,11 @@ impl fmt::Display for TableFactor {
                     write!(f, "{}{}", delim, pivot_val)?;
                     delim = ", ";
                 }
-                write!(f, "))")
+                write!(f, "))")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {}", alias)?;
                 }
+                Ok(())
             }
             TableFactor::Unpivot {
                 expr,
@@ -424,10 +425,11 @@ impl fmt::Display for TableFactor {
                     write!(f, "{}{}", delim, pivot_val)?;
                     delim = ", ";
                 }
-                write!(f, "))")
+                write!(f, "))")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {}", alias)?;
                 }
+                Ok(())
             }
             TableFactor::NestedJoin(table_reference) => write!(f, "({})", table_reference),
         }

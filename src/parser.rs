@@ -2631,6 +2631,7 @@ impl<'a> Parser<'a> {
                             alias.replace(outer_alias);
                         }
                         TableFactor::Pivot { .. } => unreachable!(),
+                        TableFactor::Unpivot { .. } => unreachable!(),
                         TableFactor::NestedJoin(_) => unreachable!(),
                     };
                 }
@@ -2681,8 +2682,10 @@ impl<'a> Parser<'a> {
         let pivot_vals = self.parse_comma_separated(Parser::parse_expr)?;
         self.expect_token(&Token::RParen)?;
         self.expect_token(&Token::RParen)?;
+        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
         Ok(TableFactor::Pivot {
             expr,
+            alias,
             val,
             pivot_vals,
         })

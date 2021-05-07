@@ -319,6 +319,14 @@ pub enum TableFactor {
     /// https://docs.snowflake.com/en/sql-reference/constructs/pivot.html
     Pivot {
         expr: Expr,
+        alias: Option<TableAlias>,
+        val: Ident,
+        pivot_vals: Vec<Expr>,
+    },
+    /// https://docs.snowflake.com/en/sql-reference/constructs/unpivot.html
+    Unpivot {
+        expr: Expr,
+        alias: Option<TableAlias>,
         val: Ident,
         pivot_vals: Vec<Expr>,
     },
@@ -389,6 +397,7 @@ impl fmt::Display for TableFactor {
             }
             TableFactor::Pivot {
                 expr,
+                alias,
                 val,
                 pivot_vals,
             } => {
@@ -399,6 +408,26 @@ impl fmt::Display for TableFactor {
                     delim = ", ";
                 }
                 write!(f, "))")
+                if let Some(alias) = alias {
+                    write!(f, " AS {}", alias)?;
+                }
+            }
+            TableFactor::Unpivot {
+                expr,
+                alias,
+                val,
+                pivot_vals,
+            } => {
+                write!(f, "({} FOR {} IN (", expr, val)?;
+                let mut delim = "";
+                for pivot_val in pivot_vals {
+                    write!(f, "{}{}", delim, pivot_val)?;
+                    delim = ", ";
+                }
+                write!(f, "))")
+                if let Some(alias) = alias {
+                    write!(f, " AS {}", alias)?;
+                }
             }
             TableFactor::NestedJoin(table_reference) => write!(f, "({})", table_reference),
         }
@@ -498,7 +527,6 @@ pub enum JoinOperator {
     LeftOuter(JoinConstraint),
     RightOuter(JoinConstraint),
     FullOuter(JoinConstraint),
-    /// [UN]PIVOT not actually a join but it seems to fit here syntactically
     /// https://docs.snowflake.com/en/sql-reference/constructs/pivot.html
     Pivot,
     /// https://docs.snowflake.com/en/sql-reference/constructs/unpivot.html
@@ -509,6 +537,13 @@ pub enum JoinOperator {
     /// OUTER APPLY (non-standard)
     OuterApply,
 }
+
+/*
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum PivotOperator {
+}
+*/
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

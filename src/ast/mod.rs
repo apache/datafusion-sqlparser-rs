@@ -485,168 +485,242 @@ impl fmt::Display for AddDropSync {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct AnalyzeStatement {
+    pub table_name: ObjectName,
+    pub partitions: Option<Vec<Expr>>,
+    pub for_columns: bool,
+    pub columns: Vec<Ident>,
+    pub cache_metadata: bool,
+    pub noscan: bool,
+    pub compute_statistics: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct TruncateStatement {
+    pub table_name: ObjectName,
+    pub partitions: Option<Vec<Expr>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct MsckStatement {
+    pub table_name: ObjectName,
+    pub repair: bool,
+    pub partition_action: Option<AddDropSync>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct InsertStatement {
+    /// Only for Sqlite
+    pub or: Option<SqliteOnConflict>,
+    /// TABLE
+    pub table_name: ObjectName,
+    /// COLUMNS
+    pub columns: Vec<Ident>,
+    /// Overwrite (Hive)
+    pub overwrite: bool,
+    /// A SQL query that specifies what to insert
+    pub source: Box<Query>,
+    /// partitioned insert (Hive)
+    pub partitioned: Option<Vec<Expr>>,
+    /// Columns defined after PARTITION
+    pub after_columns: Vec<Ident>,
+    /// whether the insert has the table keyword (Hive)
+    pub table: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct DirectoryStatement {
+    pub overwrite: bool,
+    pub local: bool,
+    pub path: String,
+    pub file_format: Option<FileFormat>,
+    pub source: Box<Query>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct CopyStatement {
+    /// TABLE
+    pub table_name: ObjectName,
+    /// COLUMNS
+    pub columns: Vec<Ident>,
+    /// VALUES a vector of values to be copied
+    pub values: Vec<Option<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct UpdateStatement {
+    /// TABLE
+    pub table_name: ObjectName,
+    /// Column assignments
+    pub assignments: Vec<Assignment>,
+    /// WHERE
+    pub selection: Option<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct DeleteStatement {
+    /// FROM
+    pub table_name: ObjectName,
+    /// WHERE
+    pub selection: Option<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct CreateTableStatement {
+    pub or_replace: bool,
+    pub temporary: bool,
+    pub external: bool,
+    pub if_not_exists: bool,
+    /// Table name
+    pub name: ObjectName,
+    /// Optional schema
+    pub columns: Vec<ColumnDef>,
+    pub constraints: Vec<TableConstraint>,
+    pub hive_distribution: HiveDistributionStyle,
+    pub hive_formats: Option<HiveFormat>,
+    pub table_properties: Vec<SqlOption>,
+    pub with_options: Vec<SqlOption>,
+    pub file_format: Option<FileFormat>,
+    pub location: Option<String>,
+    pub query: Option<Box<Query>>,
+    pub without_rowid: bool,
+    pub like: Option<ObjectName>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct CreateViewStatement {
+    pub or_replace: bool,
+    pub materialized: bool,
+    /// View name
+    pub name: ObjectName,
+    pub columns: Vec<Ident>,
+    pub query: Box<Query>,
+    pub with_options: Vec<SqlOption>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct CreateVirtualTableStatement {
+    pub name: ObjectName,
+    pub if_not_exists: bool,
+    pub module_name: Ident,
+    pub module_args: Vec<Ident>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct CreateIndexStatement {
+    /// index name
+    pub name: ObjectName,
+    pub table_name: ObjectName,
+    pub columns: Vec<OrderByExpr>,
+    pub unique: bool,
+    pub if_not_exists: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct AlterTableStatement {
+    /// Table name
+    pub name: ObjectName,
+    pub operation: AlterTableOperation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct DropStatement {
+    /// The type of the object to drop: TABLE, VIEW, etc.
+    pub object_type: ObjectType,
+    /// An optional `IF EXISTS` clause. (Non-standard.)
+    pub if_exists: bool,
+    /// One or more objects to drop. (ANSI SQL requires exactly one.)
+    pub names: Vec<ObjectName>,
+    /// Whether `CASCADE` was specified. This will be `false` when
+    /// `RESTRICT` or no drop behavior at all was specified.
+    pub cascade: bool,
+    /// Hive allows you specify whether the table's stored data will be
+    /// deleted along with the dropped table
+    pub purge: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct SetVariableStatement {
+    pub local: bool,
+    pub hivevar: bool,
+    pub variable: Ident,
+    pub value: Vec<SetVariableValue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ShowVariableStatement {}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ShowColumnsStatement {}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct StartTransactionStatement {}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Statement {
     /// Analyze (Hive)
-    Analyze {
-        table_name: ObjectName,
-        partitions: Option<Vec<Expr>>,
-        for_columns: bool,
-        columns: Vec<Ident>,
-        cache_metadata: bool,
-        noscan: bool,
-        compute_statistics: bool,
-    },
+    Analyze(AnalyzeStatement),
     /// Truncate (Hive)
-    Truncate {
-        table_name: ObjectName,
-        partitions: Option<Vec<Expr>>,
-    },
+    Truncate(TruncateStatement),
     /// Msck (Hive)
-    Msck {
-        table_name: ObjectName,
-        repair: bool,
-        partition_action: Option<AddDropSync>,
-    },
+    Msck(MsckStatement),
     /// SELECT
     Query(Box<Query>),
     /// INSERT
-    Insert {
-        /// Only for Sqlite
-        or: Option<SqliteOnConflict>,
-        /// TABLE
-        table_name: ObjectName,
-        /// COLUMNS
-        columns: Vec<Ident>,
-        /// Overwrite (Hive)
-        overwrite: bool,
-        /// A SQL query that specifies what to insert
-        source: Box<Query>,
-        /// partitioned insert (Hive)
-        partitioned: Option<Vec<Expr>>,
-        /// Columns defined after PARTITION
-        after_columns: Vec<Ident>,
-        /// whether the insert has the table keyword (Hive)
-        table: bool,
-    },
+    Insert(InsertStatement),
     // TODO: Support ROW FORMAT
-    Directory {
-        overwrite: bool,
-        local: bool,
-        path: String,
-        file_format: Option<FileFormat>,
-        source: Box<Query>,
-    },
-    Copy {
-        /// TABLE
-        table_name: ObjectName,
-        /// COLUMNS
-        columns: Vec<Ident>,
-        /// VALUES a vector of values to be copied
-        values: Vec<Option<String>>,
-    },
+    Directory(DirectoryStatement),
+    Copy(CopyStatement),
     /// UPDATE
-    Update {
-        /// TABLE
-        table_name: ObjectName,
-        /// Column assignments
-        assignments: Vec<Assignment>,
-        /// WHERE
-        selection: Option<Expr>,
-    },
+    Update(UpdateStatement),
     /// DELETE
-    Delete {
-        /// FROM
-        table_name: ObjectName,
-        /// WHERE
-        selection: Option<Expr>,
-    },
+    Delete(DeleteStatement),
     /// CREATE VIEW
-    CreateView {
-        or_replace: bool,
-        materialized: bool,
-        /// View name
-        name: ObjectName,
-        columns: Vec<Ident>,
-        query: Box<Query>,
-        with_options: Vec<SqlOption>,
-    },
+    CreateView(CreateViewStatement),
     /// CREATE TABLE
-    CreateTable {
-        or_replace: bool,
-        temporary: bool,
-        external: bool,
-        if_not_exists: bool,
-        /// Table name
-        name: ObjectName,
-        /// Optional schema
-        columns: Vec<ColumnDef>,
-        constraints: Vec<TableConstraint>,
-        hive_distribution: HiveDistributionStyle,
-        hive_formats: Option<HiveFormat>,
-        table_properties: Vec<SqlOption>,
-        with_options: Vec<SqlOption>,
-        file_format: Option<FileFormat>,
-        location: Option<String>,
-        query: Option<Box<Query>>,
-        without_rowid: bool,
-        like: Option<ObjectName>,
-    },
+    CreateTable(CreateTableStatement),
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
-    CreateVirtualTable {
-        name: ObjectName,
-        if_not_exists: bool,
-        module_name: Ident,
-        module_args: Vec<Ident>,
-    },
+    CreateVirtualTable(CreateVirtualTableStatement),
     /// CREATE INDEX
-    CreateIndex {
-        /// index name
-        name: ObjectName,
-        table_name: ObjectName,
-        columns: Vec<OrderByExpr>,
-        unique: bool,
-        if_not_exists: bool,
-    },
+    CreateIndex(CreateIndexStatement),
     /// ALTER TABLE
-    AlterTable {
-        /// Table name
-        name: ObjectName,
-        operation: AlterTableOperation,
-    },
+    AlterTable(AlterTableStatement),
     /// DROP
-    Drop {
-        /// The type of the object to drop: TABLE, VIEW, etc.
-        object_type: ObjectType,
-        /// An optional `IF EXISTS` clause. (Non-standard.)
-        if_exists: bool,
-        /// One or more objects to drop. (ANSI SQL requires exactly one.)
-        names: Vec<ObjectName>,
-        /// Whether `CASCADE` was specified. This will be `false` when
-        /// `RESTRICT` or no drop behavior at all was specified.
-        cascade: bool,
-        /// Hive allows you specify whether the table's stored data will be
-        /// deleted along with the dropped table
-        purge: bool,
-    },
+    Drop(DropStatement),
     /// SET <variable>
     ///
     /// Note: this is not a standard SQL statement, but it is supported by at
     /// least MySQL and PostgreSQL. Not all MySQL-specific syntatic forms are
     /// supported yet.
-    SetVariable {
-        local: bool,
-        hivevar: bool,
-        variable: Ident,
-        value: Vec<SetVariableValue>,
-    },
+    SetVariable(SetVariableStatement),
     /// SHOW <variable>
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    ShowVariable { variable: Vec<Ident> },
+    ShowVariable {
+        variable: Vec<Ident>,
+    },
     /// SHOW COLUMNS
     ///
     /// Note: this is a MySQL-specific statement.
@@ -657,13 +731,21 @@ pub enum Statement {
         filter: Option<ShowStatementFilter>,
     },
     /// `{ BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...`
-    StartTransaction { modes: Vec<TransactionMode> },
+    StartTransaction {
+        modes: Vec<TransactionMode>,
+    },
     /// `SET TRANSACTION ...`
-    SetTransaction { modes: Vec<TransactionMode> },
+    SetTransaction {
+        modes: Vec<TransactionMode>,
+    },
     /// `COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
-    Commit { chain: bool },
+    Commit {
+        chain: bool,
+    },
     /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
-    Rollback { chain: bool },
+    Rollback {
+        chain: bool,
+    },
     /// CREATE SCHEMA
     CreateSchema {
         schema_name: ObjectName,
@@ -684,11 +766,17 @@ pub enum Statement {
     /// `DEALLOCATE [ PREPARE ] { name | ALL }`
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Deallocate { name: Ident, prepare: bool },
+    Deallocate {
+        name: Ident,
+        prepare: bool,
+    },
     /// `EXECUTE name [ ( parameter [, ...] ) ]`
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Execute { name: Ident, parameters: Vec<Expr> },
+    Execute {
+        name: Ident,
+        parameters: Vec<Expr>,
+    },
     /// `PREPARE name [ ( data_type [, ...] ) ] AS statement`
     ///
     /// Note: this is a PostgreSQL-specific statement.
@@ -732,13 +820,13 @@ impl fmt::Display for Statement {
                 write!(f, "{}", statement)
             }
             Statement::Query(s) => write!(f, "{}", s),
-            Statement::Directory {
+            Statement::Directory(DirectoryStatement {
                 overwrite,
                 local,
                 path,
                 file_format,
                 source,
-            } => {
+            }) => {
                 write!(
                     f,
                     "INSERT{overwrite}{local} DIRECTORY '{path}'",
@@ -751,11 +839,11 @@ impl fmt::Display for Statement {
                 }
                 write!(f, " {}", source)
             }
-            Statement::Msck {
+            Statement::Msck(MsckStatement {
                 table_name,
                 repair,
                 partition_action,
-            } => {
+            }) => {
                 write!(
                     f,
                     "MSCK {repair}TABLE {table}",
@@ -767,10 +855,10 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Truncate {
+            Statement::Truncate(TruncateStatement {
                 table_name,
                 partitions,
-            } => {
+            }) => {
                 write!(f, "TRUNCATE TABLE {}", table_name)?;
                 if let Some(ref parts) = partitions {
                     if !parts.is_empty() {
@@ -779,7 +867,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Analyze {
+            Statement::Analyze(AnalyzeStatement {
                 table_name,
                 partitions,
                 for_columns,
@@ -787,7 +875,7 @@ impl fmt::Display for Statement {
                 cache_metadata,
                 noscan,
                 compute_statistics,
-            } => {
+            }) => {
                 write!(f, "ANALYZE TABLE {}", table_name)?;
                 if let Some(ref parts) = partitions {
                     if !parts.is_empty() {
@@ -812,7 +900,7 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Insert {
+            Statement::Insert(InsertStatement {
                 or,
                 table_name,
                 overwrite,
@@ -821,7 +909,7 @@ impl fmt::Display for Statement {
                 after_columns,
                 source,
                 table,
-            } => {
+            }) => {
                 if let Some(action) = or {
                     write!(f, "INSERT OR {} INTO {} ", action, table_name)?;
                 } else {
@@ -847,11 +935,11 @@ impl fmt::Display for Statement {
                 write!(f, "{}", source)
             }
 
-            Statement::Copy {
+            Statement::Copy(CopyStatement {
                 table_name,
                 columns,
                 values,
-            } => {
+            }) => {
                 write!(f, "COPY {}", table_name)?;
                 if !columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(columns))?;
@@ -872,11 +960,11 @@ impl fmt::Display for Statement {
                 }
                 write!(f, "\n\\.")
             }
-            Statement::Update {
+            Statement::Update(UpdateStatement {
                 table_name,
                 assignments,
                 selection,
-            } => {
+            }) => {
                 write!(f, "UPDATE {}", table_name)?;
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
@@ -886,10 +974,10 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Delete {
+            Statement::Delete(DeleteStatement {
                 table_name,
                 selection,
-            } => {
+            }) => {
                 write!(f, "DELETE FROM {}", table_name)?;
                 if let Some(selection) = selection {
                     write!(f, " WHERE {}", selection)?;
@@ -915,14 +1003,14 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateView {
+            Statement::CreateView(CreateViewStatement {
                 name,
                 or_replace,
                 columns,
                 query,
                 materialized,
                 with_options,
-            } => {
+            }) => {
                 write!(
                     f,
                     "CREATE {or_replace}{materialized}VIEW {name}",
@@ -938,7 +1026,7 @@ impl fmt::Display for Statement {
                 }
                 write!(f, " AS {}", query)
             }
-            Statement::CreateTable {
+            Statement::CreateTable(CreateTableStatement {
                 name,
                 columns,
                 constraints,
@@ -955,7 +1043,7 @@ impl fmt::Display for Statement {
                 query,
                 without_rowid,
                 like,
-            } => {
+            }) => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
                 //   `CREATE TABLE t ()`
@@ -1082,12 +1170,12 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateVirtualTable {
+            Statement::CreateVirtualTable(CreateVirtualTableStatement {
                 name,
                 if_not_exists,
                 module_name,
                 module_args,
-            } => {
+            }) => {
                 write!(
                     f,
                     "CREATE VIRTUAL TABLE {if_not_exists}{name} USING {module_name}",
@@ -1100,13 +1188,13 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::CreateIndex {
+            Statement::CreateIndex(CreateIndexStatement {
                 name,
                 table_name,
                 columns,
                 unique,
                 if_not_exists,
-            } => write!(
+            }) => write!(
                 f,
                 "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}({columns})",
                 unique = if *unique { "UNIQUE " } else { "" },
@@ -1115,16 +1203,16 @@ impl fmt::Display for Statement {
                 table_name = table_name,
                 columns = display_separated(columns, ",")
             ),
-            Statement::AlterTable { name, operation } => {
+            Statement::AlterTable(AlterTableStatement { name, operation }) => {
                 write!(f, "ALTER TABLE {} {}", name, operation)
             }
-            Statement::Drop {
+            Statement::Drop(DropStatement {
                 object_type,
                 if_exists,
                 names,
                 cascade,
                 purge,
-            } => write!(
+            }) => write!(
                 f,
                 "DROP {}{} {}{}{}",
                 object_type,
@@ -1133,12 +1221,12 @@ impl fmt::Display for Statement {
                 if *cascade { " CASCADE" } else { "" },
                 if *purge { " PURGE" } else { "" }
             ),
-            Statement::SetVariable {
+            Statement::SetVariable(SetVariableStatement {
                 local,
                 variable,
                 hivevar,
                 value,
-            } => {
+            }) => {
                 f.write_str("SET ")?;
                 if *local {
                     f.write_str("LOCAL ")?;

@@ -197,11 +197,11 @@ impl<'a> Parser<'a> {
                 Ok(pa)
             })
             .unwrap_or_default();
-        Ok(Statement::Msck {
+        Ok(Statement::Msck(MsckStatement {
             repair,
             table_name,
             partition_action,
-        })
+        }))
     }
 
     pub fn parse_truncate(&mut self) -> Result<Statement, ParserError> {
@@ -213,10 +213,10 @@ impl<'a> Parser<'a> {
             partitions = Some(self.parse_comma_separated(Parser::parse_expr)?);
             self.expect_token(&Token::RParen)?;
         }
-        Ok(Statement::Truncate {
+        Ok(Statement::Truncate(TruncateStatement {
             table_name,
             partitions,
-        })
+        }))
     }
 
     pub fn parse_analyze(&mut self) -> Result<Statement, ParserError> {
@@ -264,7 +264,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok(Statement::Analyze {
+        Ok(Statement::Analyze(AnalyzeStatement {
             table_name,
             for_columns,
             columns,
@@ -272,7 +272,7 @@ impl<'a> Parser<'a> {
             cache_metadata,
             noscan,
             compute_statistics,
-        })
+        }))
     }
 
     /// Parse a new expression
@@ -1248,12 +1248,12 @@ impl<'a> Parser<'a> {
         // definitions in a traditional CREATE TABLE statement", but
         // we don't implement that.
         let module_args = self.parse_parenthesized_column_list(Optional)?;
-        Ok(CreateVirtualTable {
+        Ok(CreateVirtualTable(CreateVirtualTableStatement {
             name: table_name,
             if_not_exists,
             module_name,
             module_args,
-        })
+        }))
     }
 
     pub fn parse_create_schema(&mut self) -> Result<Statement, ParserError> {
@@ -1309,7 +1309,7 @@ impl<'a> Parser<'a> {
         };
         let location = hive_formats.location.clone();
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
-        Ok(Statement::CreateTable {
+        Ok(Statement::CreateTable(CreateTableStatement {
             name: table_name,
             columns,
             constraints,
@@ -1326,7 +1326,7 @@ impl<'a> Parser<'a> {
             query: None,
             without_rowid: false,
             like: None,
-        })
+        }))
     }
 
     pub fn parse_file_format(&mut self) -> Result<FileFormat, ParserError> {
@@ -1356,14 +1356,14 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::AS)?;
         let query = Box::new(self.parse_query()?);
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
-        Ok(Statement::CreateView {
+        Ok(Statement::CreateView(CreateViewStatement {
             name,
             columns,
             query,
             materialized,
             or_replace,
             with_options,
-        })
+        }))
     }
 
     pub fn parse_drop(&mut self) -> Result<Statement, ParserError> {
@@ -1388,13 +1388,13 @@ impl<'a> Parser<'a> {
         if cascade && restrict {
             return parser_err!("Cannot specify both CASCADE and RESTRICT in DROP");
         }
-        Ok(Statement::Drop {
+        Ok(Statement::Drop(DropStatement {
             object_type,
             if_exists,
             names,
             cascade,
             purge,
-        })
+        }))
     }
 
     pub fn parse_create_index(&mut self, unique: bool) -> Result<Statement, ParserError> {
@@ -1405,13 +1405,13 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let columns = self.parse_comma_separated(Parser::parse_order_by_expr)?;
         self.expect_token(&Token::RParen)?;
-        Ok(Statement::CreateIndex {
+        Ok(Statement::CreateIndex(CreateIndexStatement {
             name: index_name,
             table_name,
             columns,
             unique,
             if_not_exists,
-        })
+        }))
     }
 
     //TODO: Implement parsing for Skewed and Clustered
@@ -1500,7 +1500,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Statement::CreateTable {
+        Ok(Statement::CreateTable(CreateTableStatement {
             name: table_name,
             temporary,
             columns,
@@ -1517,7 +1517,7 @@ impl<'a> Parser<'a> {
             query,
             without_rowid,
             like,
-        })
+        }))
     }
 
     fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
@@ -1813,10 +1813,10 @@ impl<'a> Parser<'a> {
                 self.peek_token(),
             );
         };
-        Ok(Statement::AlterTable {
+        Ok(Statement::AlterTable(AlterTableStatement {
             name: table_name,
             operation,
-        })
+        }))
     }
 
     /// Parse a copy statement
@@ -1826,11 +1826,11 @@ impl<'a> Parser<'a> {
         self.expect_keywords(&[Keyword::FROM, Keyword::STDIN])?;
         self.expect_token(&Token::SemiColon)?;
         let values = self.parse_tsv();
-        Ok(Statement::Copy {
+        Ok(Statement::Copy(CopyStatement {
             table_name,
             columns,
             values,
-        })
+        }))
     }
 
     /// Parse a tab separated values in
@@ -2139,10 +2139,10 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Statement::Delete {
+        Ok(Statement::Delete(DeleteStatement {
             table_name,
             selection,
-        })
+        }))
     }
 
     pub fn parse_explain(&mut self) -> Result<Statement, ParserError> {
@@ -2444,12 +2444,12 @@ impl<'a> Parser<'a> {
                 if self.consume_token(&Token::Comma) {
                     continue;
                 }
-                return Ok(Statement::SetVariable {
+                return Ok(Statement::SetVariable(SetVariableStatement {
                     local: modifier == Some(Keyword::LOCAL),
                     hivevar: Some(Keyword::HIVEVAR) == modifier,
                     variable,
                     value: values,
-                });
+                }));
             }
         } else if variable.value == "TRANSACTION" && modifier.is_none() {
             Ok(Statement::SetTransaction {
@@ -2774,13 +2774,13 @@ impl<'a> Parser<'a> {
                 None
             };
             let source = Box::new(self.parse_query()?);
-            Ok(Statement::Directory {
+            Ok(Statement::Directory(DirectoryStatement {
                 local,
                 path,
                 overwrite,
                 file_format,
                 source,
-            })
+            }))
         } else {
             // Hive lets you put table here regardless
             let table = self.parse_keyword(Keyword::TABLE);
@@ -2800,7 +2800,7 @@ impl<'a> Parser<'a> {
             let after_columns = self.parse_parenthesized_column_list(Optional)?;
 
             let source = Box::new(self.parse_query()?);
-            Ok(Statement::Insert {
+            Ok(Statement::Insert(InsertStatement {
                 or,
                 table_name,
                 overwrite,
@@ -2809,7 +2809,7 @@ impl<'a> Parser<'a> {
                 after_columns,
                 source,
                 table,
-            })
+            }))
         }
     }
 
@@ -2822,11 +2822,11 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(Statement::Update {
+        Ok(Statement::Update(UpdateStatement {
             table_name,
             assignments,
             selection,
-        })
+        }))
     }
 
     /// Parse a `var = expr` assignment, used in an UPDATE statement

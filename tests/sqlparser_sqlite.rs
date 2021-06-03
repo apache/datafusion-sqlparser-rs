@@ -26,11 +26,11 @@ use sqlparser::tokenizer::Token;
 fn parse_create_table_without_rowid() {
     let sql = "CREATE TABLE t (a INT) WITHOUT ROWID";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTableStatement {
             name,
             without_rowid: true,
             ..
-        } => {
+        }) => {
             assert_eq!("t", name.to_string());
         }
         _ => unreachable!(),
@@ -41,12 +41,12 @@ fn parse_create_table_without_rowid() {
 fn parse_create_virtual_table() {
     let sql = "CREATE VIRTUAL TABLE IF NOT EXISTS t USING module_name (arg1, arg2)";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateVirtualTable {
+        Statement::CreateVirtualTable(CreateVirtualTableStatement {
             name,
             if_not_exists: true,
             module_name,
             module_args,
-        } => {
+        }) => {
             let args = vec![Ident::new("arg1"), Ident::new("arg2")];
             assert_eq!("t", name.to_string());
             assert_eq!("module_name", module_name.to_string());
@@ -63,7 +63,7 @@ fn parse_create_virtual_table() {
 fn parse_create_table_auto_increment() {
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTOINCREMENT)";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTableStatement { name, columns, .. }) => {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
@@ -94,7 +94,7 @@ fn parse_create_table_auto_increment() {
 fn parse_create_sqlite_quote() {
     let sql = "CREATE TABLE `PRIMARY` (\"KEY\" INT, [INDEX] INT)";
     match sqlite().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTableStatement { name, columns, .. }) => {
             assert_eq!(name.to_string(), "`PRIMARY`");
             assert_eq!(
                 vec![

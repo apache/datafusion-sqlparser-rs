@@ -37,7 +37,7 @@ fn parse_create_table_with_defaults() {
             active integer NOT NULL
     ) WITH (fillfactor = 20, user_catalog_table = true, autovacuum_vacuum_threshold = 100)";
     match pg_and_generic().one_statement_parses_to(sql, "") {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTableStatement {
             name,
             columns,
             constraints,
@@ -47,7 +47,7 @@ fn parse_create_table_with_defaults() {
             file_format: None,
             location: None,
             ..
-        } => {
+        }) => {
             assert_eq!("public.customer", name.to_string());
             assert_eq!(
                 columns,
@@ -243,12 +243,12 @@ fn parse_create_table_constraints_only() {
     let sql = "CREATE TABLE t (CONSTRAINT positive CHECK (2 > 1))";
     let ast = pg_and_generic().verified_stmt(sql);
     match ast {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTableStatement {
             name,
             columns,
             constraints,
             ..
-        } => {
+        }) => {
             assert_eq!("t", name.to_string());
             assert!(columns.is_empty());
             assert_eq!(
@@ -265,11 +265,11 @@ fn parse_create_table_if_not_exists() {
     let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
     let ast = pg_and_generic().verified_stmt(sql);
     match ast {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTableStatement {
             name,
             if_not_exists: true,
             ..
-        } => {
+        }) => {
             assert_eq!("uk_cities", name.to_string());
         }
         _ => unreachable!(),
@@ -321,11 +321,11 @@ fn parse_drop_schema_if_exists() {
     let sql = "DROP SCHEMA IF EXISTS schema_name";
     let ast = pg().verified_stmt(sql);
     match ast {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             object_type,
             if_exists: true,
             ..
-        } => assert_eq!(object_type, ObjectType::Schema),
+        }) => assert_eq!(object_type, ObjectType::Schema),
         _ => unreachable!(),
     }
 }
@@ -362,58 +362,58 @@ fn parse_set() {
     let stmt = pg_and_generic().verified_stmt("SET a = b");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::SetVariable(SetVariableStatement {
             local: false,
             hivevar: false,
             variable: "a".into(),
             value: vec![SetVariableValue::Ident("b".into())],
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET a = 'b'");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::SetVariable(SetVariableStatement {
             local: false,
             hivevar: false,
             variable: "a".into(),
             value: vec![SetVariableValue::Literal(Value::SingleQuotedString(
                 "b".into()
             ))],
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET a = 0");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::SetVariable(SetVariableStatement {
             local: false,
             hivevar: false,
             variable: "a".into(),
             value: vec![SetVariableValue::Literal(number("0"))],
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET a = DEFAULT");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::SetVariable(SetVariableStatement {
             local: false,
             hivevar: false,
             variable: "a".into(),
             value: vec![SetVariableValue::Ident("DEFAULT".into())],
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET LOCAL a = b");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::SetVariable(SetVariableStatement {
             local: true,
             hivevar: false,
             variable: "a".into(),
             value: vec![SetVariableValue::Ident("b".into())],
-        }
+        })
     );
 
     pg_and_generic().one_statement_parses_to("SET a TO b", "SET a = b");
@@ -542,12 +542,12 @@ fn parse_prepare() {
         _ => unreachable!(),
     };
     match sub_stmt.as_ref() {
-        Statement::Insert {
+        Statement::Insert(InsertStatement {
             table_name,
             columns,
             source,
             ..
-        } => {
+        }) => {
             assert_eq!(table_name.to_string(), "customers");
             assert!(columns.is_empty());
 

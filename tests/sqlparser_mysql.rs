@@ -104,7 +104,7 @@ fn parse_show_columns() {
 fn parse_create_table_auto_increment() {
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTO_INCREMENT)";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTableStatement { name, columns, .. }) => {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
@@ -135,7 +135,7 @@ fn parse_create_table_auto_increment() {
 fn parse_quote_identifiers() {
     let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INT PRIMARY KEY)";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTableStatement { name, columns, .. }) => {
             assert_eq!(name.to_string(), "`PRIMARY`");
             assert_eq!(
                 vec![ColumnDef {

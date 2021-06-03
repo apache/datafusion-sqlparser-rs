@@ -64,12 +64,12 @@ fn parse_insert_values() {
         expected_rows: &[Vec<Expr>],
     ) {
         match verified_stmt(sql) {
-            Statement::Insert {
+            Statement::Insert(InsertStatement {
                 table_name,
                 columns,
                 source,
                 ..
-            } => {
+            }) => {
                 assert_eq!(table_name.to_string(), expected_table_name);
                 assert_eq!(columns.len(), expected_columns.len());
                 for (index, column) in columns.iter().enumerate() {
@@ -108,7 +108,7 @@ fn parse_insert_sqlite() {
     .pop()
     .unwrap()
     {
-        Statement::Insert { or, .. } => assert_eq!(or, expected_action),
+        Statement::Insert(InsertStatement { or, .. }) => assert_eq!(or, expected_action),
         _ => panic!(sql.to_string()),
     };
 
@@ -138,12 +138,12 @@ fn parse_insert_sqlite() {
 fn parse_update() {
     let sql = "UPDATE t SET a = 1, b = 2, c = 3 WHERE d";
     match verified_stmt(sql) {
-        Statement::Update {
+        Statement::Update(UpdateStatement {
             table_name,
             assignments,
             selection,
             ..
-        } => {
+        }) => {
             assert_eq!(table_name.to_string(), "t".to_string());
             assert_eq!(
                 assignments,
@@ -201,7 +201,7 @@ fn parse_no_table_name() {
 fn parse_delete_statement() {
     let sql = "DELETE FROM \"table\"";
     match verified_stmt(sql) {
-        Statement::Delete { table_name, .. } => {
+        Statement::Delete(DeleteStatement { table_name, .. }) => {
             assert_eq!(
                 ObjectName(vec![Ident::with_quote('"', "table")]),
                 table_name
@@ -217,11 +217,11 @@ fn parse_where_delete_statement() {
 
     let sql = "DELETE FROM foo WHERE name = 5";
     match verified_stmt(sql) {
-        Statement::Delete {
+        Statement::Delete(DeleteStatement {
             table_name,
             selection,
             ..
-        } => {
+        }) => {
             assert_eq!(ObjectName(vec![Ident::new("foo")]), table_name);
 
             assert_eq!(
@@ -1155,7 +1155,7 @@ fn parse_create_table() {
          ref2 INT REFERENCES othertable2 ON DELETE CASCADE ON UPDATE NO ACTION)",
     );
     match ast {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTableStatement {
             name,
             columns,
             constraints,
@@ -1165,7 +1165,7 @@ fn parse_create_table() {
             file_format: None,
             location: None,
             ..
-        } => {
+        }) => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
                 columns,
@@ -1336,7 +1336,9 @@ fn parse_drop_schema() {
     let sql = "DROP SCHEMA X";
 
     match verified_stmt(sql) {
-        Statement::Drop { object_type, .. } => assert_eq!(object_type, ObjectType::Schema),
+        Statement::Drop(DropStatement { object_type, .. }) => {
+            assert_eq!(object_type, ObjectType::Schema)
+        }
         _ => unreachable!(),
     }
 }
@@ -1346,7 +1348,7 @@ fn parse_create_table_as() {
     let sql = "CREATE TABLE t AS SELECT * FROM a";
 
     match verified_stmt(sql) {
-        Statement::CreateTable { name, query, .. } => {
+        Statement::CreateTable(CreateTableStatement { name, query, .. }) => {
             assert_eq!(name.to_string(), "t".to_string());
             assert_eq!(query, Some(Box::new(verified_query("SELECT * FROM a"))));
         }
@@ -1358,7 +1360,7 @@ fn parse_create_table_as() {
     // (without data types) in a CTAS, but we have yet to support that.
     let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
     match verified_stmt(sql) {
-        Statement::CreateTable { columns, query, .. } => {
+        Statement::CreateTable(CreateTableStatement { columns, query, .. }) => {
             assert_eq!(columns.len(), 2);
             assert_eq!(columns[0].to_string(), "a INT".to_string());
             assert_eq!(columns[1].to_string(), "b INT".to_string());
@@ -1376,9 +1378,9 @@ fn parse_create_or_replace_table() {
     let sql = "CREATE OR REPLACE TABLE t (a INT)";
 
     match verified_stmt(sql) {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTableStatement {
             name, or_replace, ..
-        } => {
+        }) => {
             assert_eq!(name.to_string(), "t".to_string());
             assert!(or_replace);
         }
@@ -1387,7 +1389,7 @@ fn parse_create_or_replace_table() {
 
     let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
     match verified_stmt(sql) {
-        Statement::CreateTable { columns, query, .. } => {
+        Statement::CreateTable(CreateTableStatement { columns, query, .. }) => {
             assert_eq!(columns.len(), 2);
             assert_eq!(columns[0].to_string(), "a INT".to_string());
             assert_eq!(columns[1].to_string(), "b INT".to_string());
@@ -1418,7 +1420,7 @@ fn parse_create_table_with_on_delete_on_update_2in_any_order() -> Result<(), Par
 fn parse_create_table_with_options() {
     let sql = "CREATE TABLE t (c INT) WITH (foo = 'bar', a = 123)";
     match verified_stmt(sql) {
-        Statement::CreateTable { with_options, .. } => {
+        Statement::CreateTable(CreateTableStatement { with_options, .. }) => {
             assert_eq!(
                 vec![
                     SqlOption {
@@ -1459,7 +1461,7 @@ fn parse_create_external_table() {
          STORED AS TEXTFILE LOCATION '/tmp/example.csv'",
     );
     match ast {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTableStatement {
             name,
             columns,
             constraints,
@@ -1469,7 +1471,7 @@ fn parse_create_external_table() {
             file_format,
             location,
             ..
-        } => {
+        }) => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
                 columns,
@@ -1527,7 +1529,7 @@ fn parse_create_or_replace_external_table() {
          STORED AS TEXTFILE LOCATION '/tmp/example.csv'",
     );
     match ast {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTableStatement {
             name,
             columns,
             constraints,
@@ -1538,7 +1540,7 @@ fn parse_create_or_replace_external_table() {
             location,
             or_replace,
             ..
-        } => {
+        }) => {
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
                 columns,
@@ -1588,10 +1590,10 @@ fn parse_create_external_table_lowercase() {
 fn parse_alter_table() {
     let add_column = "ALTER TABLE tab ADD COLUMN foo TEXT;";
     match one_statement_parses_to(add_column, "ALTER TABLE tab ADD COLUMN foo TEXT") {
-        Statement::AlterTable {
+        Statement::AlterTable(AlterTableStatement {
             name,
             operation: AlterTableOperation::AddColumn { column_def },
-        } => {
+        }) => {
             assert_eq!("tab", name.to_string());
             assert_eq!("foo", column_def.name.to_string());
             assert_eq!("TEXT", column_def.data_type.to_string());
@@ -1601,10 +1603,10 @@ fn parse_alter_table() {
 
     let rename_table = "ALTER TABLE tab RENAME TO new_tab";
     match verified_stmt(rename_table) {
-        Statement::AlterTable {
+        Statement::AlterTable(AlterTableStatement {
             name,
             operation: AlterTableOperation::RenameTable { table_name },
-        } => {
+        }) => {
             assert_eq!("tab", name.to_string());
             assert_eq!("new_tab", table_name.to_string())
         }
@@ -1613,14 +1615,14 @@ fn parse_alter_table() {
 
     let rename_column = "ALTER TABLE tab RENAME COLUMN foo TO new_foo";
     match verified_stmt(rename_column) {
-        Statement::AlterTable {
+        Statement::AlterTable(AlterTableStatement {
             name,
             operation:
                 AlterTableOperation::RenameColumn {
                     old_column_name,
                     new_column_name,
                 },
-        } => {
+        }) => {
             assert_eq!("tab", name.to_string());
             assert_eq!(old_column_name.to_string(), "foo");
             assert_eq!(new_column_name.to_string(), "new_foo");
@@ -1646,10 +1648,10 @@ fn parse_alter_table_constraints() {
 
     fn check_one(constraint_text: &str) {
         match verified_stmt(&format!("ALTER TABLE tab ADD {}", constraint_text)) {
-            Statement::AlterTable {
+            Statement::AlterTable(AlterTableStatement {
                 name,
                 operation: AlterTableOperation::AddConstraint(constraint),
-            } => {
+            }) => {
                 assert_eq!("tab", name.to_string());
                 assert_eq!(constraint_text, constraint.to_string());
             }
@@ -1673,7 +1675,7 @@ fn parse_alter_table_drop_column() {
 
     fn check_one(constraint_text: &str) {
         match verified_stmt(&format!("ALTER TABLE tab {}", constraint_text)) {
-            Statement::AlterTable {
+            Statement::AlterTable(AlterTableStatement {
                 name,
                 operation:
                     AlterTableOperation::DropColumn {
@@ -1681,7 +1683,7 @@ fn parse_alter_table_drop_column() {
                         if_exists,
                         cascade,
                     },
-            } => {
+            }) => {
                 assert_eq!("tab", name.to_string());
                 assert_eq!("is_active", column_name.to_string());
                 assert_eq!(true, if_exists);
@@ -2527,7 +2529,9 @@ fn parse_ctes() {
     // CTE in a view
     let sql = &format!("CREATE VIEW v AS {}", with);
     match verified_stmt(sql) {
-        Statement::CreateView { query, .. } => assert_ctes_in_select(&cte_sqls, &query),
+        Statement::CreateView(CreateViewStatement { query, .. }) => {
+            assert_ctes_in_select(&cte_sqls, &query)
+        }
         _ => panic!("Expected CREATE VIEW"),
     }
     // CTE in a CTE...
@@ -2771,14 +2775,14 @@ fn parse_exists_subquery() {
 fn parse_create_view() {
     let sql = "CREATE VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateViewStatement {
             name,
             columns,
             query,
             or_replace,
             materialized,
             with_options,
-        } => {
+        }) => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<Ident>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
@@ -2794,7 +2798,7 @@ fn parse_create_view() {
 fn parse_create_view_with_options() {
     let sql = "CREATE VIEW v WITH (foo = 'bar', a = 123) AS SELECT 1";
     match verified_stmt(sql) {
-        Statement::CreateView { with_options, .. } => {
+        Statement::CreateView(CreateViewStatement { with_options, .. }) => {
             assert_eq!(
                 vec![
                     SqlOption {
@@ -2817,14 +2821,14 @@ fn parse_create_view_with_options() {
 fn parse_create_view_with_columns() {
     let sql = "CREATE VIEW v (has, cols) AS SELECT 1, 2";
     match verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateViewStatement {
             name,
             columns,
             or_replace,
             with_options,
             query,
             materialized,
-        } => {
+        }) => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![Ident::new("has"), Ident::new("cols")]);
             assert_eq!(with_options, vec![]);
@@ -2839,14 +2843,14 @@ fn parse_create_view_with_columns() {
 fn parse_create_or_replace_view() {
     let sql = "CREATE OR REPLACE VIEW v AS SELECT 1";
     match verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateViewStatement {
             name,
             columns,
             or_replace,
             with_options,
             query,
             materialized,
-        } => {
+        }) => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
             assert_eq!(with_options, vec![]);
@@ -2866,14 +2870,14 @@ fn parse_create_or_replace_materialized_view() {
     // https://docs.snowflake.com/en/sql-reference/sql/create-materialized-view.html
     let sql = "CREATE OR REPLACE MATERIALIZED VIEW v AS SELECT 1";
     match verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateViewStatement {
             name,
             columns,
             or_replace,
             with_options,
             query,
             materialized,
-        } => {
+        }) => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
             assert_eq!(with_options, vec![]);
@@ -2889,14 +2893,14 @@ fn parse_create_or_replace_materialized_view() {
 fn parse_create_materialized_view() {
     let sql = "CREATE MATERIALIZED VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {
-        Statement::CreateView {
+        Statement::CreateView(CreateViewStatement {
             name,
             or_replace,
             columns,
             query,
             materialized,
             with_options,
-        } => {
+        }) => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<Ident>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
@@ -2912,13 +2916,13 @@ fn parse_create_materialized_view() {
 fn parse_drop_table() {
     let sql = "DROP TABLE foo";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             object_type,
             if_exists,
             names,
             cascade,
             purge: _,
-        } => {
+        }) => {
             assert_eq!(false, if_exists);
             assert_eq!(ObjectType::Table, object_type);
             assert_eq!(
@@ -2932,13 +2936,13 @@ fn parse_drop_table() {
 
     let sql = "DROP TABLE IF EXISTS foo, bar CASCADE";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             object_type,
             if_exists,
             names,
             cascade,
             purge: _,
-        } => {
+        }) => {
             assert_eq!(true, if_exists);
             assert_eq!(ObjectType::Table, object_type);
             assert_eq!(
@@ -2967,9 +2971,9 @@ fn parse_drop_table() {
 fn parse_drop_view() {
     let sql = "DROP VIEW myschema.myview";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             names, object_type, ..
-        } => {
+        }) => {
             assert_eq!(
                 vec!["myschema.myview"],
                 names.iter().map(ToString::to_string).collect::<Vec<_>>()
@@ -3370,13 +3374,13 @@ fn parse_create_index() {
         },
     ];
     match verified_stmt(sql) {
-        Statement::CreateIndex {
+        Statement::CreateIndex(CreateIndexStatement {
             name,
             table_name,
             columns,
             unique,
             if_not_exists,
-        } => {
+        }) => {
             assert_eq!("idx_name", name.to_string());
             assert_eq!("test", table_name.to_string());
             assert_eq!(indexed_columns, columns);
@@ -3390,9 +3394,9 @@ fn parse_create_index() {
 fn parse_drop_index() {
     let sql = "DROP INDEX idx_a";
     match verified_stmt(sql) {
-        Statement::Drop {
+        Statement::Drop(DropStatement {
             names, object_type, ..
-        } => {
+        }) => {
             assert_eq!(
                 vec!["idx_a"],
                 names.iter().map(ToString::to_string).collect::<Vec<_>>()

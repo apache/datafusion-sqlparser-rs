@@ -444,6 +444,19 @@ pub struct WindowFrame {
     // TBD: EXCLUDE
 }
 
+impl Default for WindowFrame {
+    /// returns default value for window frame
+    ///
+    /// see https://www.sqlite.org/windowfunctions.html#frame_specifications
+    fn default() -> Self {
+        Self {
+            units: WindowFrameUnits::Range,
+            start_bound: WindowFrameBound::Preceding(None),
+            end_bound: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum WindowFrameUnits {
@@ -1620,5 +1633,16 @@ impl fmt::Display for SqliteOnConflict {
             Ignore => write!(f, "IGNORE"),
             Replace => write!(f, "REPLACE"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_window_frame_default() {
+        let window_frame = WindowFrame::default();
+        assert_eq!(WindowFrameBound::Preceding(None), window_frame.start_bound);
     }
 }

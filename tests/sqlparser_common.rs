@@ -109,7 +109,7 @@ fn parse_insert_sqlite() {
     .unwrap()
     {
         Statement::Insert { or, .. } => assert_eq!(or, expected_action),
-        _ => panic!("{}", sql.to_string()),
+        _ => panic!("{}", sql),
     };
 
     let sql = "INSERT INTO test_table(id) VALUES(1)";

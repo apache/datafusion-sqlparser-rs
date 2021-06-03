@@ -1,4 +1,4 @@
-# fuzz
+# Fuzzing
 
 ## Installing `honggfuzz`
 
@@ -8,9 +8,12 @@ cargo install honggfuzz
 
 Install [dependencies](https://github.com/rust-fuzz/honggfuzz-rs#dependencies) for your system.
 
-## Fuzzing
+## Running the fuzzer
 
-Choose a target.
+Running the fuzzer is as easy as running in the `fuzz` directory.
+
+Choose a target:
+
 These are `[[bin]]` entries in `Cargo.toml`.
 List them with `cargo read-manifest | jq '.targets[].name'` from the `fuzz` directory.
 

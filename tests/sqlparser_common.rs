@@ -24,7 +24,7 @@ use test_utils::{all_dialects, expr_from_projection, join, number, only, table, 
 
 use matches::assert_matches;
 use sqlparser::ast::*;
-use sqlparser::dialect::{keywords::ALL_KEYWORDS, SQLiteDialect};
+use sqlparser::dialect::{keywords::ALL_KEYWORDS, GenericDialect, SQLiteDialect};
 use sqlparser::parser::{Parser, ParserError};
 
 #[test]
@@ -109,7 +109,7 @@ fn parse_insert_sqlite() {
     .unwrap()
     {
         Statement::Insert { or, .. } => assert_eq!(or, expected_action),
-        _ => panic!(sql.to_string()),
+        _ => panic!("{}", sql.to_string()),
     };
 
     let sql = "INSERT INTO test_table(id) VALUES(1)";
@@ -354,6 +354,15 @@ fn test_eof_after_as() {
     let res = parse_sql_statements("SELECT 1 FROM foo AS");
     assert_eq!(
         ParserError::ParserError("Expected an identifier after AS, found: EOF".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
+fn test_no_infix_error() {
+    let res = Parser::parse_sql(&GenericDialect {}, "ASSERT-URA<<");
+    assert_eq!(
+        ParserError::ParserError("No infix parser for token ShiftLeft".to_string()),
         res.unwrap_err()
     );
 }

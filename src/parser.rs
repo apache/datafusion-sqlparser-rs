@@ -883,7 +883,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 // Can only happen if `get_next_precedence` got out of sync with this function
-                _ => panic!("No infix parser for token {:?}", tok),
+                _ => parser_err!(format!("No infix parser for token {:?}", tok)),
             }
         } else if Token::DoubleColon == tok {
             self.parse_pg_cast(expr)
@@ -897,7 +897,7 @@ impl<'a> Parser<'a> {
             self.parse_map_access(expr)
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
-            panic!("No infix parser for token {:?}", tok)
+            parser_err!(format!("No infix parser for token {:?}", tok))
         }
     }
 

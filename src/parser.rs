@@ -2199,14 +2199,7 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            Ok(Query {
-                with,
-                body,
-                limit,
-                order_by,
-                offset,
-                fetch,
-            })
+            Ok(Query { with, body, order_by, limit, offset, fetch })
         } else {
             let insert = self.parse_insert()?;
             Ok(Query {
@@ -2409,19 +2402,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Select {
-            distinct,
-            top,
-            projection,
-            from,
-            selection,
-            lateral_views,
-            group_by,
-            cluster_by,
-            distribute_by,
-            sort_by,
-            having,
-        })
+        Ok(Select { distinct, top, projection, from, lateral_views, selection, group_by, cluster_by, distribute_by, sort_by, having })
     }
 
     pub fn parse_set(&mut self) -> Result<Statement, ParserError> {

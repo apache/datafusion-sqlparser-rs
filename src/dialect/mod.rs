@@ -85,20 +85,11 @@ mod tests {
             dialect: ansi_dialect,
         };
 
-        assert_eq!(
-            dialect_of!(generic_holder is GenericDialect |  AnsiDialect),
-            true
-        );
-        assert_eq!(dialect_of!(generic_holder is  AnsiDialect), false);
+        assert!(dialect_of!(generic_holder is GenericDialect |  AnsiDialect),);
+        assert!(!dialect_of!(generic_holder is  AnsiDialect));
 
-        assert_eq!(dialect_of!(ansi_holder is  AnsiDialect), true);
-        assert_eq!(
-            dialect_of!(ansi_holder is  GenericDialect | AnsiDialect),
-            true
-        );
-        assert_eq!(
-            dialect_of!(ansi_holder is  GenericDialect | MsSqlDialect),
-            false
-        );
+        assert!(dialect_of!(ansi_holder is  AnsiDialect));
+        assert!(dialect_of!(ansi_holder is  GenericDialect | AnsiDialect),);
+        assert!(!dialect_of!(ansi_holder is  GenericDialect | MsSqlDialect),);
     }
 }

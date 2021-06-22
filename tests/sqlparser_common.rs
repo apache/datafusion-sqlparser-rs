@@ -249,7 +249,7 @@ fn parse_top_level() {
 fn parse_simple_select() {
     let sql = "SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5";
     let select = verified_only_select(sql);
-    assert_eq!(false, select.distinct);
+    assert!(!select.distinct);
     assert_eq!(3, select.projection.len());
     let select = verified_query(sql);
     assert_eq!(Some(Expr::Value(number("5"))), select.limit);
@@ -269,7 +269,7 @@ fn parse_limit_is_not_an_alias() {
 fn parse_select_distinct() {
     let sql = "SELECT DISTINCT name FROM customer";
     let select = verified_only_select(sql);
-    assert_eq!(true, select.distinct);
+    assert!(select.distinct);
     assert_eq!(
         &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
         only(&select.projection)
@@ -1693,8 +1693,8 @@ fn parse_alter_table_drop_column() {
             } => {
                 assert_eq!("tab", name.to_string());
                 assert_eq!("is_active", column_name.to_string());
-                assert_eq!(true, if_exists);
-                assert_eq!(true, cascade);
+                assert!(if_exists);
+                assert!(cascade);
             }
             _ => unreachable!(),
         }
@@ -2928,13 +2928,13 @@ fn parse_drop_table() {
             cascade,
             purge: _,
         } => {
-            assert_eq!(false, if_exists);
+            assert!(!if_exists);
             assert_eq!(ObjectType::Table, object_type);
             assert_eq!(
                 vec!["foo"],
                 names.iter().map(ToString::to_string).collect::<Vec<_>>()
             );
-            assert_eq!(false, cascade);
+            assert!(!cascade);
         }
         _ => unreachable!(),
     }
@@ -2948,13 +2948,13 @@ fn parse_drop_table() {
             cascade,
             purge: _,
         } => {
-            assert_eq!(true, if_exists);
+            assert!(if_exists);
             assert_eq!(ObjectType::Table, object_type);
             assert_eq!(
                 vec!["foo", "bar"],
                 names.iter().map(ToString::to_string).collect::<Vec<_>>()
             );
-            assert_eq!(true, cascade);
+            assert!(cascade);
         }
         _ => unreachable!(),
     }
@@ -3389,8 +3389,8 @@ fn parse_create_index() {
             assert_eq!("idx_name", name.to_string());
             assert_eq!("test", table_name.to_string());
             assert_eq!(indexed_columns, columns);
-            assert_eq!(true, unique);
-            assert_eq!(true, if_not_exists)
+            assert!(unique);
+            assert!(if_not_exists)
         }
         _ => unreachable!(),
     }

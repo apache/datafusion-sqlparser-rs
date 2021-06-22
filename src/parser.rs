@@ -2358,8 +2358,7 @@ impl<'a> Parser<'a> {
                         ]) // This couldn't possibly be a bad idea
                     })?
                     .into_iter()
-                    .filter(|i| i.is_some())
-                    .map(|i| i.unwrap())
+                    .flatten()
                     .collect();
 
                 lateral_views.push(LateralView {

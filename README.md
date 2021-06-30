@@ -124,7 +124,7 @@ resources.
 [tdop-tutorial]: https://eli.thegreenplace.net/2010/01/02/top-down-operator-precedence-parsing
 [`cargo fmt`]: https://github.com/rust-lang/rustfmt#on-the-stable-toolchain
 [current issues]: https://github.com/ballista-compute/sqlparser-rs/issues
-[DataFusion]: https://github.com/apache/arrow/tree/master/rust/datafusion
+[DataFusion]: https://github.com/apache/arrow-datafusion
 [LocustDB]: https://github.com/cswinter/LocustDB
 [Ballista]: https://github.com/ballista-compute/ballista
 [Pratt Parser]: https://tdop.github.io/

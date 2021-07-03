@@ -440,6 +440,7 @@ define_keywords!(
     TEXTFILE,
     THEN,
     TIES,
+    TINYINT,
     TIME,
     TIMESTAMP,
     TIMEZONE_HOUR,

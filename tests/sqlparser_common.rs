@@ -24,7 +24,7 @@ use test_utils::{all_dialects, expr_from_projection, join, number, only, table, 
 
 use matches::assert_matches;
 use sqlparser::ast::*;
-use sqlparser::dialect::{keywords::ALL_KEYWORDS, SQLiteDialect};
+use sqlparser::dialect::{keywords::ALL_KEYWORDS, GenericDialect, SQLiteDialect};
 use sqlparser::parser::{Parser, ParserError};
 
 #[test]
@@ -108,8 +108,8 @@ fn parse_insert_sqlite() {
     .pop()
     .unwrap()
     {
-        Statement::Insert(InsertStatement { or, .. }) => assert_eq!(or, expected_action),
-        _ => panic!(sql.to_string()),
+        Statement::Insert(InsertStatement{ or, .. }) => assert_eq!(or, expected_action),
+        _ => panic!("{}", sql.to_string()),
     };
 
     let sql = "INSERT INTO test_table(id) VALUES(1)";
@@ -249,7 +249,7 @@ fn parse_top_level() {
 fn parse_simple_select() {
     let sql = "SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5";
     let select = verified_only_select(sql);
-    assert_eq!(false, select.distinct);
+    assert!(!select.distinct);
     assert_eq!(3, select.projection.len());
     let select = verified_query(sql);
     assert_eq!(Some(Expr::Value(number("5"))), select.limit);
@@ -269,7 +269,7 @@ fn parse_limit_is_not_an_alias() {
 fn parse_select_distinct() {
     let sql = "SELECT DISTINCT name FROM customer";
     let select = verified_only_select(sql);
-    assert_eq!(true, select.distinct);
+    assert!(select.distinct);
     assert_eq!(
         &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
         only(&select.projection)
@@ -354,6 +354,15 @@ fn test_eof_after_as() {
     let res = parse_sql_statements("SELECT 1 FROM foo AS");
     assert_eq!(
         ParserError::ParserError("Expected an identifier after AS, found: EOF".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
+fn test_no_infix_error() {
+    let res = Parser::parse_sql(&GenericDialect {}, "ASSERT-URA<<");
+    assert_eq!(
+        ParserError::ParserError("No infix parser for token ShiftLeft".to_string()),
         res.unwrap_err()
     );
 }
@@ -1686,8 +1695,8 @@ fn parse_alter_table_drop_column() {
             }) => {
                 assert_eq!("tab", name.to_string());
                 assert_eq!("is_active", column_name.to_string());
-                assert_eq!(true, if_exists);
-                assert_eq!(true, cascade);
+                assert!(if_exists);
+                assert!(cascade);
             }
             _ => unreachable!(),
         }
@@ -2923,13 +2932,13 @@ fn parse_drop_table() {
             cascade,
             purge: _,
         }) => {
-            assert_eq!(false, if_exists);
+            assert!(!if_exists);
             assert_eq!(ObjectType::Table, object_type);
             assert_eq!(
                 vec!["foo"],
                 names.iter().map(ToString::to_string).collect::<Vec<_>>()
             );
-            assert_eq!(false, cascade);
+            assert!(!cascade);
         }
         _ => unreachable!(),
     }
@@ -2943,13 +2952,13 @@ fn parse_drop_table() {
             cascade,
             purge: _,
         }) => {
-            assert_eq!(true, if_exists);
+            assert!(if_exists);
             assert_eq!(ObjectType::Table, object_type);
             assert_eq!(
                 vec!["foo", "bar"],
                 names.iter().map(ToString::to_string).collect::<Vec<_>>()
             );
-            assert_eq!(true, cascade);
+            assert!(cascade);
         }
         _ => unreachable!(),
     }
@@ -3384,8 +3393,8 @@ fn parse_create_index() {
             assert_eq!("idx_name", name.to_string());
             assert_eq!("test", table_name.to_string());
             assert_eq!(indexed_columns, columns);
-            assert_eq!(true, unique);
-            assert_eq!(true, if_not_exists)
+            assert!(unique);
+            assert!(if_not_exists)
         }
         _ => unreachable!(),
     }

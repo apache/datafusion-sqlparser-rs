@@ -883,7 +883,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 // Can only happen if `get_next_precedence` got out of sync with this function
-                _ => panic!("No infix parser for token {:?}", tok),
+                _ => parser_err!(format!("No infix parser for token {:?}", tok)),
             }
         } else if Token::DoubleColon == tok {
             self.parse_pg_cast(expr)
@@ -897,7 +897,7 @@ impl<'a> Parser<'a> {
             self.parse_map_access(expr)
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
-            panic!("No infix parser for token {:?}", tok)
+            parser_err!(format!("No infix parser for token {:?}", tok))
         }
     }
 
@@ -2202,8 +2202,8 @@ impl<'a> Parser<'a> {
             Ok(Query {
                 with,
                 body,
-                limit,
                 order_by,
+                limit,
                 offset,
                 fetch,
             })
@@ -2358,8 +2358,7 @@ impl<'a> Parser<'a> {
                         ]) // This couldn't possibly be a bad idea
                     })?
                     .into_iter()
-                    .filter(|i| i.is_some())
-                    .map(|i| i.unwrap())
+                    .flatten()
                     .collect();
 
                 lateral_views.push(LateralView {
@@ -2414,8 +2413,8 @@ impl<'a> Parser<'a> {
             top,
             projection,
             from,
-            selection,
             lateral_views,
+            selection,
             group_by,
             cluster_by,
             distribute_by,

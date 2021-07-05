@@ -1017,6 +1017,17 @@ fn parse_cast() {
         },
         expr_from_projection(only(&select.projection))
     );
+
+    let sql = "SELECT CAST(id AS TINYINT) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::TinyInt
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
     one_statement_parses_to(
         "SELECT CAST(id AS BIGINT) FROM customer",
         "SELECT CAST(id AS BIGINT) FROM customer",

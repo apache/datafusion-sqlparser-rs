@@ -16,6 +16,10 @@ use crate::dialect::Dialect;
 pub struct GenericDialect;
 
 impl Dialect for GenericDialect {
+    fn is_delimited_identifier_start(&self, ch: char) -> bool {
+        (ch == '"') || (ch == '`') || (ch == '\'')
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
         ('a'..='z').contains(&ch)
             || ('A'..='Z').contains(&ch)

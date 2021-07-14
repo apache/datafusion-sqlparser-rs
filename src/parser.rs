@@ -1259,6 +1259,14 @@ impl<'a> Parser<'a> {
     pub fn parse_create_schema(&mut self) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let schema_name = self.parse_object_name()?;
+
+        loop {
+            match self.parse_object_name() {
+                Ok(_) => {}
+                _ => break,
+            }
+        }
+
         Ok(Statement::CreateSchema {
             schema_name,
             if_not_exists,

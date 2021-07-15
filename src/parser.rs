@@ -1938,6 +1938,7 @@ impl<'a> Parser<'a> {
                     let _ = self.parse_keyword(Keyword::PRECISION);
                     Ok(DataType::Double)
                 }
+                Keyword::TINYINT => Ok(DataType::TinyInt),
                 Keyword::SMALLINT => Ok(DataType::SmallInt),
                 Keyword::INT | Keyword::INTEGER => Ok(DataType::Int),
                 Keyword::BIGINT => Ok(DataType::BigInt),

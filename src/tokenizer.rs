@@ -377,10 +377,10 @@ impl<'a> Tokenizer<'a> {
                     Ok(Some(Token::make_word(&s, None)))
                 }
                 // string
-                // '\'' => {
-                //     let s = self.tokenize_single_quoted_string(chars)?;
-                //     Ok(Some(Token::SingleQuotedString(s)))
-                // }
+                '\'' => {
+                    let s = self.tokenize_single_quoted_string(chars)?;
+                    Ok(Some(Token::SingleQuotedString(s)))
+                }
                 // delimited (quoted) identifier
                 quote_start if self.dialect.is_delimited_identifier_start(quote_start) => {
                     chars.next(); // consume the opening quote

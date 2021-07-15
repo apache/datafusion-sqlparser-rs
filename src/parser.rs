@@ -2479,11 +2479,20 @@ impl<'a> Parser<'a> {
         {
             self.prev_token();
             self.parse_show_columns()
+        } else if self.parse_keyword(Keyword::VARIABLES) {
+            self.parse_show_variables()
         } else {
             Ok(Statement::ShowVariable {
                 variable: self.parse_identifiers()?,
             })
         }
+    }
+
+    pub fn parse_show_variables(&mut self) -> Result<Statement, ParserError> {
+        let filter = self.parse_show_statement_filter()?;
+        Ok(Statement::ShowVariables {
+            filter,
+        })
     }
 
     fn parse_show_columns(&mut self) -> Result<Statement, ParserError> {

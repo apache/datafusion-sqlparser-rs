@@ -397,6 +397,17 @@ impl<'a> Tokenizer<'a> {
                 // numbers and period
                 '0'..='9' | '.' => {
                     let mut s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
+
+                    // match binary literal that starts with 0x
+                    if s == "0" && chars.peek() == Some(&'x') {
+                        chars.next();
+                        let s2 = peeking_take_while(
+                            chars,
+                            |ch| matches!(ch, '0'..='9' | 'A'..='F' | 'a'..='f'),
+                        );
+                        return Ok(Some(Token::HexStringLiteral(s2)));
+                    }
+
                     // match one period
                     if let Some('.') = chars.peek() {
                         s.push('.');

@@ -427,6 +427,7 @@ impl<'a> Parser<'a> {
             }
             Token::Number(_, _)
             | Token::SingleQuotedString(_)
+            | Token::DoubleQuotedString(_)
             | Token::NationalStringLiteral(_)
             | Token::HexStringLiteral(_) => {
                 self.prev_token();
@@ -670,6 +671,7 @@ impl<'a> Parser<'a> {
                         None
                     }
                     Token::SingleQuotedString(_)
+                    | Token::DoubleQuotedString(_)
                     | Token::NationalStringLiteral(_)
                     | Token::HexStringLiteral(_) => Some(Box::new(self.parse_expr()?)),
                     unexpected => {
@@ -1900,6 +1902,7 @@ impl<'a> Parser<'a> {
                 Err(e) => parser_err!(format!("Could not parse '{}' as number: {}", n, e)),
             },
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
+            Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
             unexpected => self.expected("a value", unexpected),
@@ -1931,6 +1934,7 @@ impl<'a> Parser<'a> {
         match self.next_token() {
             Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => Ok(value),
             Token::SingleQuotedString(s) => Ok(s),
+            Token::DoubleQuotedString(s) => Ok(s),
             unexpected => self.expected("literal string", unexpected),
         }
     }

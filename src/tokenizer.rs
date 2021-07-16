@@ -40,6 +40,8 @@ pub enum Token {
     Char(char),
     /// Single quoted string: i.e: 'string'
     SingleQuotedString(String),
+    /// Double quoted string: i.e: "string"
+    DoubleQuotedString(String),
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
     /// Hexadecimal string literal: i.e.: X'deadbeef'
@@ -134,6 +136,7 @@ impl fmt::Display for Token {
             Token::Number(ref n, l) => write!(f, "{}{long}", n, long = if *l { "L" } else { "" }),
             Token::Char(ref c) => write!(f, "{}", c),
             Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
+            Token::DoubleQuotedString(ref s) => write!(f, "\"{}\"", s),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
             Token::HexStringLiteral(ref s) => write!(f, "X'{}'", s),
             Token::Comma => f.write_str(","),
@@ -381,6 +384,21 @@ impl<'a> Tokenizer<'a> {
                     let s = self.tokenize_single_quoted_string(chars)?;
                     Ok(Some(Token::SingleQuotedString(s)))
                 }
+                quote_start if self.dialect.is_delimited_string_start(quote_start) => {
+                    match quote_start {
+                        '\'' => {
+                            let s = self.tokenize_single_quoted_string(chars)?;
+                            Ok(Some(Token::SingleQuotedString(s)))
+                        }
+                        '\"' => {
+                            let s = self.tokenize_double_quoted_string(chars)?;
+                            Ok(Some(Token::DoubleQuotedString(s)))
+                        }
+                        _ => {
+                            self.tokenizer_error("Unsupported delimit char")
+                        }
+                    }
+                }
                 // delimited (quoted) identifier
                 quote_start if self.dialect.is_delimited_identifier_start(quote_start) => {
                     chars.next(); // consume the opening quote
@@ -586,6 +604,34 @@ impl<'a> Tokenizer<'a> {
                     let escaped_quote = chars.peek().map(|c| *c == '\'').unwrap_or(false);
                     if escaped_quote {
                         s.push('\'');
+                        chars.next();
+                    } else {
+                        return Ok(s);
+                    }
+                }
+                _ => {
+                    chars.next(); // consume
+                    s.push(ch);
+                }
+            }
+        }
+        self.tokenizer_error("Unterminated string literal")
+    }
+
+    /// Read a single quoted string, starting with the opening quote.
+    fn tokenize_double_quoted_string(
+        &self,
+        chars: &mut Peekable<Chars<'_>>,
+    ) -> Result<String, TokenizerError> {
+        let mut s = String::new();
+        chars.next(); // consume the opening quote
+        while let Some(&ch) = chars.peek() {
+            match ch {
+                '\"' => {
+                    chars.next(); // consume
+                    let escaped_quote = chars.peek().map(|c| *c == '\"').unwrap_or(false);
+                    if escaped_quote {
+                        s.push('\"');
                         chars.next();
                     } else {
                         return Ok(s);

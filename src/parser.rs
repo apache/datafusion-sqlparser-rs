@@ -2481,6 +2481,8 @@ impl<'a> Parser<'a> {
             self.parse_show_tables()
         } else if self.parse_keyword(Keyword::VARIABLES) {
             self.parse_show_variables()
+        } else if self.parse_keywords(&[Keyword::TABLE, Keyword::STATUS]) {
+            self.parse_show_table_status()
         } else if self.parse_one_of_keywords(&[
                 Keyword::EXTENDED,
                 Keyword::FULL,
@@ -2501,6 +2503,20 @@ impl<'a> Parser<'a> {
     pub fn parse_show_variables(&mut self) -> Result<Statement, ParserError> {
         let filter = self.parse_show_statement_filter()?;
         Ok(Statement::ShowVariables {
+            filter,
+        })
+    }
+
+    pub fn parse_show_table_status(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::FROM)?;
+
+        let db_name = self.parse_object_name()?;
+
+        // MySQL allows both LIKE 'pattern' and WHERE expr,
+        let filter = self.parse_show_statement_filter()?;
+
+        Ok(Statement::ShowTableStatus {
+            db_name,
             filter,
         })
     }

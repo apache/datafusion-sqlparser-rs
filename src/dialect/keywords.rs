@@ -416,6 +416,7 @@ define_keywords!(
     START,
     STATIC,
     STATISTICS,
+    STATUS,
     STDDEV_POP,
     STDDEV_SAMP,
     STDIN,

@@ -671,6 +671,13 @@ pub enum Statement {
         db_name: Option<ObjectName>,
         filter: Option<ShowStatementFilter>,
     },
+    /// SHOW TABLE STATUS [FROM db_name] [LIKE'pattern']
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowTableStatus {
+        db_name: ObjectName,
+        filter: Option<ShowStatementFilter>,
+    },
     /// `{ BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...`
     StartTransaction { modes: Vec<TransactionMode> },
     /// `SET TRANSACTION ...`
@@ -1197,11 +1204,24 @@ impl fmt::Display for Statement {
                         " {}",
                         full = if *from { "FROM" } else { "IN" },
                     )?;
-
                     if let Some(db_name) = db_name {
                         write!(f, " {}", db_name)?;
                     }
                 }
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
+                }
+                Ok(())
+            }
+            Statement::ShowTableStatus {
+                db_name,
+                filter,
+            } => {
+                write!(
+                    f,
+                    "SHOW TABLE STATUS FROM {}",
+                    db_name.to_string(),
+                )?;
                 if let Some(filter) = filter {
                     write!(f, " {}", filter)?;
                 }

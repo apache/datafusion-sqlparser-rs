@@ -444,6 +444,7 @@ define_keywords!(
     TIMESTAMP,
     TIMEZONE_HOUR,
     TIMEZONE_MINUTE,
+    TINYINT,
     TO,
     TOP,
     TRAILING,

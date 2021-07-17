@@ -662,6 +662,15 @@ pub enum Statement {
         table_name: ObjectName,
         filter: Option<ShowStatementFilter>,
     },
+    /// SHOW TABLES
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowTables {
+        full: bool,
+        from: Option<bool>,
+        db_name: Option<ObjectName>,
+        filter: Option<ShowStatementFilter>,
+    },
     /// `{ BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...`
     StartTransaction { modes: Vec<TransactionMode> },
     /// `SET TRANSACTION ...`
@@ -1166,6 +1175,33 @@ impl fmt::Display for Statement {
             }
             Statement::ShowVariables { filter } => {
                 write!(f, "SHOW VARIABLES")?;
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
+                }
+                Ok(())
+            }
+            Statement::ShowTables {
+                full,
+                from,
+                db_name,
+                filter,
+            } => {
+                write!(
+                    f,
+                    "SHOW {full}TABLES",
+                    full = if *full { "FULL " } else { "" },
+                )?;
+                if let Some(from) = from {
+                    write!(
+                        f,
+                        " {}",
+                        full = if *from { "FROM" } else { "IN" },
+                    )?;
+
+                    if let Some(db_name) = db_name {
+                        write!(f, " {}", db_name)?;
+                    }
+                }
                 if let Some(filter) = filter {
                     write!(f, " {}", filter)?;
                 }

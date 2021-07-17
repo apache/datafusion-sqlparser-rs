@@ -2472,8 +2472,16 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_show(&mut self) -> Result<Statement, ParserError> {
-        if self
-            .parse_one_of_keywords(&[
+        if self.parse_keywords(&[Keyword::FULL, Keyword::TABLES]){
+            self.prev_token();
+            self.prev_token();
+            self.parse_show_tables()
+        } else if self.parse_keyword(Keyword::TABLES){
+            self.prev_token();
+            self.parse_show_tables()
+        } else if self.parse_keyword(Keyword::VARIABLES) {
+            self.parse_show_variables()
+        } else if self.parse_one_of_keywords(&[
                 Keyword::EXTENDED,
                 Keyword::FULL,
                 Keyword::COLUMNS,
@@ -2483,8 +2491,6 @@ impl<'a> Parser<'a> {
         {
             self.prev_token();
             self.parse_show_columns()
-        } else if self.parse_keyword(Keyword::VARIABLES) {
-            self.parse_show_variables()
         } else {
             Ok(Statement::ShowVariable {
                 variable: self.parse_identifiers()?,
@@ -2495,6 +2501,41 @@ impl<'a> Parser<'a> {
     pub fn parse_show_variables(&mut self) -> Result<Statement, ParserError> {
         let filter = self.parse_show_statement_filter()?;
         Ok(Statement::ShowVariables {
+            filter,
+        })
+    }
+
+    pub fn parse_show_tables(&mut self) -> Result<Statement, ParserError> {
+        let full = self.parse_keyword(Keyword::FULL);
+        self.expect_keyword(Keyword::TABLES)?;
+
+        let mut from = None;
+        let mut db_name = None;
+        let mut filter = None;
+
+        match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
+            None => {}
+            Some(keyword) => {
+                match keyword {
+                    Keyword::FROM => from = Some(true),
+                    Keyword::IN => from = Some(false),
+                    _ => {},
+                }
+            }
+        }
+
+        if from.is_some() {
+            let object_name = self.parse_object_name()?;
+            db_name = Some(object_name);
+        }
+
+        // MySQL allows both LIKE 'pattern' and WHERE expr,
+        filter = self.parse_show_statement_filter()?;
+
+        Ok(Statement::ShowTables {
+            full,
+            from,
+            db_name,
             filter,
         })
     }

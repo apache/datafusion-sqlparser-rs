@@ -594,6 +594,7 @@ pub enum Statement {
         query: Option<Box<Query>>,
         without_rowid: bool,
         like: Option<ObjectName>,
+        table_options: Vec<SqlOption>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -977,6 +978,7 @@ impl fmt::Display for Statement {
                 query,
                 without_rowid,
                 like,
+                table_options,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -1007,6 +1009,15 @@ impl fmt::Display for Statement {
                 // Only for SQLite
                 if *without_rowid {
                     write!(f, " WITHOUT ROWID")?;
+                }
+
+                // Only for mysql
+                if !table_options.is_empty() {
+                    write!(
+                        f,
+                        " {}",
+                        display_separated(table_options, " "),
+                    )?;
                 }
 
                 // Only for Hive

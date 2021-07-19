@@ -1336,6 +1336,7 @@ impl<'a> Parser<'a> {
             query: None,
             without_rowid: false,
             like: None,
+            table_options: vec![],
         })
     }
 
@@ -1498,6 +1499,10 @@ impl<'a> Parser<'a> {
         // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
 
+        // MySQL supports table_options
+        // https://dev.mysql.com/doc/refman/8.0/en/create-table.html
+        let table_options = self.parse_table_options()?;
+
         let hive_distribution = self.parse_hive_distribution()?;
         let hive_formats = self.parse_hive_formats()?;
         // PostgreSQL supports `WITH ( options )`, before `AS`
@@ -1527,7 +1532,38 @@ impl<'a> Parser<'a> {
             query,
             without_rowid,
             like,
+            table_options,
         })
+    }
+
+    pub fn parse_table_options(&mut self) -> Result<Vec<SqlOption>, ParserError> {
+        let mut sql_options = vec![];
+        loop {
+            if let Some(sql_option) = self.parse_table_option()? {
+                sql_options.push(sql_option);
+            } else {
+                break;
+            }
+        }
+        Ok(sql_options)
+    }
+
+    pub fn parse_table_option(&mut self) -> Result<Option<SqlOption>, ParserError> {
+        if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARSET]) {
+            self.prev_token();
+            let name = self.parse_identifier()?;
+            self.expect_token(&Token::Eq)?;
+            let value = self.parse_value()?;
+            Ok(Some(SqlOption { name, value }))
+        } else if self.parse_keyword(Keyword::ENGINE) {
+            self.prev_token();
+            let name = self.parse_identifier()?;
+            self.expect_token(&Token::Eq)?;
+            let value = self.parse_value()?;
+            Ok(Some(SqlOption { name, value }))
+        } else {
+            Ok(None)
+        }
     }
 
     fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
@@ -1887,10 +1923,13 @@ impl<'a> Parser<'a> {
                 Keyword::TRUE => Ok(Value::Boolean(true)),
                 Keyword::FALSE => Ok(Value::Boolean(false)),
                 Keyword::NULL => Ok(Value::Null),
-                Keyword::NoKeyword if w.quote_style.is_some() => match w.quote_style {
-                    Some('"') => Ok(Value::DoubleQuotedString(w.value)),
-                    Some('\'') => Ok(Value::SingleQuotedString(w.value)),
-                    _ => self.expected("A value?", Token::Word(w))?,
+                Keyword::NoKeyword => {
+                    match w.quote_style {
+                        Some('"') => Ok(Value::DoubleQuotedString(w.value)),
+                        Some('\'') => Ok(Value::SingleQuotedString(w.value)),
+                        None => Ok(Value::OnlyString(w.value)),
+                        _ => self.expected("A value?", Token::Word(w))?,
+                    }
                 },
                 _ => self.expected("a concrete value", Token::Word(w)),
             },
@@ -2527,7 +2566,6 @@ impl<'a> Parser<'a> {
 
         let mut from = None;
         let mut db_name = None;
-        let mut filter = None;
 
         match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
             None => {}
@@ -2546,7 +2584,7 @@ impl<'a> Parser<'a> {
         }
 
         // MySQL allows both LIKE 'pattern' and WHERE expr,
-        filter = self.parse_show_statement_filter()?;
+        let filter = self.parse_show_statement_filter()?;
 
         Ok(Statement::ShowTables {
             full,

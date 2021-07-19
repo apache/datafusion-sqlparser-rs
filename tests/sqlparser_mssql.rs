@@ -115,7 +115,7 @@ fn parse_mssql_top() {
 
 #[test]
 fn parse_mssql_bin_literal() {
-  let _ = ms_and_generic().one_statement_parses_to("SELECT 0xdeadBEEF", "SELECT X'deadBEEF'");
+    let _ = ms_and_generic().one_statement_parses_to("SELECT 0xdeadBEEF", "SELECT X'deadBEEF'");
 }
 
 fn ms() -> TestedDialects {

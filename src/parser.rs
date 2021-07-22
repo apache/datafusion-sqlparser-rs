@@ -2084,6 +2084,7 @@ impl<'a> Parser<'a> {
         match self.next_token() {
             Token::Word(w) => Ok(w.to_ident()),
             Token::SingleQuotedString(s) => Ok(Ident::with_quote('\'', s)),
+            Token::BackQuotedString(s) => Ok(Ident::with_quote('`', s)),
             unexpected => self.expected("identifier", unexpected),
         }
     }

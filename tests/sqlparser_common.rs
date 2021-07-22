@@ -58,7 +58,7 @@ fn parse_insert_values() {
         "",
     );
 
-    let sql = "INSERT INTO public.customer (id, name, active) VALUES";
+    let sql = "INSERT INTO public.customer (`id`, `name`, `active`) VALUES";
     check_one(
         sql,
         "public.customer",
@@ -66,6 +66,9 @@ fn parse_insert_values() {
         &vec![],
         "",
     );
+
+    let sql = "INSERT INTO public.customer VALUES";
+    check_one(sql, "public.customer", &[], &vec![], "");
 
     let sql = "INSERT INTO public.customer FORMAT TSV";
     check_one(sql, "public.customer", &[], &vec![], "TSV");
@@ -97,7 +100,7 @@ fn parse_insert_values() {
                 assert_eq!(table_name.to_string(), expected_table_name);
                 assert_eq!(columns.len(), expected_columns.len());
                 for (index, column) in columns.iter().enumerate() {
-                    assert_eq!(column, &Ident::new(expected_columns[index].clone()));
+                    assert_eq!(column.value, expected_columns[index]);
                 }
 
                 match &source {

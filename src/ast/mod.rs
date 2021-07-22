@@ -841,7 +841,11 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(format) = format {
-                    write!(f, "FORMAT {}", format)?;
+                    if format.is_empty() {
+                        write!(f, "VALUES")?;
+                    } else {
+                        write!(f, "FORMAT {}", format)?;
+                    }
                 } else {
                     if let Some(ref parts) = partitioned {
                         if !parts.is_empty() {

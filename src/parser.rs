@@ -2803,6 +2803,15 @@ impl<'a> Parser<'a> {
                 } else {
                     None
                 }
+            } else if self.parse_keyword(Keyword::VALUES) {
+                let t = self.next_token();
+                if t == Token::EOF {
+                    Some("".to_owned())
+                } else {
+                    self.prev_token();
+                    self.prev_token();
+                    None
+                }
             } else {
                 None
             };

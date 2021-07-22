@@ -58,6 +58,15 @@ fn parse_insert_values() {
         "",
     );
 
+    let sql = "INSERT INTO public.customer (id, name, active) VALUES";
+    check_one(
+        sql,
+        "public.customer",
+        &["id".to_string(), "name".to_string(), "active".to_string()],
+        &vec![],
+        "",
+    );
+
     let sql = "INSERT INTO public.customer FORMAT TSV";
     check_one(sql, "public.customer", &[], &vec![], "TSV");
 

@@ -1079,6 +1079,16 @@ fn parse_cast() {
         "SELECT CAST(id AS DECIMAL) FROM customer",
         "SELECT CAST(id AS NUMERIC) FROM customer",
     );
+
+    one_statement_parses_to(
+        "SELECT CAST(id, DECIMAL) FROM customer",
+        "SELECT CAST(id AS NUMERIC) FROM customer",
+    );
+
+    one_statement_parses_to(
+        "SELECT TRY_CAST(id, DECIMAL) FROM customer",
+        "SELECT TRY_CAST(id AS NUMERIC) FROM customer",
+    );
 }
 
 #[test]

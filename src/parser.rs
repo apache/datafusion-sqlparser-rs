@@ -579,11 +579,13 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
+    /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)` or `cast(expr, FLOAT)`
     pub fn parse_cast_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
-        self.expect_keyword(Keyword::AS)?;
+        if !self.consume_token(&Token::Comma) {
+            self.expect_keyword(Keyword::AS)?;
+        }
         let data_type = self.parse_data_type()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Cast {
@@ -592,11 +594,13 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a SQL TRY_CAST function e.g. `TRY_CAST(expr AS FLOAT)`
+    /// Parse a SQL TRY_CAST function e.g. `TRY_CAST(expr AS FLOAT)` or `cast(expr, FLOAT)`
     pub fn parse_try_cast_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
-        self.expect_keyword(Keyword::AS)?;
+        if !self.consume_token(&Token::Comma) {
+            self.expect_keyword(Keyword::AS)?;
+        }
         let data_type = self.parse_data_type()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::TryCast {

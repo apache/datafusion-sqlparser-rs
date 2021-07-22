@@ -38,16 +38,16 @@ fn parse_insert_values() {
     let rows2 = vec![row.clone(), row];
 
     let sql = "INSERT INTO customer VALUES (1, 2, 3)";
-    check_one(sql, "customer", &[], &rows1);
+    check_one(sql, "customer", &[], &rows1, "");
 
     let sql = "INSERT INTO customer VALUES (1, 2, 3), (1, 2, 3)";
-    check_one(sql, "customer", &[], &rows2);
+    check_one(sql, "customer", &[], &rows2, "");
 
     let sql = "INSERT INTO public.customer VALUES (1, 2, 3)";
-    check_one(sql, "public.customer", &[], &rows1);
+    check_one(sql, "public.customer", &[], &rows1, "");
 
     let sql = "INSERT INTO db.public.customer VALUES (1, 2, 3)";
-    check_one(sql, "db.public.customer", &[], &rows1);
+    check_one(sql, "db.public.customer", &[], &rows1, "");
 
     let sql = "INSERT INTO public.customer (id, name, active) VALUES (1, 2, 3)";
     check_one(
@@ -55,6 +55,31 @@ fn parse_insert_values() {
         "public.customer",
         &["id".to_string(), "name".to_string(), "active".to_string()],
         &rows1,
+        "",
+    );
+
+    let sql = "INSERT INTO public.customer (`id`, `name`, `active`) VALUES";
+    check_one(
+        sql,
+        "public.customer",
+        &["id".to_string(), "name".to_string(), "active".to_string()],
+        &vec![],
+        "",
+    );
+
+    let sql = "INSERT INTO public.customer VALUES";
+    check_one(sql, "public.customer", &[], &vec![], "");
+
+    let sql = "INSERT INTO public.customer FORMAT TSV";
+    check_one(sql, "public.customer", &[], &vec![], "TSV");
+
+    let sql = "INSERT INTO public.customer (id, name, active) FORMAT TSV";
+    check_one(
+        sql,
+        "public.customer",
+        &["id".to_string(), "name".to_string(), "active".to_string()],
+        &vec![],
+        "TSV",
     );
 
     fn check_one(
@@ -62,22 +87,32 @@ fn parse_insert_values() {
         expected_table_name: &str,
         expected_columns: &[String],
         expected_rows: &[Vec<Expr>],
+        expected_format: &str,
     ) {
         match verified_stmt(sql) {
             Statement::Insert {
                 table_name,
                 columns,
                 source,
+                format,
                 ..
             } => {
                 assert_eq!(table_name.to_string(), expected_table_name);
                 assert_eq!(columns.len(), expected_columns.len());
                 for (index, column) in columns.iter().enumerate() {
-                    assert_eq!(column, &Ident::new(expected_columns[index].clone()));
+                    assert_eq!(column.value, expected_columns[index]);
                 }
-                match &source.body {
-                    SetExpr::Values(Values(values)) => assert_eq!(values.as_slice(), expected_rows),
-                    _ => unreachable!(),
+
+                match &source {
+                    Some(source) => match &source.body {
+                        SetExpr::Values(Values(values)) => {
+                            assert_eq!(values.as_slice(), expected_rows)
+                        }
+                        _ => unreachable!(),
+                    },
+                    None => {
+                        assert_eq!(format.unwrap(), expected_format)
+                    }
                 }
             }
             _ => unreachable!(),

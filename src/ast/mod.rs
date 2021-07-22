@@ -524,9 +524,11 @@ pub enum Statement {
         /// Overwrite (Hive)
         overwrite: bool,
         /// A SQL query that specifies what to insert
-        source: Box<Query>,
+        source: Option<Box<Query>>,
         /// partitioned insert (Hive)
         partitioned: Option<Vec<Expr>>,
+        /// format name
+        format: Option<String>,
         /// Columns defined after PARTITION
         after_columns: Vec<Ident>,
         /// whether the insert has the table keyword (Hive)
@@ -821,6 +823,7 @@ impl fmt::Display for Statement {
                 after_columns,
                 source,
                 table,
+                format,
             } => {
                 if let Some(action) = or {
                     write!(f, "INSERT OR {} INTO {} ", action, table_name)?;
@@ -836,15 +839,28 @@ impl fmt::Display for Statement {
                 if !columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(columns))?;
                 }
-                if let Some(ref parts) = partitioned {
-                    if !parts.is_empty() {
-                        write!(f, "PARTITION ({}) ", display_comma_separated(parts))?;
+
+                if let Some(format) = format {
+                    if format.is_empty() {
+                        write!(f, "VALUES")?;
+                    } else {
+                        write!(f, "FORMAT {}", format)?;
+                    }
+                } else {
+                    if let Some(ref parts) = partitioned {
+                        if !parts.is_empty() {
+                            write!(f, "PARTITION ({}) ", display_comma_separated(parts))?;
+                        }
+                    }
+                    if !after_columns.is_empty() {
+                        write!(f, "({}) ", display_comma_separated(after_columns))?;
+                    }
+
+                    if let Some(source) = source {
+                        write!(f, "{}", source)?;
                     }
                 }
-                if !after_columns.is_empty() {
-                    write!(f, "({}) ", display_comma_separated(after_columns))?;
-                }
-                write!(f, "{}", source)
+                Ok(())
             }
 
             Statement::Copy {

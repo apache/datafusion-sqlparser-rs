@@ -2084,6 +2084,7 @@ impl<'a> Parser<'a> {
         match self.next_token() {
             Token::Word(w) => Ok(w.to_ident()),
             Token::SingleQuotedString(s) => Ok(Ident::with_quote('\'', s)),
+            Token::BackQuotedString(s) => Ok(Ident::with_quote('`', s)),
             unexpected => self.expected("identifier", unexpected),
         }
     }
@@ -2796,10 +2797,33 @@ impl<'a> Parser<'a> {
                 None
             };
 
+            let format = if self.parse_keyword(Keyword::FORMAT) {
+                let t = self.next_token();
+                if let Token::Word(Word { value, .. }) = t {
+                    Some(value)
+                } else {
+                    None
+                }
+            } else if self.parse_keyword(Keyword::VALUES) {
+                let t = self.next_token();
+                if t == Token::EOF {
+                    Some("".to_owned())
+                } else {
+                    self.prev_token();
+                    self.prev_token();
+                    None
+                }
+            } else {
+                None
+            };
+
             // Hive allows you to specify columns after partitions as well if you want.
             let after_columns = self.parse_parenthesized_column_list(Optional)?;
-
-            let source = Box::new(self.parse_query()?);
+            let source = if format.is_some() {
+                None
+            } else {
+                Some(Box::new(self.parse_query()?))
+            };
             Ok(Statement::Insert {
                 or,
                 table_name,
@@ -2809,6 +2833,7 @@ impl<'a> Parser<'a> {
                 after_columns,
                 source,
                 table,
+                format,
             })
         }
     }

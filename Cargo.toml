@@ -13,6 +13,7 @@ include = [
     "Cargo.toml",
 ]
 edition = "2018"
+resolver = "2"
 
 [lib]
 name = "sqlparser"
@@ -21,10 +22,12 @@ path = "src/lib.rs"
 [features]
 # Enable JSON output in the `cli` example:
 json_example = ["serde_json", "serde"]
+default = ["std"]
+std = []
 
 [dependencies]
 bigdecimal = { version = "0.2", features = ["serde"], optional = true }
-log = "0.4"
+log = {version = "0.4"}
 serde = { version = "1.0", features = ["derive"], optional = true }
 # serde_json is only used in examples/cli, but we have to put it outside
 # of dev-dependencies because of

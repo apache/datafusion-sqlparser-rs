@@ -18,9 +18,10 @@ mod operator;
 mod query;
 mod value;
 
+use crate::prelude::*;
+use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 pub use self::data_type::DataType;
 pub use self::ddl::{

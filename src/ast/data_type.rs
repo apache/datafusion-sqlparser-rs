@@ -11,9 +11,10 @@
 // limitations under the License.
 
 use super::ObjectName;
+use crate::prelude::*;
+use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 /// SQL data types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

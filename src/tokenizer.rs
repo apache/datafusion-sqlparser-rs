@@ -16,15 +16,16 @@
 //!
 //! The tokens then form the input for the parser, which outputs an Abstract Syntax Tree (AST).
 
-use std::iter::Peekable;
-use std::str::Chars;
+use core::iter::Peekable;
+use core::str::Chars;
 
 use super::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 use super::dialect::Dialect;
 use super::dialect::SnowflakeDialect;
+use crate::prelude::*;
+use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

@@ -18,9 +18,10 @@ mod operator;
 mod query;
 mod value;
 
+use std::fmt;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 pub use self::data_type::DataType;
 pub use self::ddl::{
@@ -993,16 +994,16 @@ impl fmt::Display for Statement {
                 }
                 match hive_distribution {
                     HiveDistributionStyle::PARTITIONED { columns } => {
-                        write!(f, " PARTITIONED BY ({})", display_comma_separated(&columns))?;
+                        write!(f, " PARTITIONED BY ({})", display_comma_separated(columns))?;
                     }
                     HiveDistributionStyle::CLUSTERED {
                         columns,
                         sorted_by,
                         num_buckets,
                     } => {
-                        write!(f, " CLUSTERED BY ({})", display_comma_separated(&columns))?;
+                        write!(f, " CLUSTERED BY ({})", display_comma_separated(columns))?;
                         if !sorted_by.is_empty() {
-                            write!(f, " SORTED BY ({})", display_comma_separated(&sorted_by))?;
+                            write!(f, " SORTED BY ({})", display_comma_separated(sorted_by))?;
                         }
                         if *num_buckets > 0 {
                             write!(f, " INTO {} BUCKETS", num_buckets)?;
@@ -1016,8 +1017,8 @@ impl fmt::Display for Statement {
                         write!(
                             f,
                             " SKEWED BY ({})) ON ({})",
-                            display_comma_separated(&columns),
-                            display_comma_separated(&on)
+                            display_comma_separated(columns),
+                            display_comma_separated(on)
                         )?;
                         if *stored_as_directories {
                             write!(f, " STORED AS DIRECTORIES")?;

@@ -16,15 +16,16 @@
 //!
 //! The tokens then form the input for the parser, which outputs an Abstract Syntax Tree (AST).
 
+use std::fmt;
 use std::iter::Peekable;
 use std::str::Chars;
 
-use super::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
-use super::dialect::Dialect;
-use super::dialect::SnowflakeDialect;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
+
+use crate::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
+use crate::dialect::Dialect;
+use crate::dialect::SnowflakeDialect;
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -184,6 +185,7 @@ impl Token {
     pub fn make_keyword(keyword: &str) -> Self {
         Token::make_word(keyword, None)
     }
+
     pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
         let word_uppercase = word.to_uppercase();
         Token::Word(Word {
@@ -226,6 +228,7 @@ impl fmt::Display for Word {
         }
     }
 }
+
 impl Word {
     fn matching_end_quote(ch: char) -> char {
         match ch {

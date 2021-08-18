@@ -12,14 +12,15 @@
 
 //! SQL Parser
 
-use log::debug;
-
-use super::ast::*;
-use super::dialect::keywords::Keyword;
-use super::dialect::*;
-use super::tokenizer::*;
 use std::error::Error;
 use std::fmt;
+
+use log::debug;
+
+use crate::ast::*;
+use crate::dialect::keywords::Keyword;
+use crate::dialect::*;
+use crate::tokenizer::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParserError {
@@ -56,7 +57,6 @@ pub enum IsLateral {
     NotLateral,
 }
 
-use crate::ast::Statement::CreateVirtualTable;
 use IsLateral::*;
 
 impl From<TokenizerError> for ParserError {
@@ -102,7 +102,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
     pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
-        let mut tokenizer = Tokenizer::new(dialect, &sql);
+        let mut tokenizer = Tokenizer::new(dialect, sql);
         let tokens = tokenizer.tokenize()?;
         let mut parser = Parser::new(tokens, dialect);
         let mut stmts = Vec::new();
@@ -297,6 +297,7 @@ impl<'a> Parser<'a> {
         }
         Ok(expr)
     }
+
     pub fn parse_assert(&mut self) -> Result<Statement, ParserError> {
         let condition = self.parse_expr()?;
         let message = if self.parse_keyword(Keyword::AS) {
@@ -1248,7 +1249,7 @@ impl<'a> Parser<'a> {
         // definitions in a traditional CREATE TABLE statement", but
         // we don't implement that.
         let module_args = self.parse_parenthesized_column_list(Optional)?;
-        Ok(CreateVirtualTable {
+        Ok(Statement::CreateVirtualTable {
             name: table_name,
             if_not_exists,
             module_name,

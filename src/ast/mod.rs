@@ -1009,16 +1009,16 @@ impl fmt::Display for Statement {
                 }
                 match hive_distribution {
                     HiveDistributionStyle::PARTITIONED { columns } => {
-                        write!(f, " PARTITIONED BY ({})", display_comma_separated(&columns))?;
+                        write!(f, " PARTITIONED BY ({})", display_comma_separated(columns))?;
                     }
                     HiveDistributionStyle::CLUSTERED {
                         columns,
                         sorted_by,
                         num_buckets,
                     } => {
-                        write!(f, " CLUSTERED BY ({})", display_comma_separated(&columns))?;
+                        write!(f, " CLUSTERED BY ({})", display_comma_separated(columns))?;
                         if !sorted_by.is_empty() {
-                            write!(f, " SORTED BY ({})", display_comma_separated(&sorted_by))?;
+                            write!(f, " SORTED BY ({})", display_comma_separated(sorted_by))?;
                         }
                         if *num_buckets > 0 {
                             write!(f, " INTO {} BUCKETS", num_buckets)?;
@@ -1032,8 +1032,8 @@ impl fmt::Display for Statement {
                         write!(
                             f,
                             " SKEWED BY ({})) ON ({})",
-                            display_comma_separated(&columns),
-                            display_comma_separated(&on)
+                            display_comma_separated(columns),
+                            display_comma_separated(on)
                         )?;
                         if *stored_as_directories {
                             write!(f, " STORED AS DIRECTORIES")?;
@@ -1291,6 +1291,7 @@ impl fmt::Display for FunctionArg {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Function {
     pub name: ObjectName,
+    pub params: Vec<Value>,
     pub args: Vec<FunctionArg>,
     pub over: Option<WindowSpec>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
@@ -1299,13 +1300,17 @@ pub struct Function {
 
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        if !self.params.is_empty() {
+            write!(f, "({})", display_comma_separated(&self.params))?;
+        }
         write!(
             f,
-            "{}({}{})",
-            self.name,
+            "({}{})",
             if self.distinct { "DISTINCT " } else { "" },
             display_comma_separated(&self.args),
         )?;
+
         if let Some(o) = &self.over {
             write!(f, " OVER ({})", o)?;
         }

@@ -63,22 +63,22 @@ fn parse_insert_values() {
         sql,
         "public.customer",
         &["id".to_string(), "name".to_string(), "active".to_string()],
-        &vec![],
+        &[],
         "",
     );
 
     let sql = "INSERT INTO public.customer VALUES";
-    check_one(sql, "public.customer", &[], &vec![], "");
+    check_one(sql, "public.customer", &[], &[], "");
 
     let sql = "INSERT INTO public.customer FORMAT TSV";
-    check_one(sql, "public.customer", &[], &vec![], "TSV");
+    check_one(sql, "public.customer", &[], &[], "TSV");
 
     let sql = "INSERT INTO public.customer (id, name, active) FORMAT TSV";
     check_one(
         sql,
         "public.customer",
         &["id".to_string(), "name".to_string(), "active".to_string()],
-        &vec![],
+        &[],
         "TSV",
     );
 
@@ -137,7 +137,7 @@ fn parse_insert_sqlite() {
     let dialect = SQLiteDialect {};
 
     let check = |sql: &str, expected_action: Option<SqliteOnConflict>| match Parser::parse_sql(
-        &dialect, &sql,
+        &dialect, sql,
     )
     .unwrap()
     .pop()
@@ -375,7 +375,7 @@ fn parse_column_aliases() {
     }
 
     // alias without AS is parsed correctly:
-    one_statement_parses_to("SELECT a.col + 1 newname FROM foo AS a", &sql);
+    one_statement_parses_to("SELECT a.col + 1 newname FROM foo AS a", sql);
 }
 
 #[test]
@@ -409,6 +409,7 @@ fn parse_select_count_wildcard() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("COUNT")]),
+            params: vec![],
             args: vec![FunctionArg::Unnamed(Expr::Wildcard)],
             over: None,
             distinct: false,
@@ -424,6 +425,7 @@ fn parse_select_count_distinct() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("COUNT")]),
+            params: vec![],
             args: vec![FunctionArg::Unnamed(Expr::UnaryOp {
                 op: UnaryOperator::Plus,
                 expr: Box::new(Expr::Identifier(Ident::new("x"))),
@@ -444,6 +446,25 @@ fn parse_select_count_distinct() {
     assert_eq!(
         ParserError::ParserError("Cannot specify both ALL and DISTINCT".to_string()),
         res.unwrap_err()
+    );
+}
+
+#[test]
+fn parse_function_with_params() {
+    let sql = "SELECT funnel(3600)(x, y) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("funnel")]),
+            params: vec![Value::Number("3600".parse().unwrap(), false)],
+            args: vec![
+                FunctionArg::Unnamed(Expr::Identifier(Ident::new("x"))),
+                FunctionArg::Unnamed(Expr::Identifier(Ident::new("y")))
+            ],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(only(&select.projection))
     );
 }
 
@@ -1018,6 +1039,7 @@ fn parse_select_having() {
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("COUNT")]),
+                params: vec![],
                 args: vec![FunctionArg::Unnamed(Expr::Wildcard)],
                 over: None,
                 distinct: false,
@@ -1781,6 +1803,7 @@ fn parse_scalar_function_in_projection() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("sqrt")]),
+            params: vec![],
             args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new("id")))],
             over: None,
             distinct: false,
@@ -1824,6 +1847,7 @@ fn parse_named_argument_function() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("FUN")]),
+            params: vec![],
             args: vec![
                 FunctionArg::Named {
                     name: Ident::new("a"),
@@ -1858,6 +1882,7 @@ fn parse_window_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("row_number")]),
+            params: vec![],
             args: vec![],
             over: Some(WindowSpec {
                 partition_by: vec![],
@@ -2091,6 +2116,7 @@ fn parse_table_function() {
         TableFactor::TableFunction { expr, alias } => {
             let expected_expr = Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("FUN")]),
+                params: vec![],
                 args: vec![FunctionArg::Unnamed(Expr::Value(
                     Value::SingleQuotedString("1".to_owned()),
                 ))],
@@ -2149,6 +2175,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            params: vec![],
             args: vec![],
             over: None,
             distinct: false,
@@ -2730,7 +2757,7 @@ fn parse_multiple_statements() {
         let res = parse_sql_statements(&(sql1.to_owned() + ";" + sql2_kw + sql2_rest));
         assert_eq!(
             vec![
-                one_statement_parses_to(&sql1, ""),
+                one_statement_parses_to(sql1, ""),
                 one_statement_parses_to(&(sql2_kw.to_owned() + sql2_rest), ""),
             ],
             res.unwrap()

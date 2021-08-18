@@ -1291,6 +1291,7 @@ impl fmt::Display for FunctionArg {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Function {
     pub name: ObjectName,
+    pub params: Vec<Value>,
     pub args: Vec<FunctionArg>,
     pub over: Option<WindowSpec>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
@@ -1299,13 +1300,17 @@ pub struct Function {
 
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        if !self.params.is_empty() {
+            write!(f, "({})", display_comma_separated(&self.params))?;
+        }
         write!(
             f,
-            "{}({}{})",
-            self.name,
+            "({}{})",
             if self.distinct { "DISTINCT " } else { "" },
             display_comma_separated(&self.args),
         )?;
+
         if let Some(o) = &self.over {
             write!(f, " OVER ({})", o)?;
         }

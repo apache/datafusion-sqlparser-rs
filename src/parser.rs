@@ -459,6 +459,11 @@ impl<'a> Parser<'a> {
 
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
+
+        let params = self
+            .maybe_parse(|parser| parser.parse_optional_params())
+            .unwrap_or(vec![]);
+
         let distinct = self.parse_all_or_distinct()?;
         let args = self.parse_optional_args()?;
         let over = if self.parse_keyword(Keyword::OVER) {
@@ -494,6 +499,7 @@ impl<'a> Parser<'a> {
 
         Ok(Expr::Function(Function {
             name,
+            params,
             args,
             over,
             distinct,
@@ -1535,6 +1541,8 @@ impl<'a> Parser<'a> {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
                 constraints.push(constraint);
             } else if let Token::Word(_) = self.peek_token() {
+                columns.push(self.parse_column_def()?);
+            } else if let Token::BackQuotedString(_) = self.peek_token() {
                 columns.push(self.parse_column_def()?);
             } else {
                 return self.expected("column name or constraint definition", self.peek_token());
@@ -2885,6 +2893,20 @@ impl<'a> Parser<'a> {
         } else {
             let args = self.parse_comma_separated(Parser::parse_function_args)?;
             self.expect_token(&Token::RParen)?;
+            Ok(args)
+        }
+    }
+
+    pub fn parse_optional_params(&mut self) -> Result<Vec<Value>, ParserError> {
+        if self.consume_token(&Token::RParen) {
+            // Continue to parse the args
+            self.expect_token(&Token::LParen)?;
+            Ok(vec![])
+        } else {
+            let args = self.parse_comma_separated(Parser::parse_value)?;
+            self.expect_token(&Token::RParen)?;
+            // Continue to parse the args
+            self.expect_token(&Token::LParen)?;
             Ok(args)
         }
     }

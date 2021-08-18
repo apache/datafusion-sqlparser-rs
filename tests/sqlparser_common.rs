@@ -409,6 +409,7 @@ fn parse_select_count_wildcard() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("COUNT")]),
+            params: vec![],
             args: vec![FunctionArg::Unnamed(Expr::Wildcard)],
             over: None,
             distinct: false,
@@ -424,6 +425,7 @@ fn parse_select_count_distinct() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("COUNT")]),
+            params: vec![],
             args: vec![FunctionArg::Unnamed(Expr::UnaryOp {
                 op: UnaryOperator::Plus,
                 expr: Box::new(Expr::Identifier(Ident::new("x"))),
@@ -444,6 +446,25 @@ fn parse_select_count_distinct() {
     assert_eq!(
         ParserError::ParserError("Cannot specify both ALL and DISTINCT".to_string()),
         res.unwrap_err()
+    );
+}
+
+#[test]
+fn parse_function_with_params() {
+    let sql = "SELECT funnel(3600)(x, y) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("funnel")]),
+            params: vec![Value::Number("3600".parse().unwrap(), false)],
+            args: vec![
+                FunctionArg::Unnamed(Expr::Identifier(Ident::new("x"))),
+                FunctionArg::Unnamed(Expr::Identifier(Ident::new("y")))
+            ],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(only(&select.projection))
     );
 }
 
@@ -1018,6 +1039,7 @@ fn parse_select_having() {
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("COUNT")]),
+                params: vec![],
                 args: vec![FunctionArg::Unnamed(Expr::Wildcard)],
                 over: None,
                 distinct: false,
@@ -1781,6 +1803,7 @@ fn parse_scalar_function_in_projection() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("sqrt")]),
+            params: vec![],
             args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new("id")))],
             over: None,
             distinct: false,
@@ -1824,6 +1847,7 @@ fn parse_named_argument_function() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("FUN")]),
+            params: vec![],
             args: vec![
                 FunctionArg::Named {
                     name: Ident::new("a"),
@@ -1858,6 +1882,7 @@ fn parse_window_functions() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("row_number")]),
+            params: vec![],
             args: vec![],
             over: Some(WindowSpec {
                 partition_by: vec![],
@@ -2091,6 +2116,7 @@ fn parse_table_function() {
         TableFactor::TableFunction { expr, alias } => {
             let expected_expr = Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("FUN")]),
+                params: vec![],
                 args: vec![FunctionArg::Unnamed(Expr::Value(
                     Value::SingleQuotedString("1".to_owned()),
                 ))],
@@ -2149,6 +2175,7 @@ fn parse_delimited_identifiers() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            params: vec![],
             args: vec![],
             over: None,
             distinct: false,

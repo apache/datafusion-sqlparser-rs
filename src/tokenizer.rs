@@ -108,7 +108,7 @@ pub enum Token {
     RArrow,
     /// Sharp `#` used for PostgreSQL Bitwise XOR operator
     Sharp,
-    /// Tilde `~` used for PostgreSQL Bitwise NOT operator or case sensitive match regular operator
+    /// Tilde `~` used for PostgreSQL Bitwise NOT operator or case sensitive match regular expression operator
     Tilde,
     /// `~*` , a case insensitive match regular expression operator in PostgreSQL
     TildeAsterisk,

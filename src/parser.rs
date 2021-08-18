@@ -462,7 +462,7 @@ impl<'a> Parser<'a> {
 
         let params = self
             .maybe_parse(|parser| parser.parse_optional_params())
-            .unwrap_or(vec![]);
+            .unwrap_or_default();
 
         let distinct = self.parse_all_or_distinct()?;
         let args = self.parse_optional_args()?;

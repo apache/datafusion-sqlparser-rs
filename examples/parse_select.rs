@@ -18,7 +18,7 @@ use sqlparser::parser::*;
 fn main() {
     let sql = "SELECT a, b, 123, myfunc(b) \
                FROM table_1 \
-               WHERE a > b aND b < 100 \
+               WHERE a > b AND b < 100 \
                ORDER BY a DESC, b";
 
     let dialect = GenericDialect {};

@@ -110,11 +110,11 @@ pub enum Token {
     Sharp,
     /// Tilde `~` used for PostgreSQL Bitwise NOT operator or case sensitive match regular operator
     Tilde,
-    /// `~*` , a case insensitive match regular operator in PostgreSQL
+    /// `~*` , a case insensitive match regular expression operator in PostgreSQL
     TildeAsterisk,
-    /// `!~` , a case sensitive not match regular operator in PostgreSQL
+    /// `!~` , a case sensitive not match regular expression operator in PostgreSQL
     ExclamationMarkTilde,
-    /// `!~*` , a case insensitive not match regular operator in PostgreSQL
+    /// `!~*` , a case insensitive not match regular expression operator in PostgreSQL
     ExclamationMarkTildeAsterisk,
     /// `<<`, a bitwise shift left operator in PostgreSQL
     ShiftLeft,

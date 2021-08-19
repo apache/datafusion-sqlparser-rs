@@ -2750,8 +2750,18 @@ fn parse_substring() {
 #[test]
 fn parse_trim() {
     one_statement_parses_to(
+        "SELECT TRIM(BOTH 'xyz' FROM 'xyzfooxyz')",
+        "SELECT TRIM(BOTH 'xyz' FROM 'xyzfooxyz')",
+    );
+
+    one_statement_parses_to(
         "SELECT TRIM(LEADING 'xyz' FROM 'xyzfooxyz')",
         "SELECT TRIM(LEADING 'xyz' FROM 'xyzfooxyz')",
+    );
+
+    one_statement_parses_to(
+        "SELECT TRIM(TRAILING 'xyz' FROM 'xyzfooxyz')",
+        "SELECT TRIM(TRAILING 'xyz' FROM 'xyzfooxyz')",
     );
 
     one_statement_parses_to("SELECT TRIM('   foo   ')", "SELECT TRIM('   foo   ')");

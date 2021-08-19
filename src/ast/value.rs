@@ -10,11 +10,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 #[cfg(feature = "bigdecimal")]
 use bigdecimal::BigDecimal;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

@@ -12,12 +12,14 @@
 
 //! AST types specific to CREATE/ALTER variants of [Statement]
 //! (commonly referred to as Data Definition Language, or DDL)
-use super::{display_comma_separated, DataType, Expr, Ident, ObjectName};
-use crate::ast::display_separated;
-use crate::tokenizer::Token;
+
+use std::fmt;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
+
+use crate::ast::{display_comma_separated, display_separated, DataType, Expr, Ident, ObjectName};
+use crate::tokenizer::Token;
 
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

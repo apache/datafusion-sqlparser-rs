@@ -2748,6 +2748,16 @@ fn parse_substring() {
 }
 
 #[test]
+fn parse_trim() {
+    one_statement_parses_to(
+        "SELECT TRIM(LEADING 'xyz' FROM 'xyzfooxyz')",
+        "SELECT TRIM(LEADING 'xyz' FROM 'xyzfooxyz')",
+    );
+
+    one_statement_parses_to("SELECT TRIM('   foo   ')", "SELECT TRIM('   foo   ')");
+}
+
+#[test]
 fn parse_exists_subquery() {
     let expected_inner = verified_query("SELECT 1");
     let sql = "SELECT * FROM t WHERE EXISTS (SELECT 1)";

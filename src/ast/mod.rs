@@ -219,6 +219,14 @@ pub enum Expr {
         substring_from: Option<Box<Expr>>,
         substring_for: Option<Box<Expr>>,
     },
+    /// TRIM([BOTH | LEADING | TRAILING] <expr> [FROM <expr>])\
+    /// Or\
+    /// TRIM(<expr>)
+    Trim {
+        expr: Box<Expr>,
+        // ([BOTH | LEADING | TRAILING], <expr>)
+        trim_where: Option<(Box<Ident>, Box<Expr>)>,
+    },
     /// `expr COLLATE collation`
     Collate {
         expr: Box<Expr>,
@@ -359,6 +367,16 @@ impl fmt::Display for Expr {
                 }
                 if let Some(from_part) = substring_for {
                     write!(f, " FOR {}", from_part)?;
+                }
+
+                write!(f, ")")
+            }
+            Expr::Trim { expr, trim_where } => {
+                write!(f, "TRIM(")?;
+                if let Some((ident, trim_char)) = trim_where {
+                    write!(f, "{} {} FROM {}", ident, trim_char, expr)?;
+                } else {
+                    write!(f, "{}", expr)?;
                 }
 
                 write!(f, ")")

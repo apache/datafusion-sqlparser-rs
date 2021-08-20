@@ -357,6 +357,7 @@ impl<'a> Parser<'a> {
                 Keyword::EXISTS => self.parse_exists_expr(),
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::SUBSTRING => self.parse_substring_expr(),
+                Keyword::TRIM => self.parse_trim_expr(),
                 Keyword::INTERVAL => self.parse_literal_interval(),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
                 Keyword::NOT => Ok(Expr::UnaryOp {
@@ -644,6 +645,31 @@ impl<'a> Parser<'a> {
             expr: Box::new(expr),
             substring_from: from_expr.map(Box::new),
             substring_for: to_expr.map(Box::new),
+        })
+    }
+
+    /// TRIM (WHERE 'text' FROM 'text')\
+    /// TRIM ('text')
+    pub fn parse_trim_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let mut where_expr = None;
+        if let Token::Word(word) = self.peek_token() {
+            if [Keyword::BOTH, Keyword::LEADING, Keyword::TRAILING]
+                .iter()
+                .any(|d| word.keyword == *d)
+            {
+                let ident = self.parse_identifier()?;
+                let sub_expr = self.parse_expr()?;
+                self.expect_keyword(Keyword::FROM)?;
+                where_expr = Some((ident, sub_expr))
+            }
+        }
+        let expr = self.parse_expr()?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(Expr::Trim {
+            expr: Box::new(expr),
+            trim_where: where_expr.map(|(ident, expr)| (Box::new(ident), Box::new(expr))),
         })
     }
 

@@ -43,7 +43,7 @@ jobs:
         with:
           targets: 'thumbv6m-none-eabi'
       - uses: actions/checkout@master
-      - run: cargo check --no-defatult-features --target thumbv6m-none-eabi
+      - run: cargo check --no-default-features --target thumbv6m-none-eabi
 
   test:
     strategy:

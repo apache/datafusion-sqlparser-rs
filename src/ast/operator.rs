@@ -81,6 +81,10 @@ pub enum BinaryOperator {
     PGBitwiseXor,
     PGBitwiseShiftLeft,
     PGBitwiseShiftRight,
+    PGRegexMatch,
+    PGRegexIMatch,
+    PGRegexNotMatch,
+    PGRegexNotIMatch,
 }
 
 impl fmt::Display for BinaryOperator {
@@ -111,6 +115,10 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::PGBitwiseXor => "#",
             BinaryOperator::PGBitwiseShiftLeft => "<<",
             BinaryOperator::PGBitwiseShiftRight => ">>",
+            BinaryOperator::PGRegexMatch => "~",
+            BinaryOperator::PGRegexIMatch => "~*",
+            BinaryOperator::PGRegexNotMatch => "!~",
+            BinaryOperator::PGRegexNotIMatch => "!~*",
         })
     }
 }

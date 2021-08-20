@@ -10,7 +10,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+use core::fmt;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

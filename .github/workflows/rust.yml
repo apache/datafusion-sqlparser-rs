@@ -35,6 +35,16 @@ jobs:
       - uses: actions/checkout@master
       - run: cargo check --all-targets --all-features
 
+  compile-no-std:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Rust
+        uses: hecrj/setup-rust-action@v1
+        with:
+          targets: 'thumbv6m-none-eabi'
+      - uses: actions/checkout@master
+      - run: cargo check --no-defatult-features --target thumbv6m-none-eabi
+
   test:
     strategy:
       matrix:

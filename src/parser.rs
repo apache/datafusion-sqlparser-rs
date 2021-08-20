@@ -12,8 +12,15 @@
 
 //! SQL Parser
 
-use std::error::Error;
-use std::fmt;
+#[cfg(not(feature = "std"))]
+use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::fmt;
 
 use log::debug;
 
@@ -81,7 +88,8 @@ impl fmt::Display for ParserError {
     }
 }
 
-impl Error for ParserError {}
+#[cfg(feature = "std")]
+impl std::error::Error for ParserError {}
 
 pub struct Parser<'a> {
     tokens: Vec<Token>,

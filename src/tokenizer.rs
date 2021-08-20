@@ -16,9 +16,17 @@
 //!
 //! The tokens then form the input for the parser, which outputs an Abstract Syntax Tree (AST).
 
-use std::fmt;
-use std::iter::Peekable;
-use std::str::Chars;
+#[cfg(not(feature = "std"))]
+use alloc::{
+    borrow::ToOwned,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::fmt;
+use core::iter::Peekable;
+use core::str::Chars;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

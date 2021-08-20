@@ -16,7 +16,15 @@
 //
 // Integration tests (i.e. everything under `tests/`) import this
 // via `tests/test_utils/mod.rs`.
-use std::fmt::Debug;
+
+#[cfg(not(feature = "std"))]
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::fmt::Debug;
 
 use crate::ast::*;
 use crate::dialect::*;

@@ -13,12 +13,15 @@ include = [
     "Cargo.toml",
 ]
 edition = "2018"
+resolver = "2"
 
 [lib]
 name = "sqlparser"
 path = "src/lib.rs"
 
 [features]
+default = ["std"]
+std = []
 # Enable JSON output in the `cli` example:
 json_example = ["serde_json", "serde"]
 

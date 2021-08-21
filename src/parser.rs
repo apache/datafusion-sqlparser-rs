@@ -677,7 +677,7 @@ impl<'a> Parser<'a> {
 
         Ok(Expr::Trim {
             expr: Box::new(expr),
-            trim_where: where_expr.map(|(ident, expr)| (Box::new(ident), Box::new(expr))),
+            trim_where: where_expr.map(|(ident, expr)| (ident, Box::new(expr))),
         })
     }
 

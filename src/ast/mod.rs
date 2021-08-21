@@ -231,7 +231,7 @@ pub enum Expr {
     Trim {
         expr: Box<Expr>,
         // ([BOTH | LEADING | TRAILING], <expr>)
-        trim_where: Option<(Box<Ident>, Box<Expr>)>,
+        trim_where: Option<(Ident, Box<Expr>)>,
     },
     /// `expr COLLATE collation`
     Collate {

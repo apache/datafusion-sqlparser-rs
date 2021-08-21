@@ -40,7 +40,7 @@ pub use self::query::{
     Query, Select, SelectItem, SetExpr, SetOperator, TableAlias, TableFactor, TableWithJoins, Top,
     Values, With,
 };
-pub use self::value::{DateTimeField, Value};
+pub use self::value::{DateTimeField, TrimWhereField, Value};
 
 struct DisplaySeparated<'a, T>
 where
@@ -231,7 +231,7 @@ pub enum Expr {
     Trim {
         expr: Box<Expr>,
         // ([BOTH | LEADING | TRAILING], <expr>)
-        trim_where: Option<(Ident, Box<Expr>)>,
+        trim_where: Option<(TrimWhereField, Box<Expr>)>,
     },
     /// `expr COLLATE collation`
     Collate {

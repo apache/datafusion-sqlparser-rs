@@ -666,10 +666,10 @@ impl<'a> Parser<'a> {
                 .iter()
                 .any(|d| word.keyword == *d)
             {
-                let ident = self.parse_identifier()?;
+                let trim_where = self.parse_trim_where()?;
                 let sub_expr = self.parse_expr()?;
                 self.expect_keyword(Keyword::FROM)?;
-                where_expr = Some((ident, sub_expr))
+                where_expr = Some((trim_where, Box::new(sub_expr)));
             }
         }
         let expr = self.parse_expr()?;
@@ -677,8 +677,20 @@ impl<'a> Parser<'a> {
 
         Ok(Expr::Trim {
             expr: Box::new(expr),
-            trim_where: where_expr.map(|(ident, expr)| (ident, Box::new(expr))),
+            trim_where: where_expr,
         })
+    }
+
+    pub fn parse_trim_where(&mut self) -> Result<TrimWhereField, ParserError> {
+        match self.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::BOTH => Ok(TrimWhereField::Both),
+                Keyword::LEADING => Ok(TrimWhereField::Leading),
+                Keyword::TRAILING => Ok(TrimWhereField::Trailing),
+                _ => self.expected("trim_where field", Token::Word(w))?,
+            },
+            unexpected => self.expected("trim_where field", unexpected),
+        }
     }
 
     /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.

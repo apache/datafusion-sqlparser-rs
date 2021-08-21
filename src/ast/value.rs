@@ -157,3 +157,22 @@ impl<'a> fmt::Display for EscapeSingleQuoteString<'a> {
 pub fn escape_single_quote_string(s: &str) -> EscapeSingleQuoteString<'_> {
     EscapeSingleQuoteString(s)
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum TrimWhereField {
+    Both,
+    Leading,
+    Trailing,
+}
+
+impl fmt::Display for TrimWhereField {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use TrimWhereField::*;
+        f.write_str(match self {
+            Both => "BOTH",
+            Leading => "LEADING",
+            Trailing => "TRAILING",
+        })
+    }
+}

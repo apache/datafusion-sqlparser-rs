@@ -951,7 +951,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        let key = self.parse_literal_string()?;
+        let key = self.parse_map_key_string()?;
         let tok = self.consume_token(&Token::RBracket);
         debug!("Tok: {}", tok);
         match expr {
@@ -1992,6 +1992,16 @@ impl<'a> Parser<'a> {
             Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => Ok(value),
             Token::SingleQuotedString(s) => Ok(s),
             unexpected => self.expected("literal string", unexpected),
+        }
+    }
+
+    /// Parse a map key string
+    pub fn parse_map_key_string(&mut self) -> Result<String, ParserError> {
+        match self.next_token() {
+            Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => Ok(value),
+            Token::SingleQuotedString(s) => Ok(s),
+            Token::Number(s, _) => Ok(s),
+            unexpected => self.expected("literal string or number", unexpected),
         }
     }
 

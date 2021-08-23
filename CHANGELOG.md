@@ -15,6 +15,7 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 * Postgres regular expression operators (`~`, `~*`, `!~`, `!~*`) (#328) - Thanks @b41sh!
 * tinyint (#320) - Thanks @sundy-li
 * ILIKE (#300) - Thanks @maxcountryman!
+* TRIM syntax (#331, #334) - Thanks ever0de
 
 
 ### Fixed

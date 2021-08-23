@@ -2,7 +2,7 @@
 
 ## Prerequisites
 Publishing to crates.io has been automated via GitHub Actions, so you will only
-need push access to the [ballista-compute GitHub repository](https://github.com/ballista-compute/sqlparser-rs)
+need push access to the [sqlparser-rs GitHub repository](https://github.com/sqlparser-rs/sqlparser-rs)
 in order to publish a release.
 
 We use the [`cargo release`](https://github.com/sunng87/cargo-release)
@@ -41,7 +41,7 @@ $ cargo install cargo-release
     * Create a new tag (e.g. `v0.8.0`) locally
     * Push the new tag to the specified remote (`upstream` in the above
       example), which will trigger a publishing process to crates.io as part of
-      the [corresponding GitHub Action](https://github.com/ballista-compute/sqlparser-rs/blob/main/.github/workflows/rust.yml).
+      the [corresponding GitHub Action](https://github.com/sqlparser-rs/sqlparser-rs/blob/main/.github/workflows/rust.yml).
 
       Note that credentials for authoring in this way are securely stored in
       the (GitHub) repo secrets as `CRATE_TOKEN`.

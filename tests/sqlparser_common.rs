@@ -2765,6 +2765,11 @@ fn parse_trim() {
     );
 
     one_statement_parses_to("SELECT TRIM('   foo   ')", "SELECT TRIM('   foo   ')");
+
+    assert_eq!(
+        ParserError::ParserError("Expected ), found: 'xyz'".to_owned()),
+        parse_sql_statements("SELECT TRIM(FOO 'xyz' FROM 'xyzfooxyz')").unwrap_err()
+    );
 }
 
 #[test]

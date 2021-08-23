@@ -2862,7 +2862,7 @@ impl<'a> Parser<'a> {
             } else if self.parse_keyword(Keyword::VALUES) {
                 let t = self.next_token();
                 if t == Token::EOF {
-                    Some("".to_owned())
+                    Some("".to_string())
                 } else {
                     self.prev_token();
                     self.prev_token();

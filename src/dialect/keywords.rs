@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-///! This module defines
+/// This module defines
 /// 1) a list of constants for every keyword that
 /// can appear in [Word::keyword]:
 ///    pub const KEYWORD = "KEYWORD"
@@ -444,6 +444,7 @@ define_keywords!(
     TIMESTAMP,
     TIMEZONE_HOUR,
     TIMEZONE_MINUTE,
+    TINYINT,
     TO,
     TOP,
     TRAILING,

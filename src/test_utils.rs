@@ -16,12 +16,20 @@
 //
 // Integration tests (i.e. everything under `tests/`) import this
 // via `tests/test_utils/mod.rs`.
-use std::fmt::Debug;
 
-use super::ast::*;
-use super::dialect::*;
-use super::parser::{Parser, ParserError};
-use super::tokenizer::Tokenizer;
+#[cfg(not(feature = "std"))]
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::fmt::Debug;
+
+use crate::ast::*;
+use crate::dialect::*;
+use crate::parser::{Parser, ParserError};
+use crate::tokenizer::Tokenizer;
 
 /// Tests use the methods on this struct to invoke the parser on one or
 /// multiple dialects.
@@ -64,7 +72,7 @@ impl TestedDialects {
     }
 
     pub fn parse_sql_statements(&self, sql: &str) -> Result<Vec<Statement>, ParserError> {
-        self.one_of_identical_results(|dialect| Parser::parse_sql(dialect, &sql))
+        self.one_of_identical_results(|dialect| Parser::parse_sql(dialect, sql))
         // To fail the `ensure_multiple_dialects_are_tested` test:
         // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)
     }
@@ -75,11 +83,11 @@ impl TestedDialects {
     /// tree as parsing `canonical`, and that serializing it back to string
     /// results in the `canonical` representation.
     pub fn one_statement_parses_to(&self, sql: &str, canonical: &str) -> Statement {
-        let mut statements = self.parse_sql_statements(&sql).unwrap();
+        let mut statements = self.parse_sql_statements(sql).unwrap();
         assert_eq!(statements.len(), 1);
 
         if !canonical.is_empty() && sql != canonical {
-            assert_eq!(self.parse_sql_statements(&canonical).unwrap(), statements);
+            assert_eq!(self.parse_sql_statements(canonical).unwrap(), statements);
         }
 
         let only_statement = statements.pop().unwrap();

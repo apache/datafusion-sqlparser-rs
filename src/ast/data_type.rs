@@ -10,10 +10,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::ObjectName;
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+use core::fmt;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
+
+use crate::ast::ObjectName;
 
 /// SQL data types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -37,6 +41,8 @@ pub enum DataType {
     Decimal(Option<u64>, Option<u64>),
     /// Floating point with optional precision e.g. FLOAT(8)
     Float(Option<u64>),
+    /// Tiny integer
+    TinyInt,
     /// Small integer
     SmallInt,
     /// Integer
@@ -91,6 +97,7 @@ impl fmt::Display for DataType {
                 }
             }
             DataType::Float(size) => format_type_with_optional_length(f, "FLOAT", size),
+            DataType::TinyInt => write!(f, "TINYINT"),
             DataType::SmallInt => write!(f, "SMALLINT"),
             DataType::Int => write!(f, "INT"),
             DataType::BigInt => write!(f, "BIGINT"),

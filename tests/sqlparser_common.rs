@@ -102,14 +102,14 @@ fn parse_insert_sqlite() {
     let dialect = SQLiteDialect {};
 
     let check = |sql: &str, expected_action: Option<SqliteOnConflict>| match Parser::parse_sql(
-        &dialect, &sql,
+        &dialect, sql,
     )
     .unwrap()
     .pop()
     .unwrap()
     {
         Statement::Insert { or, .. } => assert_eq!(or, expected_action),
-        _ => panic!("{}", sql.to_string()),
+        _ => panic!("{}", sql),
     };
 
     let sql = "INSERT INTO test_table(id) VALUES(1)";
@@ -340,7 +340,7 @@ fn parse_column_aliases() {
     }
 
     // alias without AS is parsed correctly:
-    one_statement_parses_to("SELECT a.col + 1 newname FROM foo AS a", &sql);
+    one_statement_parses_to("SELECT a.col + 1 newname FROM foo AS a", sql);
 }
 
 #[test]
@@ -1017,6 +1017,17 @@ fn parse_cast() {
         },
         expr_from_projection(only(&select.projection))
     );
+
+    let sql = "SELECT CAST(id AS TINYINT) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::TinyInt
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
     one_statement_parses_to(
         "SELECT CAST(id AS BIGINT) FROM customer",
         "SELECT CAST(id AS BIGINT) FROM customer",
@@ -2674,7 +2685,7 @@ fn parse_multiple_statements() {
         let res = parse_sql_statements(&(sql1.to_owned() + ";" + sql2_kw + sql2_rest));
         assert_eq!(
             vec![
-                one_statement_parses_to(&sql1, ""),
+                one_statement_parses_to(sql1, ""),
                 one_statement_parses_to(&(sql2_kw.to_owned() + sql2_rest), ""),
             ],
             res.unwrap()
@@ -2734,6 +2745,26 @@ fn parse_substring() {
     );
 
     one_statement_parses_to("SELECT SUBSTRING('1' FOR 3)", "SELECT SUBSTRING('1' FOR 3)");
+}
+
+#[test]
+fn parse_trim() {
+    one_statement_parses_to(
+        "SELECT TRIM(BOTH 'xyz' FROM 'xyzfooxyz')",
+        "SELECT TRIM(BOTH 'xyz' FROM 'xyzfooxyz')",
+    );
+
+    one_statement_parses_to(
+        "SELECT TRIM(LEADING 'xyz' FROM 'xyzfooxyz')",
+        "SELECT TRIM(LEADING 'xyz' FROM 'xyzfooxyz')",
+    );
+
+    one_statement_parses_to(
+        "SELECT TRIM(TRAILING 'xyz' FROM 'xyzfooxyz')",
+        "SELECT TRIM(TRAILING 'xyz' FROM 'xyzfooxyz')",
+    );
+
+    one_statement_parses_to("SELECT TRIM('   foo   ')", "SELECT TRIM('   foo   ')");
 }
 
 #[test]
@@ -3264,7 +3295,7 @@ fn parse_start_transaction() {
     verified_stmt("START TRANSACTION ISOLATION LEVEL REPEATABLE READ");
     verified_stmt("START TRANSACTION ISOLATION LEVEL SERIALIZABLE");
 
-    // Regression test for https://github.com/ballista-compute/sqlparser-rs/pull/139,
+    // Regression test for https://github.com/sqlparser-rs/sqlparser-rs/pull/139,
     // in which START TRANSACTION would fail to parse if followed by a statement
     // terminator.
     assert_eq!(

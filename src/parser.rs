@@ -855,7 +855,7 @@ impl<'a> Parser<'a> {
             Token::Plus => Some(BinaryOperator::Plus),
             Token::Minus => Some(BinaryOperator::Minus),
             Token::Mult => Some(BinaryOperator::Multiply),
-            Token::Mod => Some(BinaryOperator::Modulus),
+            Token::Mod => Some(BinaryOperator::Modulo),
             Token::StringConcat => Some(BinaryOperator::StringConcat),
             Token::Pipe => Some(BinaryOperator::BitwiseOr),
             Token::Caret => Some(BinaryOperator::BitwiseXor),

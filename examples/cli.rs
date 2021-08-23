@@ -12,13 +12,14 @@
 
 #![warn(clippy::all)]
 
-///! A small command-line app to run the parser.
+/// A small command-line app to run the parser.
 /// Run with `cargo run --example cli`
 use std::fs;
 
 use simple_logger::SimpleLogger;
 use sqlparser::dialect::*;
 use sqlparser::parser::Parser;
+
 fn main() {
     SimpleLogger::new().init().unwrap();
 

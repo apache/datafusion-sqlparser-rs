@@ -12,14 +12,22 @@
 
 //! SQL Parser
 
+#[cfg(not(feature = "std"))]
+use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::fmt;
+
 use log::debug;
 
-use super::ast::*;
-use super::dialect::keywords::Keyword;
-use super::dialect::*;
-use super::tokenizer::*;
-use std::error::Error;
-use std::fmt;
+use crate::ast::*;
+use crate::dialect::keywords::Keyword;
+use crate::dialect::*;
+use crate::tokenizer::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParserError {
@@ -56,7 +64,6 @@ pub enum IsLateral {
     NotLateral,
 }
 
-use crate::ast::Statement::CreateVirtualTable;
 use IsLateral::*;
 
 impl From<TokenizerError> for ParserError {
@@ -81,7 +88,8 @@ impl fmt::Display for ParserError {
     }
 }
 
-impl Error for ParserError {}
+#[cfg(feature = "std")]
+impl std::error::Error for ParserError {}
 
 pub struct Parser<'a> {
     tokens: Vec<Token>,
@@ -297,6 +305,7 @@ impl<'a> Parser<'a> {
         }
         Ok(expr)
     }
+
     pub fn parse_assert(&mut self) -> Result<Statement, ParserError> {
         let condition = self.parse_expr()?;
         let message = if self.parse_keyword(Keyword::AS) {
@@ -356,6 +365,7 @@ impl<'a> Parser<'a> {
                 Keyword::EXISTS => self.parse_exists_expr(),
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::SUBSTRING => self.parse_substring_expr(),
+                Keyword::TRIM => self.parse_trim_expr(),
                 Keyword::INTERVAL => self.parse_literal_interval(),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
                 Keyword::NOT => Ok(Expr::UnaryOp {
@@ -656,6 +666,31 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// TRIM (WHERE 'text' FROM 'text')\
+    /// TRIM ('text')
+    pub fn parse_trim_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let mut where_expr = None;
+        if let Token::Word(word) = self.peek_token() {
+            if [Keyword::BOTH, Keyword::LEADING, Keyword::TRAILING]
+                .iter()
+                .any(|d| word.keyword == *d)
+            {
+                let ident = self.parse_identifier()?;
+                let sub_expr = self.parse_expr()?;
+                self.expect_keyword(Keyword::FROM)?;
+                where_expr = Some((ident, sub_expr))
+            }
+        }
+        let expr = self.parse_expr()?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(Expr::Trim {
+            expr: Box::new(expr),
+            trim_where: where_expr.map(|(ident, expr)| (Box::new(ident), Box::new(expr))),
+        })
+    }
+
     /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.
     pub fn parse_listagg_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
@@ -830,7 +865,7 @@ impl<'a> Parser<'a> {
             Token::Plus => Some(BinaryOperator::Plus),
             Token::Minus => Some(BinaryOperator::Minus),
             Token::Mult => Some(BinaryOperator::Multiply),
-            Token::Mod => Some(BinaryOperator::Modulus),
+            Token::Mod => Some(BinaryOperator::Modulo),
             Token::StringConcat => Some(BinaryOperator::StringConcat),
             Token::Pipe => Some(BinaryOperator::BitwiseOr),
             Token::Caret => Some(BinaryOperator::BitwiseXor),
@@ -845,6 +880,10 @@ impl<'a> Parser<'a> {
             Token::Sharp if dialect_of!(self is PostgreSqlDialect) => {
                 Some(BinaryOperator::PGBitwiseXor)
             }
+            Token::Tilde => Some(BinaryOperator::PGRegexMatch),
+            Token::TildeAsterisk => Some(BinaryOperator::PGRegexIMatch),
+            Token::ExclamationMarkTilde => Some(BinaryOperator::PGRegexNotMatch),
+            Token::ExclamationMarkTildeAsterisk => Some(BinaryOperator::PGRegexNotIMatch),
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
@@ -1003,6 +1042,10 @@ impl<'a> Parser<'a> {
             | Token::Gt
             | Token::GtEq
             | Token::DoubleEq
+            | Token::Tilde
+            | Token::TildeAsterisk
+            | Token::ExclamationMarkTilde
+            | Token::ExclamationMarkTildeAsterisk
             | Token::Spaceship => Ok(20),
             Token::Pipe => Ok(21),
             Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(22),
@@ -1258,7 +1301,7 @@ impl<'a> Parser<'a> {
         // definitions in a traditional CREATE TABLE statement", but
         // we don't implement that.
         let module_args = self.parse_parenthesized_column_list(Optional)?;
-        Ok(CreateVirtualTable {
+        Ok(Statement::CreateVirtualTable {
             name: table_name,
             if_not_exists,
             module_name,

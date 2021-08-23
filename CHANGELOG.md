@@ -6,10 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 Given that the parser produces a typed AST, any changes to the AST will technically be breaking and thus will result in a `0.(N+1)` version. We document changes that break via addition as "Added".
 
 ## [Unreleased]
-Check https://github.com/ballista-compute/sqlparser-rs/commits/main for undocumented changes.
+Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
 
-## [0.8.0] 2020-03-21
+## [0.9.0] 2020-03-21
 
 ### Added
 * Add support for `TRY_CAST` syntax (#299) - Thanks @seddonm1!

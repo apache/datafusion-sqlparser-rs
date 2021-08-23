@@ -16,15 +16,24 @@
 //!
 //! The tokens then form the input for the parser, which outputs an Abstract Syntax Tree (AST).
 
-use std::iter::Peekable;
-use std::str::Chars;
+#[cfg(not(feature = "std"))]
+use alloc::{
+    borrow::ToOwned,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::fmt;
+use core::iter::Peekable;
+use core::str::Chars;
 
-use super::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
-use super::dialect::Dialect;
-use super::dialect::SnowflakeDialect;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
+
+use crate::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
+use crate::dialect::Dialect;
+use crate::dialect::SnowflakeDialect;
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -109,8 +118,14 @@ pub enum Token {
     RArrow,
     /// Sharp `#` used for PostgreSQL Bitwise XOR operator
     Sharp,
-    /// Tilde `~` used for PostgreSQL Bitwise NOT operator
+    /// Tilde `~` used for PostgreSQL Bitwise NOT operator or case sensitive match regular expression operator
     Tilde,
+    /// `~*` , a case insensitive match regular expression operator in PostgreSQL
+    TildeAsterisk,
+    /// `!~` , a case sensitive not match regular expression operator in PostgreSQL
+    ExclamationMarkTilde,
+    /// `!~*` , a case insensitive not match regular expression operator in PostgreSQL
+    ExclamationMarkTildeAsterisk,
     /// `<<`, a bitwise shift left operator in PostgreSQL
     ShiftLeft,
     /// `>>`, a bitwise shift right operator in PostgreSQL
@@ -173,6 +188,9 @@ impl fmt::Display for Token {
             Token::ExclamationMark => f.write_str("!"),
             Token::DoubleExclamationMark => f.write_str("!!"),
             Token::Tilde => f.write_str("~"),
+            Token::TildeAsterisk => f.write_str("~*"),
+            Token::ExclamationMarkTilde => f.write_str("!~"),
+            Token::ExclamationMarkTildeAsterisk => f.write_str("!~*"),
             Token::AtSign => f.write_str("@"),
             Token::ShiftLeft => f.write_str("<<"),
             Token::ShiftRight => f.write_str(">>"),
@@ -186,6 +204,7 @@ impl Token {
     pub fn make_keyword(keyword: &str) -> Self {
         Token::make_word(keyword, None)
     }
+
     pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
         let word_uppercase = word.to_uppercase();
         Token::Word(Word {
@@ -228,6 +247,7 @@ impl fmt::Display for Word {
         }
     }
 }
+
 impl Word {
     fn matching_end_quote(ch: char) -> char {
         match ch {
@@ -493,6 +513,14 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::Neq),
                         Some('!') => self.consume_and_return(chars, Token::DoubleExclamationMark),
+                        Some('~') => {
+                            chars.next();
+                            match chars.peek() {
+                                Some('*') => self
+                                    .consume_and_return(chars, Token::ExclamationMarkTildeAsterisk),
+                                _ => Ok(Some(Token::ExclamationMarkTilde)),
+                            }
+                        }
                         _ => Ok(Some(Token::ExclamationMark)),
                     }
                 }
@@ -542,7 +570,13 @@ impl<'a> Tokenizer<'a> {
                         comment,
                     })))
                 }
-                '~' => self.consume_and_return(chars, Token::Tilde),
+                '~' => {
+                    chars.next(); // consume
+                    match chars.peek() {
+                        Some('*') => self.consume_and_return(chars, Token::TildeAsterisk),
+                        _ => Ok(Some(Token::Tilde)),
+                    }
+                }
                 '#' => self.consume_and_return(chars, Token::Sharp),
                 '@' => self.consume_and_return(chars, Token::AtSign),
                 other => self.consume_and_return(chars, Token::Char(other)),
@@ -1135,6 +1169,45 @@ mod tests {
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
             Token::make_word("foo", None),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_pg_regex_match() {
+        let sql = "SELECT col ~ '^a', col ~* '^a', col !~ '^a', col !~* '^a'";
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::Tilde,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("^a".into()),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::TildeAsterisk,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("^a".into()),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::ExclamationMarkTilde,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("^a".into()),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::ExclamationMarkTildeAsterisk,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("^a".into()),
         ];
         compare(expected, tokens);
     }

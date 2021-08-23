@@ -10,9 +10,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::fmt;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 /// Unary operators
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -59,7 +60,7 @@ pub enum BinaryOperator {
     Minus,
     Multiply,
     Divide,
-    Modulus,
+    Modulo,
     StringConcat,
     Gt,
     Lt,
@@ -80,6 +81,10 @@ pub enum BinaryOperator {
     PGBitwiseXor,
     PGBitwiseShiftLeft,
     PGBitwiseShiftRight,
+    PGRegexMatch,
+    PGRegexIMatch,
+    PGRegexNotMatch,
+    PGRegexNotIMatch,
 }
 
 impl fmt::Display for BinaryOperator {
@@ -89,7 +94,7 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::Minus => "-",
             BinaryOperator::Multiply => "*",
             BinaryOperator::Divide => "/",
-            BinaryOperator::Modulus => "%",
+            BinaryOperator::Modulo => "%",
             BinaryOperator::StringConcat => "||",
             BinaryOperator::Gt => ">",
             BinaryOperator::Lt => "<",
@@ -110,6 +115,10 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::PGBitwiseXor => "#",
             BinaryOperator::PGBitwiseShiftLeft => "<<",
             BinaryOperator::PGBitwiseShiftRight => ">>",
+            BinaryOperator::PGRegexMatch => "~",
+            BinaryOperator::PGRegexIMatch => "~*",
+            BinaryOperator::PGRegexNotMatch => "!~",
+            BinaryOperator::PGRegexNotIMatch => "!~*",
         })
     }
 }

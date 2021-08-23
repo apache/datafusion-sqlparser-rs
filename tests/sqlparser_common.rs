@@ -144,7 +144,7 @@ fn parse_insert_sqlite() {
     .unwrap()
     {
         Statement::Insert { or, .. } => assert_eq!(or, expected_action),
-        _ => panic!("{}", sql.to_string()),
+        _ => panic!("{}", sql),
     };
 
     let sql = "INSERT INTO test_table(id) VALUES(1)";
@@ -2820,6 +2820,26 @@ fn parse_substring() {
 }
 
 #[test]
+fn parse_trim() {
+    one_statement_parses_to(
+        "SELECT TRIM(BOTH 'xyz' FROM 'xyzfooxyz')",
+        "SELECT TRIM(BOTH 'xyz' FROM 'xyzfooxyz')",
+    );
+
+    one_statement_parses_to(
+        "SELECT TRIM(LEADING 'xyz' FROM 'xyzfooxyz')",
+        "SELECT TRIM(LEADING 'xyz' FROM 'xyzfooxyz')",
+    );
+
+    one_statement_parses_to(
+        "SELECT TRIM(TRAILING 'xyz' FROM 'xyzfooxyz')",
+        "SELECT TRIM(TRAILING 'xyz' FROM 'xyzfooxyz')",
+    );
+
+    one_statement_parses_to("SELECT TRIM('   foo   ')", "SELECT TRIM('   foo   ')");
+}
+
+#[test]
 fn parse_exists_subquery() {
     let expected_inner = verified_query("SELECT 1");
     let sql = "SELECT * FROM t WHERE EXISTS (SELECT 1)";
@@ -3347,7 +3367,7 @@ fn parse_start_transaction() {
     verified_stmt("START TRANSACTION ISOLATION LEVEL REPEATABLE READ");
     verified_stmt("START TRANSACTION ISOLATION LEVEL SERIALIZABLE");
 
-    // Regression test for https://github.com/ballista-compute/sqlparser-rs/pull/139,
+    // Regression test for https://github.com/sqlparser-rs/sqlparser-rs/pull/139,
     // in which START TRANSACTION would fail to parse if followed by a statement
     // terminator.
     assert_eq!(

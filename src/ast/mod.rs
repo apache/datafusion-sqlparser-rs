@@ -18,9 +18,16 @@ mod operator;
 mod query;
 mod value;
 
+#[cfg(not(feature = "std"))]
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::fmt;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 pub use self::data_type::DataType;
 pub use self::ddl::{
@@ -218,6 +225,14 @@ pub enum Expr {
         substring_from: Option<Box<Expr>>,
         substring_for: Option<Box<Expr>>,
     },
+    /// TRIM([BOTH | LEADING | TRAILING] <expr> [FROM <expr>])\
+    /// Or\
+    /// TRIM(<expr>)
+    Trim {
+        expr: Box<Expr>,
+        // ([BOTH | LEADING | TRAILING], <expr>)
+        trim_where: Option<(Box<Ident>, Box<Expr>)>,
+    },
     /// `expr COLLATE collation`
     Collate {
         expr: Box<Expr>,
@@ -362,6 +377,16 @@ impl fmt::Display for Expr {
 
                 write!(f, ")")
             }
+            Expr::Trim { expr, trim_where } => {
+                write!(f, "TRIM(")?;
+                if let Some((ident, trim_char)) = trim_where {
+                    write!(f, "{} {} FROM {}", ident, trim_char, expr)?;
+                } else {
+                    write!(f, "{}", expr)?;
+                }
+
+                write!(f, ")")
+            }
         }
     }
 }
@@ -423,6 +448,19 @@ pub struct WindowFrame {
     /// behave the same as `end_bound = WindowFrameBound::CurrentRow`.
     pub end_bound: Option<WindowFrameBound>,
     // TBD: EXCLUDE
+}
+
+impl Default for WindowFrame {
+    /// returns default value for window frame
+    ///
+    /// see https://www.sqlite.org/windowfunctions.html#frame_specifications
+    fn default() -> Self {
+        Self {
+            units: WindowFrameUnits::Range,
+            start_bound: WindowFrameBound::Preceding(None),
+            end_bound: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1622,5 +1660,16 @@ impl fmt::Display for SqliteOnConflict {
             Ignore => write!(f, "IGNORE"),
             Replace => write!(f, "REPLACE"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_window_frame_default() {
+        let window_frame = WindowFrame::default();
+        assert_eq!(WindowFrameBound::Preceding(None), window_frame.start_bound);
     }
 }

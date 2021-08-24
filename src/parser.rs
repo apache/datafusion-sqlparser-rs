@@ -2526,12 +2526,38 @@ impl<'a> Parser<'a> {
             .is_some()
         {
             self.prev_token();
-            self.parse_show_columns()
+            Ok(self.parse_show_columns()?)
+        } else if self.parse_one_of_keywords(&[Keyword::CREATE]).is_some() {
+            Ok(self.parse_show_create()?)
         } else {
             Ok(Statement::ShowVariable {
                 variable: self.parse_identifiers()?,
             })
         }
+    }
+
+    fn parse_show_create(&mut self) -> Result<Statement, ParserError> {
+        let obj_type = match self.expect_one_of_keywords(&[
+            Keyword::TABLE,
+            Keyword::TRIGGER,
+            Keyword::FUNCTION,
+            Keyword::PROCEDURE,
+            Keyword::EVENT,
+        ])? {
+            Keyword::TABLE => Ok(ShowCreateObject::Table),
+            Keyword::TRIGGER => Ok(ShowCreateObject::Trigger),
+            Keyword::FUNCTION => Ok(ShowCreateObject::Function),
+            Keyword::PROCEDURE => Ok(ShowCreateObject::Procedure),
+            Keyword::EVENT => Ok(ShowCreateObject::Event),
+            keyword => Err(ParserError::ParserError(format!(
+                "Unable to map keyword to ShowCreateObject: {:?}",
+                keyword
+            ))),
+        }?;
+
+        let obj_name = self.parse_object_name()?;
+
+        Ok(Statement::ShowCreate { obj_type, obj_name })
     }
 
     fn parse_show_columns(&mut self) -> Result<Statement, ParserError> {

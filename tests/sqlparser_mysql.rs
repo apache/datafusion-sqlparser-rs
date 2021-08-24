@@ -101,6 +101,35 @@ fn parse_show_columns() {
 }
 
 #[test]
+fn parse_show_create() {
+    let obj_name = ObjectName(vec![Ident::new("myident")]);
+
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW CREATE TABLE myident"),
+        Statement::ShowCreate {
+            obj_type: ShowCreateObject::Table,
+            obj_name: obj_name.clone(),
+        }
+    );
+
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW CREATE TRIGGER myident"),
+        Statement::ShowCreate {
+            obj_type: ShowCreateObject::Trigger,
+            obj_name: obj_name.clone(),
+        }
+    );
+
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW CREATE EVENT myident"),
+        Statement::ShowCreate {
+            obj_type: ShowCreateObject::Event,
+            obj_name,
+        }
+    );
+}
+
+#[test]
 fn parse_create_table_auto_increment() {
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTO_INCREMENT)";
     match mysql().verified_stmt(sql) {

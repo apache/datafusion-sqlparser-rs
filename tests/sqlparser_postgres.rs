@@ -21,6 +21,9 @@ use test_utils::*;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
+use sqlparser::ast::Expr::{Identifier, MapAccess};
+#[cfg(feature = "bigdecimal")]
+use bigdecimal::BigDecimal;
 
 #[test]
 fn parse_create_table_with_defaults() {
@@ -668,6 +671,26 @@ fn parse_pg_regex_match_ops() {
         );
     }
 }
+
+#[test]
+fn parse_map_access_expr() {
+    //let sql = "SELECT foo[0] as foozero, bar[\"baz\"] as barbaz FROM foos";
+    let sql = "SELECT foo[0] FROM foos";
+    let select = pg_and_generic().verified_only_select(sql);
+    #[cfg(not(feature = "bigdecimal"))]
+    assert_eq!(
+        &MapAccess { column: Box::new(Identifier(Ident { value: "foo".to_string(), quote_style: None })), keys: vec![Value::Number("0".to_string(), false)] },
+        expr_from_projection(only(&select.projection)),
+    );
+    let sql = "SELECT foo[0][0] FROM foos";
+    let select = pg_and_generic().verified_only_select(sql);
+    #[cfg(not(feature = "bigdecimal"))]
+    assert_eq!(
+        &MapAccess { column: Box::new(Identifier(Ident { value: "foo".to_string(), quote_style: None })), keys: vec![Value::Number("0".to_string(), false), Value::Number("0".to_string(), false)] },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
 
 fn pg() -> TestedDialects {
     TestedDialects {

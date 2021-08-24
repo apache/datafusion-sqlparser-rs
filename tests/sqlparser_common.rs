@@ -26,6 +26,7 @@ use matches::assert_matches;
 use sqlparser::ast::*;
 use sqlparser::dialect::{keywords::ALL_KEYWORDS, GenericDialect, SQLiteDialect};
 use sqlparser::parser::{Parser, ParserError};
+use sqlparser::ast::Expr::Identifier;
 
 #[test]
 fn parse_insert_values() {

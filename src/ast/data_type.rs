@@ -42,13 +42,13 @@ pub enum DataType {
     /// Floating point with optional precision e.g. FLOAT(8)
     Float(Option<u64>),
     /// Tiny integer
-    TinyInt,
+    TinyInt(Option<u64>),
     /// Small integer
-    SmallInt,
+    SmallInt(Option<u64>),
     /// Integer
-    Int,
+    Int(Option<u64>),
     /// Big integer
-    BigInt,
+    BigInt(Option<u64>),
     /// Floating point e.g. REAL
     Real,
     /// Double e.g. DOUBLE PRECISION
@@ -97,10 +97,12 @@ impl fmt::Display for DataType {
                 }
             }
             DataType::Float(size) => format_type_with_optional_length(f, "FLOAT", size),
-            DataType::TinyInt => write!(f, "TINYINT"),
-            DataType::SmallInt => write!(f, "SMALLINT"),
-            DataType::Int => write!(f, "INT"),
-            DataType::BigInt => write!(f, "BIGINT"),
+            DataType::TinyInt(zerofill) => format_type_with_optional_length(f, "TINYINT", zerofill),
+            DataType::SmallInt(zerofill) => {
+                format_type_with_optional_length(f, "SMALLINT", zerofill)
+            }
+            DataType::Int(zerofill) => format_type_with_optional_length(f, "INT", zerofill),
+            DataType::BigInt(zerofill) => format_type_with_optional_length(f, "BIGINT", zerofill),
             DataType::Real => write!(f, "REAL"),
             DataType::Double => write!(f, "DOUBLE"),
             DataType::Boolean => write!(f, "BOOLEAN"),

@@ -1817,6 +1817,23 @@ fn run_explain_analyze(query: &str, expected_verbose: bool, expected_analyze: bo
 }
 
 #[test]
+fn parse_explain_table() {
+    let validate_explain = |query: &str, expected_describe_alias: bool| match verified_stmt(query) {
+        Statement::ExplainTable {
+            describe_alias,
+            table_name,
+        } => {
+            assert_eq!(describe_alias, expected_describe_alias);
+            assert_eq!("test_identifier", table_name.to_string());
+        }
+        _ => panic!("Unexpected Statement, must be ExplainTable"),
+    };
+
+    validate_explain("EXPLAIN test_identifier", false);
+    validate_explain("DESCRIBE test_identifier", true);
+}
+
+#[test]
 fn parse_explain_analyze_with_simple_select() {
     // Describe is an alias for EXPLAIN
     run_explain_analyze("DESCRIBE SELECT sqrt(id) FROM foo", false, false);

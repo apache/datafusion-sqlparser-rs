@@ -735,7 +735,14 @@ pub enum Statement {
         data_types: Vec<DataType>,
         statement: Box<Statement>,
     },
-    /// EXPLAIN
+    /// Note: this is a MySQL-specific statement.
+    ExplainTable {
+        // MySQL supports DESCRIBE alias for EXPLAIN
+        describe_alias: bool,
+        // Table name
+        table_name: ObjectName,
+    },
+    /// EXPLAIN / DESCRIBE for select_statement
     Explain {
         // MySQL supports DESCRIBE alias for EXPLAIN
         describe_alias: bool,
@@ -754,6 +761,18 @@ impl fmt::Display for Statement {
     #[allow(clippy::cognitive_complexity)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Statement::ExplainTable {
+                describe_alias,
+                table_name,
+            } => {
+                if *describe_alias {
+                    write!(f, "DESCRIBE ")?;
+                } else {
+                    write!(f, "EXPLAIN ")?;
+                }
+
+                write!(f, "{}", table_name)
+            }
             Statement::Explain {
                 describe_alias,
                 verbose,

@@ -2221,14 +2221,21 @@ impl<'a> Parser<'a> {
         let analyze = self.parse_keyword(Keyword::ANALYZE);
         let verbose = self.parse_keyword(Keyword::VERBOSE);
 
-        let statement = Box::new(self.parse_statement()?);
+        if let Some(statement) = self.maybe_parse(|parser| parser.parse_statement()) {
+            Ok(Statement::Explain {
+                describe_alias,
+                analyze,
+                verbose,
+                statement: Box::new(statement),
+            })
+        } else {
+            let table_name = self.parse_object_name()?;
 
-        Ok(Statement::Explain {
-            describe_alias,
-            analyze,
-            verbose,
-            statement,
-        })
+            Ok(Statement::ExplainTable {
+                describe_alias,
+                table_name,
+            })
+        }
     }
 
     /// Parse a query expression, i.e. a `SELECT` statement optionally

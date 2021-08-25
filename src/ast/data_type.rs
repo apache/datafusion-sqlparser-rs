@@ -41,13 +41,13 @@ pub enum DataType {
     Decimal(Option<u64>, Option<u64>),
     /// Floating point with optional precision e.g. FLOAT(8)
     Float(Option<u64>),
-    /// Tiny integer
+    /// Tiny integer with optional display width e.g. TINYINT or TINYINT(3)
     TinyInt(Option<u64>),
-    /// Small integer
+    /// Small integer with optional display width e.g. SMALLINT or SMALLINT(5)
     SmallInt(Option<u64>),
-    /// Integer
+    /// Integer with optional display width e.g. INT or INT(11)
     Int(Option<u64>),
-    /// Big integer
+    /// Big integer with optional display width e.g. BIGINT or BIGINT(20)
     BigInt(Option<u64>),
     /// Floating point e.g. REAL
     Real,

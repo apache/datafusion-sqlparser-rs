@@ -1995,7 +1995,9 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::TINYINT => Ok(DataType::TinyInt(self.parse_optional_precision()?)),
                 Keyword::SMALLINT => Ok(DataType::SmallInt(self.parse_optional_precision()?)),
-                Keyword::INT | Keyword::INTEGER => Ok(DataType::Int(self.parse_optional_precision()?)),
+                Keyword::INT | Keyword::INTEGER => {
+                    Ok(DataType::Int(self.parse_optional_precision()?))
+                }
                 Keyword::BIGINT => Ok(DataType::BigInt(self.parse_optional_precision()?)),
                 Keyword::VARCHAR => Ok(DataType::Varchar(self.parse_optional_precision()?)),
                 Keyword::CHAR | Keyword::CHARACTER => {

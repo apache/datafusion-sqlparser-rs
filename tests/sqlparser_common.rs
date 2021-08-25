@@ -1164,6 +1164,8 @@ fn parse_create_table() {
                ref INT REFERENCES othertable (a, b),\
                ref2 INT references othertable2 on delete cascade on update no action,\
                constraint fkey foreign key (lat) references othertable3 (lat) on delete restrict,\
+               constraint fkey2 foreign key (lat) references othertable4(lat) on delete no action on update restrict, \
+               foreign key (lat) references othertable4(lat) on update set default on delete cascade, \
                FOREIGN KEY (lng) REFERENCES othertable4 (longitude) ON UPDATE SET NULL
                )";
     let ast = one_statement_parses_to(
@@ -1176,6 +1178,8 @@ fn parse_create_table() {
          ref INT REFERENCES othertable (a, b), \
          ref2 INT REFERENCES othertable2 ON DELETE CASCADE ON UPDATE NO ACTION, \
          CONSTRAINT fkey FOREIGN KEY (lat) REFERENCES othertable3(lat) ON DELETE RESTRICT, \
+         CONSTRAINT fkey2 FOREIGN KEY (lat) REFERENCES othertable4(lat) ON DELETE NO ACTION ON UPDATE RESTRICT, \
+         FOREIGN KEY (lat) REFERENCES othertable4(lat) ON DELETE CASCADE ON UPDATE SET DEFAULT, \
          FOREIGN KEY (lng) REFERENCES othertable4(longitude) ON UPDATE SET NULL)",
     );
     match ast {
@@ -1287,6 +1291,22 @@ fn parse_create_table() {
                         on_update: None
                     },
                     TableConstraint::ForeignKey {
+                        name: Some("fkey2".into()),
+                        columns: vec!["lat".into()],
+                        foreign_table: ObjectName(vec!["othertable4".into()]),
+                        referred_columns: vec!["lat".into()],
+                        on_delete: Some(ReferentialAction::NoAction),
+                        on_update: Some(ReferentialAction::Restrict)
+                    },
+                    TableConstraint::ForeignKey {
+                        name: None,
+                        columns: vec!["lat".into()],
+                        foreign_table: ObjectName(vec!["othertable4".into()]),
+                        referred_columns: vec!["lat".into()],
+                        on_delete: Some(ReferentialAction::Cascade),
+                        on_update: Some(ReferentialAction::SetDefault)
+                    },
+                    TableConstraint::ForeignKey {
                         name: None,
                         columns: vec!["lng".into()],
                         foreign_table: ObjectName(vec!["othertable4".into()]),
@@ -1312,6 +1332,18 @@ fn parse_create_table() {
         .unwrap_err()
         .to_string()
         .contains("Expected constraint details after CONSTRAINT <name>"));
+}
+
+#[test]
+fn parse_create_table_with_multiple_on_delete_in_constraint_fails() {
+    parse_sql_statements(
+        "\
+        create table X (\
+            y_id int, \
+            foreign key (y_id) references Y (id) on delete cascade on update cascade on delete no action\
+        )",
+    )
+        .expect_err("should have failed");
 }
 
 #[test]

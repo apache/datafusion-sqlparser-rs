@@ -104,29 +104,21 @@ fn parse_show_columns() {
 fn parse_show_create() {
     let obj_name = ObjectName(vec![Ident::new("myident")]);
 
-    assert_eq!(
-        mysql_and_generic().verified_stmt("SHOW CREATE TABLE myident"),
-        Statement::ShowCreate {
-            obj_type: ShowCreateObject::Table,
-            obj_name: obj_name.clone(),
-        }
-    );
-
-    assert_eq!(
-        mysql_and_generic().verified_stmt("SHOW CREATE TRIGGER myident"),
-        Statement::ShowCreate {
-            obj_type: ShowCreateObject::Trigger,
-            obj_name: obj_name.clone(),
-        }
-    );
-
-    assert_eq!(
-        mysql_and_generic().verified_stmt("SHOW CREATE EVENT myident"),
-        Statement::ShowCreate {
-            obj_type: ShowCreateObject::Event,
-            obj_name,
-        }
-    );
+    for obj_type in &vec![
+        ShowCreateObject::Table,
+        ShowCreateObject::Trigger,
+        ShowCreateObject::Event,
+        ShowCreateObject::Function,
+        ShowCreateObject::Procedure,
+    ] {
+        assert_eq!(
+            mysql_and_generic().verified_stmt(format!("SHOW CREATE {} myident", obj_type).as_str()),
+            Statement::ShowCreate {
+                obj_type: obj_type.clone(),
+                obj_name: obj_name.clone(),
+            }
+        );
+    }
 }
 
 #[test]

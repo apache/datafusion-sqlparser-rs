@@ -737,6 +737,8 @@ pub enum Statement {
     },
     /// EXPLAIN
     Explain {
+        // MySQL supports DESCRIBE alias for EXPLAIN
+        describe_alias: bool,
         /// Carry out the command and show actual run times and other statistics.
         analyze: bool,
         // Display additional information regarding the plan.
@@ -753,11 +755,16 @@ impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Statement::Explain {
+                describe_alias,
                 verbose,
                 analyze,
                 statement,
             } => {
-                write!(f, "EXPLAIN ")?;
+                if *describe_alias {
+                    write!(f, "DESCRIBE ")?;
+                } else {
+                    write!(f, "EXPLAIN ")?;
+                }
 
                 if *analyze {
                     write!(f, "ANALYZE ")?;

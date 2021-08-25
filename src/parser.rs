@@ -141,7 +141,8 @@ impl<'a> Parser<'a> {
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
         match self.next_token() {
             Token::Word(w) => match w.keyword {
-                Keyword::EXPLAIN => Ok(self.parse_explain()?),
+                Keyword::DESCRIBE => Ok(self.parse_explain(true)?),
+                Keyword::EXPLAIN => Ok(self.parse_explain(false)?),
                 Keyword::ANALYZE => Ok(self.parse_analyze()?),
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES => {
                     self.prev_token();
@@ -2216,13 +2217,14 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_explain(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_explain(&mut self, describe_alias: bool) -> Result<Statement, ParserError> {
         let analyze = self.parse_keyword(Keyword::ANALYZE);
         let verbose = self.parse_keyword(Keyword::VERBOSE);
 
         let statement = Box::new(self.parse_statement()?);
 
         Ok(Statement::Explain {
+            describe_alias,
             analyze,
             verbose,
             statement,

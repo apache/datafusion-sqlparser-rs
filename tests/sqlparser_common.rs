@@ -102,14 +102,14 @@ fn parse_insert_sqlite() {
     let dialect = SQLiteDialect {};
 
     let check = |sql: &str, expected_action: Option<SqliteOnConflict>| match Parser::parse_sql(
-        &dialect, &sql,
+        &dialect, sql,
     )
     .unwrap()
     .pop()
     .unwrap()
     {
         Statement::Insert { or, .. } => assert_eq!(or, expected_action),
-        _ => panic!("{}", sql.to_string()),
+        _ => panic!("{}", sql),
     };
 
     let sql = "INSERT INTO test_table(id) VALUES(1)";
@@ -340,7 +340,7 @@ fn parse_column_aliases() {
     }
 
     // alias without AS is parsed correctly:
-    one_statement_parses_to("SELECT a.col + 1 newname FROM foo AS a", &sql);
+    one_statement_parses_to("SELECT a.col + 1 newname FROM foo AS a", sql);
 }
 
 #[test]
@@ -1017,6 +1017,17 @@ fn parse_cast() {
         },
         expr_from_projection(only(&select.projection))
     );
+
+    let sql = "SELECT CAST(id AS TINYINT) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::TinyInt
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
     one_statement_parses_to(
         "SELECT CAST(id AS BIGINT) FROM customer",
         "SELECT CAST(id AS BIGINT) FROM customer",
@@ -1151,7 +1162,11 @@ fn parse_create_table() {
                lng DOUBLE,
                constrained INT NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0),
                ref INT REFERENCES othertable (a, b),\
-               ref2 INT references othertable2 on delete cascade on update no action\
+               ref2 INT references othertable2 on delete cascade on update no action,\
+               constraint fkey foreign key (lat) references othertable3 (lat) on delete restrict,\
+               constraint fkey2 foreign key (lat) references othertable4(lat) on delete no action on update restrict, \
+               foreign key (lat) references othertable4(lat) on update set default on delete cascade, \
+               FOREIGN KEY (lng) REFERENCES othertable4 (longitude) ON UPDATE SET NULL
                )";
     let ast = one_statement_parses_to(
         sql,
@@ -1161,7 +1176,11 @@ fn parse_create_table() {
          lng DOUBLE, \
          constrained INT NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0), \
          ref INT REFERENCES othertable (a, b), \
-         ref2 INT REFERENCES othertable2 ON DELETE CASCADE ON UPDATE NO ACTION)",
+         ref2 INT REFERENCES othertable2 ON DELETE CASCADE ON UPDATE NO ACTION, \
+         CONSTRAINT fkey FOREIGN KEY (lat) REFERENCES othertable3(lat) ON DELETE RESTRICT, \
+         CONSTRAINT fkey2 FOREIGN KEY (lat) REFERENCES othertable4(lat) ON DELETE NO ACTION ON UPDATE RESTRICT, \
+         FOREIGN KEY (lat) REFERENCES othertable4(lat) ON DELETE CASCADE ON UPDATE SET DEFAULT, \
+         FOREIGN KEY (lng) REFERENCES othertable4(longitude) ON UPDATE SET NULL)",
     );
     match ast {
         Statement::CreateTable {
@@ -1260,7 +1279,43 @@ fn parse_create_table() {
                     }
                 ]
             );
-            assert!(constraints.is_empty());
+            assert_eq!(
+                constraints,
+                vec![
+                    TableConstraint::ForeignKey {
+                        name: Some("fkey".into()),
+                        columns: vec!["lat".into()],
+                        foreign_table: ObjectName(vec!["othertable3".into()]),
+                        referred_columns: vec!["lat".into()],
+                        on_delete: Some(ReferentialAction::Restrict),
+                        on_update: None
+                    },
+                    TableConstraint::ForeignKey {
+                        name: Some("fkey2".into()),
+                        columns: vec!["lat".into()],
+                        foreign_table: ObjectName(vec!["othertable4".into()]),
+                        referred_columns: vec!["lat".into()],
+                        on_delete: Some(ReferentialAction::NoAction),
+                        on_update: Some(ReferentialAction::Restrict)
+                    },
+                    TableConstraint::ForeignKey {
+                        name: None,
+                        columns: vec!["lat".into()],
+                        foreign_table: ObjectName(vec!["othertable4".into()]),
+                        referred_columns: vec!["lat".into()],
+                        on_delete: Some(ReferentialAction::Cascade),
+                        on_update: Some(ReferentialAction::SetDefault)
+                    },
+                    TableConstraint::ForeignKey {
+                        name: None,
+                        columns: vec!["lng".into()],
+                        foreign_table: ObjectName(vec!["othertable4".into()]),
+                        referred_columns: vec!["longitude".into()],
+                        on_delete: None,
+                        on_update: Some(ReferentialAction::SetNull)
+                    },
+                ]
+            );
             assert_eq!(with_options, vec![]);
         }
         _ => unreachable!(),
@@ -1277,6 +1332,18 @@ fn parse_create_table() {
         .unwrap_err()
         .to_string()
         .contains("Expected constraint details after CONSTRAINT <name>"));
+}
+
+#[test]
+fn parse_create_table_with_multiple_on_delete_in_constraint_fails() {
+    parse_sql_statements(
+        "\
+        create table X (\
+            y_id int, \
+            foreign key (y_id) references Y (id) on delete cascade on update cascade on delete no action\
+        )",
+    )
+        .expect_err("should have failed");
 }
 
 #[test]
@@ -2674,7 +2741,7 @@ fn parse_multiple_statements() {
         let res = parse_sql_statements(&(sql1.to_owned() + ";" + sql2_kw + sql2_rest));
         assert_eq!(
             vec![
-                one_statement_parses_to(&sql1, ""),
+                one_statement_parses_to(sql1, ""),
                 one_statement_parses_to(&(sql2_kw.to_owned() + sql2_rest), ""),
             ],
             res.unwrap()
@@ -2734,6 +2801,31 @@ fn parse_substring() {
     );
 
     one_statement_parses_to("SELECT SUBSTRING('1' FOR 3)", "SELECT SUBSTRING('1' FOR 3)");
+}
+
+#[test]
+fn parse_trim() {
+    one_statement_parses_to(
+        "SELECT TRIM(BOTH 'xyz' FROM 'xyzfooxyz')",
+        "SELECT TRIM(BOTH 'xyz' FROM 'xyzfooxyz')",
+    );
+
+    one_statement_parses_to(
+        "SELECT TRIM(LEADING 'xyz' FROM 'xyzfooxyz')",
+        "SELECT TRIM(LEADING 'xyz' FROM 'xyzfooxyz')",
+    );
+
+    one_statement_parses_to(
+        "SELECT TRIM(TRAILING 'xyz' FROM 'xyzfooxyz')",
+        "SELECT TRIM(TRAILING 'xyz' FROM 'xyzfooxyz')",
+    );
+
+    one_statement_parses_to("SELECT TRIM('   foo   ')", "SELECT TRIM('   foo   ')");
+
+    assert_eq!(
+        ParserError::ParserError("Expected ), found: 'xyz'".to_owned()),
+        parse_sql_statements("SELECT TRIM(FOO 'xyz' FROM 'xyzfooxyz')").unwrap_err()
+    );
 }
 
 #[test]
@@ -3264,7 +3356,7 @@ fn parse_start_transaction() {
     verified_stmt("START TRANSACTION ISOLATION LEVEL REPEATABLE READ");
     verified_stmt("START TRANSACTION ISOLATION LEVEL SERIALIZABLE");
 
-    // Regression test for https://github.com/ballista-compute/sqlparser-rs/pull/139,
+    // Regression test for https://github.com/sqlparser-rs/sqlparser-rs/pull/139,
     // in which START TRANSACTION would fail to parse if followed by a statement
     // terminator.
     assert_eq!(

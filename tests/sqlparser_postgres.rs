@@ -233,7 +233,7 @@ fn parse_create_table_with_inherit() {
 #[test]
 fn parse_create_table_empty() {
     // Zero-column tables are weird, but supported by at least PostgreSQL.
-    // <https://github.com/ballista-compute/sqlparser-rs/pull/94>
+    // <https://github.com/sqlparser-rs/sqlparser-rs/pull/94>
     let _ = pg_and_generic().verified_stmt("CREATE TABLE t ()");
 }
 
@@ -641,6 +641,28 @@ fn parse_pg_postfix_factorial() {
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: op.clone(),
                 expr: Box::new(Expr::Identifier(Ident::new("a"))),
+            }),
+            select.projection[0]
+        );
+    }
+}
+
+#[test]
+fn parse_pg_regex_match_ops() {
+    let pg_regex_match_ops = &[
+        ("~", BinaryOperator::PGRegexMatch),
+        ("~*", BinaryOperator::PGRegexIMatch),
+        ("!~", BinaryOperator::PGRegexNotMatch),
+        ("!~*", BinaryOperator::PGRegexNotIMatch),
+    ];
+
+    for (str_op, op) in pg_regex_match_ops {
+        let select = pg().verified_only_select(&format!("SELECT 'abc' {} '^a'", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::BinaryOp {
+                left: Box::new(Expr::Value(Value::SingleQuotedString("abc".into()))),
+                op: op.clone(),
+                right: Box::new(Expr::Value(Value::SingleQuotedString("^a".into()))),
             }),
             select.projection[0]
         );

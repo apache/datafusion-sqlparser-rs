@@ -10,11 +10,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(not(feature = "std"))]
+use alloc::string::String;
+use core::fmt;
+
 #[cfg(feature = "bigdecimal")]
 use bigdecimal::BigDecimal;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -156,4 +159,23 @@ impl<'a> fmt::Display for EscapeSingleQuoteString<'a> {
 
 pub fn escape_single_quote_string(s: &str) -> EscapeSingleQuoteString<'_> {
     EscapeSingleQuoteString(s)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum TrimWhereField {
+    Both,
+    Leading,
+    Trailing,
+}
+
+impl fmt::Display for TrimWhereField {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use TrimWhereField::*;
+        f.write_str(match self {
+            Both => "BOTH",
+            Leading => "LEADING",
+            Trailing => "TRAILING",
+        })
+    }
 }

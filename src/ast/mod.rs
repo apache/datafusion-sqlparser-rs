@@ -523,6 +523,28 @@ impl fmt::Display for AddDropSync {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ShowCreateObject {
+    Event,
+    Function,
+    Procedure,
+    Table,
+    Trigger,
+}
+
+impl fmt::Display for ShowCreateObject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ShowCreateObject::Event => f.write_str("EVENT"),
+            ShowCreateObject::Function => f.write_str("FUNCTION"),
+            ShowCreateObject::Procedure => f.write_str("PROCEDURE"),
+            ShowCreateObject::Table => f.write_str("TABLE"),
+            ShowCreateObject::Trigger => f.write_str("TRIGGER"),
+        }
+    }
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -685,6 +707,13 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement.
     ShowVariable { variable: Vec<Ident> },
+    /// SHOW CREATE TABLE
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowCreate {
+        obj_type: ShowCreateObject,
+        obj_name: ObjectName,
+    },
     /// SHOW COLUMNS
     ///
     /// Note: this is a MySQL-specific statement.
@@ -1194,6 +1223,15 @@ impl fmt::Display for Statement {
                 if !variable.is_empty() {
                     write!(f, " {}", display_separated(variable, " "))?;
                 }
+                Ok(())
+            }
+            Statement::ShowCreate { obj_type, obj_name } => {
+                write!(
+                    f,
+                    "SHOW CREATE {obj_type} {obj_name}",
+                    obj_type = obj_type,
+                    obj_name = obj_name,
+                )?;
                 Ok(())
             }
             Statement::ShowColumns {

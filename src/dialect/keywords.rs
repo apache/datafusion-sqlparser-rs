@@ -193,6 +193,7 @@ define_keywords!(
     EQUALS,
     ERROR,
     ESCAPE,
+    EVENT,
     EVERY,
     EXCEPT,
     EXEC,

@@ -735,7 +735,8 @@ pub enum Statement {
         data_types: Vec<DataType>,
         statement: Box<Statement>,
     },
-    /// Note: this is a MySQL-specific statement.
+    /// EXPLAIN TABLE
+    /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/explain.html>
     ExplainTable {
         // If true, query used the MySQL `DESCRIBE` alias for explain
         describe_alias: bool,

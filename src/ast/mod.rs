@@ -744,7 +744,7 @@ pub enum Statement {
     },
     /// EXPLAIN / DESCRIBE for select_statement
     Explain {
-        // MySQL supports DESCRIBE alias for EXPLAIN
+        // If true, query used the MySQL `DESCRIBE` alias for explain
         describe_alias: bool,
         /// Carry out the command and show actual run times and other statistics.
         analyze: bool,

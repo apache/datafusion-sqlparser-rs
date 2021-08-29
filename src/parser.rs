@@ -2008,10 +2008,12 @@ impl<'a> Parser<'a> {
                     let _ = self.parse_keyword(Keyword::PRECISION);
                     Ok(DataType::Double)
                 }
-                Keyword::TINYINT => Ok(DataType::TinyInt),
-                Keyword::SMALLINT => Ok(DataType::SmallInt),
-                Keyword::INT | Keyword::INTEGER => Ok(DataType::Int),
-                Keyword::BIGINT => Ok(DataType::BigInt),
+                Keyword::TINYINT => Ok(DataType::TinyInt(self.parse_optional_precision()?)),
+                Keyword::SMALLINT => Ok(DataType::SmallInt(self.parse_optional_precision()?)),
+                Keyword::INT | Keyword::INTEGER => {
+                    Ok(DataType::Int(self.parse_optional_precision()?))
+                }
+                Keyword::BIGINT => Ok(DataType::BigInt(self.parse_optional_precision()?)),
                 Keyword::VARCHAR => Ok(DataType::Varchar(self.parse_optional_precision()?)),
                 Keyword::CHAR | Keyword::CHARACTER => {
                     if self.parse_keyword(Keyword::VARYING) {

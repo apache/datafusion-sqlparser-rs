@@ -737,7 +737,7 @@ pub enum Statement {
     },
     /// Note: this is a MySQL-specific statement.
     ExplainTable {
-        // MySQL supports DESCRIBE alias for EXPLAIN
+        // If true, query used the MySQL `DESCRIBE` alias for explain
         describe_alias: bool,
         // Table name
         table_name: ObjectName,

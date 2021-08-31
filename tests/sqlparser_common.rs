@@ -2817,6 +2817,16 @@ fn parse_substring() {
     );
 
     one_statement_parses_to("SELECT SUBSTRING('1' FOR 3)", "SELECT SUBSTRING('1' FOR 3)");
+
+    one_statement_parses_to(
+        "SELECT SUBSTRING('1', 1)",
+        "SELECT SUBSTRING('1' FROM 1)",
+    );
+
+    one_statement_parses_to(
+        "SELECT SUBSTRING('1', 1, 3)",
+        "SELECT SUBSTRING('1' FROM 1 FOR 3)",
+    );
 }
 
 #[test]

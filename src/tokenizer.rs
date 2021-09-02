@@ -290,17 +290,17 @@ pub struct TokenizerError {
 /// SQL Tokenizer
 pub struct Tokenizer<'a> {
     dialect: &'a dyn Dialect,
-    pub query: String,
-    pub line: u64,
-    pub col: u64,
+    query: &'a str,
+    line: u64,
+    col: u64,
 }
 
 impl<'a> Tokenizer<'a> {
     /// Create a new SQL tokenizer for the specified SQL statement
-    pub fn new(dialect: &'a dyn Dialect, query: &str) -> Self {
+    pub fn new(dialect: &'a dyn Dialect, query: &'a str) -> Self {
         Self {
             dialect,
-            query: query.to_string(),
+            query,
             line: 1,
             col: 1,
         }

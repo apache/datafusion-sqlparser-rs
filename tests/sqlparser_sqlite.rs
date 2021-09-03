@@ -68,7 +68,7 @@ fn parse_create_table_auto_increment() {
             assert_eq!(
                 vec![ColumnDef {
                     name: "bar".into(),
-                    data_type: DataType::Int,
+                    data_type: DataType::Int(None),
                     collation: None,
                     options: vec![
                         ColumnOptionDef {
@@ -100,13 +100,13 @@ fn parse_create_sqlite_quote() {
                 vec![
                     ColumnDef {
                         name: Ident::with_quote('"', "KEY"),
-                        data_type: DataType::Int,
+                        data_type: DataType::Int(None),
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::with_quote('[', "INDEX"),
-                        data_type: DataType::Int,
+                        data_type: DataType::Int(None),
                         collation: None,
                         options: vec![],
                     },

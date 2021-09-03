@@ -684,10 +684,10 @@ impl<'a> Parser<'a> {
                 .iter()
                 .any(|d| word.keyword == *d)
             {
-                let ident = self.parse_identifier()?;
+                let trim_where = self.parse_trim_where()?;
                 let sub_expr = self.parse_expr()?;
                 self.expect_keyword(Keyword::FROM)?;
-                where_expr = Some((ident, sub_expr))
+                where_expr = Some((trim_where, Box::new(sub_expr)));
             }
         }
         let expr = self.parse_expr()?;
@@ -695,8 +695,20 @@ impl<'a> Parser<'a> {
 
         Ok(Expr::Trim {
             expr: Box::new(expr),
-            trim_where: where_expr.map(|(ident, expr)| (Box::new(ident), Box::new(expr))),
+            trim_where: where_expr,
         })
+    }
+
+    pub fn parse_trim_where(&mut self) -> Result<TrimWhereField, ParserError> {
+        match self.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::BOTH => Ok(TrimWhereField::Both),
+                Keyword::LEADING => Ok(TrimWhereField::Leading),
+                Keyword::TRAILING => Ok(TrimWhereField::Trailing),
+                _ => self.expected("trim_where field", Token::Word(w))?,
+            },
+            unexpected => self.expected("trim_where field", unexpected),
+        }
     }
 
     /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.
@@ -1749,11 +1761,26 @@ impl<'a> Parser<'a> {
                 self.expect_keyword(Keyword::REFERENCES)?;
                 let foreign_table = self.parse_object_name()?;
                 let referred_columns = self.parse_parenthesized_column_list(Mandatory)?;
+                let mut on_delete = None;
+                let mut on_update = None;
+                loop {
+                    if on_delete.is_none() && self.parse_keywords(&[Keyword::ON, Keyword::DELETE]) {
+                        on_delete = Some(self.parse_referential_action()?);
+                    } else if on_update.is_none()
+                        && self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
+                    {
+                        on_update = Some(self.parse_referential_action()?);
+                    } else {
+                        break;
+                    }
+                }
                 Ok(Some(TableConstraint::ForeignKey {
                     name,
                     columns,
                     foreign_table,
                     referred_columns,
+                    on_delete,
+                    on_update,
                 }))
             }
             Token::Word(w) if w.keyword == Keyword::CHECK => {
@@ -2001,10 +2028,12 @@ impl<'a> Parser<'a> {
                     let _ = self.parse_keyword(Keyword::PRECISION);
                     Ok(DataType::Double)
                 }
-                Keyword::TINYINT => Ok(DataType::TinyInt),
-                Keyword::SMALLINT => Ok(DataType::SmallInt),
-                Keyword::INT | Keyword::INTEGER => Ok(DataType::Int),
-                Keyword::BIGINT => Ok(DataType::BigInt),
+                Keyword::TINYINT => Ok(DataType::TinyInt(self.parse_optional_precision()?)),
+                Keyword::SMALLINT => Ok(DataType::SmallInt(self.parse_optional_precision()?)),
+                Keyword::INT | Keyword::INTEGER => {
+                    Ok(DataType::Int(self.parse_optional_precision()?))
+                }
+                Keyword::BIGINT => Ok(DataType::BigInt(self.parse_optional_precision()?)),
                 Keyword::VARCHAR => Ok(DataType::Varchar(self.parse_optional_precision()?)),
                 Keyword::CHAR | Keyword::CHARACTER => {
                     if self.parse_keyword(Keyword::VARYING) {
@@ -2535,12 +2564,38 @@ impl<'a> Parser<'a> {
             .is_some()
         {
             self.prev_token();
-            self.parse_show_columns()
+            Ok(self.parse_show_columns()?)
+        } else if self.parse_one_of_keywords(&[Keyword::CREATE]).is_some() {
+            Ok(self.parse_show_create()?)
         } else {
             Ok(Statement::ShowVariable {
                 variable: self.parse_identifiers()?,
             })
         }
+    }
+
+    fn parse_show_create(&mut self) -> Result<Statement, ParserError> {
+        let obj_type = match self.expect_one_of_keywords(&[
+            Keyword::TABLE,
+            Keyword::TRIGGER,
+            Keyword::FUNCTION,
+            Keyword::PROCEDURE,
+            Keyword::EVENT,
+        ])? {
+            Keyword::TABLE => Ok(ShowCreateObject::Table),
+            Keyword::TRIGGER => Ok(ShowCreateObject::Trigger),
+            Keyword::FUNCTION => Ok(ShowCreateObject::Function),
+            Keyword::PROCEDURE => Ok(ShowCreateObject::Procedure),
+            Keyword::EVENT => Ok(ShowCreateObject::Event),
+            keyword => Err(ParserError::ParserError(format!(
+                "Unable to map keyword to ShowCreateObject: {:?}",
+                keyword
+            ))),
+        }?;
+
+        let obj_name = self.parse_object_name()?;
+
+        Ok(Statement::ShowCreate { obj_type, obj_name })
     }
 
     fn parse_show_columns(&mut self) -> Result<Statement, ParserError> {

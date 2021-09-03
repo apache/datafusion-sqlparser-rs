@@ -292,17 +292,17 @@ pub struct TokenizerError {
 /// SQL Tokenizer
 pub struct Tokenizer<'a> {
     dialect: &'a dyn Dialect,
-    pub query: String,
-    pub line: u64,
-    pub col: u64,
+    query: &'a str,
+    line: u64,
+    col: u64,
 }
 
 impl<'a> Tokenizer<'a> {
     /// Create a new SQL tokenizer for the specified SQL statement
-    pub fn new(dialect: &'a dyn Dialect, query: &str) -> Self {
+    pub fn new(dialect: &'a dyn Dialect, query: &'a str) -> Self {
         Self {
             dialect,
-            query: query.to_string(),
+            query,
             line: 1,
             col: 1,
         }
@@ -424,6 +424,17 @@ impl<'a> Tokenizer<'a> {
                 // numbers and period
                 '0'..='9' | '.' => {
                     let mut s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
+
+                    // match binary literal that starts with 0x
+                    if s == "0" && chars.peek() == Some(&'x') {
+                        chars.next();
+                        let s2 = peeking_take_while(
+                            chars,
+                            |ch| matches!(ch, '0'..='9' | 'A'..='F' | 'a'..='f'),
+                        );
+                        return Ok(Some(Token::HexStringLiteral(s2)));
+                    }
+
                     // match one period
                     if let Some('.') = chars.peek() {
                         s.push('.');

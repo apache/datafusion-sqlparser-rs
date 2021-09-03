@@ -36,7 +36,7 @@ pub enum DataType {
     /// Variable-length binary type e.g. VARBINARY(10)
     Varbinary(u64),
     /// Large binary object e.g. BLOB(1000)
-    Blob(u64),
+    Blob(Option<u64>),
     /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
     Decimal(Option<u64>, Option<u64>),
     /// Floating point with optional precision e.g. FLOAT(8)
@@ -88,7 +88,13 @@ impl fmt::Display for DataType {
             DataType::Clob(size) => write!(f, "CLOB({})", size),
             DataType::Binary(size) => write!(f, "BINARY({})", size),
             DataType::Varbinary(size) => write!(f, "VARBINARY({})", size),
-            DataType::Blob(size) => write!(f, "BLOB({})", size),
+            DataType::Blob(size) => {
+                if let Some(size) = size {
+                    write!(f, "BLOB({})", size)
+                } else {
+                    write!(f, "BLOB")
+                }
+            }
             DataType::Decimal(precision, scale) => {
                 if let Some(scale) = scale {
                     write!(f, "NUMERIC({},{})", precision.unwrap(), scale)
@@ -101,7 +107,7 @@ impl fmt::Display for DataType {
             DataType::SmallInt(zerofill) => {
                 format_type_with_optional_length(f, "SMALLINT", zerofill)
             }
-            DataType::Int(zerofill) => format_type_with_optional_length(f, "INT", zerofill),
+            DataType::Int(zerofill) => format_type_with_optional_length(f, "INTEGER", zerofill),
             DataType::BigInt(zerofill) => format_type_with_optional_length(f, "BIGINT", zerofill),
             DataType::Real => write!(f, "REAL"),
             DataType::Double => write!(f, "DOUBLE"),

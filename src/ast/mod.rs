@@ -17,7 +17,7 @@ mod ddl;
 mod operator;
 mod query;
 mod value;
-
+mod statement;
 #[cfg(not(feature = "std"))]
 use alloc::{
     boxed::Box,
@@ -778,7 +778,7 @@ pub enum Statement {
 impl fmt::Display for Statement {
     // Clippy thinks this function is too complicated, but it is painful to
     // split up without extracting structs for each `Statement` variant.
-    #[allow(clippy::cognitive_complexity)]
+
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Statement::Explain {

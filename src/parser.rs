@@ -139,6 +139,7 @@ impl<'a> Parser<'a> {
     /// Parse a single top-level statement (such as SELECT, INSERT, CREATE, etc.),
     /// stopping before the statement separator, if any.
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
+        use Statement::*; 
         match self.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::EXPLAIN => Ok(self.parse_explain()?),
@@ -150,7 +151,7 @@ impl<'a> Parser<'a> {
                 Keyword::TRUNCATE => Ok(self.parse_truncate()?),
                 Keyword::MSCK => Ok(self.parse_msck()?),
                 Keyword::CREATE => Ok(self.parse_create()?),
-                Keyword::DROP => Ok(self.parse_drop()?),
+                Keyword::DROP => Ok(Drop(self.parse_drop()?)),
                 Keyword::DELETE => Ok(self.parse_delete()?),
                 Keyword::INSERT => Ok(self.parse_insert()?),
                 Keyword::UPDATE => Ok(self.parse_update()?),
@@ -1421,7 +1422,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_drop(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_drop(&mut self) -> Result<Drop, ParserError> {
         let object_type = if self.parse_keyword(Keyword::TABLE) {
             ObjectType::Table
         } else if self.parse_keyword(Keyword::VIEW) {
@@ -1443,7 +1444,7 @@ impl<'a> Parser<'a> {
         if cascade && restrict {
             return parser_err!("Cannot specify both CASCADE and RESTRICT in DROP");
         }
-        Ok(Statement::Drop {
+        Ok(Drop {
             object_type,
             if_exists,
             names,
@@ -1452,7 +1453,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_create_index(&mut self, unique: bool) -> Result<Statement, ParserError> {
+    pub fn parse_create_index(&mut self, unique: bool) -> Result<CreateIndex, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let index_name = self.parse_object_name()?;
         self.expect_keyword(Keyword::ON)?;
@@ -1460,7 +1461,7 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let columns = self.parse_comma_separated(Parser::parse_order_by_expr)?;
         self.expect_token(&Token::RParen)?;
-        Ok(Statement::CreateIndex {
+        Ok(CreateIndex {
             name: index_name,
             table_name,
             columns,
@@ -1798,7 +1799,7 @@ impl<'a> Parser<'a> {
         Ok(SqlOption { name, value })
     }
 
-    pub fn parse_alter(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_alter(&mut self) -> Result<AlterTable, ParserError> {
         self.expect_keyword(Keyword::TABLE)?;
         let _ = self.parse_keyword(Keyword::ONLY);
         let table_name = self.parse_object_name()?;
@@ -1883,20 +1884,20 @@ impl<'a> Parser<'a> {
                 self.peek_token(),
             );
         };
-        Ok(Statement::AlterTable {
+        Ok(AlterTable {
             name: table_name,
             operation,
         })
     }
 
     /// Parse a copy statement
-    pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_copy(&mut self) -> Result<Copy, ParserError> {
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
         self.expect_keywords(&[Keyword::FROM, Keyword::STDIN])?;
         self.expect_token(&Token::SemiColon)?;
         let values = self.parse_tsv();
-        Ok(Statement::Copy {
+        Ok(Copy {
             table_name,
             columns,
             values,
@@ -2203,7 +2204,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_delete(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_delete(&mut self) -> Result<Delete, ParserError> {
         self.expect_keyword(Keyword::FROM)?;
         let table_name = self.parse_object_name()?;
         let selection = if self.parse_keyword(Keyword::WHERE) {
@@ -2212,19 +2213,19 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Statement::Delete {
+        Ok(Delete {
             table_name,
             selection,
         })
     }
 
-    pub fn parse_explain(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_explain(&mut self) -> Result<Expain, ParserError> {
         let analyze = self.parse_keyword(Keyword::ANALYZE);
         let verbose = self.parse_keyword(Keyword::VERBOSE);
 
         let statement = Box::new(self.parse_statement()?);
 
-        Ok(Statement::Explain {
+        Ok(Explain {
             analyze,
             verbose,
             statement,
@@ -2516,23 +2517,23 @@ impl<'a> Parser<'a> {
                 if self.consume_token(&Token::Comma) {
                     continue;
                 }
-                return Ok(Statement::SetVariable {
+                return Ok(Statement::SetVariable(SetVariable {
                     local: modifier == Some(Keyword::LOCAL),
                     hivevar: Some(Keyword::HIVEVAR) == modifier,
                     variable,
                     value: values,
-                });
+                }));
             }
         } else if variable.value == "TRANSACTION" && modifier.is_none() {
-            Ok(Statement::SetTransaction {
+            Ok(Statement::SetTransaction(SetTransaction {
                 modes: self.parse_transaction_modes()?,
-            })
+            }))
         } else {
             self.expected("equals sign or TO", self.peek_token())
         }
     }
 
-    pub fn parse_show(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_show(&mut self) -> Result<ShowVariable, ParserError> {
         if self
             .parse_one_of_keywords(&[
                 Keyword::EXTENDED,
@@ -2547,13 +2548,13 @@ impl<'a> Parser<'a> {
         } else if self.parse_one_of_keywords(&[Keyword::CREATE]).is_some() {
             Ok(self.parse_show_create()?)
         } else {
-            Ok(Statement::ShowVariable {
+            Ok(ShowVariable {
                 variable: self.parse_identifiers()?,
             })
         }
     }
 
-    fn parse_show_create(&mut self) -> Result<Statement, ParserError> {
+    fn parse_show_create(&mut self) -> Result<ShowCreate, ParserError> {
         let obj_type = match self.expect_one_of_keywords(&[
             Keyword::TABLE,
             Keyword::TRIGGER,
@@ -2574,10 +2575,10 @@ impl<'a> Parser<'a> {
 
         let obj_name = self.parse_object_name()?;
 
-        Ok(Statement::ShowCreate { obj_type, obj_name })
+        Ok(ShowCreate { obj_type, obj_name })
     }
 
-    fn parse_show_columns(&mut self) -> Result<Statement, ParserError> {
+    fn parse_show_columns(&mut self) -> Result<ShowColumns, ParserError> {
         let extended = self.parse_keyword(Keyword::EXTENDED);
         let full = self.parse_keyword(Keyword::FULL);
         self.expect_one_of_keywords(&[Keyword::COLUMNS, Keyword::FIELDS])?;
@@ -2587,7 +2588,7 @@ impl<'a> Parser<'a> {
         // allows both FROM <table> FROM <database> and FROM <database>.<table>,
         // while we only support the latter for now.
         let filter = self.parse_show_statement_filter()?;
-        Ok(Statement::ShowColumns {
+        Ok(ShowColumns {
             extended,
             full,
             table_name,
@@ -2872,13 +2873,13 @@ impl<'a> Parser<'a> {
                 None
             };
             let source = Box::new(self.parse_query()?);
-            Ok(Statement::Directory {
+            Ok(Statement::Directory(Directory {
                 local,
                 path,
                 overwrite,
                 file_format,
                 source,
-            })
+            }))
         } else {
             // Hive lets you put table here regardless
             let table = self.parse_keyword(Keyword::TABLE);
@@ -2898,7 +2899,7 @@ impl<'a> Parser<'a> {
             let after_columns = self.parse_parenthesized_column_list(Optional)?;
 
             let source = Box::new(self.parse_query()?);
-            Ok(Statement::Insert {
+            Ok(Statement::Insert(Insert {
                 or,
                 table_name,
                 overwrite,
@@ -2907,11 +2908,11 @@ impl<'a> Parser<'a> {
                 after_columns,
                 source,
                 table,
-            })
+            }))
         }
     }
 
-    pub fn parse_update(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_update(&mut self) -> Result<Update, ParserError> {
         let table_name = self.parse_object_name()?;
         self.expect_keyword(Keyword::SET)?;
         let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
@@ -2920,7 +2921,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(Statement::Update {
+        Ok(Update {
             table_name,
             assignments,
             selection,
@@ -3084,16 +3085,16 @@ impl<'a> Parser<'a> {
         Ok(Values(values))
     }
 
-    pub fn parse_start_transaction(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_start_transaction(&mut self) -> Result<StartTransaction, ParserError> {
         self.expect_keyword(Keyword::TRANSACTION)?;
-        Ok(Statement::StartTransaction {
+        Ok(StartTransaction {
             modes: self.parse_transaction_modes()?,
         })
     }
 
-    pub fn parse_begin(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_begin(&mut self) -> Result<StartTransaction, ParserError> {
         let _ = self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]);
-        Ok(Statement::StartTransaction {
+        Ok(StartTransaction {
             modes: self.parse_transaction_modes()?,
         })
     }
@@ -3134,14 +3135,14 @@ impl<'a> Parser<'a> {
         Ok(modes)
     }
 
-    pub fn parse_commit(&mut self) -> Result<Statement, ParserError> {
-        Ok(Statement::Commit {
+    pub fn parse_commit(&mut self) -> Result<Commit, ParserError> {
+        Ok(Commit {
             chain: self.parse_commit_rollback_chain()?,
         })
     }
 
-    pub fn parse_rollback(&mut self) -> Result<Statement, ParserError> {
-        Ok(Statement::Rollback {
+    pub fn parse_rollback(&mut self) -> Result<Rollback, ParserError> {
+        Ok(Rollback {
             chain: self.parse_commit_rollback_chain()?,
         })
     }
@@ -3157,13 +3158,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_deallocate(&mut self) -> Result<Statement, ParserError> {
+    fn parse_deallocate(&mut self) -> Result<Deallocate, ParserError> {
         let prepare = self.parse_keyword(Keyword::PREPARE);
         let name = self.parse_identifier()?;
-        Ok(Statement::Deallocate { name, prepare })
+        Ok(Deallocate { name, prepare })
     }
 
-    fn parse_execute(&mut self) -> Result<Statement, ParserError> {
+    fn parse_execute(&mut self) -> Result<Execute, ParserError> {
         let name = self.parse_identifier()?;
 
         let mut parameters = vec![];
@@ -3172,10 +3173,10 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
         }
 
-        Ok(Statement::Execute { name, parameters })
+        Ok(Execute { name, parameters })
     }
 
-    fn parse_prepare(&mut self) -> Result<Statement, ParserError> {
+    fn parse_prepare(&mut self) -> Result<Prepare, ParserError> {
         let name = self.parse_identifier()?;
 
         let mut data_types = vec![];
@@ -3186,7 +3187,7 @@ impl<'a> Parser<'a> {
 
         self.expect_keyword(Keyword::AS)?;
         let statement = Box::new(self.parse_statement()?);
-        Ok(Statement::Prepare {
+        Ok(Prepare {
             name,
             data_types,
             statement,

@@ -430,62 +430,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    //TODO: Implement parsing for Skewed and Clustered
-    pub fn parse_hive_distribution(&mut self) -> Result<HiveDistributionStyle, ParserError> {
-        if self.parse_keywords(&[Keyword::PARTITIONED, Keyword::BY]) {
-            self.expect_token(&Token::LParen)?;
-            let columns = self.parse_comma_separated(Parser::parse_column_def)?;
-            self.expect_token(&Token::RParen)?;
-            Ok(HiveDistributionStyle::PARTITIONED { columns })
-        } else {
-            Ok(HiveDistributionStyle::NONE)
-        }
-    }
-
-    pub fn parse_hive_formats(&mut self) -> Result<HiveFormat, ParserError> {
-        let mut hive_format = HiveFormat::default();
-        loop {
-            match self.parse_one_of_keywords(&[Keyword::ROW, Keyword::STORED, Keyword::LOCATION]) {
-                Some(Keyword::ROW) => {
-                    hive_format.row_format = Some(self.parse_row_format()?);
-                }
-                Some(Keyword::STORED) => {
-                    self.expect_keyword(Keyword::AS)?;
-                    if self.parse_keyword(Keyword::INPUTFORMAT) {
-                        let input_format = self.parse_expr()?;
-                        self.expect_keyword(Keyword::OUTPUTFORMAT)?;
-                        let output_format = self.parse_expr()?;
-                        hive_format.storage = Some(HiveIOFormat::IOF {
-                            input_format,
-                            output_format,
-                        });
-                    } else {
-                        let format = self.parse_file_format()?;
-                        hive_format.storage = Some(HiveIOFormat::FileFormat { format });
-                    }
-                }
-                Some(Keyword::LOCATION) => {
-                    hive_format.location = Some(self.parse_literal_string()?);
-                }
-                None => break,
-                _ => break,
-            }
-        }
-
-        Ok(hive_format)
-    }
-
-    pub fn parse_row_format(&mut self) -> Result<HiveRowFormat, ParserError> {
-        self.expect_keyword(Keyword::FORMAT)?;
-        match self.parse_one_of_keywords(&[Keyword::SERDE, Keyword::DELIMITED]) {
-            Some(Keyword::SERDE) => {
-                let class = self.parse_literal_string()?;
-                Ok(HiveRowFormat::SERDE { class })
-            }
-            _ => Ok(HiveRowFormat::DELIMITED),
-        }
-    }
-
     pub(super) fn parse_show_create(&mut self) -> Result<Statement, ParserError> {
         let obj_type = match self.expect_one_of_keywords(&[
             Keyword::TABLE,
@@ -550,7 +494,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
+    fn parse_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
         let mut idents = vec![];
         loop {
             match self.next_token() {
@@ -560,5 +504,61 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(idents)
+    }
+
+    //TODO: Implement parsing for Skewed and Clustered
+    pub fn parse_hive_distribution(&mut self) -> Result<HiveDistributionStyle, ParserError> {
+        if self.parse_keywords(&[Keyword::PARTITIONED, Keyword::BY]) {
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(Parser::parse_column_def)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(HiveDistributionStyle::PARTITIONED { columns })
+        } else {
+            Ok(HiveDistributionStyle::NONE)
+        }
+    }
+
+    pub fn parse_hive_formats(&mut self) -> Result<HiveFormat, ParserError> {
+        let mut hive_format = HiveFormat::default();
+        loop {
+            match self.parse_one_of_keywords(&[Keyword::ROW, Keyword::STORED, Keyword::LOCATION]) {
+                Some(Keyword::ROW) => {
+                    hive_format.row_format = Some(self.parse_row_format()?);
+                }
+                Some(Keyword::STORED) => {
+                    self.expect_keyword(Keyword::AS)?;
+                    if self.parse_keyword(Keyword::INPUTFORMAT) {
+                        let input_format = self.parse_expr()?;
+                        self.expect_keyword(Keyword::OUTPUTFORMAT)?;
+                        let output_format = self.parse_expr()?;
+                        hive_format.storage = Some(HiveIOFormat::IOF {
+                            input_format,
+                            output_format,
+                        });
+                    } else {
+                        let format = self.parse_file_format()?;
+                        hive_format.storage = Some(HiveIOFormat::FileFormat { format });
+                    }
+                }
+                Some(Keyword::LOCATION) => {
+                    hive_format.location = Some(self.parse_literal_string()?);
+                }
+                None => break,
+                _ => break,
+            }
+        }
+
+        Ok(hive_format)
+    }
+
+    pub fn parse_row_format(&mut self) -> Result<HiveRowFormat, ParserError> {
+        self.expect_keyword(Keyword::FORMAT)?;
+        match self.parse_one_of_keywords(&[Keyword::SERDE, Keyword::DELIMITED]) {
+            Some(Keyword::SERDE) => {
+                let class = self.parse_literal_string()?;
+                Ok(HiveRowFormat::SERDE { class })
+            }
+            _ => Ok(HiveRowFormat::DELIMITED),
+        }
     }
 }

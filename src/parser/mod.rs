@@ -1887,14 +1887,14 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a SQL `DEALLOCATE` statement
-    fn parse_deallocate(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_deallocate(&mut self) -> Result<Statement, ParserError> {
         let prepare = self.parse_keyword(Keyword::PREPARE);
         let name = self.parse_identifier()?;
         Ok(Statement::Deallocate { name, prepare })
     }
 
     /// Parse a SQL `EXECUTE` statement
-    fn parse_execute(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_execute(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_identifier()?;
 
         let mut parameters = vec![];
@@ -1907,7 +1907,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a SQL `PREPARE` statement
-    fn parse_prepare(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_prepare(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_identifier()?;
 
         let mut data_types = vec![];

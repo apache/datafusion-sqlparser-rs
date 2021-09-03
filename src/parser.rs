@@ -272,7 +272,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok(Statement::Analyze {
+        Ok(Analyze {
             table_name,
             for_columns,
             columns,

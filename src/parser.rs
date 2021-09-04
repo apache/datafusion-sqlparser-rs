@@ -347,10 +347,10 @@ impl<'a> Parser<'a> {
                 // an unary negation `NOT ('a' LIKE 'b')`. To solve this, we don't accept the
                 // `type 'string'` syntax for the custom data types at all.
                 DataType::Custom(..) => parser_err!("dummy"),
-                data_type => Ok(Expr::TypedString {
+                data_type => Ok(Expr::TypedString(TypedString {
                     data_type,
                     value: parser.parse_literal_string()?,
-                }),
+                })),
             }
         }));
 
@@ -369,10 +369,10 @@ impl<'a> Parser<'a> {
                 Keyword::TRIM => self.parse_trim_expr(),
                 Keyword::INTERVAL => self.parse_literal_interval(),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
-                Keyword::NOT => Ok(Expr::UnaryOp {
+                Keyword::NOT => Ok(Expr::UnaryOp(UnaryOp {
                     op: UnaryOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
-                }),
+                })),
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {
@@ -411,10 +411,10 @@ impl<'a> Parser<'a> {
                 } else {
                     UnaryOperator::Minus
                 };
-                Ok(Expr::UnaryOp {
+                Ok(Expr::UnaryOp(UnaryOp {
                     op,
                     expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
-                })
+                }))
             }
             tok @ Token::DoubleExclamationMark
             | tok @ Token::PGSquareRoot
@@ -431,10 +431,10 @@ impl<'a> Parser<'a> {
                     Token::Tilde => UnaryOperator::PGBitwiseNot,
                     _ => unreachable!(),
                 };
-                Ok(Expr::UnaryOp {
+                Ok(Expr::UnaryOp(UnaryOp {
                     op,
                     expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
-                })
+                }))
             }
             Token::Number(_, _)
             | Token::SingleQuotedString(_)
@@ -459,10 +459,10 @@ impl<'a> Parser<'a> {
         }?;
 
         if self.parse_keyword(Keyword::COLLATE) {
-            Ok(Expr::Collate {
+            Ok(Expr::Collate(Collate {
                 expr: Box::new(expr),
                 collation: self.parse_object_name()?,
-            })
+            }))
         } else {
             Ok(expr)
         }
@@ -582,12 +582,12 @@ impl<'a> Parser<'a> {
             None
         };
         self.expect_keyword(Keyword::END)?;
-        Ok(Expr::Case {
+        Ok(Expr::Case(Case {
             operand,
             conditions,
             results,
             else_result,
-        })
+        }))
     }
 
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
@@ -597,10 +597,10 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::AS)?;
         let data_type = self.parse_data_type()?;
         self.expect_token(&Token::RParen)?;
-        Ok(Expr::Cast {
+        Ok(Expr::Cast(Cast {
             expr: Box::new(expr),
             data_type,
-        })
+        }))
     }
 
     /// Parse a SQL TRY_CAST function e.g. `TRY_CAST(expr AS FLOAT)`
@@ -610,10 +610,10 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::AS)?;
         let data_type = self.parse_data_type()?;
         self.expect_token(&Token::RParen)?;
-        Ok(Expr::TryCast {
+        Ok(Expr::TryCast(TryCast {
             expr: Box::new(expr),
             data_type,
-        })
+        }))
     }
 
     /// Parse a SQL EXISTS expression e.g. `WHERE EXISTS(SELECT ...)`.
@@ -630,10 +630,10 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::FROM)?;
         let expr = self.parse_expr()?;
         self.expect_token(&Token::RParen)?;
-        Ok(Expr::Extract {
+        Ok(Expr::Extract(Extract {
             field,
             expr: Box::new(expr),
-        })
+        }))
     }
 
     pub fn parse_substring_expr(&mut self) -> Result<Expr, ParserError> {
@@ -650,11 +650,11 @@ impl<'a> Parser<'a> {
         }
         self.expect_token(&Token::RParen)?;
 
-        Ok(Expr::Substring {
+        Ok(Expr::Substring(Substring {
             expr: Box::new(expr),
             substring_from: from_expr.map(Box::new),
             substring_for: to_expr.map(Box::new),
-        })
+        }))
     }
 
     /// TRIM (WHERE 'text' FROM 'text')\
@@ -676,10 +676,10 @@ impl<'a> Parser<'a> {
         let expr = self.parse_expr()?;
         self.expect_token(&Token::RParen)?;
 
-        Ok(Expr::Trim {
+        Ok(Expr::Trim(Trim {
             expr: Box::new(expr),
             trim_where: where_expr,
-        })
+        }))
     }
 
     pub fn parse_trim_where(&mut self) -> Result<TrimWhereField, ParserError> {
@@ -907,11 +907,11 @@ impl<'a> Parser<'a> {
         };
 
         if let Some(op) = regular_binary_operator {
-            Ok(Expr::BinaryOp {
+            Ok(Expr::BinaryOp(BinaryOp {
                 left: Box::new(expr),
                 op,
                 right: Box::new(self.parse_subexpr(precedence)?),
-            })
+            }))
         } else if let Token::Word(w) = &tok {
             match w.keyword {
                 Keyword::IS => {
@@ -941,10 +941,10 @@ impl<'a> Parser<'a> {
             self.parse_pg_cast(expr)
         } else if Token::ExclamationMark == tok {
             // PostgreSQL factorial operation
-            Ok(Expr::UnaryOp {
+            Ok(Expr::UnaryOp(UnaryOp {
                 op: UnaryOperator::PGPostfixFactorial,
                 expr: Box::new(expr),
-            })
+            }))
         } else if Token::LBracket == tok {
             self.parse_map_access(expr)
         } else {
@@ -958,10 +958,12 @@ impl<'a> Parser<'a> {
         let tok = self.consume_token(&Token::RBracket);
         debug!("Tok: {}", tok);
         match expr {
-            e @ Expr::Identifier(_) | e @ Expr::CompoundIdentifier(_) => Ok(Expr::MapAccess {
-                column: Box::new(e),
-                key,
-            }),
+            e @ Expr::Identifier(_) | e @ Expr::CompoundIdentifier(_) => {
+                Ok(Expr::MapAccess(MapAccess {
+                    column: Box::new(e),
+                    key,
+                }))
+            }
             _ => Ok(expr),
         }
     }
@@ -971,17 +973,17 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let in_op = if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
             self.prev_token();
-            Expr::InSubquery {
+            Expr::InSubquery(InSubquery {
                 expr: Box::new(expr),
                 subquery: Box::new(self.parse_query()?),
                 negated,
-            }
+            })
         } else {
-            Expr::InList {
+            Expr::InList(InList {
                 expr: Box::new(expr),
                 list: self.parse_comma_separated(Parser::parse_expr)?,
                 negated,
-            }
+            })
         };
         self.expect_token(&Token::RParen)?;
         Ok(in_op)
@@ -994,20 +996,20 @@ impl<'a> Parser<'a> {
         let low = self.parse_subexpr(Self::BETWEEN_PREC)?;
         self.expect_keyword(Keyword::AND)?;
         let high = self.parse_subexpr(Self::BETWEEN_PREC)?;
-        Ok(Expr::Between {
+        Ok(Expr::Between(Between {
             expr: Box::new(expr),
             negated,
             low: Box::new(low),
             high: Box::new(high),
-        })
+        }))
     }
 
     /// Parse a postgresql casting style which is in the form of `expr::datatype`
     pub fn parse_pg_cast(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        Ok(Expr::Cast {
+        Ok(Expr::Cast(Cast {
             expr: Box::new(expr),
             data_type: self.parse_data_type()?,
-        })
+        }))
     }
 
     const UNARY_NOT_PREC: u8 = 15;
@@ -1269,16 +1271,16 @@ impl<'a> Parser<'a> {
             .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
             .is_some();
         if self.parse_keyword(Keyword::TABLE) {
-            Ok(Statement::CreateTable(
-                Box::new(self.parse_create_table(or_replace, temporary)?),
-            ))
+            Ok(Statement::CreateTable(Box::new(
+                self.parse_create_table(or_replace, temporary)?,
+            )))
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
             Ok(Statement::CreateView(self.parse_create_view(or_replace)?))
         } else if self.parse_keyword(Keyword::EXTERNAL) {
-            Ok(Statement::CreateTable(
-                Box::new(self.parse_create_external_table(or_replace)?),
-            ))
+            Ok(Statement::CreateTable(Box::new(
+                self.parse_create_external_table(or_replace)?,
+            )))
         } else if or_replace {
             self.expected(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW after CREATE OR REPLACE",

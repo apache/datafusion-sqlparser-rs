@@ -14,11 +14,13 @@
 
 mod data_type;
 mod ddl;
+mod expression;
 mod operator;
 mod query;
-mod value;
 mod statement;
-pub use statement::*; 
+mod value;
+pub use expression::*;
+pub use statement::*;
 
 #[cfg(not(feature = "std"))]
 use alloc::{
@@ -146,250 +148,6 @@ pub struct ObjectName(pub Vec<Ident>);
 impl fmt::Display for ObjectName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", display_separated(&self.0, "."))
-    }
-}
-
-/// An SQL expression of any type.
-///
-/// The parser does not distinguish between expressions of different types
-/// (e.g. boolean vs string), so the caller must handle expressions of
-/// inappropriate type, like `WHERE 1` or `SELECT 1=1`, as necessary.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum Expr {
-    /// Identifier e.g. table name or column name
-    Identifier(Ident),
-    /// Unqualified wildcard (`*`). SQL allows this in limited contexts, such as:
-    /// - right after `SELECT` (which is represented as a [SelectItem::Wildcard] instead)
-    /// - or as part of an aggregate function, e.g. `COUNT(*)`,
-    ///
-    /// ...but we currently also accept it in contexts where it doesn't make
-    /// sense, such as `* + *`
-    Wildcard,
-    /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
-    /// (Same caveats apply to `QualifiedWildcard` as to `Wildcard`.)
-    QualifiedWildcard(Vec<Ident>),
-    /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
-    CompoundIdentifier(Vec<Ident>),
-    /// `IS NULL` expression
-    IsNull(Box<Expr>),
-    /// `IS NOT NULL` expression
-    IsNotNull(Box<Expr>),
-    /// `[ NOT ] IN (val1, val2, ...)`
-    InList {
-        expr: Box<Expr>,
-        list: Vec<Expr>,
-        negated: bool,
-    },
-    /// `[ NOT ] IN (SELECT ...)`
-    InSubquery {
-        expr: Box<Expr>,
-        subquery: Box<Query>,
-        negated: bool,
-    },
-    /// `<expr> [ NOT ] BETWEEN <low> AND <high>`
-    Between {
-        expr: Box<Expr>,
-        negated: bool,
-        low: Box<Expr>,
-        high: Box<Expr>,
-    },
-    /// Binary operation e.g. `1 + 1` or `foo > bar`
-    BinaryOp {
-        left: Box<Expr>,
-        op: BinaryOperator,
-        right: Box<Expr>,
-    },
-    /// Unary operation e.g. `NOT foo`
-    UnaryOp {
-        op: UnaryOperator,
-        expr: Box<Expr>,
-    },
-    /// CAST an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
-    Cast {
-        expr: Box<Expr>,
-        data_type: DataType,
-    },
-    /// TRY_CAST an expression to a different data type e.g. `TRY_CAST(foo AS VARCHAR(123))`
-    //  this differs from CAST in the choice of how to implement invalid conversions
-    TryCast {
-        expr: Box<Expr>,
-        data_type: DataType,
-    },
-    /// EXTRACT(DateTimeField FROM <expr>)
-    Extract {
-        field: DateTimeField,
-        expr: Box<Expr>,
-    },
-    /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
-    Substring {
-        expr: Box<Expr>,
-        substring_from: Option<Box<Expr>>,
-        substring_for: Option<Box<Expr>>,
-    },
-    /// TRIM([BOTH | LEADING | TRAILING] <expr> [FROM <expr>])\
-    /// Or\
-    /// TRIM(<expr>)
-    Trim {
-        expr: Box<Expr>,
-        // ([BOTH | LEADING | TRAILING], <expr>)
-        trim_where: Option<(TrimWhereField, Box<Expr>)>,
-    },
-    /// `expr COLLATE collation`
-    Collate {
-        expr: Box<Expr>,
-        collation: ObjectName,
-    },
-    /// Nested expression e.g. `(foo > bar)` or `(1)`
-    Nested(Box<Expr>),
-    /// A literal value, such as string, number, date or NULL
-    Value(Value),
-    /// A constant of form `<data_type> 'value'`.
-    /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
-    /// as well as constants of other types (a non-standard PostgreSQL extension).
-    TypedString {
-        data_type: DataType,
-        value: String,
-    },
-    MapAccess {
-        column: Box<Expr>,
-        key: String,
-    },
-    /// Scalar function call e.g. `LEFT(foo, 5)`
-    Function(Function),
-    /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
-    ///
-    /// Note we only recognize a complete single expression as `<condition>`,
-    /// not `< 0` nor `1, 2, 3` as allowed in a `<simple when clause>` per
-    /// <https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#simple-when-clause>
-    Case {
-        operand: Option<Box<Expr>>,
-        conditions: Vec<Expr>,
-        results: Vec<Expr>,
-        else_result: Option<Box<Expr>>,
-    },
-    /// An exists expression `EXISTS(SELECT ...)`, used in expressions like
-    /// `WHERE EXISTS (SELECT ...)`.
-    Exists(Box<Query>),
-    /// A parenthesized subquery `(SELECT ...)`, used in expression like
-    /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
-    Subquery(Box<Query>),
-    /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
-    ListAgg(ListAgg),
-}
-
-impl fmt::Display for Expr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Expr::Identifier(s) => write!(f, "{}", s),
-            Expr::MapAccess { column, key } => write!(f, "{}[\"{}\"]", column, key),
-            Expr::Wildcard => f.write_str("*"),
-            Expr::QualifiedWildcard(q) => write!(f, "{}.*", display_separated(q, ".")),
-            Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
-            Expr::IsNull(ast) => write!(f, "{} IS NULL", ast),
-            Expr::IsNotNull(ast) => write!(f, "{} IS NOT NULL", ast),
-            Expr::InList {
-                expr,
-                list,
-                negated,
-            } => write!(
-                f,
-                "{} {}IN ({})",
-                expr,
-                if *negated { "NOT " } else { "" },
-                display_comma_separated(list)
-            ),
-            Expr::InSubquery {
-                expr,
-                subquery,
-                negated,
-            } => write!(
-                f,
-                "{} {}IN ({})",
-                expr,
-                if *negated { "NOT " } else { "" },
-                subquery
-            ),
-            Expr::Between {
-                expr,
-                negated,
-                low,
-                high,
-            } => write!(
-                f,
-                "{} {}BETWEEN {} AND {}",
-                expr,
-                if *negated { "NOT " } else { "" },
-                low,
-                high
-            ),
-            Expr::BinaryOp { left, op, right } => write!(f, "{} {} {}", left, op, right),
-            Expr::UnaryOp { op, expr } => {
-                if op == &UnaryOperator::PGPostfixFactorial {
-                    write!(f, "{}{}", expr, op)
-                } else {
-                    write!(f, "{} {}", op, expr)
-                }
-            }
-            Expr::Cast { expr, data_type } => write!(f, "CAST({} AS {})", expr, data_type),
-            Expr::TryCast { expr, data_type } => write!(f, "TRY_CAST({} AS {})", expr, data_type),
-            Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
-            Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),
-            Expr::Nested(ast) => write!(f, "({})", ast),
-            Expr::Value(v) => write!(f, "{}", v),
-            Expr::TypedString { data_type, value } => {
-                write!(f, "{}", data_type)?;
-                write!(f, " '{}'", &value::escape_single_quote_string(value))
-            }
-            Expr::Function(fun) => write!(f, "{}", fun),
-            Expr::Case {
-                operand,
-                conditions,
-                results,
-                else_result,
-            } => {
-                write!(f, "CASE")?;
-                if let Some(operand) = operand {
-                    write!(f, " {}", operand)?;
-                }
-                for (c, r) in conditions.iter().zip(results) {
-                    write!(f, " WHEN {} THEN {}", c, r)?;
-                }
-
-                if let Some(else_result) = else_result {
-                    write!(f, " ELSE {}", else_result)?;
-                }
-                write!(f, " END")
-            }
-            Expr::Exists(s) => write!(f, "EXISTS ({})", s),
-            Expr::Subquery(s) => write!(f, "({})", s),
-            Expr::ListAgg(listagg) => write!(f, "{}", listagg),
-            Expr::Substring {
-                expr,
-                substring_from,
-                substring_for,
-            } => {
-                write!(f, "SUBSTRING({}", expr)?;
-                if let Some(from_part) = substring_from {
-                    write!(f, " FROM {}", from_part)?;
-                }
-                if let Some(from_part) = substring_for {
-                    write!(f, " FOR {}", from_part)?;
-                }
-
-                write!(f, ")")
-            }
-            Expr::Trim { expr, trim_where } => {
-                write!(f, "TRIM(")?;
-                if let Some((ident, trim_char)) = trim_where {
-                    write!(f, "{} {} FROM {}", ident, trim_char, expr)?;
-                } else {
-                    write!(f, "{}", expr)?;
-                }
-
-                write!(f, ")")
-            }
-        }
     }
 }
 
@@ -549,7 +307,7 @@ impl fmt::Display for ShowCreateObject {
 
 #[test]
 fn func() {
-    dbg!(std::mem::size_of::<Statement>()); 
+    dbg!(std::mem::size_of::<Statement>());
 }
 /// SQL assignment `foo = expr` as used in SQLUpdate
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

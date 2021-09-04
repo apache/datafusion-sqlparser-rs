@@ -225,11 +225,11 @@ fn parse_where_delete_statement() {
             assert_eq!(ObjectName(vec![Ident::new("foo")]), table_name);
 
             assert_eq!(
-                Expr::BinaryOp {
+                Expr::BinaryOp(BinaryOp {
                     left: Box::new(Expr::Identifier(Ident::new("name"))),
                     op: Eq,
                     right: Box::new(Expr::Value(number("5"))),
-                },
+                }),
                 selection.unwrap(),
             );
         }
@@ -326,9 +326,9 @@ fn parse_column_aliases() {
     let sql = "SELECT a.col + 1 AS newname FROM foo AS a";
     let select = verified_only_select(sql);
     if let SelectItem::ExprWithAlias {
-        expr: Expr::BinaryOp {
+        expr: Expr::BinaryOp(BinaryOp {
             ref op, ref right, ..
-        },
+        }),
         ref alias,
     } = only(&select.projection)
     {
@@ -389,10 +389,10 @@ fn parse_select_count_distinct() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("COUNT")]),
-            args: vec![FunctionArg::Unnamed(Expr::UnaryOp {
+            args: vec![FunctionArg::Unnamed(Expr::UnaryOp(UnaryOp {
                 op: UnaryOperator::Plus,
                 expr: Box::new(Expr::Identifier(Ident::new("x"))),
-            })],
+            }))],
             over: None,
             distinct: true,
         }),
@@ -482,13 +482,13 @@ fn parse_escaped_single_quote_string_predicate() {
                WHERE salary <> 'Jim''s salary'";
     let ast = verified_only_select(sql);
     assert_eq!(
-        Some(Expr::BinaryOp {
+        Some(Expr::BinaryOp(BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("salary"))),
             op: NotEq,
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "Jim's salary".to_string()
             )))
-        }),
+        })),
         ast.selection,
     );
 }
@@ -510,18 +510,18 @@ fn parse_number() {
 #[test]
 fn parse_compound_expr_1() {
     use self::BinaryOperator::*;
-    use self::Expr::*;
+    use self::Expr::Identifier;
     let sql = "a + b * c";
     assert_eq!(
-        BinaryOp {
+        Expr::BinaryOp(BinaryOp {
             left: Box::new(Identifier(Ident::new("a"))),
             op: Plus,
-            right: Box::new(BinaryOp {
+            right: Box::new(Expr::BinaryOp(BinaryOp {
                 left: Box::new(Identifier(Ident::new("b"))),
                 op: Multiply,
                 right: Box::new(Identifier(Ident::new("c")))
-            })
-        },
+            }))
+        }),
         verified_expr(sql)
     );
 }
@@ -529,38 +529,37 @@ fn parse_compound_expr_1() {
 #[test]
 fn parse_compound_expr_2() {
     use self::BinaryOperator::*;
-    use self::Expr::*;
+
     let sql = "a * b + c";
     assert_eq!(
-        BinaryOp {
-            left: Box::new(BinaryOp {
-                left: Box::new(Identifier(Ident::new("a"))),
+        Expr::BinaryOp(BinaryOp {
+            left: Box::new(Expr::BinaryOp(BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
                 op: Multiply,
-                right: Box::new(Identifier(Ident::new("b")))
-            }),
+                right: Box::new(Expr::Identifier(Ident::new("b")))
+            })),
             op: Plus,
-            right: Box::new(Identifier(Ident::new("c")))
-        },
+            right: Box::new(Expr::Identifier(Ident::new("c")))
+        }),
         verified_expr(sql)
     );
 }
 
 #[test]
 fn parse_unary_math() {
-    use self::Expr::*;
     let sql = "- a + - b";
     assert_eq!(
-        BinaryOp {
-            left: Box::new(UnaryOp {
+        Expr::BinaryOp(BinaryOp {
+            left: Box::new(Expr::UnaryOp(UnaryOp {
                 op: UnaryOperator::Minus,
-                expr: Box::new(Identifier(Ident::new("a"))),
-            }),
+                expr: Box::new(Expr::Identifier(Ident::new("a"))),
+            })),
             op: BinaryOperator::Plus,
-            right: Box::new(UnaryOp {
+            right: Box::new(Expr::UnaryOp(UnaryOp {
                 op: UnaryOperator::Minus,
-                expr: Box::new(Identifier(Ident::new("b"))),
-            }),
-        },
+                expr: Box::new(Expr::Identifier(Ident::new("b"))),
+            })),
+        }),
         verified_expr(sql)
     );
 }
@@ -591,63 +590,63 @@ fn parse_not_precedence() {
     let sql = "NOT true OR true";
     assert_matches!(
         verified_expr(sql),
-        Expr::BinaryOp {
+        Expr::BinaryOp(BinaryOp {
             op: BinaryOperator::Or,
             ..
-        }
+        })
     );
 
     // But NOT has lower precedence than comparison operators, so the following parses as NOT (a IS NULL)
     let sql = "NOT a IS NULL";
     assert_matches!(
         verified_expr(sql),
-        Expr::UnaryOp {
+        Expr::UnaryOp(UnaryOp {
             op: UnaryOperator::Not,
             ..
-        }
+        })
     );
 
     // NOT has lower precedence than BETWEEN, so the following parses as NOT (1 NOT BETWEEN 1 AND 2)
     let sql = "NOT 1 NOT BETWEEN 1 AND 2";
     assert_eq!(
         verified_expr(sql),
-        Expr::UnaryOp {
+        Expr::UnaryOp(UnaryOp {
             op: UnaryOperator::Not,
-            expr: Box::new(Expr::Between {
+            expr: Box::new(Expr::Between(Between {
                 expr: Box::new(Expr::Value(number("1"))),
                 low: Box::new(Expr::Value(number("1"))),
                 high: Box::new(Expr::Value(number("2"))),
                 negated: true,
-            }),
-        },
+            })),
+        }),
     );
 
     // NOT has lower precedence than LIKE, so the following parses as NOT ('a' NOT LIKE 'b')
     let sql = "NOT 'a' NOT LIKE 'b'";
     assert_eq!(
         verified_expr(sql),
-        Expr::UnaryOp {
+        Expr::UnaryOp(UnaryOp {
             op: UnaryOperator::Not,
-            expr: Box::new(Expr::BinaryOp {
+            expr: Box::new(Expr::BinaryOp(BinaryOp {
                 left: Box::new(Expr::Value(Value::SingleQuotedString("a".into()))),
                 op: BinaryOperator::NotLike,
                 right: Box::new(Expr::Value(Value::SingleQuotedString("b".into()))),
-            }),
-        },
+            })),
+        }),
     );
 
     // NOT has lower precedence than IN, so the following parses as NOT (a NOT IN 'a')
     let sql = "NOT a NOT IN ('a')";
     assert_eq!(
         verified_expr(sql),
-        Expr::UnaryOp {
+        Expr::UnaryOp(UnaryOp {
             op: UnaryOperator::Not,
-            expr: Box::new(Expr::InList {
+            expr: Box::new(Expr::InList(InList {
                 expr: Box::new(Expr::Identifier("a".into())),
                 list: vec![Expr::Value(Value::SingleQuotedString("a".into()))],
                 negated: true,
-            }),
-        },
+            })),
+        }),
     );
 }
 
@@ -660,7 +659,7 @@ fn parse_like() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::BinaryOp {
+            Expr::BinaryOp(BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("name"))),
                 op: if negated {
                     BinaryOperator::NotLike
@@ -668,7 +667,7 @@ fn parse_like() {
                     BinaryOperator::Like
                 },
                 right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-            },
+            }),
             select.selection.unwrap()
         );
 
@@ -680,7 +679,7 @@ fn parse_like() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::IsNull(Box::new(Expr::BinaryOp {
+            Expr::IsNull(Box::new(Expr::BinaryOp(BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("name"))),
                 op: if negated {
                     BinaryOperator::NotLike
@@ -688,7 +687,7 @@ fn parse_like() {
                     BinaryOperator::Like
                 },
                 right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-            })),
+            }))),
             select.selection.unwrap()
         );
     }
@@ -705,7 +704,7 @@ fn parse_ilike() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::BinaryOp {
+            Expr::BinaryOp(BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("name"))),
                 op: if negated {
                     BinaryOperator::NotILike
@@ -713,7 +712,7 @@ fn parse_ilike() {
                     BinaryOperator::ILike
                 },
                 right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-            },
+            }),
             select.selection.unwrap()
         );
 
@@ -725,7 +724,7 @@ fn parse_ilike() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::IsNull(Box::new(Expr::BinaryOp {
+            Expr::IsNull(Box::new(Expr::BinaryOp(BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("name"))),
                 op: if negated {
                     BinaryOperator::NotILike
@@ -733,7 +732,7 @@ fn parse_ilike() {
                     BinaryOperator::ILike
                 },
                 right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-            })),
+            }))),
             select.selection.unwrap()
         );
     }
@@ -750,14 +749,14 @@ fn parse_in_list() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::InList {
+            Expr::InList(InList {
                 expr: Box::new(Expr::Identifier(Ident::new("segment"))),
                 list: vec![
                     Expr::Value(Value::SingleQuotedString("HIGH".to_string())),
                     Expr::Value(Value::SingleQuotedString("MED".to_string())),
                 ],
                 negated,
-            },
+            }),
             select.selection.unwrap()
         );
     }
@@ -770,11 +769,11 @@ fn parse_in_subquery() {
     let sql = "SELECT * FROM customers WHERE segment IN (SELECT segm FROM bar)";
     let select = verified_only_select(sql);
     assert_eq!(
-        Expr::InSubquery {
+        Expr::InSubquery(InSubquery {
             expr: Box::new(Expr::Identifier(Ident::new("segment"))),
             subquery: Box::new(verified_query("SELECT segm FROM bar")),
             negated: false,
-        },
+        }),
         select.selection.unwrap()
     );
 }
@@ -785,11 +784,11 @@ fn parse_string_agg() {
 
     let select = verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
+        SelectItem::UnnamedExpr(Expr::BinaryOp(BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("a"))),
             op: BinaryOperator::StringConcat,
             right: Box::new(Expr::Identifier(Ident::new("b"))),
-        }),
+        })),
         select.projection[0]
     );
 }
@@ -805,11 +804,11 @@ fn parse_bitwise_ops() {
     for (str_op, op) in bitwise_ops {
         let select = verified_only_select(&format!("SELECT a {} b", &str_op));
         assert_eq!(
-            SelectItem::UnnamedExpr(Expr::BinaryOp {
+            SelectItem::UnnamedExpr(Expr::BinaryOp(BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("a"))),
                 op: op.clone(),
                 right: Box::new(Expr::Identifier(Ident::new("b"))),
-            }),
+            })),
             select.projection[0]
         );
     }
@@ -824,12 +823,12 @@ fn parse_between() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::Between {
+            Expr::Between(Between {
                 expr: Box::new(Expr::Identifier(Ident::new("age"))),
                 low: Box::new(Expr::Value(number("25"))),
                 high: Box::new(Expr::Value(number("32"))),
                 negated,
-            },
+            }),
             select.selection.unwrap()
         );
     }
@@ -843,44 +842,44 @@ fn parse_between_with_expr() {
     let sql = "SELECT * FROM t WHERE 1 BETWEEN 1 + 2 AND 3 + 4 IS NULL";
     let select = verified_only_select(sql);
     assert_eq!(
-        Expr::IsNull(Box::new(Expr::Between {
+        Expr::IsNull(Box::new(Expr::Between(Between {
             expr: Box::new(Expr::Value(number("1"))),
-            low: Box::new(Expr::BinaryOp {
+            low: Box::new(Expr::BinaryOp(BinaryOp {
                 left: Box::new(Expr::Value(number("1"))),
                 op: Plus,
                 right: Box::new(Expr::Value(number("2"))),
-            }),
-            high: Box::new(Expr::BinaryOp {
+            })),
+            high: Box::new(Expr::BinaryOp(BinaryOp {
                 left: Box::new(Expr::Value(number("3"))),
                 op: Plus,
                 right: Box::new(Expr::Value(number("4"))),
-            }),
+            })),
             negated: false,
-        })),
+        }))),
         select.selection.unwrap()
     );
 
     let sql = "SELECT * FROM t WHERE 1 = 1 AND 1 + x BETWEEN 1 AND 2";
     let select = verified_only_select(sql);
     assert_eq!(
-        Expr::BinaryOp {
-            left: Box::new(Expr::BinaryOp {
+        Expr::BinaryOp(BinaryOp {
+            left: Box::new(Expr::BinaryOp(BinaryOp {
                 left: Box::new(Expr::Value(number("1"))),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Value(number("1"))),
-            }),
+            })),
             op: BinaryOperator::And,
-            right: Box::new(Expr::Between {
-                expr: Box::new(Expr::BinaryOp {
+            right: Box::new(Expr::Between(Between {
+                expr: Box::new(Expr::BinaryOp(BinaryOp {
                     left: Box::new(Expr::Value(number("1"))),
                     op: BinaryOperator::Plus,
                     right: Box::new(Expr::Identifier(Ident::new("x"))),
-                }),
+                })),
                 low: Box::new(Expr::Value(number("1"))),
                 high: Box::new(Expr::Value(number("2"))),
                 negated: false,
-            }),
-        },
+            })),
+        }),
         select.selection.unwrap(),
     )
 }
@@ -980,7 +979,7 @@ fn parse_select_having() {
     let sql = "SELECT foo FROM bar GROUP BY foo HAVING COUNT(*) > 1";
     let select = verified_only_select(sql);
     assert_eq!(
-        Some(Expr::BinaryOp {
+        Some(Expr::BinaryOp(BinaryOp {
             left: Box::new(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("COUNT")]),
                 args: vec![FunctionArg::Unnamed(Expr::Wildcard)],
@@ -989,7 +988,7 @@ fn parse_select_having() {
             })),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Value(number("1")))
-        }),
+        })),
         select.having
     );
 
@@ -1011,20 +1010,20 @@ fn parse_cast() {
     let sql = "SELECT CAST(id AS BIGINT) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast {
+        &Expr::Cast(Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None)
-        },
+        }),
         expr_from_projection(only(&select.projection))
     );
 
     let sql = "SELECT CAST(id AS TINYINT) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Cast {
+        &Expr::Cast(Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::TinyInt(None)
-        },
+        }),
         expr_from_projection(only(&select.projection))
     );
 
@@ -1051,10 +1050,10 @@ fn parse_try_cast() {
     let sql = "SELECT TRY_CAST(id AS BIGINT) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TryCast {
+        &Expr::TryCast(TryCast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None)
-        },
+        }),
         expr_from_projection(only(&select.projection))
     );
     one_statement_parses_to(
@@ -1080,10 +1079,10 @@ fn parse_extract() {
     let sql = "SELECT EXTRACT(YEAR FROM d)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Extract {
+        &Expr::Extract(Extract {
             field: DateTimeField::Year,
             expr: Box::new(Expr::Identifier(Ident::new("d"))),
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -1937,10 +1936,10 @@ fn parse_literal_date() {
     let sql = "SELECT DATE '1999-01-01'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Date,
             value: "1999-01-01".into()
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -1950,10 +1949,10 @@ fn parse_literal_time() {
     let sql = "SELECT TIME '01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Time,
             value: "01:23:34".into()
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -1963,10 +1962,10 @@ fn parse_literal_timestamp() {
     let sql = "SELECT TIMESTAMP '1999-01-01 01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::TypedString {
+        &Expr::TypedString(TypedString {
             data_type: DataType::Timestamp,
             value: "1999-01-01 01:23:34".into()
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -2184,22 +2183,22 @@ fn parse_delimited_identifiers() {
 #[test]
 fn parse_parens() {
     use self::BinaryOperator::*;
-    use self::Expr::*;
+    use Expr::{Identifier, Nested};
     let sql = "(a + b) - (c + d)";
     assert_eq!(
-        BinaryOp {
-            left: Box::new(Nested(Box::new(BinaryOp {
+        Expr::BinaryOp(BinaryOp {
+            left: Box::new(Nested(Box::new(Expr::BinaryOp(BinaryOp {
                 left: Box::new(Identifier(Ident::new("a"))),
                 op: Plus,
                 right: Box::new(Identifier(Ident::new("b")))
-            }))),
+            })))),
             op: Minus,
-            right: Box::new(Nested(Box::new(BinaryOp {
+            right: Box::new(Nested(Box::new(Expr::BinaryOp(BinaryOp {
                 left: Box::new(Identifier(Ident::new("c"))),
                 op: Plus,
                 right: Box::new(Identifier(Ident::new("d")))
-            })))
-        },
+            }))))
+        }),
         verified_expr(sql)
     );
 }
@@ -2208,23 +2207,23 @@ fn parse_parens() {
 fn parse_searched_case_expr() {
     let sql = "SELECT CASE WHEN bar IS NULL THEN 'null' WHEN bar = 0 THEN '=0' WHEN bar >= 0 THEN '>=0' ELSE '<0' END FROM foo";
     use self::BinaryOperator::*;
-    use self::Expr::{BinaryOp, Case, Identifier, IsNull};
+    use self::Expr::{Identifier, IsNull};
     let select = verified_only_select(sql);
     assert_eq!(
-        &Case {
+        &Expr::Case(Case {
             operand: None,
             conditions: vec![
                 IsNull(Box::new(Identifier(Ident::new("bar")))),
-                BinaryOp {
+                Expr::BinaryOp(BinaryOp {
                     left: Box::new(Identifier(Ident::new("bar"))),
                     op: Eq,
                     right: Box::new(Expr::Value(number("0")))
-                },
-                BinaryOp {
+                }),
+                Expr::BinaryOp(BinaryOp {
                     left: Box::new(Identifier(Ident::new("bar"))),
                     op: GtEq,
                     right: Box::new(Expr::Value(number("0")))
-                }
+                })
             ],
             results: vec![
                 Expr::Value(Value::SingleQuotedString("null".to_string())),
@@ -2234,7 +2233,7 @@ fn parse_searched_case_expr() {
             else_result: Some(Box::new(Expr::Value(Value::SingleQuotedString(
                 "<0".to_string()
             ))))
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -2244,16 +2243,16 @@ fn parse_simple_case_expr() {
     // ANSI calls a CASE expression with an operand "<simple case>"
     let sql = "SELECT CASE foo WHEN 1 THEN 'Y' ELSE 'N' END";
     let select = verified_only_select(sql);
-    use self::Expr::{Case, Identifier};
+    use self::Expr::Identifier;
     assert_eq!(
-        &Case {
+        &Expr::Case(Case {
             operand: Some(Box::new(Identifier(Ident::new("foo")))),
             conditions: vec![Expr::Value(number("1"))],
             results: vec![Expr::Value(Value::SingleQuotedString("Y".to_string())),],
             else_result: Some(Box::new(Expr::Value(Value::SingleQuotedString(
                 "N".to_string()
             ))))
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -2367,11 +2366,11 @@ fn parse_joins_on() {
                 args: vec![],
                 with_hints: vec![],
             },
-            join_operator: f(JoinConstraint::On(Expr::BinaryOp {
+            join_operator: f(JoinConstraint::On(Expr::BinaryOp(BinaryOp {
                 left: Box::new(Expr::Identifier("c1".into())),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Identifier("c2".into())),
-            })),
+            }))),
         }
     }
     // Test parsing of aliases
@@ -2780,11 +2779,11 @@ fn parse_scalar_subqueries() {
     let sql = "(SELECT 1) + (SELECT 2)";
     assert_matches!(
         verified_expr(sql),
-        Expr::BinaryOp {
+        Expr::BinaryOp(BinaryOp {
         op: BinaryOperator::Plus, ..
         //left: box Subquery { .. },
         //right: box Subquery { .. },
-    }
+    })
     );
 }
 
@@ -2843,10 +2842,10 @@ fn parse_exists_subquery() {
     let sql = "SELECT * FROM t WHERE NOT EXISTS (SELECT 1)";
     let select = verified_only_select(sql);
     assert_eq!(
-        Expr::UnaryOp {
+        Expr::UnaryOp(UnaryOp {
             op: UnaryOperator::Not,
             expr: Box::new(Expr::Exists(Box::new(expected_inner))),
-        },
+        }),
         select.selection.unwrap(),
     );
 

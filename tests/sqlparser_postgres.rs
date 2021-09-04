@@ -42,7 +42,7 @@ fn parse_create_table_with_defaults() {
             let columns = table.columns;
             let constraints = table.constraints;
             let with_options = table.with_options;
-            
+
             assert!(!table.external);
             assert!(!table.if_not_exists);
             assert_eq!("public.customer", name.to_string());
@@ -592,11 +592,11 @@ fn parse_pg_bitwise_binary_ops() {
     for (str_op, op) in bitwise_ops {
         let select = pg().verified_only_select(&format!("SELECT a {} b", &str_op));
         assert_eq!(
-            SelectItem::UnnamedExpr(Expr::BinaryOp {
+            SelectItem::UnnamedExpr(Expr::BinaryOp(BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("a"))),
                 op: op.clone(),
                 right: Box::new(Expr::Identifier(Ident::new("b"))),
-            }),
+            })),
             select.projection[0]
         );
     }
@@ -615,10 +615,10 @@ fn parse_pg_unary_ops() {
     for (str_op, op) in pg_unary_ops {
         let select = pg().verified_only_select(&format!("SELECT {} a", &str_op));
         assert_eq!(
-            SelectItem::UnnamedExpr(Expr::UnaryOp {
+            SelectItem::UnnamedExpr(Expr::UnaryOp(UnaryOp {
                 op: op.clone(),
                 expr: Box::new(Expr::Identifier(Ident::new("a"))),
-            }),
+            })),
             select.projection[0]
         );
     }
@@ -631,10 +631,10 @@ fn parse_pg_postfix_factorial() {
     for (str_op, op) in postfix_factorial {
         let select = pg().verified_only_select(&format!("SELECT a{}", &str_op));
         assert_eq!(
-            SelectItem::UnnamedExpr(Expr::UnaryOp {
+            SelectItem::UnnamedExpr(Expr::UnaryOp(UnaryOp {
                 op: op.clone(),
                 expr: Box::new(Expr::Identifier(Ident::new("a"))),
-            }),
+            })),
             select.projection[0]
         );
     }
@@ -652,11 +652,11 @@ fn parse_pg_regex_match_ops() {
     for (str_op, op) in pg_regex_match_ops {
         let select = pg().verified_only_select(&format!("SELECT 'abc' {} '^a'", &str_op));
         assert_eq!(
-            SelectItem::UnnamedExpr(Expr::BinaryOp {
+            SelectItem::UnnamedExpr(Expr::BinaryOp(BinaryOp {
                 left: Box::new(Expr::Value(Value::SingleQuotedString("abc".into()))),
                 op: op.clone(),
                 right: Box::new(Expr::Value(Value::SingleQuotedString("^a".into()))),
-            }),
+            })),
             select.projection[0]
         );
     }

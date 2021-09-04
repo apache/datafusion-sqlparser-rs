@@ -24,7 +24,7 @@ use sqlparser::tokenizer::Token;
 
 #[test]
 fn parse_create_table_without_rowid() {
-    let sql = "CREATE TABLE t (a INT) WITHOUT ROWID";
+    let sql = "CREATE TABLE t (a INTEGER) WITHOUT ROWID";
     match sqlite_and_generic().verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
             name,
@@ -61,7 +61,7 @@ fn parse_create_virtual_table() {
 
 #[test]
 fn parse_create_table_auto_increment() {
-    let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTOINCREMENT)";
+    let sql = "CREATE TABLE foo (bar INTEGER PRIMARY KEY AUTOINCREMENT)";
     match sqlite_and_generic().verified_stmt(sql) {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "foo");
@@ -92,7 +92,7 @@ fn parse_create_table_auto_increment() {
 
 #[test]
 fn parse_create_sqlite_quote() {
-    let sql = "CREATE TABLE `PRIMARY` (\"KEY\" INT, [INDEX] INT)";
+    let sql = "CREATE TABLE `PRIMARY` (\"KEY\" INTEGER, [INDEX] INTEGER)";
     match sqlite().verified_stmt(sql) {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "`PRIMARY`");

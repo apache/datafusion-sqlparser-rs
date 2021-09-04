@@ -203,7 +203,7 @@ fn parse_create_table_from_pg_dump() {
             active integer
         )";
     pg().one_statement_parses_to(sql, "CREATE TABLE public.customer (\
-            customer_id INT DEFAULT nextval(CAST('public.customer_customer_id_seq' AS REGCLASS)) NOT NULL, \
+            customer_id INTEGER DEFAULT nextval(CAST('public.customer_customer_id_seq' AS REGCLASS)) NOT NULL, \
             store_id SMALLINT NOT NULL, \
             first_name CHARACTER VARYING(45) NOT NULL, \
             last_name CHARACTER VARYING(45) NOT NULL, \
@@ -214,7 +214,7 @@ fn parse_create_table_from_pg_dump() {
             create_date1 DATE DEFAULT CAST(CAST('now' AS TEXT) AS DATE) NOT NULL, \
             last_update TIMESTAMP DEFAULT now(), \
             release_year public.year, \
-            active INT\
+            active INTEGER\
         )");
 }
 
@@ -565,7 +565,7 @@ fn parse_prepare() {
     };
 
     let stmt = pg_and_generic()
-        .verified_stmt("PREPARE a (INT, TEXT) AS SELECT * FROM customers WHERE customers.id = a1");
+        .verified_stmt("PREPARE a (INTEGER, TEXT) AS SELECT * FROM customers WHERE customers.id = a1");
     let sub_stmt = match stmt {
         Statement::Prepare(Prepare {
             name,

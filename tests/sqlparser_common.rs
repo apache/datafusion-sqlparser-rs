@@ -1160,9 +1160,9 @@ fn parse_create_table() {
                name VARCHAR(100) NOT NULL,\
                lat DOUBLE NULL,\
                lng DOUBLE,
-               constrained INT NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0),
-               ref INT REFERENCES othertable (a, b),\
-               ref2 INT references othertable2 on delete cascade on update no action,\
+               constrained INTEGER NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0),
+               ref INTEGER REFERENCES othertable (a, b),\
+               ref2 INTEGER references othertable2 on delete cascade on update no action,\
                constraint fkey foreign key (lat) references othertable3 (lat) on delete restrict,\
                constraint fkey2 foreign key (lat) references othertable4(lat) on delete no action on update restrict, \
                foreign key (lat) references othertable4(lat) on update set default on delete cascade, \
@@ -1174,9 +1174,9 @@ fn parse_create_table() {
          name CHARACTER VARYING(100) NOT NULL, \
          lat DOUBLE NULL, \
          lng DOUBLE, \
-         constrained INT NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0), \
-         ref INT REFERENCES othertable (a, b), \
-         ref2 INT REFERENCES othertable2 ON DELETE CASCADE ON UPDATE NO ACTION, \
+         constrained INTEGER NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0), \
+         ref INTEGER REFERENCES othertable (a, b), \
+         ref2 INTEGER REFERENCES othertable2 ON DELETE CASCADE ON UPDATE NO ACTION, \
          CONSTRAINT fkey FOREIGN KEY (lat) REFERENCES othertable3(lat) ON DELETE RESTRICT, \
          CONSTRAINT fkey2 FOREIGN KEY (lat) REFERENCES othertable4(lat) ON DELETE NO ACTION ON UPDATE RESTRICT, \
          FOREIGN KEY (lat) REFERENCES othertable4(lat) ON DELETE CASCADE ON UPDATE SET DEFAULT, \
@@ -1321,13 +1321,13 @@ fn parse_create_table() {
         _ => unreachable!(),
     }
 
-    let res = parse_sql_statements("CREATE TABLE t (a int NOT NULL GARBAGE)");
+    let res = parse_sql_statements("CREATE TABLE t (a integer NOT NULL GARBAGE)");
     assert!(res
         .unwrap_err()
         .to_string()
         .contains("Expected \',\' or \')\' after column definition, found: GARBAGE"));
 
-    let res = parse_sql_statements("CREATE TABLE t (a int NOT NULL CONSTRAINT foo)");
+    let res = parse_sql_statements("CREATE TABLE t (a integer NOT NULL CONSTRAINT foo)");
     assert!(res
         .unwrap_err()
         .to_string()
@@ -1432,12 +1432,12 @@ fn parse_create_table_as() {
     // BigQuery allows specifying table schema in CTAS
     // ANSI SQL and PostgreSQL let you only specify the list of columns
     // (without data types) in a CTAS, but we have yet to support that.
-    let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
+    let sql = "CREATE TABLE t (a INTEGER, b INTEGER) AS SELECT 1 AS b, 2 AS a";
     match verified_stmt(sql) {
         Statement::CreateTable(CreateTable { columns, query, .. }) => {
             assert_eq!(columns.len(), 2);
-            assert_eq!(columns[0].to_string(), "a INT".to_string());
-            assert_eq!(columns[1].to_string(), "b INT".to_string());
+            assert_eq!(columns[0].to_string(), "a INTEGER".to_string());
+            assert_eq!(columns[1].to_string(), "b INTEGER".to_string());
             assert_eq!(
                 query,
                 Some(Box::new(verified_query("SELECT 1 AS b, 2 AS a")))
@@ -1449,7 +1449,7 @@ fn parse_create_table_as() {
 
 #[test]
 fn parse_create_or_replace_table() {
-    let sql = "CREATE OR REPLACE TABLE t (a INT)";
+    let sql = "CREATE OR REPLACE TABLE t (a INTEGER)";
 
     match verified_stmt(sql) {
         Statement::CreateTable(CreateTable {
@@ -1461,12 +1461,12 @@ fn parse_create_or_replace_table() {
         _ => unreachable!(),
     }
 
-    let sql = "CREATE TABLE t (a INT, b INT) AS SELECT 1 AS b, 2 AS a";
+    let sql = "CREATE TABLE t (a INTEGER, b INTEGER) AS SELECT 1 AS b, 2 AS a";
     match verified_stmt(sql) {
         Statement::CreateTable(CreateTable { columns, query, .. }) => {
             assert_eq!(columns.len(), 2);
-            assert_eq!(columns[0].to_string(), "a INT".to_string());
-            assert_eq!(columns[1].to_string(), "b INT".to_string());
+            assert_eq!(columns[0].to_string(), "a INTEGER".to_string());
+            assert_eq!(columns[1].to_string(), "b INTEGER".to_string());
             assert_eq!(
                 query,
                 Some(Box::new(verified_query("SELECT 1 AS b, 2 AS a")))
@@ -1492,7 +1492,7 @@ fn parse_create_table_with_on_delete_on_update_2in_any_order() -> Result<(), Par
 
 #[test]
 fn parse_create_table_with_options() {
-    let sql = "CREATE TABLE t (c INT) WITH (foo = 'bar', a = 123)";
+    let sql = "CREATE TABLE t (c INTEGER) WITH (foo = 'bar', a = 123)";
     match verified_stmt(sql) {
         Statement::CreateTable(CreateTable { with_options, .. }) => {
             assert_eq!(
@@ -1516,7 +1516,7 @@ fn parse_create_table_with_options() {
 #[test]
 fn parse_create_table_trailing_comma() {
     let sql = "CREATE TABLE foo (bar int,)";
-    all_dialects().one_statement_parses_to(sql, "CREATE TABLE foo (bar INT)");
+    all_dialects().one_statement_parses_to(sql, "CREATE TABLE foo (bar INTEGER)");
 }
 
 #[test]
@@ -1731,7 +1731,7 @@ fn parse_alter_table_constraints() {
             }
             _ => unreachable!(),
         }
-        verified_stmt(&format!("CREATE TABLE foo (id INT, {})", constraint_text));
+        verified_stmt(&format!("CREATE TABLE foo (id INTEGER, {})", constraint_text));
     }
 }
 
@@ -2767,7 +2767,7 @@ fn parse_multiple_statements() {
     );
     test_with("DELETE FROM foo", "SELECT", " bar");
     test_with("INSERT INTO foo VALUES (1)", "SELECT", " bar");
-    test_with("CREATE TABLE foo (baz INT)", "SELECT", " bar");
+    test_with("CREATE TABLE foo (baz INTEGER)", "SELECT", " bar");
     // Make sure that empty statements do not cause an error:
     let res = parse_sql_statements(";;");
     assert_eq!(0, res.unwrap().len());

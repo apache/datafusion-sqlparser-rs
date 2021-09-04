@@ -160,8 +160,8 @@ fn decimal_precision() {
 
 #[test]
 fn create_temp_table() {
-    let query = "CREATE TEMPORARY TABLE db.table (a INT NOT NULL)";
-    let query2 = "CREATE TEMP TABLE db.table (a INT NOT NULL)";
+    let query = "CREATE TEMPORARY TABLE db.table (a INTEGER NOT NULL)";
+    let query2 = "CREATE TEMP TABLE db.table (a INTEGER NOT NULL)";
 
     hive().verified_stmt(query);
     hive().one_statement_parses_to(query2, query);

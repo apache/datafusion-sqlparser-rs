@@ -124,7 +124,7 @@ fn parse_show_create() {
 
 #[test]
 fn parse_create_table_auto_increment() {
-    let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTO_INCREMENT)";
+    let sql = "CREATE TABLE foo (bar INTEGER PRIMARY KEY AUTO_INCREMENT)";
     match mysql().verified_stmt(sql) {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "foo");
@@ -155,7 +155,7 @@ fn parse_create_table_auto_increment() {
 
 #[test]
 fn parse_quote_identifiers() {
-    let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INT PRIMARY KEY)";
+    let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INTEGER PRIMARY KEY)";
     match mysql().verified_stmt(sql) {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "`PRIMARY`");

@@ -107,7 +107,13 @@ impl fmt::Display for DataType {
             DataType::SmallInt(zerofill) => {
                 format_type_with_optional_length(f, "SMALLINT", zerofill)
             }
-            DataType::Int(zerofill) => format_type_with_optional_length(f, "INTEGER", zerofill),
+            DataType::Int(zerofill) => {
+                if let Some(len) = zerofill {
+                    write!(f, "INT({})", len)
+                } else {
+                    write!(f, "INTEGER")
+                }
+            }
             DataType::BigInt(zerofill) => format_type_with_optional_length(f, "BIGINT", zerofill),
             DataType::Real => write!(f, "REAL"),
             DataType::Double => write!(f, "DOUBLE"),

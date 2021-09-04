@@ -33,59 +33,59 @@ fn parse_show_columns() {
     let table_name = ObjectName(vec![Ident::new("mytable")]);
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mytable"),
-        Statement::ShowColumns {
+        Statement::ShowColumns(ShowColumns {
             extended: false,
             full: false,
             table_name: table_name.clone(),
             filter: None,
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mydb.mytable"),
-        Statement::ShowColumns {
+        Statement::ShowColumns(ShowColumns {
             extended: false,
             full: false,
             table_name: ObjectName(vec![Ident::new("mydb"), Ident::new("mytable")]),
             filter: None,
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW EXTENDED COLUMNS FROM mytable"),
-        Statement::ShowColumns {
+        Statement::ShowColumns(ShowColumns {
             extended: true,
             full: false,
             table_name: table_name.clone(),
             filter: None,
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW FULL COLUMNS FROM mytable"),
-        Statement::ShowColumns {
+        Statement::ShowColumns(ShowColumns {
             extended: false,
             full: true,
             table_name: table_name.clone(),
             filter: None,
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mytable LIKE 'pattern'"),
-        Statement::ShowColumns {
+        Statement::ShowColumns(ShowColumns {
             extended: false,
             full: false,
             table_name: table_name.clone(),
             filter: Some(ShowStatementFilter::Like("pattern".into())),
-        }
+        })
     );
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mytable WHERE 1 = 2"),
-        Statement::ShowColumns {
+        Statement::ShowColumns(ShowColumns {
             extended: false,
             full: false,
             table_name,
             filter: Some(ShowStatementFilter::Where(
                 mysql_and_generic().verified_expr("1 = 2")
             )),
-        }
+        })
     );
     mysql_and_generic()
         .one_statement_parses_to("SHOW FIELDS FROM mytable", "SHOW COLUMNS FROM mytable");
@@ -114,10 +114,10 @@ fn parse_show_create() {
     ] {
         assert_eq!(
             mysql_and_generic().verified_stmt(format!("SHOW CREATE {} myident", obj_type).as_str()),
-            Statement::ShowCreate {
+            Statement::ShowCreate(ShowCreate {
                 obj_type: obj_type.clone(),
                 obj_name: obj_name.clone(),
-            }
+            })
         );
     }
 }
@@ -126,7 +126,7 @@ fn parse_show_create() {
 fn parse_create_table_auto_increment() {
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTO_INCREMENT)";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
@@ -157,7 +157,7 @@ fn parse_create_table_auto_increment() {
 fn parse_quote_identifiers() {
     let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INT PRIMARY KEY)";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "`PRIMARY`");
             assert_eq!(
                 vec![ColumnDef {
@@ -180,7 +180,7 @@ fn parse_quote_identifiers() {
 fn parse_create_table_with_minimum_display_width() {
     let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3), bar_smallint SMALLINT(5), bar_int INT(11), bar_bigint BIGINT(20))";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable { name, columns, .. } => {
+        Statement::CreateTable(CreateTable { name, columns, .. }) => {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![

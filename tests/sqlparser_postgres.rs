@@ -37,7 +37,7 @@ fn parse_create_table_with_defaults() {
             active integer NOT NULL
     ) WITH (fillfactor = 20, user_catalog_table = true, autovacuum_vacuum_threshold = 100)";
     match pg_and_generic().one_statement_parses_to(sql, "") {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             constraints,
@@ -47,7 +47,7 @@ fn parse_create_table_with_defaults() {
             file_format: None,
             location: None,
             ..
-        } => {
+        }) => {
             assert_eq!("public.customer", name.to_string());
             assert_eq!(
                 columns,
@@ -243,12 +243,12 @@ fn parse_create_table_constraints_only() {
     let sql = "CREATE TABLE t (CONSTRAINT positive CHECK (2 > 1))";
     let ast = pg_and_generic().verified_stmt(sql);
     match ast {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             columns,
             constraints,
             ..
-        } => {
+        }) => {
             assert_eq!("t", name.to_string());
             assert!(columns.is_empty());
             assert_eq!(
@@ -265,11 +265,11 @@ fn parse_create_table_if_not_exists() {
     let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
     let ast = pg_and_generic().verified_stmt(sql);
     match ast {
-        Statement::CreateTable {
+        Statement::CreateTable(CreateTable {
             name,
             if_not_exists: true,
             ..
-        } => {
+        }) => {
             assert_eq!("uk_cities", name.to_string());
         }
         _ => unreachable!(),
@@ -308,10 +308,10 @@ fn parse_create_schema_if_not_exists() {
     let sql = "CREATE SCHEMA IF NOT EXISTS schema_name";
     let ast = pg_and_generic().verified_stmt(sql);
     match ast {
-        Statement::CreateSchema {
+        Statement::CreateSchema(CreateSchema {
             if_not_exists: true,
             schema_name,
-        } => assert_eq!("schema_name", schema_name.to_string()),
+        }) => assert_eq!("schema_name", schema_name.to_string()),
         _ => unreachable!(),
     }
 }
@@ -321,11 +321,11 @@ fn parse_drop_schema_if_exists() {
     let sql = "DROP SCHEMA IF EXISTS schema_name";
     let ast = pg().verified_stmt(sql);
     match ast {
-        Statement::Drop {
+        Statement::Drop(Drop {
             object_type,
             if_exists: true,
             ..
-        } => assert_eq!(object_type, ObjectType::Schema),
+        }) => assert_eq!(object_type, ObjectType::Schema),
         _ => unreachable!(),
     }
 }
@@ -362,58 +362,58 @@ fn parse_set() {
     let stmt = pg_and_generic().verified_stmt("SET a = b");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::SetVariable(SetVariable {
             local: false,
             hivevar: false,
             variable: "a".into(),
             value: vec![SetVariableValue::Ident("b".into())],
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET a = 'b'");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::SetVariable(SetVariable {
             local: false,
             hivevar: false,
             variable: "a".into(),
             value: vec![SetVariableValue::Literal(Value::SingleQuotedString(
                 "b".into()
             ))],
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET a = 0");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::SetVariable(SetVariable {
             local: false,
             hivevar: false,
             variable: "a".into(),
             value: vec![SetVariableValue::Literal(number("0"))],
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET a = DEFAULT");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::SetVariable(SetVariable {
             local: false,
             hivevar: false,
             variable: "a".into(),
             value: vec![SetVariableValue::Ident("DEFAULT".into())],
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SET LOCAL a = b");
     assert_eq!(
         stmt,
-        Statement::SetVariable {
+        Statement::SetVariable(SetVariable {
             local: true,
             hivevar: false,
             variable: "a".into(),
             value: vec![SetVariableValue::Ident("b".into())],
-        }
+        })
     );
 
     pg_and_generic().one_statement_parses_to("SET a TO b", "SET a = b");
@@ -446,17 +446,17 @@ fn parse_show() {
     let stmt = pg_and_generic().verified_stmt("SHOW a a");
     assert_eq!(
         stmt,
-        Statement::ShowVariable {
+        Statement::ShowVariable(ShowVariable {
             variable: vec!["a".into(), "a".into()]
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("SHOW ALL ALL");
     assert_eq!(
         stmt,
-        Statement::ShowVariable {
+        Statement::ShowVariable(ShowVariable {
             variable: vec!["ALL".into(), "ALL".into()]
-        }
+        })
     )
 }
 
@@ -465,37 +465,37 @@ fn parse_deallocate() {
     let stmt = pg_and_generic().verified_stmt("DEALLOCATE a");
     assert_eq!(
         stmt,
-        Statement::Deallocate {
+        Statement::Deallocate(Deallocate {
             name: "a".into(),
             prepare: false,
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("DEALLOCATE ALL");
     assert_eq!(
         stmt,
-        Statement::Deallocate {
+        Statement::Deallocate(Deallocate {
             name: "ALL".into(),
             prepare: false,
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("DEALLOCATE PREPARE a");
     assert_eq!(
         stmt,
-        Statement::Deallocate {
+        Statement::Deallocate(Deallocate {
             name: "a".into(),
             prepare: true,
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("DEALLOCATE PREPARE ALL");
     assert_eq!(
         stmt,
-        Statement::Deallocate {
+        Statement::Deallocate(Deallocate {
             name: "ALL".into(),
             prepare: true,
-        }
+        })
     );
 }
 
@@ -504,22 +504,22 @@ fn parse_execute() {
     let stmt = pg_and_generic().verified_stmt("EXECUTE a");
     assert_eq!(
         stmt,
-        Statement::Execute {
+        Statement::Execute(Execute {
             name: "a".into(),
             parameters: vec![],
-        }
+        })
     );
 
     let stmt = pg_and_generic().verified_stmt("EXECUTE a(1, 't')");
     assert_eq!(
         stmt,
-        Statement::Execute {
+        Statement::Execute(Execute {
             name: "a".into(),
             parameters: vec![
                 Expr::Value(number("1")),
                 Expr::Value(Value::SingleQuotedString("t".to_string()))
             ],
-        }
+        })
     );
 }
 
@@ -528,12 +528,12 @@ fn parse_prepare() {
     let stmt =
         pg_and_generic().verified_stmt("PREPARE a AS INSERT INTO customers VALUES (a1, a2, a3)");
     let sub_stmt = match stmt {
-        Statement::Prepare {
+        Statement::Prepare(Prepare {
             name,
             data_types,
             statement,
             ..
-        } => {
+        }) => {
             assert_eq!(name, "a".into());
             assert!(data_types.is_empty());
 
@@ -542,12 +542,12 @@ fn parse_prepare() {
         _ => unreachable!(),
     };
     match sub_stmt.as_ref() {
-        Statement::Insert {
+        Statement::Insert(Insert {
             table_name,
             columns,
             source,
             ..
-        } => {
+        }) => {
             assert_eq!(table_name.to_string(), "customers");
             assert!(columns.is_empty());
 
@@ -567,12 +567,12 @@ fn parse_prepare() {
     let stmt = pg_and_generic()
         .verified_stmt("PREPARE a (INT, TEXT) AS SELECT * FROM customers WHERE customers.id = a1");
     let sub_stmt = match stmt {
-        Statement::Prepare {
+        Statement::Prepare(Prepare {
             name,
             data_types,
             statement,
             ..
-        } => {
+        }) => {
             assert_eq!(name, "a".into());
             assert_eq!(data_types, vec![DataType::Int(None), DataType::Text]);
 

@@ -139,39 +139,39 @@ impl<'a> Parser<'a> {
     /// Parse a single top-level statement (such as SELECT, INSERT, CREATE, etc.),
     /// stopping before the statement separator, if any.
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
-        use Statement::*; 
+        use Statement::*;
         match self.next_token() {
             Token::Word(w) => match w.keyword {
-                Keyword::EXPLAIN => Ok(self.parse_explain()?),
-                Keyword::ANALYZE => Ok(self.parse_analyze()?),
+                Keyword::EXPLAIN => Ok(Explain(self.parse_explain()?)),
+                Keyword::ANALYZE => Ok(Analyze(self.parse_analyze()?)),
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES => {
                     self.prev_token();
                     Ok(Statement::Query(Box::new(self.parse_query()?)))
                 }
-                Keyword::TRUNCATE => Ok(self.parse_truncate()?),
-                Keyword::MSCK => Ok(self.parse_msck()?),
+                Keyword::TRUNCATE => Ok(Truncate(self.parse_truncate()?)),
+                Keyword::MSCK => Ok(Msck(self.parse_msck()?)),
                 Keyword::CREATE => Ok(self.parse_create()?),
                 Keyword::DROP => Ok(Drop(self.parse_drop()?)),
-                Keyword::DELETE => Ok(self.parse_delete()?),
+                Keyword::DELETE => Ok(Delete(self.parse_delete()?)),
                 Keyword::INSERT => Ok(self.parse_insert()?),
-                Keyword::UPDATE => Ok(self.parse_update()?),
-                Keyword::ALTER => Ok(self.parse_alter()?),
-                Keyword::COPY => Ok(self.parse_copy()?),
+                Keyword::UPDATE => Ok(Update(self.parse_update()?)),
+                Keyword::ALTER => Ok(AlterTable(self.parse_alter()?)),
+                Keyword::COPY => Ok(Copy(self.parse_copy()?)),
                 Keyword::SET => Ok(self.parse_set()?),
                 Keyword::SHOW => Ok(self.parse_show()?),
-                Keyword::START => Ok(self.parse_start_transaction()?),
+                Keyword::START => Ok(StartTransaction(self.parse_start_transaction()?)),
                 // `BEGIN` is a nonstandard but common alias for the
                 // standard `START TRANSACTION` statement. It is supported
                 // by at least PostgreSQL and MySQL.
-                Keyword::BEGIN => Ok(self.parse_begin()?),
-                Keyword::COMMIT => Ok(self.parse_commit()?),
-                Keyword::ROLLBACK => Ok(self.parse_rollback()?),
-                Keyword::ASSERT => Ok(self.parse_assert()?),
+                Keyword::BEGIN => Ok(StartTransaction(self.parse_begin()?)),
+                Keyword::COMMIT => Ok(Commit(self.parse_commit()?)),
+                Keyword::ROLLBACK => Ok(Rollback(self.parse_rollback()?)),
+                Keyword::ASSERT => Ok(Assert(self.parse_assert()?)),
                 // `PREPARE`, `EXECUTE` and `DEALLOCATE` are Postgres-specific
                 // syntaxes. They are used for Postgres prepared statement.
-                Keyword::DEALLOCATE => Ok(self.parse_deallocate()?),
-                Keyword::EXECUTE => Ok(self.parse_execute()?),
-                Keyword::PREPARE => Ok(self.parse_prepare()?),
+                Keyword::DEALLOCATE => Ok(Deallocate(self.parse_deallocate()?)),
+                Keyword::EXECUTE => Ok(Execute(self.parse_execute()?)),
+                Keyword::PREPARE => Ok(Prepare(self.parse_prepare()?)),
                 Keyword::REPLACE if dialect_of!(self is SQLiteDialect ) => {
                     self.prev_token();
                     Ok(self.parse_insert()?)
@@ -186,7 +186,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_msck(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_msck(&mut self) -> Result<Msck, ParserError> {
         let repair = self.parse_keyword(Keyword::REPAIR);
         self.expect_keyword(Keyword::TABLE)?;
         let table_name = self.parse_object_name()?;
@@ -206,14 +206,14 @@ impl<'a> Parser<'a> {
                 Ok(pa)
             })
             .unwrap_or_default();
-        Ok(Statement::Msck {
+        Ok(Msck {
             repair,
             table_name,
             partition_action,
         })
     }
 
-    pub fn parse_truncate(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_truncate(&mut self) -> Result<Truncate, ParserError> {
         self.expect_keyword(Keyword::TABLE)?;
         let table_name = self.parse_object_name()?;
         let mut partitions = None;
@@ -222,13 +222,13 @@ impl<'a> Parser<'a> {
             partitions = Some(self.parse_comma_separated(Parser::parse_expr)?);
             self.expect_token(&Token::RParen)?;
         }
-        Ok(Statement::Truncate {
+        Ok(Truncate {
             table_name,
             partitions,
         })
     }
 
-    pub fn parse_analyze(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_analyze(&mut self) -> Result<Analyze, ParserError> {
         self.expect_keyword(Keyword::TABLE)?;
         let table_name = self.parse_object_name()?;
         let mut for_columns = false;
@@ -307,7 +307,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    pub fn parse_assert(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_assert(&mut self) -> Result<Assert, ParserError> {
         let condition = self.parse_expr()?;
         let message = if self.parse_keyword(Keyword::AS) {
             Some(self.parse_expr()?)
@@ -315,7 +315,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Statement::Assert { condition, message })
+        Ok(Assert { condition, message })
     }
 
     /// Parse an expression prefix
@@ -1263,37 +1263,42 @@ impl<'a> Parser<'a> {
 
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
+        use Statement::*;
         let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
         let temporary = self
             .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
             .is_some();
         if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table(or_replace, temporary)
+            Ok(Statement::CreateTable(
+                self.parse_create_table(or_replace, temporary)?,
+            ))
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
-            self.parse_create_view(or_replace)
+            Ok(Statement::CreateView(self.parse_create_view(or_replace)?))
         } else if self.parse_keyword(Keyword::EXTERNAL) {
-            self.parse_create_external_table(or_replace)
+            Ok(Statement::CreateTable(
+                self.parse_create_external_table(or_replace)?,
+            ))
         } else if or_replace {
             self.expected(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW after CREATE OR REPLACE",
                 self.peek_token(),
             )
         } else if self.parse_keyword(Keyword::INDEX) {
-            self.parse_create_index(false)
+            Ok(CreateIndex(self.parse_create_index(false)?))
         } else if self.parse_keywords(&[Keyword::UNIQUE, Keyword::INDEX]) {
-            self.parse_create_index(true)
+            Ok(CreateIndex(self.parse_create_index(true)?))
         } else if self.parse_keyword(Keyword::VIRTUAL) {
-            self.parse_create_virtual_table()
+            Ok(CreateVirtualTable(self.parse_create_virtual_table()?))
         } else if self.parse_keyword(Keyword::SCHEMA) {
-            self.parse_create_schema()
+            Ok(CreateSchema(self.parse_create_schema()?))
         } else {
             self.expected("an object type after CREATE", self.peek_token())
         }
     }
 
     /// SQLite-specific `CREATE VIRTUAL TABLE`
-    pub fn parse_create_virtual_table(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_virtual_table(&mut self) -> Result<CreateVirtualTable, ParserError> {
         self.expect_keyword(Keyword::TABLE)?;
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name()?;
@@ -1304,7 +1309,7 @@ impl<'a> Parser<'a> {
         // definitions in a traditional CREATE TABLE statement", but
         // we don't implement that.
         let module_args = self.parse_parenthesized_column_list(Optional)?;
-        Ok(Statement::CreateVirtualTable {
+        Ok(CreateVirtualTable {
             name: table_name,
             if_not_exists,
             module_name,
@@ -1312,16 +1317,16 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_create_schema(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_schema(&mut self) -> Result<CreateSchema, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let schema_name = self.parse_object_name()?;
-        Ok(Statement::CreateSchema {
+        Ok(CreateSchema {
             schema_name,
             if_not_exists,
         })
     }
 
-    pub fn parse_create_database(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_create_database(&mut self) -> Result<CreateDatabase, ParserError> {
         let ine = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let db_name = self.parse_object_name()?;
         let mut location = None;
@@ -1335,7 +1340,7 @@ impl<'a> Parser<'a> {
                 _ => break,
             }
         }
-        Ok(Statement::CreateDatabase {
+        Ok(CreateDatabase {
             db_name,
             if_not_exists: ine,
             location,
@@ -1346,7 +1351,7 @@ impl<'a> Parser<'a> {
     pub fn parse_create_external_table(
         &mut self,
         or_replace: bool,
-    ) -> Result<Statement, ParserError> {
+    ) -> Result<CreateTable, ParserError> {
         self.expect_keyword(Keyword::TABLE)?;
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name()?;
@@ -1365,7 +1370,7 @@ impl<'a> Parser<'a> {
         };
         let location = hive_formats.location.clone();
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
-        Ok(Statement::CreateTable {
+        Ok(CreateTable {
             name: table_name,
             columns,
             constraints,
@@ -1401,7 +1406,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_create_view(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
+    pub fn parse_create_view(&mut self, or_replace: bool) -> Result<CreateView, ParserError> {
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         self.expect_keyword(Keyword::VIEW)?;
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
@@ -1412,7 +1417,7 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::AS)?;
         let query = Box::new(self.parse_query()?);
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
-        Ok(Statement::CreateView {
+        Ok(CreateView {
             name,
             columns,
             query,
@@ -1530,7 +1535,7 @@ impl<'a> Parser<'a> {
         &mut self,
         or_replace: bool,
         temporary: bool,
-    ) -> Result<Statement, ParserError> {
+    ) -> Result<CreateTable, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name()?;
         let like = if self.parse_keyword(Keyword::LIKE) || self.parse_keyword(Keyword::ILIKE) {
@@ -1556,7 +1561,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Statement::CreateTable {
+        Ok(CreateTable {
             name: table_name,
             temporary,
             columns,
@@ -2219,7 +2224,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_explain(&mut self) -> Result<Expain, ParserError> {
+    pub fn parse_explain(&mut self) -> Result<Explain, ParserError> {
         let analyze = self.parse_keyword(Keyword::ANALYZE);
         let verbose = self.parse_keyword(Keyword::VERBOSE);
 
@@ -2533,7 +2538,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_show(&mut self) -> Result<ShowVariable, ParserError> {
+    pub fn parse_show(&mut self) -> Result<Statement, ParserError> {
         if self
             .parse_one_of_keywords(&[
                 Keyword::EXTENDED,
@@ -2544,13 +2549,13 @@ impl<'a> Parser<'a> {
             .is_some()
         {
             self.prev_token();
-            Ok(self.parse_show_columns()?)
+            Ok(Statement::ShowColumns(self.parse_show_columns()?))
         } else if self.parse_one_of_keywords(&[Keyword::CREATE]).is_some() {
-            Ok(self.parse_show_create()?)
+            Ok(Statement::ShowCreate(self.parse_show_create()?))
         } else {
-            Ok(ShowVariable {
+            Ok(Statement::ShowVariable(ShowVariable {
                 variable: self.parse_identifiers()?,
-            })
+            }))
         }
     }
 
@@ -3194,7 +3199,6 @@ impl<'a> Parser<'a> {
         })
     }
 }
-
 impl Word {
     pub fn to_ident(&self) -> Ident {
         Ident {

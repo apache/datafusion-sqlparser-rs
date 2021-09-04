@@ -1770,6 +1770,16 @@ fn parse_alter_table_drop_column() {
 }
 
 #[test]
+fn parse_alter_table_drop_constraint() {
+    let cascade = "ALTER TABLE table_name DROP CONSTRAINT constraint_name CASCADE";
+    let restrict = "ALTER TABLE table_name DROP CONSTRAINT constraint_name RESTRICT";
+    let plain = "ALTER TABLE table_name DROP CONSTRAINT constraint_name";
+    assert_eq!(cascade, &format!("{}", verified_stmt(cascade)));
+    assert_eq!(restrict, &format!("{}", verified_stmt(restrict)));
+    assert_eq!(plain, &format!("{}", verified_stmt(plain)));
+}
+
+#[test]
 fn parse_bad_constraint() {
     let res = parse_sql_statements("ALTER TABLE tab ADD");
     assert_eq!(

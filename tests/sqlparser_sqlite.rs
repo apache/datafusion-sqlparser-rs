@@ -26,12 +26,9 @@ use sqlparser::tokenizer::Token;
 fn parse_create_table_without_rowid() {
     let sql = "CREATE TABLE t (a INTEGER) WITHOUT ROWID";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            name,
-            without_rowid: true,
-            ..
-        }) => {
-            assert_eq!("t", name.to_string());
+        Statement::CreateTable(table) => {
+            assert!(table.without_rowid);
+            assert_eq!("t", table.name.to_string());
         }
         _ => unreachable!(),
     }
@@ -63,7 +60,9 @@ fn parse_create_virtual_table() {
 fn parse_create_table_auto_increment() {
     let sql = "CREATE TABLE foo (bar INTEGER PRIMARY KEY AUTOINCREMENT)";
     match sqlite_and_generic().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(table) => {
+            let name = table.name;
+            let columns = table.columns;
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
@@ -94,7 +93,9 @@ fn parse_create_table_auto_increment() {
 fn parse_create_sqlite_quote() {
     let sql = "CREATE TABLE `PRIMARY` (\"KEY\" INTEGER, [INDEX] INTEGER)";
     match sqlite().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(table) => {
+            let columns = table.columns;
+            let name = table.name;
             assert_eq!(name.to_string(), "`PRIMARY`");
             assert_eq!(
                 vec![

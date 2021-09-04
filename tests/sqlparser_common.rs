@@ -1183,17 +1183,15 @@ fn parse_create_table() {
          FOREIGN KEY (lng) REFERENCES othertable4(longitude) ON UPDATE SET NULL)",
     );
     match ast {
-        Statement::CreateTable(CreateTable {
-            name,
-            columns,
-            constraints,
-            with_options,
-            if_not_exists: false,
-            external: false,
-            file_format: None,
-            location: None,
-            ..
-        }) => {
+        Statement::CreateTable(table) => {
+            let name = table.name;
+            let columns = table.columns;
+            let constraints = table.constraints;
+            let with_options = table.with_options;
+            assert!(!table.external);
+            assert!(!table.if_not_exists);
+            assert!(table.file_format.is_none());
+            assert!(table.location.is_none());
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
                 columns,
@@ -1422,9 +1420,12 @@ fn parse_create_table_as() {
     let sql = "CREATE TABLE t AS SELECT * FROM a";
 
     match verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { name, query, .. }) => {
-            assert_eq!(name.to_string(), "t".to_string());
-            assert_eq!(query, Some(Box::new(verified_query("SELECT * FROM a"))));
+        Statement::CreateTable(table) => {
+            assert_eq!(table.name.to_string(), "t".to_string());
+            assert_eq!(
+                table.query,
+                Some(Box::new(verified_query("SELECT * FROM a")))
+            );
         }
         _ => unreachable!(),
     }
@@ -1434,7 +1435,9 @@ fn parse_create_table_as() {
     // (without data types) in a CTAS, but we have yet to support that.
     let sql = "CREATE TABLE t (a INTEGER, b INTEGER) AS SELECT 1 AS b, 2 AS a";
     match verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { columns, query, .. }) => {
+        Statement::CreateTable(table) => {
+            let columns = table.columns;
+            let query = table.query;
             assert_eq!(columns.len(), 2);
             assert_eq!(columns[0].to_string(), "a INTEGER".to_string());
             assert_eq!(columns[1].to_string(), "b INTEGER".to_string());
@@ -1452,23 +1455,22 @@ fn parse_create_or_replace_table() {
     let sql = "CREATE OR REPLACE TABLE t (a INTEGER)";
 
     match verified_stmt(sql) {
-        Statement::CreateTable(CreateTable {
-            name, or_replace, ..
-        }) => {
-            assert_eq!(name.to_string(), "t".to_string());
-            assert!(or_replace);
+        Statement::CreateTable(table) => {
+            assert_eq!(table.name.to_string(), "t".to_string());
+            assert!(table.or_replace);
         }
         _ => unreachable!(),
     }
 
     let sql = "CREATE TABLE t (a INTEGER, b INTEGER) AS SELECT 1 AS b, 2 AS a";
     match verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { columns, query, .. }) => {
+        Statement::CreateTable(table) => {
+            let columns = table.columns;
             assert_eq!(columns.len(), 2);
             assert_eq!(columns[0].to_string(), "a INTEGER".to_string());
             assert_eq!(columns[1].to_string(), "b INTEGER".to_string());
             assert_eq!(
-                query,
+                table.query,
                 Some(Box::new(verified_query("SELECT 1 AS b, 2 AS a")))
             );
         }
@@ -1494,7 +1496,8 @@ fn parse_create_table_with_on_delete_on_update_2in_any_order() -> Result<(), Par
 fn parse_create_table_with_options() {
     let sql = "CREATE TABLE t (c INTEGER) WITH (foo = 'bar', a = 123)";
     match verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { with_options, .. }) => {
+        Statement::CreateTable(table) => {
+            let with_options = table.with_options;
             assert_eq!(
                 vec![
                     SqlOption {
@@ -1535,17 +1538,15 @@ fn parse_create_external_table() {
          STORED AS TEXTFILE LOCATION '/tmp/example.csv'",
     );
     match ast {
-        Statement::CreateTable(CreateTable {
-            name,
-            columns,
-            constraints,
-            with_options,
-            if_not_exists,
-            external,
-            file_format,
-            location,
-            ..
-        }) => {
+        Statement::CreateTable(table) => {
+            let name = table.name;
+            let columns = table.columns;
+            let constraints = table.constraints;
+            let with_options = table.with_options;
+            let if_not_exists = table.if_not_exists;
+            let external = table.external;
+            let file_format = table.file_format;
+            let location = table.location;
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
                 columns,
@@ -1603,18 +1604,16 @@ fn parse_create_or_replace_external_table() {
          STORED AS TEXTFILE LOCATION '/tmp/example.csv'",
     );
     match ast {
-        Statement::CreateTable(CreateTable {
-            name,
-            columns,
-            constraints,
-            with_options,
-            if_not_exists,
-            external,
-            file_format,
-            location,
-            or_replace,
-            ..
-        }) => {
+        Statement::CreateTable(table) => {
+            let name = table.name;
+            let columns = table.columns;
+            let constraints = table.constraints;
+            let with_options = table.with_options;
+            let if_not_exists = table.if_not_exists;
+            let external = table.external;
+            let file_format = table.file_format;
+            let location = table.location;
+            let or_replace = table.or_replace;
             assert_eq!("uk_cities", name.to_string());
             assert_eq!(
                 columns,
@@ -1731,7 +1730,10 @@ fn parse_alter_table_constraints() {
             }
             _ => unreachable!(),
         }
-        verified_stmt(&format!("CREATE TABLE foo (id INTEGER, {})", constraint_text));
+        verified_stmt(&format!(
+            "CREATE TABLE foo (id INTEGER, {})",
+            constraint_text
+        ));
     }
 }
 

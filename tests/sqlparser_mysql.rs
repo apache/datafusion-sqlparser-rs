@@ -126,7 +126,9 @@ fn parse_show_create() {
 fn parse_create_table_auto_increment() {
     let sql = "CREATE TABLE foo (bar INTEGER PRIMARY KEY AUTO_INCREMENT)";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(table) => {
+            let name = table.name;
+            let columns = table.columns;
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
@@ -157,7 +159,9 @@ fn parse_create_table_auto_increment() {
 fn parse_quote_identifiers() {
     let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INTEGER PRIMARY KEY)";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(table) => {
+            let name = table.name;
+            let columns = table.columns;
             assert_eq!(name.to_string(), "`PRIMARY`");
             assert_eq!(
                 vec![ColumnDef {
@@ -180,7 +184,9 @@ fn parse_quote_identifiers() {
 fn parse_create_table_with_minimum_display_width() {
     let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3), bar_smallint SMALLINT(5), bar_int INT(11), bar_bigint BIGINT(20))";
     match mysql().verified_stmt(sql) {
-        Statement::CreateTable(CreateTable { name, columns, .. }) => {
+        Statement::CreateTable(table) => {
+            let name = table.name;
+            let columns = table.columns;
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![

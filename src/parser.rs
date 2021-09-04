@@ -1270,14 +1270,14 @@ impl<'a> Parser<'a> {
             .is_some();
         if self.parse_keyword(Keyword::TABLE) {
             Ok(Statement::CreateTable(
-                self.parse_create_table(or_replace, temporary)?,
+                Box::new(self.parse_create_table(or_replace, temporary)?),
             ))
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
             Ok(Statement::CreateView(self.parse_create_view(or_replace)?))
         } else if self.parse_keyword(Keyword::EXTERNAL) {
             Ok(Statement::CreateTable(
-                self.parse_create_external_table(or_replace)?,
+                Box::new(self.parse_create_external_table(or_replace)?),
             ))
         } else if or_replace {
             self.expected(

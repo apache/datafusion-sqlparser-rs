@@ -37,17 +37,14 @@ fn parse_create_table_with_defaults() {
             active integer NOT NULL
     ) WITH (fillfactor = 20, user_catalog_table = true, autovacuum_vacuum_threshold = 100)";
     match pg_and_generic().one_statement_parses_to(sql, "") {
-        Statement::CreateTable(CreateTable {
-            name,
-            columns,
-            constraints,
-            with_options,
-            if_not_exists: false,
-            external: false,
-            file_format: None,
-            location: None,
-            ..
-        }) => {
+        Statement::CreateTable(table) => {
+            let name = table.name;
+            let columns = table.columns;
+            let constraints = table.constraints;
+            let with_options = table.with_options;
+            
+            assert!(!table.external);
+            assert!(!table.if_not_exists);
             assert_eq!("public.customer", name.to_string());
             assert_eq!(
                 columns,
@@ -243,12 +240,10 @@ fn parse_create_table_constraints_only() {
     let sql = "CREATE TABLE t (CONSTRAINT positive CHECK (2 > 1))";
     let ast = pg_and_generic().verified_stmt(sql);
     match ast {
-        Statement::CreateTable(CreateTable {
-            name,
-            columns,
-            constraints,
-            ..
-        }) => {
+        Statement::CreateTable(table) => {
+            let name = table.name;
+            let columns = table.columns;
+            let constraints = table.constraints;
             assert_eq!("t", name.to_string());
             assert!(columns.is_empty());
             assert_eq!(
@@ -265,12 +260,9 @@ fn parse_create_table_if_not_exists() {
     let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
     let ast = pg_and_generic().verified_stmt(sql);
     match ast {
-        Statement::CreateTable(CreateTable {
-            name,
-            if_not_exists: true,
-            ..
-        }) => {
-            assert_eq!("uk_cities", name.to_string());
+        Statement::CreateTable(table) => {
+            assert!(table.if_not_exists);
+            assert_eq!("uk_cities", table.name.to_string());
         }
         _ => unreachable!(),
     }
@@ -564,8 +556,9 @@ fn parse_prepare() {
         _ => unreachable!(),
     };
 
-    let stmt = pg_and_generic()
-        .verified_stmt("PREPARE a (INTEGER, TEXT) AS SELECT * FROM customers WHERE customers.id = a1");
+    let stmt = pg_and_generic().verified_stmt(
+        "PREPARE a (INTEGER, TEXT) AS SELECT * FROM customers WHERE customers.id = a1",
+    );
     let sub_stmt = match stmt {
         Statement::Prepare(Prepare {
             name,

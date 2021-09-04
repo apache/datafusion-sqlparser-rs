@@ -547,7 +547,10 @@ impl fmt::Display for ShowCreateObject {
     }
 }
 
-
+#[test]
+fn func() {
+    dbg!(std::mem::size_of::<Statement>()); 
+}
 /// SQL assignment `foo = expr` as used in SQLUpdate
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

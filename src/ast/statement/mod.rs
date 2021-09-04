@@ -26,7 +26,7 @@ pub enum Statement {
     /// CREATE VIEW
     CreateView(CreateView),
     /// CREATE TABLE
-    CreateTable(CreateTable),
+    CreateTable(Box<CreateTable>),
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable(CreateVirtualTable),
     /// CREATE INDEX

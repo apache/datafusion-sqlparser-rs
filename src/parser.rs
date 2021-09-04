@@ -1730,6 +1730,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+
         match self.next_token() {
             Token::Word(w) if w.keyword == Keyword::PRIMARY || w.keyword == Keyword::UNIQUE => {
                 let is_primary = w.keyword == Keyword::PRIMARY;
@@ -1737,11 +1738,11 @@ impl<'a> Parser<'a> {
                     self.expect_keyword(Keyword::KEY)?;
                 }
                 let columns = self.parse_parenthesized_column_list(Mandatory)?;
-                Ok(Some(TableConstraint::Unique {
+                Ok(Some(TableConstraint::Unique(Unique {
                     name,
                     columns,
                     is_primary,
-                }))
+                })))
             }
             Token::Word(w) if w.keyword == Keyword::FOREIGN => {
                 self.expect_keyword(Keyword::KEY)?;
@@ -1762,20 +1763,20 @@ impl<'a> Parser<'a> {
                         break;
                     }
                 }
-                Ok(Some(TableConstraint::ForeignKey {
+                Ok(Some(TableConstraint::ForeignKey(ForeignKey {
                     name,
                     columns,
                     foreign_table,
                     referred_columns,
                     on_delete,
                     on_update,
-                }))
+                })))
             }
             Token::Word(w) if w.keyword == Keyword::CHECK => {
                 self.expect_token(&Token::LParen)?;
                 let expr = Box::new(self.parse_expr()?);
                 self.expect_token(&Token::RParen)?;
-                Ok(Some(TableConstraint::Check { name, expr }))
+                Ok(Some(TableConstraint::Check(Check { name, expr })))
             }
             unexpected => {
                 if name.is_some() {

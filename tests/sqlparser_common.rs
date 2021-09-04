@@ -1279,38 +1279,38 @@ fn parse_create_table() {
             assert_eq!(
                 constraints,
                 vec![
-                    TableConstraint::ForeignKey {
+                    TableConstraint::ForeignKey(ForeignKey {
                         name: Some("fkey".into()),
                         columns: vec!["lat".into()],
                         foreign_table: ObjectName(vec!["othertable3".into()]),
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Restrict),
                         on_update: None
-                    },
-                    TableConstraint::ForeignKey {
+                    }),
+                    TableConstraint::ForeignKey(ForeignKey {
                         name: Some("fkey2".into()),
                         columns: vec!["lat".into()],
                         foreign_table: ObjectName(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::NoAction),
                         on_update: Some(ReferentialAction::Restrict)
-                    },
-                    TableConstraint::ForeignKey {
+                    }),
+                    TableConstraint::ForeignKey(ForeignKey {
                         name: None,
                         columns: vec!["lat".into()],
                         foreign_table: ObjectName(vec!["othertable4".into()]),
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: Some(ReferentialAction::SetDefault)
-                    },
-                    TableConstraint::ForeignKey {
+                    }),
+                    TableConstraint::ForeignKey(ForeignKey {
                         name: None,
                         columns: vec!["lng".into()],
                         foreign_table: ObjectName(vec!["othertable4".into()]),
                         referred_columns: vec!["longitude".into()],
                         on_delete: None,
                         on_update: Some(ReferentialAction::SetNull)
-                    },
+                    }),
                 ]
             );
             assert_eq!(with_options, vec![]);

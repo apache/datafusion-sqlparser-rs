@@ -145,54 +145,68 @@ impl fmt::Display for AlterTableOperation {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TableConstraint {
     /// `[ CONSTRAINT <name> ] { PRIMARY KEY | UNIQUE } (<columns>)`
-    Unique {
-        name: Option<Ident>,
-        columns: Vec<Ident>,
-        /// Whether this is a `PRIMARY KEY` or just a `UNIQUE` constraint
-        is_primary: bool,
-    },
+    Unique(Unique),
     /// A referential integrity constraint (`[ CONSTRAINT <name> ] FOREIGN KEY (<columns>)
     /// REFERENCES <foreign_table> (<referred_columns>)
     /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
     ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
     /// }`).
-    ForeignKey {
-        name: Option<Ident>,
-        columns: Vec<Ident>,
-        foreign_table: ObjectName,
-        referred_columns: Vec<Ident>,
-        on_delete: Option<ReferentialAction>,
-        on_update: Option<ReferentialAction>,
-    },
+    ForeignKey(ForeignKey),
     /// `[ CONSTRAINT <name> ] CHECK (<expr>)`
-    Check {
-        name: Option<Ident>,
-        expr: Box<Expr>,
-    },
+    Check(Check),
+}
+/// `[ CONSTRAINT <name> ] { PRIMARY KEY | UNIQUE } (<columns>)`
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Unique {
+    pub name: Option<Ident>,
+    pub columns: Vec<Ident>,
+    /// Whether this is a `PRIMARY KEY` or just a `UNIQUE` constraint
+    pub is_primary: bool,
+}
+/// `[ CONSTRAINT <name> ] CHECK (<expr>)`
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Check {
+   pub name: Option<Ident>,
+   pub expr: Box<Expr>,
+}
+
+/// A referential integrity constraint (`[ CONSTRAINT <name> ] FOREIGN KEY (<columns>)
+/// REFERENCES <foreign_table> (<referred_columns>)
+/// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
+///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
+/// }`).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ForeignKey {
+    pub name: Option<Ident>,
+    pub columns: Vec<Ident>,
+    pub foreign_table: ObjectName,
+    pub referred_columns: Vec<Ident>,
+    pub on_delete: Option<ReferentialAction>,
+    pub on_update: Option<ReferentialAction>,
 }
 
 impl fmt::Display for TableConstraint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TableConstraint::Unique {
+            TableConstraint::Unique(Unique {
                 name,
                 columns,
                 is_primary,
-            } => write!(
+            }) => write!(
                 f,
                 "{}{} ({})",
                 display_constraint_name(name),
                 if *is_primary { "PRIMARY KEY" } else { "UNIQUE" },
                 display_comma_separated(columns)
             ),
-            TableConstraint::ForeignKey {
+            TableConstraint::ForeignKey(ForeignKey {
                 name,
                 columns,
                 foreign_table,
                 referred_columns,
                 on_delete,
                 on_update,
-            } => {
+            }) => {
                 write!(
                     f,
                     "{}FOREIGN KEY ({}) REFERENCES {}({})",
@@ -209,7 +223,7 @@ impl fmt::Display for TableConstraint {
                 }
                 Ok(())
             }
-            TableConstraint::Check { name, expr } => {
+            TableConstraint::Check(Check { name, expr }) => {
                 write!(f, "{}CHECK ({})", display_constraint_name(name), expr)
             }
         }

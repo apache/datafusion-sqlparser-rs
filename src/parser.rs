@@ -1861,17 +1861,7 @@ impl<'a> Parser<'a> {
                     partitions,
                     if_exists: false,
                 }
-            } else if self.parse_keyword(Keyword::COLUMN) {
-                let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-                let column_name = self.parse_identifier()?;
-                let cascade = self.parse_keyword(Keyword::CASCADE);
-                AlterTableOperation::DropColumn {
-                    column_name,
-                    if_exists,
-                    cascade,
-                }
-            } else {
-                let _ = self.parse_keyword(Keyword::CONSTRAINT);
+            } else if self.parse_keyword(Keyword::CONSTRAINT) {
                 let name = self.parse_identifier()?;
                 let cascade = self.parse_keyword(Keyword::CASCADE);
                 let mut restrict = false;
@@ -1882,6 +1872,16 @@ impl<'a> Parser<'a> {
                     name,
                     cascade,
                     restrict,
+                }
+            } else {
+                let _ = self.parse_keyword(Keyword::COLUMN);
+                let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+                let column_name = self.parse_identifier()?;
+                let cascade = self.parse_keyword(Keyword::CASCADE);
+                AlterTableOperation::DropColumn {
+                    column_name,
+                    if_exists,
+                    cascade,
                 }
             }
         } else if self.parse_keyword(Keyword::PARTITION) {

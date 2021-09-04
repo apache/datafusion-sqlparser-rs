@@ -1,3 +1,6 @@
+# Fork
+This is a fork of [`sqlparser`](https://github.com/sqlparser-rs/sqlparser-rs). The major difference between `sqlparse` and this fork is that here `Statement` and `Expr` hold structs instead of variables. 
+
 # Extensible SQL Lexer and Parser for Rust
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)

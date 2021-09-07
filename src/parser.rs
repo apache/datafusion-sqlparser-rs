@@ -2939,10 +2939,10 @@ impl<'a> Parser<'a> {
             let after_columns = self.parse_parenthesized_column_list(Optional)?;
 
             let source = Box::new(self.parse_query()?);
-            let on = if dialect_of!(self is MySqlDialect) && self.parse_keyword(Keyword::ON) {
-                self.expect_keyword(Keyword::DUPLICATE);
-                self.expect_keyword(Keyword::KEY);
-                self.expect_keyword(Keyword::UPDATE);
+            let on = if self.parse_keyword(Keyword::ON) {
+                self.expect_keyword(Keyword::DUPLICATE)?;
+                self.expect_keyword(Keyword::KEY)?;
+                self.expect_keyword(Keyword::UPDATE)?;
                 let l = self.parse_comma_separated(Parser::parse_expr)?;
 
                 Some(OnInsert::DuplicateKeyUpdate(l))

@@ -262,7 +262,7 @@ fn parse_simple_insert() {
 }
 
 #[test]
-fn insert_with_on_duplicate_update() {
+fn parse_insert_with_on_duplicate_update() {
     let sql = "INSERT INTO permission_groups (name, description, perm_create, perm_read, perm_update, perm_delete) VALUES ('accounting_manager', 'Some description about the group', true, true, true, true) ON DUPLICATE KEY UPDATE description = VALUES(description), perm_create = VALUES(perm_create), perm_read = VALUES(perm_read), perm_update = VALUES(perm_update), perm_delete = VALUES(perm_delete)";
 
     match mysql().verified_stmt(sql) {
@@ -374,7 +374,7 @@ fn insert_with_on_duplicate_update() {
 }
 
 #[test]
-fn update_with_joins() {
+fn parse_update_with_joins() {
     let sql = "UPDATE orders AS o JOIN customers AS c ON o.customer_id = c.id SET o.completed = true WHERE c.firstname = 'Peter'";
     match mysql().verified_stmt(sql) {
         Statement::Update {
@@ -436,6 +436,35 @@ fn update_with_joins() {
                 }),
                 selection
             );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_change_column() {
+    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_operation = AlterTableOperation::ChangeColumn {
+        old_name: Ident::new("description"),
+        new_name: Ident::new("desc"),
+        data_type: DataType::Text,
+        options: vec![ColumnOption::NotNull],
+    };
+
+    let sql1 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL";
+    match mysql().verified_stmt(sql1) {
+        Statement::AlterTable { name, operation } => {
+            assert_eq!(expected_name, name);
+            assert_eq!(expected_operation, operation);
+        }
+        _ => unreachable!(),
+    }
+
+    let sql2 = "ALTER TABLE orders CHANGE description desc TEXT NOT NULL";
+    match mysql().one_statement_parses_to(sql2, sql1) {
+        Statement::AlterTable { name, operation } => {
+            assert_eq!(expected_name, name);
+            assert_eq!(expected_operation, operation);
         }
         _ => unreachable!(),
     }

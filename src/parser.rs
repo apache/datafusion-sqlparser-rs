@@ -1894,7 +1894,27 @@ impl<'a> Parser<'a> {
                 old_partitions: before,
                 new_partitions: renames,
             }
-        } else {
+        } else if self.parse_keyword(Keyword::CHANGE) {
+            let _ = self.parse_keyword(Keyword::COLUMN);
+            let old_name = self.parse_identifier()?;
+            let new_name = self.parse_identifier()?;
+            let data_type = self.parse_data_type()?;
+            let mut options = vec![];
+            loop {
+                if let Some(option) = self.parse_optional_column_option()? {
+                    options.push(option);
+                } else {
+                    break;
+                }
+            }
+
+            AlterTableOperation::ChangeColumn {
+                old_name,
+                new_name,
+                data_type,
+                options,
+            }
+        }else {
             return self.expected(
                 "ADD, RENAME, PARTITION or DROP after ALTER TABLE",
                 self.peek_token(),

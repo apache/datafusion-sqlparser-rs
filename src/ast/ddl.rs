@@ -60,6 +60,13 @@ pub enum AlterTableOperation {
     },
     /// `RENAME TO <table_name>`
     RenameTable { table_name: ObjectName },
+    // CHANGE [ COLUMN ] <old_name> <new_name> <data_type> [ <options> ]
+    ChangeColumn {
+        old_name: Ident,
+        new_name: Ident,
+        data_type: DataType,
+        options: Vec<ColumnOption>,
+    },
 }
 
 impl fmt::Display for AlterTableOperation {
@@ -118,6 +125,14 @@ impl fmt::Display for AlterTableOperation {
             ),
             AlterTableOperation::RenameTable { table_name } => {
                 write!(f, "RENAME TO {}", table_name)
+            }
+            AlterTableOperation::ChangeColumn {old_name, new_name, data_type, options} => {
+                write!(f, "CHANGE COLUMN {} {} {}", old_name, new_name, data_type)?;
+                if options.is_empty() {
+                    Ok(())
+                }else {
+                    write!(f, " {}", display_separated(options, " "))
+                }
             }
         }
     }

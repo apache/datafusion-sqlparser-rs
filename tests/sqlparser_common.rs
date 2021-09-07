@@ -140,25 +140,25 @@ fn parse_update() {
     let sql = "UPDATE t SET a = 1, b = 2, c = 3 WHERE d";
     match verified_stmt(sql) {
         Statement::Update {
-            table_name,
+            table,
             assignments,
             selection,
             ..
         } => {
-            assert_eq!(table_name.to_string(), "t".to_string());
+            assert_eq!(table.to_string(), "t".to_string());
             assert_eq!(
                 assignments,
                 vec![
                     Assignment {
-                        id: "a".into(),
+                        id: vec!["a".into()],
                         value: Expr::Value(number("1")),
                     },
                     Assignment {
-                        id: "b".into(),
+                        id: vec!["b".into()],
                         value: Expr::Value(number("2")),
                     },
                     Assignment {
-                        id: "c".into(),
+                        id: vec!["c".into()],
                         value: Expr::Value(number("3")),
                     },
                 ]
@@ -183,6 +183,55 @@ fn parse_update() {
         ParserError::ParserError("Expected end of statement, found: extrabadstuff".to_string()),
         res.unwrap_err()
     );
+}
+
+#[test]
+fn parse_update_with_table_alias() {
+    let sql = "UPDATE users AS u SET u.username = 'new_user' WHERE u.username = 'old_user'";
+    match verified_stmt(sql) {
+        Statement::Update {
+            table,
+            assignments,
+            selection,
+        } => {
+            assert_eq!(
+                TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName(vec![Ident::new("users")]),
+                        alias: Some(TableAlias {
+                            name: Ident::new("u"),
+                            columns: vec![]
+                        }),
+                        args: vec![],
+                        with_hints: vec![],
+                    },
+                    joins: vec![]
+                },
+                table
+            );
+            assert_eq!(
+                vec![Assignment {
+                    id: vec![Ident::new("u"), Ident::new("username")],
+                    value: Expr::Value(Value::SingleQuotedString("new_user".to_string()))
+                }],
+                assignments
+            );
+            assert_eq!(
+                Some(Expr::BinaryOp {
+                    left: Box::new(Expr::CompoundIdentifier(vec![
+                        Ident::new("u"),
+                        Ident::new("username")
+                    ])),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "old_user".to_string()
+                    )))
+                }),
+                selection
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

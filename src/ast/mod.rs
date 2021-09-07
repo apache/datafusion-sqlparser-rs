@@ -497,7 +497,6 @@ impl fmt::Display for WindowFrameUnits {
     }
 }
 
-
 /// Specifies [WindowFrame]'s `start_bound` and `end_bound`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -629,7 +628,7 @@ pub enum Statement {
     /// UPDATE
     Update {
         /// TABLE
-        table_name: ObjectName,
+        table: TableWithJoins,
         /// Column assignments
         assignments: Vec<Assignment>,
         /// WHERE
@@ -992,11 +991,11 @@ impl fmt::Display for Statement {
                 write!(f, "\n\\.")
             }
             Statement::Update {
-                table_name,
+                table,
                 assignments,
                 selection,
             } => {
-                write!(f, "UPDATE {}", table_name)?;
+                write!(f, "UPDATE {}", table)?;
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
@@ -1379,7 +1378,11 @@ pub enum OnInsert {
 impl fmt::Display for OnInsert {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            OnInsert::DuplicateKeyUpdate(expr) => write!(f, " ON DUPLICATE KEY UPDATE {}", display_comma_separated(expr)),
+            Self::DuplicateKeyUpdate(expr) => write!(
+                f,
+                " ON DUPLICATE KEY UPDATE {}",
+                display_comma_separated(expr)
+            ),
         }
     }
 }
@@ -1388,13 +1391,13 @@ impl fmt::Display for OnInsert {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Assignment {
-    pub id: Ident,
+    pub id: Vec<Ident>,
     pub value: Expr,
 }
 
 impl fmt::Display for Assignment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} = {}", self.id, self.value)
+        write!(f, "{} = {}", display_separated(&self.id, "."), self.value)
     }
 }
 

@@ -2170,16 +2170,41 @@ impl<'a> Parser<'a> {
         Ok(ObjectName(idents))
     }
 
+    /// Parse identifiers strictly i.e. don't parse keywords
+    pub fn parse_identifiers_strict(&mut self) -> Result<Vec<Ident>, ParserError> {
+        let mut idents = vec![];
+        loop {
+            match self.peek_token() {
+                Token::Word(w) => {
+                    if w.keyword != Keyword::NoKeyword {
+                        break;
+                    }
+
+                    idents.push(w.to_ident());
+                }
+                Token::EOF | Token::Eq => break,
+                _ => {}
+            }
+
+            self.next_token();
+        }
+
+        Ok(idents)
+    }
+
     /// Parse identifiers
     pub fn parse_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
         let mut idents = vec![];
         loop {
             match self.next_token() {
-                Token::Word(w) => idents.push(w.to_ident()),
+                Token::Word(w) => {
+                    idents.push(w.to_ident());
+                }
                 Token::EOF => break,
                 _ => {}
             }
         }
+
         Ok(idents)
     }
 
@@ -2965,7 +2990,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_update(&mut self) -> Result<Statement, ParserError> {
-        let table_name = self.parse_object_name()?;
+        let table = self.parse_table_and_joins()?;
         self.expect_keyword(Keyword::SET)?;
         let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
         let selection = if self.parse_keyword(Keyword::WHERE) {
@@ -2974,7 +2999,7 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(Statement::Update {
-            table_name,
+            table,
             assignments,
             selection,
         })
@@ -2982,7 +3007,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a `var = expr` assignment, used in an UPDATE statement
     pub fn parse_assignment(&mut self) -> Result<Assignment, ParserError> {
-        let id = self.parse_identifier()?;
+        let id = self.parse_identifiers_strict()?;
         self.expect_token(&Token::Eq)?;
         let value = self.parse_expr()?;
         Ok(Assignment { id, value })

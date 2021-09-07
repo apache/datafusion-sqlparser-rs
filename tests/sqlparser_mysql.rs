@@ -311,7 +311,7 @@ fn insert_with_on_duplicate_update() {
             assert_eq!(
                 Some(OnInsert::DuplicateKeyUpdate(vec![
                     Assignment {
-                        id: Ident::new("description".to_string()),
+                        id: vec![Ident::new("description".to_string())],
                         value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
@@ -322,7 +322,7 @@ fn insert_with_on_duplicate_update() {
                         })
                     },
                     Assignment {
-                        id: Ident::new("perm_create".to_string()),
+                        id: vec![Ident::new("perm_create".to_string())],
                         value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
@@ -333,7 +333,7 @@ fn insert_with_on_duplicate_update() {
                         })
                     },
                     Assignment {
-                        id: Ident::new("perm_read".to_string()),
+                        id: vec![Ident::new("perm_read".to_string())],
                         value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
@@ -344,7 +344,7 @@ fn insert_with_on_duplicate_update() {
                         })
                     },
                     Assignment {
-                        id: Ident::new("perm_update".to_string()),
+                        id: vec![Ident::new("perm_update".to_string())],
                         value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
@@ -355,7 +355,7 @@ fn insert_with_on_duplicate_update() {
                         })
                     },
                     Assignment {
-                        id: Ident::new("perm_delete".to_string()),
+                        id: vec![Ident::new("perm_delete".to_string())],
                         value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
@@ -367,6 +367,74 @@ fn insert_with_on_duplicate_update() {
                     },
                 ])),
                 on
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn update_with_joins() {
+    let sql = "UPDATE orders AS o JOIN customers AS c ON o.customer_id = c.id SET o.completed = true WHERE c.firstname = 'Peter'";
+    match mysql().verified_stmt(sql) {
+        Statement::Update {
+            table,
+            assignments,
+            selection,
+        } => {
+            assert_eq!(
+                TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName(vec![Ident::new("orders")]),
+                        alias: Some(TableAlias {
+                            name: Ident::new("o"),
+                            columns: vec![]
+                        }),
+                        args: vec![],
+                        with_hints: vec![],
+                    },
+                    joins: vec![Join {
+                        relation: TableFactor::Table {
+                            name: ObjectName(vec![Ident::new("customers")]),
+                            alias: Some(TableAlias {
+                                name: Ident::new("c"),
+                                columns: vec![]
+                            }),
+                            args: vec![],
+                            with_hints: vec![],
+                        },
+                        join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("o"),
+                                Ident::new("customer_id")
+                            ])),
+                            op: BinaryOperator::Eq,
+                            right: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("c"),
+                                Ident::new("id")
+                            ]))
+                        })),
+                    }]
+                },
+                table
+            );
+            assert_eq!(
+                vec![Assignment {
+                    id: vec![Ident::new("o"), Ident::new("completed")],
+                    value: Expr::Value(Value::Boolean(true))
+                }],
+                assignments
+            );
+            assert_eq!(
+                Some(Expr::BinaryOp {
+                    left: Box::new(Expr::CompoundIdentifier(vec![
+                        Ident::new("c"),
+                        Ident::new("firstname")
+                    ])),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("Peter".to_string())))
+                }),
+                selection
             );
         }
         _ => unreachable!(),

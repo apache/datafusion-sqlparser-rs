@@ -535,6 +535,7 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::DISTRIBUTE,
     // for MSSQL-specific OUTER APPLY (seems reserved in most dialects)
     Keyword::OUTER,
+    Keyword::SET,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`

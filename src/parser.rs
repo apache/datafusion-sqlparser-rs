@@ -2943,7 +2943,7 @@ impl<'a> Parser<'a> {
                 self.expect_keyword(Keyword::DUPLICATE)?;
                 self.expect_keyword(Keyword::KEY)?;
                 self.expect_keyword(Keyword::UPDATE)?;
-                let l = self.parse_comma_separated(Parser::parse_expr)?;
+                let l = self.parse_comma_separated(Parser::parse_assignment)?;
 
                 Some(OnInsert::DuplicateKeyUpdate(l))
             } else {

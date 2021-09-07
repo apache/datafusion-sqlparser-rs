@@ -310,66 +310,61 @@ fn insert_with_on_duplicate_update() {
             );
             assert_eq!(
                 Some(OnInsert::DuplicateKeyUpdate(vec![
-                    Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("description".to_string()))),
-                        op: BinaryOperator::Eq,
-                        right: Box::new(Expr::Function(Function {
+                    Assignment {
+                        id: Ident::new("description".to_string()),
+                        value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
                                 "description"
                             )))],
                             over: None,
                             distinct: false
-                        }))
+                        })
                     },
-                    Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("perm_create".to_string()))),
-                        op: BinaryOperator::Eq,
-                        right: Box::new(Expr::Function(Function {
+                    Assignment {
+                        id: Ident::new("perm_create".to_string()),
+                        value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
                                 "perm_create"
                             )))],
                             over: None,
                             distinct: false
-                        }))
+                        })
                     },
-                    Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("perm_read".to_string()))),
-                        op: BinaryOperator::Eq,
-                        right: Box::new(Expr::Function(Function {
+                    Assignment {
+                        id: Ident::new("perm_read".to_string()),
+                        value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
                                 "perm_read"
                             )))],
                             over: None,
                             distinct: false
-                        }))
+                        })
                     },
-                    Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("perm_update".to_string()))),
-                        op: BinaryOperator::Eq,
-                        right: Box::new(Expr::Function(Function {
+                    Assignment {
+                        id: Ident::new("perm_update".to_string()),
+                        value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
                                 "perm_update"
                             )))],
                             over: None,
                             distinct: false
-                        }))
+                        })
                     },
-                    Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("perm_delete".to_string()))),
-                        op: BinaryOperator::Eq,
-                        right: Box::new(Expr::Function(Function {
+                    Assignment {
+                        id: Ident::new("perm_delete".to_string()),
+                        value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
                                 "perm_delete"
                             )))],
                             over: None,
                             distinct: false
-                        }))
-                    }
+                        })
+                    },
                 ])),
                 on
             );

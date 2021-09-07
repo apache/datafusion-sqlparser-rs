@@ -216,6 +216,168 @@ fn parse_create_table_with_minimum_display_width() {
     }
 }
 
+#[test]
+#[cfg(not(feature = "bigdecimal"))]
+fn parse_simple_insert() {
+    let sql = r"INSERT INTO tasks (title, priority) VALUES ('Test Some Inserts', 1), ('Test Entry 2', 2), ('Test Entry 3', 3)";
+
+    match mysql().verified_stmt(sql) {
+        Statement::Insert {
+            table_name,
+            columns,
+            source,
+            on,
+            ..
+        } => {
+            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
+            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert!(on.is_none());
+            assert_eq!(
+                Box::new(Query {
+                    with: None,
+                    body: SetExpr::Values(Values(vec![
+                        vec![
+                            Expr::Value(Value::SingleQuotedString("Test Some Inserts".to_string())),
+                            Expr::Value(Value::Number("1".to_string(), false))
+                        ],
+                        vec![
+                            Expr::Value(Value::SingleQuotedString("Test Entry 2".to_string())),
+                            Expr::Value(Value::Number("2".to_string(), false))
+                        ],
+                        vec![
+                            Expr::Value(Value::SingleQuotedString("Test Entry 3".to_string())),
+                            Expr::Value(Value::Number("3".to_string(), false))
+                        ]
+                    ])),
+                    order_by: vec![],
+                    limit: None,
+                    offset: None,
+                    fetch: None,
+                }),
+                source
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn insert_with_on_duplicate_update() {
+    let sql = "INSERT INTO permission_groups (name, description, perm_create, perm_read, perm_update, perm_delete) VALUES ('accounting_manager', 'Some description about the group', true, true, true, true) ON DUPLICATE KEY UPDATE description = VALUES(description), perm_create = VALUES(perm_create), perm_read = VALUES(perm_read), perm_update = VALUES(perm_update), perm_delete = VALUES(perm_delete)";
+
+    match mysql().verified_stmt(sql) {
+        Statement::Insert {
+            table_name,
+            columns,
+            source,
+            on,
+            ..
+        } => {
+            assert_eq!(
+                ObjectName(vec![Ident::new("permission_groups")]),
+                table_name
+            );
+            assert_eq!(
+                vec![
+                    Ident::new("name"),
+                    Ident::new("description"),
+                    Ident::new("perm_create"),
+                    Ident::new("perm_read"),
+                    Ident::new("perm_update"),
+                    Ident::new("perm_delete")
+                ],
+                columns
+            );
+            assert_eq!(
+                Box::new(Query {
+                    with: None,
+                    body: SetExpr::Values(Values(vec![vec![
+                        Expr::Value(Value::SingleQuotedString("accounting_manager".to_string())),
+                        Expr::Value(Value::SingleQuotedString(
+                            "Some description about the group".to_string()
+                        )),
+                        Expr::Value(Value::Boolean(true)),
+                        Expr::Value(Value::Boolean(true)),
+                        Expr::Value(Value::Boolean(true)),
+                        Expr::Value(Value::Boolean(true)),
+                    ]])),
+                    order_by: vec![],
+                    limit: None,
+                    offset: None,
+                    fetch: None,
+                }),
+                source
+            );
+            assert_eq!(
+                Some(OnInsert::DuplicateKeyUpdate(vec![
+                    Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("description".to_string()))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Function(Function {
+                            name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
+                            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
+                                "description"
+                            )))],
+                            over: None,
+                            distinct: false
+                        }))
+                    },
+                    Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("perm_create".to_string()))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Function(Function {
+                            name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
+                            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
+                                "perm_create"
+                            )))],
+                            over: None,
+                            distinct: false
+                        }))
+                    },
+                    Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("perm_read".to_string()))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Function(Function {
+                            name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
+                            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
+                                "perm_read"
+                            )))],
+                            over: None,
+                            distinct: false
+                        }))
+                    },
+                    Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("perm_update".to_string()))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Function(Function {
+                            name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
+                            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
+                                "perm_update"
+                            )))],
+                            over: None,
+                            distinct: false
+                        }))
+                    },
+                    Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("perm_delete".to_string()))),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Function(Function {
+                            name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
+                            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
+                                "perm_delete"
+                            )))],
+                            over: None,
+                            distinct: false
+                        }))
+                    }
+                ])),
+                on
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
 fn mysql() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],

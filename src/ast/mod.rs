@@ -497,6 +497,7 @@ impl fmt::Display for WindowFrameUnits {
     }
 }
 
+
 /// Specifies [WindowFrame]'s `start_bound` and `end_bound`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -607,6 +608,7 @@ pub enum Statement {
         after_columns: Vec<Ident>,
         /// whether the insert has the table keyword (Hive)
         table: bool,
+        on: Option<OnInsert>,
     },
     // TODO: Support ROW FORMAT
     Directory {
@@ -931,6 +933,7 @@ impl fmt::Display for Statement {
                 after_columns,
                 source,
                 table,
+                on,
             } => {
                 if let Some(action) = or {
                     write!(f, "INSERT OR {} INTO {} ", action, table_name)?;
@@ -954,7 +957,13 @@ impl fmt::Display for Statement {
                 if !after_columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(after_columns))?;
                 }
-                write!(f, "{}", source)
+                write!(f, "{}", source)?;
+
+                if let Some(on) = on {
+                    write!(f, "{}", on)
+                } else {
+                    Ok(())
+                }
             }
 
             Statement::Copy {
@@ -1355,6 +1364,22 @@ impl fmt::Display for Statement {
                 }
                 write!(f, "AS {}", statement)
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
+pub enum OnInsert {
+    /// ON DUPLICATE KEY UPDATE (MySQL when the key already exists, then execute an update instead)
+    DuplicateKeyUpdate(Vec<Expr>),
+}
+
+impl fmt::Display for OnInsert {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            OnInsert::DuplicateKeyUpdate(expr) => write!(f, " ON DUPLICATE KEY UPDATE {}", display_comma_separated(expr)),
         }
     }
 }

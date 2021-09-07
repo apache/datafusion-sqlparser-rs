@@ -2322,6 +2322,7 @@ impl<'a> Parser<'a> {
             })
         } else {
             let insert = self.parse_insert()?;
+
             Ok(Query {
                 with,
                 body: SetExpr::Insert(insert),
@@ -2938,6 +2939,17 @@ impl<'a> Parser<'a> {
             let after_columns = self.parse_parenthesized_column_list(Optional)?;
 
             let source = Box::new(self.parse_query()?);
+            let on = if dialect_of!(self is MySqlDialect) && self.parse_keyword(Keyword::ON) {
+                self.expect_keyword(Keyword::DUPLICATE);
+                self.expect_keyword(Keyword::KEY);
+                self.expect_keyword(Keyword::UPDATE);
+                let l = self.parse_comma_separated(Parser::parse_expr)?;
+
+                Some(OnInsert::DuplicateKeyUpdate(l))
+            } else {
+                None
+            };
+
             Ok(Statement::Insert {
                 or,
                 table_name,
@@ -2947,6 +2959,7 @@ impl<'a> Parser<'a> {
                 after_columns,
                 source,
                 table,
+                on,
             })
         }
     }

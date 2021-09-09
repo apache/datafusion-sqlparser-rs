@@ -764,8 +764,18 @@ pub enum Statement {
         data_types: Vec<DataType>,
         statement: Box<Statement>,
     },
-    /// EXPLAIN
+    /// EXPLAIN TABLE
+    /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/explain.html>
+    ExplainTable {
+        // If true, query used the MySQL `DESCRIBE` alias for explain
+        describe_alias: bool,
+        // Table name
+        table_name: ObjectName,
+    },
+    /// EXPLAIN / DESCRIBE for select_statement
     Explain {
+        // If true, query used the MySQL `DESCRIBE` alias for explain
+        describe_alias: bool,
         /// Carry out the command and show actual run times and other statistics.
         analyze: bool,
         // Display additional information regarding the plan.
@@ -781,12 +791,29 @@ impl fmt::Display for Statement {
     #[allow(clippy::cognitive_complexity)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Statement::ExplainTable {
+                describe_alias,
+                table_name,
+            } => {
+                if *describe_alias {
+                    write!(f, "DESCRIBE ")?;
+                } else {
+                    write!(f, "EXPLAIN ")?;
+                }
+
+                write!(f, "{}", table_name)
+            }
             Statement::Explain {
+                describe_alias,
                 verbose,
                 analyze,
                 statement,
             } => {
-                write!(f, "EXPLAIN ")?;
+                if *describe_alias {
+                    write!(f, "DESCRIBE ")?;
+                } else {
+                    write!(f, "EXPLAIN ")?;
+                }
 
                 if *analyze {
                     write!(f, "ANALYZE ")?;

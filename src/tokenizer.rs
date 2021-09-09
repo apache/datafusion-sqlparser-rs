@@ -287,6 +287,19 @@ pub struct TokenizerError {
     pub col: u64,
 }
 
+impl fmt::Display for TokenizerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} at Line: {}, Column {}",
+            self.message, self.line, self.col
+        )
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for TokenizerError {}
+
 /// SQL Tokenizer
 pub struct Tokenizer<'a> {
     dialect: &'a dyn Dialect,
@@ -408,10 +421,10 @@ impl<'a> Tokenizer<'a> {
                     if chars.next() == Some(quote_end) {
                         Ok(Some(Token::make_word(&s, Some(quote_start))))
                     } else {
-                        self.tokenizer_error(
-                            format!("Expected close delimiter '{}' before EOF.", quote_end)
-                                .as_str(),
-                        )
+                        self.tokenizer_error(format!(
+                            "Expected close delimiter '{}' before EOF.",
+                            quote_end
+                        ))
                     }
                 }
                 // numbers and period
@@ -589,9 +602,9 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn tokenizer_error<R>(&self, message: &str) -> Result<R, TokenizerError> {
+    fn tokenizer_error<R>(&self, message: impl Into<String>) -> Result<R, TokenizerError> {
         Err(TokenizerError {
-            message: message.to_string(),
+            message: message.into(),
             col: self.col,
             line: self.line,
         })

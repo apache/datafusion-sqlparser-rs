@@ -16,7 +16,7 @@ use alloc::{boxed::Box, format, vec, vec::Vec};
 use crate::ast::*;
 use crate::dialect::keywords::Keyword;
 use crate::dialect::*;
-use crate::parser::{IsOptional::*, Parser, ParserError};
+use crate::parser::{IsOptional, Parser, ParserError};
 use crate::tokenizer::Token;
 
 impl<'a> Parser<'a> {
@@ -148,7 +148,7 @@ impl<'a> Parser<'a> {
         // general that the arguments can be made to appear as column
         // definitions in a traditional CREATE TABLE statement", but
         // we don't implement that.
-        let module_args = self.parse_parenthesized_column_list(Optional)?;
+        let module_args = self.parse_parenthesized_column_list(IsOptional::Optional)?;
         Ok(Statement::CreateVirtualTable {
             name: table_name,
             if_not_exists,
@@ -164,7 +164,7 @@ impl<'a> Parser<'a> {
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let name = self.parse_object_name()?;
-        let columns = self.parse_parenthesized_column_list(Optional)?;
+        let columns = self.parse_parenthesized_column_list(IsOptional::Optional)?;
         let with_options = self.parse_options(Keyword::WITH)?;
         self.expect_keyword(Keyword::AS)?;
         let query = Box::new(self.parse_query()?);
@@ -255,7 +255,7 @@ impl<'a> Parser<'a> {
             let foreign_table = self.parse_object_name()?;
             // PostgreSQL allows omitting the column list and
             // uses the primary key column of the foreign table by default
-            let referred_columns = self.parse_parenthesized_column_list(Optional)?;
+            let referred_columns = self.parse_parenthesized_column_list(IsOptional::Optional)?;
             let mut on_delete = None;
             let mut on_update = None;
             loop {
@@ -313,7 +313,7 @@ impl<'a> Parser<'a> {
                 if is_primary {
                     self.expect_keyword(Keyword::KEY)?;
                 }
-                let columns = self.parse_parenthesized_column_list(Mandatory)?;
+                let columns = self.parse_parenthesized_column_list(IsOptional::Mandatory)?;
                 Ok(Some(TableConstraint::Unique {
                     name,
                     columns,
@@ -322,10 +322,11 @@ impl<'a> Parser<'a> {
             }
             Token::Word(w) if w.keyword == Keyword::FOREIGN => {
                 self.expect_keyword(Keyword::KEY)?;
-                let columns = self.parse_parenthesized_column_list(Mandatory)?;
+                let columns = self.parse_parenthesized_column_list(IsOptional::Mandatory)?;
                 self.expect_keyword(Keyword::REFERENCES)?;
                 let foreign_table = self.parse_object_name()?;
-                let referred_columns = self.parse_parenthesized_column_list(Mandatory)?;
+                let referred_columns =
+                    self.parse_parenthesized_column_list(IsOptional::Mandatory)?;
                 let mut on_delete = None;
                 let mut on_update = None;
                 loop {

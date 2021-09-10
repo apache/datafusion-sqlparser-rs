@@ -495,7 +495,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
+    pub fn parse_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
         let mut idents = vec![];
         loop {
             match self.next_token() {

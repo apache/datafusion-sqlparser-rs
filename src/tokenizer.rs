@@ -31,9 +31,9 @@ use core::str::Chars;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 use crate::dialect::Dialect;
 use crate::dialect::SnowflakeDialect;
+use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

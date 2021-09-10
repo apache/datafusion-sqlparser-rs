@@ -25,8 +25,8 @@ use core::fmt;
 use log::debug;
 
 use crate::ast::*;
-use crate::dialect::keywords::Keyword;
 use crate::dialect::*;
+use crate::keywords::{self, Keyword};
 use crate::tokenizer::*;
 
 #[derive(Debug, Clone, PartialEq)]

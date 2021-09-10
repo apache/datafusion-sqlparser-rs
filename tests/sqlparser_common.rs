@@ -24,7 +24,8 @@ use test_utils::{all_dialects, expr_from_projection, join, number, only, table, 
 
 use matches::assert_matches;
 use sqlparser::ast::*;
-use sqlparser::dialect::{keywords::ALL_KEYWORDS, GenericDialect, SQLiteDialect};
+use sqlparser::dialect::{GenericDialect, SQLiteDialect};
+use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
 
 #[test]

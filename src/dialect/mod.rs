@@ -13,7 +13,6 @@
 mod ansi;
 mod generic;
 mod hive;
-pub mod keywords;
 mod mssql;
 mod mysql;
 mod postgresql;

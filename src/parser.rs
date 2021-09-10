@@ -382,7 +382,7 @@ impl<'a> Parser<'a> {
                         while self.consume_token(&Token::Period) {
                             match self.next_token() {
                                 Token::Word(w) => id_parts.push(w.to_ident()),
-                                Token::Mult => {
+                                Token::Mul => {
                                     ends_with_wildcard = true;
                                     break;
                                 }
@@ -404,7 +404,7 @@ impl<'a> Parser<'a> {
                     _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word
-            Token::Mult => Ok(Expr::Wildcard),
+            Token::Mul => Ok(Expr::Wildcard),
             tok @ Token::Minus | tok @ Token::Plus => {
                 let op = if tok == Token::Plus {
                     UnaryOperator::Plus
@@ -867,7 +867,7 @@ impl<'a> Parser<'a> {
             Token::LtEq => Some(BinaryOperator::LtEq),
             Token::Plus => Some(BinaryOperator::Plus),
             Token::Minus => Some(BinaryOperator::Minus),
-            Token::Mult => Some(BinaryOperator::Multiply),
+            Token::Mul => Some(BinaryOperator::Multiply),
             Token::Mod => Some(BinaryOperator::Modulo),
             Token::StringConcat => Some(BinaryOperator::StringConcat),
             Token::Pipe => Some(BinaryOperator::BitwiseOr),
@@ -1054,7 +1054,7 @@ impl<'a> Parser<'a> {
             Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(22),
             Token::Ampersand => Ok(23),
             Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
-            Token::Mult | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
+            Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
             Token::LBracket | Token::RBracket => Ok(10),

@@ -68,10 +68,7 @@ use IsLateral::*;
 
 impl From<TokenizerError> for ParserError {
     fn from(e: TokenizerError) -> Self {
-        ParserError::TokenizerError(format!(
-            "{} at Line: {}, Column {}",
-            e.message, e.line, e.col
-        ))
+        ParserError::TokenizerError(e.to_string())
     }
 }
 

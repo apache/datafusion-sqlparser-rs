@@ -287,6 +287,19 @@ pub struct TokenizerError {
     pub col: u64,
 }
 
+impl fmt::Display for TokenizerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} at Line: {}, Column {}",
+            self.message, self.line, self.col
+        )
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for TokenizerError {}
+
 /// SQL Tokenizer
 pub struct Tokenizer<'a> {
     dialect: &'a dyn Dialect,
@@ -408,10 +421,10 @@ impl<'a> Tokenizer<'a> {
                     if chars.next() == Some(quote_end) {
                         Ok(Some(Token::make_word(&s, Some(quote_start))))
                     } else {
-                        self.tokenizer_error(
-                            format!("Expected close delimiter '{}' before EOF.", quote_end)
-                                .as_str(),
-                        )
+                        self.tokenizer_error(format!(
+                            "Expected close delimiter '{}' before EOF.",
+                            quote_end
+                        ))
                     }
                 }
                 // numbers and period
@@ -589,9 +602,9 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn tokenizer_error<R>(&self, message: &str) -> Result<R, TokenizerError> {
+    fn tokenizer_error<R>(&self, message: impl Into<String>) -> Result<R, TokenizerError> {
         Err(TokenizerError {
-            message: message.to_string(),
+            message: message.into(),
             col: self.col,
             line: self.line,
         })
@@ -703,9 +716,23 @@ fn peeking_take_while(
 
 #[cfg(test)]
 mod tests {
-    use super::super::dialect::GenericDialect;
-    use super::super::dialect::MsSqlDialect;
     use super::*;
+    use crate::dialect::{GenericDialect, MsSqlDialect};
+
+    #[test]
+    fn tokenizer_error_impl() {
+        let err = TokenizerError {
+            message: "test".into(),
+            line: 1,
+            col: 1,
+        };
+        #[cfg(feature = "std")]
+        {
+            use std::error::Error;
+            assert!(err.source().is_none());
+        }
+        assert_eq!(err.to_string(), "test at Line: 1, Column 1");
+    }
 
     #[test]
     fn tokenize_select_1() {
@@ -930,7 +957,7 @@ mod tests {
         let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
-        println!("tokens: {:#?}", tokens);
+        // println!("tokens: {:#?}", tokens);
         let expected = vec![
             Token::Whitespace(Whitespace::Newline),
             Token::Char('م'),
@@ -977,7 +1004,7 @@ mod tests {
         let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
-        println!("tokens: {:#?}", tokens);
+        // println!("tokens: {:#?}", tokens);
         let expected = vec![
             Token::Whitespace(Whitespace::Newline),
             Token::Whitespace(Whitespace::Newline),

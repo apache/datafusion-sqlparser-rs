@@ -12,7 +12,7 @@ making it easy to support custom dialects so that this crate can be used as a
 foundation for vendor-specific parsers.
 
 This parser is currently being used by the [DataFusion] query engine,
-[LocustDB], and [Ballista].
+[LocustDB], [Ballista] and [GlueSQL].
 
 ## Example
 
@@ -127,6 +127,7 @@ resources.
 [DataFusion]: https://github.com/apache/arrow-datafusion
 [LocustDB]: https://github.com/cswinter/LocustDB
 [Ballista]: https://github.com/apache/arrow-datafusion/tree/master/ballista
+[GlueSQL]: https://github.com/gluesql/gluesql
 [Pratt Parser]: https://tdop.github.io/
 [sql-2016-grammar]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html
 [sql-standard]: https://en.wikipedia.org/wiki/ISO/IEC_9075

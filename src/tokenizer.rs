@@ -78,7 +78,7 @@ pub enum Token {
     /// Minus operator `-`
     Minus,
     /// Multiplication operator `*`
-    Mult,
+    Mul,
     /// Division operator `/`
     Div,
     /// Modulo Operator `%`
@@ -163,7 +163,7 @@ impl fmt::Display for Token {
             Token::GtEq => f.write_str(">="),
             Token::Plus => f.write_str("+"),
             Token::Minus => f.write_str("-"),
-            Token::Mult => f.write_str("*"),
+            Token::Mul => f.write_str("*"),
             Token::Div => f.write_str("/"),
             Token::StringConcat => f.write_str("||"),
             Token::Mod => f.write_str("%"),
@@ -501,7 +501,7 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 '+' => self.consume_and_return(chars, Token::Plus),
-                '*' => self.consume_and_return(chars, Token::Mult),
+                '*' => self.consume_and_return(chars, Token::Mul),
                 '%' => self.consume_and_return(chars, Token::Mod),
                 '|' => {
                     chars.next(); // consume the '|'
@@ -838,7 +838,7 @@ mod tests {
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Mult,
+            Token::Mul,
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
@@ -872,7 +872,7 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Mult,
+            Token::Mul,
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
@@ -904,7 +904,7 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Mult,
+            Token::Mul,
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
@@ -932,7 +932,7 @@ mod tests {
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Mult,
+            Token::Mul,
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
@@ -1010,7 +1010,7 @@ mod tests {
             Token::Whitespace(Whitespace::Newline),
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Mult,
+            Token::Mul,
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),

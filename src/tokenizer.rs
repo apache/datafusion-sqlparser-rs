@@ -824,7 +824,47 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_word("three", None),
         ];
+        compare(expected, tokens);
+    }
 
+    #[test]
+    fn tokenize_logical_xor() {
+        let sql =
+            String::from("SELECT true XOR true, false XOR false, true XOR false, false XOR true");
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("true"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("XOR"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("true"),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("false"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("XOR"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("false"),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("true"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("XOR"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("false"),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("false"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("XOR"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("true"),
+        ];
         compare(expected, tokens);
     }
 

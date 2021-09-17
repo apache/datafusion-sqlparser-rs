@@ -898,6 +898,7 @@ impl<'a> Parser<'a> {
                         None
                     }
                 }
+                Keyword::XOR => Some(BinaryOperator::Xor),
                 _ => None,
             },
             _ => None,
@@ -1018,6 +1019,7 @@ impl<'a> Parser<'a> {
         match token {
             Token::Word(w) if w.keyword == Keyword::OR => Ok(5),
             Token::Word(w) if w.keyword == Keyword::AND => Ok(10),
+            Token::Word(w) if w.keyword == Keyword::XOR => Ok(24),
             Token::Word(w) if w.keyword == Keyword::NOT => match self.peek_nth_token(1) {
                 // The precedence of NOT varies depending on keyword that
                 // follows it. If it is followed by IN, BETWEEN, or LIKE,

@@ -674,7 +674,6 @@ fn parse_pg_regex_match_ops() {
 
 #[test]
 fn parse_map_access_expr() {
-    //let sql = "SELECT foo[0] as foozero, bar[\"baz\"] as barbaz FROM foos";
     let sql = "SELECT foo[0] FROM foos";
     let select = pg_and_generic().verified_only_select(sql);
     #[cfg(not(feature = "bigdecimal"))]
@@ -687,6 +686,13 @@ fn parse_map_access_expr() {
     #[cfg(not(feature = "bigdecimal"))]
     assert_eq!(
         &MapAccess { column: Box::new(Identifier(Ident { value: "foo".to_string(), quote_style: None })), keys: vec![Value::Number("0".to_string(), false), Value::Number("0".to_string(), false)] },
+        expr_from_projection(only(&select.projection)),
+    );
+    let sql = r#"SELECT bar[0]['baz']['fooz'] FROM foos"#;
+    let select = pg_and_generic().verified_only_select(sql);
+    #[cfg(not(feature = "bigdecimal"))]
+    assert_eq!(
+        &MapAccess { column: Box::new(Identifier(Ident { value: "bar".to_string(), quote_style: None })), keys: vec![Value::Number("0".to_string(), false), Value::SingleQuotedString("baz".to_string()), Value::SingleQuotedString("fooz".to_string())] },
         expr_from_projection(only(&select.projection)),
     );
 }

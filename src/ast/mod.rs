@@ -284,7 +284,7 @@ impl fmt::Display for Expr {
                 write!(f, "{}{}", column, keys.into_iter().map(|k| {
                     match k {
                         k @ Value::Number(_, _) => format!("[{}]", k),
-                        _ => format!("[\"{}\"]", k)
+                        _ => format!("[{}]", k)
                     }
 
                 }).collect::<Vec<String>>().join(""))

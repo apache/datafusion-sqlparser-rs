@@ -816,6 +816,44 @@ fn parse_bitwise_ops() {
 }
 
 #[test]
+fn parse_logical_xor() {
+    let sql = "SELECT true XOR true, false XOR false, true XOR false, false XOR true";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value(Value::Boolean(true))),
+            op: BinaryOperator::Xor,
+            right: Box::new(Expr::Value(Value::Boolean(true))),
+        }),
+        select.projection[0]
+    );
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value(Value::Boolean(false))),
+            op: BinaryOperator::Xor,
+            right: Box::new(Expr::Value(Value::Boolean(false))),
+        }),
+        select.projection[1]
+    );
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value(Value::Boolean(true))),
+            op: BinaryOperator::Xor,
+            right: Box::new(Expr::Value(Value::Boolean(false))),
+        }),
+        select.projection[2]
+    );
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value(Value::Boolean(false))),
+            op: BinaryOperator::Xor,
+            right: Box::new(Expr::Value(Value::Boolean(true))),
+        }),
+        select.projection[3]
+    );
+}
+
+#[test]
 fn parse_between() {
     fn chk(negated: bool) {
         let sql = &format!(

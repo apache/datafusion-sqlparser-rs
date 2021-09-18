@@ -493,6 +493,7 @@ define_keywords!(
     WITHOUT,
     WORK,
     WRITE,
+    XOR,
     YEAR,
     ZONE
 );

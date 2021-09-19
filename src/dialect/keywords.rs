@@ -195,6 +195,7 @@ define_keywords!(
     EQUALS,
     ERROR,
     ESCAPE,
+    EVENT,
     EVERY,
     EXCEPT,
     EXEC,
@@ -498,6 +499,7 @@ define_keywords!(
     WITHOUT,
     WORK,
     WRITE,
+    XOR,
     YEAR,
     ZONE
 );

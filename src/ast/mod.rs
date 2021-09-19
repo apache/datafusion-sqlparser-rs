@@ -523,6 +523,28 @@ impl fmt::Display for AddDropSync {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ShowCreateObject {
+    Event,
+    Function,
+    Procedure,
+    Table,
+    Trigger,
+}
+
+impl fmt::Display for ShowCreateObject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ShowCreateObject::Event => f.write_str("EVENT"),
+            ShowCreateObject::Function => f.write_str("FUNCTION"),
+            ShowCreateObject::Procedure => f.write_str("PROCEDURE"),
+            ShowCreateObject::Table => f.write_str("TABLE"),
+            ShowCreateObject::Trigger => f.write_str("TRIGGER"),
+        }
+    }
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -632,7 +654,6 @@ pub enum Statement {
         query: Option<Box<Query>>,
         without_rowid: bool,
         like: Option<ObjectName>,
-        table_options: Vec<SqlOption>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -686,11 +707,12 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement.
     ShowVariable { variable: Vec<Ident> },
-    /// SHOW VARIABLES [ LIKE | WHERE ]
+    /// SHOW CREATE TABLE
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowVariables {
-        filter: Option<ShowStatementFilter>,
+    ShowCreate {
+        obj_type: ShowCreateObject,
+        obj_name: ObjectName,
     },
     /// SHOW COLUMNS
     ///
@@ -699,22 +721,6 @@ pub enum Statement {
         extended: bool,
         full: bool,
         table_name: ObjectName,
-        filter: Option<ShowStatementFilter>,
-    },
-    /// SHOW TABLES
-    ///
-    /// Note: this is a MySQL-specific statement.
-    ShowTables {
-        full: bool,
-        from: Option<bool>,
-        db_name: Option<ObjectName>,
-        filter: Option<ShowStatementFilter>,
-    },
-    /// SHOW TABLE STATUS [FROM db_name] [LIKE'pattern']
-    ///
-    /// Note: this is a MySQL-specific statement.
-    ShowTableStatus {
-        db_name: ObjectName,
         filter: Option<ShowStatementFilter>,
     },
     /// `{ BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...`
@@ -758,8 +764,18 @@ pub enum Statement {
         data_types: Vec<DataType>,
         statement: Box<Statement>,
     },
-    /// EXPLAIN
+    /// EXPLAIN TABLE
+    /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/explain.html>
+    ExplainTable {
+        // If true, query used the MySQL `DESCRIBE` alias for explain
+        describe_alias: bool,
+        // Table name
+        table_name: ObjectName,
+    },
+    /// EXPLAIN / DESCRIBE for select_statement
     Explain {
+        // If true, query used the MySQL `DESCRIBE` alias for explain
+        describe_alias: bool,
         /// Carry out the command and show actual run times and other statistics.
         analyze: bool,
         // Display additional information regarding the plan.
@@ -775,12 +791,29 @@ impl fmt::Display for Statement {
     #[allow(clippy::cognitive_complexity)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Statement::ExplainTable {
+                describe_alias,
+                table_name,
+            } => {
+                if *describe_alias {
+                    write!(f, "DESCRIBE ")?;
+                } else {
+                    write!(f, "EXPLAIN ")?;
+                }
+
+                write!(f, "{}", table_name)
+            }
             Statement::Explain {
+                describe_alias,
                 verbose,
                 analyze,
                 statement,
             } => {
-                write!(f, "EXPLAIN ")?;
+                if *describe_alias {
+                    write!(f, "DESCRIBE ")?;
+                } else {
+                    write!(f, "EXPLAIN ")?;
+                }
 
                 if *analyze {
                     write!(f, "ANALYZE ")?;
@@ -1016,7 +1049,6 @@ impl fmt::Display for Statement {
                 query,
                 without_rowid,
                 like,
-                table_options,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -1047,15 +1079,6 @@ impl fmt::Display for Statement {
                 // Only for SQLite
                 if *without_rowid {
                     write!(f, " WITHOUT ROWID")?;
-                }
-
-                // Only for mysql
-                if !table_options.is_empty() {
-                    write!(
-                        f,
-                        " {}",
-                        display_separated(table_options, " "),
-                    )?;
                 }
 
                 // Only for Hive
@@ -1229,51 +1252,13 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::ShowVariables { filter } => {
-                write!(f, "SHOW VARIABLES")?;
-                if let Some(filter) = filter {
-                    write!(f, " {}", filter)?;
-                }
-                Ok(())
-            }
-            Statement::ShowTables {
-                full,
-                from,
-                db_name,
-                filter,
-            } => {
+            Statement::ShowCreate { obj_type, obj_name } => {
                 write!(
                     f,
-                    "SHOW {full}TABLES",
-                    full = if *full { "FULL " } else { "" },
+                    "SHOW CREATE {obj_type} {obj_name}",
+                    obj_type = obj_type,
+                    obj_name = obj_name,
                 )?;
-                if let Some(from) = from {
-                    write!(
-                        f,
-                        " {}",
-                        full = if *from { "FROM" } else { "IN" },
-                    )?;
-                    if let Some(db_name) = db_name {
-                        write!(f, " {}", db_name)?;
-                    }
-                }
-                if let Some(filter) = filter {
-                    write!(f, " {}", filter)?;
-                }
-                Ok(())
-            }
-            Statement::ShowTableStatus {
-                db_name,
-                filter,
-            } => {
-                write!(
-                    f,
-                    "SHOW TABLE STATUS FROM {}",
-                    db_name.to_string(),
-                )?;
-                if let Some(filter) = filter {
-                    write!(f, " {}", filter)?;
-                }
                 Ok(())
             }
             Statement::ShowColumns {
@@ -1574,22 +1559,12 @@ pub enum HiveIOFormat {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct HiveFormat {
     pub row_format: Option<HiveRowFormat>,
     pub storage: Option<HiveIOFormat>,
     pub location: Option<String>,
-}
-
-impl Default for HiveFormat {
-    fn default() -> Self {
-        HiveFormat {
-            row_format: None,
-            location: None,
-            storage: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

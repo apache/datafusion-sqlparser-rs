@@ -68,10 +68,7 @@ use IsLateral::*;
 
 impl From<TokenizerError> for ParserError {
     fn from(e: TokenizerError) -> Self {
-        ParserError::TokenizerError(format!(
-            "{} at Line: {}, Column {}",
-            e.message, e.line, e.col
-        ))
+        ParserError::TokenizerError(e.to_string())
     }
 }
 
@@ -141,7 +138,8 @@ impl<'a> Parser<'a> {
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
         match self.next_token() {
             Token::Word(w) => match w.keyword {
-                Keyword::EXPLAIN => Ok(self.parse_explain()?),
+                Keyword::DESCRIBE => Ok(self.parse_explain(true)?),
+                Keyword::EXPLAIN => Ok(self.parse_explain(false)?),
                 Keyword::ANALYZE => Ok(self.parse_analyze()?),
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES => {
                     self.prev_token();
@@ -381,7 +379,7 @@ impl<'a> Parser<'a> {
                         while self.consume_token(&Token::Period) {
                             match self.next_token() {
                                 Token::Word(w) => id_parts.push(w.to_ident()),
-                                Token::Mult => {
+                                Token::Mul => {
                                     ends_with_wildcard = true;
                                     break;
                                 }
@@ -403,7 +401,7 @@ impl<'a> Parser<'a> {
                     _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word
-            Token::Mult => Ok(Expr::Wildcard),
+            Token::Mul => Ok(Expr::Wildcard),
             tok @ Token::Minus | tok @ Token::Plus => {
                 let op = if tok == Token::Plus {
                     UnaryOperator::Plus
@@ -437,7 +435,6 @@ impl<'a> Parser<'a> {
             }
             Token::Number(_, _)
             | Token::SingleQuotedString(_)
-            | Token::DoubleQuotedString(_)
             | Token::NationalStringLiteral(_)
             | Token::HexStringLiteral(_) => {
                 self.prev_token();
@@ -718,7 +715,6 @@ impl<'a> Parser<'a> {
                         None
                     }
                     Token::SingleQuotedString(_)
-                    | Token::DoubleQuotedString(_)
                     | Token::NationalStringLiteral(_)
                     | Token::HexStringLiteral(_) => Some(Box::new(self.parse_expr()?)),
                     unexpected => {
@@ -868,7 +864,7 @@ impl<'a> Parser<'a> {
             Token::LtEq => Some(BinaryOperator::LtEq),
             Token::Plus => Some(BinaryOperator::Plus),
             Token::Minus => Some(BinaryOperator::Minus),
-            Token::Mult => Some(BinaryOperator::Multiply),
+            Token::Mul => Some(BinaryOperator::Multiply),
             Token::Mod => Some(BinaryOperator::Modulo),
             Token::StringConcat => Some(BinaryOperator::StringConcat),
             Token::Pipe => Some(BinaryOperator::BitwiseOr),
@@ -902,6 +898,7 @@ impl<'a> Parser<'a> {
                         None
                     }
                 }
+                Keyword::XOR => Some(BinaryOperator::Xor),
                 _ => None,
             },
             _ => None,
@@ -1022,6 +1019,7 @@ impl<'a> Parser<'a> {
         match token {
             Token::Word(w) if w.keyword == Keyword::OR => Ok(5),
             Token::Word(w) if w.keyword == Keyword::AND => Ok(10),
+            Token::Word(w) if w.keyword == Keyword::XOR => Ok(24),
             Token::Word(w) if w.keyword == Keyword::NOT => match self.peek_nth_token(1) {
                 // The precedence of NOT varies depending on keyword that
                 // follows it. If it is followed by IN, BETWEEN, or LIKE,
@@ -1055,7 +1053,7 @@ impl<'a> Parser<'a> {
             Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(22),
             Token::Ampersand => Ok(23),
             Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
-            Token::Mult | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
+            Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
             Token::LBracket | Token::RBracket => Ok(10),
@@ -1316,14 +1314,6 @@ impl<'a> Parser<'a> {
     pub fn parse_create_schema(&mut self) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let schema_name = self.parse_object_name()?;
-
-        loop {
-            match self.parse_object_name() {
-                Ok(_) => {}
-                _ => break,
-            }
-        }
-
         Ok(Statement::CreateSchema {
             schema_name,
             if_not_exists,
@@ -1391,7 +1381,6 @@ impl<'a> Parser<'a> {
             query: None,
             without_rowid: false,
             like: None,
-            table_options: vec![],
         })
     }
 
@@ -1554,10 +1543,6 @@ impl<'a> Parser<'a> {
         // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
 
-        // MySQL supports table_options
-        // https://dev.mysql.com/doc/refman/8.0/en/create-table.html
-        let table_options = self.parse_table_options()?;
-
         let hive_distribution = self.parse_hive_distribution()?;
         let hive_formats = self.parse_hive_formats()?;
         // PostgreSQL supports `WITH ( options )`, before `AS`
@@ -1587,38 +1572,7 @@ impl<'a> Parser<'a> {
             query,
             without_rowid,
             like,
-            table_options,
         })
-    }
-
-    pub fn parse_table_options(&mut self) -> Result<Vec<SqlOption>, ParserError> {
-        let mut sql_options = vec![];
-        loop {
-            if let Some(sql_option) = self.parse_table_option()? {
-                sql_options.push(sql_option);
-            } else {
-                break;
-            }
-        }
-        Ok(sql_options)
-    }
-
-    pub fn parse_table_option(&mut self) -> Result<Option<SqlOption>, ParserError> {
-        if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARSET]) {
-            self.prev_token();
-            let name = self.parse_identifier()?;
-            self.expect_token(&Token::Eq)?;
-            let value = self.parse_value()?;
-            Ok(Some(SqlOption { name, value }))
-        } else if self.parse_keyword(Keyword::ENGINE) {
-            self.prev_token();
-            let name = self.parse_identifier()?;
-            self.expect_token(&Token::Eq)?;
-            let value = self.parse_value()?;
-            Ok(Some(SqlOption { name, value }))
-        } else {
-            Ok(None)
-        }
     }
 
     fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
@@ -1993,13 +1947,10 @@ impl<'a> Parser<'a> {
                 Keyword::TRUE => Ok(Value::Boolean(true)),
                 Keyword::FALSE => Ok(Value::Boolean(false)),
                 Keyword::NULL => Ok(Value::Null),
-                Keyword::NoKeyword => {
-                    match w.quote_style {
-                        Some('"') => Ok(Value::DoubleQuotedString(w.value)),
-                        Some('\'') => Ok(Value::SingleQuotedString(w.value)),
-                        None => Ok(Value::OnlyString(w.value)),
-                        _ => self.expected("A value?", Token::Word(w))?,
-                    }
+                Keyword::NoKeyword if w.quote_style.is_some() => match w.quote_style {
+                    Some('"') => Ok(Value::DoubleQuotedString(w.value)),
+                    Some('\'') => Ok(Value::SingleQuotedString(w.value)),
+                    _ => self.expected("A value?", Token::Word(w))?,
                 },
                 _ => self.expected("a concrete value", Token::Word(w)),
             },
@@ -2011,7 +1962,6 @@ impl<'a> Parser<'a> {
                 Err(e) => parser_err!(format!("Could not parse '{}' as number: {}", n, e)),
             },
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
-            Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
             unexpected => self.expected("a value", unexpected),
@@ -2043,7 +1993,6 @@ impl<'a> Parser<'a> {
         match self.next_token() {
             Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => Ok(value),
             Token::SingleQuotedString(s) => Ok(s),
-            Token::DoubleQuotedString(s) => Ok(s),
             unexpected => self.expected("literal string", unexpected),
         }
     }
@@ -2059,10 +2008,12 @@ impl<'a> Parser<'a> {
                     let _ = self.parse_keyword(Keyword::PRECISION);
                     Ok(DataType::Double)
                 }
-                Keyword::TINYINT => Ok(DataType::TinyInt),
-                Keyword::SMALLINT => Ok(DataType::SmallInt),
-                Keyword::INT | Keyword::INTEGER => Ok(DataType::Int),
-                Keyword::BIGINT => Ok(DataType::BigInt),
+                Keyword::TINYINT => Ok(DataType::TinyInt(self.parse_optional_precision()?)),
+                Keyword::SMALLINT => Ok(DataType::SmallInt(self.parse_optional_precision()?)),
+                Keyword::INT | Keyword::INTEGER => {
+                    Ok(DataType::Int(self.parse_optional_precision()?))
+                }
+                Keyword::BIGINT => Ok(DataType::BigInt(self.parse_optional_precision()?)),
                 Keyword::VARCHAR => Ok(DataType::Varchar(self.parse_optional_precision()?)),
                 Keyword::CHAR | Keyword::CHARACTER => {
                     if self.parse_keyword(Keyword::VARYING) {
@@ -2267,17 +2218,25 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_explain(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_explain(&mut self, describe_alias: bool) -> Result<Statement, ParserError> {
         let analyze = self.parse_keyword(Keyword::ANALYZE);
         let verbose = self.parse_keyword(Keyword::VERBOSE);
 
-        let statement = Box::new(self.parse_statement()?);
+        if let Some(statement) = self.maybe_parse(|parser| parser.parse_statement()) {
+            Ok(Statement::Explain {
+                describe_alias,
+                analyze,
+                verbose,
+                statement: Box::new(statement),
+            })
+        } else {
+            let table_name = self.parse_object_name()?;
 
-        Ok(Statement::Explain {
-            analyze,
-            verbose,
-            statement,
-        })
+            Ok(Statement::ExplainTable {
+                describe_alias,
+                table_name,
+            })
+        }
     }
 
     /// Parse a query expression, i.e. a `SELECT` statement optionally
@@ -2582,18 +2541,8 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_show(&mut self) -> Result<Statement, ParserError> {
-        if self.parse_keywords(&[Keyword::FULL, Keyword::TABLES]){
-            self.prev_token();
-            self.prev_token();
-            self.parse_show_tables()
-        } else if self.parse_keyword(Keyword::TABLES){
-            self.prev_token();
-            self.parse_show_tables()
-        } else if self.parse_keyword(Keyword::VARIABLES) {
-            self.parse_show_variables()
-        } else if self.parse_keywords(&[Keyword::TABLE, Keyword::STATUS]) {
-            self.parse_show_table_status()
-        } else if self.parse_one_of_keywords(&[
+        if self
+            .parse_one_of_keywords(&[
                 Keyword::EXTENDED,
                 Keyword::FULL,
                 Keyword::COLUMNS,
@@ -2602,7 +2551,9 @@ impl<'a> Parser<'a> {
             .is_some()
         {
             self.prev_token();
-            self.parse_show_columns()
+            Ok(self.parse_show_columns()?)
+        } else if self.parse_one_of_keywords(&[Keyword::CREATE]).is_some() {
+            Ok(self.parse_show_create()?)
         } else {
             Ok(Statement::ShowVariable {
                 variable: self.parse_identifiers()?,
@@ -2610,59 +2561,28 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_show_variables(&mut self) -> Result<Statement, ParserError> {
-        let filter = self.parse_show_statement_filter()?;
-        Ok(Statement::ShowVariables {
-            filter,
-        })
-    }
+    fn parse_show_create(&mut self) -> Result<Statement, ParserError> {
+        let obj_type = match self.expect_one_of_keywords(&[
+            Keyword::TABLE,
+            Keyword::TRIGGER,
+            Keyword::FUNCTION,
+            Keyword::PROCEDURE,
+            Keyword::EVENT,
+        ])? {
+            Keyword::TABLE => Ok(ShowCreateObject::Table),
+            Keyword::TRIGGER => Ok(ShowCreateObject::Trigger),
+            Keyword::FUNCTION => Ok(ShowCreateObject::Function),
+            Keyword::PROCEDURE => Ok(ShowCreateObject::Procedure),
+            Keyword::EVENT => Ok(ShowCreateObject::Event),
+            keyword => Err(ParserError::ParserError(format!(
+                "Unable to map keyword to ShowCreateObject: {:?}",
+                keyword
+            ))),
+        }?;
 
-    pub fn parse_show_table_status(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::FROM)?;
+        let obj_name = self.parse_object_name()?;
 
-        let db_name = self.parse_object_name()?;
-
-        // MySQL allows both LIKE 'pattern' and WHERE expr,
-        let filter = self.parse_show_statement_filter()?;
-
-        Ok(Statement::ShowTableStatus {
-            db_name,
-            filter,
-        })
-    }
-
-    pub fn parse_show_tables(&mut self) -> Result<Statement, ParserError> {
-        let full = self.parse_keyword(Keyword::FULL);
-        self.expect_keyword(Keyword::TABLES)?;
-
-        let mut from = None;
-        let mut db_name = None;
-
-        match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
-            None => {}
-            Some(keyword) => {
-                match keyword {
-                    Keyword::FROM => from = Some(true),
-                    Keyword::IN => from = Some(false),
-                    _ => {},
-                }
-            }
-        }
-
-        if from.is_some() {
-            let object_name = self.parse_object_name()?;
-            db_name = Some(object_name);
-        }
-
-        // MySQL allows both LIKE 'pattern' and WHERE expr,
-        let filter = self.parse_show_statement_filter()?;
-
-        Ok(Statement::ShowTables {
-            full,
-            from,
-            db_name,
-            filter,
-        })
+        Ok(Statement::ShowCreate { obj_type, obj_name })
     }
 
     fn parse_show_columns(&mut self) -> Result<Statement, ParserError> {

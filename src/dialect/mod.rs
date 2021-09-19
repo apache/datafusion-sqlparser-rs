@@ -41,9 +41,6 @@ macro_rules! dialect_of {
 }
 
 pub trait Dialect: Debug + Any {
-    fn is_delimited_string_start(&self, ch: char) -> bool {
-        ch == '\''
-    }
     /// Determine if a character starts a quoted identifier. The default
     /// implementation, accepting "double quoted" ids is both ANSI-compliant
     /// and appropriate for most dialects (with the notable exception of

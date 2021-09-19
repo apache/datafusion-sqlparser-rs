@@ -816,6 +816,44 @@ fn parse_bitwise_ops() {
 }
 
 #[test]
+fn parse_logical_xor() {
+    let sql = "SELECT true XOR true, false XOR false, true XOR false, false XOR true";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value(Value::Boolean(true))),
+            op: BinaryOperator::Xor,
+            right: Box::new(Expr::Value(Value::Boolean(true))),
+        }),
+        select.projection[0]
+    );
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value(Value::Boolean(false))),
+            op: BinaryOperator::Xor,
+            right: Box::new(Expr::Value(Value::Boolean(false))),
+        }),
+        select.projection[1]
+    );
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value(Value::Boolean(true))),
+            op: BinaryOperator::Xor,
+            right: Box::new(Expr::Value(Value::Boolean(false))),
+        }),
+        select.projection[2]
+    );
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Value(Value::Boolean(false))),
+            op: BinaryOperator::Xor,
+            right: Box::new(Expr::Value(Value::Boolean(true))),
+        }),
+        select.projection[3]
+    );
+}
+
+#[test]
 fn parse_between() {
     fn chk(negated: bool) {
         let sql = &format!(
@@ -1013,7 +1051,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::BigInt
+            data_type: DataType::BigInt(None)
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1023,7 +1061,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::TinyInt
+            data_type: DataType::TinyInt(None)
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1053,7 +1091,7 @@ fn parse_try_cast() {
     assert_eq!(
         &Expr::TryCast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::BigInt
+            data_type: DataType::BigInt(None)
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1224,7 +1262,7 @@ fn parse_create_table() {
                     },
                     ColumnDef {
                         name: "constrained".into(),
-                        data_type: DataType::Int,
+                        data_type: DataType::Int(None),
                         collation: None,
                         options: vec![
                             ColumnOptionDef {
@@ -1251,7 +1289,7 @@ fn parse_create_table() {
                     },
                     ColumnDef {
                         name: "ref".into(),
-                        data_type: DataType::Int,
+                        data_type: DataType::Int(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -1265,7 +1303,7 @@ fn parse_create_table() {
                     },
                     ColumnDef {
                         name: "ref2".into(),
-                        data_type: DataType::Int,
+                        data_type: DataType::Int(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -1803,6 +1841,7 @@ fn parse_scalar_function_in_projection() {
 fn run_explain_analyze(query: &str, expected_verbose: bool, expected_analyze: bool) {
     match verified_stmt(query) {
         Statement::Explain {
+            describe_alias: _,
             analyze,
             verbose,
             statement,
@@ -1816,7 +1855,27 @@ fn run_explain_analyze(query: &str, expected_verbose: bool, expected_analyze: bo
 }
 
 #[test]
+fn parse_explain_table() {
+    let validate_explain = |query: &str, expected_describe_alias: bool| match verified_stmt(query) {
+        Statement::ExplainTable {
+            describe_alias,
+            table_name,
+        } => {
+            assert_eq!(describe_alias, expected_describe_alias);
+            assert_eq!("test_identifier", table_name.to_string());
+        }
+        _ => panic!("Unexpected Statement, must be ExplainTable"),
+    };
+
+    validate_explain("EXPLAIN test_identifier", false);
+    validate_explain("DESCRIBE test_identifier", true);
+}
+
+#[test]
 fn parse_explain_analyze_with_simple_select() {
+    // Describe is an alias for EXPLAIN
+    run_explain_analyze("DESCRIBE SELECT sqrt(id) FROM foo", false, false);
+
     run_explain_analyze("EXPLAIN SELECT sqrt(id) FROM foo", false, false);
     run_explain_analyze("EXPLAIN VERBOSE SELECT sqrt(id) FROM foo", true, false);
     run_explain_analyze("EXPLAIN ANALYZE SELECT sqrt(id) FROM foo", false, true);

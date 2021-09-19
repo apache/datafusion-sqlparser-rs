@@ -435,6 +435,7 @@ impl<'a> Parser<'a> {
             }
             Token::Number(_, _)
             | Token::SingleQuotedString(_)
+            | Token::DoubleQuotedString(_)
             | Token::NationalStringLiteral(_)
             | Token::HexStringLiteral(_) => {
                 self.prev_token();
@@ -1314,6 +1315,15 @@ impl<'a> Parser<'a> {
     pub fn parse_create_schema(&mut self) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let schema_name = self.parse_object_name()?;
+
+        /// MySQL table_options
+        loop {
+            match self.parse_object_name() {
+                Ok(_) => {}
+                _ => break,
+            }
+        }
+
         Ok(Statement::CreateSchema {
             schema_name,
             if_not_exists,
@@ -1381,6 +1391,7 @@ impl<'a> Parser<'a> {
             query: None,
             without_rowid: false,
             like: None,
+            table_options: vec![],
         })
     }
 
@@ -1543,6 +1554,10 @@ impl<'a> Parser<'a> {
         // SQLite supports `WITHOUT ROWID` at the end of `CREATE TABLE`
         let without_rowid = self.parse_keywords(&[Keyword::WITHOUT, Keyword::ROWID]);
 
+        // MySQL supports table_options
+        // https://dev.mysql.com/doc/refman/8.0/en/create-table.html
+        let table_options = self.parse_table_options()?;
+
         let hive_distribution = self.parse_hive_distribution()?;
         let hive_formats = self.parse_hive_formats()?;
         // PostgreSQL supports `WITH ( options )`, before `AS`
@@ -1572,7 +1587,38 @@ impl<'a> Parser<'a> {
             query,
             without_rowid,
             like,
+            table_options,
         })
+    }
+
+    pub fn parse_table_options(&mut self) -> Result<Vec<SqlOption>, ParserError> {
+        let mut sql_options = vec![];
+        loop {
+            if let Some(sql_option) = self.parse_table_option()? {
+                sql_options.push(sql_option);
+            } else {
+                break;
+            }
+        }
+        Ok(sql_options)
+    }
+
+    pub fn parse_table_option(&mut self) -> Result<Option<SqlOption>, ParserError> {
+        if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARSET]) {
+            self.prev_token();
+            let name = self.parse_identifier()?;
+            self.expect_token(&Token::Eq)?;
+            let value = self.parse_value()?;
+            Ok(Some(SqlOption { name, value }))
+        } else if self.parse_keyword(Keyword::ENGINE) {
+            self.prev_token();
+            let name = self.parse_identifier()?;
+            self.expect_token(&Token::Eq)?;
+            let value = self.parse_value()?;
+            Ok(Some(SqlOption { name, value }))
+        } else {
+            Ok(None)
+        }
     }
 
     fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
@@ -1950,6 +1996,7 @@ impl<'a> Parser<'a> {
                 Keyword::NoKeyword if w.quote_style.is_some() => match w.quote_style {
                     Some('"') => Ok(Value::DoubleQuotedString(w.value)),
                     Some('\'') => Ok(Value::SingleQuotedString(w.value)),
+                    None => Ok(Value::OnlyString(w.value)),
                     _ => self.expected("A value?", Token::Word(w))?,
                 },
                 _ => self.expected("a concrete value", Token::Word(w)),
@@ -1962,6 +2009,7 @@ impl<'a> Parser<'a> {
                 Err(e) => parser_err!(format!("Could not parse '{}' as number: {}", n, e)),
             },
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
+            Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
             unexpected => self.expected("a value", unexpected),
@@ -1993,6 +2041,7 @@ impl<'a> Parser<'a> {
         match self.next_token() {
             Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => Ok(value),
             Token::SingleQuotedString(s) => Ok(s),
+            Token::DoubleQuotedString(s) => Ok(s),
             unexpected => self.expected("literal string", unexpected),
         }
     }
@@ -2262,17 +2311,23 @@ impl<'a> Parser<'a> {
                 vec![]
             };
 
-            let limit = if self.parse_keyword(Keyword::LIMIT) {
-                self.parse_limit()?
-            } else {
-                None
-            };
+            let mut offset = None;
+            let mut limit = None;
+            /// MySQL: limit value1, value2
+            if self.parse_keyword(Keyword::LIMIT) {
+                let value1 = Expr::Value(self.parse_value()?);
+                if self.consume_token(&Token::Comma) {
+                    let value2 = Expr::Value(self.parse_value()?);
+                    offset = Some(Offset { value: value1, rows: OffsetRows::None });
+                    limit = Some(value2);
+                } else {
+                    limit = Some(value1);
+                }
+            }
 
-            let offset = if self.parse_keyword(Keyword::OFFSET) {
-                Some(self.parse_offset()?)
-            } else {
-                None
-            };
+            if self.parse_keyword(Keyword::OFFSET) {
+                offset = Some(self.parse_offset()?)
+            }
 
             let fetch = if self.parse_keyword(Keyword::FETCH) {
                 Some(self.parse_fetch()?)
@@ -2541,8 +2596,18 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_show(&mut self) -> Result<Statement, ParserError> {
-        if self
-            .parse_one_of_keywords(&[
+        if self.parse_keywords(&[Keyword::FULL, Keyword::TABLES]){
+            self.prev_token();
+            self.prev_token();
+            self.parse_show_tables()
+        } else if self.parse_keyword(Keyword::TABLES){
+            self.prev_token();
+            self.parse_show_tables()
+        } else if self.parse_keyword(Keyword::VARIABLES) {
+            self.parse_show_variables()
+        } else if self.parse_keywords(&[Keyword::TABLE, Keyword::STATUS]) {
+            self.parse_show_table_status()
+        } else if self.parse_one_of_keywords(&[
                 Keyword::EXTENDED,
                 Keyword::FULL,
                 Keyword::COLUMNS,
@@ -2559,6 +2624,61 @@ impl<'a> Parser<'a> {
                 variable: self.parse_identifiers()?,
             })
         }
+    }
+
+    pub fn parse_show_variables(&mut self) -> Result<Statement, ParserError> {
+        let filter = self.parse_show_statement_filter()?;
+        Ok(Statement::ShowVariables {
+            filter,
+        })
+    }
+
+    pub fn parse_show_table_status(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::FROM)?;
+
+        let db_name = self.parse_object_name()?;
+
+        // MySQL allows both LIKE 'pattern' and WHERE expr,
+        let filter = self.parse_show_statement_filter()?;
+
+        Ok(Statement::ShowTableStatus {
+            db_name,
+            filter,
+        })
+    }
+
+    pub fn parse_show_tables(&mut self) -> Result<Statement, ParserError> {
+        let full = self.parse_keyword(Keyword::FULL);
+        self.expect_keyword(Keyword::TABLES)?;
+
+        let mut from = None;
+        let mut db_name = None;
+
+        match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::IN]) {
+            None => {}
+            Some(keyword) => {
+                match keyword {
+                    Keyword::FROM => from = Some(true),
+                    Keyword::IN => from = Some(false),
+                    _ => {},
+                }
+            }
+        }
+
+        if from.is_some() {
+            let object_name = self.parse_object_name()?;
+            db_name = Some(object_name);
+        }
+
+        // MySQL allows both LIKE 'pattern' and WHERE expr,
+        let filter = self.parse_show_statement_filter()?;
+
+        Ok(Statement::ShowTables {
+            full,
+            from,
+            db_name,
+            filter,
+        })
     }
 
     fn parse_show_create(&mut self) -> Result<Statement, ParserError> {

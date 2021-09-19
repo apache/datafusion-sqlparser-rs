@@ -417,21 +417,25 @@ impl<'a> Tokenizer<'a> {
                     let s = self.tokenize_single_quoted_string(chars)?;
                     Ok(Some(Token::SingleQuotedString(s)))
                 }
-                quote_start if self.dialect.is_delimited_string_start(quote_start) => {
-                    match quote_start {
-                        '\'' => {
-                            let s = self.tokenize_single_quoted_string(chars)?;
-                            Ok(Some(Token::SingleQuotedString(s)))
-                        }
-                        '\"' => {
-                            let s = self.tokenize_double_quoted_string(chars)?;
-                            Ok(Some(Token::DoubleQuotedString(s)))
-                        }
-                        _ => {
-                            self.tokenizer_error("Unsupported delimit char")
-                        }
-                    }
+                '\"' => {
+                    let s = self.tokenize_double_quoted_string(chars)?;
+                    Ok(Some(Token::DoubleQuotedString(s)))
                 }
+                // quote_start if self.dialect.is_delimited_string_start(quote_start) => {
+                //     match quote_start {
+                //         '\'' => {
+                //             let s = self.tokenize_single_quoted_string(chars)?;
+                //             Ok(Some(Token::SingleQuotedString(s)))
+                //         }
+                //         '\"' => {
+                //             let s = self.tokenize_double_quoted_string(chars)?;
+                //             Ok(Some(Token::DoubleQuotedString(s)))
+                //         }
+                //         _ => {
+                //             self.tokenizer_error("Unsupported delimit char")
+                //         }
+                //     }
+                // }
                 // delimited (quoted) identifier
                 quote_start if self.dialect.is_delimited_identifier_start(quote_start) => {
                     chars.next(); // consume the opening quote

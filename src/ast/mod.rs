@@ -654,6 +654,8 @@ pub enum Statement {
         query: Option<Box<Query>>,
         without_rowid: bool,
         like: Option<ObjectName>,
+        /// MySQL: CREATE TABLE table_name (...) [ ( table_option [, ...] ) ]
+        table_options: Vec<SqlOption>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -707,6 +709,12 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement.
     ShowVariable { variable: Vec<Ident> },
+    /// SHOW VARIABLES [ LIKE | WHERE ]
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowVariables {
+        filter: Option<ShowStatementFilter>,
+    },
     /// SHOW CREATE TABLE
     ///
     /// Note: this is a MySQL-specific statement.
@@ -721,6 +729,22 @@ pub enum Statement {
         extended: bool,
         full: bool,
         table_name: ObjectName,
+        filter: Option<ShowStatementFilter>,
+    },
+    /// SHOW TABLES
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowTables {
+        full: bool,
+        from: Option<bool>,
+        db_name: Option<ObjectName>,
+        filter: Option<ShowStatementFilter>,
+    },
+    /// SHOW TABLE STATUS [FROM db_name] [LIKE'pattern']
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowTableStatus {
+        db_name: ObjectName,
         filter: Option<ShowStatementFilter>,
     },
     /// `{ BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...`
@@ -1049,6 +1073,7 @@ impl fmt::Display for Statement {
                 query,
                 without_rowid,
                 like,
+                table_options,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -1079,6 +1104,15 @@ impl fmt::Display for Statement {
                 // Only for SQLite
                 if *without_rowid {
                     write!(f, " WITHOUT ROWID")?;
+                }
+
+                // Only for mysql
+                if !table_options.is_empty() {
+                    write!(
+                        f,
+                        " {}",
+                        display_separated(table_options, " "),
+                    )?;
                 }
 
                 // Only for Hive
@@ -1249,6 +1283,53 @@ impl fmt::Display for Statement {
                 write!(f, "SHOW")?;
                 if !variable.is_empty() {
                     write!(f, " {}", display_separated(variable, " "))?;
+                }
+                Ok(())
+            }
+            Statement::ShowVariables { filter } => {
+                write!(f, "SHOW VARIABLES")?;
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
+                }
+                Ok(())
+            }
+            Statement::ShowTables {
+                full,
+                from,
+                db_name,
+                filter,
+            } => {
+                write!(
+                    f,
+                    "SHOW {full}TABLES",
+                    full = if *full { "FULL " } else { "" },
+                )?;
+                if let Some(from) = from {
+                    write!(
+                        f,
+                        " {}",
+                        full = if *from { "FROM" } else { "IN" },
+                    )?;
+                    if let Some(db_name) = db_name {
+                        write!(f, " {}", db_name)?;
+                    }
+                }
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
+                }
+                Ok(())
+            }
+            Statement::ShowTableStatus {
+                db_name,
+                filter,
+            } => {
+                write!(
+                    f,
+                    "SHOW TABLE STATUS FROM {}",
+                    db_name.to_string(),
+                )?;
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
                 }
                 Ok(())
             }

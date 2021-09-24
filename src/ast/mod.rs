@@ -281,21 +281,15 @@ impl fmt::Display for Expr {
         match self {
             Expr::Identifier(s) => write!(f, "{}", s),
             Expr::MapAccess { column, keys } => {
-                write!(
-                    f,
-                    "{}{}",
-                    column,
-                    keys.iter()
-                        .map(|k| {
-                            match k {
-                                k @ Value::Number(_, _) => format!("[{}]", k),
-                                Value::SingleQuotedString(s) => format!("[\"{}\"]", s),
-                                _ => format!("[{}]", k),
-                            }
-                        })
-                        .collect::<Vec<String>>()
-                        .join("")
-                )
+                write!(f, "{}", column)?;
+                for k in keys {
+                    match k {
+                        k @ Value::Number(_, _) => write!(f, "[{}]", k)?,
+                        Value::SingleQuotedString(s) => write!(f, "[\"{}\"]", s)?,
+                        _ => write!(f, "[{}]", k)?
+                    }
+                }
+                Ok(())
             }
             Expr::Wildcard => f.write_str("*"),
             Expr::QualifiedWildcard(q) => write!(f, "{}.*", display_separated(q, ".")),

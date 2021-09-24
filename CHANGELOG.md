@@ -8,6 +8,25 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.11.0] 2020-09-24
+
+### Added
+* Support minimum display width for integer data types (#337) Thanks @vasilev-alex!
+* Add logical XOR operator (#357) - Thanks @xzmrdltl!
+* Support DESCRIBE table_name (#340) - Thanks @ovr!
+* Support SHOW CREATE TABLE|EVENT|FUNCTION (#338) - Thanks @ovr!
+* Add referential actions to TableConstraint foreign key (#306) - Thanks @joshwd36!
+
+### Changed
+* Enable map access for numbers, multiple nesting levels (#356) - Thanks @Igosuki!
+* Rename Token::Mult to Token::Mul (#353) - Thanks @koushiro!
+* Use derive(Default) for HiveFormat (#348) - Thanks @koushiro!
+* Improve tokenizer error (#347)  - Thanks @koushiro!
+* Eliminate redundant string copy in Tokenizer (#343) - Thanks @koushiro!
+* Update bigdecimal requirement from 0.2 to 0.3 dependencies (#341)
+* Support parsing hexadecimal literals that start with `0x` (#324) - Thanks @TheSchemm!
+
+
 ## [0.10.0] 2020-08-23
 
 ### Added

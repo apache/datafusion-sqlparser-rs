@@ -286,7 +286,7 @@ impl fmt::Display for Expr {
                     match k {
                         k @ Value::Number(_, _) => write!(f, "[{}]", k)?,
                         Value::SingleQuotedString(s) => write!(f, "[\"{}\"]", s)?,
-                        _ => write!(f, "[{}]", k)?
+                        _ => write!(f, "[{}]", k)?,
                     }
                 }
                 Ok(())

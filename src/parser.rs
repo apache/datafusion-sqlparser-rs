@@ -2005,7 +2005,9 @@ impl<'a> Parser<'a> {
     /// Parse a map key string
     pub fn parse_map_key(&mut self) -> Result<Value, ParserError> {
         match self.next_token() {
-            Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => Ok(Value::SingleQuotedString(value)),
+            Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => {
+                Ok(Value::SingleQuotedString(value))
+            }
             Token::SingleQuotedString(s) => Ok(Value::SingleQuotedString(s)),
             #[cfg(not(feature = "bigdecimal"))]
             Token::Number(s, _) => Ok(Value::Number(s, false)),

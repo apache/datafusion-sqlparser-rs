@@ -18,12 +18,12 @@
 mod test_utils;
 use test_utils::*;
 
+#[cfg(feature = "bigdecimal")]
+use bigdecimal::BigDecimal;
+use sqlparser::ast::Expr::{Identifier, MapAccess};
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
-use sqlparser::ast::Expr::{Identifier, MapAccess};
-#[cfg(feature = "bigdecimal")]
-use bigdecimal::BigDecimal;
 
 #[test]
 fn parse_create_table_with_defaults() {
@@ -681,19 +681,44 @@ fn parse_map_access_expr() {
     let sql = "SELECT foo[0] FROM foos";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &MapAccess { column: Box::new(Identifier(Ident { value: "foo".to_string(), quote_style: None })), keys: vec![Value::Number(zero.clone(), false)] },
+        &MapAccess {
+            column: Box::new(Identifier(Ident {
+                value: "foo".to_string(),
+                quote_style: None
+            })),
+            keys: vec![Value::Number(zero.clone(), false)]
+        },
         expr_from_projection(only(&select.projection)),
     );
     let sql = "SELECT foo[0][0] FROM foos";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &MapAccess { column: Box::new(Identifier(Ident { value: "foo".to_string(), quote_style: None })), keys: vec![Value::Number(zero.clone(), false), Value::Number(zero.clone(), false)] },
+        &MapAccess {
+            column: Box::new(Identifier(Ident {
+                value: "foo".to_string(),
+                quote_style: None
+            })),
+            keys: vec![
+                Value::Number(zero.clone(), false),
+                Value::Number(zero.clone(), false)
+            ]
+        },
         expr_from_projection(only(&select.projection)),
     );
     let sql = r#"SELECT bar[0]["baz"]["fooz"] FROM foos"#;
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &MapAccess { column: Box::new(Identifier(Ident { value: "bar".to_string(), quote_style: None })), keys: vec![Value::Number(zero, false), Value::SingleQuotedString("baz".to_string()), Value::SingleQuotedString("fooz".to_string())] },
+        &MapAccess {
+            column: Box::new(Identifier(Ident {
+                value: "bar".to_string(),
+                quote_style: None
+            })),
+            keys: vec![
+                Value::Number(zero, false),
+                Value::SingleQuotedString("baz".to_string()),
+                Value::SingleQuotedString("fooz".to_string())
+            ]
+        },
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -709,4 +734,3 @@ fn pg_and_generic() -> TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(GenericDialect {})],
     }
 }
-

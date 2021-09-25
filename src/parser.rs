@@ -952,13 +952,20 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        let key = self.parse_literal_string()?;
+        let key = self.parse_map_key()?;
         let tok = self.consume_token(&Token::RBracket);
         debug!("Tok: {}", tok);
+        let mut key_parts: Vec<Value> = vec![key];
+        while self.consume_token(&Token::LBracket) {
+            let key = self.parse_map_key()?;
+            let tok = self.consume_token(&Token::RBracket);
+            debug!("Tok: {}", tok);
+            key_parts.push(key);
+        }
         match expr {
             e @ Expr::Identifier(_) | e @ Expr::CompoundIdentifier(_) => Ok(Expr::MapAccess {
                 column: Box::new(e),
-                key,
+                keys: key_parts,
             }),
             _ => Ok(expr),
         }
@@ -1994,6 +2001,21 @@ impl<'a> Parser<'a> {
             Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => Ok(value),
             Token::SingleQuotedString(s) => Ok(s),
             unexpected => self.expected("literal string", unexpected),
+        }
+    }
+
+    /// Parse a map key string
+    pub fn parse_map_key(&mut self) -> Result<Value, ParserError> {
+        match self.next_token() {
+            Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => {
+                Ok(Value::SingleQuotedString(value))
+            }
+            Token::SingleQuotedString(s) => Ok(Value::SingleQuotedString(s)),
+            #[cfg(not(feature = "bigdecimal"))]
+            Token::Number(s, _) => Ok(Value::Number(s, false)),
+            #[cfg(feature = "bigdecimal")]
+            Token::Number(s, _) => Ok(Value::Number(s.parse().unwrap(), false)),
+            unexpected => self.expected("literal string or number", unexpected),
         }
     }
 

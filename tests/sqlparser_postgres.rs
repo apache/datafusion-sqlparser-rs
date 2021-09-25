@@ -18,6 +18,9 @@
 mod test_utils;
 use test_utils::*;
 
+#[cfg(feature = "bigdecimal")]
+use bigdecimal::BigDecimal;
+use sqlparser::ast::Expr::{Identifier, MapAccess};
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
@@ -667,6 +670,57 @@ fn parse_pg_regex_match_ops() {
             select.projection[0]
         );
     }
+}
+
+#[test]
+fn parse_map_access_expr() {
+    #[cfg(not(feature = "bigdecimal"))]
+    let zero = "0".to_string();
+    #[cfg(feature = "bigdecimal")]
+    let zero = BigDecimal::parse_bytes(b"0", 10).unwrap();
+    let sql = "SELECT foo[0] FROM foos";
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &MapAccess {
+            column: Box::new(Identifier(Ident {
+                value: "foo".to_string(),
+                quote_style: None
+            })),
+            keys: vec![Value::Number(zero.clone(), false)]
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+    let sql = "SELECT foo[0][0] FROM foos";
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &MapAccess {
+            column: Box::new(Identifier(Ident {
+                value: "foo".to_string(),
+                quote_style: None
+            })),
+            keys: vec![
+                Value::Number(zero.clone(), false),
+                Value::Number(zero.clone(), false)
+            ]
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+    let sql = r#"SELECT bar[0]["baz"]["fooz"] FROM foos"#;
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &MapAccess {
+            column: Box::new(Identifier(Ident {
+                value: "bar".to_string(),
+                quote_style: None
+            })),
+            keys: vec![
+                Value::Number(zero, false),
+                Value::SingleQuotedString("baz".to_string()),
+                Value::SingleQuotedString("fooz".to_string())
+            ]
+        },
+        expr_from_projection(only(&select.projection)),
+    );
 }
 
 fn pg() -> TestedDialects {

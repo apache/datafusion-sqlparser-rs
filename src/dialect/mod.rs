@@ -30,6 +30,7 @@ pub use self::mysql::MySqlDialect;
 pub use self::postgresql::PostgreSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
+pub use crate::keywords;
 
 /// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
 /// to `true` iff `parser.dialect` is one of the `Dialect`s specified.

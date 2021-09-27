@@ -10,19 +10,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// This module defines
-/// 1) a list of constants for every keyword that
-/// can appear in [Word::keyword]:
-///    pub const KEYWORD = "KEYWORD"
-/// 2) an `ALL_KEYWORDS` array with every keyword in it
-///     This is not a list of *reserved* keywords: some of these can be
-///     parsed as identifiers if the parser decides so. This means that
-///     new keywords can be added here without affecting the parse result.
-///
-///     As a matter of fact, most of these keywords are not used at all
-///     and could be removed.
-/// 3) a `RESERVED_FOR_TABLE_ALIAS` array with keywords reserved in a
-/// "table alias" context.
+//! This module defines
+//! 1) a list of constants for every keyword that
+//! can appear in [Word::keyword]:
+//!    pub const KEYWORD = "KEYWORD"
+//! 2) an `ALL_KEYWORDS` array with every keyword in it
+//!     This is not a list of *reserved* keywords: some of these can be
+//!     parsed as identifiers if the parser decides so. This means that
+//!     new keywords can be added here without affecting the parse result.
+//!
+//!     As a matter of fact, most of these keywords are not used at all
+//!     and could be removed.
+//! 3) a `RESERVED_FOR_TABLE_ALIAS` array with keywords reserved in a
+//! "table alias" context.
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -59,9 +60,7 @@ macro_rules! define_keywords {
         pub const ALL_KEYWORDS: &[&str] = &[
             $($ident),*
         ];
-
     };
-
 }
 
 // The following keywords should be sorted to be able to match using binary search
@@ -494,6 +493,7 @@ define_keywords!(
     WITHOUT,
     WORK,
     WRITE,
+    XOR,
     YEAR,
     ZONE
 );

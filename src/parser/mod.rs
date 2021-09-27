@@ -35,8 +35,8 @@ use alloc::{
 use core::fmt;
 
 use crate::ast::*;
-use crate::dialect::keywords::Keyword;
 use crate::dialect::*;
+use crate::keywords::{self, Keyword};
 use crate::tokenizer::*;
 
 #[derive(PartialEq)]
@@ -373,7 +373,7 @@ impl<'a> Parser<'a> {
                         while self.consume_token(&Token::Period) {
                             match self.next_token() {
                                 Token::Word(w) => id_parts.push(w.to_ident()),
-                                Token::Mult => {
+                                Token::Mul => {
                                     ends_with_wildcard = true;
                                     break;
                                 }
@@ -395,7 +395,7 @@ impl<'a> Parser<'a> {
                     _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word
-            Token::Mult => Ok(Expr::Wildcard),
+            Token::Mul => Ok(Expr::Wildcard),
             tok @ Token::Minus | tok @ Token::Plus => {
                 let op = if tok == Token::Plus {
                     UnaryOperator::Plus
@@ -858,7 +858,7 @@ impl<'a> Parser<'a> {
             Token::LtEq => Some(BinaryOperator::LtEq),
             Token::Plus => Some(BinaryOperator::Plus),
             Token::Minus => Some(BinaryOperator::Minus),
-            Token::Mult => Some(BinaryOperator::Multiply),
+            Token::Mul => Some(BinaryOperator::Multiply),
             Token::Mod => Some(BinaryOperator::Modulo),
             Token::StringConcat => Some(BinaryOperator::StringConcat),
             Token::Pipe => Some(BinaryOperator::BitwiseOr),
@@ -892,6 +892,7 @@ impl<'a> Parser<'a> {
                         None
                     }
                 }
+                Keyword::XOR => Some(BinaryOperator::Xor),
                 _ => None,
             },
             _ => None,
@@ -945,13 +946,20 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        let key = self.parse_literal_string()?;
+        let key = self.parse_map_key()?;
         let tok = self.consume_token(&Token::RBracket);
         log::debug!("Tok: {}", tok);
+        let mut key_parts: Vec<Value> = vec![key];
+        while self.consume_token(&Token::LBracket) {
+            let key = self.parse_map_key()?;
+            let tok = self.consume_token(&Token::RBracket);
+            log::debug!("Tok: {}", tok);
+            key_parts.push(key);
+        }
         match expr {
             e @ Expr::Identifier(_) | e @ Expr::CompoundIdentifier(_) => Ok(Expr::MapAccess {
                 column: Box::new(e),
-                key,
+                keys: key_parts,
             }),
             _ => Ok(expr),
         }
@@ -1012,6 +1020,7 @@ impl<'a> Parser<'a> {
         match token {
             Token::Word(w) if w.keyword == Keyword::OR => Ok(5),
             Token::Word(w) if w.keyword == Keyword::AND => Ok(10),
+            Token::Word(w) if w.keyword == Keyword::XOR => Ok(24),
             Token::Word(w) if w.keyword == Keyword::NOT => match self.peek_nth_token(1) {
                 // The precedence of NOT varies depending on keyword that
                 // follows it. If it is followed by IN, BETWEEN, or LIKE,
@@ -1045,7 +1054,7 @@ impl<'a> Parser<'a> {
             Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(22),
             Token::Ampersand => Ok(23),
             Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
-            Token::Mult | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
+            Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
             Token::LBracket | Token::RBracket => Ok(10),
@@ -1491,6 +1500,21 @@ impl<'a> Parser<'a> {
             Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => Ok(value),
             Token::SingleQuotedString(s) => Ok(s),
             unexpected => self.expected("literal string", unexpected),
+        }
+    }
+
+    /// Parse a map key string
+    pub fn parse_map_key(&mut self) -> Result<Value, ParserError> {
+        match self.next_token() {
+            Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => {
+                Ok(Value::SingleQuotedString(value))
+            }
+            Token::SingleQuotedString(s) => Ok(Value::SingleQuotedString(s)),
+            #[cfg(not(feature = "bigdecimal"))]
+            Token::Number(s, _) => Ok(Value::Number(s, false)),
+            #[cfg(feature = "bigdecimal")]
+            Token::Number(s, _) => Ok(Value::Number(s.parse().unwrap(), false)),
+            unexpected => self.expected("literal string or number", unexpected),
         }
     }
 

@@ -36,7 +36,7 @@ use core::fmt;
 
 use crate::ast::*;
 use crate::dialect::*;
-use crate::keywords::{self, Keyword};
+use crate::keywords::Keyword;
 use crate::tokenizer::*;
 
 #[derive(PartialEq)]

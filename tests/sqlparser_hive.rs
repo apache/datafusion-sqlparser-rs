@@ -194,7 +194,7 @@ fn rename_table() {
 
 #[test]
 fn map_access() {
-    let rename = "SELECT a.b[\"asdf\"] FROM db.table WHERE a = 2";
+    let rename = r#"SELECT a.b["asdf"] FROM db.table WHERE a = 2"#;
     hive().verified_stmt(rename);
 }
 

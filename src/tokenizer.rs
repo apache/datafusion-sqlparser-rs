@@ -31,9 +31,9 @@ use core::str::Chars;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 use crate::dialect::Dialect;
 use crate::dialect::SnowflakeDialect;
+use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -79,7 +79,7 @@ pub enum Token {
     /// Minus operator `-`
     Minus,
     /// Multiplication operator `*`
-    Mult,
+    Mul,
     /// Division operator `/`
     Div,
     /// Modulo Operator `%`
@@ -165,7 +165,7 @@ impl fmt::Display for Token {
             Token::GtEq => f.write_str(">="),
             Token::Plus => f.write_str("+"),
             Token::Minus => f.write_str("-"),
-            Token::Mult => f.write_str("*"),
+            Token::Mul => f.write_str("*"),
             Token::Div => f.write_str("/"),
             Token::StringConcat => f.write_str("||"),
             Token::Mod => f.write_str("%"),
@@ -508,7 +508,7 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 '+' => self.consume_and_return(chars, Token::Plus),
-                '*' => self.consume_and_return(chars, Token::Mult),
+                '*' => self.consume_and_return(chars, Token::Mul),
                 '%' => self.consume_and_return(chars, Token::Mod),
                 '|' => {
                     chars.next(); // consume the '|'
@@ -852,7 +852,47 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_word("three", None),
         ];
+        compare(expected, tokens);
+    }
 
+    #[test]
+    fn tokenize_logical_xor() {
+        let sql =
+            String::from("SELECT true XOR true, false XOR false, true XOR false, false XOR true");
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("true"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("XOR"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("true"),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("false"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("XOR"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("false"),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("true"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("XOR"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("false"),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("false"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("XOR"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("true"),
+        ];
         compare(expected, tokens);
     }
 
@@ -866,7 +906,7 @@ mod tests {
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Mult,
+            Token::Mul,
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
@@ -900,7 +940,7 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Mult,
+            Token::Mul,
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
@@ -932,7 +972,7 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Mult,
+            Token::Mul,
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
@@ -960,7 +1000,7 @@ mod tests {
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Mult,
+            Token::Mul,
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
@@ -1038,7 +1078,7 @@ mod tests {
             Token::Whitespace(Whitespace::Newline),
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Mult,
+            Token::Mul,
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),

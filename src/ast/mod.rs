@@ -251,7 +251,7 @@ pub enum Expr {
     },
     MapAccess {
         column: Box<Expr>,
-        key: String,
+        keys: Vec<Value>,
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
@@ -280,7 +280,17 @@ impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Expr::Identifier(s) => write!(f, "{}", s),
-            Expr::MapAccess { column, key } => write!(f, "{}[\"{}\"]", column, key),
+            Expr::MapAccess { column, keys } => {
+                write!(f, "{}", column)?;
+                for k in keys {
+                    match k {
+                        k @ Value::Number(_, _) => write!(f, "[{}]", k)?,
+                        Value::SingleQuotedString(s) => write!(f, "[\"{}\"]", s)?,
+                        _ => write!(f, "[{}]", k)?,
+                    }
+                }
+                Ok(())
+            }
             Expr::Wildcard => f.write_str("*"),
             Expr::QualifiedWildcard(q) => write!(f, "{}.*", display_separated(q, ".")),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),

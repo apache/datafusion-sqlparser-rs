@@ -712,9 +712,7 @@ pub enum Statement {
     /// SHOW VARIABLES [ LIKE | WHERE ]
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowVariables {
-        filter: Option<ShowStatementFilter>,
-    },
+    ShowVariables { filter: Option<ShowStatementFilter> },
     /// SHOW CREATE TABLE
     ///
     /// Note: this is a MySQL-specific statement.
@@ -1108,11 +1106,7 @@ impl fmt::Display for Statement {
 
                 // Only for mysql
                 if !table_options.is_empty() {
-                    write!(
-                        f,
-                        " {}",
-                        display_separated(table_options, " "),
-                    )?;
+                    write!(f, " {}", display_separated(table_options, " "))?;
                 }
 
                 // Only for Hive
@@ -1155,10 +1149,10 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(HiveFormat {
-                    row_format,
-                    storage,
-                    location,
-                }) = hive_formats
+                                row_format,
+                                storage,
+                                location,
+                            }) = hive_formats
                 {
                     match row_format {
                         Some(HiveRowFormat::SERDE { class }) => {
@@ -1169,9 +1163,9 @@ impl fmt::Display for Statement {
                     }
                     match storage {
                         Some(HiveIOFormat::IOF {
-                            input_format,
-                            output_format,
-                        }) => write!(
+                                 input_format,
+                                 output_format,
+                             }) => write!(
                             f,
                             " STORED AS INPUTFORMAT {} OUTPUTFORMAT {}",
                             input_format, output_format
@@ -1375,10 +1369,10 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Commit { chain } => {
-                write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" },)
+                write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" }, )
             }
             Statement::Rollback { chain } => {
-                write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" },)
+                write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" }, )
             }
             Statement::CreateSchema {
                 schema_name,

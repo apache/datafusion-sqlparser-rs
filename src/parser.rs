@@ -2305,7 +2305,7 @@ impl<'a> Parser<'a> {
 
             let mut offset = None;
             let mut limit = None;
-            /// MySQL: limit value1, value2
+            // MySQL: limit value1, value2
             if self.parse_keyword(Keyword::LIMIT) {
                 let value1 = Expr::Value(self.parse_value()?);
                 if self.consume_token(&Token::Comma) {

@@ -586,6 +586,31 @@ fn parse_is_not_null() {
 }
 
 #[test]
+fn parse_is_distinct_from() {
+    use self::Expr::*;
+    let sql = "a IS DISTINCT FROM b";
+    assert_eq!(
+        IsDistinctFrom(
+            Box::new(Identifier(Ident::new("a"))),
+            Box::new(Identifier(Ident::new("b")))
+        ),
+        verified_expr(sql)
+    );
+}
+#[test]
+fn parse_is_not_distinct_from() {
+    use self::Expr::*;
+    let sql = "a IS NOT DISTINCT FROM b";
+    assert_eq!(
+        IsNotDistinctFrom(
+            Box::new(Identifier(Ident::new("a"))),
+            Box::new(Identifier(Ident::new("b")))
+        ),
+        verified_expr(sql)
+    );
+}
+
+#[test]
 fn parse_not_precedence() {
     // NOT has higher precedence than OR/AND, so the following must parse as (NOT true) OR true
     let sql = "NOT true OR true";

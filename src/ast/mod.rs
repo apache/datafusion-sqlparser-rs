@@ -162,10 +162,14 @@ pub enum Expr {
     QualifiedWildcard(Vec<Ident>),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
-    /// `IS NULL` expression
+    /// `IS NULL` operator
     IsNull(Box<Expr>),
-    /// `IS NOT NULL` expression
+    /// `IS NOT NULL` operator
     IsNotNull(Box<Expr>),
+    /// `IS DISTINCT FROM` operator
+    IsDistinctFrom(Box<Expr>, Box<Expr>),
+    /// `IS NOT DISTINCT FROM` operator
+    IsNotDistinctFrom(Box<Expr>, Box<Expr>),
     /// `[ NOT ] IN (val1, val2, ...)`
     InList {
         expr: Box<Expr>,
@@ -362,6 +366,8 @@ impl fmt::Display for Expr {
 
                 write!(f, ")")
             }
+            Expr::IsDistinctFrom(a, b) => write!(f, "{} IS DISTINCT FROM {}", a, b),
+            Expr::IsNotDistinctFrom(a, b) => write!(f, "{} IS NOT DISTINCT FROM {}", a, b),
         }
     }
 }

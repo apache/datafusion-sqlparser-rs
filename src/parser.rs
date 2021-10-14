@@ -867,8 +867,18 @@ impl<'a> Parser<'a> {
                         Ok(Expr::IsNull(Box::new(expr)))
                     } else if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
                         Ok(Expr::IsNotNull(Box::new(expr)))
+                    } else if self.parse_keywords(&[Keyword::DISTINCT, Keyword::FROM]) {
+                        let expr2 = self.parse_expr()?;
+                        Ok(Expr::IsDistinctFrom(Box::new(expr), Box::new(expr2)))
+                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::DISTINCT, Keyword::FROM])
+                    {
+                        let expr2 = self.parse_expr()?;
+                        Ok(Expr::IsNotDistinctFrom(Box::new(expr), Box::new(expr2)))
                     } else {
-                        self.expected("NULL or NOT NULL after IS", self.peek_token())
+                        self.expected(
+                            "NULL, NOT NULL, DISTINCT FROM OR NOT DISTINCT FROM after IS",
+                            self.peek_token(),
+                        )
                     }
                 }
                 Keyword::NOT | Keyword::IN | Keyword::BETWEEN => {

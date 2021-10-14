@@ -18,6 +18,9 @@
 mod test_utils;
 use test_utils::*;
 
+#[cfg(feature = "bigdecimal")]
+use bigdecimal::BigDecimal;
+use sqlparser::ast::Expr::{Identifier, MapAccess};
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
@@ -54,7 +57,7 @@ fn parse_create_table_with_defaults() {
                 vec![
                     ColumnDef {
                         name: "customer_id".into(),
-                        data_type: DataType::Int,
+                        data_type: DataType::Int(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -65,7 +68,7 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "store_id".into(),
-                        data_type: DataType::SmallInt,
+                        data_type: DataType::SmallInt(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -98,7 +101,7 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "address_id".into(),
-                        data_type: DataType::SmallInt,
+                        data_type: DataType::SmallInt(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -154,7 +157,7 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "active".into(),
-                        data_type: DataType::Int,
+                        data_type: DataType::Int(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -233,7 +236,7 @@ fn parse_create_table_with_inherit() {
 #[test]
 fn parse_create_table_empty() {
     // Zero-column tables are weird, but supported by at least PostgreSQL.
-    // <https://github.com/ballista-compute/sqlparser-rs/pull/94>
+    // <https://github.com/sqlparser-rs/sqlparser-rs/pull/94>
     let _ = pg_and_generic().verified_stmt("CREATE TABLE t ()");
 }
 
@@ -574,7 +577,7 @@ fn parse_prepare() {
             ..
         } => {
             assert_eq!(name, "a".into());
-            assert_eq!(data_types, vec![DataType::Int, DataType::Text]);
+            assert_eq!(data_types, vec![DataType::Int(None), DataType::Text]);
 
             statement
         }
@@ -645,6 +648,79 @@ fn parse_pg_postfix_factorial() {
             select.projection[0]
         );
     }
+}
+
+#[test]
+fn parse_pg_regex_match_ops() {
+    let pg_regex_match_ops = &[
+        ("~", BinaryOperator::PGRegexMatch),
+        ("~*", BinaryOperator::PGRegexIMatch),
+        ("!~", BinaryOperator::PGRegexNotMatch),
+        ("!~*", BinaryOperator::PGRegexNotIMatch),
+    ];
+
+    for (str_op, op) in pg_regex_match_ops {
+        let select = pg().verified_only_select(&format!("SELECT 'abc' {} '^a'", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::BinaryOp {
+                left: Box::new(Expr::Value(Value::SingleQuotedString("abc".into()))),
+                op: op.clone(),
+                right: Box::new(Expr::Value(Value::SingleQuotedString("^a".into()))),
+            }),
+            select.projection[0]
+        );
+    }
+}
+
+#[test]
+fn parse_map_access_expr() {
+    #[cfg(not(feature = "bigdecimal"))]
+    let zero = "0".to_string();
+    #[cfg(feature = "bigdecimal")]
+    let zero = BigDecimal::parse_bytes(b"0", 10).unwrap();
+    let sql = "SELECT foo[0] FROM foos";
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &MapAccess {
+            column: Box::new(Identifier(Ident {
+                value: "foo".to_string(),
+                quote_style: None
+            })),
+            keys: vec![Value::Number(zero.clone(), false)]
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+    let sql = "SELECT foo[0][0] FROM foos";
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &MapAccess {
+            column: Box::new(Identifier(Ident {
+                value: "foo".to_string(),
+                quote_style: None
+            })),
+            keys: vec![
+                Value::Number(zero.clone(), false),
+                Value::Number(zero.clone(), false)
+            ]
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+    let sql = r#"SELECT bar[0]["baz"]["fooz"] FROM foos"#;
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &MapAccess {
+            column: Box::new(Identifier(Ident {
+                value: "bar".to_string(),
+                quote_style: None
+            })),
+            keys: vec![
+                Value::Number(zero, false),
+                Value::SingleQuotedString("baz".to_string()),
+                Value::SingleQuotedString("fooz".to_string())
+            ]
+        },
+        expr_from_projection(only(&select.projection)),
+    );
 }
 
 fn pg() -> TestedDialects {

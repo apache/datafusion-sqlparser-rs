@@ -12,14 +12,22 @@
 
 //! SQL Parser
 
+#[cfg(not(feature = "std"))]
+use alloc::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::fmt;
+
 use log::debug;
 
-use super::ast::*;
-use super::dialect::keywords::Keyword;
-use super::dialect::*;
-use super::tokenizer::*;
-use std::error::Error;
-use std::fmt;
+use crate::ast::*;
+use crate::dialect::*;
+use crate::keywords::{self, Keyword};
+use crate::tokenizer::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParserError {
@@ -56,15 +64,11 @@ pub enum IsLateral {
     NotLateral,
 }
 
-use crate::ast::Statement::CreateVirtualTable;
 use IsLateral::*;
 
 impl From<TokenizerError> for ParserError {
     fn from(e: TokenizerError) -> Self {
-        ParserError::TokenizerError(format!(
-            "{} at Line: {}, Column {}",
-            e.message, e.line, e.col
-        ))
+        ParserError::TokenizerError(e.to_string())
     }
 }
 
@@ -81,7 +85,8 @@ impl fmt::Display for ParserError {
     }
 }
 
-impl Error for ParserError {}
+#[cfg(feature = "std")]
+impl std::error::Error for ParserError {}
 
 pub struct Parser<'a> {
     tokens: Vec<Token>,
@@ -133,7 +138,8 @@ impl<'a> Parser<'a> {
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
         match self.next_token() {
             Token::Word(w) => match w.keyword {
-                Keyword::EXPLAIN => Ok(self.parse_explain()?),
+                Keyword::DESCRIBE => Ok(self.parse_explain(true)?),
+                Keyword::EXPLAIN => Ok(self.parse_explain(false)?),
                 Keyword::ANALYZE => Ok(self.parse_analyze()?),
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES => {
                     self.prev_token();
@@ -297,6 +303,7 @@ impl<'a> Parser<'a> {
         }
         Ok(expr)
     }
+
     pub fn parse_assert(&mut self) -> Result<Statement, ParserError> {
         let condition = self.parse_expr()?;
         let message = if self.parse_keyword(Keyword::AS) {
@@ -356,6 +363,7 @@ impl<'a> Parser<'a> {
                 Keyword::EXISTS => self.parse_exists_expr(),
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::SUBSTRING => self.parse_substring_expr(),
+                Keyword::TRIM => self.parse_trim_expr(),
                 Keyword::INTERVAL => self.parse_literal_interval(),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
                 Keyword::NOT => Ok(Expr::UnaryOp {
@@ -371,7 +379,7 @@ impl<'a> Parser<'a> {
                         while self.consume_token(&Token::Period) {
                             match self.next_token() {
                                 Token::Word(w) => id_parts.push(w.to_ident()),
-                                Token::Mult => {
+                                Token::Mul => {
                                     ends_with_wildcard = true;
                                     break;
                                 }
@@ -393,7 +401,7 @@ impl<'a> Parser<'a> {
                     _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word
-            Token::Mult => Ok(Expr::Wildcard),
+            Token::Mul => Ok(Expr::Wildcard),
             tok @ Token::Minus | tok @ Token::Plus => {
                 let op = if tok == Token::Plus {
                     UnaryOperator::Plus
@@ -646,6 +654,43 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// TRIM (WHERE 'text' FROM 'text')\
+    /// TRIM ('text')
+    pub fn parse_trim_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let mut where_expr = None;
+        if let Token::Word(word) = self.peek_token() {
+            if [Keyword::BOTH, Keyword::LEADING, Keyword::TRAILING]
+                .iter()
+                .any(|d| word.keyword == *d)
+            {
+                let trim_where = self.parse_trim_where()?;
+                let sub_expr = self.parse_expr()?;
+                self.expect_keyword(Keyword::FROM)?;
+                where_expr = Some((trim_where, Box::new(sub_expr)));
+            }
+        }
+        let expr = self.parse_expr()?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(Expr::Trim {
+            expr: Box::new(expr),
+            trim_where: where_expr,
+        })
+    }
+
+    pub fn parse_trim_where(&mut self) -> Result<TrimWhereField, ParserError> {
+        match self.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::BOTH => Ok(TrimWhereField::Both),
+                Keyword::LEADING => Ok(TrimWhereField::Leading),
+                Keyword::TRAILING => Ok(TrimWhereField::Trailing),
+                _ => self.expected("trim_where field", Token::Word(w))?,
+            },
+            unexpected => self.expected("trim_where field", unexpected),
+        }
+    }
+
     /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.
     pub fn parse_listagg_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
@@ -819,8 +864,8 @@ impl<'a> Parser<'a> {
             Token::LtEq => Some(BinaryOperator::LtEq),
             Token::Plus => Some(BinaryOperator::Plus),
             Token::Minus => Some(BinaryOperator::Minus),
-            Token::Mult => Some(BinaryOperator::Multiply),
-            Token::Mod => Some(BinaryOperator::Modulus),
+            Token::Mul => Some(BinaryOperator::Multiply),
+            Token::Mod => Some(BinaryOperator::Modulo),
             Token::StringConcat => Some(BinaryOperator::StringConcat),
             Token::Pipe => Some(BinaryOperator::BitwiseOr),
             Token::Caret => Some(BinaryOperator::BitwiseXor),
@@ -835,6 +880,10 @@ impl<'a> Parser<'a> {
             Token::Sharp if dialect_of!(self is PostgreSqlDialect) => {
                 Some(BinaryOperator::PGBitwiseXor)
             }
+            Token::Tilde => Some(BinaryOperator::PGRegexMatch),
+            Token::TildeAsterisk => Some(BinaryOperator::PGRegexIMatch),
+            Token::ExclamationMarkTilde => Some(BinaryOperator::PGRegexNotMatch),
+            Token::ExclamationMarkTildeAsterisk => Some(BinaryOperator::PGRegexNotIMatch),
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
@@ -849,6 +898,7 @@ impl<'a> Parser<'a> {
                         None
                     }
                 }
+                Keyword::XOR => Some(BinaryOperator::Xor),
                 _ => None,
             },
             _ => None,
@@ -912,13 +962,20 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        let key = self.parse_literal_string()?;
+        let key = self.parse_map_key()?;
         let tok = self.consume_token(&Token::RBracket);
         debug!("Tok: {}", tok);
+        let mut key_parts: Vec<Value> = vec![key];
+        while self.consume_token(&Token::LBracket) {
+            let key = self.parse_map_key()?;
+            let tok = self.consume_token(&Token::RBracket);
+            debug!("Tok: {}", tok);
+            key_parts.push(key);
+        }
         match expr {
             e @ Expr::Identifier(_) | e @ Expr::CompoundIdentifier(_) => Ok(Expr::MapAccess {
                 column: Box::new(e),
-                key,
+                keys: key_parts,
             }),
             _ => Ok(expr),
         }
@@ -979,6 +1036,7 @@ impl<'a> Parser<'a> {
         match token {
             Token::Word(w) if w.keyword == Keyword::OR => Ok(5),
             Token::Word(w) if w.keyword == Keyword::AND => Ok(10),
+            Token::Word(w) if w.keyword == Keyword::XOR => Ok(24),
             Token::Word(w) if w.keyword == Keyword::NOT => match self.peek_nth_token(1) {
                 // The precedence of NOT varies depending on keyword that
                 // follows it. If it is followed by IN, BETWEEN, or LIKE,
@@ -1003,12 +1061,16 @@ impl<'a> Parser<'a> {
             | Token::Gt
             | Token::GtEq
             | Token::DoubleEq
+            | Token::Tilde
+            | Token::TildeAsterisk
+            | Token::ExclamationMarkTilde
+            | Token::ExclamationMarkTildeAsterisk
             | Token::Spaceship => Ok(20),
             Token::Pipe => Ok(21),
             Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(22),
             Token::Ampersand => Ok(23),
             Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
-            Token::Mult | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
+            Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
             Token::LBracket | Token::RBracket => Ok(10),
@@ -1258,7 +1320,7 @@ impl<'a> Parser<'a> {
         // definitions in a traditional CREATE TABLE statement", but
         // we don't implement that.
         let module_args = self.parse_parenthesized_column_list(Optional)?;
-        Ok(CreateVirtualTable {
+        Ok(Statement::CreateVirtualTable {
             name: table_name,
             if_not_exists,
             module_name,
@@ -1696,11 +1758,26 @@ impl<'a> Parser<'a> {
                 self.expect_keyword(Keyword::REFERENCES)?;
                 let foreign_table = self.parse_object_name()?;
                 let referred_columns = self.parse_parenthesized_column_list(Mandatory)?;
+                let mut on_delete = None;
+                let mut on_update = None;
+                loop {
+                    if on_delete.is_none() && self.parse_keywords(&[Keyword::ON, Keyword::DELETE]) {
+                        on_delete = Some(self.parse_referential_action()?);
+                    } else if on_update.is_none()
+                        && self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
+                    {
+                        on_update = Some(self.parse_referential_action()?);
+                    } else {
+                        break;
+                    }
+                }
                 Ok(Some(TableConstraint::ForeignKey {
                     name,
                     columns,
                     foreign_table,
                     referred_columns,
+                    on_delete,
+                    on_update,
                 }))
             }
             Token::Word(w) if w.keyword == Keyword::CHECK => {
@@ -1937,6 +2014,21 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a map key string
+    pub fn parse_map_key(&mut self) -> Result<Value, ParserError> {
+        match self.next_token() {
+            Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => {
+                Ok(Value::SingleQuotedString(value))
+            }
+            Token::SingleQuotedString(s) => Ok(Value::SingleQuotedString(s)),
+            #[cfg(not(feature = "bigdecimal"))]
+            Token::Number(s, _) => Ok(Value::Number(s, false)),
+            #[cfg(feature = "bigdecimal")]
+            Token::Number(s, _) => Ok(Value::Number(s.parse().unwrap(), false)),
+            unexpected => self.expected("literal string or number", unexpected),
+        }
+    }
+
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)
     pub fn parse_data_type(&mut self) -> Result<DataType, ParserError> {
         match self.next_token() {
@@ -1948,9 +2040,12 @@ impl<'a> Parser<'a> {
                     let _ = self.parse_keyword(Keyword::PRECISION);
                     Ok(DataType::Double)
                 }
-                Keyword::SMALLINT => Ok(DataType::SmallInt),
-                Keyword::INT | Keyword::INTEGER => Ok(DataType::Int),
-                Keyword::BIGINT => Ok(DataType::BigInt),
+                Keyword::TINYINT => Ok(DataType::TinyInt(self.parse_optional_precision()?)),
+                Keyword::SMALLINT => Ok(DataType::SmallInt(self.parse_optional_precision()?)),
+                Keyword::INT | Keyword::INTEGER => {
+                    Ok(DataType::Int(self.parse_optional_precision()?))
+                }
+                Keyword::BIGINT => Ok(DataType::BigInt(self.parse_optional_precision()?)),
                 Keyword::VARCHAR => Ok(DataType::Varchar(self.parse_optional_precision()?)),
                 Keyword::CHAR | Keyword::CHARACTER => {
                     if self.parse_keyword(Keyword::VARYING) {
@@ -2155,17 +2250,25 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_explain(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_explain(&mut self, describe_alias: bool) -> Result<Statement, ParserError> {
         let analyze = self.parse_keyword(Keyword::ANALYZE);
         let verbose = self.parse_keyword(Keyword::VERBOSE);
 
-        let statement = Box::new(self.parse_statement()?);
+        if let Some(statement) = self.maybe_parse(|parser| parser.parse_statement()) {
+            Ok(Statement::Explain {
+                describe_alias,
+                analyze,
+                verbose,
+                statement: Box::new(statement),
+            })
+        } else {
+            let table_name = self.parse_object_name()?;
 
-        Ok(Statement::Explain {
-            analyze,
-            verbose,
-            statement,
-        })
+            Ok(Statement::ExplainTable {
+                describe_alias,
+                table_name,
+            })
+        }
     }
 
     /// Parse a query expression, i.e. a `SELECT` statement optionally
@@ -2480,12 +2583,38 @@ impl<'a> Parser<'a> {
             .is_some()
         {
             self.prev_token();
-            self.parse_show_columns()
+            Ok(self.parse_show_columns()?)
+        } else if self.parse_one_of_keywords(&[Keyword::CREATE]).is_some() {
+            Ok(self.parse_show_create()?)
         } else {
             Ok(Statement::ShowVariable {
                 variable: self.parse_identifiers()?,
             })
         }
+    }
+
+    fn parse_show_create(&mut self) -> Result<Statement, ParserError> {
+        let obj_type = match self.expect_one_of_keywords(&[
+            Keyword::TABLE,
+            Keyword::TRIGGER,
+            Keyword::FUNCTION,
+            Keyword::PROCEDURE,
+            Keyword::EVENT,
+        ])? {
+            Keyword::TABLE => Ok(ShowCreateObject::Table),
+            Keyword::TRIGGER => Ok(ShowCreateObject::Trigger),
+            Keyword::FUNCTION => Ok(ShowCreateObject::Function),
+            Keyword::PROCEDURE => Ok(ShowCreateObject::Procedure),
+            Keyword::EVENT => Ok(ShowCreateObject::Event),
+            keyword => Err(ParserError::ParserError(format!(
+                "Unable to map keyword to ShowCreateObject: {:?}",
+                keyword
+            ))),
+        }?;
+
+        let obj_name = self.parse_object_name()?;
+
+        Ok(Statement::ShowCreate { obj_type, obj_name })
     }
 
     fn parse_show_columns(&mut self) -> Result<Statement, ParserError> {

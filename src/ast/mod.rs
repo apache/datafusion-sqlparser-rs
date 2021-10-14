@@ -18,9 +18,16 @@ mod operator;
 mod query;
 mod value;
 
+#[cfg(not(feature = "std"))]
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::fmt;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 pub use self::data_type::DataType;
 pub use self::ddl::{
@@ -33,7 +40,7 @@ pub use self::query::{
     Query, Select, SelectItem, SetExpr, SetOperator, TableAlias, TableFactor, TableWithJoins, Top,
     Values, With,
 };
-pub use self::value::{DateTimeField, Value};
+pub use self::value::{DateTimeField, TrimWhereField, Value};
 
 struct DisplaySeparated<'a, T>
 where
@@ -222,6 +229,14 @@ pub enum Expr {
         substring_from: Option<Box<Expr>>,
         substring_for: Option<Box<Expr>>,
     },
+    /// TRIM([BOTH | LEADING | TRAILING] <expr> [FROM <expr>])\
+    /// Or\
+    /// TRIM(<expr>)
+    Trim {
+        expr: Box<Expr>,
+        // ([BOTH | LEADING | TRAILING], <expr>)
+        trim_where: Option<(TrimWhereField, Box<Expr>)>,
+    },
     /// `expr COLLATE collation`
     Collate {
         expr: Box<Expr>,
@@ -240,7 +255,7 @@ pub enum Expr {
     },
     MapAccess {
         column: Box<Expr>,
-        key: String,
+        keys: Vec<Value>,
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
@@ -269,7 +284,17 @@ impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Expr::Identifier(s) => write!(f, "{}", s),
-            Expr::MapAccess { column, key } => write!(f, "{}[\"{}\"]", column, key),
+            Expr::MapAccess { column, keys } => {
+                write!(f, "{}", column)?;
+                for k in keys {
+                    match k {
+                        k @ Value::Number(_, _) => write!(f, "[{}]", k)?,
+                        Value::SingleQuotedString(s) => write!(f, "[\"{}\"]", s)?,
+                        _ => write!(f, "[{}]", k)?,
+                    }
+                }
+                Ok(())
+            }
             Expr::Wildcard => f.write_str("*"),
             Expr::QualifiedWildcard(q) => write!(f, "{}.*", display_separated(q, ".")),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
@@ -368,6 +393,16 @@ impl fmt::Display for Expr {
             }
             Expr::IsDistinctFrom(a, b) => write!(f, "{} IS DISTINCT FROM {}", a, b),
             Expr::IsNotDistinctFrom(a, b) => write!(f, "{} IS NOT DISTINCT FROM {}", a, b),
+            Expr::Trim { expr, trim_where } => {
+                write!(f, "TRIM(")?;
+                if let Some((ident, trim_char)) = trim_where {
+                    write!(f, "{} {} FROM {}", ident, trim_char, expr)?;
+                } else {
+                    write!(f, "{}", expr)?;
+                }
+
+                write!(f, ")")
+            }
         }
     }
 }
@@ -431,6 +466,19 @@ pub struct WindowFrame {
     // TBD: EXCLUDE
 }
 
+impl Default for WindowFrame {
+    /// returns default value for window frame
+    ///
+    /// see https://www.sqlite.org/windowfunctions.html#frame_specifications
+    fn default() -> Self {
+        Self {
+            units: WindowFrameUnits::Range,
+            start_bound: WindowFrameBound::Preceding(None),
+            end_bound: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum WindowFrameUnits {
@@ -487,6 +535,28 @@ impl fmt::Display for AddDropSync {
             AddDropSync::SYNC => f.write_str("SYNC PARTITIONS"),
             AddDropSync::DROP => f.write_str("DROP PARTITIONS"),
             AddDropSync::ADD => f.write_str("ADD PARTITIONS"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ShowCreateObject {
+    Event,
+    Function,
+    Procedure,
+    Table,
+    Trigger,
+}
+
+impl fmt::Display for ShowCreateObject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ShowCreateObject::Event => f.write_str("EVENT"),
+            ShowCreateObject::Function => f.write_str("FUNCTION"),
+            ShowCreateObject::Procedure => f.write_str("PROCEDURE"),
+            ShowCreateObject::Table => f.write_str("TABLE"),
+            ShowCreateObject::Trigger => f.write_str("TRIGGER"),
         }
     }
 }
@@ -653,6 +723,13 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement.
     ShowVariable { variable: Vec<Ident> },
+    /// SHOW CREATE TABLE
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowCreate {
+        obj_type: ShowCreateObject,
+        obj_name: ObjectName,
+    },
     /// SHOW COLUMNS
     ///
     /// Note: this is a MySQL-specific statement.
@@ -703,8 +780,18 @@ pub enum Statement {
         data_types: Vec<DataType>,
         statement: Box<Statement>,
     },
-    /// EXPLAIN
+    /// EXPLAIN TABLE
+    /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/explain.html>
+    ExplainTable {
+        // If true, query used the MySQL `DESCRIBE` alias for explain
+        describe_alias: bool,
+        // Table name
+        table_name: ObjectName,
+    },
+    /// EXPLAIN / DESCRIBE for select_statement
     Explain {
+        // If true, query used the MySQL `DESCRIBE` alias for explain
+        describe_alias: bool,
         /// Carry out the command and show actual run times and other statistics.
         analyze: bool,
         // Display additional information regarding the plan.
@@ -720,12 +807,29 @@ impl fmt::Display for Statement {
     #[allow(clippy::cognitive_complexity)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Statement::ExplainTable {
+                describe_alias,
+                table_name,
+            } => {
+                if *describe_alias {
+                    write!(f, "DESCRIBE ")?;
+                } else {
+                    write!(f, "EXPLAIN ")?;
+                }
+
+                write!(f, "{}", table_name)
+            }
             Statement::Explain {
+                describe_alias,
                 verbose,
                 analyze,
                 statement,
             } => {
-                write!(f, "EXPLAIN ")?;
+                if *describe_alias {
+                    write!(f, "DESCRIBE ")?;
+                } else {
+                    write!(f, "EXPLAIN ")?;
+                }
 
                 if *analyze {
                     write!(f, "ANALYZE ")?;
@@ -1164,6 +1268,15 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::ShowCreate { obj_type, obj_name } => {
+                write!(
+                    f,
+                    "SHOW CREATE {obj_type} {obj_name}",
+                    obj_type = obj_type,
+                    obj_name = obj_name,
+                )?;
+                Ok(())
+            }
             Statement::ShowColumns {
                 extended,
                 full,
@@ -1462,22 +1575,12 @@ pub enum HiveIOFormat {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct HiveFormat {
     pub row_format: Option<HiveRowFormat>,
     pub storage: Option<HiveIOFormat>,
     pub location: Option<String>,
-}
-
-impl Default for HiveFormat {
-    fn default() -> Self {
-        HiveFormat {
-            row_format: None,
-            location: None,
-            storage: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1607,5 +1710,16 @@ impl fmt::Display for SqliteOnConflict {
             Ignore => write!(f, "IGNORE"),
             Replace => write!(f, "REPLACE"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_window_frame_default() {
+        let window_frame = WindowFrame::default();
+        assert_eq!(WindowFrameBound::Preceding(None), window_frame.start_bound);
     }
 }

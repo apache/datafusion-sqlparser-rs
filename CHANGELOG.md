@@ -6,10 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 Given that the parser produces a typed AST, any changes to the AST will technically be breaking and thus will result in a `0.(N+1)` version. We document changes that break via addition as "Added".
 
 ## [Unreleased]
-Check https://github.com/ballista-compute/sqlparser-rs/commits/main for undocumented changes.
+Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
+
+## [0.11.0] 2020-09-24
+
+### Added
+* Support minimum display width for integer data types (#337) Thanks @vasilev-alex!
+* Add logical XOR operator (#357) - Thanks @xzmrdltl!
+* Support DESCRIBE table_name (#340) - Thanks @ovr!
+* Support SHOW CREATE TABLE|EVENT|FUNCTION (#338) - Thanks @ovr!
+* Add referential actions to TableConstraint foreign key (#306) - Thanks @joshwd36!
+
+### Changed
+* Enable map access for numbers, multiple nesting levels (#356) - Thanks @Igosuki!
+* Rename Token::Mult to Token::Mul (#353) - Thanks @koushiro!
+* Use derive(Default) for HiveFormat (#348) - Thanks @koushiro!
+* Improve tokenizer error (#347)  - Thanks @koushiro!
+* Eliminate redundant string copy in Tokenizer (#343) - Thanks @koushiro!
+* Update bigdecimal requirement from 0.2 to 0.3 dependencies (#341)
+* Support parsing hexadecimal literals that start with `0x` (#324) - Thanks @TheSchemm!
 
 
-## [0.8.0] 2020-03-21
+## [0.10.0] 2020-08-23
+
+### Added
+* Support for `no_std` (#332) - Thanks @koushiro!
+* Postgres regular expression operators (`~`, `~*`, `!~`, `!~*`) (#328) - Thanks @b41sh!
+* tinyint (#320) - Thanks @sundy-li
+* ILIKE (#300) - Thanks @maxcountryman!
+* TRIM syntax (#331, #334) - Thanks ever0de
+
+
+### Fixed
+* Return error instead of panic (#316) - Thanks @BohuTANG!
+
+### Changed
+- Rename `Modulus` to `Modulo` (#335) - Thanks @RGRAVITY817!
+- Update links to reflect repository move to `sqlparser-rs` GitHub org (#333) - Thanks @andygrove
+- Add default value for `WindowFrame` (#313) - Thanks @Jimexist!
+
+## [0.9.0] 2020-03-21
 
 ### Added
 * Add support for `TRY_CAST` syntax (#299) - Thanks @seddonm1!
@@ -213,4 +249,3 @@ We don't have a changelog for the changes made in 2018, but thanks to @crw5996, 
 
 ## [0.1.0] - 2018-09-03
 Initial release
-

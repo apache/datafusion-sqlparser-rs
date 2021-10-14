@@ -12,12 +12,16 @@
 
 //! AST types specific to CREATE/ALTER variants of [Statement]
 //! (commonly referred to as Data Definition Language, or DDL)
-use super::{display_comma_separated, DataType, Expr, Ident, ObjectName};
-use crate::ast::display_separated;
-use crate::tokenizer::Token;
+
+#[cfg(not(feature = "std"))]
+use alloc::{boxed::Box, string::ToString, vec::Vec};
+use core::fmt;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
+
+use crate::ast::{display_comma_separated, display_separated, DataType, Expr, Ident, ObjectName};
+use crate::tokenizer::Token;
 
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -132,12 +136,17 @@ pub enum TableConstraint {
         is_primary: bool,
     },
     /// A referential integrity constraint (`[ CONSTRAINT <name> ] FOREIGN KEY (<columns>)
-    /// REFERENCES <foreign_table> (<referred_columns>)`)
+    /// REFERENCES <foreign_table> (<referred_columns>)
+    /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
+    ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
+    /// }`).
     ForeignKey {
         name: Option<Ident>,
         columns: Vec<Ident>,
         foreign_table: ObjectName,
         referred_columns: Vec<Ident>,
+        on_delete: Option<ReferentialAction>,
+        on_update: Option<ReferentialAction>,
     },
     /// `[ CONSTRAINT <name> ] CHECK (<expr>)`
     Check {
@@ -165,14 +174,25 @@ impl fmt::Display for TableConstraint {
                 columns,
                 foreign_table,
                 referred_columns,
-            } => write!(
-                f,
-                "{}FOREIGN KEY ({}) REFERENCES {}({})",
-                display_constraint_name(name),
-                display_comma_separated(columns),
-                foreign_table,
-                display_comma_separated(referred_columns)
-            ),
+                on_delete,
+                on_update,
+            } => {
+                write!(
+                    f,
+                    "{}FOREIGN KEY ({}) REFERENCES {}({})",
+                    display_constraint_name(name),
+                    display_comma_separated(columns),
+                    foreign_table,
+                    display_comma_separated(referred_columns),
+                )?;
+                if let Some(action) = on_delete {
+                    write!(f, " ON DELETE {}", action)?;
+                }
+                if let Some(action) = on_update {
+                    write!(f, " ON UPDATE {}", action)?;
+                }
+                Ok(())
+            }
             TableConstraint::Check { name, expr } => {
                 write!(f, "{}CHECK ({})", display_constraint_name(name), expr)
             }

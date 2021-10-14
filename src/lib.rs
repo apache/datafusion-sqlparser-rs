@@ -32,11 +32,17 @@
 //!
 //! println!("AST: {:?}", ast);
 //! ```
+
+#![cfg_attr(not(feature = "std"), no_std)]
 #![allow(clippy::upper_case_acronyms)]
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
 
 pub mod ast;
 #[macro_use]
 pub mod dialect;
+pub mod keywords;
 pub mod parser;
 pub mod tokenizer;
 

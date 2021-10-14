@@ -16,15 +16,24 @@
 //!
 //! The tokens then form the input for the parser, which outputs an Abstract Syntax Tree (AST).
 
-use std::iter::Peekable;
-use std::str::Chars;
+#[cfg(not(feature = "std"))]
+use alloc::{
+    borrow::ToOwned,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::fmt;
+use core::iter::Peekable;
+use core::str::Chars;
 
-use super::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
-use super::dialect::Dialect;
-use super::dialect::SnowflakeDialect;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
+
+use crate::dialect::Dialect;
+use crate::dialect::SnowflakeDialect;
+use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -69,7 +78,7 @@ pub enum Token {
     /// Minus operator `-`
     Minus,
     /// Multiplication operator `*`
-    Mult,
+    Mul,
     /// Division operator `/`
     Div,
     /// Modulo Operator `%`
@@ -108,8 +117,14 @@ pub enum Token {
     RArrow,
     /// Sharp `#` used for PostgreSQL Bitwise XOR operator
     Sharp,
-    /// Tilde `~` used for PostgreSQL Bitwise NOT operator
+    /// Tilde `~` used for PostgreSQL Bitwise NOT operator or case sensitive match regular expression operator
     Tilde,
+    /// `~*` , a case insensitive match regular expression operator in PostgreSQL
+    TildeAsterisk,
+    /// `!~` , a case sensitive not match regular expression operator in PostgreSQL
+    ExclamationMarkTilde,
+    /// `!~*` , a case insensitive not match regular expression operator in PostgreSQL
+    ExclamationMarkTildeAsterisk,
     /// `<<`, a bitwise shift left operator in PostgreSQL
     ShiftLeft,
     /// `>>`, a bitwise shift right operator in PostgreSQL
@@ -148,7 +163,7 @@ impl fmt::Display for Token {
             Token::GtEq => f.write_str(">="),
             Token::Plus => f.write_str("+"),
             Token::Minus => f.write_str("-"),
-            Token::Mult => f.write_str("*"),
+            Token::Mul => f.write_str("*"),
             Token::Div => f.write_str("/"),
             Token::StringConcat => f.write_str("||"),
             Token::Mod => f.write_str("%"),
@@ -171,6 +186,9 @@ impl fmt::Display for Token {
             Token::ExclamationMark => f.write_str("!"),
             Token::DoubleExclamationMark => f.write_str("!!"),
             Token::Tilde => f.write_str("~"),
+            Token::TildeAsterisk => f.write_str("~*"),
+            Token::ExclamationMarkTilde => f.write_str("!~"),
+            Token::ExclamationMarkTildeAsterisk => f.write_str("!~*"),
             Token::AtSign => f.write_str("@"),
             Token::ShiftLeft => f.write_str("<<"),
             Token::ShiftRight => f.write_str(">>"),
@@ -184,6 +202,7 @@ impl Token {
     pub fn make_keyword(keyword: &str) -> Self {
         Token::make_word(keyword, None)
     }
+
     pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
         let word_uppercase = word.to_uppercase();
         Token::Word(Word {
@@ -226,6 +245,7 @@ impl fmt::Display for Word {
         }
     }
 }
+
 impl Word {
     fn matching_end_quote(ch: char) -> char {
         match ch {
@@ -267,20 +287,33 @@ pub struct TokenizerError {
     pub col: u64,
 }
 
+impl fmt::Display for TokenizerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} at Line: {}, Column {}",
+            self.message, self.line, self.col
+        )
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for TokenizerError {}
+
 /// SQL Tokenizer
 pub struct Tokenizer<'a> {
     dialect: &'a dyn Dialect,
-    pub query: String,
-    pub line: u64,
-    pub col: u64,
+    query: &'a str,
+    line: u64,
+    col: u64,
 }
 
 impl<'a> Tokenizer<'a> {
     /// Create a new SQL tokenizer for the specified SQL statement
-    pub fn new(dialect: &'a dyn Dialect, query: &str) -> Self {
+    pub fn new(dialect: &'a dyn Dialect, query: &'a str) -> Self {
         Self {
             dialect,
-            query: query.to_string(),
+            query,
             line: 1,
             col: 1,
         }
@@ -388,15 +421,26 @@ impl<'a> Tokenizer<'a> {
                     if chars.next() == Some(quote_end) {
                         Ok(Some(Token::make_word(&s, Some(quote_start))))
                     } else {
-                        self.tokenizer_error(
-                            format!("Expected close delimiter '{}' before EOF.", quote_end)
-                                .as_str(),
-                        )
+                        self.tokenizer_error(format!(
+                            "Expected close delimiter '{}' before EOF.",
+                            quote_end
+                        ))
                     }
                 }
                 // numbers and period
                 '0'..='9' | '.' => {
                     let mut s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
+
+                    // match binary literal that starts with 0x
+                    if s == "0" && chars.peek() == Some(&'x') {
+                        chars.next();
+                        let s2 = peeking_take_while(
+                            chars,
+                            |ch| matches!(ch, '0'..='9' | 'A'..='F' | 'a'..='f'),
+                        );
+                        return Ok(Some(Token::HexStringLiteral(s2)));
+                    }
+
                     // match one period
                     if let Some('.') = chars.peek() {
                         s.push('.');
@@ -457,7 +501,7 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 '+' => self.consume_and_return(chars, Token::Plus),
-                '*' => self.consume_and_return(chars, Token::Mult),
+                '*' => self.consume_and_return(chars, Token::Mul),
                 '%' => self.consume_and_return(chars, Token::Mod),
                 '|' => {
                     chars.next(); // consume the '|'
@@ -486,6 +530,14 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('=') => self.consume_and_return(chars, Token::Neq),
                         Some('!') => self.consume_and_return(chars, Token::DoubleExclamationMark),
+                        Some('~') => {
+                            chars.next();
+                            match chars.peek() {
+                                Some('*') => self
+                                    .consume_and_return(chars, Token::ExclamationMarkTildeAsterisk),
+                                _ => Ok(Some(Token::ExclamationMarkTilde)),
+                            }
+                        }
                         _ => Ok(Some(Token::ExclamationMark)),
                     }
                 }
@@ -535,7 +587,13 @@ impl<'a> Tokenizer<'a> {
                         comment,
                     })))
                 }
-                '~' => self.consume_and_return(chars, Token::Tilde),
+                '~' => {
+                    chars.next(); // consume
+                    match chars.peek() {
+                        Some('*') => self.consume_and_return(chars, Token::TildeAsterisk),
+                        _ => Ok(Some(Token::Tilde)),
+                    }
+                }
                 '#' => self.consume_and_return(chars, Token::Sharp),
                 '@' => self.consume_and_return(chars, Token::AtSign),
                 other => self.consume_and_return(chars, Token::Char(other)),
@@ -544,9 +602,9 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn tokenizer_error<R>(&self, message: &str) -> Result<R, TokenizerError> {
+    fn tokenizer_error<R>(&self, message: impl Into<String>) -> Result<R, TokenizerError> {
         Err(TokenizerError {
-            message: message.to_string(),
+            message: message.into(),
             col: self.col,
             line: self.line,
         })
@@ -658,9 +716,23 @@ fn peeking_take_while(
 
 #[cfg(test)]
 mod tests {
-    use super::super::dialect::GenericDialect;
-    use super::super::dialect::MsSqlDialect;
     use super::*;
+    use crate::dialect::{GenericDialect, MsSqlDialect};
+
+    #[test]
+    fn tokenizer_error_impl() {
+        let err = TokenizerError {
+            message: "test".into(),
+            line: 1,
+            col: 1,
+        };
+        #[cfg(feature = "std")]
+        {
+            use std::error::Error;
+            assert!(err.source().is_none());
+        }
+        assert_eq!(err.to_string(), "test at Line: 1, Column 1");
+    }
 
     #[test]
     fn tokenize_select_1() {
@@ -752,7 +824,47 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_word("three", None),
         ];
+        compare(expected, tokens);
+    }
 
+    #[test]
+    fn tokenize_logical_xor() {
+        let sql =
+            String::from("SELECT true XOR true, false XOR false, true XOR false, false XOR true");
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("true"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("XOR"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("true"),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("false"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("XOR"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("false"),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("true"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("XOR"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("false"),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("false"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("XOR"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("true"),
+        ];
         compare(expected, tokens);
     }
 
@@ -766,7 +878,7 @@ mod tests {
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Mult,
+            Token::Mul,
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
@@ -800,7 +912,7 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Mult,
+            Token::Mul,
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
@@ -832,7 +944,7 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Mult,
+            Token::Mul,
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
@@ -860,7 +972,7 @@ mod tests {
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Mult,
+            Token::Mul,
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
@@ -885,7 +997,7 @@ mod tests {
         let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
-        println!("tokens: {:#?}", tokens);
+        // println!("tokens: {:#?}", tokens);
         let expected = vec![
             Token::Whitespace(Whitespace::Newline),
             Token::Char('م'),
@@ -932,13 +1044,13 @@ mod tests {
         let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
-        println!("tokens: {:#?}", tokens);
+        // println!("tokens: {:#?}", tokens);
         let expected = vec![
             Token::Whitespace(Whitespace::Newline),
             Token::Whitespace(Whitespace::Newline),
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::Mult,
+            Token::Mul,
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
@@ -1107,6 +1219,45 @@ mod tests {
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
             Token::make_word("foo", None),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_pg_regex_match() {
+        let sql = "SELECT col ~ '^a', col ~* '^a', col !~ '^a', col !~* '^a'";
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::Tilde,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("^a".into()),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::TildeAsterisk,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("^a".into()),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::ExclamationMarkTilde,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("^a".into()),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::ExclamationMarkTildeAsterisk,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("^a".into()),
         ];
         compare(expected, tokens);
     }

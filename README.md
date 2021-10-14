@@ -2,8 +2,8 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Version](https://img.shields.io/crates/v/sqlparser.svg)](https://crates.io/crates/sqlparser)
-[![Build Status](https://github.com/ballista-compute/sqlparser-rs/workflows/Rust/badge.svg?branch=main)](https://github.com/ballista-compute/sqlparser-rs/actions?query=workflow%3ARust+branch%3Amain)
-[![Coverage Status](https://coveralls.io/repos/github/ballista-compute/sqlparser-rs/badge.svg?branch=main)](https://coveralls.io/github/ballista-compute/sqlparser-rs?branch=main)
+[![Build Status](https://github.com/sqlparser-rs/sqlparser-rs/workflows/Rust/badge.svg?branch=main)](https://github.com/sqlparser-rs/sqlparser-rs/actions?query=workflow%3ARust+branch%3Amain)
+[![Coverage Status](https://coveralls.io/repos/github/sqlparser-rs/sqlparser-rs/badge.svg?branch=main)](https://coveralls.io/github/sqlparser-rs/sqlparser-rs?branch=main)
 [![Gitter Chat](https://badges.gitter.im/sqlparser-rs/community.svg)](https://gitter.im/sqlparser-rs/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 The goal of this project is to build a SQL lexer and parser capable of parsing
@@ -12,7 +12,7 @@ making it easy to support custom dialects so that this crate can be used as a
 foundation for vendor-specific parsers.
 
 This parser is currently being used by the [DataFusion] query engine,
-[LocustDB], and [Ballista].
+[LocustDB], [Ballista] and [GlueSQL].
 
 ## Example
 
@@ -123,10 +123,11 @@ resources.
 
 [tdop-tutorial]: https://eli.thegreenplace.net/2010/01/02/top-down-operator-precedence-parsing
 [`cargo fmt`]: https://github.com/rust-lang/rustfmt#on-the-stable-toolchain
-[current issues]: https://github.com/ballista-compute/sqlparser-rs/issues
-[DataFusion]: https://github.com/apache/arrow/tree/master/rust/datafusion
+[current issues]: https://github.com/sqlparser-rs/sqlparser-rs/issues
+[DataFusion]: https://github.com/apache/arrow-datafusion
 [LocustDB]: https://github.com/cswinter/LocustDB
-[Ballista]: https://github.com/ballista-compute/ballista
+[Ballista]: https://github.com/apache/arrow-datafusion/tree/master/ballista
+[GlueSQL]: https://github.com/gluesql/gluesql
 [Pratt Parser]: https://tdop.github.io/
 [sql-2016-grammar]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html
 [sql-standard]: https://en.wikipedia.org/wiki/ISO/IEC_9075

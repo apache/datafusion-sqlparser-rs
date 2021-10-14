@@ -87,9 +87,8 @@ mod tests {
 
         assert!(dialect_of!(generic_holder is GenericDialect |  AnsiDialect),);
         assert!(!dialect_of!(generic_holder is  AnsiDialect));
-
-        assert!(dialect_of!(ansi_holder is  AnsiDialect));
-        assert!(dialect_of!(ansi_holder is  GenericDialect | AnsiDialect),);
-        assert!(!dialect_of!(ansi_holder is  GenericDialect | MsSqlDialect),);
+        assert!(dialect_of!(ansi_holder is AnsiDialect));
+        assert!(dialect_of!(ansi_holder is GenericDialect | AnsiDialect));
+        assert!(!dialect_of!(ansi_holder is GenericDialect | MsSqlDialect));
     }
 }

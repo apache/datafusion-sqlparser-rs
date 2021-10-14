@@ -102,7 +102,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
     pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
-        let mut tokenizer = Tokenizer::new(dialect, &sql);
+        let mut tokenizer = Tokenizer::new(dialect, sql);
         let tokens = tokenizer.tokenize()?;
         let mut parser = Parser::new(tokens, dialect);
         let mut stmts = Vec::new();
@@ -2368,8 +2368,7 @@ impl<'a> Parser<'a> {
                         ]) // This couldn't possibly be a bad idea
                     })?
                     .into_iter()
-                    .filter(|i| i.is_some())
-                    .map(|i| i.unwrap())
+                    .flatten()
                     .collect();
 
                 lateral_views.push(LateralView {

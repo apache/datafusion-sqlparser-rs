@@ -876,7 +876,7 @@ impl<'a> Parser<'a> {
                         Ok(Expr::IsNotDistinctFrom(Box::new(expr), Box::new(expr2)))
                     } else {
                         self.expected(
-                            "NULL, NOT NULL, DISTINCT FROM OR NOT DISTINCT FROM after IS",
+                            "[NOT] NULL or [NOT] DISTINCT FROM after IS",
                             self.peek_token(),
                         )
                     }

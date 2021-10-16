@@ -8,6 +8,15 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.12.0] 2020-10-14
+
+### Added
+* Add support for [NOT] IS DISTINCT FROM (#306) - @Dandandan
+
+### Changed
+* Move the keywords module - Thanks @koushiro!
+
+
 ## [0.11.0] 2020-09-24
 
 ### Added

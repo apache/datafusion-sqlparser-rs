@@ -31,8 +31,8 @@ $ cargo install cargo-release
     $ cargo release minor --push-remote upstream
     ```
 
-    You can add `--dry-run` to see what the command is going to do,
-    or `--skip-push` to stop before actually publishing the release.
+    After verifying, you can rerun with `--execute` if all looks good. 
+    You can add `--no-push` to stop before actually publishing the release.
 
     `cargo release` will then:
 

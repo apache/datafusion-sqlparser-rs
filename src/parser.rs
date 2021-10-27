@@ -637,14 +637,25 @@ impl<'a> Parser<'a> {
         // PARSE SUBSTRING (EXPR [FROM 1] [FOR 3])
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
-        let mut from_expr = None;
-        let mut to_expr = None;
-        if self.parse_keyword(Keyword::FROM) {
-            from_expr = Some(self.parse_expr()?);
-        }
-        if self.parse_keyword(Keyword::FOR) {
-            to_expr = Some(self.parse_expr()?);
-        }
+        let from_expr = if self.parse_keyword(Keyword::FROM) {
+            Some(self.parse_expr()?)
+        } else {
+            if self.consume_token(&Token::Comma) {
+                Some(self.parse_expr()?)
+            } else {
+                None
+            }
+        };
+
+        let to_expr = if self.parse_keyword(Keyword::FOR) {
+            Some(self.parse_expr()?)
+        } else {
+            if self.consume_token(&Token::Comma) {
+                Some(self.parse_expr()?)
+            } else {
+                None
+            }
+        };
         self.expect_token(&Token::RParen)?;
 
         Ok(Expr::Substring {

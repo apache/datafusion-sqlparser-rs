@@ -126,11 +126,16 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::RenameTable { table_name } => {
                 write!(f, "RENAME TO {}", table_name)
             }
-            AlterTableOperation::ChangeColumn {old_name, new_name, data_type, options} => {
+            AlterTableOperation::ChangeColumn {
+                old_name,
+                new_name,
+                data_type,
+                options,
+            } => {
                 write!(f, "CHANGE COLUMN {} {} {}", old_name, new_name, data_type)?;
                 if options.is_empty() {
                     Ok(())
-                }else {
+                } else {
                     write!(f, " {}", display_separated(options, " "))
                 }
             }

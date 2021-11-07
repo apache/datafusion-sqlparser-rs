@@ -643,10 +643,9 @@ impl<'a> Tokenizer<'a> {
     ) -> Result<String, TokenizerError> {
         let mut s = String::new();
         chars.next(); // consume the opening quote
-        while let Some(&ch) = chars.peek() {
+        while let Some(ch) = chars.next() {
             match ch {
                 '\'' => {
-                    chars.next(); // consume
                     let escaped_quote = chars.peek().map(|c| *c == '\'').unwrap_or(false);
                     if escaped_quote {
                         s.push('\'');
@@ -655,8 +654,25 @@ impl<'a> Tokenizer<'a> {
                         return Ok(s);
                     }
                 }
+                '\\' => {
+                    if let Some(c) = chars.next() {
+                        match c {
+                            'n' => s.push('\n'),
+                            't' => s.push('\t'),
+                            'r' => s.push('\r'),
+                            'b' => s.push('\u{08}'),
+                            '0' => s.push('\0'),
+                            '\'' => s.push('\''),
+                            '\\' => s.push('\\'),
+                            '\"' => s.push('\"'),
+                            _ => {
+                                s.push('\\');
+                                s.push(c);
+                            }
+                        }
+                    }
+                }
                 _ => {
-                    chars.next(); // consume
                     s.push(ch);
                 }
             }

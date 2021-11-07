@@ -1620,9 +1620,10 @@ impl<'a> Parser<'a> {
         loop {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
                 constraints.push(constraint);
-            } else if let Token::Word(_) = self.peek_token() {
-                columns.push(self.parse_column_def()?);
-            } else if let Token::BackQuotedString(_) = self.peek_token() {
+            } else if matches!(
+                self.peek_token(),
+                Token::Word(_) | Token::BackQuotedString(_)
+            ) {
                 columns.push(self.parse_column_def()?);
             } else {
                 return self.expected("column name or constraint definition", self.peek_token());
@@ -2793,10 +2794,10 @@ impl<'a> Parser<'a> {
             // followed by some joins or (B) another level of nesting.
             let mut table_and_joins = self.parse_table_and_joins()?;
 
-            if !table_and_joins.joins.is_empty() {
-                self.expect_token(&Token::RParen)?;
-                Ok(TableFactor::NestedJoin(Box::new(table_and_joins))) // (A)
-            } else if let TableFactor::NestedJoin(_) = &table_and_joins.relation {
+            if !table_and_joins.joins.is_empty()
+                || matches!(&table_and_joins.relation, TableFactor::NestedJoin(_))
+            {
+                // (A)
                 // (B): `table_and_joins` (what we found inside the parentheses)
                 // is a nested join `(foo JOIN bar)`, not followed by other joins.
                 self.expect_token(&Token::RParen)?;

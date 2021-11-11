@@ -162,24 +162,27 @@ pub enum GrantPrivileges {
 
 impl fmt::Display for GrantPrivileges {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            GrantPrivileges::All {
-                with_privileges_keyword,
-            } => {
-                write!(
-                    f,
-                    "GRANT ALL {}ON ",
-                    if *with_privileges_keyword {
-                        "PRIVILEGES "
-                    } else {
-                        ""
-                    }
-                )
+        write!(
+            f,
+            "GRANT {} ON",
+            match self {
+                GrantPrivileges::All {
+                    with_privileges_keyword,
+                } => {
+                    format!(
+                        "ALL{}",
+                        if *with_privileges_keyword {
+                            " PRIVILEGES"
+                        } else {
+                            ""
+                        }
+                    )
+                }
+                GrantPrivileges::Privileges(privileges) => {
+                    display_comma_separated(privileges).to_string()
+                }
             }
-            GrantPrivileges::Privileges(privileges) => {
-                write!(f, "GRANT {} ON ", display_comma_separated(privileges))
-            }
-        }
+        )
     }
 }
 
@@ -1465,7 +1468,7 @@ impl fmt::Display for Statement {
                 with_grant_option,
                 granted_by,
             } => {
-                write!(f, "{}", privileges)?;
+                write!(f, "{} ", privileges)?;
                 write!(f, "{} ", objects)?;
                 write!(f, "TO {}", display_comma_separated(roles))?;
                 if *with_grant_option {

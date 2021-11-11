@@ -156,6 +156,7 @@ impl<'a> Parser<'a> {
                 Keyword::COPY => Ok(self.parse_copy()?),
                 Keyword::SET => Ok(self.parse_set()?),
                 Keyword::SHOW => Ok(self.parse_show()?),
+                Keyword::GRANT => Ok(self.parse_grant()?),
                 Keyword::START => Ok(self.parse_start_transaction()?),
                 // `BEGIN` is a nonstandard but common alias for the
                 // standard `START TRANSACTION` statement. It is supported
@@ -2878,6 +2879,82 @@ impl<'a> Parser<'a> {
         } else {
             Ok(JoinConstraint::None)
             //self.expected("ON, or USING after JOIN", self.peek_token())
+        }
+    }
+
+    /// Parse a GRANT statement.
+    pub fn parse_grant(&mut self) -> Result<Statement, ParserError> {
+        let privileges = if self.parse_keyword(Keyword::ALL) {
+            GrantPrivileges::All { with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES) }
+        } else {
+            GrantPrivileges::Privileges(
+                self.parse_comma_separated(Parser::parse_grant_permission)?
+                    .iter().map(|kw| match kw {
+                        Keyword::DELETE     => keywords::DELETE.into(),
+                        Keyword::INSERT     => keywords::INSERT.into(),
+                        Keyword::REFERENCES => keywords::REFERENCES.into(),
+                        Keyword::SELECT     => keywords::SELECT.into(),
+                        Keyword::TRIGGER    => keywords::TRIGGER.into(),
+                        Keyword::TRUNCATE   => keywords::TRUNCATE.into(),
+                        Keyword::UPDATE     => keywords::UPDATE.into(),
+                        Keyword::USAGE      => keywords::USAGE.into(),
+                        _ => unreachable!()
+                    }).collect()
+            )
+        };
+
+        self.expect_keyword(Keyword::ON)?;
+
+        let objects = if self.parse_keywords(&[Keyword::ALL, Keyword::TABLES, Keyword::IN, Keyword::SCHEMA]) {
+            GrantObjects::AllTablesInSchema { schemas: self.parse_comma_separated(Parser::parse_object_name)? }
+        } else if self.parse_keywords(&[Keyword::ALL, Keyword::SEQUENCES, Keyword::IN, Keyword::SCHEMA]) {
+            GrantObjects::AllSequencesInSchema { schemas: self.parse_comma_separated(Parser::parse_object_name)? }
+        } else {
+            let object_type = self.parse_one_of_keywords(&[Keyword::SEQUENCE, Keyword::SCHEMA, Keyword::TABLE]);
+            let objects = self.parse_comma_separated(Parser::parse_object_name);
+            match object_type {
+                Some(Keyword::SCHEMA) => GrantObjects::Schemas(objects?),
+                Some(Keyword::SEQUENCE) => GrantObjects::Sequences(objects?),
+                Some(Keyword::TABLE) | None => GrantObjects::Tables(objects?),
+                _ => unreachable!(),
+            }
+        };
+
+        self.expect_keyword(Keyword::TO)?;
+        let grantees = self.parse_comma_separated(Parser::parse_identifier);
+
+        let with_grant_option = self.parse_keywords(&[Keyword::WITH, Keyword::GRANT, Keyword::OPTION]);
+
+        let granted_by = self.parse_keywords(&[Keyword::GRANTED, Keyword::BY])
+            .then(|| self.parse_identifier().unwrap());
+
+        Ok(Statement::Grant {
+            privileges,
+            objects,
+            roles: grantees?,
+            with_grant_option,
+            granted_by,
+        })
+    }
+
+    fn parse_grant_permission(&mut self) -> Result<Keyword, ParserError> {
+        if let Some(kw) = self.parse_one_of_keywords(&[
+            Keyword::CONNECT,
+            Keyword::CREATE,
+            Keyword::DELETE,
+            Keyword::EXECUTE,
+            Keyword::INSERT,
+            Keyword::REFERENCES,
+            Keyword::SELECT,
+            Keyword::TEMPORARY,
+            Keyword::TRIGGER,
+            Keyword::TRUNCATE,
+            Keyword::UPDATE,
+            Keyword::USAGE,
+        ]) {
+            Ok(kw)
+        } else {
+            self.expected("a privilege keyword", self.peek_token())?
         }
     }
 

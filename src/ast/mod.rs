@@ -244,6 +244,8 @@ pub enum Expr {
     },
     /// Nested expression e.g. `(foo > bar)` or `(1)`
     Nested(Box<Expr>),
+    // Tuple expression e.g. `(foo,bar)`
+    Tuple(Vec<Expr>),
     /// A literal value, such as string, number, date or NULL
     Value(Value),
     /// A constant of form `<data_type> 'value'`.
@@ -348,6 +350,7 @@ impl fmt::Display for Expr {
             Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
             Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),
             Expr::Nested(ast) => write!(f, "({})", ast),
+            Expr::Tuple(ast) => write!(f, "({})", display_comma_separated(ast)),
             Expr::Value(v) => write!(f, "{}", v),
             Expr::TypedString { data_type, value } => {
                 write!(f, "{}", data_type)?;

@@ -447,7 +447,12 @@ impl<'a> Parser<'a> {
                         self.prev_token();
                         Expr::Subquery(Box::new(self.parse_query()?))
                     } else {
-                        Expr::Nested(Box::new(self.parse_expr()?))
+                        let exprs = self.parse_comma_separated(Parser::parse_expr)?;
+                        if exprs.len() == 1 {
+                            Expr::Nested(Box::new(exprs[0].clone()))
+                        } else {
+                            Expr::Tuple(exprs)
+                        }
                     };
                 self.expect_token(&Token::RParen)?;
                 Ok(expr)

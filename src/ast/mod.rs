@@ -153,7 +153,7 @@ impl fmt::Display for ObjectName {
 pub enum GrantPrivileges {
     All {
         /// Optional keyword from the spec, ignored in practice
-        with_privileges_keyword: bool
+        with_privileges_keyword: bool,
     },
     Privileges(Vec<String>),
 }
@@ -1361,10 +1361,26 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::Grant { privileges, objects, roles, with_grant_option, granted_by } => {
+            Statement::Grant {
+                privileges,
+                objects,
+                roles,
+                with_grant_option,
+                granted_by,
+            } => {
                 match privileges {
-                    GrantPrivileges::All { with_privileges_keyword } => {
-                        write!(f, "GRANT ALL {}ON ", if *with_privileges_keyword { "PRIVILEGES " } else { "" })?;
+                    GrantPrivileges::All {
+                        with_privileges_keyword,
+                    } => {
+                        write!(
+                            f,
+                            "GRANT ALL {}ON ",
+                            if *with_privileges_keyword {
+                                "PRIVILEGES "
+                            } else {
+                                ""
+                            }
+                        )?;
                     }
                     GrantPrivileges::Privileges(privileges) => {
                         write!(f, "GRANT {} ON ", display_comma_separated(privileges))?;
@@ -1381,15 +1397,29 @@ impl fmt::Display for Statement {
                         write!(f, "{} ", display_comma_separated(tables))?;
                     }
                     GrantObjects::AllSequencesInSchema { schemas } => {
-                        write!(f, "ALL SEQUENCES IN SCHEMA {} ", display_comma_separated(schemas))?;
+                        write!(
+                            f,
+                            "ALL SEQUENCES IN SCHEMA {} ",
+                            display_comma_separated(schemas)
+                        )?;
                     }
                     GrantObjects::AllTablesInSchema { schemas } => {
-                        write!(f, "ALL TABLES IN SCHEMA {} ", display_comma_separated(schemas))?;
+                        write!(
+                            f,
+                            "ALL TABLES IN SCHEMA {} ",
+                            display_comma_separated(schemas)
+                        )?;
                     }
                 }
-                write!(f, "TO {}{}",
+                write!(
+                    f,
+                    "TO {}{}",
                     display_comma_separated(roles),
-                    if *with_grant_option { " WITH GRANT OPTION" } else { "" },
+                    if *with_grant_option {
+                        " WITH GRANT OPTION"
+                    } else {
+                        ""
+                    },
                 )?;
                 if let Some(grantor) = granted_by {
                     write!(f, " GRANTED BY {}", grantor)?;

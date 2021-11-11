@@ -2885,32 +2885,51 @@ impl<'a> Parser<'a> {
     /// Parse a GRANT statement.
     pub fn parse_grant(&mut self) -> Result<Statement, ParserError> {
         let privileges = if self.parse_keyword(Keyword::ALL) {
-            GrantPrivileges::All { with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES) }
+            GrantPrivileges::All {
+                with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
+            }
         } else {
             GrantPrivileges::Privileges(
                 self.parse_comma_separated(Parser::parse_grant_permission)?
-                    .iter().map(|kw| match kw {
-                        Keyword::DELETE     => keywords::DELETE.into(),
-                        Keyword::INSERT     => keywords::INSERT.into(),
+                    .iter()
+                    .map(|kw| match kw {
+                        Keyword::DELETE => keywords::DELETE.into(),
+                        Keyword::INSERT => keywords::INSERT.into(),
                         Keyword::REFERENCES => keywords::REFERENCES.into(),
-                        Keyword::SELECT     => keywords::SELECT.into(),
-                        Keyword::TRIGGER    => keywords::TRIGGER.into(),
-                        Keyword::TRUNCATE   => keywords::TRUNCATE.into(),
-                        Keyword::UPDATE     => keywords::UPDATE.into(),
-                        Keyword::USAGE      => keywords::USAGE.into(),
-                        _ => unreachable!()
-                    }).collect()
+                        Keyword::SELECT => keywords::SELECT.into(),
+                        Keyword::TRIGGER => keywords::TRIGGER.into(),
+                        Keyword::TRUNCATE => keywords::TRUNCATE.into(),
+                        Keyword::UPDATE => keywords::UPDATE.into(),
+                        Keyword::USAGE => keywords::USAGE.into(),
+                        _ => unreachable!(),
+                    })
+                    .collect(),
             )
         };
 
         self.expect_keyword(Keyword::ON)?;
 
-        let objects = if self.parse_keywords(&[Keyword::ALL, Keyword::TABLES, Keyword::IN, Keyword::SCHEMA]) {
-            GrantObjects::AllTablesInSchema { schemas: self.parse_comma_separated(Parser::parse_object_name)? }
-        } else if self.parse_keywords(&[Keyword::ALL, Keyword::SEQUENCES, Keyword::IN, Keyword::SCHEMA]) {
-            GrantObjects::AllSequencesInSchema { schemas: self.parse_comma_separated(Parser::parse_object_name)? }
+        let objects = if self.parse_keywords(&[
+            Keyword::ALL,
+            Keyword::TABLES,
+            Keyword::IN,
+            Keyword::SCHEMA,
+        ]) {
+            GrantObjects::AllTablesInSchema {
+                schemas: self.parse_comma_separated(Parser::parse_object_name)?,
+            }
+        } else if self.parse_keywords(&[
+            Keyword::ALL,
+            Keyword::SEQUENCES,
+            Keyword::IN,
+            Keyword::SCHEMA,
+        ]) {
+            GrantObjects::AllSequencesInSchema {
+                schemas: self.parse_comma_separated(Parser::parse_object_name)?,
+            }
         } else {
-            let object_type = self.parse_one_of_keywords(&[Keyword::SEQUENCE, Keyword::SCHEMA, Keyword::TABLE]);
+            let object_type =
+                self.parse_one_of_keywords(&[Keyword::SEQUENCE, Keyword::SCHEMA, Keyword::TABLE]);
             let objects = self.parse_comma_separated(Parser::parse_object_name);
             match object_type {
                 Some(Keyword::SCHEMA) => GrantObjects::Schemas(objects?),
@@ -2923,9 +2942,11 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::TO)?;
         let grantees = self.parse_comma_separated(Parser::parse_identifier);
 
-        let with_grant_option = self.parse_keywords(&[Keyword::WITH, Keyword::GRANT, Keyword::OPTION]);
+        let with_grant_option =
+            self.parse_keywords(&[Keyword::WITH, Keyword::GRANT, Keyword::OPTION]);
 
-        let granted_by = self.parse_keywords(&[Keyword::GRANTED, Keyword::BY])
+        let granted_by = self
+            .parse_keywords(&[Keyword::GRANTED, Keyword::BY])
             .then(|| self.parse_identifier().unwrap());
 
         Ok(Statement::Grant {

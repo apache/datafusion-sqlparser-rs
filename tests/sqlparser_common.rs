@@ -3594,106 +3594,154 @@ fn parse_grant() {
     let sql = "GRANT SELECT, INSERT, UPDATE, USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
     match verified_stmt(sql) {
         Statement::Grant {
-            privileges, objects, roles, with_grant_option, granted_by, ..
-        } => {
-            match (privileges, objects) {
-                (GrantPrivileges::Privileges(privileges), GrantObjects::Tables(objects)) => {
-                    assert_eq!(
-                        vec!["SELECT", "INSERT", "UPDATE", "USAGE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"],
-                        privileges
-                    );
-                    assert_eq!(
-                        vec!["abc", "def"],
-                        objects.iter().map(ToString::to_string).collect::<Vec<_>>()
-                    );
-                    assert_eq!(
-                        vec!["xyz", "m"],
-                        roles.iter().map(ToString::to_string).collect::<Vec<_>>()
-                    );
-                    assert_eq!(true, with_grant_option);
-                    assert_eq!("jj", granted_by.unwrap().to_string());
-                },
-                _ => unreachable!()
+            privileges,
+            objects,
+            roles,
+            with_grant_option,
+            granted_by,
+            ..
+        } => match (privileges, objects) {
+            (GrantPrivileges::Privileges(privileges), GrantObjects::Tables(objects)) => {
+                assert_eq!(
+                    vec![
+                        "SELECT",
+                        "INSERT",
+                        "UPDATE",
+                        "USAGE",
+                        "DELETE",
+                        "TRUNCATE",
+                        "REFERENCES",
+                        "TRIGGER"
+                    ],
+                    privileges
+                );
+                assert_eq!(
+                    vec!["abc", "def"],
+                    objects.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert_eq!(
+                    vec!["xyz", "m"],
+                    roles.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert_eq!(true, with_grant_option);
+                assert_eq!("jj", granted_by.unwrap().to_string());
             }
-        }
-        _ => unreachable!()
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
     }
 
     let sql2 = "GRANT INSERT ON ALL TABLES IN SCHEMA public TO browser";
     match verified_stmt(sql2) {
         Statement::Grant {
-            privileges, objects, roles, with_grant_option, ..
-        } => {
-            match (privileges, objects) {
-                (GrantPrivileges::Privileges(privileges), GrantObjects::AllTablesInSchema { schemas }) => {
-                    assert_eq!(vec!["INSERT"], privileges);
-                    assert_eq!(vec!["public"], schemas.iter().map(ToString::to_string).collect::<Vec<_>>());
-                    assert_eq!(vec!["browser"], roles.iter().map(ToString::to_string).collect::<Vec<_>>());
-                    assert_eq!(false, with_grant_option);
-                },
-                _ => unreachable!()
+            privileges,
+            objects,
+            roles,
+            with_grant_option,
+            ..
+        } => match (privileges, objects) {
+            (
+                GrantPrivileges::Privileges(privileges),
+                GrantObjects::AllTablesInSchema { schemas },
+            ) => {
+                assert_eq!(vec!["INSERT"], privileges);
+                assert_eq!(
+                    vec!["public"],
+                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert_eq!(
+                    vec!["browser"],
+                    roles.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert_eq!(false, with_grant_option);
             }
-        }
-        _ => unreachable!()
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
     }
 
     let sql3 = "GRANT USAGE, SELECT ON SEQUENCE p TO u";
     match verified_stmt(sql3) {
         Statement::Grant {
-            privileges, objects, roles, granted_by, ..
-        } => {
-            match (privileges, objects, granted_by) {
-                (GrantPrivileges::Privileges(privileges), GrantObjects::Sequences(objects), None) => {
-                    assert_eq!(vec!["USAGE", "SELECT"], privileges);
-                    assert_eq!(vec!["p"], objects.iter().map(ToString::to_string).collect::<Vec<_>>());
-                    assert_eq!(vec!["u"], roles.iter().map(ToString::to_string).collect::<Vec<_>>());
-                },
-                _ => unreachable!()
+            privileges,
+            objects,
+            roles,
+            granted_by,
+            ..
+        } => match (privileges, objects, granted_by) {
+            (GrantPrivileges::Privileges(privileges), GrantObjects::Sequences(objects), None) => {
+                assert_eq!(vec!["USAGE", "SELECT"], privileges);
+                assert_eq!(
+                    vec!["p"],
+                    objects.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert_eq!(
+                    vec!["u"],
+                    roles.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
             }
-        }
-        _ => unreachable!()
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
     }
 
     let sql4 = "GRANT ALL PRIVILEGES ON aa, b TO z";
     match verified_stmt(sql4) {
-        Statement::Grant {
-            privileges, ..
-        } => {
-            assert_eq!(GrantPrivileges::All { with_privileges_keyword: true }, privileges);
+        Statement::Grant { privileges, .. } => {
+            assert_eq!(
+                GrantPrivileges::All {
+                    with_privileges_keyword: true
+                },
+                privileges
+            );
         }
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 
     let sql5 = "GRANT ALL ON SCHEMA aa, b TO z";
     match verified_stmt(sql5) {
         Statement::Grant {
-            privileges, objects, ..
-        } => {
-            match (privileges, objects) {
-                (GrantPrivileges::All { with_privileges_keyword }, GrantObjects::Schemas(schemas)) => {
-                    assert_eq!(false, with_privileges_keyword);
-                    assert_eq!(vec!["aa", "b"], schemas.iter().map(ToString::to_string).collect::<Vec<_>>());
-                }
-                _ => unreachable!()
+            privileges,
+            objects,
+            ..
+        } => match (privileges, objects) {
+            (
+                GrantPrivileges::All {
+                    with_privileges_keyword,
+                },
+                GrantObjects::Schemas(schemas),
+            ) => {
+                assert_eq!(false, with_privileges_keyword);
+                assert_eq!(
+                    vec!["aa", "b"],
+                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
             }
-        }
-        _ => unreachable!()
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
     }
 
     let sql6 = "GRANT USAGE ON ALL SEQUENCES IN SCHEMA bus TO a, beta WITH GRANT OPTION";
     match verified_stmt(sql6) {
         Statement::Grant {
-            privileges, objects, ..
-        } => {
-            match (privileges, objects) {
-                (GrantPrivileges::Privileges(privileges), GrantObjects::AllSequencesInSchema { schemas }) => {
-                    assert_eq!(vec!["USAGE"], privileges);
-                    assert_eq!(vec!["bus"], schemas.iter().map(ToString::to_string).collect::<Vec<_>>());
-                }
-                _ => unreachable!()
+            privileges,
+            objects,
+            ..
+        } => match (privileges, objects) {
+            (
+                GrantPrivileges::Privileges(privileges),
+                GrantObjects::AllSequencesInSchema { schemas },
+            ) => {
+                assert_eq!(vec!["USAGE"], privileges);
+                assert_eq!(
+                    vec!["bus"],
+                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
             }
-        }
-        _ => unreachable!()
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
     }
 }
 

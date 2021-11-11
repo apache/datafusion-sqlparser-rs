@@ -3591,7 +3591,7 @@ fn parse_drop_index() {
 
 #[test]
 fn parse_grant() {
-    let sql = "GRANT SELECT, INSERT, UPDATE (shape), USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
+    let sql = "GRANT SELECT, INSERT, UPDATE (shape, size), USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
     match verified_stmt(sql) {
         Statement::Grant {
             privileges,
@@ -3607,10 +3607,16 @@ fn parse_grant() {
                         Privilege::Select { columns: None },
                         Privilege::Insert { columns: None },
                         Privilege::Update {
-                            columns: Some(vec![Ident {
-                                value: "shape".into(),
-                                quote_style: None
-                            }])
+                            columns: Some(vec![
+                                Ident {
+                                    value: "shape".into(),
+                                    quote_style: None
+                                },
+                                Ident {
+                                    value: "size".into(),
+                                    quote_style: None
+                                }
+                            ])
                         },
                         Privilege::Usage,
                         Privilege::Delete,

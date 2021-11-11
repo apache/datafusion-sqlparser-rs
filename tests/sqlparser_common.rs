@@ -3591,7 +3591,7 @@ fn parse_drop_index() {
 
 #[test]
 fn parse_grant() {
-    let sql = "GRANT SELECT, INSERT, UPDATE, USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
+    let sql = "GRANT SELECT, INSERT, UPDATE (shape), USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
     match verified_stmt(sql) {
         Statement::Grant {
             privileges,
@@ -3604,13 +3604,18 @@ fn parse_grant() {
             (GrantPrivileges::Privileges(privileges), GrantObjects::Tables(objects)) => {
                 assert_eq!(
                     vec![
-                        Privilege::Select,
-                        Privilege::Insert,
-                        Privilege::Update,
+                        Privilege::Select { columns: None },
+                        Privilege::Insert { columns: None },
+                        Privilege::Update {
+                            columns: Some(vec![Ident {
+                                value: "shape".into(),
+                                quote_style: None
+                            }])
+                        },
                         Privilege::Usage,
                         Privilege::Delete,
                         Privilege::Truncate,
-                        Privilege::References,
+                        Privilege::References { columns: None },
                         Privilege::Trigger,
                     ],
                     privileges
@@ -3644,7 +3649,7 @@ fn parse_grant() {
                 GrantPrivileges::Privileges(privileges),
                 GrantObjects::AllTablesInSchema { schemas },
             ) => {
-                assert_eq!(vec![Privilege::Insert], privileges);
+                assert_eq!(vec![Privilege::Insert { columns: None }], privileges);
                 assert_eq!(
                     vec!["public"],
                     schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
@@ -3670,7 +3675,10 @@ fn parse_grant() {
             ..
         } => match (privileges, objects, granted_by) {
             (GrantPrivileges::Privileges(privileges), GrantObjects::Sequences(objects), None) => {
-                assert_eq!(vec![Privilege::Usage, Privilege::Select], privileges);
+                assert_eq!(
+                    vec![Privilege::Usage, Privilege::Select { columns: None }],
+                    privileges
+                );
                 assert_eq!(
                     vec!["p"],
                     objects.iter().map(ToString::to_string).collect::<Vec<_>>()

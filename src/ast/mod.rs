@@ -194,32 +194,44 @@ pub enum Privilege {
     Create,
     Delete,
     Execute,
-    Insert,
-    References,
-    Select,
+    Insert { columns: Option<Vec<Ident>> },
+    References { columns: Option<Vec<Ident>> },
+    Select { columns: Option<Vec<Ident>> },
     Temporary,
     Trigger,
     Truncate,
-    Update,
+    Update { columns: Option<Vec<Ident>> },
     Usage,
 }
 
 impl fmt::Display for Privilege {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Privilege::Connect => f.write_str("CONNECT"),
-            Privilege::Create => f.write_str("CREATE"),
-            Privilege::Delete => f.write_str("DELETE"),
-            Privilege::Execute => f.write_str("EXECUTE"),
-            Privilege::Insert => f.write_str("INSERT"),
-            Privilege::References => f.write_str("REFERENCES"),
-            Privilege::Select => f.write_str("SELECT"),
-            Privilege::Temporary => f.write_str("TEMPORARY"),
-            Privilege::Trigger => f.write_str("TRIGGER"),
-            Privilege::Truncate => f.write_str("TRUNCATE"),
-            Privilege::Update => f.write_str("UPDATE"),
-            Privilege::Usage => f.write_str("USAGE"),
-        }
+            Privilege::Connect => f.write_str("CONNECT")?,
+            Privilege::Create => f.write_str("CREATE")?,
+            Privilege::Delete => f.write_str("DELETE")?,
+            Privilege::Execute => f.write_str("EXECUTE")?,
+            Privilege::Insert { .. } => f.write_str("INSERT")?,
+            Privilege::References { .. } => f.write_str("REFERENCES")?,
+            Privilege::Select { .. } => f.write_str("SELECT")?,
+            Privilege::Temporary => f.write_str("TEMPORARY")?,
+            Privilege::Trigger => f.write_str("TRIGGER")?,
+            Privilege::Truncate => f.write_str("TRUNCATE")?,
+            Privilege::Update { .. } => f.write_str("UPDATE")?,
+            Privilege::Usage => f.write_str("USAGE")?,
+        };
+        match self {
+            Privilege::Insert { columns }
+            | Privilege::References { columns }
+            | Privilege::Select { columns }
+            | Privilege::Update { columns } => {
+                if let Some(columns) = columns {
+                    write!(f, " ({})", display_comma_separated(columns))?;
+                }
+            }
+            _ => (),
+        };
+        Ok(())
     }
 }
 

@@ -2891,15 +2891,15 @@ impl<'a> Parser<'a> {
         } else {
             GrantPrivileges::Privileges(
                 self.parse_comma_separated(Parser::parse_grant_permission)?
-                    .iter()
-                    .map(|kw| match kw {
+                    .into_iter()
+                    .map(|(kw, columns)| match kw {
                         Keyword::DELETE => Privilege::Delete,
-                        Keyword::INSERT => Privilege::Insert,
-                        Keyword::REFERENCES => Privilege::References,
-                        Keyword::SELECT => Privilege::Select,
+                        Keyword::INSERT => Privilege::Insert { columns },
+                        Keyword::REFERENCES => Privilege::References { columns },
+                        Keyword::SELECT => Privilege::Select { columns },
                         Keyword::TRIGGER => Privilege::Trigger,
                         Keyword::TRUNCATE => Privilege::Truncate,
-                        Keyword::UPDATE => Privilege::Update,
+                        Keyword::UPDATE => Privilege::Update { columns },
                         Keyword::USAGE => Privilege::Usage,
                         _ => unreachable!(),
                     })
@@ -2958,7 +2958,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_grant_permission(&mut self) -> Result<Keyword, ParserError> {
+    fn parse_grant_permission(&mut self) -> Result<(Keyword, Option<Vec<Ident>>), ParserError> {
         if let Some(kw) = self.parse_one_of_keywords(&[
             Keyword::CONNECT,
             Keyword::CREATE,
@@ -2973,7 +2973,18 @@ impl<'a> Parser<'a> {
             Keyword::UPDATE,
             Keyword::USAGE,
         ]) {
-            Ok(kw)
+            let columns = match kw {
+                Keyword::INSERT | Keyword::REFERENCES | Keyword::SELECT | Keyword::UPDATE => {
+                    let columns = self.parse_parenthesized_column_list(Optional)?;
+                    if columns.is_empty() {
+                        None
+                    } else {
+                        Some(columns)
+                    }
+                }
+                _ => None,
+            };
+            Ok((kw, columns))
         } else {
             self.expected("a privilege keyword", self.peek_token())?
         }

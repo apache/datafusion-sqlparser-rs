@@ -3604,14 +3604,14 @@ fn parse_grant() {
             (GrantPrivileges::Privileges(privileges), GrantObjects::Tables(objects)) => {
                 assert_eq!(
                     vec![
-                        "SELECT",
-                        "INSERT",
-                        "UPDATE",
-                        "USAGE",
-                        "DELETE",
-                        "TRUNCATE",
-                        "REFERENCES",
-                        "TRIGGER"
+                        Privilege::Select,
+                        Privilege::Insert,
+                        Privilege::Update,
+                        Privilege::Usage,
+                        Privilege::Delete,
+                        Privilege::Truncate,
+                        Privilege::References,
+                        Privilege::Trigger,
                     ],
                     privileges
                 );
@@ -3644,7 +3644,7 @@ fn parse_grant() {
                 GrantPrivileges::Privileges(privileges),
                 GrantObjects::AllTablesInSchema { schemas },
             ) => {
-                assert_eq!(vec!["INSERT"], privileges);
+                assert_eq!(vec![Privilege::Insert], privileges);
                 assert_eq!(
                     vec!["public"],
                     schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
@@ -3670,7 +3670,7 @@ fn parse_grant() {
             ..
         } => match (privileges, objects, granted_by) {
             (GrantPrivileges::Privileges(privileges), GrantObjects::Sequences(objects), None) => {
-                assert_eq!(vec!["USAGE", "SELECT"], privileges);
+                assert_eq!(vec![Privilege::Usage, Privilege::Select], privileges);
                 assert_eq!(
                     vec!["p"],
                     objects.iter().map(ToString::to_string).collect::<Vec<_>>()
@@ -3733,7 +3733,7 @@ fn parse_grant() {
                 GrantPrivileges::Privileges(privileges),
                 GrantObjects::AllSequencesInSchema { schemas },
             ) => {
-                assert_eq!(vec!["USAGE"], privileges);
+                assert_eq!(vec![Privilege::Usage], privileges);
                 assert_eq!(
                     vec!["bus"],
                     schemas.iter().map(ToString::to_string).collect::<Vec<_>>()

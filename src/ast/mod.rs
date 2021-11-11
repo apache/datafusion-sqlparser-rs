@@ -151,21 +151,88 @@ impl fmt::Display for ObjectName {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum GrantPrivileges {
+    /// All privileges applicable to the object type
     All {
         /// Optional keyword from the spec, ignored in practice
         with_privileges_keyword: bool,
     },
-    Privileges(Vec<String>),
+    /// Specific privileges (e.g. `SELECT`, `INSERT`)
+    Privileges(Vec<Privilege>),
 }
 
-/// Objects to which privileges are granted in a GRANT statement.
+impl fmt::Display for GrantPrivileges {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GrantPrivileges::All {
+                with_privileges_keyword,
+            } => {
+                write!(
+                    f,
+                    "GRANT ALL {}ON ",
+                    if *with_privileges_keyword {
+                        "PRIVILEGES "
+                    } else {
+                        ""
+                    }
+                )
+            }
+            GrantPrivileges::Privileges(privileges) => {
+                write!(f, "GRANT {} ON ", display_comma_separated(privileges))
+            }
+        }
+    }
+}
+
+/// A privilege on a database object (table, sequence, etc.).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Privilege {
+    Connect,
+    Create,
+    Delete,
+    Execute,
+    Insert,
+    References,
+    Select,
+    Temporary,
+    Trigger,
+    Truncate,
+    Update,
+    Usage,
+}
+
+impl fmt::Display for Privilege {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Privilege::Connect => f.write_str("CONNECT"),
+            Privilege::Create => f.write_str("CREATE"),
+            Privilege::Delete => f.write_str("DELETE"),
+            Privilege::Execute => f.write_str("EXECUTE"),
+            Privilege::Insert => f.write_str("INSERT"),
+            Privilege::References => f.write_str("REFERENCES"),
+            Privilege::Select => f.write_str("SELECT"),
+            Privilege::Temporary => f.write_str("TEMPORARY"),
+            Privilege::Trigger => f.write_str("TRIGGER"),
+            Privilege::Truncate => f.write_str("TRUNCATE"),
+            Privilege::Update => f.write_str("UPDATE"),
+            Privilege::Usage => f.write_str("USAGE"),
+        }
+    }
+}
+
+/// Objects on which privileges are granted in a GRANT statement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum GrantObjects {
+    /// Grant privileges on `ALL SEQUENCES IN SCHEMA <schema_name> [, ...]`
     AllSequencesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `ALL TABLES IN SCHEMA <schema_name> [, ...]`
     AllTablesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on specific schemas
     Schemas(Vec<ObjectName>),
+    /// Grant privileges on specific sequences
     Sequences(Vec<ObjectName>),
+    /// Grant privileges on specific tables
     Tables(Vec<ObjectName>),
 }
 
@@ -786,7 +853,7 @@ pub enum Statement {
         condition: Expr,
         message: Option<Expr>,
     },
-    /// `GRANT permission [, ...] ON [ SEQUENCE ] name TO role [, ...]`
+    /// GRANT privileges ON objects TO roles
     Grant {
         privileges: GrantPrivileges,
         objects: GrantObjects,

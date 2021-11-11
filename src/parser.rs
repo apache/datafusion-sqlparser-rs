@@ -2893,14 +2893,14 @@ impl<'a> Parser<'a> {
                 self.parse_comma_separated(Parser::parse_grant_permission)?
                     .iter()
                     .map(|kw| match kw {
-                        Keyword::DELETE => keywords::DELETE.into(),
-                        Keyword::INSERT => keywords::INSERT.into(),
-                        Keyword::REFERENCES => keywords::REFERENCES.into(),
-                        Keyword::SELECT => keywords::SELECT.into(),
-                        Keyword::TRIGGER => keywords::TRIGGER.into(),
-                        Keyword::TRUNCATE => keywords::TRUNCATE.into(),
-                        Keyword::UPDATE => keywords::UPDATE.into(),
-                        Keyword::USAGE => keywords::USAGE.into(),
+                        Keyword::DELETE => Privilege::Delete,
+                        Keyword::INSERT => Privilege::Insert,
+                        Keyword::REFERENCES => Privilege::References,
+                        Keyword::SELECT => Privilege::Select,
+                        Keyword::TRIGGER => Privilege::Trigger,
+                        Keyword::TRUNCATE => Privilege::Truncate,
+                        Keyword::UPDATE => Privilege::Update,
+                        Keyword::USAGE => Privilege::Usage,
                         _ => unreachable!(),
                     })
                     .collect(),

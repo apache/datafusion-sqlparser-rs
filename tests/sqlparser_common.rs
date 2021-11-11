@@ -2360,6 +2360,27 @@ fn parse_parens() {
 }
 
 #[test]
+fn parse_tuples() {
+    use self::BinaryOperator::*;
+    use self::Expr::*;
+    let sql = "(a, b) = (c, d)";
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(Tuple(vec![
+                Identifier(Ident::new("a")),
+                Identifier(Ident::new("b")),
+            ])),
+            op: Eq,
+            right: Box::new(Tuple(vec![
+                Identifier(Ident::new("c")),
+                Identifier(Ident::new("d")),
+            ])),
+        },
+        verified_expr(sql)
+    );
+}
+
+#[test]
 fn parse_searched_case_expr() {
     let sql = "SELECT CASE WHEN bar IS NULL THEN 'null' WHEN bar = 0 THEN '=0' WHEN bar >= 0 THEN '>=0' ELSE '<0' END FROM foo";
     use self::BinaryOperator::*;

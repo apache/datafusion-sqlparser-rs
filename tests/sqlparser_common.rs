@@ -3596,17 +3596,17 @@ fn parse_grant() {
         Statement::Grant {
             privileges,
             objects,
-            roles,
+            grantees,
             with_grant_option,
             granted_by,
             ..
         } => match (privileges, objects) {
-            (GrantPrivileges::Privileges(privileges), GrantObjects::Tables(objects)) => {
+            (Privileges::Actions(actions), GrantObjects::Tables(objects)) => {
                 assert_eq!(
                     vec![
-                        Privilege::Select { columns: None },
-                        Privilege::Insert { columns: None },
-                        Privilege::Update {
+                        Action::Select { columns: None },
+                        Action::Insert { columns: None },
+                        Action::Update {
                             columns: Some(vec![
                                 Ident {
                                     value: "shape".into(),
@@ -3618,13 +3618,13 @@ fn parse_grant() {
                                 }
                             ])
                         },
-                        Privilege::Usage,
-                        Privilege::Delete,
-                        Privilege::Truncate,
-                        Privilege::References { columns: None },
-                        Privilege::Trigger,
+                        Action::Usage,
+                        Action::Delete,
+                        Action::Truncate,
+                        Action::References { columns: None },
+                        Action::Trigger,
                     ],
-                    privileges
+                    actions
                 );
                 assert_eq!(
                     vec!["abc", "def"],
@@ -3632,7 +3632,7 @@ fn parse_grant() {
                 );
                 assert_eq!(
                     vec!["xyz", "m"],
-                    roles.iter().map(ToString::to_string).collect::<Vec<_>>()
+                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
                 );
                 assert_eq!(true, with_grant_option);
                 assert_eq!("jj", granted_by.unwrap().to_string());
@@ -3647,22 +3647,19 @@ fn parse_grant() {
         Statement::Grant {
             privileges,
             objects,
-            roles,
+            grantees,
             with_grant_option,
             ..
         } => match (privileges, objects) {
-            (
-                GrantPrivileges::Privileges(privileges),
-                GrantObjects::AllTablesInSchema { schemas },
-            ) => {
-                assert_eq!(vec![Privilege::Insert { columns: None }], privileges);
+            (Privileges::Actions(actions), GrantObjects::AllTablesInSchema { schemas }) => {
+                assert_eq!(vec![Action::Insert { columns: None }], actions);
                 assert_eq!(
                     vec!["public"],
                     schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
                 );
                 assert_eq!(
                     vec!["browser"],
-                    roles.iter().map(ToString::to_string).collect::<Vec<_>>()
+                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
                 );
                 assert_eq!(false, with_grant_option);
             }
@@ -3676,14 +3673,14 @@ fn parse_grant() {
         Statement::Grant {
             privileges,
             objects,
-            roles,
+            grantees,
             granted_by,
             ..
         } => match (privileges, objects, granted_by) {
-            (GrantPrivileges::Privileges(privileges), GrantObjects::Sequences(objects), None) => {
+            (Privileges::Actions(actions), GrantObjects::Sequences(objects), None) => {
                 assert_eq!(
-                    vec![Privilege::Usage, Privilege::Select { columns: None }],
-                    privileges
+                    vec![Action::Usage, Action::Select { columns: None }],
+                    actions
                 );
                 assert_eq!(
                     vec!["p"],
@@ -3691,7 +3688,7 @@ fn parse_grant() {
                 );
                 assert_eq!(
                     vec!["u"],
-                    roles.iter().map(ToString::to_string).collect::<Vec<_>>()
+                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
                 );
             }
             _ => unreachable!(),
@@ -3703,7 +3700,7 @@ fn parse_grant() {
     match verified_stmt(sql4) {
         Statement::Grant { privileges, .. } => {
             assert_eq!(
-                GrantPrivileges::All {
+                Privileges::All {
                     with_privileges_keyword: true
                 },
                 privileges
@@ -3720,7 +3717,7 @@ fn parse_grant() {
             ..
         } => match (privileges, objects) {
             (
-                GrantPrivileges::All {
+                Privileges::All {
                     with_privileges_keyword,
                 },
                 GrantObjects::Schemas(schemas),
@@ -3743,15 +3740,47 @@ fn parse_grant() {
             objects,
             ..
         } => match (privileges, objects) {
-            (
-                GrantPrivileges::Privileges(privileges),
-                GrantObjects::AllSequencesInSchema { schemas },
-            ) => {
-                assert_eq!(vec![Privilege::Usage], privileges);
+            (Privileges::Actions(actions), GrantObjects::AllSequencesInSchema { schemas }) => {
+                assert_eq!(vec![Action::Usage], actions);
                 assert_eq!(
                     vec!["bus"],
                     schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
                 );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_revoke() {
+    let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst CASCADE";
+    match verified_stmt(sql) {
+        Statement::Revoke {
+            privileges,
+            objects,
+            grantees,
+            cascade,
+            granted_by,
+        } => match objects {
+            GrantObjects::Tables(tables) => {
+                assert_eq!(
+                    Privileges::All {
+                        with_privileges_keyword: true
+                    },
+                    privileges
+                );
+                assert_eq!(
+                    vec!["users", "auth"],
+                    tables.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert_eq!(
+                    vec!["analyst"],
+                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert_eq!(true, cascade);
+                assert_eq!(None, granted_by);
             }
             _ => unreachable!(),
         },

@@ -157,6 +157,7 @@ impl<'a> Parser<'a> {
                 Keyword::SET => Ok(self.parse_set()?),
                 Keyword::SHOW => Ok(self.parse_show()?),
                 Keyword::GRANT => Ok(self.parse_grant()?),
+                Keyword::REVOKE => Ok(self.parse_revoke()?),
                 Keyword::START => Ok(self.parse_start_transaction()?),
                 // `BEGIN` is a nonstandard but common alias for the
                 // standard `START TRANSACTION` statement. It is supported
@@ -2884,23 +2885,47 @@ impl<'a> Parser<'a> {
 
     /// Parse a GRANT statement.
     pub fn parse_grant(&mut self) -> Result<Statement, ParserError> {
+        let (privileges, objects) = self.parse_grant_revoke_privileges_objects()?;
+
+        self.expect_keyword(Keyword::TO)?;
+        let grantees = self.parse_comma_separated(Parser::parse_identifier)?;
+
+        let with_grant_option =
+            self.parse_keywords(&[Keyword::WITH, Keyword::GRANT, Keyword::OPTION]);
+
+        let granted_by = self
+            .parse_keywords(&[Keyword::GRANTED, Keyword::BY])
+            .then(|| self.parse_identifier().unwrap());
+
+        Ok(Statement::Grant {
+            privileges,
+            objects,
+            grantees,
+            with_grant_option,
+            granted_by,
+        })
+    }
+
+    fn parse_grant_revoke_privileges_objects(
+        &mut self,
+    ) -> Result<(Privileges, GrantObjects), ParserError> {
         let privileges = if self.parse_keyword(Keyword::ALL) {
-            GrantPrivileges::All {
+            Privileges::All {
                 with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
             }
         } else {
-            GrantPrivileges::Privileges(
+            Privileges::Actions(
                 self.parse_comma_separated(Parser::parse_grant_permission)?
                     .into_iter()
                     .map(|(kw, columns)| match kw {
-                        Keyword::DELETE => Privilege::Delete,
-                        Keyword::INSERT => Privilege::Insert { columns },
-                        Keyword::REFERENCES => Privilege::References { columns },
-                        Keyword::SELECT => Privilege::Select { columns },
-                        Keyword::TRIGGER => Privilege::Trigger,
-                        Keyword::TRUNCATE => Privilege::Truncate,
-                        Keyword::UPDATE => Privilege::Update { columns },
-                        Keyword::USAGE => Privilege::Usage,
+                        Keyword::DELETE => Action::Delete,
+                        Keyword::INSERT => Action::Insert { columns },
+                        Keyword::REFERENCES => Action::References { columns },
+                        Keyword::SELECT => Action::Select { columns },
+                        Keyword::TRIGGER => Action::Trigger,
+                        Keyword::TRUNCATE => Action::Truncate,
+                        Keyword::UPDATE => Action::Update { columns },
+                        Keyword::USAGE => Action::Usage,
                         _ => unreachable!(),
                     })
                     .collect(),
@@ -2939,23 +2964,7 @@ impl<'a> Parser<'a> {
             }
         };
 
-        self.expect_keyword(Keyword::TO)?;
-        let grantees = self.parse_comma_separated(Parser::parse_identifier);
-
-        let with_grant_option =
-            self.parse_keywords(&[Keyword::WITH, Keyword::GRANT, Keyword::OPTION]);
-
-        let granted_by = self
-            .parse_keywords(&[Keyword::GRANTED, Keyword::BY])
-            .then(|| self.parse_identifier().unwrap());
-
-        Ok(Statement::Grant {
-            privileges,
-            objects,
-            roles: grantees?,
-            with_grant_option,
-            granted_by,
-        })
+        Ok((privileges, objects))
     }
 
     fn parse_grant_permission(&mut self) -> Result<(Keyword, Option<Vec<Ident>>), ParserError> {
@@ -2988,6 +2997,32 @@ impl<'a> Parser<'a> {
         } else {
             self.expected("a privilege keyword", self.peek_token())?
         }
+    }
+
+    /// Parse a REVOKE statement
+    pub fn parse_revoke(&mut self) -> Result<Statement, ParserError> {
+        let (privileges, objects) = self.parse_grant_revoke_privileges_objects()?;
+
+        self.expect_keyword(Keyword::FROM)?;
+        let grantees = self.parse_comma_separated(Parser::parse_identifier)?;
+
+        let granted_by = self
+            .parse_keywords(&[Keyword::GRANTED, Keyword::BY])
+            .then(|| self.parse_identifier().unwrap());
+
+        let cascade = self.parse_keyword(Keyword::CASCADE);
+        let restrict = self.parse_keyword(Keyword::RESTRICT);
+        if cascade && restrict {
+            return parser_err!("Cannot specify both CASCADE and RESTRICT in REVOKE");
+        }
+
+        Ok(Statement::Revoke {
+            privileges,
+            objects,
+            grantees,
+            granted_by,
+            cascade,
+        })
     }
 
     /// Parse an INSERT statement

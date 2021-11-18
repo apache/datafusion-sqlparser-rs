@@ -378,6 +378,45 @@ fn parse_drop_schema_if_exists() {
 }
 
 #[test]
+fn parse_copy() {
+    let sql = "COPY table FROM 'file.csv' WITH 
+    (
+        FORMAT CSV,
+        DELIMITER ',',
+        NULL '',
+        HEADER,
+        HEADER TRUE,
+        HEADER FALSE,
+        QUOTE '\"',
+        ESCAPE '\\',
+        ENCODING 'utf8'
+    )";
+    assert_eq!(
+        pg_and_generic().one_statement_parses_to(sql, ""),
+        Statement::Copy {
+            table_name: ObjectName(vec!["table".into()]),
+            columns: vec![],
+            to: false,
+            target: CopyTarget::File {
+                filename: "file.csv".into()
+            },
+            options: vec![
+                CopyOption::Format("CSV".into()),
+                CopyOption::Delimiter(','),
+                CopyOption::Null("".to_string()),
+                CopyOption::Header(true),
+                CopyOption::Header(true),
+                CopyOption::Header(false),
+                CopyOption::Quote('"'),
+                CopyOption::Escape('\\'),
+                CopyOption::Encoding("utf8".to_string()),
+            ],
+            values: vec![],
+        }
+    );
+}
+
+#[test]
 fn parse_copy_example() {
     let sql = r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM stdin;
 1	PENELOPE	GUINESS	2006-02-15 09:34:33 0.11111

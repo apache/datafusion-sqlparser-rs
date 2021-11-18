@@ -668,6 +668,11 @@ pub enum Statement {
         table_name: ObjectName,
         /// COLUMNS
         columns: Vec<Ident>,
+        /// FROM / TO
+        to: bool,
+        target: CopyTarget,
+        /// WITH
+        options: Vec<CopyOption>,
         /// VALUES a vector of values to be copied
         values: Vec<Option<String>>,
     },
@@ -1042,15 +1047,21 @@ impl fmt::Display for Statement {
             Statement::Copy {
                 table_name,
                 columns,
+                to,
+                target,
+                options,
                 values,
             } => {
                 write!(f, "COPY {}", table_name)?;
                 if !columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(columns))?;
                 }
-                write!(f, " FROM stdin; ")?;
+                write!(f, " {} {}", if *to { "TO" } else { "FROM" }, target)?;
+                if !options.is_empty() {
+                    write!(f, " ({})", display_comma_separated(options))?;
+                }
                 if !values.is_empty() {
-                    writeln!(f)?;
+                    writeln!(f, ";")?;
                     let mut delim = "";
                     for v in values {
                         write!(f, "{}", delim)?;
@@ -1061,8 +1072,9 @@ impl fmt::Display for Statement {
                             write!(f, "\\N")?;
                         }
                     }
+                    write!(f, "\n\\.")?;
                 }
-                write!(f, "\n\\.")
+                Ok(())
             }
             Statement::Update {
                 table,
@@ -2021,6 +2033,83 @@ impl fmt::Display for SqliteOnConflict {
             Fail => write!(f, "FAIL"),
             Ignore => write!(f, "IGNORE"),
             Replace => write!(f, "REPLACE"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum CopyTarget {
+    Stdin,
+    Stdout,
+    File {
+        /// The path name of the input or output file.
+        filename: String,
+    },
+    Program {
+        /// A command to execute
+        command: String,
+    },
+}
+
+impl fmt::Display for CopyTarget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use CopyTarget::*;
+        match self {
+            Stdin { .. } => write!(f, "STDIN"),
+            Stdout => write!(f, "STDOUT"),
+            File { filename } => write!(f, "'{}'", value::escape_single_quote_string(filename)),
+            Program { command } => write!(
+                f,
+                "PROGRAM '{}'",
+                value::escape_single_quote_string(command)
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum CopyOption {
+    /// FORMAT format_name
+    Format(Ident),
+    /// DELIMITER 'delimiter_character'
+    Delimiter(char),
+    /// NULL 'null_string'
+    Null(String),
+    /// HEADER [ boolean ]
+    Header(bool),
+    /// QUOTE 'quote_character'
+    Quote(char),
+    /// ESCAPE 'escape_character'
+    Escape(char),
+    /// FORCE_QUOTE { ( column_name [, ...] ) | * }
+    ForceQuote(Vec<Ident>),
+    /// FORCE_NOT_NULL ( column_name [, ...] )
+    ForceNotNull(Vec<Ident>),
+    /// FORCE_NULL ( column_name [, ...] )
+    ForceNull(Vec<Ident>),
+    /// ENCODING 'encoding_name'
+    Encoding(String),
+}
+
+impl fmt::Display for CopyOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use CopyOption::*;
+        match self {
+            Format(name) => write!(f, "FORMAT {}", name),
+            Delimiter(char) => write!(f, "DELIMITER '{}'", char),
+            Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),
+            Header(true) => write!(f, "HEADER"),
+            Header(false) => write!(f, "HEADER FALSE"),
+            Quote(char) => write!(f, "QUOTE '{}'", char),
+            Escape(char) => write!(f, "ESCAPE '{}'", char),
+            ForceQuote(columns) => write!(f, "FORCE_QUOTE {}", display_comma_separated(columns)),
+            ForceNotNull(columns) => {
+                write!(f, "FORCE_NOT_NULL {}", display_comma_separated(columns))
+            }
+            ForceNull(columns) => write!(f, "FORCE_NULL {}", display_comma_separated(columns)),
+            Encoding(name) => write!(f, "ENCODING '{}'", value::escape_single_quote_string(name)),
         }
     }
 }

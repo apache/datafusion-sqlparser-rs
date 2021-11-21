@@ -1040,6 +1040,24 @@ fn parse_select_group_by() {
 }
 
 #[test]
+fn parse_select_group_by_grouping_sets() {
+    let sql =
+        "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, GROUPING SETS ((brand), (size), ())";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        vec![
+            Expr::Identifier(Ident::new("size")),
+            Expr::GroupingSets(vec![
+                vec![Expr::Identifier(Ident::new("brand"))],
+                vec![Expr::Identifier(Ident::new("size"))],
+                vec![],
+            ])
+        ],
+        select.group_by
+    );
+}
+
+#[test]
 fn parse_select_having() {
     let sql = "SELECT foo FROM bar GROUP BY foo HAVING COUNT(*) > 1";
     let select = verified_only_select(sql);

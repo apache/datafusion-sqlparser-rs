@@ -338,7 +338,7 @@ impl<'a> Parser<'a> {
         return_ok_if_some!(self.maybe_parse(|parser| {
             match parser.parse_data_type()? {
                 DataType::Interval => parser.parse_literal_interval(),
-                // PosgreSQL allows almost any identifier to be used as custom data type name,
+                // PostgreSQL allows almost any identifier to be used as custom data type name,
                 // and we support that in `parse_data_type()`. But unlike Postgres we don't
                 // have a list of globally reserved keywords (since they vary across dialects),
                 // so given `NOT 'a' LIKE 'b'`, we'd accept `NOT` as a possible custom data type
@@ -556,6 +556,63 @@ impl<'a> Parser<'a> {
             } else {
                 self.expected("PRECEDING or FOLLOWING", self.peek_token())
             }
+        }
+    }
+
+    /// parse a group by expr. a group by expr can be one of group sets, roll up, cube, or simple
+    /// expr.
+    fn parse_group_by_expr(&mut self) -> Result<Expr, ParserError> {
+        if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
+            self.expect_token(&Token::LParen)?;
+            let result = self.parse_comma_separated(|p| p.parse_tuple(false, true))?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Expr::GroupingSets(result))
+        } else if self.parse_keyword(Keyword::CUBE) {
+            self.expect_token(&Token::LParen)?;
+            let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Expr::Cube(result))
+        } else if self.parse_keyword(Keyword::ROLLUP) {
+            self.expect_token(&Token::LParen)?;
+            let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Expr::Rollup(result))
+        } else {
+            self.parse_expr()
+        }
+    }
+
+    /// parse a tuple with `(` and `)`.
+    /// If `lift_singleton` is true, then a singleton tuple is lifted to a tuple of length 1, otherwise it will fail.
+    /// If `allow_empty` is true, then an empty tuple is allowed.
+    fn parse_tuple(
+        &mut self,
+        lift_singleton: bool,
+        allow_empty: bool,
+    ) -> Result<Vec<Expr>, ParserError> {
+        if lift_singleton {
+            if self.consume_token(&Token::LParen) {
+                let result = if allow_empty && self.consume_token(&Token::RParen) {
+                    vec![]
+                } else {
+                    let result = self.parse_comma_separated(Parser::parse_expr)?;
+                    self.expect_token(&Token::RParen)?;
+                    result
+                };
+                Ok(result)
+            } else {
+                Ok(vec![self.parse_expr()?])
+            }
+        } else {
+            self.expect_token(&Token::LParen)?;
+            let result = if allow_empty && self.consume_token(&Token::RParen) {
+                vec![]
+            } else {
+                let result = self.parse_comma_separated(Parser::parse_expr)?;
+                self.expect_token(&Token::RParen)?;
+                result
+            };
+            Ok(result)
         }
     }
 
@@ -2494,7 +2551,7 @@ impl<'a> Parser<'a> {
         };
 
         let group_by = if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
-            self.parse_comma_separated(Parser::parse_expr)?
+            self.parse_comma_separated(Parser::parse_group_by_expr)?
         } else {
             vec![]
         };

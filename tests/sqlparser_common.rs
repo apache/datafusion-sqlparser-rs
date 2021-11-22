@@ -603,6 +603,25 @@ fn parse_compound_expr_2() {
 }
 
 #[test]
+fn parse_compound_expr_3() {
+    use self::BinaryOperator::*;
+    use self::Expr::*;
+    let sql = "a + b DIV c";
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(Identifier(Ident::new("a"))),
+            op: Plus,
+            right: Box::new(BinaryOp {
+                left: Box::new(Identifier(Ident::new("b"))),
+                op: Div,
+                right: Box::new(Identifier(Ident::new("c")))
+            })
+        },
+        verified_expr(sql)
+    );
+}
+
+#[test]
 fn parse_unary_math() {
     use self::Expr::*;
     let sql = "- a + - b";

@@ -81,7 +81,7 @@ pub enum Token {
     /// Multiplication operator `*`
     Mul,
     /// Division operator `/`
-    Div,
+    Divide,
     /// Modulo Operator `%`
     Mod,
     /// String concatenation `||`
@@ -166,7 +166,7 @@ impl fmt::Display for Token {
             Token::Plus => f.write_str("+"),
             Token::Minus => f.write_str("-"),
             Token::Mul => f.write_str("*"),
-            Token::Div => f.write_str("/"),
+            Token::Divide => f.write_str("/"),
             Token::StringConcat => f.write_str("||"),
             Token::Mod => f.write_str("%"),
             Token::LParen => f.write_str("("),
@@ -504,7 +504,7 @@ impl<'a> Tokenizer<'a> {
                             })))
                         }
                         // a regular '/' operator
-                        _ => Ok(Some(Token::Div)),
+                        _ => Ok(Some(Token::Divide)),
                     }
                 }
                 '+' => self.consume_and_return(chars, Token::Plus),

@@ -179,6 +179,7 @@ define_keywords!(
     DISCONNECT,
     DISTINCT,
     DISTRIBUTE,
+    DIV,
     DOUBLE,
     DROP,
     DYNAMIC,

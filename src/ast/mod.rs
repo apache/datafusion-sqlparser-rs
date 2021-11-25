@@ -992,6 +992,13 @@ pub enum Statement {
         variable: ObjectName,
         value: Vec<SetVariableValue>,
     },
+    /// SET NAMES 'charset_name' [COLLATE 'collation_name']
+    ///
+    /// Note: this is a MySQL-specific statement.
+    SetNames {
+        charset_name: String,
+        collation_name: Option<String>,
+    },
     /// SHOW <variable>
     ///
     /// Note: this is a PostgreSQL-specific statement.
@@ -1779,6 +1786,20 @@ impl fmt::Display for Statement {
                     name = variable,
                     value = display_comma_separated(value)
                 )
+            }
+            Statement::SetNames {
+                charset_name,
+                collation_name,
+            } => {
+                f.write_str("SET NAMES ")?;
+                f.write_str(charset_name)?;
+
+                if let Some(collation) = collation_name {
+                    f.write_str(" COLLATE ")?;
+                    f.write_str(collation)?;
+                };
+
+                Ok(())
             }
             Statement::ShowVariable { variable } => {
                 write!(f, "SHOW")?;

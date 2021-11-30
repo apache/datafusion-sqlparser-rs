@@ -38,7 +38,7 @@ pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     Cte, Fetch, Join, JoinConstraint, JoinOperator, LateralView, Offset, OffsetRows, OrderByExpr,
     Query, Select, SelectItem, SetExpr, SetOperator, TableAlias, TableFactor, TableWithJoins, Top,
-    Values, With,
+    Values, With, Limit
 };
 pub use self::value::{DateTimeField, TrimWhereField, Value};
 

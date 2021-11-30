@@ -3065,11 +3065,26 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a LIMIT clause
-    pub fn parse_limit(&mut self) -> Result<Option<Expr>, ParserError> {
+    pub fn parse_limit(&mut self) -> Result<Option<Limit>, ParserError> {
         if self.parse_keyword(Keyword::ALL) {
             Ok(None)
         } else {
-            Ok(Some(Expr::Value(self.parse_number_value()?)))
+            let first_number = self.parse_number_value()?;
+            let second_number = if  self.consume_token(&Token::Comma){
+                Some(self.parse_number_value()?)
+            } else {
+                None
+            };
+            match second_number {
+                Some(count_number) => Ok(Some(Limit {
+                    offset: Some(Expr::Value(first_number)),
+                    count: Expr::Value(count_number),
+                })),
+                None => Ok(Some(Limit {
+                    offset: None,
+                    count: Expr::Value(first_number),
+                })),
+            }
         }
     }
 

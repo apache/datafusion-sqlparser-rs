@@ -29,8 +29,8 @@ pub struct Query {
     pub body: SetExpr,
     /// ORDER BY
     pub order_by: Vec<OrderByExpr>,
-    /// `LIMIT { <N> | ALL }`
-    pub limit: Option<Expr>,
+    /// `LIMIT { <N> [C]| ALL }`
+    pub limit: Option<Limit>,
     /// `OFFSET <N> [ { ROW | ROWS } ]`
     pub offset: Option<Offset>,
     /// `FETCH { FIRST | NEXT } <N> [ PERCENT ] { ROW | ROWS } | { ONLY | WITH TIES }`
@@ -47,7 +47,7 @@ impl fmt::Display for Query {
             write!(f, " ORDER BY {}", display_comma_separated(&self.order_by))?;
         }
         if let Some(ref limit) = self.limit {
-            write!(f, " LIMIT {}", limit)?;
+            write!(f, " {}", limit)?;
         }
         if let Some(ref offset) = self.offset {
             write!(f, " {}", offset)?;
@@ -519,6 +519,24 @@ impl fmt::Display for OrderByExpr {
             Some(true) => write!(f, " NULLS FIRST")?,
             Some(false) => write!(f, " NULLS LAST")?,
             None => (),
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Limit {
+    pub offset: Option<Expr>,
+    pub count: Expr,
+}
+
+impl fmt::Display for Limit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(offset) = &self.offset {
+            write!(f, "LIMIT {},{}", offset, self.count)?;
+        } else {
+            write!(f, "LIMIT {}", self.count)?;
         }
         Ok(())
     }

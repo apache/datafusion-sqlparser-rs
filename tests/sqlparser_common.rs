@@ -253,17 +253,47 @@ fn parse_simple_select() {
     assert!(!select.distinct);
     assert_eq!(3, select.projection.len());
     let select = verified_query(sql);
-    assert_eq!(Some(Expr::Value(number("5"))), select.limit);
+    let expect = Some(Limit {
+        offset: None,
+        count: Expr::Value(number("5")),
+    });
+    assert_eq!(expect, select.limit);
 }
 
 #[test]
 fn parse_limit_is_not_an_alias() {
     // In dialects supporting LIMIT it shouldn't be parsed as a table alias
     let ast = verified_query("SELECT id FROM customer LIMIT 1");
-    assert_eq!(Some(Expr::Value(number("1"))), ast.limit);
+    let expect = Some(Limit {
+        offset: None,
+        count: Expr::Value(number("1")),
+    });
+    assert_eq!(expect, ast.limit);
 
     let ast = verified_query("SELECT 1 LIMIT 5");
-    assert_eq!(Some(Expr::Value(number("5"))), ast.limit);
+    let expect = Some(Limit {
+        offset: None,
+        count: Expr::Value(number("5")),
+    });
+    assert_eq!(expect, ast.limit);
+}
+
+#[test]
+fn parse_limit_with_offset_count() {
+    // In dialects supporting LIMIT with offset and count
+    let ast = verified_query("SELECT id FROM customer LIMIT 2,4");
+    let expect = Some(Limit {
+        offset: Some(Expr::Value(number("2"))),
+        count: Expr::Value(number("4")),
+    });
+    assert_eq!(expect, ast.limit);
+
+    let ast = verified_query("SELECT 1 LIMIT 5,10");
+    let expect = Some(Limit {
+        offset: Some(Expr::Value(number("5"))),
+        count: Expr::Value(number("10")),
+    });
+    assert_eq!(expect, ast.limit);
 }
 
 #[test]
@@ -1000,7 +1030,11 @@ fn parse_select_order_by_limit() {
         ],
         select.order_by
     );
-    assert_eq!(Some(Expr::Value(number("2"))), select.limit);
+    let expect = Some(Limit {
+        offset: None,
+        count: Expr::Value(number("2")),
+    });
+    assert_eq!(expect, select.limit);
 }
 
 #[test]
@@ -1023,7 +1057,11 @@ fn parse_select_order_by_nulls_order() {
         ],
         select.order_by
     );
-    assert_eq!(Some(Expr::Value(number("2"))), select.limit);
+    let expect = Some(Limit {
+        offset: None,
+        count: Expr::Value(number("2")),
+    });
+    assert_eq!(expect, select.limit);
 }
 
 #[test]

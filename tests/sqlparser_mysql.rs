@@ -154,6 +154,32 @@ fn parse_create_table_auto_increment() {
 }
 
 #[test]
+fn parse_create_table_with_column_comment() {
+    let sql = "CREATE TABLE foo (bar INT COMMENT 'bar')";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::new("bar"),
+                    data_type: DataType::Int(None),
+                    collation: None,
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::DialectSpecific(vec![
+                            Token::make_keyword("COMMENT"),
+                            Token::make_word("bar", Some('\''))
+                        ]),
+                    },],
+                }],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_quote_identifiers() {
     let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INT PRIMARY KEY)";
     match mysql().verified_stmt(sql) {

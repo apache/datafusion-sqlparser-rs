@@ -237,7 +237,7 @@ pub struct Word {
 impl fmt::Display for Word {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.quote_style {
-            Some(s) if s == '"' || s == '[' || s == '`' => {
+            Some(s) if s == '"' || s == '[' || s == '`' || s == '\'' => {
                 write!(f, "{}{}{}", s, self.value, Word::matching_end_quote(s))
             }
             None => f.write_str(&self.value),
@@ -252,6 +252,7 @@ impl Word {
             '"' => '"', // ANSI and most dialects
             '[' => ']', // MS SQL
             '`' => '`', // MySQL
+            '\'' => '\'',
             _ => panic!("unexpected quoting style!"),
         }
     }

@@ -1800,6 +1800,13 @@ impl<'a> Parser<'a> {
             let expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
             Ok(Some(ColumnOption::Check(expr)))
+        } else if self.parse_keyword(Keyword::COMMENT)
+            && dialect_of!(self is MySqlDialect | GenericDialect)
+        {
+            Ok(Some(ColumnOption::DialectSpecific(vec![
+                Token::make_keyword("COMMENT"),
+                Token::make_word(&self.parse_literal_string()?, Some('\'')),
+            ])))
         } else if self.parse_keyword(Keyword::AUTO_INCREMENT)
             && dialect_of!(self is MySqlDialect |  GenericDialect)
         {

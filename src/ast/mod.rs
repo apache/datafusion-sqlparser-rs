@@ -223,6 +223,11 @@ pub enum Expr {
         field: DateTimeField,
         expr: Box<Expr>,
     },
+    /// POSITION(<expr> IN <expr>)
+    Position {
+        substr_expr: Box<Expr>,
+        str_expr: Box<Expr>,
+    },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     Substring {
         expr: Box<Expr>,
@@ -379,6 +384,10 @@ impl fmt::Display for Expr {
             Expr::Exists(s) => write!(f, "EXISTS ({})", s),
             Expr::Subquery(s) => write!(f, "({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
+            Expr::Position {
+                substr_expr,
+                str_expr,
+            } => write!(f, "POSITION({} IN {})", substr_expr, str_expr),
             Expr::Substring {
                 expr,
                 substring_from,

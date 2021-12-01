@@ -2984,6 +2984,14 @@ fn parse_scalar_subqueries() {
 }
 
 #[test]
+fn parse_position() {
+    one_statement_parses_to(
+        "SELECT POSITION('2' IN '012345')",
+        "SELECT POSITION('2' IN '012345')",
+    );
+}
+
+#[test]
 fn parse_substring() {
     one_statement_parses_to("SELECT SUBSTRING('1')", "SELECT SUBSTRING('1')");
 

@@ -84,10 +84,10 @@ impl Value {
                 fractional_seconds_precision,
             } => Value::Interval {
                 value: format!("-{}", value),
-                leading_field: leading_field,
-                leading_precision: leading_precision,
-                last_field: last_field,
-                fractional_seconds_precision: fractional_seconds_precision,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision,
             },
             Value::Null => Value::Null,
         }

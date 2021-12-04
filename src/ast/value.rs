@@ -18,6 +18,8 @@ use core::fmt;
 use bigdecimal::BigDecimal;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "bigdecimal")]
+use std::ops::Neg;
 
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -59,6 +61,37 @@ pub enum Value {
     },
     /// `NULL` value
     Null,
+}
+
+impl Value {
+    pub fn to_negative(self) -> Self {
+        match self {
+            #[cfg(not(feature = "bigdecimal"))]
+            Value::Number(x, v) => Value::Number(format!("-{}", x), v),
+            #[cfg(feature = "bigdecimal")]
+            Value::Number(x, v) => Value::Number(x.neg(), v),
+
+            Value::SingleQuotedString(v) => Value::SingleQuotedString(format!("-{}", v)),
+            Value::NationalStringLiteral(v) => Value::NationalStringLiteral(format!("-{}", v)),
+            Value::HexStringLiteral(v) => Value::HexStringLiteral(format!("-{}", v)),
+            Value::DoubleQuotedString(v) => Value::DoubleQuotedString(format!("-{}", v)),
+            Value::Boolean(v) => Value::Boolean(v),
+            Value::Interval {
+                value,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision,
+            } => Value::Interval {
+                value: format!("-{}", value),
+                leading_field: leading_field,
+                leading_precision: leading_precision,
+                last_field: last_field,
+                fractional_seconds_precision: fractional_seconds_precision,
+            },
+            Value::Null => Value::Null,
+        }
+    }
 }
 
 impl fmt::Display for Value {

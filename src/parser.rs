@@ -409,9 +409,20 @@ impl<'a> Parser<'a> {
                 } else {
                     UnaryOperator::Minus
                 };
+
+                let expr = self.parse_subexpr(Self::PLUS_MINUS_PREC)?;
+
+                if let Expr::Value(v) = &expr {
+                    if tok == Token::Plus {
+                        return Ok(expr);
+                    } else {
+                        return Ok(Expr::Value(v.clone().to_negative()));
+                    }
+                };
+
                 Ok(Expr::UnaryOp {
                     op,
-                    expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
+                    expr: Box::new(expr),
                 })
             }
             tok @ Token::DoubleExclamationMark

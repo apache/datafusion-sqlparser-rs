@@ -1562,7 +1562,7 @@ impl<'a> Parser<'a> {
                         let output_format = self.parse_expr()?;
                         hive_format.storage = Some(HiveIOFormat::IOF {
                             input_format,
-                            output_format,
+                            output_format: Box::new(output_format),
                         });
                     } else {
                         let format = self.parse_file_format()?;

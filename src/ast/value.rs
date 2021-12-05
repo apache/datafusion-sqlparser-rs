@@ -143,12 +143,14 @@ pub struct EscapeSingleQuoteString<'a>(&'a str);
 
 impl<'a> fmt::Display for EscapeSingleQuoteString<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut cur_escaped = false;
         for c in self.0.chars() {
             if c == '\'' {
-                write!(f, "\'\'")?;
+                write!(f, "{}", if cur_escaped { "\'" } else { "\'\'" })?;
             } else {
                 write!(f, "{}", c)?;
             }
+            cur_escaped = c == '\\';
         }
         Ok(())
     }

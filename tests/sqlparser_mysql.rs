@@ -177,6 +177,33 @@ fn parse_quote_identifiers() {
 }
 
 #[test]
+fn parse_escaped_string() {
+    let sql = r#"SELECT 'I\'m fine'"#;
+
+    let projection = mysql().verified_only_select(sql).projection;
+    let item = projection.get(0).unwrap();
+
+    match &item {
+        SelectItem::UnnamedExpr(Expr::Value(value)) => {
+            assert_eq!("'I\\'m fine'", value.to_string());
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = r#"SELECT 'I''m fine'"#;
+
+    let projection = mysql().verified_only_select(sql).projection;
+    let item = projection.get(0).unwrap();
+
+    match &item {
+        SelectItem::UnnamedExpr(Expr::Value(value)) => {
+            assert_eq!("'I''m fine'", value.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_with_minimum_display_width() {
     let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3), bar_smallint SMALLINT(5), bar_int INT(11), bar_bigint BIGINT(20))";
     match mysql().verified_stmt(sql) {

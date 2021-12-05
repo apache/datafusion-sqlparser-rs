@@ -1874,6 +1874,7 @@ pub enum HiveRowFormat {
     DELIMITED,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[allow(clippy::large_enum_variant)]

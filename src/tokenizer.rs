@@ -411,6 +411,7 @@ impl<'a> Tokenizer<'a> {
                 // string
                 '\'' => {
                     let s = self.tokenize_single_quoted_string(chars)?;
+
                     Ok(Some(Token::SingleQuotedString(s)))
                 }
                 // delimited (quoted) identifier
@@ -646,6 +647,24 @@ impl<'a> Tokenizer<'a> {
                         chars.next();
                     } else {
                         return Ok(s);
+                    }
+                }
+                '\\' => {
+                    chars.next();
+                    match chars.peek() {
+                        None => {
+                            return self.tokenizer_error("Unterminated escape sequence");
+                        }
+                        Some(&c) => {
+                            chars.next();
+                            match c {
+                                '\'' => {
+                                    s.push('\\');
+                                    s.push('\'');
+                                }
+                                x => s.push(x),
+                            }
+                        }
                     }
                 }
                 _ => {

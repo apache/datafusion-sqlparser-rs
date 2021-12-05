@@ -16,10 +16,10 @@ use core::fmt;
 
 #[cfg(feature = "bigdecimal")]
 use bigdecimal::BigDecimal;
+#[cfg(feature = "bigdecimal")]
+use core::ops::Neg;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "bigdecimal")]
-use std::ops::Neg;
 
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

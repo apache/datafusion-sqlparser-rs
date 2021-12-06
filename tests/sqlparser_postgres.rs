@@ -18,7 +18,6 @@
 mod test_utils;
 use test_utils::*;
 
-use sqlparser::ast::Value::Boolean;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
@@ -782,7 +781,10 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a")]),
-            value: vec![SetVariableValue::Ident("b".into())],
+            value: vec![Expr::Identifier(Ident {
+                value: "b".into(),
+                quote_style: None
+            })],
         }
     );
 
@@ -793,9 +795,7 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a")]),
-            value: vec![SetVariableValue::Literal(Value::SingleQuotedString(
-                "b".into()
-            ))],
+            value: vec![Expr::Value(Value::SingleQuotedString("b".into()))],
         }
     );
 
@@ -806,7 +806,13 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a")]),
-            value: vec![SetVariableValue::Literal(number("0"))],
+            value: vec![Expr::Value(Value::Number(
+                #[cfg(not(feature = "bigdecimal"))]
+                "0".to_string(),
+                #[cfg(feature = "bigdecimal")]
+                bigdecimal::BigDecimal::from(0),
+                false,
+            ))],
         }
     );
 
@@ -817,7 +823,10 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a")]),
-            value: vec![SetVariableValue::Ident("DEFAULT".into())],
+            value: vec![Expr::Identifier(Ident {
+                value: "DEFAULT".into(),
+                quote_style: None
+            })],
         }
     );
 
@@ -828,7 +837,7 @@ fn parse_set() {
             local: true,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a")]),
-            value: vec![SetVariableValue::Ident("b".into())],
+            value: vec![Expr::Identifier("b".into())],
         }
     );
 
@@ -839,7 +848,10 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a"), Ident::new("b"), Ident::new("c")]),
-            value: vec![SetVariableValue::Ident("b".into())],
+            value: vec![Expr::Identifier(Ident {
+                value: "b".into(),
+                quote_style: None
+            })],
         }
     );
 
@@ -859,7 +871,7 @@ fn parse_set() {
                 Ident::new("reducer"),
                 Ident::new("parallelism")
             ]),
-            value: vec![SetVariableValue::Literal(Boolean(false))],
+            value: vec![Expr::Value(Value::Boolean(false))],
         }
     );
 
@@ -1107,7 +1119,7 @@ fn parse_pg_unary_ops() {
     ];
 
     for (str_op, op) in pg_unary_ops {
-        let select = pg().verified_only_select(&format!("SELECT {} a", &str_op));
+        let select = pg().verified_only_select(&format!("SELECT {}a", &str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: op.clone(),

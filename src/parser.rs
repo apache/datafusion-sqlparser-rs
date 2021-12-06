@@ -3737,22 +3737,12 @@ impl<'a> Parser<'a> {
         } else if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
             let mut values = vec![];
             loop {
-                let token = self.peek_token();
-                let value = match (self.parse_value(), token) {
-                    (Ok(value), _) => SetVariableValue::Literal(value),
-                    (Err(_), Token::Word(ident)) => SetVariableValue::Ident(ident.to_ident()),
-                    (Err(_), Token::Minus) => {
-                        let next_token = self.next_token();
-                        match next_token {
-                            Token::Word(ident) => SetVariableValue::Ident(Ident {
-                                quote_style: ident.quote_style,
-                                value: format!("-{}", ident.value),
-                            }),
-                            _ => self.expected("word", next_token)?,
-                        }
-                    }
-                    (Err(_), unexpected) => self.expected("variable value", unexpected)?,
+                let value = if let Ok(expr) = self.parse_expr() {
+                    expr
+                } else {
+                    self.expected("variable value", self.peek_token())?
                 };
+
                 values.push(value);
                 if self.consume_token(&Token::Comma) {
                     continue;

@@ -580,7 +580,7 @@ fn parse_select_count_wildcard() {
 
 #[test]
 fn parse_select_count_distinct() {
-    let sql = "SELECT COUNT(DISTINCT + x) FROM customer";
+    let sql = "SELECT COUNT(DISTINCT +x) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
@@ -597,8 +597,8 @@ fn parse_select_count_distinct() {
     );
 
     one_statement_parses_to(
-        "SELECT COUNT(ALL + x) FROM customer",
-        "SELECT COUNT(+ x) FROM customer",
+        "SELECT COUNT(ALL +x) FROM customer",
+        "SELECT COUNT(+x) FROM customer",
     );
 
     let sql = "SELECT COUNT(ALL DISTINCT + x) FROM customer";
@@ -754,7 +754,7 @@ fn parse_compound_expr_2() {
 #[test]
 fn parse_unary_math() {
     use self::Expr::*;
-    let sql = "- a + - b";
+    let sql = "-a + -b";
     assert_eq!(
         BinaryOp {
             left: Box::new(UnaryOp {

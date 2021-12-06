@@ -15,7 +15,7 @@
 //! Test SQL syntax specific to Hive. The parser based on the generic dialect
 //! is also tested (on the inputs it can handle).
 
-use sqlparser::ast::{CreateFunctionUsing, Ident, ObjectName, SetVariableValue, Statement};
+use sqlparser::ast::{CreateFunctionUsing, Expr, Ident, ObjectName, Statement, UnaryOperator};
 use sqlparser::dialect::{GenericDialect, HiveDialect};
 use sqlparser::parser::ParserError;
 use sqlparser::test_utils::*;
@@ -220,14 +220,17 @@ fn set_statement_with_minus() {
                 Ident::new("java"),
                 Ident::new("opts")
             ]),
-            value: vec![SetVariableValue::Ident("-Xmx4g".into())],
+            value: vec![Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                expr: Box::new(Expr::Identifier(Ident::new("Xmx4g")))
+            }],
         }
     );
 
     assert_eq!(
         hive().parse_sql_statements("SET hive.tez.java.opts = -"),
         Err(ParserError::ParserError(
-            "Expected word, found: EOF".to_string()
+            "Expected variable value, found: EOF".to_string()
         ))
     )
 }

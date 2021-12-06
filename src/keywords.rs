@@ -128,6 +128,7 @@ define_keywords!(
     COLLECT,
     COLUMN,
     COLUMNS,
+    COMMENT,
     COMMIT,
     COMMITTED,
     COMPUTE,

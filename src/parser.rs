@@ -175,6 +175,9 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     Ok(self.parse_insert()?)
                 }
+                Keyword::COMMENT if dialect_of!(self is PostgreSqlDialect) => {
+                    Ok(self.parse_comment()?)
+                }
                 _ => self.expected("an SQL statement", Token::Word(w)),
             },
             Token::LParen => {
@@ -3509,6 +3512,35 @@ impl<'a> Parser<'a> {
             name,
             data_types,
             statement,
+        })
+    }
+
+    fn parse_comment(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::ON)?;
+        let token = self.next_token();
+
+        let (object_type, object_name) = match token {
+            Token::Word(w) if w.keyword == Keyword::COLUMN => {
+                let object_name = self.parse_object_name()?;
+                (CommentObject::Column, object_name)
+            }
+            Token::Word(w) if w.keyword == Keyword::TABLE => {
+                let object_name = self.parse_object_name()?;
+                (CommentObject::Table, object_name)
+            }
+            _ => self.expected("comment object_type", token)?,
+        };
+
+        self.expect_keyword(Keyword::IS)?;
+        let comment = if self.parse_keyword(Keyword::NULL) {
+            None
+        } else {
+            Some(self.parse_literal_string()?)
+        };
+        Ok(Statement::Comment {
+            object_type,
+            object_name,
+            comment,
         })
     }
 }

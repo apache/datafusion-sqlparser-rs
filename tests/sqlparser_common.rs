@@ -3759,31 +3759,28 @@ fn test_revoke() {
     match verified_stmt(sql) {
         Statement::Revoke {
             privileges,
-            objects,
+            objects: GrantObjects::Tables(tables),
             grantees,
             cascade,
             granted_by,
-        } => match objects {
-            GrantObjects::Tables(tables) => {
-                assert_eq!(
-                    Privileges::All {
-                        with_privileges_keyword: true
-                    },
-                    privileges
-                );
-                assert_eq!(
-                    vec!["users", "auth"],
-                    tables.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
-                assert_eq!(
-                    vec!["analyst"],
-                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
-                assert!(cascade);
-                assert_eq!(None, granted_by);
-            }
-            _ => unreachable!(),
-        },
+        } => {
+            assert_eq!(
+                Privileges::All {
+                    with_privileges_keyword: true
+                },
+                privileges
+            );
+            assert_eq!(
+                vec!["users", "auth"],
+                tables.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert_eq!(
+                vec!["analyst"],
+                grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert!(cascade);
+            assert_eq!(None, granted_by);
+        }
         _ => unreachable!(),
     }
 }

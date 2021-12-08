@@ -1745,6 +1745,7 @@ pub enum HiveRowFormat {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[allow(clippy::large_enum_variant)]
 pub enum HiveIOFormat {
     IOF {
         input_format: Expr,

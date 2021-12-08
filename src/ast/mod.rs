@@ -433,15 +433,14 @@ impl fmt::Display for WindowSpec {
             write!(f, "ORDER BY {}", display_comma_separated(&self.order_by))?;
         }
         if let Some(window_frame) = &self.window_frame {
+            f.write_str(delim)?;
             if let Some(end_bound) = &window_frame.end_bound {
-                f.write_str(delim)?;
                 write!(
                     f,
                     "{} BETWEEN {} AND {}",
                     window_frame.units, window_frame.start_bound, end_bound
                 )?;
             } else {
-                f.write_str(delim)?;
                 write!(f, "{} {}", window_frame.units, window_frame.start_bound)?;
             }
         }
@@ -1593,6 +1592,7 @@ pub enum HiveRowFormat {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[allow(clippy::large_enum_variant)]
 pub enum HiveIOFormat {
     IOF {
         input_format: Expr,

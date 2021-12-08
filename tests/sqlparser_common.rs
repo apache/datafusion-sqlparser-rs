@@ -3634,7 +3634,7 @@ fn parse_grant() {
                     vec!["xyz", "m"],
                     grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
                 );
-                assert_eq!(true, with_grant_option);
+                assert!(with_grant_option);
                 assert_eq!("jj", granted_by.unwrap().to_string());
             }
             _ => unreachable!(),
@@ -3661,7 +3661,7 @@ fn parse_grant() {
                     vec!["browser"],
                     grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
                 );
-                assert_eq!(false, with_grant_option);
+                assert!(!with_grant_option);
             }
             _ => unreachable!(),
         },
@@ -3722,7 +3722,7 @@ fn parse_grant() {
                 },
                 GrantObjects::Schemas(schemas),
             ) => {
-                assert_eq!(false, with_privileges_keyword);
+                assert!(!with_privileges_keyword);
                 assert_eq!(
                     vec!["aa", "b"],
                     schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
@@ -3779,7 +3779,7 @@ fn test_revoke() {
                     vec!["analyst"],
                     grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
                 );
-                assert_eq!(true, cascade);
+                assert!(cascade);
                 assert_eq!(None, granted_by);
             }
             _ => unreachable!(),

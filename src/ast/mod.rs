@@ -764,6 +764,22 @@ pub enum Statement {
         condition: Expr,
         message: Option<Expr>,
     },
+    /// GRANT privileges ON objects TO grantees
+    Grant {
+        privileges: Privileges,
+        objects: GrantObjects,
+        grantees: Vec<Ident>,
+        with_grant_option: bool,
+        granted_by: Option<Ident>,
+    },
+    /// REVOKE privileges ON objects FROM grantees
+    Revoke {
+        privileges: Privileges,
+        objects: GrantObjects,
+        grantees: Vec<Ident>,
+        granted_by: Option<Ident>,
+        cascade: bool,
+    },
     /// `DEALLOCATE [ PREPARE ] { name | ALL }`
     ///
     /// Note: this is a PostgreSQL-specific statement.
@@ -1338,6 +1354,40 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::Grant {
+                privileges,
+                objects,
+                grantees,
+                with_grant_option,
+                granted_by,
+            } => {
+                write!(f, "GRANT {} ", privileges)?;
+                write!(f, "ON {} ", objects)?;
+                write!(f, "TO {}", display_comma_separated(grantees))?;
+                if *with_grant_option {
+                    write!(f, " WITH GRANT OPTION")?;
+                }
+                if let Some(grantor) = granted_by {
+                    write!(f, " GRANTED BY {}", grantor)?;
+                }
+                Ok(())
+            }
+            Statement::Revoke {
+                privileges,
+                objects,
+                grantees,
+                granted_by,
+                cascade,
+            } => {
+                write!(f, "REVOKE {} ", privileges)?;
+                write!(f, "ON {} ", objects)?;
+                write!(f, "FROM {}", display_comma_separated(grantees))?;
+                if let Some(grantor) = granted_by {
+                    write!(f, " GRANTED BY {}", grantor)?;
+                }
+                write!(f, " {}", if *cascade { "CASCADE" } else { "RESTRICT" })?;
+                Ok(())
+            }
             Statement::Deallocate { name, prepare } => write!(
                 f,
                 "DEALLOCATE {prepare}{name}",
@@ -1382,6 +1432,137 @@ impl fmt::Display for OnInsert {
                 " ON DUPLICATE KEY UPDATE {}",
                 display_comma_separated(expr)
             ),
+        }
+    }
+}
+
+/// Privileges granted in a GRANT statement or revoked in a REVOKE statement.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Privileges {
+    /// All privileges applicable to the object type
+    All {
+        /// Optional keyword from the spec, ignored in practice
+        with_privileges_keyword: bool,
+    },
+    /// Specific privileges (e.g. `SELECT`, `INSERT`)
+    Actions(Vec<Action>),
+}
+
+impl fmt::Display for Privileges {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Privileges::All {
+                with_privileges_keyword,
+            } => {
+                write!(
+                    f,
+                    "ALL{}",
+                    if *with_privileges_keyword {
+                        " PRIVILEGES"
+                    } else {
+                        ""
+                    }
+                )
+            }
+            Privileges::Actions(actions) => {
+                write!(f, "{}", display_comma_separated(actions).to_string())
+            }
+        }
+    }
+}
+
+/// A privilege on a database object (table, sequence, etc.).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Action {
+    Connect,
+    Create,
+    Delete,
+    Execute,
+    Insert { columns: Option<Vec<Ident>> },
+    References { columns: Option<Vec<Ident>> },
+    Select { columns: Option<Vec<Ident>> },
+    Temporary,
+    Trigger,
+    Truncate,
+    Update { columns: Option<Vec<Ident>> },
+    Usage,
+}
+
+impl fmt::Display for Action {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Action::Connect => f.write_str("CONNECT")?,
+            Action::Create => f.write_str("CREATE")?,
+            Action::Delete => f.write_str("DELETE")?,
+            Action::Execute => f.write_str("EXECUTE")?,
+            Action::Insert { .. } => f.write_str("INSERT")?,
+            Action::References { .. } => f.write_str("REFERENCES")?,
+            Action::Select { .. } => f.write_str("SELECT")?,
+            Action::Temporary => f.write_str("TEMPORARY")?,
+            Action::Trigger => f.write_str("TRIGGER")?,
+            Action::Truncate => f.write_str("TRUNCATE")?,
+            Action::Update { .. } => f.write_str("UPDATE")?,
+            Action::Usage => f.write_str("USAGE")?,
+        };
+        match self {
+            Action::Insert { columns }
+            | Action::References { columns }
+            | Action::Select { columns }
+            | Action::Update { columns } => {
+                if let Some(columns) = columns {
+                    write!(f, " ({})", display_comma_separated(columns))?;
+                }
+            }
+            _ => (),
+        };
+        Ok(())
+    }
+}
+
+/// Objects on which privileges are granted in a GRANT statement.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum GrantObjects {
+    /// Grant privileges on `ALL SEQUENCES IN SCHEMA <schema_name> [, ...]`
+    AllSequencesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `ALL TABLES IN SCHEMA <schema_name> [, ...]`
+    AllTablesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on specific schemas
+    Schemas(Vec<ObjectName>),
+    /// Grant privileges on specific sequences
+    Sequences(Vec<ObjectName>),
+    /// Grant privileges on specific tables
+    Tables(Vec<ObjectName>),
+}
+
+impl fmt::Display for GrantObjects {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GrantObjects::Sequences(sequences) => {
+                write!(f, "SEQUENCE {}", display_comma_separated(sequences))
+            }
+            GrantObjects::Schemas(schemas) => {
+                write!(f, "SCHEMA {}", display_comma_separated(schemas))
+            }
+            GrantObjects::Tables(tables) => {
+                write!(f, "{}", display_comma_separated(tables))
+            }
+            GrantObjects::AllSequencesInSchema { schemas } => {
+                write!(
+                    f,
+                    "ALL SEQUENCES IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::AllTablesInSchema { schemas } => {
+                write!(
+                    f,
+                    "ALL TABLES IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
         }
     }
 }

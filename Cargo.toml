@@ -12,8 +12,7 @@ include = [
     "src/**/*.rs",
     "Cargo.toml",
 ]
-edition = "2018"
-resolver = "2"
+edition = "2021"
 
 [lib]
 name = "sqlparser"

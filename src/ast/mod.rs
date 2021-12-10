@@ -278,6 +278,12 @@ pub enum Expr {
     Subquery(Box<Query>),
     /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
     ListAgg(ListAgg),
+    /// The `GROUPING SETS` expr.
+    GroupingSets(Vec<Vec<Expr>>),
+    /// The `CUBE` expr.
+    Cube(Vec<Vec<Expr>>),
+    /// The `ROLLUP` expr.
+    Rollup(Vec<Vec<Expr>>),
 }
 
 impl fmt::Display for Expr {
@@ -376,6 +382,44 @@ impl fmt::Display for Expr {
             Expr::Exists(s) => write!(f, "EXISTS ({})", s),
             Expr::Subquery(s) => write!(f, "({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
+            Expr::GroupingSets(sets) => {
+                write!(f, "GROUPING SETS (")?;
+                let mut sep = "";
+                for set in sets {
+                    write!(f, "{}", sep)?;
+                    sep = ", ";
+                    write!(f, "({})", display_comma_separated(set))?;
+                }
+                write!(f, ")")
+            }
+            Expr::Cube(sets) => {
+                write!(f, "CUBE (")?;
+                let mut sep = "";
+                for set in sets {
+                    write!(f, "{}", sep)?;
+                    sep = ", ";
+                    if set.len() == 1 {
+                        write!(f, "{}", set[0])?;
+                    } else {
+                        write!(f, "({})", display_comma_separated(set))?;
+                    }
+                }
+                write!(f, ")")
+            }
+            Expr::Rollup(sets) => {
+                write!(f, "ROLLUP (")?;
+                let mut sep = "";
+                for set in sets {
+                    write!(f, "{}", sep)?;
+                    sep = ", ";
+                    if set.len() == 1 {
+                        write!(f, "{}", set[0])?;
+                    } else {
+                        write!(f, "({})", display_comma_separated(set))?;
+                    }
+                }
+                write!(f, ")")
+            }
             Expr::Substring {
                 expr,
                 substring_from,
@@ -1902,5 +1946,94 @@ mod tests {
     fn test_window_frame_default() {
         let window_frame = WindowFrame::default();
         assert_eq!(WindowFrameBound::Preceding(None), window_frame.start_bound);
+    }
+
+    #[test]
+    fn test_grouping_sets_display() {
+        // a and b in different group
+        let grouping_sets = Expr::GroupingSets(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![Expr::Identifier(Ident::new("b"))],
+        ]);
+        assert_eq!("GROUPING SETS ((a), (b))", format!("{}", grouping_sets));
+
+        // a and b in the same group
+        let grouping_sets = Expr::GroupingSets(vec![vec![
+            Expr::Identifier(Ident::new("a")),
+            Expr::Identifier(Ident::new("b")),
+        ]]);
+        assert_eq!("GROUPING SETS ((a, b))", format!("{}", grouping_sets));
+
+        // (a, b) and (c, d) in different group
+        let grouping_sets = Expr::GroupingSets(vec![
+            vec![
+                Expr::Identifier(Ident::new("a")),
+                Expr::Identifier(Ident::new("b")),
+            ],
+            vec![
+                Expr::Identifier(Ident::new("c")),
+                Expr::Identifier(Ident::new("d")),
+            ],
+        ]);
+        assert_eq!(
+            "GROUPING SETS ((a, b), (c, d))",
+            format!("{}", grouping_sets)
+        );
+    }
+
+    #[test]
+    fn test_rollup_display() {
+        let rollup = Expr::Rollup(vec![vec![Expr::Identifier(Ident::new("a"))]]);
+        assert_eq!("ROLLUP (a)", format!("{}", rollup));
+
+        let rollup = Expr::Rollup(vec![vec![
+            Expr::Identifier(Ident::new("a")),
+            Expr::Identifier(Ident::new("b")),
+        ]]);
+        assert_eq!("ROLLUP ((a, b))", format!("{}", rollup));
+
+        let rollup = Expr::Rollup(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![Expr::Identifier(Ident::new("b"))],
+        ]);
+        assert_eq!("ROLLUP (a, b)", format!("{}", rollup));
+
+        let rollup = Expr::Rollup(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![
+                Expr::Identifier(Ident::new("b")),
+                Expr::Identifier(Ident::new("c")),
+            ],
+            vec![Expr::Identifier(Ident::new("d"))],
+        ]);
+        assert_eq!("ROLLUP (a, (b, c), d)", format!("{}", rollup));
+    }
+
+    #[test]
+    fn test_cube_display() {
+        let cube = Expr::Cube(vec![vec![Expr::Identifier(Ident::new("a"))]]);
+        assert_eq!("CUBE (a)", format!("{}", cube));
+
+        let cube = Expr::Cube(vec![vec![
+            Expr::Identifier(Ident::new("a")),
+            Expr::Identifier(Ident::new("b")),
+        ]]);
+        assert_eq!("CUBE ((a, b))", format!("{}", cube));
+
+        let cube = Expr::Cube(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![Expr::Identifier(Ident::new("b"))],
+        ]);
+        assert_eq!("CUBE (a, b)", format!("{}", cube));
+
+        let cube = Expr::Cube(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![
+                Expr::Identifier(Ident::new("b")),
+                Expr::Identifier(Ident::new("c")),
+            ],
+            vec![Expr::Identifier(Ident::new("d"))],
+        ]);
+        assert_eq!("CUBE (a, (b, c), d)", format!("{}", cube));
     }
 }

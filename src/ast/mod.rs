@@ -650,6 +650,7 @@ pub enum Statement {
         after_columns: Vec<Ident>,
         /// whether the insert has the table keyword (Hive)
         table: bool,
+        on: Option<OnInsert>,
     },
     // TODO: Support ROW FORMAT
     Directory {
@@ -670,7 +671,7 @@ pub enum Statement {
     /// UPDATE
     Update {
         /// TABLE
-        table_name: ObjectName,
+        table: TableWithJoins,
         /// Column assignments
         assignments: Vec<Assignment>,
         /// WHERE
@@ -990,6 +991,7 @@ impl fmt::Display for Statement {
                 after_columns,
                 source,
                 table,
+                on,
             } => {
                 if let Some(action) = or {
                     write!(f, "INSERT OR {} INTO {} ", action, table_name)?;
@@ -1013,7 +1015,13 @@ impl fmt::Display for Statement {
                 if !after_columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(after_columns))?;
                 }
-                write!(f, "{}", source)
+                write!(f, "{}", source)?;
+
+                if let Some(on) = on {
+                    write!(f, "{}", on)
+                } else {
+                    Ok(())
+                }
             }
 
             Statement::Copy {
@@ -1042,11 +1050,11 @@ impl fmt::Display for Statement {
                 write!(f, "\n\\.")
             }
             Statement::Update {
-                table_name,
+                table,
                 assignments,
                 selection,
             } => {
-                write!(f, "UPDATE {}", table_name)?;
+                write!(f, "UPDATE {}", table)?;
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
@@ -1452,6 +1460,26 @@ impl fmt::Display for Statement {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
+pub enum OnInsert {
+    /// ON DUPLICATE KEY UPDATE (MySQL when the key already exists, then execute an update instead)
+    DuplicateKeyUpdate(Vec<Assignment>),
+}
+
+impl fmt::Display for OnInsert {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::DuplicateKeyUpdate(expr) => write!(
+                f,
+                " ON DUPLICATE KEY UPDATE {}",
+                display_comma_separated(expr)
+            ),
+        }
+    }
+}
+
 /// Privileges granted in a GRANT statement or revoked in a REVOKE statement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -1587,13 +1615,13 @@ impl fmt::Display for GrantObjects {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Assignment {
-    pub id: Ident,
+    pub id: Vec<Ident>,
     pub value: Expr,
 }
 
 impl fmt::Display for Assignment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} = {}", self.id, self.value)
+        write!(f, "{} = {}", display_separated(&self.id, "."), self.value)
     }
 }
 

@@ -8,6 +8,21 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+
+## [0.13.0] 2020-12-10
+
+### Added
+* Add ALTER TABLE CHANGE COLUMN, extend the UPDATE statement with ON clause (#375) - Thanks @0xA537FD!
+* Add support for GROUPIING SETS, ROLLUP and CUBE - Thanks @Jimexist!
+* Add basic support for GRANT and REVOKE (#365) - Thanks @blx!
+
+### Changed
+* Use Rust 2021 edition (#368) - Thanks @Jimexist!
+
+### Fixed
+* Fix clippy errors (#367, #374) - Thanks @Jimexist!
+
+
 ## [0.12.0] 2020-10-14
 
 ### Added

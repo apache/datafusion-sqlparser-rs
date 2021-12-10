@@ -20,13 +20,14 @@
 
 #[macro_use]
 mod test_utils;
-use test_utils::{all_dialects, expr_from_projection, join, number, only, table, table_alias};
-
 use matches::assert_matches;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, SQLiteDialect};
+use sqlparser::dialect::{GenericDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
+use test_utils::{
+    all_dialects, expr_from_projection, join, number, only, table, table_alias, TestedDialects,
+};
 
 #[test]
 fn parse_insert_values() {
@@ -1041,9 +1042,12 @@ fn parse_select_group_by() {
 
 #[test]
 fn parse_select_group_by_grouping_sets() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {})],
+    };
     let sql =
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, GROUPING SETS ((brand), (size), ())";
-    let select = verified_only_select(sql);
+    let select = dialects.verified_only_select(sql);
     assert_eq!(
         vec![
             Expr::Identifier(Ident::new("size")),
@@ -1051,6 +1055,44 @@ fn parse_select_group_by_grouping_sets() {
                 vec![Expr::Identifier(Ident::new("brand"))],
                 vec![Expr::Identifier(Ident::new("size"))],
                 vec![],
+            ])
+        ],
+        select.group_by
+    );
+}
+
+#[test]
+fn parse_select_group_by_rollup() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {})],
+    };
+    let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, ROLLUP (brand, size)";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        vec![
+            Expr::Identifier(Ident::new("size")),
+            Expr::Rollup(vec![
+                vec![Expr::Identifier(Ident::new("brand"))],
+                vec![Expr::Identifier(Ident::new("size"))],
+            ])
+        ],
+        select.group_by
+    );
+}
+
+#[test]
+fn parse_select_group_by_cube() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {})],
+    };
+    let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, CUBE (brand, size)";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        vec![
+            Expr::Identifier(Ident::new("size")),
+            Expr::Cube(vec![
+                vec![Expr::Identifier(Ident::new("brand"))],
+                vec![Expr::Identifier(Ident::new("size"))],
             ])
         ],
         select.group_by

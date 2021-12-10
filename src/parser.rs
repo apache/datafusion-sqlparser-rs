@@ -562,22 +562,27 @@ impl<'a> Parser<'a> {
     /// parse a group by expr. a group by expr can be one of group sets, roll up, cube, or simple
     /// expr.
     fn parse_group_by_expr(&mut self) -> Result<Expr, ParserError> {
-        if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
-            self.expect_token(&Token::LParen)?;
-            let result = self.parse_comma_separated(|p| p.parse_tuple(false, true))?;
-            self.expect_token(&Token::RParen)?;
-            Ok(Expr::GroupingSets(result))
-        } else if self.parse_keyword(Keyword::CUBE) {
-            self.expect_token(&Token::LParen)?;
-            let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
-            self.expect_token(&Token::RParen)?;
-            Ok(Expr::Cube(result))
-        } else if self.parse_keyword(Keyword::ROLLUP) {
-            self.expect_token(&Token::LParen)?;
-            let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
-            self.expect_token(&Token::RParen)?;
-            Ok(Expr::Rollup(result))
+        if dialect_of!(self is PostgreSqlDialect) {
+            if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
+                self.expect_token(&Token::LParen)?;
+                let result = self.parse_comma_separated(|p| p.parse_tuple(false, true))?;
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::GroupingSets(result))
+            } else if self.parse_keyword(Keyword::CUBE) {
+                self.expect_token(&Token::LParen)?;
+                let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::Cube(result))
+            } else if self.parse_keyword(Keyword::ROLLUP) {
+                self.expect_token(&Token::LParen)?;
+                let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::Rollup(result))
+            } else {
+                self.parse_expr()
+            }
         } else {
+            // TODO parse rollup for other dialects
             self.parse_expr()
         }
     }

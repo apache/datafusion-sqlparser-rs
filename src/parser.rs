@@ -384,7 +384,7 @@ impl<'a> Parser<'a> {
         return_ok_if_some!(self.maybe_parse(|parser| {
             match parser.parse_data_type()? {
                 DataType::Interval => parser.parse_literal_interval(),
-                // PosgreSQL allows almost any identifier to be used as custom data type name,
+                // PostgreSQL allows almost any identifier to be used as custom data type name,
                 // and we support that in `parse_data_type()`. But unlike Postgres we don't
                 // have a list of globally reserved keywords (since they vary across dialects),
                 // so given `NOT 'a' LIKE 'b'`, we'd accept `NOT` as a possible custom data type
@@ -598,6 +598,68 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// parse a group by expr. a group by expr can be one of group sets, roll up, cube, or simple
+    /// expr.
+    fn parse_group_by_expr(&mut self) -> Result<Expr, ParserError> {
+        if dialect_of!(self is PostgreSqlDialect) {
+            if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
+                self.expect_token(&Token::LParen)?;
+                let result = self.parse_comma_separated(|p| p.parse_tuple(false, true))?;
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::GroupingSets(result))
+            } else if self.parse_keyword(Keyword::CUBE) {
+                self.expect_token(&Token::LParen)?;
+                let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::Cube(result))
+            } else if self.parse_keyword(Keyword::ROLLUP) {
+                self.expect_token(&Token::LParen)?;
+                let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::Rollup(result))
+            } else {
+                self.parse_expr()
+            }
+        } else {
+            // TODO parse rollup for other dialects
+            self.parse_expr()
+        }
+    }
+
+    /// parse a tuple with `(` and `)`.
+    /// If `lift_singleton` is true, then a singleton tuple is lifted to a tuple of length 1, otherwise it will fail.
+    /// If `allow_empty` is true, then an empty tuple is allowed.
+    fn parse_tuple(
+        &mut self,
+        lift_singleton: bool,
+        allow_empty: bool,
+    ) -> Result<Vec<Expr>, ParserError> {
+        if lift_singleton {
+            if self.consume_token(&Token::LParen) {
+                let result = if allow_empty && self.consume_token(&Token::RParen) {
+                    vec![]
+                } else {
+                    let result = self.parse_comma_separated(Parser::parse_expr)?;
+                    self.expect_token(&Token::RParen)?;
+                    result
+                };
+                Ok(result)
+            } else {
+                Ok(vec![self.parse_expr()?])
+            }
+        } else {
+            self.expect_token(&Token::LParen)?;
+            let result = if allow_empty && self.consume_token(&Token::RParen) {
+                vec![]
+            } else {
+                let result = self.parse_comma_separated(Parser::parse_expr)?;
+                self.expect_token(&Token::RParen)?;
+                result
+            };
+            Ok(result)
+        }
+    }
+
     pub fn parse_case_expr(&mut self) -> Result<Expr, ParserError> {
         let mut operand = None;
         if !self.parse_keyword(Keyword::WHEN) {
@@ -679,11 +741,12 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
         let mut from_expr = None;
-        let mut to_expr = None;
-        if self.parse_keyword(Keyword::FROM) {
+        if self.parse_keyword(Keyword::FROM) || self.consume_token(&Token::Comma) {
             from_expr = Some(self.parse_expr()?);
         }
-        if self.parse_keyword(Keyword::FOR) {
+
+        let mut to_expr = None;
+        if self.parse_keyword(Keyword::FOR) || self.consume_token(&Token::Comma) {
             to_expr = Some(self.parse_expr()?);
         }
         self.expect_token(&Token::RParen)?;
@@ -1935,6 +1998,22 @@ impl<'a> Parser<'a> {
                 old_partitions: before,
                 new_partitions: renames,
             }
+        } else if self.parse_keyword(Keyword::CHANGE) {
+            let _ = self.parse_keyword(Keyword::COLUMN);
+            let old_name = self.parse_identifier()?;
+            let new_name = self.parse_identifier()?;
+            let data_type = self.parse_data_type()?;
+            let mut options = vec![];
+            while let Some(option) = self.parse_optional_column_option()? {
+                options.push(option);
+            }
+
+            AlterTableOperation::ChangeColumn {
+                old_name,
+                new_name,
+                data_type,
+                options,
+            }
         } else {
             return self.expected(
                 "ADD, RENAME, PARTITION or DROP after ALTER TABLE",
@@ -2211,16 +2290,41 @@ impl<'a> Parser<'a> {
         Ok(ObjectName(idents))
     }
 
+    /// Parse identifiers strictly i.e. don't parse keywords
+    pub fn parse_identifiers_non_keywords(&mut self) -> Result<Vec<Ident>, ParserError> {
+        let mut idents = vec![];
+        loop {
+            match self.peek_token() {
+                Token::Word(w) => {
+                    if w.keyword != Keyword::NoKeyword {
+                        break;
+                    }
+
+                    idents.push(w.to_ident());
+                }
+                Token::EOF | Token::Eq => break,
+                _ => {}
+            }
+
+            self.next_token();
+        }
+
+        Ok(idents)
+    }
+
     /// Parse identifiers
     pub fn parse_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
         let mut idents = vec![];
         loop {
             match self.next_token() {
-                Token::Word(w) => idents.push(w.to_ident()),
+                Token::Word(w) => {
+                    idents.push(w.to_ident());
+                }
                 Token::EOF => break,
                 _ => {}
             }
         }
+
         Ok(idents)
     }
 
@@ -2363,6 +2467,7 @@ impl<'a> Parser<'a> {
             })
         } else {
             let insert = self.parse_insert()?;
+
             Ok(Query {
                 with,
                 body: SetExpr::Insert(insert),
@@ -2533,7 +2638,7 @@ impl<'a> Parser<'a> {
         };
 
         let group_by = if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
-            self.parse_comma_separated(Parser::parse_expr)?
+            self.parse_comma_separated(Parser::parse_group_by_expr)?
         } else {
             vec![]
         };
@@ -3122,6 +3227,17 @@ impl<'a> Parser<'a> {
             let after_columns = self.parse_parenthesized_column_list(Optional)?;
 
             let source = Box::new(self.parse_query()?);
+            let on = if self.parse_keyword(Keyword::ON) {
+                self.expect_keyword(Keyword::DUPLICATE)?;
+                self.expect_keyword(Keyword::KEY)?;
+                self.expect_keyword(Keyword::UPDATE)?;
+                let l = self.parse_comma_separated(Parser::parse_assignment)?;
+
+                Some(OnInsert::DuplicateKeyUpdate(l))
+            } else {
+                None
+            };
+
             Ok(Statement::Insert {
                 or,
                 table_name,
@@ -3131,12 +3247,13 @@ impl<'a> Parser<'a> {
                 after_columns,
                 source,
                 table,
+                on,
             })
         }
     }
 
     pub fn parse_update(&mut self) -> Result<Statement, ParserError> {
-        let table_name = self.parse_object_name()?;
+        let table = self.parse_table_and_joins()?;
         self.expect_keyword(Keyword::SET)?;
         let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
         let selection = if self.parse_keyword(Keyword::WHERE) {
@@ -3145,7 +3262,7 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(Statement::Update {
-            table_name,
+            table,
             assignments,
             selection,
         })
@@ -3153,7 +3270,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a `var = expr` assignment, used in an UPDATE statement
     pub fn parse_assignment(&mut self) -> Result<Assignment, ParserError> {
-        let id = self.parse_identifier()?;
+        let id = self.parse_identifiers_non_keywords()?;
         self.expect_token(&Token::Eq)?;
         let value = self.parse_expr()?;
         Ok(Assignment { id, value })

@@ -20,13 +20,14 @@
 
 #[macro_use]
 mod test_utils;
-use test_utils::{all_dialects, expr_from_projection, join, number, only, table, table_alias};
-
 use matches::assert_matches;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, SQLiteDialect};
+use sqlparser::dialect::{GenericDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
+use test_utils::{
+    all_dialects, expr_from_projection, join, number, only, table, table_alias, TestedDialects,
+};
 
 #[test]
 fn parse_insert_values() {
@@ -140,25 +141,25 @@ fn parse_update() {
     let sql = "UPDATE t SET a = 1, b = 2, c = 3 WHERE d";
     match verified_stmt(sql) {
         Statement::Update {
-            table_name,
+            table,
             assignments,
             selection,
             ..
         } => {
-            assert_eq!(table_name.to_string(), "t".to_string());
+            assert_eq!(table.to_string(), "t".to_string());
             assert_eq!(
                 assignments,
                 vec![
                     Assignment {
-                        id: "a".into(),
+                        id: vec!["a".into()],
                         value: Expr::Value(number("1")),
                     },
                     Assignment {
-                        id: "b".into(),
+                        id: vec!["b".into()],
                         value: Expr::Value(number("2")),
                     },
                     Assignment {
-                        id: "c".into(),
+                        id: vec!["c".into()],
                         value: Expr::Value(number("3")),
                     },
                 ]
@@ -183,6 +184,55 @@ fn parse_update() {
         ParserError::ParserError("Expected end of statement, found: extrabadstuff".to_string()),
         res.unwrap_err()
     );
+}
+
+#[test]
+fn parse_update_with_table_alias() {
+    let sql = "UPDATE users AS u SET u.username = 'new_user' WHERE u.username = 'old_user'";
+    match verified_stmt(sql) {
+        Statement::Update {
+            table,
+            assignments,
+            selection,
+        } => {
+            assert_eq!(
+                TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName(vec![Ident::new("users")]),
+                        alias: Some(TableAlias {
+                            name: Ident::new("u"),
+                            columns: vec![]
+                        }),
+                        args: vec![],
+                        with_hints: vec![],
+                    },
+                    joins: vec![]
+                },
+                table
+            );
+            assert_eq!(
+                vec![Assignment {
+                    id: vec![Ident::new("u"), Ident::new("username")],
+                    value: Expr::Value(Value::SingleQuotedString("new_user".to_string()))
+                }],
+                assignments
+            );
+            assert_eq!(
+                Some(Expr::BinaryOp {
+                    left: Box::new(Expr::CompoundIdentifier(vec![
+                        Ident::new("u"),
+                        Ident::new("username")
+                    ])),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "old_user".to_string()
+                    )))
+                }),
+                selection
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]
@@ -1043,6 +1093,65 @@ fn parse_select_group_by() {
         vec![
             Expr::Identifier(Ident::new("lname")),
             Expr::Identifier(Ident::new("fname")),
+        ],
+        select.group_by
+    );
+}
+
+#[test]
+fn parse_select_group_by_grouping_sets() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {})],
+    };
+    let sql =
+        "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, GROUPING SETS ((brand), (size), ())";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        vec![
+            Expr::Identifier(Ident::new("size")),
+            Expr::GroupingSets(vec![
+                vec![Expr::Identifier(Ident::new("brand"))],
+                vec![Expr::Identifier(Ident::new("size"))],
+                vec![],
+            ])
+        ],
+        select.group_by
+    );
+}
+
+#[test]
+fn parse_select_group_by_rollup() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {})],
+    };
+    let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, ROLLUP (brand, size)";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        vec![
+            Expr::Identifier(Ident::new("size")),
+            Expr::Rollup(vec![
+                vec![Expr::Identifier(Ident::new("brand"))],
+                vec![Expr::Identifier(Ident::new("size"))],
+            ])
+        ],
+        select.group_by
+    );
+}
+
+#[test]
+fn parse_select_group_by_cube() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {})],
+    };
+    let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, CUBE (brand, size)";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        vec![
+            Expr::Identifier(Ident::new("size")),
+            Expr::Cube(vec![
+                vec![Expr::Identifier(Ident::new("brand"))],
+                vec![Expr::Identifier(Ident::new("size"))],
+            ])
         ],
         select.group_by
     );

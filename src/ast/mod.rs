@@ -268,6 +268,12 @@ pub enum Expr {
     Subquery(Box<Query>),
     /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
     ListAgg(ListAgg),
+    /// The `GROUPING SETS` expr.
+    GroupingSets(Vec<Vec<Expr>>),
+    /// The `CUBE` expr.
+    Cube(Vec<Vec<Expr>>),
+    /// The `ROLLUP` expr.
+    Rollup(Vec<Vec<Expr>>),
 }
 
 impl fmt::Display for Expr {
@@ -364,6 +370,44 @@ impl fmt::Display for Expr {
             Expr::Exists(s) => write!(f, "EXISTS ({})", s),
             Expr::Subquery(s) => write!(f, "({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
+            Expr::GroupingSets(sets) => {
+                write!(f, "GROUPING SETS (")?;
+                let mut sep = "";
+                for set in sets {
+                    write!(f, "{}", sep)?;
+                    sep = ", ";
+                    write!(f, "({})", display_comma_separated(set))?;
+                }
+                write!(f, ")")
+            }
+            Expr::Cube(sets) => {
+                write!(f, "CUBE (")?;
+                let mut sep = "";
+                for set in sets {
+                    write!(f, "{}", sep)?;
+                    sep = ", ";
+                    if set.len() == 1 {
+                        write!(f, "{}", set[0])?;
+                    } else {
+                        write!(f, "({})", display_comma_separated(set))?;
+                    }
+                }
+                write!(f, ")")
+            }
+            Expr::Rollup(sets) => {
+                write!(f, "ROLLUP (")?;
+                let mut sep = "";
+                for set in sets {
+                    write!(f, "{}", sep)?;
+                    sep = ", ";
+                    if set.len() == 1 {
+                        write!(f, "{}", set[0])?;
+                    } else {
+                        write!(f, "({})", display_comma_separated(set))?;
+                    }
+                }
+                write!(f, ")")
+            }
             Expr::Substring {
                 expr,
                 substring_from,
@@ -594,6 +638,7 @@ pub enum Statement {
         after_columns: Vec<Ident>,
         /// whether the insert has the table keyword (Hive)
         table: bool,
+        on: Option<OnInsert>,
     },
     // TODO: Support ROW FORMAT
     Directory {
@@ -614,7 +659,7 @@ pub enum Statement {
     /// UPDATE
     Update {
         /// TABLE
-        table_name: ObjectName,
+        table: TableWithJoins,
         /// Column assignments
         assignments: Vec<Assignment>,
         /// WHERE
@@ -934,6 +979,7 @@ impl fmt::Display for Statement {
                 after_columns,
                 source,
                 table,
+                on,
             } => {
                 if let Some(action) = or {
                     write!(f, "INSERT OR {} INTO {} ", action, table_name)?;
@@ -957,7 +1003,13 @@ impl fmt::Display for Statement {
                 if !after_columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(after_columns))?;
                 }
-                write!(f, "{}", source)
+                write!(f, "{}", source)?;
+
+                if let Some(on) = on {
+                    write!(f, "{}", on)
+                } else {
+                    Ok(())
+                }
             }
 
             Statement::Copy {
@@ -986,11 +1038,11 @@ impl fmt::Display for Statement {
                 write!(f, "\n\\.")
             }
             Statement::Update {
-                table_name,
+                table,
                 assignments,
                 selection,
             } => {
-                write!(f, "UPDATE {}", table_name)?;
+                write!(f, "UPDATE {}", table)?;
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
@@ -1396,6 +1448,26 @@ impl fmt::Display for Statement {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
+pub enum OnInsert {
+    /// ON DUPLICATE KEY UPDATE (MySQL when the key already exists, then execute an update instead)
+    DuplicateKeyUpdate(Vec<Assignment>),
+}
+
+impl fmt::Display for OnInsert {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::DuplicateKeyUpdate(expr) => write!(
+                f,
+                " ON DUPLICATE KEY UPDATE {}",
+                display_comma_separated(expr)
+            ),
+        }
+    }
+}
+
 /// Privileges granted in a GRANT statement or revoked in a REVOKE statement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -1531,13 +1603,13 @@ impl fmt::Display for GrantObjects {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Assignment {
-    pub id: Ident,
+    pub id: Vec<Ident>,
     pub value: Expr,
 }
 
 impl fmt::Display for Assignment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} = {}", self.id, self.value)
+        write!(f, "{} = {}", display_separated(&self.id, "."), self.value)
     }
 }
 
@@ -1910,5 +1982,94 @@ mod tests {
     fn test_window_frame_default() {
         let window_frame = WindowFrame::default();
         assert_eq!(WindowFrameBound::Preceding(None), window_frame.start_bound);
+    }
+
+    #[test]
+    fn test_grouping_sets_display() {
+        // a and b in different group
+        let grouping_sets = Expr::GroupingSets(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![Expr::Identifier(Ident::new("b"))],
+        ]);
+        assert_eq!("GROUPING SETS ((a), (b))", format!("{}", grouping_sets));
+
+        // a and b in the same group
+        let grouping_sets = Expr::GroupingSets(vec![vec![
+            Expr::Identifier(Ident::new("a")),
+            Expr::Identifier(Ident::new("b")),
+        ]]);
+        assert_eq!("GROUPING SETS ((a, b))", format!("{}", grouping_sets));
+
+        // (a, b) and (c, d) in different group
+        let grouping_sets = Expr::GroupingSets(vec![
+            vec![
+                Expr::Identifier(Ident::new("a")),
+                Expr::Identifier(Ident::new("b")),
+            ],
+            vec![
+                Expr::Identifier(Ident::new("c")),
+                Expr::Identifier(Ident::new("d")),
+            ],
+        ]);
+        assert_eq!(
+            "GROUPING SETS ((a, b), (c, d))",
+            format!("{}", grouping_sets)
+        );
+    }
+
+    #[test]
+    fn test_rollup_display() {
+        let rollup = Expr::Rollup(vec![vec![Expr::Identifier(Ident::new("a"))]]);
+        assert_eq!("ROLLUP (a)", format!("{}", rollup));
+
+        let rollup = Expr::Rollup(vec![vec![
+            Expr::Identifier(Ident::new("a")),
+            Expr::Identifier(Ident::new("b")),
+        ]]);
+        assert_eq!("ROLLUP ((a, b))", format!("{}", rollup));
+
+        let rollup = Expr::Rollup(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![Expr::Identifier(Ident::new("b"))],
+        ]);
+        assert_eq!("ROLLUP (a, b)", format!("{}", rollup));
+
+        let rollup = Expr::Rollup(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![
+                Expr::Identifier(Ident::new("b")),
+                Expr::Identifier(Ident::new("c")),
+            ],
+            vec![Expr::Identifier(Ident::new("d"))],
+        ]);
+        assert_eq!("ROLLUP (a, (b, c), d)", format!("{}", rollup));
+    }
+
+    #[test]
+    fn test_cube_display() {
+        let cube = Expr::Cube(vec![vec![Expr::Identifier(Ident::new("a"))]]);
+        assert_eq!("CUBE (a)", format!("{}", cube));
+
+        let cube = Expr::Cube(vec![vec![
+            Expr::Identifier(Ident::new("a")),
+            Expr::Identifier(Ident::new("b")),
+        ]]);
+        assert_eq!("CUBE ((a, b))", format!("{}", cube));
+
+        let cube = Expr::Cube(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![Expr::Identifier(Ident::new("b"))],
+        ]);
+        assert_eq!("CUBE (a, b)", format!("{}", cube));
+
+        let cube = Expr::Cube(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![
+                Expr::Identifier(Ident::new("b")),
+                Expr::Identifier(Ident::new("c")),
+            ],
+            vec![Expr::Identifier(Ident::new("d"))],
+        ]);
+        assert_eq!("CUBE (a, (b, c), d)", format!("{}", cube));
     }
 }

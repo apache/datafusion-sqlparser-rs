@@ -723,6 +723,15 @@ fn parse_map_access_expr() {
     );
 }
 
+#[test]
+fn test_transaction_statement() {
+    let statement = pg().verified_stmt("SET TRANSACTION SNAPSHOT '000003A1-1'");
+    assert_eq!(statement, Statement::SetTransaction{
+        modes: vec![],
+        snapshot: Some(Value::SingleQuotedString(String::from("000003A1-1")))
+    })
+}
+
 fn pg() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {})],

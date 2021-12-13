@@ -40,6 +40,7 @@ $ cargo run --feature json_example --example cli FILENAME.sql [--dialectname]
         "--ansi" => Box::new(AnsiDialect {}),
         "--postgres" => Box::new(PostgreSqlDialect {}),
         "--ms" => Box::new(MsSqlDialect {}),
+        "--mysql" => Box::new(MySqlDialect {}),
         "--snowflake" => Box::new(SnowflakeDialect {}),
         "--hive" => Box::new(HiveDialect {}),
         "--generic" | "" => Box::new(GenericDialect {}),

@@ -20,13 +20,14 @@
 
 #[macro_use]
 mod test_utils;
-use test_utils::{all_dialects, expr_from_projection, join, number, only, table, table_alias};
-
 use matches::assert_matches;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, SQLiteDialect};
+use sqlparser::dialect::{GenericDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
+use test_utils::{
+    all_dialects, expr_from_projection, join, number, only, table, table_alias, TestedDialects,
+};
 
 #[test]
 fn parse_insert_values() {
@@ -175,25 +176,25 @@ fn parse_update() {
     let sql = "UPDATE t SET a = 1, b = 2, c = 3 WHERE d";
     match verified_stmt(sql) {
         Statement::Update {
-            table_name,
+            table,
             assignments,
             selection,
             ..
         } => {
-            assert_eq!(table_name.to_string(), "t".to_string());
+            assert_eq!(table.to_string(), "t".to_string());
             assert_eq!(
                 assignments,
                 vec![
                     Assignment {
-                        id: "a".into(),
+                        id: vec!["a".into()],
                         value: Expr::Value(number("1")),
                     },
                     Assignment {
-                        id: "b".into(),
+                        id: vec!["b".into()],
                         value: Expr::Value(number("2")),
                     },
                     Assignment {
-                        id: "c".into(),
+                        id: vec!["c".into()],
                         value: Expr::Value(number("3")),
                     },
                 ]
@@ -218,6 +219,55 @@ fn parse_update() {
         ParserError::ParserError("Expected end of statement, found: extrabadstuff".to_string()),
         res.unwrap_err()
     );
+}
+
+#[test]
+fn parse_update_with_table_alias() {
+    let sql = "UPDATE users AS u SET u.username = 'new_user' WHERE u.username = 'old_user'";
+    match verified_stmt(sql) {
+        Statement::Update {
+            table,
+            assignments,
+            selection,
+        } => {
+            assert_eq!(
+                TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName(vec![Ident::new("users")]),
+                        alias: Some(TableAlias {
+                            name: Ident::new("u"),
+                            columns: vec![]
+                        }),
+                        args: vec![],
+                        with_hints: vec![],
+                    },
+                    joins: vec![]
+                },
+                table
+            );
+            assert_eq!(
+                vec![Assignment {
+                    id: vec![Ident::new("u"), Ident::new("username")],
+                    value: Expr::Value(Value::SingleQuotedString("new_user".to_string()))
+                }],
+                assignments
+            );
+            assert_eq!(
+                Some(Expr::BinaryOp {
+                    left: Box::new(Expr::CompoundIdentifier(vec![
+                        Ident::new("u"),
+                        Ident::new("username")
+                    ])),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "old_user".to_string()
+                    )))
+                }),
+                selection
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]
@@ -1109,6 +1159,65 @@ fn parse_select_group_by() {
         vec![
             Expr::Identifier(Ident::new("lname")),
             Expr::Identifier(Ident::new("fname")),
+        ],
+        select.group_by
+    );
+}
+
+#[test]
+fn parse_select_group_by_grouping_sets() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {})],
+    };
+    let sql =
+        "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, GROUPING SETS ((brand), (size), ())";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        vec![
+            Expr::Identifier(Ident::new("size")),
+            Expr::GroupingSets(vec![
+                vec![Expr::Identifier(Ident::new("brand"))],
+                vec![Expr::Identifier(Ident::new("size"))],
+                vec![],
+            ])
+        ],
+        select.group_by
+    );
+}
+
+#[test]
+fn parse_select_group_by_rollup() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {})],
+    };
+    let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, ROLLUP (brand, size)";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        vec![
+            Expr::Identifier(Ident::new("size")),
+            Expr::Rollup(vec![
+                vec![Expr::Identifier(Ident::new("brand"))],
+                vec![Expr::Identifier(Ident::new("size"))],
+            ])
+        ],
+        select.group_by
+    );
+}
+
+#[test]
+fn parse_select_group_by_cube() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {})],
+    };
+    let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, CUBE (brand, size)";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        vec![
+            Expr::Identifier(Ident::new("size")),
+            Expr::Cube(vec![
+                vec![Expr::Identifier(Ident::new("brand"))],
+                vec![Expr::Identifier(Ident::new("size"))],
+            ])
         ],
         select.group_by
     );
@@ -3754,6 +3863,202 @@ fn parse_drop_index() {
                 names.iter().map(ToString::to_string).collect::<Vec<_>>()
             );
             assert_eq!(ObjectType::Index, object_type);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_grant() {
+    let sql = "GRANT SELECT, INSERT, UPDATE (shape, size), USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
+    match verified_stmt(sql) {
+        Statement::Grant {
+            privileges,
+            objects,
+            grantees,
+            with_grant_option,
+            granted_by,
+            ..
+        } => match (privileges, objects) {
+            (Privileges::Actions(actions), GrantObjects::Tables(objects)) => {
+                assert_eq!(
+                    vec![
+                        Action::Select { columns: None },
+                        Action::Insert { columns: None },
+                        Action::Update {
+                            columns: Some(vec![
+                                Ident {
+                                    value: "shape".into(),
+                                    quote_style: None
+                                },
+                                Ident {
+                                    value: "size".into(),
+                                    quote_style: None
+                                }
+                            ])
+                        },
+                        Action::Usage,
+                        Action::Delete,
+                        Action::Truncate,
+                        Action::References { columns: None },
+                        Action::Trigger,
+                    ],
+                    actions
+                );
+                assert_eq!(
+                    vec!["abc", "def"],
+                    objects.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert_eq!(
+                    vec!["xyz", "m"],
+                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert!(with_grant_option);
+                assert_eq!("jj", granted_by.unwrap().to_string());
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    let sql2 = "GRANT INSERT ON ALL TABLES IN SCHEMA public TO browser";
+    match verified_stmt(sql2) {
+        Statement::Grant {
+            privileges,
+            objects,
+            grantees,
+            with_grant_option,
+            ..
+        } => match (privileges, objects) {
+            (Privileges::Actions(actions), GrantObjects::AllTablesInSchema { schemas }) => {
+                assert_eq!(vec![Action::Insert { columns: None }], actions);
+                assert_eq!(
+                    vec!["public"],
+                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert_eq!(
+                    vec!["browser"],
+                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert!(!with_grant_option);
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    let sql3 = "GRANT USAGE, SELECT ON SEQUENCE p TO u";
+    match verified_stmt(sql3) {
+        Statement::Grant {
+            privileges,
+            objects,
+            grantees,
+            granted_by,
+            ..
+        } => match (privileges, objects, granted_by) {
+            (Privileges::Actions(actions), GrantObjects::Sequences(objects), None) => {
+                assert_eq!(
+                    vec![Action::Usage, Action::Select { columns: None }],
+                    actions
+                );
+                assert_eq!(
+                    vec!["p"],
+                    objects.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert_eq!(
+                    vec!["u"],
+                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    let sql4 = "GRANT ALL PRIVILEGES ON aa, b TO z";
+    match verified_stmt(sql4) {
+        Statement::Grant { privileges, .. } => {
+            assert_eq!(
+                Privileges::All {
+                    with_privileges_keyword: true
+                },
+                privileges
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let sql5 = "GRANT ALL ON SCHEMA aa, b TO z";
+    match verified_stmt(sql5) {
+        Statement::Grant {
+            privileges,
+            objects,
+            ..
+        } => match (privileges, objects) {
+            (
+                Privileges::All {
+                    with_privileges_keyword,
+                },
+                GrantObjects::Schemas(schemas),
+            ) => {
+                assert!(!with_privileges_keyword);
+                assert_eq!(
+                    vec!["aa", "b"],
+                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    let sql6 = "GRANT USAGE ON ALL SEQUENCES IN SCHEMA bus TO a, beta WITH GRANT OPTION";
+    match verified_stmt(sql6) {
+        Statement::Grant {
+            privileges,
+            objects,
+            ..
+        } => match (privileges, objects) {
+            (Privileges::Actions(actions), GrantObjects::AllSequencesInSchema { schemas }) => {
+                assert_eq!(vec![Action::Usage], actions);
+                assert_eq!(
+                    vec!["bus"],
+                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_revoke() {
+    let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst CASCADE";
+    match verified_stmt(sql) {
+        Statement::Revoke {
+            privileges,
+            objects: GrantObjects::Tables(tables),
+            grantees,
+            cascade,
+            granted_by,
+        } => {
+            assert_eq!(
+                Privileges::All {
+                    with_privileges_keyword: true
+                },
+                privileges
+            );
+            assert_eq!(
+                vec!["users", "auth"],
+                tables.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert_eq!(
+                vec!["analyst"],
+                grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert!(cascade);
+            assert_eq!(None, granted_by);
         }
         _ => unreachable!(),
     }

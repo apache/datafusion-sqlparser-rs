@@ -285,6 +285,12 @@ pub enum Expr {
     Subquery(Box<Query>),
     /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
     ListAgg(ListAgg),
+    /// The `GROUPING SETS` expr.
+    GroupingSets(Vec<Vec<Expr>>),
+    /// The `CUBE` expr.
+    Cube(Vec<Vec<Expr>>),
+    /// The `ROLLUP` expr.
+    Rollup(Vec<Vec<Expr>>),
 }
 
 impl fmt::Display for Expr {
@@ -388,6 +394,44 @@ impl fmt::Display for Expr {
                 substr_expr,
                 str_expr,
             } => write!(f, "POSITION({} IN {})", substr_expr, str_expr),
+            Expr::GroupingSets(sets) => {
+                write!(f, "GROUPING SETS (")?;
+                let mut sep = "";
+                for set in sets {
+                    write!(f, "{}", sep)?;
+                    sep = ", ";
+                    write!(f, "({})", display_comma_separated(set))?;
+                }
+                write!(f, ")")
+            }
+            Expr::Cube(sets) => {
+                write!(f, "CUBE (")?;
+                let mut sep = "";
+                for set in sets {
+                    write!(f, "{}", sep)?;
+                    sep = ", ";
+                    if set.len() == 1 {
+                        write!(f, "{}", set[0])?;
+                    } else {
+                        write!(f, "({})", display_comma_separated(set))?;
+                    }
+                }
+                write!(f, ")")
+            }
+            Expr::Rollup(sets) => {
+                write!(f, "ROLLUP (")?;
+                let mut sep = "";
+                for set in sets {
+                    write!(f, "{}", sep)?;
+                    sep = ", ";
+                    if set.len() == 1 {
+                        write!(f, "{}", set[0])?;
+                    } else {
+                        write!(f, "({})", display_comma_separated(set))?;
+                    }
+                }
+                write!(f, ")")
+            }
             Expr::Substring {
                 expr,
                 substring_from,
@@ -620,6 +664,7 @@ pub enum Statement {
         after_columns: Vec<Ident>,
         /// whether the insert has the table keyword (Hive)
         table: bool,
+        on: Option<OnInsert>,
     },
     // TODO: Support ROW FORMAT
     Directory {
@@ -640,7 +685,7 @@ pub enum Statement {
     /// UPDATE
     Update {
         /// TABLE
-        table_name: ObjectName,
+        table: TableWithJoins,
         /// Column assignments
         assignments: Vec<Assignment>,
         /// WHERE
@@ -776,6 +821,22 @@ pub enum Statement {
     Assert {
         condition: Expr,
         message: Option<Expr>,
+    },
+    /// GRANT privileges ON objects TO grantees
+    Grant {
+        privileges: Privileges,
+        objects: GrantObjects,
+        grantees: Vec<Ident>,
+        with_grant_option: bool,
+        granted_by: Option<Ident>,
+    },
+    /// REVOKE privileges ON objects FROM grantees
+    Revoke {
+        privileges: Privileges,
+        objects: GrantObjects,
+        grantees: Vec<Ident>,
+        granted_by: Option<Ident>,
+        cascade: bool,
     },
     /// `DEALLOCATE [ PREPARE ] { name | ALL }`
     ///
@@ -945,6 +1006,7 @@ impl fmt::Display for Statement {
                 source,
                 table,
                 format,
+                on,
             } => {
                 if let Some(action) = or {
                     write!(f, "INSERT OR {} INTO {} ", action, table_name)?;
@@ -980,7 +1042,12 @@ impl fmt::Display for Statement {
                     if let Some(source) = source {
                         write!(f, "{}", source)?;
                     }
+
+                    if let Some(on) = on {
+                        write!(f, "{}", on)?;
+                    }
                 }
+
                 Ok(())
             }
 
@@ -1010,11 +1077,11 @@ impl fmt::Display for Statement {
                 write!(f, "\n\\.")
             }
             Statement::Update {
-                table_name,
+                table,
                 assignments,
                 selection,
             } => {
-                write!(f, "UPDATE {}", table_name)?;
+                write!(f, "UPDATE {}", table)?;
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
@@ -1358,6 +1425,40 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::Grant {
+                privileges,
+                objects,
+                grantees,
+                with_grant_option,
+                granted_by,
+            } => {
+                write!(f, "GRANT {} ", privileges)?;
+                write!(f, "ON {} ", objects)?;
+                write!(f, "TO {}", display_comma_separated(grantees))?;
+                if *with_grant_option {
+                    write!(f, " WITH GRANT OPTION")?;
+                }
+                if let Some(grantor) = granted_by {
+                    write!(f, " GRANTED BY {}", grantor)?;
+                }
+                Ok(())
+            }
+            Statement::Revoke {
+                privileges,
+                objects,
+                grantees,
+                granted_by,
+                cascade,
+            } => {
+                write!(f, "REVOKE {} ", privileges)?;
+                write!(f, "ON {} ", objects)?;
+                write!(f, "FROM {}", display_comma_separated(grantees))?;
+                if let Some(grantor) = granted_by {
+                    write!(f, " GRANTED BY {}", grantor)?;
+                }
+                write!(f, " {}", if *cascade { "CASCADE" } else { "RESTRICT" })?;
+                Ok(())
+            }
             Statement::Deallocate { name, prepare } => write!(
                 f,
                 "DEALLOCATE {prepare}{name}",
@@ -1386,17 +1487,168 @@ impl fmt::Display for Statement {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
+pub enum OnInsert {
+    /// ON DUPLICATE KEY UPDATE (MySQL when the key already exists, then execute an update instead)
+    DuplicateKeyUpdate(Vec<Assignment>),
+}
+
+impl fmt::Display for OnInsert {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::DuplicateKeyUpdate(expr) => write!(
+                f,
+                " ON DUPLICATE KEY UPDATE {}",
+                display_comma_separated(expr)
+            ),
+        }
+    }
+}
+
+/// Privileges granted in a GRANT statement or revoked in a REVOKE statement.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Privileges {
+    /// All privileges applicable to the object type
+    All {
+        /// Optional keyword from the spec, ignored in practice
+        with_privileges_keyword: bool,
+    },
+    /// Specific privileges (e.g. `SELECT`, `INSERT`)
+    Actions(Vec<Action>),
+}
+
+impl fmt::Display for Privileges {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Privileges::All {
+                with_privileges_keyword,
+            } => {
+                write!(
+                    f,
+                    "ALL{}",
+                    if *with_privileges_keyword {
+                        " PRIVILEGES"
+                    } else {
+                        ""
+                    }
+                )
+            }
+            Privileges::Actions(actions) => {
+                write!(f, "{}", display_comma_separated(actions).to_string())
+            }
+        }
+    }
+}
+
+/// A privilege on a database object (table, sequence, etc.).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Action {
+    Connect,
+    Create,
+    Delete,
+    Execute,
+    Insert { columns: Option<Vec<Ident>> },
+    References { columns: Option<Vec<Ident>> },
+    Select { columns: Option<Vec<Ident>> },
+    Temporary,
+    Trigger,
+    Truncate,
+    Update { columns: Option<Vec<Ident>> },
+    Usage,
+}
+
+impl fmt::Display for Action {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Action::Connect => f.write_str("CONNECT")?,
+            Action::Create => f.write_str("CREATE")?,
+            Action::Delete => f.write_str("DELETE")?,
+            Action::Execute => f.write_str("EXECUTE")?,
+            Action::Insert { .. } => f.write_str("INSERT")?,
+            Action::References { .. } => f.write_str("REFERENCES")?,
+            Action::Select { .. } => f.write_str("SELECT")?,
+            Action::Temporary => f.write_str("TEMPORARY")?,
+            Action::Trigger => f.write_str("TRIGGER")?,
+            Action::Truncate => f.write_str("TRUNCATE")?,
+            Action::Update { .. } => f.write_str("UPDATE")?,
+            Action::Usage => f.write_str("USAGE")?,
+        };
+        match self {
+            Action::Insert { columns }
+            | Action::References { columns }
+            | Action::Select { columns }
+            | Action::Update { columns } => {
+                if let Some(columns) = columns {
+                    write!(f, " ({})", display_comma_separated(columns))?;
+                }
+            }
+            _ => (),
+        };
+        Ok(())
+    }
+}
+
+/// Objects on which privileges are granted in a GRANT statement.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum GrantObjects {
+    /// Grant privileges on `ALL SEQUENCES IN SCHEMA <schema_name> [, ...]`
+    AllSequencesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `ALL TABLES IN SCHEMA <schema_name> [, ...]`
+    AllTablesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on specific schemas
+    Schemas(Vec<ObjectName>),
+    /// Grant privileges on specific sequences
+    Sequences(Vec<ObjectName>),
+    /// Grant privileges on specific tables
+    Tables(Vec<ObjectName>),
+}
+
+impl fmt::Display for GrantObjects {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GrantObjects::Sequences(sequences) => {
+                write!(f, "SEQUENCE {}", display_comma_separated(sequences))
+            }
+            GrantObjects::Schemas(schemas) => {
+                write!(f, "SCHEMA {}", display_comma_separated(schemas))
+            }
+            GrantObjects::Tables(tables) => {
+                write!(f, "{}", display_comma_separated(tables))
+            }
+            GrantObjects::AllSequencesInSchema { schemas } => {
+                write!(
+                    f,
+                    "ALL SEQUENCES IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::AllTablesInSchema { schemas } => {
+                write!(
+                    f,
+                    "ALL TABLES IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+        }
+    }
+}
+
 /// SQL assignment `foo = expr` as used in SQLUpdate
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Assignment {
-    pub id: Ident,
+    pub id: Vec<Ident>,
     pub value: Expr,
 }
 
 impl fmt::Display for Assignment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} = {}", self.id, self.value)
+        write!(f, "{} = {}", display_separated(&self.id, "."), self.value)
     }
 }
 
@@ -1597,6 +1849,7 @@ pub enum HiveRowFormat {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[allow(clippy::large_enum_variant)]
 pub enum HiveIOFormat {
     IOF {
         input_format: Expr,
@@ -1753,5 +2006,94 @@ mod tests {
     fn test_window_frame_default() {
         let window_frame = WindowFrame::default();
         assert_eq!(WindowFrameBound::Preceding(None), window_frame.start_bound);
+    }
+
+    #[test]
+    fn test_grouping_sets_display() {
+        // a and b in different group
+        let grouping_sets = Expr::GroupingSets(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![Expr::Identifier(Ident::new("b"))],
+        ]);
+        assert_eq!("GROUPING SETS ((a), (b))", format!("{}", grouping_sets));
+
+        // a and b in the same group
+        let grouping_sets = Expr::GroupingSets(vec![vec![
+            Expr::Identifier(Ident::new("a")),
+            Expr::Identifier(Ident::new("b")),
+        ]]);
+        assert_eq!("GROUPING SETS ((a, b))", format!("{}", grouping_sets));
+
+        // (a, b) and (c, d) in different group
+        let grouping_sets = Expr::GroupingSets(vec![
+            vec![
+                Expr::Identifier(Ident::new("a")),
+                Expr::Identifier(Ident::new("b")),
+            ],
+            vec![
+                Expr::Identifier(Ident::new("c")),
+                Expr::Identifier(Ident::new("d")),
+            ],
+        ]);
+        assert_eq!(
+            "GROUPING SETS ((a, b), (c, d))",
+            format!("{}", grouping_sets)
+        );
+    }
+
+    #[test]
+    fn test_rollup_display() {
+        let rollup = Expr::Rollup(vec![vec![Expr::Identifier(Ident::new("a"))]]);
+        assert_eq!("ROLLUP (a)", format!("{}", rollup));
+
+        let rollup = Expr::Rollup(vec![vec![
+            Expr::Identifier(Ident::new("a")),
+            Expr::Identifier(Ident::new("b")),
+        ]]);
+        assert_eq!("ROLLUP ((a, b))", format!("{}", rollup));
+
+        let rollup = Expr::Rollup(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![Expr::Identifier(Ident::new("b"))],
+        ]);
+        assert_eq!("ROLLUP (a, b)", format!("{}", rollup));
+
+        let rollup = Expr::Rollup(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![
+                Expr::Identifier(Ident::new("b")),
+                Expr::Identifier(Ident::new("c")),
+            ],
+            vec![Expr::Identifier(Ident::new("d"))],
+        ]);
+        assert_eq!("ROLLUP (a, (b, c), d)", format!("{}", rollup));
+    }
+
+    #[test]
+    fn test_cube_display() {
+        let cube = Expr::Cube(vec![vec![Expr::Identifier(Ident::new("a"))]]);
+        assert_eq!("CUBE (a)", format!("{}", cube));
+
+        let cube = Expr::Cube(vec![vec![
+            Expr::Identifier(Ident::new("a")),
+            Expr::Identifier(Ident::new("b")),
+        ]]);
+        assert_eq!("CUBE ((a, b))", format!("{}", cube));
+
+        let cube = Expr::Cube(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![Expr::Identifier(Ident::new("b"))],
+        ]);
+        assert_eq!("CUBE (a, b)", format!("{}", cube));
+
+        let cube = Expr::Cube(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![
+                Expr::Identifier(Ident::new("b")),
+                Expr::Identifier(Ident::new("c")),
+            ],
+            vec![Expr::Identifier(Ident::new("d"))],
+        ]);
+        assert_eq!("CUBE (a, (b, c), d)", format!("{}", cube));
     }
 }

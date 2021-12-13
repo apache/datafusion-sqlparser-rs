@@ -2105,6 +2105,49 @@ fn parse_literal_string() {
 }
 
 #[test]
+fn parse_literal_negative() {
+    let sql = "SELECT -256";
+    let select = verified_only_select(sql);
+    let expr = expr_from_projection(only(&select.projection));
+
+    #[cfg(feature = "bigdecimal")]
+    assert_eq!(
+        &Expr::Value(Value::Number(bigdecimal::BigDecimal::from(-256), false)),
+        expr
+    );
+
+    #[cfg(not(feature = "bigdecimal"))]
+    assert_eq!(expr, &Expr::Value(Value::Number("-256".into(), false)));
+}
+
+#[test]
+fn parse_math() {
+    let sql = "SELECT 1 + 2 * 3 - 4";
+    let select = verified_only_select(sql);
+    let expr = expr_from_projection(only(&select.projection));
+    let expr_str = format!("{:?}", expr);
+
+    #[cfg(feature = "bigdecimal")]
+    assert_eq!(
+        "BinaryOp { left: BinaryOp \
+        { left: Value(Number(BigDecimal(\"1\"), false)), op: Plus, right: BinaryOp \
+        { left: Value(Number(BigDecimal(\"2\"), false)), op: Multiply, \
+        right: Value(Number(BigDecimal(\"3\"), false)) } }, op: Minus, \
+        right: Value(Number(BigDecimal(\"4\"), false)) }",
+        expr_str
+    );
+
+    #[cfg(not(feature = "bigdecimal"))]
+    assert_eq!(
+        "BinaryOp \
+    { left: BinaryOp { left: Value(Number(\"1\", false)), op: Plus, \
+    right: BinaryOp { left: Value(Number(\"2\", false)), op: Multiply, \
+    right: Value(Number(\"3\", false)) } }, op: Minus, right: Value(Number(\"4\", false)) }",
+        expr_str
+    );
+}
+
+#[test]
 fn parse_literal_date() {
     let sql = "SELECT DATE '1999-01-01'";
     let select = verified_only_select(sql);

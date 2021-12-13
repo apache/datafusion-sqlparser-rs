@@ -1600,7 +1600,7 @@ pub enum HiveRowFormat {
 pub enum HiveIOFormat {
     IOF {
         input_format: Expr,
-        output_format: Expr,
+        output_format: Box<Expr>,
     },
     FileFormat {
         format: FileFormat,

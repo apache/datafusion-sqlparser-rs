@@ -11,11 +11,13 @@
 // limitations under the License.
 
 #[cfg(not(feature = "std"))]
-use alloc::string::String;
+use alloc::{format, string::String};
 use core::fmt;
 
 #[cfg(feature = "bigdecimal")]
 use bigdecimal::BigDecimal;
+#[cfg(feature = "bigdecimal")]
+use core::ops::Neg;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -59,6 +61,37 @@ pub enum Value {
     },
     /// `NULL` value
     Null,
+}
+
+impl Value {
+    pub fn to_negative(self) -> Self {
+        match self {
+            #[cfg(not(feature = "bigdecimal"))]
+            Value::Number(x, v) => Value::Number(format!("-{}", x), v),
+            #[cfg(feature = "bigdecimal")]
+            Value::Number(x, v) => Value::Number(x.neg(), v),
+
+            Value::SingleQuotedString(v) => Value::SingleQuotedString(format!("-{}", v)),
+            Value::NationalStringLiteral(v) => Value::NationalStringLiteral(format!("-{}", v)),
+            Value::HexStringLiteral(v) => Value::HexStringLiteral(format!("-{}", v)),
+            Value::DoubleQuotedString(v) => Value::DoubleQuotedString(format!("-{}", v)),
+            Value::Boolean(v) => Value::Boolean(v),
+            Value::Interval {
+                value,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision,
+            } => Value::Interval {
+                value: format!("-{}", value),
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision,
+            },
+            Value::Null => Value::Null,
+        }
+    }
 }
 
 impl fmt::Display for Value {

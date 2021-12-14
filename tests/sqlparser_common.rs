@@ -3586,14 +3586,22 @@ fn parse_set_transaction() {
     // TRANSACTION, so no need to duplicate the tests here. We just do a quick
     // sanity check.
     match verified_stmt("SET TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE") {
-        Statement::SetTransaction { modes, .. } => assert_eq!(
+        Statement::SetTransaction {
             modes,
-            vec![
-                TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
-                TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
-                TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable),
-            ]
-        ),
+            session,
+            snapshot,
+        } => {
+            assert_eq!(
+                modes,
+                vec![
+                    TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
+                    TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
+                    TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable),
+                ]
+            );
+            assert_eq!(session, false);
+            assert_eq!(snapshot, None);
+        }
         _ => unreachable!(),
     }
 }

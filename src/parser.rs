@@ -2683,13 +2683,13 @@ impl<'a> Parser<'a> {
                 return Ok(Statement::SetTransaction {
                     modes: vec![],
                     snapshot: Some(snaphot_id),
-                    session: false
+                    session: false,
                 });
             }
             Ok(Statement::SetTransaction {
                 modes: self.parse_transaction_modes()?,
                 snapshot: None,
-                session: false
+                session: false,
             })
         } else {
             self.expected("equals sign or TO", self.peek_token())

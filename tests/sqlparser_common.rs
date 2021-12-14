@@ -1942,6 +1942,108 @@ fn parse_alter_table_drop_column() {
 }
 
 #[test]
+fn parse_alter_table_alter_column() {
+    let alter_stmt = "ALTER TABLE tab";
+    match verified_stmt(&format!(
+        "{} ALTER COLUMN is_active SET NOT NULL",
+        alter_stmt
+    )) {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::AlterColumn { column_name, op },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("is_active", column_name.to_string());
+            assert_eq!(op, AlterColumnOperation::SetNotNull {});
+        }
+        _ => unreachable!(),
+    }
+
+    one_statement_parses_to(
+        "ALTER TABLE tab ALTER is_active DROP NOT NULL",
+        "ALTER TABLE tab ALTER COLUMN is_active DROP NOT NULL",
+    );
+
+    match verified_stmt(&format!(
+        "{} ALTER COLUMN is_active SET DEFAULT false",
+        alter_stmt
+    )) {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::AlterColumn { column_name, op },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("is_active", column_name.to_string());
+            assert_eq!(
+                op,
+                AlterColumnOperation::SetDefault {
+                    value: Expr::Value(Value::Boolean(false))
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt(&format!(
+        "{} ALTER COLUMN is_active DROP DEFAULT",
+        alter_stmt
+    )) {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::AlterColumn { column_name, op },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("is_active", column_name.to_string());
+            assert_eq!(op, AlterColumnOperation::DropDefault {});
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_alter_column_type() {
+    let alter_stmt = "ALTER TABLE tab";
+    match verified_stmt("ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT") {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::AlterColumn { column_name, op },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("is_active", column_name.to_string());
+            assert_eq!(
+                op,
+                AlterColumnOperation::SetDataType {
+                    data_type: DataType::Text,
+                    using: None,
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let res = Parser::parse_sql(
+        &GenericDialect {},
+        &format!("{} ALTER COLUMN is_active TYPE TEXT", alter_stmt),
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN, found: TYPE".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = Parser::parse_sql(
+        &GenericDialect {},
+        &format!(
+            "{} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'",
+            alter_stmt
+        ),
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: USING".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_bad_constraint() {
     let res = parse_sql_statements("ALTER TABLE tab ADD");
     assert_eq!(

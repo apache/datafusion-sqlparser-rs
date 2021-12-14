@@ -31,8 +31,8 @@ use serde::{Deserialize, Serialize};
 
 pub use self::data_type::DataType;
 pub use self::ddl::{
-    AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, ReferentialAction,
-    TableConstraint,
+    AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
+    ReferentialAction, TableConstraint,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
@@ -1499,17 +1499,14 @@ impl fmt::Display for Statement {
                 object_type,
                 object_name,
                 comment,
-            } => write!(
-                f,
-                "COMMENT ON {} {} IS {}",
-                object_type,
-                object_name,
+            } => {
+                write!(f, "COMMENT ON {} {} IS ", object_type, object_name)?;
                 if let Some(c) = comment {
-                    format!("'{}'", c)
+                    write!(f, "'{}'", c)
                 } else {
-                    "NULL".to_string()
+                    write!(f, "NULL")
                 }
-            ),
+            }
         }
     }
 }

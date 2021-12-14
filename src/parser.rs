@@ -1908,7 +1908,12 @@ impl<'a> Parser<'a> {
                 }
             }
         } else if self.parse_keyword(Keyword::RENAME) {
-            if self.parse_keyword(Keyword::TO) {
+            if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::CONSTRAINT) {
+                let old_name = self.parse_identifier()?;
+                self.expect_keyword(Keyword::TO)?;
+                let new_name = self.parse_identifier()?;
+                AlterTableOperation::RenameConstraint { old_name, new_name }
+            } else if self.parse_keyword(Keyword::TO) {
                 let table_name = self.parse_object_name()?;
                 AlterTableOperation::RenameTable { table_name }
             } else {
@@ -1978,6 +1983,38 @@ impl<'a> Parser<'a> {
                 data_type,
                 options,
             }
+        } else if self.parse_keyword(Keyword::ALTER) {
+            let _ = self.parse_keyword(Keyword::COLUMN);
+            let column_name = self.parse_identifier()?;
+            let is_postgresql = dialect_of!(self is PostgreSqlDialect);
+
+            let op = if self.parse_keywords(&[Keyword::SET, Keyword::NOT, Keyword::NULL]) {
+                AlterColumnOperation::SetNotNull {}
+            } else if self.parse_keywords(&[Keyword::DROP, Keyword::NOT, Keyword::NULL]) {
+                AlterColumnOperation::DropNotNull {}
+            } else if self.parse_keywords(&[Keyword::SET, Keyword::DEFAULT]) {
+                AlterColumnOperation::SetDefault {
+                    value: self.parse_expr()?,
+                }
+            } else if self.parse_keywords(&[Keyword::DROP, Keyword::DEFAULT]) {
+                AlterColumnOperation::DropDefault {}
+            } else if self.parse_keywords(&[Keyword::SET, Keyword::DATA, Keyword::TYPE])
+                || (is_postgresql && self.parse_keyword(Keyword::TYPE))
+            {
+                let data_type = self.parse_data_type()?;
+                let using = if is_postgresql && self.parse_keyword(Keyword::USING) {
+                    Some(self.parse_expr()?)
+                } else {
+                    None
+                };
+                AlterColumnOperation::SetDataType { data_type, using }
+            } else {
+                return self.expected(
+                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN",
+                    self.peek_token(),
+                );
+            };
+            AlterTableOperation::AlterColumn { column_name, op }
         } else {
             return self.expected(
                 "ADD, RENAME, PARTITION or DROP after ALTER TABLE",

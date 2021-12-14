@@ -264,6 +264,50 @@ fn parse_create_table_constraints_only() {
 }
 
 #[test]
+fn parse_alter_table_constraints_rename() {
+    match pg().verified_stmt("ALTER TABLE tab RENAME CONSTRAINT old_name TO new_name") {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::RenameConstraint { old_name, new_name },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!(old_name.to_string(), "old_name");
+            assert_eq!(new_name.to_string(), "new_name");
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_alter_column() {
+    pg().one_statement_parses_to(
+        "ALTER TABLE tab ALTER COLUMN is_active TYPE TEXT USING 'text'",
+        "ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'",
+    );
+
+    match pg()
+        .verified_stmt("ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'")
+    {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::AlterColumn { column_name, op },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("is_active", column_name.to_string());
+            let using_expr = Expr::Value(Value::SingleQuotedString("text".to_string()));
+            assert_eq!(
+                op,
+                AlterColumnOperation::SetDataType {
+                    data_type: DataType::Text,
+                    using: Some(using_expr),
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_if_not_exists() {
     let sql = "CREATE TABLE IF NOT EXISTS uk_cities ()";
     let ast = pg_and_generic().verified_stmt(sql);

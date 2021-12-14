@@ -3599,7 +3599,7 @@ fn parse_set_transaction() {
                     TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable),
                 ]
             );
-            assert_eq!(session, false);
+            assert!(!session);
             assert_eq!(snapshot, None);
         }
         _ => unreachable!(),

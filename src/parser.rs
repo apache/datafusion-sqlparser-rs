@@ -1030,7 +1030,7 @@ impl<'a> Parser<'a> {
         let key = self.parse_map_key()?;
         let tok = self.consume_token(&Token::RBracket);
         debug!("Tok: {}", tok);
-        let mut key_parts: Vec<Value> = vec![key];
+        let mut key_parts: Vec<Expr> = vec![key];
         while self.consume_token(&Token::LBracket) {
             let key = self.parse_map_key()?;
             let tok = self.consume_token(&Token::RBracket);
@@ -2096,17 +2096,20 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a map key string
-    pub fn parse_map_key(&mut self) -> Result<Value, ParserError> {
+    pub fn parse_map_key(&mut self) -> Result<Expr, ParserError> {
         match self.next_token() {
             Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => {
-                Ok(Value::SingleQuotedString(value))
+                if self.peek_token() == Token::LParen {
+                    return self.parse_function(ObjectName(vec![Ident::new(value)]));
+                }
+                Ok(Expr::Value(Value::SingleQuotedString(value)))
             }
-            Token::SingleQuotedString(s) => Ok(Value::SingleQuotedString(s)),
+            Token::SingleQuotedString(s) => Ok(Expr::Value(Value::SingleQuotedString(s))),
             #[cfg(not(feature = "bigdecimal"))]
             Token::Number(s, _) => Ok(Value::Number(s, false)),
             #[cfg(feature = "bigdecimal")]
-            Token::Number(s, _) => Ok(Value::Number(s.parse().unwrap(), false)),
-            unexpected => self.expected("literal string or number", unexpected),
+            Token::Number(s, _) => Ok(Expr::Value(Value::Number(s.parse().unwrap(), false))),
+            unexpected => self.expected("literal string, number or function", unexpected),
         }
     }
 

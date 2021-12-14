@@ -11,6 +11,7 @@
 // limitations under the License.
 
 mod ansi;
+mod clickhouse;
 mod generic;
 mod hive;
 mod mssql;
@@ -23,6 +24,7 @@ use core::any::{Any, TypeId};
 use core::fmt::Debug;
 
 pub use self::ansi::AnsiDialect;
+pub use self::clickhouse::ClickHouseDialect;
 pub use self::generic::GenericDialect;
 pub use self::hive::HiveDialect;
 pub use self::mssql::MsSqlDialect;

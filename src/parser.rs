@@ -2670,9 +2670,26 @@ impl<'a> Parser<'a> {
                     value: values,
                 });
             }
-        } else if variable.value == "TRANSACTION" && modifier.is_none() {
+        } else if variable.value == "CHARACTERISTICS" {
+            self.expect_keywords(&[Keyword::AS, Keyword::TRANSACTION])?;
             Ok(Statement::SetTransaction {
                 modes: self.parse_transaction_modes()?,
+                snapshot: None,
+                session: true,
+            })
+        } else if variable.value == "TRANSACTION" && modifier.is_none() {
+            if self.parse_keyword(Keyword::SNAPSHOT) {
+                let snaphot_id = self.parse_value()?;
+                return Ok(Statement::SetTransaction {
+                    modes: vec![],
+                    snapshot: Some(snaphot_id),
+                    session: false,
+                });
+            }
+            Ok(Statement::SetTransaction {
+                modes: self.parse_transaction_modes()?,
+                snapshot: None,
+                session: false,
             })
         } else {
             self.expected("equals sign or TO", self.peek_token())

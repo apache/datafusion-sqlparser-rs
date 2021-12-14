@@ -786,7 +786,11 @@ pub enum Statement {
     /// `{ BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...`
     StartTransaction { modes: Vec<TransactionMode> },
     /// `SET TRANSACTION ...`
-    SetTransaction { modes: Vec<TransactionMode> },
+    SetTransaction {
+        modes: Vec<TransactionMode>,
+        snapshot: Option<Value>,
+        session: bool,
+    },
     /// `COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
     Commit { chain: bool },
     /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
@@ -1369,10 +1373,21 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::SetTransaction { modes } => {
-                write!(f, "SET TRANSACTION")?;
+            Statement::SetTransaction {
+                modes,
+                snapshot,
+                session,
+            } => {
+                if *session {
+                    write!(f, "SET SESSION CHARACTERISTICS AS TRANSACTION")?;
+                } else {
+                    write!(f, "SET TRANSACTION")?;
+                }
                 if !modes.is_empty() {
                     write!(f, " {}", display_comma_separated(modes))?;
+                }
+                if let Some(snapshot_id) = snapshot {
+                    write!(f, " SNAPSHOT {}", snapshot_id)?;
                 }
                 Ok(())
             }

@@ -3620,3 +3620,18 @@ fn verified_only_select(query: &str) -> Select {
 fn verified_expr(query: &str) -> Expr {
     all_dialects().verified_expr(query)
 }
+
+#[test]
+fn parse_time_functions() {
+    let sql = "SELECT CURRENT_TIMESTAMP()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+}

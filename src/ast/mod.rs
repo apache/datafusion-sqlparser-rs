@@ -157,16 +157,6 @@ impl fmt::Display for ObjectName {
 pub enum Expr {
     /// Identifier e.g. table name or column name
     Identifier(Ident),
-    /// Unqualified wildcard (`*`). SQL allows this in limited contexts, such as:
-    /// - right after `SELECT` (which is represented as a [SelectItem::Wildcard] instead)
-    /// - or as part of an aggregate function, e.g. `COUNT(*)`,
-    ///
-    /// ...but we currently also accept it in contexts where it doesn't make
-    /// sense, such as `* + *`
-    Wildcard,
-    /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
-    /// (Same caveats apply to `QualifiedWildcard` as to `Wildcard`.)
-    QualifiedWildcard(Vec<Ident>),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
     /// `IS NULL` operator
@@ -301,8 +291,6 @@ impl fmt::Display for Expr {
                 }
                 Ok(())
             }
-            Expr::Wildcard => f.write_str("*"),
-            Expr::QualifiedWildcard(q) => write!(f, "{}.*", display_separated(q, ".")),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
             Expr::IsNull(ast) => write!(f, "{} IS NULL", ast),
             Expr::IsNotNull(ast) => write!(f, "{} IS NOT NULL", ast),
@@ -1642,9 +1630,29 @@ impl fmt::Display for Assignment {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum FunctionArgExpr {
+    Expr(Expr),
+    /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
+    QualifiedWildcard(ObjectName),
+    /// An unqualified `*`
+    Wildcard,
+}
+
+impl fmt::Display for FunctionArgExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FunctionArgExpr::Expr(expr) => write!(f, "{}", expr),
+            FunctionArgExpr::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
+            FunctionArgExpr::Wildcard => f.write_str("*"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FunctionArg {
-    Named { name: Ident, arg: Expr },
-    Unnamed(Expr),
+    Named { name: Ident, arg: FunctionArgExpr },
+    Unnamed(FunctionArgExpr),
 }
 
 impl fmt::Display for FunctionArg {

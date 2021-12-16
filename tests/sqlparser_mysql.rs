@@ -341,9 +341,9 @@ fn parse_insert_with_on_duplicate_update() {
                         value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             params: vec![],
-                            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
-                                "description"
-                            )))],
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Identifier(Ident::new("description"))
+                            ))],
                             over: None,
                             distinct: false
                         })
@@ -353,9 +353,9 @@ fn parse_insert_with_on_duplicate_update() {
                         value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             params: vec![],
-                            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
-                                "perm_create"
-                            )))],
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Identifier(Ident::new("perm_create"))
+                            ))],
                             over: None,
                             distinct: false
                         })
@@ -365,9 +365,9 @@ fn parse_insert_with_on_duplicate_update() {
                         value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             params: vec![],
-                            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
-                                "perm_read"
-                            )))],
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Identifier(Ident::new("perm_read"))
+                            ))],
                             over: None,
                             distinct: false
                         })
@@ -377,9 +377,9 @@ fn parse_insert_with_on_duplicate_update() {
                         value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             params: vec![],
-                            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
-                                "perm_update"
-                            )))],
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Identifier(Ident::new("perm_update"))
+                            ))],
                             over: None,
                             distinct: false
                         })
@@ -389,9 +389,9 @@ fn parse_insert_with_on_duplicate_update() {
                         value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             params: vec![],
-                            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new(
-                                "perm_delete"
-                            )))],
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                Expr::Identifier(Ident::new("perm_delete"))
+                            ))],
                             over: None,
                             distinct: false
                         })

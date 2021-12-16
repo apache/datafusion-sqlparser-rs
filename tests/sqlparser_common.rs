@@ -3622,21 +3622,6 @@ fn verified_expr(query: &str) -> Expr {
 }
 
 #[test]
-fn parse_time_functions() {
-    let sql = "SELECT CURRENT_TIMESTAMP()";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]),
-            args: vec![],
-            over: None,
-            distinct: false,
-        }),
-        expr_from_projection(&select.projection[0])
-    );
-}
-
-#[test]
 fn parse_offset_and_limit() {
     let expect = Some(Offset {
         value: Expr::Value(number("2")),

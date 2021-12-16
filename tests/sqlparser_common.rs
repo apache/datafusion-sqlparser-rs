@@ -3635,3 +3635,15 @@ fn parse_time_functions() {
         expr_from_projection(&select.projection[0])
     );
 }
+
+#[test]
+fn parse_offset_and_limit() {
+    let expect = Some(Offset {
+        value: Expr::Value(number("2")),
+        rows: OffsetRows::None,
+    });
+    let ast = verified_query("SELECT foo FROM bar LIMIT 2 OFFSET 2");
+    assert_eq!(ast.offset, expect);
+    assert_eq!(ast.limit, Some(Expr::Value(number("2"))));
+}
+

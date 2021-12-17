@@ -3631,4 +3631,3 @@ fn parse_offset_and_limit() {
     assert_eq!(ast.offset, expect);
     assert_eq!(ast.limit, Some(Expr::Value(number("2"))));
 }
-

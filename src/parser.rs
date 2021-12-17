@@ -357,7 +357,9 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     Ok(Expr::Value(self.parse_value()?))
                 }
-                Keyword::CURRENT_TIMESTAMP | Keyword::CURRENT_TIME | Keyword::CURRENT_DATE => self.parse_time_functions(ObjectName(vec![w.to_ident()])),
+                Keyword::CURRENT_TIMESTAMP | Keyword::CURRENT_TIME | Keyword::CURRENT_DATE => {
+                    self.parse_time_functions(ObjectName(vec![w.to_ident()]))
+                }
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CAST => self.parse_cast_expr(),
                 Keyword::TRY_CAST => self.parse_try_cast_expr(),
@@ -516,11 +518,11 @@ impl<'a> Parser<'a> {
             vec![]
         };
         Ok(Expr::Function(Function {
-              name,
-              args,
-              over:None,
-              distinct:false,
-          }))
+            name,
+            args,
+            over: None,
+            distinct: false,
+        }))
     }
 
     pub fn parse_window_frame_units(&mut self) -> Result<WindowFrameUnits, ParserError> {

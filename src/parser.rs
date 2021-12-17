@@ -3332,20 +3332,27 @@ impl<'a> Parser<'a> {
             Ok(None)
         } else {
             let first_number = self.parse_number_value()?;
-            let second_number = if  self.consume_token(&Token::Comma){
-                Some(self.parse_number_value()?)
+            if dialect_of!(self is MsSqlDialect) {
+                let second_number = if  self.consume_token(&Token::Comma){
+                    Some(self.parse_number_value()?)
+                } else {
+                    None
+                };
+                match second_number {
+                    Some(count_number) => Ok(Some(Limit {
+                        offset: Some(Expr::Value(first_number)),
+                        count: Expr::Value(count_number),
+                    })),
+                    None => Ok(Some(Limit {
+                        offset: None,
+                        count: Expr::Value(first_number),
+                    })),
+                }
             } else {
-                None
-            };
-            match second_number {
-                Some(count_number) => Ok(Some(Limit {
-                    offset: Some(Expr::Value(first_number)),
-                    count: Expr::Value(count_number),
-                })),
-                None => Ok(Some(Limit {
-                    offset: None,
-                    count: Expr::Value(first_number),
-                })),
+                Ok(Some(Limit {
+                        offset: None,
+                        count: Expr::Value(first_number),
+                }))
             }
         }
     }

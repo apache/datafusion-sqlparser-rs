@@ -527,6 +527,7 @@ impl fmt::Display for OrderByExpr {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Limit {
+    // MySQL specific
     pub offset: Option<Expr>,
     pub count: Expr,
 }

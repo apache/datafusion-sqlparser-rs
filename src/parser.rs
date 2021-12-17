@@ -1077,7 +1077,7 @@ impl<'a> Parser<'a> {
             key_parts.push(key);
         }
         match expr {
-            e @ Expr::Identifier(_) | e @ Expr::CompoundIdentifier(_) => Ok(Expr::MapAccess {
+            e @ Expr::Identifier(_) | e @ Expr::CompoundIdentifier(_)| e @ Expr::Nested(_) => Ok(Expr::MapAccess {
                 column: Box::new(e),
                 keys: key_parts,
             }),

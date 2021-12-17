@@ -721,6 +721,29 @@ fn parse_map_access_expr() {
         },
         expr_from_projection(only(&select.projection)),
     );
+    let sql = "SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname = ((pg_catalog.current_schemas(true))[1])";
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("nspname"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Nested(Box::new(MapAccess {
+                column: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
+                    name: ObjectName(vec![
+                        Ident::new("pg_catalog"),
+                        Ident::new("current_schemas")
+                    ]),
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        Value::Boolean(true)
+                    )))],
+                    over: None,
+                    distinct: false
+                })))),
+                keys: vec![Value::Number("1".to_string(), false)],
+            }))),
+        },
+        select.selection.unwrap()
+    );
 }
 
 #[test]

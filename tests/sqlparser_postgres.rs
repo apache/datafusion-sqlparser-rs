@@ -714,14 +714,14 @@ fn parse_map_access_expr() {
                 quote_style: None
             })),
             keys: vec![
-                Value::Number(zero, false),
+                Value::Number(zero.clone(), false),
                 Value::SingleQuotedString("baz".to_string()),
                 Value::SingleQuotedString("fooz".to_string())
             ]
         },
         expr_from_projection(only(&select.projection)),
     );
-    let sql = "SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname = ((pg_catalog.current_schemas(true))[1])";
+    let sql = "SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname = ((pg_catalog.current_schemas(true))[0])";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
         Expr::BinaryOp {
@@ -739,7 +739,7 @@ fn parse_map_access_expr() {
                     over: None,
                     distinct: false
                 })))),
-                keys: vec![Value::Number("1".to_string(), false)],
+                keys: vec![Value::Number(zero, false)],
             }))),
         },
         select.selection.unwrap()

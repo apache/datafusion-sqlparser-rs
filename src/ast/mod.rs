@@ -31,8 +31,8 @@ use serde::{Deserialize, Serialize};
 
 pub use self::data_type::DataType;
 pub use self::ddl::{
-    AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, ReferentialAction,
-    TableConstraint,
+    AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
+    ReferentialAction, TableConstraint,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
@@ -592,6 +592,22 @@ impl fmt::Display for ShowCreateObject {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum CommentObject {
+    Column,
+    Table,
+}
+
+impl fmt::Display for CommentObject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CommentObject::Column => f.write_str("COLUMN"),
+            CommentObject::Table => f.write_str("TABLE"),
+        }
+    }
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -778,6 +794,14 @@ pub enum Statement {
         modes: Vec<TransactionMode>,
         snapshot: Option<Value>,
         session: bool,
+    },
+    /// `COMMENT ON ...`
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    Comment {
+        object_type: CommentObject,
+        object_name: ObjectName,
+        comment: Option<String>,
     },
     /// `COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
     Commit { chain: bool },
@@ -1458,6 +1482,18 @@ impl fmt::Display for Statement {
                     write!(f, "({}) ", display_comma_separated(data_types))?;
                 }
                 write!(f, "AS {}", statement)
+            }
+            Statement::Comment {
+                object_type,
+                object_name,
+                comment,
+            } => {
+                write!(f, "COMMENT ON {} {} IS ", object_type, object_name)?;
+                if let Some(c) = comment {
+                    write!(f, "'{}'", c)
+                } else {
+                    write!(f, "NULL")
+                }
             }
         }
     }

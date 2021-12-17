@@ -771,7 +771,7 @@ fn parse_map_access_expr() {
                         over: None,
                         distinct: false
                     })))),
-                    keys: vec![Value::Number(zero.clone(), false)],
+                    keys: vec![Value::Number(zero, false)],
                 }),
             }),
         })),

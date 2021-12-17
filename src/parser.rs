@@ -1077,10 +1077,12 @@ impl<'a> Parser<'a> {
             key_parts.push(key);
         }
         match expr {
-            e @ Expr::Identifier(_) | e @ Expr::CompoundIdentifier(_)| e @ Expr::Nested(_) => Ok(Expr::MapAccess {
-                column: Box::new(e),
-                keys: key_parts,
-            }),
+            e @ Expr::Identifier(_) | e @ Expr::CompoundIdentifier(_) | e @ Expr::Nested(_) => {
+                Ok(Expr::MapAccess {
+                    column: Box::new(e),
+                    keys: key_parts,
+                })
+            }
             _ => Ok(expr),
         }
     }
@@ -1177,7 +1179,7 @@ impl<'a> Parser<'a> {
             Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
-            Token::LBracket | Token::RBracket => Ok(10),
+            Token::LBracket | Token::RBracket => Ok(51),
             _ => Ok(0),
         }
     }

@@ -66,6 +66,22 @@ pub enum IsLateral {
 
 use IsLateral::*;
 
+pub enum WildcardExpr {
+    Expr(Expr),
+    QualifiedWildcard(ObjectName),
+    Wildcard,
+}
+
+impl From<WildcardExpr> for FunctionArgExpr {
+    fn from(wildcard_expr: WildcardExpr) -> Self {
+        match wildcard_expr {
+            WildcardExpr::Expr(expr) => Self::Expr(expr),
+            WildcardExpr::QualifiedWildcard(prefix) => Self::QualifiedWildcard(prefix),
+            WildcardExpr::Wildcard => Self::Wildcard,
+        }
+    }
+}
+
 impl From<TokenizerError> for ParserError {
     fn from(e: TokenizerError) -> Self {
         ParserError::TokenizerError(e.to_string())
@@ -283,6 +299,36 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse a new expression including wildcard & qualified wildcard
+    pub fn parse_wildcard_expr(&mut self) -> Result<WildcardExpr, ParserError> {
+        let index = self.index;
+
+        match self.next_token() {
+            Token::Word(w) if self.peek_token() == Token::Period => {
+                let mut id_parts: Vec<Ident> = vec![w.to_ident()];
+
+                while self.consume_token(&Token::Period) {
+                    match self.next_token() {
+                        Token::Word(w) => id_parts.push(w.to_ident()),
+                        Token::Mul => {
+                            return Ok(WildcardExpr::QualifiedWildcard(ObjectName(id_parts)));
+                        }
+                        unexpected => {
+                            return self.expected("an identifier or a '*' after '.'", unexpected);
+                        }
+                    }
+                }
+            }
+            Token::Mul => {
+                return Ok(WildcardExpr::Wildcard);
+            }
+            _ => (),
+        };
+
+        self.index = index;
+        self.parse_expr().map(WildcardExpr::Expr)
+    }
+
     /// Parse a new expression
     pub fn parse_expr(&mut self) -> Result<Expr, ParserError> {
         self.parse_subexpr(0)
@@ -377,23 +423,17 @@ impl<'a> Parser<'a> {
                 _ => match self.peek_token() {
                     Token::LParen | Token::Period => {
                         let mut id_parts: Vec<Ident> = vec![w.to_ident()];
-                        let mut ends_with_wildcard = false;
                         while self.consume_token(&Token::Period) {
                             match self.next_token() {
                                 Token::Word(w) => id_parts.push(w.to_ident()),
-                                Token::Mul => {
-                                    ends_with_wildcard = true;
-                                    break;
-                                }
                                 unexpected => {
                                     return self
                                         .expected("an identifier or a '*' after '.'", unexpected);
                                 }
                             }
                         }
-                        if ends_with_wildcard {
-                            Ok(Expr::QualifiedWildcard(id_parts))
-                        } else if self.consume_token(&Token::LParen) {
+
+                        if self.consume_token(&Token::LParen) {
                             self.prev_token();
                             self.parse_function(ObjectName(id_parts))
                         } else {
@@ -403,7 +443,6 @@ impl<'a> Parser<'a> {
                     _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word
-            Token::Mul => Ok(Expr::Wildcard),
             tok @ Token::Minus | tok @ Token::Plus => {
                 let op = if tok == Token::Plus {
                     UnaryOperator::Plus
@@ -2670,9 +2709,26 @@ impl<'a> Parser<'a> {
                     value: values,
                 });
             }
-        } else if variable.value == "TRANSACTION" && modifier.is_none() {
+        } else if variable.value == "CHARACTERISTICS" {
+            self.expect_keywords(&[Keyword::AS, Keyword::TRANSACTION])?;
             Ok(Statement::SetTransaction {
                 modes: self.parse_transaction_modes()?,
+                snapshot: None,
+                session: true,
+            })
+        } else if variable.value == "TRANSACTION" && modifier.is_none() {
+            if self.parse_keyword(Keyword::SNAPSHOT) {
+                let snaphot_id = self.parse_value()?;
+                return Ok(Statement::SetTransaction {
+                    modes: vec![],
+                    snapshot: Some(snaphot_id),
+                    session: false,
+                });
+            }
+            Ok(Statement::SetTransaction {
+                modes: self.parse_transaction_modes()?,
+                snapshot: None,
+                session: false,
             })
         } else {
             self.expected("equals sign or TO", self.peek_token())
@@ -3242,11 +3298,11 @@ impl<'a> Parser<'a> {
             let name = self.parse_identifier()?;
 
             self.expect_token(&Token::RArrow)?;
-            let arg = self.parse_expr()?;
+            let arg = self.parse_wildcard_expr()?.into();
 
             Ok(FunctionArg::Named { name, arg })
         } else {
-            Ok(FunctionArg::Unnamed(self.parse_expr()?))
+            Ok(FunctionArg::Unnamed(self.parse_wildcard_expr()?.into()))
         }
     }
 
@@ -3262,18 +3318,15 @@ impl<'a> Parser<'a> {
 
     /// Parse a comma-delimited list of projections after SELECT
     pub fn parse_select_item(&mut self) -> Result<SelectItem, ParserError> {
-        let expr = self.parse_expr()?;
-        if let Expr::Wildcard = expr {
-            Ok(SelectItem::Wildcard)
-        } else if let Expr::QualifiedWildcard(prefix) = expr {
-            Ok(SelectItem::QualifiedWildcard(ObjectName(prefix)))
-        } else {
-            // `expr` is a regular SQL expression and can be followed by an alias
-            if let Some(alias) = self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)? {
-                Ok(SelectItem::ExprWithAlias { expr, alias })
-            } else {
-                Ok(SelectItem::UnnamedExpr(expr))
-            }
+        match self.parse_wildcard_expr()? {
+            WildcardExpr::Expr(expr) => self
+                .parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
+                .map(|alias| match alias {
+                    Some(alias) => SelectItem::ExprWithAlias { expr, alias },
+                    None => SelectItem::UnnamedExpr(expr),
+                }),
+            WildcardExpr::QualifiedWildcard(prefix) => Ok(SelectItem::QualifiedWildcard(prefix)),
+            WildcardExpr::Wildcard => Ok(SelectItem::Wildcard),
         }
     }
 

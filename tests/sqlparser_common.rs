@@ -375,10 +375,19 @@ fn parse_select_wildcard() {
         ])),
         only(&select.projection)
     );
+
+    let sql = "SELECT * + * FROM foo;";
+    let result = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: +".to_string()),
+        result.unwrap_err(),
+    );
 }
 
 #[test]
 fn parse_count_wildcard() {
+    verified_only_select("SELECT COUNT(*) FROM Order WHERE id = 10");
+
     verified_only_select(
         "SELECT COUNT(Employee.*) FROM Order JOIN Employee ON Order.employee = Employee.id",
     );
@@ -437,7 +446,7 @@ fn parse_select_count_wildcard() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("COUNT")]),
-            args: vec![FunctionArg::Unnamed(Expr::Wildcard)],
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
             over: None,
             distinct: false,
         }),
@@ -452,10 +461,10 @@ fn parse_select_count_distinct() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("COUNT")]),
-            args: vec![FunctionArg::Unnamed(Expr::UnaryOp {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::UnaryOp {
                 op: UnaryOperator::Plus,
                 expr: Box::new(Expr::Identifier(Ident::new("x"))),
-            })],
+            }))],
             over: None,
             distinct: true,
         }),
@@ -1176,7 +1185,7 @@ fn parse_select_having() {
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("COUNT")]),
-                args: vec![FunctionArg::Unnamed(Expr::Wildcard)],
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
                 over: None,
                 distinct: false,
             })),
@@ -1985,7 +1994,9 @@ fn parse_scalar_function_in_projection() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("sqrt")]),
-            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new("id")))],
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                Expr::Identifier(Ident::new("id"))
+            ))],
             over: None,
             distinct: false,
         }),
@@ -2052,11 +2063,15 @@ fn parse_named_argument_function() {
             args: vec![
                 FunctionArg::Named {
                     name: Ident::new("a"),
-                    arg: Expr::Value(Value::SingleQuotedString("1".to_owned()))
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "1".to_owned()
+                    ))),
                 },
                 FunctionArg::Named {
                     name: Ident::new("b"),
-                    arg: Expr::Value(Value::SingleQuotedString("2".to_owned()))
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "2".to_owned()
+                    ))),
                 },
             ],
             over: None,
@@ -2316,9 +2331,9 @@ fn parse_table_function() {
         TableFactor::TableFunction { expr, alias } => {
             let expected_expr = Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("FUN")]),
-                args: vec![FunctionArg::Unnamed(Expr::Value(
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                     Value::SingleQuotedString("1".to_owned()),
-                ))],
+                )))],
                 over: None,
                 distinct: false,
             });
@@ -3606,14 +3621,22 @@ fn parse_set_transaction() {
     // TRANSACTION, so no need to duplicate the tests here. We just do a quick
     // sanity check.
     match verified_stmt("SET TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE") {
-        Statement::SetTransaction { modes } => assert_eq!(
+        Statement::SetTransaction {
             modes,
-            vec![
-                TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
-                TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
-                TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable),
-            ]
-        ),
+            session,
+            snapshot,
+        } => {
+            assert_eq!(
+                modes,
+                vec![
+                    TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
+                    TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
+                    TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable),
+                ]
+            );
+            assert!(!session);
+            assert_eq!(snapshot, None);
+        }
         _ => unreachable!(),
     }
 }

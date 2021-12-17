@@ -412,6 +412,7 @@ define_keywords!(
     SHOW,
     SIMILAR,
     SMALLINT,
+    SNAPSHOT,
     SOME,
     SORT,
     SPECIFIC,

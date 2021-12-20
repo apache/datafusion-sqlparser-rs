@@ -294,11 +294,8 @@ impl fmt::Display for Expr {
                 write!(f, "{}", column)?;
                 for k in keys {
                     match k {
-                        Expr::Value(v) => match v {
-                            k @ Value::Number(_, _) => write!(f, "[{}]", k)?,
-                            Value::SingleQuotedString(s) => write!(f, "[\"{}\"]", s)?,
-                            _ => write!(f, "[{}]", k)?,
-                        },
+                        k @ Expr::Value(Value::Number(_, _)) => write!(f, "[{}]", k)?,
+                        Expr::Value(Value::SingleQuotedString(s)) => write!(f, "[\"{}\"]", s)?,
                         _ => write!(f, "[{}]", k)?,
                     }
                 }

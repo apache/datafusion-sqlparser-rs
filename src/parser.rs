@@ -2106,7 +2106,7 @@ impl<'a> Parser<'a> {
             }
             Token::SingleQuotedString(s) => Ok(Expr::Value(Value::SingleQuotedString(s))),
             #[cfg(not(feature = "bigdecimal"))]
-            Token::Number(s, _) => Ok(Value::Number(s, false)),
+            Token::Number(s, _) => Ok(Expr::Value(Value::Number(s, false))),
             #[cfg(feature = "bigdecimal")]
             Token::Number(s, _) => Ok(Expr::Value(Value::Number(s.parse().unwrap(), false))),
             unexpected => self.expected("literal string, number or function", unexpected),

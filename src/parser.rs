@@ -352,6 +352,10 @@ impl<'a> Parser<'a> {
 
             expr = self.parse_infix(expr, next_precedence)?;
         }
+
+        if self.consume_token(&Token::LBracket) {
+            return self.parse_map_access(expr);
+        }
         Ok(expr)
     }
 
@@ -1066,23 +1070,19 @@ impl<'a> Parser<'a> {
                 op: UnaryOperator::PGPostfixFactorial,
                 expr: Box::new(expr),
             })
-        } else if Token::LBracket == tok {
-            self.parse_map_access(expr, precedence)
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             parser_err!(format!("No infix parser for token {:?}", tok))
         }
     }
 
-    pub fn parse_map_access(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
-        let key = self.parse_subexpr(precedence)?;
-        let tok = self.consume_token(&Token::RBracket);
-        debug!("Tok: {}", tok);
+    pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+        let key = self.parse_expr()?;
+        self.expect_token(&Token::RBracket)?;
         let mut key_parts: Vec<Expr> = vec![key];
         while self.consume_token(&Token::LBracket) {
-            let key = self.parse_subexpr(precedence)?;
-            let tok = self.consume_token(&Token::RBracket);
-            debug!("Tok: {}", tok);
+            let key = self.parse_expr()?;
+            self.expect_token(&Token::RBracket)?;
             key_parts.push(key);
         }
         Ok(Expr::MapAccess {
@@ -1183,7 +1183,6 @@ impl<'a> Parser<'a> {
             Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
-            Token::LBracket => Ok(51),
             _ => Ok(0),
         }
     }

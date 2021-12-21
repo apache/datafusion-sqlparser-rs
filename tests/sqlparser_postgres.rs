@@ -730,7 +730,7 @@ fn parse_map_access_expr() {
                 value: "foo".to_string(),
                 quote_style: None
             })),
-            keys: vec![Value::Number(zero.clone(), false)]
+            keys: vec![Expr::Value(Value::Number(zero.clone(), false))]
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -743,8 +743,8 @@ fn parse_map_access_expr() {
                 quote_style: None
             })),
             keys: vec![
-                Value::Number(zero.clone(), false),
-                Value::Number(zero.clone(), false)
+                Expr::Value(Value::Number(zero.clone(), false)),
+                Expr::Value(Value::Number(zero.clone(), false))
             ]
         },
         expr_from_projection(only(&select.projection)),
@@ -758,9 +758,9 @@ fn parse_map_access_expr() {
                 quote_style: None
             })),
             keys: vec![
-                Value::Number(zero, false),
-                Value::SingleQuotedString("baz".to_string()),
-                Value::SingleQuotedString("fooz".to_string())
+                Expr::Value(Value::Number(zero, false)),
+                Expr::Value(Value::SingleQuotedString("baz".to_string())),
+                Expr::Value(Value::SingleQuotedString("fooz".to_string()))
             ]
         },
         expr_from_projection(only(&select.projection)),

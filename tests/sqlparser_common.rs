@@ -3634,4 +3634,37 @@ fn parse_time_functions() {
         }),
         expr_from_projection(&select.projection[0])
     );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT CURRENT_TIMESTAMP", sql);
+
+    let sql = "SELECT CURRENT_TIME()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("CURRENT_TIME")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT CURRENT_TIME", sql);
+
+    let sql = "SELECT CURRENT_DATE()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("CURRENT_DATE")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT CURRENT_DATE", sql);
 }

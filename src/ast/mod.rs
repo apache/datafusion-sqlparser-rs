@@ -274,6 +274,8 @@ pub enum Expr {
     Cube(Vec<Vec<Expr>>),
     /// The `ROLLUP` expr.
     Rollup(Vec<Vec<Expr>>),
+
+    Array(Vec<Expr>),
 }
 
 impl fmt::Display for Expr {
@@ -430,6 +432,9 @@ impl fmt::Display for Expr {
                 }
 
                 write!(f, ")")
+            }
+            Expr::Array(exprs) => {
+                write!(f, "ARRAY[{}]", display_comma_separated(exprs))
             }
         }
     }

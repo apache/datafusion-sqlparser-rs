@@ -421,6 +421,12 @@ impl<'a> Parser<'a> {
                     op: UnaryOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
                 }),
+                Keyword::ARRAY => {
+                    self.expect_token(&Token::LBracket)?;
+                    let exprs = self.parse_comma_separated(Parser::parse_expr)?;
+                    self.expect_token(&Token::RBracket)?;
+                    Ok(Expr::Array(exprs))
+                }
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {
@@ -1177,7 +1183,7 @@ impl<'a> Parser<'a> {
             Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
-            Token::LBracket | Token::RBracket => Ok(51),
+            Token::LBracket => Ok(51),
             _ => Ok(0),
         }
     }

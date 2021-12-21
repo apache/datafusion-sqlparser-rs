@@ -759,8 +759,14 @@ fn parse_map_access_expr() {
             })),
             keys: vec![
                 Expr::Value(Value::Number(zero.clone(), false)),
-                Expr::Identifier(Ident{value: "baz".to_string(), quote_style: Some('"')}),
-                Expr::Identifier(Ident{value: "fooz".to_string(), quote_style: Some('"')})
+                Expr::Identifier(Ident {
+                    value: "baz".to_string(),
+                    quote_style: Some('"')
+                }),
+                Expr::Identifier(Ident {
+                    value: "fooz".to_string(),
+                    quote_style: Some('"')
+                })
             ]
         },
         expr_from_projection(only(&select.projection)),
@@ -820,6 +826,39 @@ fn parse_map_access_expr() {
             }),
         })),
         select.selection.unwrap()
+    );
+}
+
+#[test]
+fn test_postgres_array() {
+    #[cfg(not(feature = "bigdecimal"))]
+    let zero = "0".to_string();
+    #[cfg(feature = "bigdecimal")]
+    let zero = BigDecimal::parse_bytes(b"0", 10).unwrap();
+
+    let sql = "SELECT (ARRAY['Yes', 'No', 'Maybe'])";
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::Nested(Box::new(Expr::Array(vec![
+            Expr::Value(Value::SingleQuotedString("Yes".to_string()),),
+            Expr::Value(Value::SingleQuotedString("No".to_string()),),
+            Expr::Value(Value::SingleQuotedString("Maybe".to_string()),)
+        ])))),
+        select.projection[0]
+    );
+
+    let sql = "SELECT (ARRAY['Yes', 'No', 'Maybe'][0])";
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::Nested(Box::new(Expr::MapAccess {
+            column: Box::new(Expr::Array(vec![
+                Expr::Value(Value::SingleQuotedString("Yes".to_string()),),
+                Expr::Value(Value::SingleQuotedString("No".to_string()),),
+                Expr::Value(Value::SingleQuotedString("Maybe".to_string()),)
+            ])),
+            keys: vec![Expr::Value(Value::Number(zero.clone(), false))],
+        }))),
+        select.projection[0]
     );
 }
 

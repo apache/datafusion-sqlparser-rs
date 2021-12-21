@@ -821,7 +821,7 @@ fn parse_map_access_expr() {
                         over: None,
                         distinct: false
                     })))),
-                    keys: vec![Expr::Value(Value::Number(zero.clone(), false))],
+                    keys: vec![Expr::Value(Value::Number(zero, false))],
                 }),
             }),
         })),
@@ -856,7 +856,7 @@ fn test_postgres_array() {
                 Expr::Value(Value::SingleQuotedString("No".to_string()),),
                 Expr::Value(Value::SingleQuotedString("Maybe".to_string()),)
             ])),
-            keys: vec![Expr::Value(Value::Number(zero.clone(), false))],
+            keys: vec![Expr::Value(Value::Number(zero, false))],
         }))),
         select.projection[0]
     );

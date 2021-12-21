@@ -1068,7 +1068,7 @@ impl<'a> Parser<'a> {
             })
         } else if Token::LBracket == tok {
             self.parse_map_access(expr, precedence)
-        }else {
+        } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             parser_err!(format!("No infix parser for token {:?}", tok))
         }

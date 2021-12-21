@@ -730,7 +730,7 @@ fn parse_map_access_expr() {
                 value: "foo".to_string(),
                 quote_style: None
             })),
-            keys: vec![Value::Number(zero.clone(), false)]
+            keys: vec![Expr::Value(Value::Number(zero.clone(), false))]
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -743,8 +743,8 @@ fn parse_map_access_expr() {
                 quote_style: None
             })),
             keys: vec![
-                Value::Number(zero.clone(), false),
-                Value::Number(zero.clone(), false)
+                Expr::Value(Value::Number(zero.clone(), false)),
+                Expr::Value(Value::Number(zero.clone(), false))
             ]
         },
         expr_from_projection(only(&select.projection)),
@@ -758,12 +758,68 @@ fn parse_map_access_expr() {
                 quote_style: None
             })),
             keys: vec![
-                Value::Number(zero, false),
-                Value::SingleQuotedString("baz".to_string()),
-                Value::SingleQuotedString("fooz".to_string())
+                Expr::Value(Value::Number(zero.clone(), false)),
+                Expr::Identifier(Ident{value: "baz".to_string(), quote_style: Some('"')}),
+                Expr::Identifier(Ident{value: "fooz".to_string(), quote_style: Some('"')})
             ]
         },
         expr_from_projection(only(&select.projection)),
+    );
+    let sql = "SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname = ((pg_catalog.current_schemas(true))[0])";
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("nspname"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Nested(Box::new(MapAccess {
+                column: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
+                    name: ObjectName(vec![
+                        Ident::new("pg_catalog"),
+                        Ident::new("current_schemas")
+                    ]),
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        Value::Boolean(true)
+                    )))],
+                    over: None,
+                    distinct: false
+                })))),
+                keys: vec![Expr::Value(Value::Number(zero.clone(), false))],
+            }))),
+        },
+        select.selection.unwrap()
+    );
+    let sql ="SELECT nspname WHERE (nspname !~ '^pg_temp_' OR nspname = (pg_catalog.current_schemas(true))[0])";
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        Expr::Nested(Box::new(Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("nspname"))),
+                op: BinaryOperator::PGRegexNotMatch,
+                right: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "^pg_temp_".to_string()
+                ))),
+            }),
+            op: BinaryOperator::Or,
+            right: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("nspname"))),
+                op: BinaryOperator::Eq,
+                right: Box::new(MapAccess {
+                    column: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
+                        name: ObjectName(vec![
+                            Ident::new("pg_catalog"),
+                            Ident::new("current_schemas")
+                        ]),
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                            Value::Boolean(true)
+                        )))],
+                        over: None,
+                        distinct: false
+                    })))),
+                    keys: vec![Expr::Value(Value::Number(zero.clone(), false))],
+                }),
+            }),
+        })),
+        select.selection.unwrap()
     );
 }
 

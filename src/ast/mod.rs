@@ -245,7 +245,7 @@ pub enum Expr {
     },
     MapAccess {
         column: Box<Expr>,
-        keys: Vec<Value>,
+        keys: Vec<Expr>,
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
@@ -283,11 +283,7 @@ impl fmt::Display for Expr {
             Expr::MapAccess { column, keys } => {
                 write!(f, "{}", column)?;
                 for k in keys {
-                    match k {
-                        k @ Value::Number(_, _) => write!(f, "[{}]", k)?,
-                        Value::SingleQuotedString(s) => write!(f, "[\"{}\"]", s)?,
-                        _ => write!(f, "[{}]", k)?,
-                    }
+                    write!(f, "[{}]", k)?
                 }
                 Ok(())
             }

@@ -1061,31 +1061,28 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
             })
         } else if Token::LBracket == tok {
-            self.parse_map_access(expr)
-        } else {
+            self.parse_map_access(expr, precedence)
+        }else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             parser_err!(format!("No infix parser for token {:?}", tok))
         }
     }
 
-    pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        let key = self.parse_map_key()?;
+    pub fn parse_map_access(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
+        let key = self.parse_subexpr(precedence)?;
         let tok = self.consume_token(&Token::RBracket);
         debug!("Tok: {}", tok);
-        let mut key_parts: Vec<Value> = vec![key];
+        let mut key_parts: Vec<Expr> = vec![key];
         while self.consume_token(&Token::LBracket) {
-            let key = self.parse_map_key()?;
+            let key = self.parse_subexpr(precedence)?;
             let tok = self.consume_token(&Token::RBracket);
             debug!("Tok: {}", tok);
             key_parts.push(key);
         }
-        match expr {
-            e @ Expr::Identifier(_) | e @ Expr::CompoundIdentifier(_) => Ok(Expr::MapAccess {
-                column: Box::new(e),
-                keys: key_parts,
-            }),
-            _ => Ok(expr),
-        }
+        Ok(Expr::MapAccess {
+            column: Box::new(expr),
+            keys: key_parts,
+        })
     }
 
     /// Parses the parens following the `[ NOT ] IN` operator
@@ -1180,7 +1177,7 @@ impl<'a> Parser<'a> {
             Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
-            Token::LBracket | Token::RBracket => Ok(10),
+            Token::LBracket | Token::RBracket => Ok(51),
             _ => Ok(0),
         }
     }

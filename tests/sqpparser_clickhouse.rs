@@ -35,9 +35,11 @@ fn parse_map_access_expr() {
             keys: vec![Expr::Function(Function {
                 name: ObjectName(vec!["indexOf".into()]),
                 args: vec![
-                    FunctionArg::Unnamed(Expr::Identifier(Ident::new("string_names"))),
-                    FunctionArg::Unnamed(Expr::Value(Value::SingleQuotedString(
-                        "endpoint".to_string()
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new(
+                        "string_names"
+                    )))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        Value::SingleQuotedString("endpoint".to_string())
                     )))
                 ],
                 over: None,

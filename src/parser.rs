@@ -66,6 +66,22 @@ pub enum IsLateral {
 
 use IsLateral::*;
 
+pub enum WildcardExpr {
+    Expr(Expr),
+    QualifiedWildcard(ObjectName),
+    Wildcard,
+}
+
+impl From<WildcardExpr> for FunctionArgExpr {
+    fn from(wildcard_expr: WildcardExpr) -> Self {
+        match wildcard_expr {
+            WildcardExpr::Expr(expr) => Self::Expr(expr),
+            WildcardExpr::QualifiedWildcard(prefix) => Self::QualifiedWildcard(prefix),
+            WildcardExpr::Wildcard => Self::Wildcard,
+        }
+    }
+}
+
 impl From<TokenizerError> for ParserError {
     fn from(e: TokenizerError) -> Self {
         ParserError::TokenizerError(e.to_string())
@@ -175,6 +191,9 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     Ok(self.parse_insert()?)
                 }
+                Keyword::COMMENT if dialect_of!(self is PostgreSqlDialect) => {
+                    Ok(self.parse_comment()?)
+                }
                 _ => self.expected("an SQL statement", Token::Word(w)),
             },
             Token::LParen => {
@@ -283,6 +302,36 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse a new expression including wildcard & qualified wildcard
+    pub fn parse_wildcard_expr(&mut self) -> Result<WildcardExpr, ParserError> {
+        let index = self.index;
+
+        match self.next_token() {
+            Token::Word(w) if self.peek_token() == Token::Period => {
+                let mut id_parts: Vec<Ident> = vec![w.to_ident()];
+
+                while self.consume_token(&Token::Period) {
+                    match self.next_token() {
+                        Token::Word(w) => id_parts.push(w.to_ident()),
+                        Token::Mul => {
+                            return Ok(WildcardExpr::QualifiedWildcard(ObjectName(id_parts)));
+                        }
+                        unexpected => {
+                            return self.expected("an identifier or a '*' after '.'", unexpected);
+                        }
+                    }
+                }
+            }
+            Token::Mul => {
+                return Ok(WildcardExpr::Wildcard);
+            }
+            _ => (),
+        };
+
+        self.index = index;
+        self.parse_expr().map(WildcardExpr::Expr)
+    }
+
     /// Parse a new expression
     pub fn parse_expr(&mut self) -> Result<Expr, ParserError> {
         self.parse_subexpr(0)
@@ -377,23 +426,17 @@ impl<'a> Parser<'a> {
                 _ => match self.peek_token() {
                     Token::LParen | Token::Period => {
                         let mut id_parts: Vec<Ident> = vec![w.to_ident()];
-                        let mut ends_with_wildcard = false;
                         while self.consume_token(&Token::Period) {
                             match self.next_token() {
                                 Token::Word(w) => id_parts.push(w.to_ident()),
-                                Token::Mul => {
-                                    ends_with_wildcard = true;
-                                    break;
-                                }
                                 unexpected => {
                                     return self
                                         .expected("an identifier or a '*' after '.'", unexpected);
                                 }
                             }
                         }
-                        if ends_with_wildcard {
-                            Ok(Expr::QualifiedWildcard(id_parts))
-                        } else if self.consume_token(&Token::LParen) {
+
+                        if self.consume_token(&Token::LParen) {
                             self.prev_token();
                             self.parse_function(ObjectName(id_parts))
                         } else {
@@ -403,7 +446,6 @@ impl<'a> Parser<'a> {
                     _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word
-            Token::Mul => Ok(Expr::Wildcard),
             tok @ Token::Minus | tok @ Token::Plus => {
                 let op = if tok == Token::Plus {
                     UnaryOperator::Plus
@@ -1905,7 +1947,12 @@ impl<'a> Parser<'a> {
                 }
             }
         } else if self.parse_keyword(Keyword::RENAME) {
-            if self.parse_keyword(Keyword::TO) {
+            if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::CONSTRAINT) {
+                let old_name = self.parse_identifier()?;
+                self.expect_keyword(Keyword::TO)?;
+                let new_name = self.parse_identifier()?;
+                AlterTableOperation::RenameConstraint { old_name, new_name }
+            } else if self.parse_keyword(Keyword::TO) {
                 let table_name = self.parse_object_name()?;
                 AlterTableOperation::RenameTable { table_name }
             } else {
@@ -1975,6 +2022,38 @@ impl<'a> Parser<'a> {
                 data_type,
                 options,
             }
+        } else if self.parse_keyword(Keyword::ALTER) {
+            let _ = self.parse_keyword(Keyword::COLUMN);
+            let column_name = self.parse_identifier()?;
+            let is_postgresql = dialect_of!(self is PostgreSqlDialect);
+
+            let op = if self.parse_keywords(&[Keyword::SET, Keyword::NOT, Keyword::NULL]) {
+                AlterColumnOperation::SetNotNull {}
+            } else if self.parse_keywords(&[Keyword::DROP, Keyword::NOT, Keyword::NULL]) {
+                AlterColumnOperation::DropNotNull {}
+            } else if self.parse_keywords(&[Keyword::SET, Keyword::DEFAULT]) {
+                AlterColumnOperation::SetDefault {
+                    value: self.parse_expr()?,
+                }
+            } else if self.parse_keywords(&[Keyword::DROP, Keyword::DEFAULT]) {
+                AlterColumnOperation::DropDefault {}
+            } else if self.parse_keywords(&[Keyword::SET, Keyword::DATA, Keyword::TYPE])
+                || (is_postgresql && self.parse_keyword(Keyword::TYPE))
+            {
+                let data_type = self.parse_data_type()?;
+                let using = if is_postgresql && self.parse_keyword(Keyword::USING) {
+                    Some(self.parse_expr()?)
+                } else {
+                    None
+                };
+                AlterColumnOperation::SetDataType { data_type, using }
+            } else {
+                return self.expected(
+                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN",
+                    self.peek_token(),
+                );
+            };
+            AlterTableOperation::AlterColumn { column_name, op }
         } else {
             return self.expected(
                 "ADD, RENAME, PARTITION or DROP after ALTER TABLE",
@@ -2673,9 +2752,26 @@ impl<'a> Parser<'a> {
                     value: values,
                 });
             }
-        } else if variable.value == "TRANSACTION" && modifier.is_none() {
+        } else if variable.value == "CHARACTERISTICS" {
+            self.expect_keywords(&[Keyword::AS, Keyword::TRANSACTION])?;
             Ok(Statement::SetTransaction {
                 modes: self.parse_transaction_modes()?,
+                snapshot: None,
+                session: true,
+            })
+        } else if variable.value == "TRANSACTION" && modifier.is_none() {
+            if self.parse_keyword(Keyword::SNAPSHOT) {
+                let snaphot_id = self.parse_value()?;
+                return Ok(Statement::SetTransaction {
+                    modes: vec![],
+                    snapshot: Some(snaphot_id),
+                    session: false,
+                });
+            }
+            Ok(Statement::SetTransaction {
+                modes: self.parse_transaction_modes()?,
+                snapshot: None,
+                session: false,
             })
         } else {
             self.expected("equals sign or TO", self.peek_token())
@@ -3245,11 +3341,11 @@ impl<'a> Parser<'a> {
             let name = self.parse_identifier()?;
 
             self.expect_token(&Token::RArrow)?;
-            let arg = self.parse_expr()?;
+            let arg = self.parse_wildcard_expr()?.into();
 
             Ok(FunctionArg::Named { name, arg })
         } else {
-            Ok(FunctionArg::Unnamed(self.parse_expr()?))
+            Ok(FunctionArg::Unnamed(self.parse_wildcard_expr()?.into()))
         }
     }
 
@@ -3265,18 +3361,15 @@ impl<'a> Parser<'a> {
 
     /// Parse a comma-delimited list of projections after SELECT
     pub fn parse_select_item(&mut self) -> Result<SelectItem, ParserError> {
-        let expr = self.parse_expr()?;
-        if let Expr::Wildcard = expr {
-            Ok(SelectItem::Wildcard)
-        } else if let Expr::QualifiedWildcard(prefix) = expr {
-            Ok(SelectItem::QualifiedWildcard(ObjectName(prefix)))
-        } else {
-            // `expr` is a regular SQL expression and can be followed by an alias
-            if let Some(alias) = self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)? {
-                Ok(SelectItem::ExprWithAlias { expr, alias })
-            } else {
-                Ok(SelectItem::UnnamedExpr(expr))
-            }
+        match self.parse_wildcard_expr()? {
+            WildcardExpr::Expr(expr) => self
+                .parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
+                .map(|alias| match alias {
+                    Some(alias) => SelectItem::ExprWithAlias { expr, alias },
+                    None => SelectItem::UnnamedExpr(expr),
+                }),
+            WildcardExpr::QualifiedWildcard(prefix) => Ok(SelectItem::QualifiedWildcard(prefix)),
+            WildcardExpr::Wildcard => Ok(SelectItem::Wildcard),
         }
     }
 
@@ -3495,6 +3588,35 @@ impl<'a> Parser<'a> {
             name,
             data_types,
             statement,
+        })
+    }
+
+    fn parse_comment(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::ON)?;
+        let token = self.next_token();
+
+        let (object_type, object_name) = match token {
+            Token::Word(w) if w.keyword == Keyword::COLUMN => {
+                let object_name = self.parse_object_name()?;
+                (CommentObject::Column, object_name)
+            }
+            Token::Word(w) if w.keyword == Keyword::TABLE => {
+                let object_name = self.parse_object_name()?;
+                (CommentObject::Table, object_name)
+            }
+            _ => self.expected("comment object_type", token)?,
+        };
+
+        self.expect_keyword(Keyword::IS)?;
+        let comment = if self.parse_keyword(Keyword::NULL) {
+            None
+        } else {
+            Some(self.parse_literal_string()?)
+        };
+        Ok(Statement::Comment {
+            object_type,
+            object_name,
+            comment,
         })
     }
 }

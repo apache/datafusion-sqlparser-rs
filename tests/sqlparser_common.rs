@@ -363,10 +363,19 @@ fn parse_select_wildcard() {
         ])),
         only(&select.projection)
     );
+
+    let sql = "SELECT * + * FROM foo;";
+    let result = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: +".to_string()),
+        result.unwrap_err(),
+    );
 }
 
 #[test]
 fn parse_count_wildcard() {
+    verified_only_select("SELECT COUNT(*) FROM Order WHERE id = 10");
+
     verified_only_select(
         "SELECT COUNT(Employee.*) FROM Order JOIN Employee ON Order.employee = Employee.id",
     );
@@ -425,7 +434,7 @@ fn parse_select_count_wildcard() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("COUNT")]),
-            args: vec![FunctionArg::Unnamed(Expr::Wildcard)],
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
             over: None,
             distinct: false,
         }),
@@ -440,10 +449,10 @@ fn parse_select_count_distinct() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("COUNT")]),
-            args: vec![FunctionArg::Unnamed(Expr::UnaryOp {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::UnaryOp {
                 op: UnaryOperator::Plus,
                 expr: Box::new(Expr::Identifier(Ident::new("x"))),
-            })],
+            }))],
             over: None,
             distinct: true,
         }),
@@ -1156,7 +1165,7 @@ fn parse_select_having() {
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("COUNT")]),
-                args: vec![FunctionArg::Unnamed(Expr::Wildcard)],
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
                 over: None,
                 distinct: false,
             })),
@@ -1942,6 +1951,108 @@ fn parse_alter_table_drop_column() {
 }
 
 #[test]
+fn parse_alter_table_alter_column() {
+    let alter_stmt = "ALTER TABLE tab";
+    match verified_stmt(&format!(
+        "{} ALTER COLUMN is_active SET NOT NULL",
+        alter_stmt
+    )) {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::AlterColumn { column_name, op },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("is_active", column_name.to_string());
+            assert_eq!(op, AlterColumnOperation::SetNotNull {});
+        }
+        _ => unreachable!(),
+    }
+
+    one_statement_parses_to(
+        "ALTER TABLE tab ALTER is_active DROP NOT NULL",
+        "ALTER TABLE tab ALTER COLUMN is_active DROP NOT NULL",
+    );
+
+    match verified_stmt(&format!(
+        "{} ALTER COLUMN is_active SET DEFAULT false",
+        alter_stmt
+    )) {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::AlterColumn { column_name, op },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("is_active", column_name.to_string());
+            assert_eq!(
+                op,
+                AlterColumnOperation::SetDefault {
+                    value: Expr::Value(Value::Boolean(false))
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt(&format!(
+        "{} ALTER COLUMN is_active DROP DEFAULT",
+        alter_stmt
+    )) {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::AlterColumn { column_name, op },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("is_active", column_name.to_string());
+            assert_eq!(op, AlterColumnOperation::DropDefault {});
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_alter_column_type() {
+    let alter_stmt = "ALTER TABLE tab";
+    match verified_stmt("ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT") {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::AlterColumn { column_name, op },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("is_active", column_name.to_string());
+            assert_eq!(
+                op,
+                AlterColumnOperation::SetDataType {
+                    data_type: DataType::Text,
+                    using: None,
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let res = Parser::parse_sql(
+        &GenericDialect {},
+        &format!("{} ALTER COLUMN is_active TYPE TEXT", alter_stmt),
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN, found: TYPE".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = Parser::parse_sql(
+        &GenericDialect {},
+        &format!(
+            "{} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'",
+            alter_stmt
+        ),
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: USING".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_bad_constraint() {
     let res = parse_sql_statements("ALTER TABLE tab ADD");
     assert_eq!(
@@ -1965,7 +2076,9 @@ fn parse_scalar_function_in_projection() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("sqrt")]),
-            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new("id")))],
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                Expr::Identifier(Ident::new("id"))
+            ))],
             over: None,
             distinct: false,
         }),
@@ -2032,11 +2145,15 @@ fn parse_named_argument_function() {
             args: vec![
                 FunctionArg::Named {
                     name: Ident::new("a"),
-                    arg: Expr::Value(Value::SingleQuotedString("1".to_owned()))
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "1".to_owned()
+                    ))),
                 },
                 FunctionArg::Named {
                     name: Ident::new("b"),
-                    arg: Expr::Value(Value::SingleQuotedString("2".to_owned()))
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "2".to_owned()
+                    ))),
                 },
             ],
             over: None,
@@ -2296,9 +2413,9 @@ fn parse_table_function() {
         TableFactor::TableFunction { expr, alias } => {
             let expected_expr = Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("FUN")]),
-                args: vec![FunctionArg::Unnamed(Expr::Value(
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                     Value::SingleQuotedString("1".to_owned()),
-                ))],
+                )))],
                 over: None,
                 distinct: false,
             });
@@ -3586,14 +3703,22 @@ fn parse_set_transaction() {
     // TRANSACTION, so no need to duplicate the tests here. We just do a quick
     // sanity check.
     match verified_stmt("SET TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE") {
-        Statement::SetTransaction { modes } => assert_eq!(
+        Statement::SetTransaction {
             modes,
-            vec![
-                TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
-                TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
-                TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable),
-            ]
-        ),
+            session,
+            snapshot,
+        } => {
+            assert_eq!(
+                modes,
+                vec![
+                    TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
+                    TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
+                    TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable),
+                ]
+            );
+            assert!(!session);
+            assert_eq!(snapshot, None);
+        }
         _ => unreachable!(),
     }
 }

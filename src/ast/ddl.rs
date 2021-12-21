@@ -67,6 +67,15 @@ pub enum AlterTableOperation {
         data_type: DataType,
         options: Vec<ColumnOption>,
     },
+    /// `RENAME CONSTRAINT <old_constraint_name> TO <new_constraint_name>`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    RenameConstraint { old_name: Ident, new_name: Ident },
+    /// `ALTER [ COLUMN ]`
+    AlterColumn {
+        column_name: Ident,
+        op: AlterColumnOperation,
+    },
 }
 
 impl fmt::Display for AlterTableOperation {
@@ -84,6 +93,9 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::AddConstraint(c) => write!(f, "ADD {}", c),
             AlterTableOperation::AddColumn { column_def } => {
                 write!(f, "ADD COLUMN {}", column_def.to_string())
+            }
+            AlterTableOperation::AlterColumn { column_name, op } => {
+                write!(f, "ALTER COLUMN {} {}", column_name, op)
             }
             AlterTableOperation::DropPartitions {
                 partitions,
@@ -137,6 +149,51 @@ impl fmt::Display for AlterTableOperation {
                     Ok(())
                 } else {
                     write!(f, " {}", display_separated(options, " "))
+                }
+            }
+            AlterTableOperation::RenameConstraint { old_name, new_name } => {
+                write!(f, "RENAME CONSTRAINT {} TO {}", old_name, new_name)
+            }
+        }
+    }
+}
+
+/// An `ALTER COLUMN` (`Statement::AlterTable`) operation
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum AlterColumnOperation {
+    /// `SET NOT NULL`
+    SetNotNull,
+    /// `DROP NOT NULL`
+    DropNotNull,
+    /// `SET DEFAULT <expr>`
+    SetDefault { value: Expr },
+    /// `DROP DEFAULT`
+    DropDefault,
+    /// `[SET DATA] TYPE <data_type> [USING <expr>]`
+    SetDataType {
+        data_type: DataType,
+        /// PostgreSQL specific
+        using: Option<Expr>,
+    },
+}
+
+impl fmt::Display for AlterColumnOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterColumnOperation::SetNotNull => write!(f, "SET NOT NULL",),
+            AlterColumnOperation::DropNotNull => write!(f, "DROP NOT NULL",),
+            AlterColumnOperation::SetDefault { value } => {
+                write!(f, "SET DEFAULT {}", value)
+            }
+            AlterColumnOperation::DropDefault {} => {
+                write!(f, "DROP DEFAULT")
+            }
+            AlterColumnOperation::SetDataType { data_type, using } => {
+                if let Some(expr) = using {
+                    write!(f, "SET DATA TYPE {} USING {}", data_type, expr)
+                } else {
+                    write!(f, "SET DATA TYPE {}", data_type)
                 }
             }
         }

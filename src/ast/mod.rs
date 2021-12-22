@@ -11,7 +11,6 @@
 // limitations under the License.
 
 //! SQL Abstract Syntax Tree (AST) types
-
 mod data_type;
 mod ddl;
 mod operator;

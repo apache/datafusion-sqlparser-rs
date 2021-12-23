@@ -11,6 +11,7 @@
 // limitations under the License.
 
 mod ansi;
+mod clickhouse;
 mod generic;
 mod hive;
 mod mssql;
@@ -23,6 +24,7 @@ use core::any::{Any, TypeId};
 use core::fmt::Debug;
 
 pub use self::ansi::AnsiDialect;
+pub use self::clickhouse::ClickHouseDialect;
 pub use self::generic::GenericDialect;
 pub use self::hive::HiveDialect;
 pub use self::mssql::MsSqlDialect;
@@ -33,7 +35,7 @@ pub use self::sqlite::SQLiteDialect;
 pub use crate::keywords;
 
 /// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
-/// to `true` iff `parser.dialect` is one of the `Dialect`s specified.
+/// to `true` if `parser.dialect` is one of the `Dialect`s specified.
 macro_rules! dialect_of {
     ( $parsed_dialect: ident is $($dialect_type: ty)|+ ) => {
         ($($parsed_dialect.dialect.is::<$dialect_type>())||+)

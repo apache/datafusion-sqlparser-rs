@@ -12,3 +12,4 @@ Cargo.lock
 
 # IDEs
 .idea
+.vscode

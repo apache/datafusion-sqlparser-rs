@@ -11,7 +11,6 @@
 // limitations under the License.
 
 //! SQL Abstract Syntax Tree (AST) types
-
 mod data_type;
 mod ddl;
 mod operator;
@@ -1874,6 +1873,7 @@ pub enum HiveRowFormat {
     DELIMITED,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[allow(clippy::large_enum_variant)]

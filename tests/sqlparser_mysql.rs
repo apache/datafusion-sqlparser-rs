@@ -19,6 +19,8 @@ mod test_utils;
 
 use test_utils::*;
 
+use sqlparser::ast::Expr;
+use sqlparser::ast::Value;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
 use sqlparser::tokenizer::Token;
@@ -171,6 +173,50 @@ fn parse_quote_identifiers() {
                 }],
                 columns
             );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_unterminated_escape() {
+    let sql = r#"SELECT 'I\'m not fine\'"#;
+    let result = std::panic::catch_unwind(|| mysql().one_statement_parses_to(sql, ""));
+    assert!(result.is_err());
+
+    let sql = r#"SELECT 'I\\'m not fine'"#;
+    let result = std::panic::catch_unwind(|| mysql().one_statement_parses_to(sql, ""));
+    assert!(result.is_err());
+}
+
+#[test]
+fn parse_escaped_string() {
+    let sql = r#"SELECT 'I\'m fine'"#;
+
+    let stmt = mysql().one_statement_parses_to(sql, "");
+
+    match stmt {
+        Statement::Query(query) => match query.body {
+            SetExpr::Select(value) => {
+                let expr = expr_from_projection(only(&value.projection));
+                assert_eq!(
+                    *expr,
+                    Expr::Value(Value::SingleQuotedString("I'm fine".to_string()))
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
+
+    let sql = r#"SELECT 'I''m fine'"#;
+
+    let projection = mysql().verified_only_select(sql).projection;
+    let item = projection.get(0).unwrap();
+
+    match &item {
+        SelectItem::UnnamedExpr(Expr::Value(value)) => {
+            assert_eq!(*value, Value::SingleQuotedString("I'm fine".to_string()));
         }
         _ => unreachable!(),
     }

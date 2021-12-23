@@ -1037,6 +1037,7 @@ fn parse_select_group_by() {
         ],
         select.group_by
     );
+    one_statement_parses_to("SELECT id, fname, lname FROM customer GROUP BY (lname, fname)", sql);
 }
 
 #[test]

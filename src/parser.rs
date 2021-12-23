@@ -2508,11 +2508,17 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let mut is_l_paren = false;
         let group_by = if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
+            is_l_paren = self.consume_token(&Token::LParen);
             self.parse_comma_separated(Parser::parse_expr)?
         } else {
             vec![]
         };
+
+        if is_l_paren {
+            self.consume_token(&Token::RParen);
+        }
 
         let cluster_by = if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
             self.parse_comma_separated(Parser::parse_expr)?

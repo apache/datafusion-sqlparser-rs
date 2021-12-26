@@ -24,21 +24,24 @@ use core::fmt;
 
 use log::debug;
 
-use crate::dialect::*;
 use crate::keywords::{self, Keyword};
 use crate::tokenizer::*;
 use crate::{ast::*, span::Span};
+use crate::{dialect::*, span::Spanned};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParserError {
-    TokenizerError(String),
-    ParserError(String),
+    TokenizerError { message: String, span: Span },
+    ParserError { message: String, span: Span },
 }
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
-    ($MSG:expr) => {
-        Err(ParserError::ParserError($MSG.to_string()))
+    ($MSG:expr, $SPAN: expr) => {
+        Err(ParserError::ParserError {
+            message: $MSG.to_string(),
+            span: $SPAN,
+        })
     };
 }
 
@@ -84,7 +87,10 @@ impl From<WildcardExpr> for FunctionArgExpr {
 
 impl From<TokenizerError> for ParserError {
     fn from(e: TokenizerError) -> Self {
-        ParserError::TokenizerError(e.to_string())
+        ParserError::TokenizerError {
+            message: e.to_string(),
+            span: e.span,
+        }
     }
 }
 
@@ -94,10 +100,19 @@ impl fmt::Display for ParserError {
             f,
             "sql parser error: {}",
             match self {
-                ParserError::TokenizerError(s) => s,
-                ParserError::ParserError(s) => s,
+                ParserError::TokenizerError { message, .. } => message,
+                ParserError::ParserError { message, .. } => message,
             }
         )
+    }
+}
+
+impl Spanned for ParserError {
+    fn span(&self) -> Span {
+        match self {
+            ParserError::TokenizerError { span, .. } => *span,
+            ParserError::ParserError { span, .. } => *span,
+        }
     }
 }
 
@@ -396,7 +411,7 @@ impl<'a> Parser<'a> {
                 // name, resulting in `NOT 'a'` being recognized as a `TypedString` instead of
                 // an unary negation `NOT ('a' LIKE 'b')`. To solve this, we don't accept the
                 // `type 'string'` syntax for the custom data types at all.
-                DataType::Custom(..) => parser_err!("dummy"),
+                DataType::Custom(..) => parser_err!("dummy", Span::new()),
                 data_type => Ok(Expr::TypedString {
                     data_type,
                     value: parser.parse_literal_string()?,
@@ -1059,10 +1074,13 @@ impl<'a> Parser<'a> {
                     }
                 }
                 // Can only happen if `get_next_precedence` got out of sync with this function
-                _ => parser_err!(format!(
-                    "No infix parser for token '{}'",
-                    Token::Word { value, span }
-                )),
+                _ => parser_err!(
+                    format!(
+                        "No infix parser for token '{}'",
+                        Token::Word { value, span },
+                    ),
+                    span
+                ),
             },
             Token::DoubleColon { .. } => self.parse_pg_cast(expr),
             Token::ExclamationMark { .. } =>
@@ -1077,7 +1095,7 @@ impl<'a> Parser<'a> {
             _ =>
             // Can only happen if `get_next_precedence` got out of sync with this function
             {
-                parser_err!(format!("No infix parser for token '{}'", tok))
+                parser_err!(format!("No infix parser for token '{}'", tok), tok.span())
             }
         }
     }
@@ -1282,7 +1300,10 @@ impl<'a> Parser<'a> {
 
     /// Report unexpected token
     fn expected<T>(&self, expected: &str, found: Token) -> Result<T, ParserError> {
-        parser_err!(format!("Expected {}, found: {}", expected, found))
+        parser_err!(
+            format!("Expected {}, found: {}", expected, found),
+            found.span()
+        )
     }
 
     /// Look for an expected keyword and consume it if it exists
@@ -1415,7 +1436,10 @@ impl<'a> Parser<'a> {
         let all = self.parse_keyword(Keyword::ALL);
         let distinct = self.parse_keyword(Keyword::DISTINCT);
         if all && distinct {
-            return parser_err!("Cannot specify both ALL and DISTINCT".to_string());
+            return parser_err!(
+                "Cannot specify both ALL and DISTINCT".to_string(),
+                self.peek_token().span()
+            );
         } else {
             Ok(distinct)
         }
@@ -1600,10 +1624,14 @@ impl<'a> Parser<'a> {
         let names = self.parse_comma_separated(Parser::parse_object_name)?;
         let cascade = self.parse_keyword(Keyword::CASCADE);
         let restrict = self.parse_keyword(Keyword::RESTRICT);
-        let purge = self.parse_keyword(Keyword::PURGE);
         if cascade && restrict {
-            return parser_err!("Cannot specify both CASCADE and RESTRICT in DROP");
+            self.prev_token();
+            return parser_err!(
+                "Cannot specify both CASCADE and RESTRICT in DROP",
+                self.peek_token().span()
+            );
         }
+        let purge = self.parse_keyword(Keyword::PURGE);
         Ok(Statement::Drop {
             object_type,
             if_exists,
@@ -2182,10 +2210,15 @@ impl<'a> Parser<'a> {
             // bigdecimal feature is enabled, and is otherwise a no-op
             // (i.e., it returns the input string).
             Token::Number {
-                ref value, long, ..
+                ref value,
+                long,
+                span,
             } => match value.parse() {
                 Ok(n) => Ok(Value::Number(n, long)),
-                Err(e) => parser_err!(format!("Could not parse '{}' as number: {}", value, e)),
+                Err(e) => parser_err!(
+                    format!("Could not parse '{}' as number: {}", value, e),
+                    span
+                ),
             },
             Token::SingleQuotedString { ref value, .. } => {
                 Ok(Value::SingleQuotedString(value.to_string()))
@@ -2213,9 +2246,12 @@ impl<'a> Parser<'a> {
     /// Parse an unsigned literal integer/long
     pub fn parse_literal_uint(&mut self) -> Result<u64, ParserError> {
         match self.next_token() {
-            Token::Number { value, .. } => value.parse::<u64>().map_err(|e| {
-                ParserError::ParserError(format!("Could not parse '{}' as u64: {}", value, e))
-            }),
+            Token::Number { value, span, .. } => {
+                value.parse::<u64>().map_err(|e| ParserError::ParserError {
+                    message: format!("Could not parse '{}' as u64: {}", value, e),
+                    span,
+                })
+            }
             unexpected => self.expected("literal int", unexpected),
         }
     }
@@ -2883,10 +2919,10 @@ impl<'a> Parser<'a> {
             Keyword::FUNCTION => Ok(ShowCreateObject::Function),
             Keyword::PROCEDURE => Ok(ShowCreateObject::Procedure),
             Keyword::EVENT => Ok(ShowCreateObject::Event),
-            keyword => Err(ParserError::ParserError(format!(
-                "Unable to map keyword to ShowCreateObject: {:?}",
-                keyword
-            ))),
+            keyword => Err(ParserError::ParserError {
+                message: format!("Unable to map keyword to ShowCreateObject: {:?}", keyword),
+                span: self.peek_token().span(),
+            }),
         }?;
 
         let obj_name = self.parse_object_name()?;
@@ -3078,10 +3114,10 @@ impl<'a> Parser<'a> {
                         | TableFactor::TableFunction { alias, .. } => {
                             // but not `FROM (mytable AS alias1) AS alias2`.
                             if let Some(inner_alias) = alias {
-                                return Err(ParserError::ParserError(format!(
-                                    "duplicate alias {}",
-                                    inner_alias
-                                )));
+                                return Err(ParserError::ParserError {
+                                    message: format!("duplicate alias {}", inner_alias),
+                                    span: self.peek_token().span(),
+                                });
                             }
                             // Act as if the alias was specified normally next
                             // to the table name: `(mytable) AS alias` ->
@@ -3289,7 +3325,11 @@ impl<'a> Parser<'a> {
         let cascade = self.parse_keyword(Keyword::CASCADE);
         let restrict = self.parse_keyword(Keyword::RESTRICT);
         if cascade && restrict {
-            return parser_err!("Cannot specify both CASCADE and RESTRICT in REVOKE");
+            self.prev_token();
+            return parser_err!(
+                "Cannot specify both CASCADE and RESTRICT in REVOKE",
+                self.peek_token().span()
+            );
         }
 
         Ok(Statement::Revoke {

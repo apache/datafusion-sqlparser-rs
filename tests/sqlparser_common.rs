@@ -332,10 +332,7 @@ fn parse_select_distinct_two_fields() {
     let sql = "SELECT DISTINCT name, id FROM customer";
     let select = verified_only_select(sql);
     assert!(select.distinct);
-    one_statement_parses_to(
-        "SELECT DISTINCT (name, id) FROM customer",
-        sql,
-    );
+    one_statement_parses_to("SELECT DISTINCT (name, id) FROM customer", sql);
     assert_eq!(
         &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
         &select.projection[0]

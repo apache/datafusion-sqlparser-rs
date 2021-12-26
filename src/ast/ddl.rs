@@ -14,12 +14,13 @@
 //! (commonly referred to as Data Definition Language, or DDL)
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, string::ToString, vec::Vec};
+use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 use core::fmt;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::ast::value::escape_single_quote_string;
 use crate::ast::{display_comma_separated, display_separated, DataType, Expr, Ident, ObjectName};
 use crate::tokenizer::Token;
 
@@ -338,7 +339,9 @@ pub enum ColumnOption {
     /// `DEFAULT <restricted-expr>`
     Default(Expr),
     /// `{ PRIMARY KEY | UNIQUE }`
-    Unique { is_primary: bool },
+    Unique {
+        is_primary: bool,
+    },
     /// A referential integrity constraint (`[FOREIGN KEY REFERENCES
     /// <foreign_table> (<referred_columns>)
     /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
@@ -356,6 +359,8 @@ pub enum ColumnOption {
     /// - MySQL's `AUTO_INCREMENT` or SQLite's `AUTOINCREMENT`
     /// - ...
     DialectSpecific(Vec<Token>),
+    CharacterSet(ObjectName),
+    Comment(String),
 }
 
 impl fmt::Display for ColumnOption {
@@ -388,6 +393,8 @@ impl fmt::Display for ColumnOption {
             }
             Check(expr) => write!(f, "CHECK ({})", expr),
             DialectSpecific(val) => write!(f, "{}", display_separated(val, " ")),
+            CharacterSet(n) => write!(f, "CHARACTER SET {}", n),
+            Comment(v) => write!(f, "COMMENT '{}'", escape_single_quote_string(v)),
         }
     }
 }

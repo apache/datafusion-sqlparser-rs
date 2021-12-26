@@ -212,6 +212,37 @@ fn parse_create_table_engine_default_charset() {
 }
 
 #[test]
+fn parse_create_table_comment_character_set() {
+    let sql = "CREATE TABLE foo (s TEXT CHARACTER SET utf8mb4 COMMENT 'comment')";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::new("s"),
+                    data_type: DataType::Text,
+                    collation: None,
+                    options: vec![
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::CharacterSet(ObjectName(vec![Ident::new(
+                                "utf8mb4"
+                            )]))
+                        },
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Comment("comment".to_string())
+                        }
+                    ],
+                },],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_quote_identifiers() {
     let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INT PRIMARY KEY)";
     match mysql().verified_stmt(sql) {

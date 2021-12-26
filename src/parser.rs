@@ -1785,8 +1785,15 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_optional_column_option(&mut self) -> Result<Option<ColumnOption>, ParserError> {
-        if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
+        if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
+            Ok(Some(ColumnOption::CharacterSet(self.parse_object_name()?)))
+        } else if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
             Ok(Some(ColumnOption::NotNull))
+        } else if self.parse_keywords(&[Keyword::COMMENT]) {
+            match self.next_token() {
+                Token::SingleQuotedString(value, ..) => Ok(Some(ColumnOption::Comment(value))),
+                unexpected => self.expected("string", unexpected),
+            }
         } else if self.parse_keyword(Keyword::NULL) {
             Ok(Some(ColumnOption::Null))
         } else if self.parse_keyword(Keyword::DEFAULT) {

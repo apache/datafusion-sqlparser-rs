@@ -44,6 +44,7 @@ pub mod ast;
 pub mod dialect;
 pub mod keywords;
 pub mod parser;
+pub mod span;
 pub mod tokenizer;
 
 #[doc(hidden)]

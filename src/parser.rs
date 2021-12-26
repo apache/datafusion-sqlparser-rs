@@ -2253,6 +2253,8 @@ impl<'a> Parser<'a> {
                     let (precision, scale) = self.parse_optional_precision_scale()?;
                     Ok(DataType::Decimal(precision, scale))
                 }
+                Keyword::ENUM => Ok(DataType::Enum(self.parse_string_values()?)),
+                Keyword::SET => Ok(DataType::Set(self.parse_string_values()?)),
                 _ => {
                     self.prev_token();
                     let type_name = self.parse_object_name()?;
@@ -2261,6 +2263,23 @@ impl<'a> Parser<'a> {
             },
             unexpected => self.expected("a data type name", unexpected),
         }
+    }
+
+    pub fn parse_string_values(&mut self) -> Result<Vec<String>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let mut values = Vec::new();
+        loop {
+            match self.next_token() {
+                Token::SingleQuotedString(value) => values.push(value),
+                unexpected => self.expected("a string", unexpected)?,
+            }
+            match self.next_token() {
+                Token::Comma => (),
+                Token::RParen => break,
+                unexpected => self.expected(", or }", unexpected)?,
+            }
+        }
+        Ok(values)
     }
 
     /// Parse `AS identifier` (or simply `identifier` if it's not a reserved keyword)

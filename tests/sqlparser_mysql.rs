@@ -156,6 +156,34 @@ fn parse_create_table_auto_increment() {
 }
 
 #[test]
+fn parse_create_table_set_enum() {
+    let sql = "CREATE TABLE foo (bar SET('a', 'b'), baz ENUM('a', 'b'))";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::new("bar"),
+                        data_type: DataType::Set(vec!["a".to_string(), "b".to_string()]),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("baz"),
+                        data_type: DataType::Enum(vec!["a".to_string(), "b".to_string()]),
+                        collation: None,
+                        options: vec![],
+                    }
+                ],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_quote_identifiers() {
     let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INT PRIMARY KEY)";
     match mysql().verified_stmt(sql) {

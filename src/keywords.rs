@@ -193,6 +193,7 @@ define_keywords!(
     END_EXEC = "END-EXEC",
     END_FRAME,
     END_PARTITION,
+    ENUM,
     EQUALS,
     ERROR,
     ESCAPE,

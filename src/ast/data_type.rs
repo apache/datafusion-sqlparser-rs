@@ -11,13 +11,15 @@
 // limitations under the License.
 
 #[cfg(not(feature = "std"))]
-use alloc::boxed::Box;
+use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::ast::ObjectName;
+
+use super::value::escape_single_quote_string;
 
 /// SQL data types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -75,6 +77,10 @@ pub enum DataType {
     Custom(ObjectName),
     /// Arrays
     Array(Box<DataType>),
+    /// Enums
+    Enum(Vec<String>),
+    /// Set
+    Set(Vec<String>),
 }
 
 impl fmt::Display for DataType {
@@ -116,6 +122,26 @@ impl fmt::Display for DataType {
             DataType::Bytea => write!(f, "BYTEA"),
             DataType::Array(ty) => write!(f, "{}[]", ty),
             DataType::Custom(ty) => write!(f, "{}", ty),
+            DataType::Enum(vals) => {
+                write!(f, "ENUM(")?;
+                for (i, v) in vals.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "'{}'", escape_single_quote_string(v))?;
+                }
+                write!(f, ")")
+            }
+            DataType::Set(vals) => {
+                write!(f, "SET(")?;
+                for (i, v) in vals.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "'{}'", escape_single_quote_string(v))?;
+                }
+                write!(f, ")")
+            }
         }
     }
 }

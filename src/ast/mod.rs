@@ -11,7 +11,6 @@
 // limitations under the License.
 
 //! SQL Abstract Syntax Tree (AST) types
-
 mod data_type;
 mod ddl;
 mod operator;
@@ -31,8 +30,8 @@ use serde::{Deserialize, Serialize};
 
 pub use self::data_type::DataType;
 pub use self::ddl::{
-    AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, ReferentialAction,
-    TableConstraint,
+    AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
+    ReferentialAction, TableConstraint,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
@@ -157,16 +156,6 @@ impl fmt::Display for ObjectName {
 pub enum Expr {
     /// Identifier e.g. table name or column name
     Identifier(Ident),
-    /// Unqualified wildcard (`*`). SQL allows this in limited contexts, such as:
-    /// - right after `SELECT` (which is represented as a [SelectItem::Wildcard] instead)
-    /// - or as part of an aggregate function, e.g. `COUNT(*)`,
-    ///
-    /// ...but we currently also accept it in contexts where it doesn't make
-    /// sense, such as `* + *`
-    Wildcard,
-    /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
-    /// (Same caveats apply to `QualifiedWildcard` as to `Wildcard`.)
-    QualifiedWildcard(Vec<Ident>),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
     /// `IS NULL` operator
@@ -255,7 +244,7 @@ pub enum Expr {
     },
     MapAccess {
         column: Box<Expr>,
-        keys: Vec<Value>,
+        keys: Vec<Expr>,
     },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
@@ -278,6 +267,12 @@ pub enum Expr {
     Subquery(Box<Query>),
     /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
     ListAgg(ListAgg),
+    /// The `GROUPING SETS` expr.
+    GroupingSets(Vec<Vec<Expr>>),
+    /// The `CUBE` expr.
+    Cube(Vec<Vec<Expr>>),
+    /// The `ROLLUP` expr.
+    Rollup(Vec<Vec<Expr>>),
 }
 
 impl fmt::Display for Expr {
@@ -288,15 +283,13 @@ impl fmt::Display for Expr {
                 write!(f, "{}", column)?;
                 for k in keys {
                     match k {
-                        k @ Value::Number(_, _) => write!(f, "[{}]", k)?,
-                        Value::SingleQuotedString(s) => write!(f, "[\"{}\"]", s)?,
+                        k @ Expr::Value(Value::Number(_, _)) => write!(f, "[{}]", k)?,
+                        Expr::Value(Value::SingleQuotedString(s)) => write!(f, "[\"{}\"]", s)?,
                         _ => write!(f, "[{}]", k)?,
                     }
                 }
                 Ok(())
             }
-            Expr::Wildcard => f.write_str("*"),
-            Expr::QualifiedWildcard(q) => write!(f, "{}.*", display_separated(q, ".")),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
             Expr::IsNull(ast) => write!(f, "{} IS NULL", ast),
             Expr::IsNotNull(ast) => write!(f, "{} IS NOT NULL", ast),
@@ -376,6 +369,44 @@ impl fmt::Display for Expr {
             Expr::Exists(s) => write!(f, "EXISTS ({})", s),
             Expr::Subquery(s) => write!(f, "({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
+            Expr::GroupingSets(sets) => {
+                write!(f, "GROUPING SETS (")?;
+                let mut sep = "";
+                for set in sets {
+                    write!(f, "{}", sep)?;
+                    sep = ", ";
+                    write!(f, "({})", display_comma_separated(set))?;
+                }
+                write!(f, ")")
+            }
+            Expr::Cube(sets) => {
+                write!(f, "CUBE (")?;
+                let mut sep = "";
+                for set in sets {
+                    write!(f, "{}", sep)?;
+                    sep = ", ";
+                    if set.len() == 1 {
+                        write!(f, "{}", set[0])?;
+                    } else {
+                        write!(f, "({})", display_comma_separated(set))?;
+                    }
+                }
+                write!(f, ")")
+            }
+            Expr::Rollup(sets) => {
+                write!(f, "ROLLUP (")?;
+                let mut sep = "";
+                for set in sets {
+                    write!(f, "{}", sep)?;
+                    sep = ", ";
+                    if set.len() == 1 {
+                        write!(f, "{}", set[0])?;
+                    } else {
+                        write!(f, "({})", display_comma_separated(set))?;
+                    }
+                }
+                write!(f, ")")
+            }
             Expr::Substring {
                 expr,
                 substring_from,
@@ -433,15 +464,14 @@ impl fmt::Display for WindowSpec {
             write!(f, "ORDER BY {}", display_comma_separated(&self.order_by))?;
         }
         if let Some(window_frame) = &self.window_frame {
+            f.write_str(delim)?;
             if let Some(end_bound) = &window_frame.end_bound {
-                f.write_str(delim)?;
                 write!(
                     f,
                     "{} BETWEEN {} AND {}",
                     window_frame.units, window_frame.start_bound, end_bound
                 )?;
             } else {
-                f.write_str(delim)?;
                 write!(f, "{} {}", window_frame.units, window_frame.start_bound)?;
             }
         }
@@ -561,6 +591,22 @@ impl fmt::Display for ShowCreateObject {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum CommentObject {
+    Column,
+    Table,
+}
+
+impl fmt::Display for CommentObject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CommentObject::Column => f.write_str("COLUMN"),
+            CommentObject::Table => f.write_str("TABLE"),
+        }
+    }
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -607,6 +653,7 @@ pub enum Statement {
         after_columns: Vec<Ident>,
         /// whether the insert has the table keyword (Hive)
         table: bool,
+        on: Option<OnInsert>,
     },
     // TODO: Support ROW FORMAT
     Directory {
@@ -627,7 +674,7 @@ pub enum Statement {
     /// UPDATE
     Update {
         /// TABLE
-        table_name: ObjectName,
+        table: TableWithJoins,
         /// Column assignments
         assignments: Vec<Assignment>,
         /// WHERE
@@ -742,7 +789,19 @@ pub enum Statement {
     /// `{ BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...`
     StartTransaction { modes: Vec<TransactionMode> },
     /// `SET TRANSACTION ...`
-    SetTransaction { modes: Vec<TransactionMode> },
+    SetTransaction {
+        modes: Vec<TransactionMode>,
+        snapshot: Option<Value>,
+        session: bool,
+    },
+    /// `COMMENT ON ...`
+    ///
+    /// Note: this is a PostgreSQL-specific statement.
+    Comment {
+        object_type: CommentObject,
+        object_name: ObjectName,
+        comment: Option<String>,
+    },
     /// `COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
     Commit { chain: bool },
     /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
@@ -763,6 +822,22 @@ pub enum Statement {
     Assert {
         condition: Expr,
         message: Option<Expr>,
+    },
+    /// GRANT privileges ON objects TO grantees
+    Grant {
+        privileges: Privileges,
+        objects: GrantObjects,
+        grantees: Vec<Ident>,
+        with_grant_option: bool,
+        granted_by: Option<Ident>,
+    },
+    /// REVOKE privileges ON objects FROM grantees
+    Revoke {
+        privileges: Privileges,
+        objects: GrantObjects,
+        grantees: Vec<Ident>,
+        granted_by: Option<Ident>,
+        cascade: bool,
     },
     /// `DEALLOCATE [ PREPARE ] { name | ALL }`
     ///
@@ -931,6 +1006,7 @@ impl fmt::Display for Statement {
                 after_columns,
                 source,
                 table,
+                on,
             } => {
                 if let Some(action) = or {
                     write!(f, "INSERT OR {} INTO {} ", action, table_name)?;
@@ -954,7 +1030,13 @@ impl fmt::Display for Statement {
                 if !after_columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(after_columns))?;
                 }
-                write!(f, "{}", source)
+                write!(f, "{}", source)?;
+
+                if let Some(on) = on {
+                    write!(f, "{}", on)
+                } else {
+                    Ok(())
+                }
             }
 
             Statement::Copy {
@@ -983,11 +1065,11 @@ impl fmt::Display for Statement {
                 write!(f, "\n\\.")
             }
             Statement::Update {
-                table_name,
+                table,
                 assignments,
                 selection,
             } => {
-                write!(f, "UPDATE {}", table_name)?;
+                write!(f, "UPDATE {}", table)?;
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
@@ -1302,10 +1384,21 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::SetTransaction { modes } => {
-                write!(f, "SET TRANSACTION")?;
+            Statement::SetTransaction {
+                modes,
+                snapshot,
+                session,
+            } => {
+                if *session {
+                    write!(f, "SET SESSION CHARACTERISTICS AS TRANSACTION")?;
+                } else {
+                    write!(f, "SET TRANSACTION")?;
+                }
                 if !modes.is_empty() {
                     write!(f, " {}", display_comma_separated(modes))?;
+                }
+                if let Some(snapshot_id) = snapshot {
+                    write!(f, " SNAPSHOT {}", snapshot_id)?;
                 }
                 Ok(())
             }
@@ -1329,6 +1422,40 @@ impl fmt::Display for Statement {
                 if let Some(m) = message {
                     write!(f, " AS {}", m)?;
                 }
+                Ok(())
+            }
+            Statement::Grant {
+                privileges,
+                objects,
+                grantees,
+                with_grant_option,
+                granted_by,
+            } => {
+                write!(f, "GRANT {} ", privileges)?;
+                write!(f, "ON {} ", objects)?;
+                write!(f, "TO {}", display_comma_separated(grantees))?;
+                if *with_grant_option {
+                    write!(f, " WITH GRANT OPTION")?;
+                }
+                if let Some(grantor) = granted_by {
+                    write!(f, " GRANTED BY {}", grantor)?;
+                }
+                Ok(())
+            }
+            Statement::Revoke {
+                privileges,
+                objects,
+                grantees,
+                granted_by,
+                cascade,
+            } => {
+                write!(f, "REVOKE {} ", privileges)?;
+                write!(f, "ON {} ", objects)?;
+                write!(f, "FROM {}", display_comma_separated(grantees))?;
+                if let Some(grantor) = granted_by {
+                    write!(f, " GRANTED BY {}", grantor)?;
+                }
+                write!(f, " {}", if *cascade { "CASCADE" } else { "RESTRICT" })?;
                 Ok(())
             }
             Statement::Deallocate { name, prepare } => write!(
@@ -1355,6 +1482,169 @@ impl fmt::Display for Statement {
                 }
                 write!(f, "AS {}", statement)
             }
+            Statement::Comment {
+                object_type,
+                object_name,
+                comment,
+            } => {
+                write!(f, "COMMENT ON {} {} IS ", object_type, object_name)?;
+                if let Some(c) = comment {
+                    write!(f, "'{}'", c)
+                } else {
+                    write!(f, "NULL")
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
+pub enum OnInsert {
+    /// ON DUPLICATE KEY UPDATE (MySQL when the key already exists, then execute an update instead)
+    DuplicateKeyUpdate(Vec<Assignment>),
+}
+
+impl fmt::Display for OnInsert {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::DuplicateKeyUpdate(expr) => write!(
+                f,
+                " ON DUPLICATE KEY UPDATE {}",
+                display_comma_separated(expr)
+            ),
+        }
+    }
+}
+
+/// Privileges granted in a GRANT statement or revoked in a REVOKE statement.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Privileges {
+    /// All privileges applicable to the object type
+    All {
+        /// Optional keyword from the spec, ignored in practice
+        with_privileges_keyword: bool,
+    },
+    /// Specific privileges (e.g. `SELECT`, `INSERT`)
+    Actions(Vec<Action>),
+}
+
+impl fmt::Display for Privileges {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Privileges::All {
+                with_privileges_keyword,
+            } => {
+                write!(
+                    f,
+                    "ALL{}",
+                    if *with_privileges_keyword {
+                        " PRIVILEGES"
+                    } else {
+                        ""
+                    }
+                )
+            }
+            Privileges::Actions(actions) => {
+                write!(f, "{}", display_comma_separated(actions).to_string())
+            }
+        }
+    }
+}
+
+/// A privilege on a database object (table, sequence, etc.).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Action {
+    Connect,
+    Create,
+    Delete,
+    Execute,
+    Insert { columns: Option<Vec<Ident>> },
+    References { columns: Option<Vec<Ident>> },
+    Select { columns: Option<Vec<Ident>> },
+    Temporary,
+    Trigger,
+    Truncate,
+    Update { columns: Option<Vec<Ident>> },
+    Usage,
+}
+
+impl fmt::Display for Action {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Action::Connect => f.write_str("CONNECT")?,
+            Action::Create => f.write_str("CREATE")?,
+            Action::Delete => f.write_str("DELETE")?,
+            Action::Execute => f.write_str("EXECUTE")?,
+            Action::Insert { .. } => f.write_str("INSERT")?,
+            Action::References { .. } => f.write_str("REFERENCES")?,
+            Action::Select { .. } => f.write_str("SELECT")?,
+            Action::Temporary => f.write_str("TEMPORARY")?,
+            Action::Trigger => f.write_str("TRIGGER")?,
+            Action::Truncate => f.write_str("TRUNCATE")?,
+            Action::Update { .. } => f.write_str("UPDATE")?,
+            Action::Usage => f.write_str("USAGE")?,
+        };
+        match self {
+            Action::Insert { columns }
+            | Action::References { columns }
+            | Action::Select { columns }
+            | Action::Update { columns } => {
+                if let Some(columns) = columns {
+                    write!(f, " ({})", display_comma_separated(columns))?;
+                }
+            }
+            _ => (),
+        };
+        Ok(())
+    }
+}
+
+/// Objects on which privileges are granted in a GRANT statement.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum GrantObjects {
+    /// Grant privileges on `ALL SEQUENCES IN SCHEMA <schema_name> [, ...]`
+    AllSequencesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on `ALL TABLES IN SCHEMA <schema_name> [, ...]`
+    AllTablesInSchema { schemas: Vec<ObjectName> },
+    /// Grant privileges on specific schemas
+    Schemas(Vec<ObjectName>),
+    /// Grant privileges on specific sequences
+    Sequences(Vec<ObjectName>),
+    /// Grant privileges on specific tables
+    Tables(Vec<ObjectName>),
+}
+
+impl fmt::Display for GrantObjects {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GrantObjects::Sequences(sequences) => {
+                write!(f, "SEQUENCE {}", display_comma_separated(sequences))
+            }
+            GrantObjects::Schemas(schemas) => {
+                write!(f, "SCHEMA {}", display_comma_separated(schemas))
+            }
+            GrantObjects::Tables(tables) => {
+                write!(f, "{}", display_comma_separated(tables))
+            }
+            GrantObjects::AllSequencesInSchema { schemas } => {
+                write!(
+                    f,
+                    "ALL SEQUENCES IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
+            GrantObjects::AllTablesInSchema { schemas } => {
+                write!(
+                    f,
+                    "ALL TABLES IN SCHEMA {}",
+                    display_comma_separated(schemas)
+                )
+            }
         }
     }
 }
@@ -1363,21 +1653,41 @@ impl fmt::Display for Statement {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Assignment {
-    pub id: Ident,
+    pub id: Vec<Ident>,
     pub value: Expr,
 }
 
 impl fmt::Display for Assignment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} = {}", self.id, self.value)
+        write!(f, "{} = {}", display_separated(&self.id, "."), self.value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum FunctionArgExpr {
+    Expr(Expr),
+    /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
+    QualifiedWildcard(ObjectName),
+    /// An unqualified `*`
+    Wildcard,
+}
+
+impl fmt::Display for FunctionArgExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FunctionArgExpr::Expr(expr) => write!(f, "{}", expr),
+            FunctionArgExpr::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
+            FunctionArgExpr::Wildcard => f.write_str("*"),
+        }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FunctionArg {
-    Named { name: Ident, arg: Expr },
-    Unnamed(Expr),
+    Named { name: Ident, arg: FunctionArgExpr },
+    Unnamed(FunctionArgExpr),
 }
 
 impl fmt::Display for FunctionArg {
@@ -1563,8 +1873,10 @@ pub enum HiveRowFormat {
     DELIMITED,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[allow(clippy::large_enum_variant)]
 pub enum HiveIOFormat {
     IOF {
         input_format: Expr,
@@ -1721,5 +2033,94 @@ mod tests {
     fn test_window_frame_default() {
         let window_frame = WindowFrame::default();
         assert_eq!(WindowFrameBound::Preceding(None), window_frame.start_bound);
+    }
+
+    #[test]
+    fn test_grouping_sets_display() {
+        // a and b in different group
+        let grouping_sets = Expr::GroupingSets(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![Expr::Identifier(Ident::new("b"))],
+        ]);
+        assert_eq!("GROUPING SETS ((a), (b))", format!("{}", grouping_sets));
+
+        // a and b in the same group
+        let grouping_sets = Expr::GroupingSets(vec![vec![
+            Expr::Identifier(Ident::new("a")),
+            Expr::Identifier(Ident::new("b")),
+        ]]);
+        assert_eq!("GROUPING SETS ((a, b))", format!("{}", grouping_sets));
+
+        // (a, b) and (c, d) in different group
+        let grouping_sets = Expr::GroupingSets(vec![
+            vec![
+                Expr::Identifier(Ident::new("a")),
+                Expr::Identifier(Ident::new("b")),
+            ],
+            vec![
+                Expr::Identifier(Ident::new("c")),
+                Expr::Identifier(Ident::new("d")),
+            ],
+        ]);
+        assert_eq!(
+            "GROUPING SETS ((a, b), (c, d))",
+            format!("{}", grouping_sets)
+        );
+    }
+
+    #[test]
+    fn test_rollup_display() {
+        let rollup = Expr::Rollup(vec![vec![Expr::Identifier(Ident::new("a"))]]);
+        assert_eq!("ROLLUP (a)", format!("{}", rollup));
+
+        let rollup = Expr::Rollup(vec![vec![
+            Expr::Identifier(Ident::new("a")),
+            Expr::Identifier(Ident::new("b")),
+        ]]);
+        assert_eq!("ROLLUP ((a, b))", format!("{}", rollup));
+
+        let rollup = Expr::Rollup(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![Expr::Identifier(Ident::new("b"))],
+        ]);
+        assert_eq!("ROLLUP (a, b)", format!("{}", rollup));
+
+        let rollup = Expr::Rollup(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![
+                Expr::Identifier(Ident::new("b")),
+                Expr::Identifier(Ident::new("c")),
+            ],
+            vec![Expr::Identifier(Ident::new("d"))],
+        ]);
+        assert_eq!("ROLLUP (a, (b, c), d)", format!("{}", rollup));
+    }
+
+    #[test]
+    fn test_cube_display() {
+        let cube = Expr::Cube(vec![vec![Expr::Identifier(Ident::new("a"))]]);
+        assert_eq!("CUBE (a)", format!("{}", cube));
+
+        let cube = Expr::Cube(vec![vec![
+            Expr::Identifier(Ident::new("a")),
+            Expr::Identifier(Ident::new("b")),
+        ]]);
+        assert_eq!("CUBE ((a, b))", format!("{}", cube));
+
+        let cube = Expr::Cube(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![Expr::Identifier(Ident::new("b"))],
+        ]);
+        assert_eq!("CUBE (a, b)", format!("{}", cube));
+
+        let cube = Expr::Cube(vec![
+            vec![Expr::Identifier(Ident::new("a"))],
+            vec![
+                Expr::Identifier(Ident::new("b")),
+                Expr::Identifier(Ident::new("c")),
+            ],
+            vec![Expr::Identifier(Ident::new("d"))],
+        ]);
+        assert_eq!("CUBE (a, (b, c), d)", format!("{}", cube));
     }
 }

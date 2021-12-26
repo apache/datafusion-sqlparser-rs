@@ -2648,7 +2648,18 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // Not Sure if Top should be cheked here as well. Trino doesn't support TOP.
+        let is_l_parent = if distinct {
+            self.consume_token(&Token::LParen)
+        } else {
+            false
+        };
+
         let projection = self.parse_comma_separated(Parser::parse_select_item)?;
+
+        if is_l_parent {
+            self.consume_token(&Token::RParen);
+        }
 
         // Note that for keywords to be properly handled here, they need to be
         // added to `RESERVED_FOR_COLUMN_ALIAS` / `RESERVED_FOR_TABLE_ALIAS`,

@@ -328,6 +328,25 @@ fn parse_select_distinct() {
 }
 
 #[test]
+fn parse_select_distinct_two_fields() {
+    let sql = "SELECT DISTINCT name, id FROM customer";
+    let select = verified_only_select(sql);
+    assert!(select.distinct);
+    one_statement_parses_to(
+        "SELECT DISTINCT (name, id) FROM customer",
+        sql,
+    );
+    assert_eq!(
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
+        &select.projection[0]
+    );
+    assert_eq!(
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
+        &select.projection[1]
+    );
+}
+
+#[test]
 fn parse_select_all() {
     one_statement_parses_to("SELECT ALL name FROM customer", "SELECT name FROM customer");
 }

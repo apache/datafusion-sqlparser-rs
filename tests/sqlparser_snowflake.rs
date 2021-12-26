@@ -16,6 +16,7 @@
 
 #[macro_use]
 mod test_utils;
+use sqlparser::span::Span;
 use test_utils::*;
 
 use sqlparser::ast::*;
@@ -43,12 +44,18 @@ fn test_snowflake_single_line_tokenize() {
 
     let expected = vec![
         Token::make_keyword("CREATE"),
-        Token::Whitespace(Whitespace::Space),
+        Token::Whitespace {
+            value: Whitespace::Space,
+            span: Span::new(),
+        },
         Token::make_keyword("TABLE"),
-        Token::Whitespace(Whitespace::SingleLineComment {
-            prefix: "#".to_string(),
-            comment: " this is a comment \n".to_string(),
-        }),
+        Token::Whitespace {
+            value: Whitespace::SingleLineComment {
+                prefix: "#".to_string(),
+                comment: " this is a comment \n".to_string(),
+            },
+            span: Span::new(),
+        },
         Token::make_word("table_1", None),
     ];
 
@@ -60,12 +67,18 @@ fn test_snowflake_single_line_tokenize() {
 
     let expected = vec![
         Token::make_keyword("CREATE"),
-        Token::Whitespace(Whitespace::Space),
+        Token::Whitespace {
+            value: Whitespace::Space,
+            span: Span::new(),
+        },
         Token::make_keyword("TABLE"),
-        Token::Whitespace(Whitespace::SingleLineComment {
-            prefix: "//".to_string(),
-            comment: " this is a comment \n".to_string(),
-        }),
+        Token::Whitespace {
+            value: Whitespace::SingleLineComment {
+                prefix: "//".to_string(),
+                comment: " this is a comment \n".to_string(),
+            },
+            span: Span::new(),
+        },
         Token::make_word("table_1", None),
     ];
 

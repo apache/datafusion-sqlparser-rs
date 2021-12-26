@@ -422,7 +422,7 @@ fn test_eof_after_as() {
 fn test_no_infix_error() {
     let res = Parser::parse_sql(&GenericDialect {}, "ASSERT-URA<<");
     assert_eq!(
-        ParserError::ParserError("No infix parser for token ShiftLeft".to_string()),
+        ParserError::ParserError("No infix parser for token '<<'".to_string()),
         res.unwrap_err()
     );
 }

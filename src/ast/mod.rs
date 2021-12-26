@@ -717,6 +717,8 @@ pub enum Statement {
         query: Option<Box<Query>>,
         without_rowid: bool,
         like: Option<ObjectName>,
+        engine: Option<String>,
+        default_charset: Option<String>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -1147,6 +1149,8 @@ impl fmt::Display for Statement {
                 query,
                 without_rowid,
                 like,
+                default_charset,
+                engine,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -1271,6 +1275,12 @@ impl fmt::Display for Statement {
                 }
                 if let Some(query) = query {
                     write!(f, " AS {}", query)?;
+                }
+                if let Some(engine) = engine {
+                    write!(f, " ENGINE={}", engine)?;
+                }
+                if let Some(default_charset) = default_charset {
+                    write!(f, " DEFAULT CHARSET={}", default_charset)?;
                 }
                 Ok(())
             }

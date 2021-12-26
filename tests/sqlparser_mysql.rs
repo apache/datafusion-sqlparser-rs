@@ -184,6 +184,34 @@ fn parse_create_table_set_enum() {
 }
 
 #[test]
+fn parse_create_table_engine_default_charset() {
+    let sql = "CREATE TABLE foo (id INT(11)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable {
+            name,
+            columns,
+            engine,
+            default_charset,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::new("id"),
+                    data_type: DataType::Int(Some(11)),
+                    collation: None,
+                    options: vec![],
+                },],
+                columns
+            );
+            assert_eq!(engine, Some("InnoDB".to_string()));
+            assert_eq!(default_charset, Some("utf8mb3".to_string()));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_quote_identifiers() {
     let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INT PRIMARY KEY)";
     match mysql().verified_stmt(sql) {

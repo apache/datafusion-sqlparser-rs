@@ -1505,6 +1505,8 @@ impl<'a> Parser<'a> {
             query: None,
             without_rowid: false,
             like: None,
+            default_charset: None,
+            engine: None,
         })
     }
 
@@ -1679,6 +1681,26 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let engine = if self.parse_keyword(Keyword::ENGINE) {
+            self.expect_token(&Token::Eq)?;
+            match self.next_token() {
+                Token::Word(w) => Some(w.value),
+                unexpected => self.expected("identifier", unexpected)?,
+            }
+        } else {
+            None
+        };
+
+        let default_charset = if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARSET]) {
+            self.expect_token(&Token::Eq)?;
+            match self.next_token() {
+                Token::Word(w) => Some(w.value),
+                unexpected => self.expected("identifier", unexpected)?,
+            }
+        } else {
+            None
+        };
+
         Ok(Statement::CreateTable {
             name: table_name,
             temporary,
@@ -1696,6 +1718,8 @@ impl<'a> Parser<'a> {
             query,
             without_rowid,
             like,
+            engine,
+            default_charset,
         })
     }
 

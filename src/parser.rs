@@ -1982,6 +1982,10 @@ impl<'a> Parser<'a> {
                     partitions,
                     if_exists: false,
                 }
+            } else if self.parse_keyword(Keyword::CONSTRAINT) {
+                let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+                let name = self.parse_identifier()?;
+                AlterTableOperation::DropConstraint { if_exists, name }
             } else {
                 let _ = self.parse_keyword(Keyword::COLUMN);
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);

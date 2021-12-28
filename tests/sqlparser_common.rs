@@ -2055,18 +2055,20 @@ fn parse_alter_table_alter_column_type() {
 #[test]
 fn parse_alter_table_drop_constraint() {
     let alter_stmt = "ALTER TABLE tab";
-    match verified_stmt("ALTER TABLE tab DROP CONSTRAINT constraint_name") {
+    match verified_stmt("ALTER TABLE tab DROP CONSTRAINT constraint_name CASCADE") {
         Statement::AlterTable {
             name,
             operation:
                 AlterTableOperation::DropConstraint {
                     name: constr_name,
                     if_exists,
+                    cascade,
                 },
         } => {
             assert_eq!("tab", name.to_string());
             assert_eq!("constraint_name", constr_name.to_string());
             assert!(!if_exists);
+            assert!(cascade);
         }
         _ => unreachable!(),
     }
@@ -2077,11 +2079,13 @@ fn parse_alter_table_drop_constraint() {
                 AlterTableOperation::DropConstraint {
                     name: constr_name,
                     if_exists,
+                    cascade,
                 },
         } => {
             assert_eq!("tab", name.to_string());
             assert_eq!("constraint_name", constr_name.to_string());
             assert!(if_exists);
+            assert!(!cascade);
         }
         _ => unreachable!(),
     }

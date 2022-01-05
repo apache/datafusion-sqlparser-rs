@@ -454,7 +454,11 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::RParen)?;
                 Ok(expr)
             }
-            unexpected => self.expected("an expression:", unexpected),
+            Token::Placeholder(_) => {
+                self.prev_token();
+                Ok(Expr::Value(self.parse_value()?))
+            }
+            unexpected => self.expected("an expression:", unexpected)
         }?;
 
         if self.parse_keyword(Keyword::COLLATE) {
@@ -2062,6 +2066,7 @@ impl<'a> Parser<'a> {
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
+            Token::Placeholder(ref s) => Ok(Value::Placeholder(s.to_string())),
             unexpected => self.expected("a value", unexpected),
         }
     }

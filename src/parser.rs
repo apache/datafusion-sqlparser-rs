@@ -118,7 +118,6 @@ impl<'a> Parser<'a> {
             while parser.consume_token(&Token::SemiColon) {
                 expecting_statement_delimiter = false;
             }
-
             if parser.peek_token() == Token::EOF {
                 break;
             }
@@ -458,7 +457,7 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
-            unexpected => self.expected("an expression:", unexpected)
+            unexpected => self.expected("an expression:", unexpected),
         }?;
 
         if self.parse_keyword(Keyword::COLLATE) {
@@ -2423,6 +2422,12 @@ impl<'a> Parser<'a> {
                 None
             };
 
+            let lock = if self.parse_keyword(Keyword::FOR) {
+                Some(self.parse_lock()?)
+            } else {
+                None
+            };
+
             Ok(Query {
                 with,
                 body,
@@ -2430,6 +2435,7 @@ impl<'a> Parser<'a> {
                 limit,
                 offset,
                 fetch,
+                lock,
             })
         } else {
             let insert = self.parse_insert()?;
@@ -2441,6 +2447,7 @@ impl<'a> Parser<'a> {
                 order_by: vec![],
                 offset: None,
                 fetch: None,
+                lock: None,
             })
         }
     }
@@ -3379,6 +3386,15 @@ impl<'a> Parser<'a> {
             percent,
             quantity,
         })
+    }
+
+    /// Parse a FOR UPDATE/FOR SHARE clause
+    pub fn parse_lock(&mut self) -> Result<LockType, ParserError> {
+        match self.expect_one_of_keywords(&[Keyword::UPDATE, Keyword::SHARE])? {
+            Keyword::UPDATE => Ok(LockType::Exclusive),
+            Keyword::SHARE => Ok(LockType::Shared),
+            _ => unreachable!(),
+        }
     }
 
     pub fn parse_values(&mut self) -> Result<Values, ParserError> {

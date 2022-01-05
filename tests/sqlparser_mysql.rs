@@ -305,6 +305,7 @@ fn parse_insert_with_on_duplicate_update() {
                     limit: None,
                     offset: None,
                     fetch: None,
+                    lock: None,
                 }),
                 source
             );

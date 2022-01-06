@@ -1045,11 +1045,17 @@ impl<'a> Parser<'a> {
                 Keyword::OR => Some(BinaryOperator::Or),
                 Keyword::LIKE => Some(BinaryOperator::Like),
                 Keyword::ILIKE => Some(BinaryOperator::ILike),
+                Keyword::REGEXP => Some(BinaryOperator::Regexp),
+                Keyword::RLIKE => Some(BinaryOperator::RLike),
                 Keyword::NOT => {
                     if self.parse_keyword(Keyword::LIKE) {
                         Some(BinaryOperator::NotLike)
                     } else if self.parse_keyword(Keyword::ILIKE) {
                         Some(BinaryOperator::NotILike)
+                    } else if self.parse_keyword(Keyword::REGEXP) {
+                        Some(BinaryOperator::NotRegexp)
+                    } else if self.parse_keyword(Keyword::RLIKE) {
+                        Some(BinaryOperator::NotRLike)
                     } else {
                         None
                     }
@@ -1195,7 +1201,7 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::XOR => Ok(24),
             Token::Word(w) if w.keyword == Keyword::NOT => match self.peek_nth_token(1) {
                 // The precedence of NOT varies depending on keyword that
-                // follows it. If it is followed by IN, BETWEEN, or LIKE,
+                // follows it. If it is followed by IN, BETWEEN, LIKE, REGEXP, or RLIKE
                 // it takes on the precedence of those tokens. Otherwise it
                 // is not an infix operator, and therefore has zero
                 // precedence.
@@ -1203,6 +1209,8 @@ impl<'a> Parser<'a> {
                 Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
                 Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
                 Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::BETWEEN_PREC),
+                Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(Self::BETWEEN_PREC),
+                Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(Self::BETWEEN_PREC),
                 _ => Ok(0),
             },
             Token::Word(w) if w.keyword == Keyword::IS => Ok(17),
@@ -1210,6 +1218,8 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::BETWEEN_PREC),
+            Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(Self::BETWEEN_PREC),
+            Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::DIV => Ok(40),
             Token::Eq
             | Token::Lt

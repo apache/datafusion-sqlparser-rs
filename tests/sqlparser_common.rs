@@ -21,6 +21,7 @@
 #[macro_use]
 mod test_utils;
 use matches::assert_matches;
+use sqlparser::ast::Expr::BinaryOp;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::keywords::ALL_KEYWORDS;
@@ -899,6 +900,84 @@ fn parse_ilike() {
     }
     chk(false);
     chk(true);
+}
+
+#[test]
+fn parse_regexp() {
+    fn chk(name: &str, negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}{} '^a'",
+            if negated { "NOT " } else { "" },
+            name
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("name"))),
+                op: if name.eq("REGEXP") && negated {
+                    BinaryOperator::NotRegexp
+                } else if name.eq("REGEXP") && !negated {
+                    BinaryOperator::Regexp
+                } else if name.eq("RLIKE") && negated {
+                    BinaryOperator::NotRLike
+                } else {
+                    BinaryOperator::RLike
+                },
+                right: Box::new(Expr::Value(Value::SingleQuotedString("^a".to_string()))),
+            },
+            select.selection.unwrap()
+        );
+
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}{} '%a' IS NULL",
+            if negated { "NOT " } else { "" },
+            name
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::IsNull(Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("name"))),
+                op: if name.eq("REGEXP") && negated {
+                    BinaryOperator::NotRegexp
+                } else if name.eq("REGEXP") && !negated {
+                    BinaryOperator::Regexp
+                } else if name.eq("RLIKE") && negated {
+                    BinaryOperator::NotRLike
+                } else {
+                    BinaryOperator::RLike
+                },
+                right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+            })),
+            select.selection.unwrap()
+        );
+
+        let sql = &format!(
+            "SELECT 'abc' {}{} '^a'",
+            if negated { "NOT " } else { "" },
+            name
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            vec![SelectItem::UnnamedExpr(BinaryOp {
+                left: Box::new(Expr::Value(Value::SingleQuotedString("abc".to_string()))),
+                op: if name.eq("REGEXP") && negated {
+                    BinaryOperator::NotRegexp
+                } else if name.eq("REGEXP") && !negated {
+                    BinaryOperator::Regexp
+                } else if name.eq("RLIKE") && negated {
+                    BinaryOperator::NotRLike
+                } else {
+                    BinaryOperator::RLike
+                },
+                right: Box::new(Expr::Value(Value::SingleQuotedString("^a".to_string()))),
+            })],
+            select.projection
+        )
+    }
+    chk("REGEXP", false);
+    chk("REGEXP", true);
+    chk("RLIKE", false);
+    chk("RLIKE", true);
 }
 
 #[test]

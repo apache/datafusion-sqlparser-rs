@@ -21,8 +21,8 @@
 #[macro_use]
 mod test_utils;
 use matches::assert_matches;
-use sqlparser::ast::*;
 use sqlparser::ast::Expr::BinaryOp;
+use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};

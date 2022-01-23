@@ -51,7 +51,5 @@ fn parse_map_access_expr() {
 }
 
 fn clickhouse() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(ClickHouseDialect {})],
-    }
+    tested_dialects!(ClickHouseDialect)
 }

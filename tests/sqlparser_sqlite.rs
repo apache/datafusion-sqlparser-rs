@@ -119,14 +119,9 @@ fn parse_create_sqlite_quote() {
 }
 
 fn sqlite() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(SQLiteDialect {})],
-    }
+    tested_dialects!(SQLiteDialect)
 }
 
 fn sqlite_and_generic() -> TestedDialects {
-    TestedDialects {
-        // we don't have a separate SQLite dialect, so test only the generic dialect for now
-        dialects: vec![Box::new(SQLiteDialect {}), Box::new(GenericDialect {})],
-    }
+    tested_dialects!(SQLiteDialect, GenericDialect)
 }

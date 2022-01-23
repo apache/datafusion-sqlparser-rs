@@ -16,12 +16,12 @@ use crate::dialect::Dialect;
 pub struct ClickHouseDialect {}
 
 impl Dialect for ClickHouseDialect {
-    fn is_identifier_start(&self, ch: char) -> bool {
+    fn is_identifier_start(ch: char) -> bool {
         // See https://clickhouse.com/docs/en/sql-reference/syntax/#syntax-identifiers
         ('a'..='z').contains(&ch) || ('A'..='Z').contains(&ch) || ch == '_'
     }
 
-    fn is_identifier_part(&self, ch: char) -> bool {
-        self.is_identifier_start(ch) || ('0'..='9').contains(&ch)
+    fn is_identifier_part(ch: char) -> bool {
+        Self::is_identifier_start(ch) || ('0'..='9').contains(&ch)
     }
 }

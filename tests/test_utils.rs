@@ -21,10 +21,9 @@ use alloc::{
 };
 use core::fmt::Debug;
 
-use sqlparser::ast::*;
 use sqlparser::dialect::*;
 use sqlparser::parser::{Parser, ParserError};
-use sqlparser::tokenizer::Tokenizer;
+use sqlparser::{ast::*, tokenizer::Token};
 
 #[macro_export]
 macro_rules! nest {
@@ -36,10 +35,46 @@ macro_rules! nest {
     };
 }
 
+pub trait Parse {
+    fn parse_statements(&mut self) -> Result<Vec<Statement>, ParserError>;
+    fn parse_expr(&mut self) -> Result<Expr, ParserError>;
+    fn parse_object_name(&mut self) -> Result<ObjectName, ParserError>;
+    fn peek_token(&self) -> Token;
+    fn next_token(&mut self) -> Token;
+    fn prev_token(&mut self);
+}
+
+impl<D: Dialect> Parse for Parser<D> {
+    fn parse_statements(&mut self) -> Result<Vec<Statement>, ParserError> {
+        self.parse_statements()
+    }
+    fn parse_expr(&mut self) -> Result<Expr, ParserError> {
+        self.parse_expr()
+    }
+
+    fn parse_object_name(&mut self) -> Result<ObjectName, ParserError> {
+        self.parse_object_name()
+    }
+
+    fn peek_token(&self) -> Token {
+        self.peek_token()
+    }
+
+    fn next_token(&mut self) -> Token {
+        self.next_token()
+    }
+
+    fn prev_token(&mut self) {
+        self.prev_token()
+    }
+}
+
+type ParserConstructor = fn(tokens: &str) -> Box<dyn Parse>;
+
 /// Tests use the methods on this struct to invoke the parser on one or
 /// multiple dialects.
 pub struct TestedDialects {
-    pub dialects: Vec<Box<dyn Dialect>>,
+    pub dialects: Vec<(&'static str, ParserConstructor)>,
 }
 
 impl TestedDialects {
@@ -47,15 +82,18 @@ impl TestedDialects {
     /// return the same result, and return that result.
     pub fn one_of_identical_results<F, T: Debug + PartialEq>(&self, f: F) -> T
     where
-        F: Fn(&dyn Dialect) -> T,
+        F: Fn(&ParserConstructor) -> T,
     {
-        let parse_results = self.dialects.iter().map(|dialect| (dialect, f(&**dialect)));
+        let parse_results = self
+            .dialects
+            .iter()
+            .map(|(name, dialect)| (name, f(dialect)));
         parse_results
             .fold(None, |s, (dialect, parsed)| {
                 if let Some((prev_dialect, prev_parsed)) = s {
                     assert_eq!(
                         prev_parsed, parsed,
-                        "Parse results with {:?} are different from {:?}",
+                        "Parse results with {} are different from {}",
                         prev_dialect, dialect
                     );
                 }
@@ -67,17 +105,13 @@ impl TestedDialects {
 
     pub fn run_parser_method<F, T: Debug + PartialEq>(&self, sql: &str, f: F) -> T
     where
-        F: Fn(&mut Parser) -> T,
+        F: Fn(&mut dyn Parse) -> T,
     {
-        self.one_of_identical_results(|dialect| {
-            let mut tokenizer = Tokenizer::new(dialect, sql);
-            let tokens = tokenizer.tokenize().unwrap();
-            f(&mut Parser::new(tokens, dialect))
-        })
+        self.one_of_identical_results(|constructor| f(constructor(sql).as_mut()))
     }
 
     pub fn parse_sql_statements(&self, sql: &str) -> Result<Vec<Statement>, ParserError> {
-        self.one_of_identical_results(|dialect| Parser::parse_sql(dialect, sql))
+        self.one_of_identical_results(|constructor| constructor(sql).parse_statements())
         // To fail the `ensure_multiple_dialects_are_tested` test:
         // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)
     }
@@ -137,17 +171,32 @@ impl TestedDialects {
     }
 }
 
+#[macro_export]
+macro_rules! tested_dialects {
+    ($($dialect:ident),+) => {
+        TestedDialects {
+            dialects: vec![
+                $(
+                    (stringify!($dialect), |input| {
+                        Box::new(sqlparser::parser::Parser::<$dialect>::new(
+                            sqlparser::tokenizer::Tokenizer::<$dialect>::new(input).tokenize().unwrap(),
+                        ))
+                    })
+                ),+
+            ],
+        }
+    };
+}
+
 pub fn all_dialects() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(MsSqlDialect {}),
-            Box::new(AnsiDialect {}),
-            Box::new(SnowflakeDialect {}),
-            Box::new(HiveDialect {}),
-        ],
-    }
+    tested_dialects!(
+        GenericDialect,
+        PostgreSqlDialect,
+        MsSqlDialect,
+        AnsiDialect,
+        SnowflakeDialect,
+        HiveDialect
+    )
 }
 
 pub fn only<T>(v: impl IntoIterator<Item = T>) -> T {

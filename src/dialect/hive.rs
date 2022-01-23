@@ -16,18 +16,18 @@ use crate::dialect::Dialect;
 pub struct HiveDialect {}
 
 impl Dialect for HiveDialect {
-    fn is_delimited_identifier_start(&self, ch: char) -> bool {
+    fn is_delimited_identifier_start(ch: char) -> bool {
         (ch == '"') || (ch == '`')
     }
 
-    fn is_identifier_start(&self, ch: char) -> bool {
+    fn is_identifier_start(ch: char) -> bool {
         ('a'..='z').contains(&ch)
             || ('A'..='Z').contains(&ch)
             || ('0'..='9').contains(&ch)
             || ch == '$'
     }
 
-    fn is_identifier_part(&self, ch: char) -> bool {
+    fn is_identifier_part(ch: char) -> bool {
         ('a'..='z').contains(&ch)
             || ('A'..='Z').contains(&ch)
             || ('0'..='9').contains(&ch)

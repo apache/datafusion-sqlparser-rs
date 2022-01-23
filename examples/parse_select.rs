@@ -21,9 +21,7 @@ fn main() {
                WHERE a > b AND b < 100 \
                ORDER BY a DESC, b";
 
-    let dialect = GenericDialect {};
-
-    let ast = Parser::parse_sql(&dialect, sql).unwrap();
+    let ast = Parser::<GenericDialect>::parse_sql(sql).unwrap();
 
     println!("AST: {:?}", ast);
 }

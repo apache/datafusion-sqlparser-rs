@@ -36,18 +36,24 @@ $ cargo run --feature json_example --example cli FILENAME.sql [--dialectname]
 "#,
     );
 
-    let dialect: Box<dyn Dialect> = match std::env::args().nth(2).unwrap_or_default().as_ref() {
-        "--ansi" => Box::new(AnsiDialect {}),
-        "--postgres" => Box::new(PostgreSqlDialect {}),
-        "--ms" => Box::new(MsSqlDialect {}),
-        "--mysql" => Box::new(MySqlDialect {}),
-        "--snowflake" => Box::new(SnowflakeDialect {}),
-        "--hive" => Box::new(HiveDialect {}),
-        "--generic" | "" => Box::new(GenericDialect {}),
+    match std::env::args().nth(2).unwrap_or_default().as_ref() {
+        "--ansi" => parse::<AnsiDialect>(filename),
+        "--postgres" => parse::<PostgreSqlDialect>(filename),
+        "--ms" => parse::<MsSqlDialect>(filename),
+        "--mysql" => parse::<MySqlDialect>(filename),
+        "--snowflake" => parse::<SnowflakeDialect>(filename),
+        "--hive" => parse::<HiveDialect>(filename),
+        "--generic" | "" => parse::<GenericDialect>(filename),
         s => panic!("Unexpected parameter: {}", s),
     };
+}
 
-    println!("Parsing from file '{}' using {:?}", &filename, dialect);
+fn parse<D: Dialect>(filename: String) {
+    println!(
+        "Parsing from file '{}' using {:?}",
+        &filename,
+        std::any::type_name::<D>()
+    );
     let contents = fs::read_to_string(&filename)
         .unwrap_or_else(|_| panic!("Unable to read the file {}", &filename));
     let without_bom = if contents.chars().next().unwrap() as u64 != 0xfeff {
@@ -57,7 +63,7 @@ $ cargo run --feature json_example --example cli FILENAME.sql [--dialectname]
         chars.next();
         chars.as_str()
     };
-    let parse_result = Parser::parse_sql(&*dialect, without_bom);
+    let parse_result = Parser::<D>::parse_sql(without_bom);
     match parse_result {
         Ok(statements) => {
             println!(

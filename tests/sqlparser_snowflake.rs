@@ -37,8 +37,7 @@ fn test_snowflake_create_table() {
 #[test]
 fn test_snowflake_single_line_tokenize() {
     let sql = "CREATE TABLE# this is a comment \ntable_1";
-    let dialect = SnowflakeDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let mut tokenizer = Tokenizer::<SnowflakeDialect>::new(sql);
     let tokens = tokenizer.tokenize().unwrap();
 
     let expected = vec![
@@ -55,7 +54,7 @@ fn test_snowflake_single_line_tokenize() {
     assert_eq!(expected, tokens);
 
     let sql = "CREATE TABLE// this is a comment \ntable_1";
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let mut tokenizer = Tokenizer::<SnowflakeDialect>::new(sql);
     let tokens = tokenizer.tokenize().unwrap();
 
     let expected = vec![
@@ -145,13 +144,9 @@ fn test_single_table_in_parenthesis_with_alias() {
 }
 
 fn snowflake() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(SnowflakeDialect {})],
-    }
+    tested_dialects!(SnowflakeDialect)
 }
 
 fn snowflake_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(SnowflakeDialect {}), Box::new(GenericDialect {})],
-    }
+    tested_dialects!(SnowflakeDialect, GenericDialect)
 }

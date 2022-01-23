@@ -123,17 +123,15 @@ fn parse_insert_invalid() {
 
 #[test]
 fn parse_insert_sqlite() {
-    let dialect = SQLiteDialect {};
-
-    let check = |sql: &str, expected_action: Option<SqliteOnConflict>| match Parser::parse_sql(
-        &dialect, sql,
-    )
-    .unwrap()
-    .pop()
-    .unwrap()
-    {
-        Statement::Insert { or, .. } => assert_eq!(or, expected_action),
-        _ => panic!("{}", sql),
+    let check = |sql: &str, expected_action: Option<SqliteOnConflict>| {
+        match Parser::<SQLiteDialect>::parse_sql(sql)
+            .unwrap()
+            .pop()
+            .unwrap()
+        {
+            Statement::Insert { or, .. } => assert_eq!(or, expected_action),
+            _ => panic!("{}", sql),
+        }
     };
 
     let sql = "INSERT INTO test_table(id) VALUES(1)";
@@ -442,7 +440,7 @@ fn test_eof_after_as() {
 
 #[test]
 fn test_no_infix_error() {
-    let res = Parser::parse_sql(&GenericDialect {}, "ASSERT-URA<<");
+    let res = Parser::<GenericDialect>::parse_sql("ASSERT-URA<<");
     assert_eq!(
         ParserError::ParserError("No infix parser for token ShiftLeft".to_string()),
         res.unwrap_err()
@@ -1122,9 +1120,7 @@ fn parse_select_group_by() {
 
 #[test]
 fn parse_select_group_by_grouping_sets() {
-    let dialects = TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {})],
-    };
+    let dialects = tested_dialects!(PostgreSqlDialect);
     let sql =
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, GROUPING SETS ((brand), (size), ())";
     let select = dialects.verified_only_select(sql);
@@ -1143,9 +1139,7 @@ fn parse_select_group_by_grouping_sets() {
 
 #[test]
 fn parse_select_group_by_rollup() {
-    let dialects = TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {})],
-    };
+    let dialects = tested_dialects!(PostgreSqlDialect);
     let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, ROLLUP (brand, size)";
     let select = dialects.verified_only_select(sql);
     assert_eq!(
@@ -1162,9 +1156,7 @@ fn parse_select_group_by_rollup() {
 
 #[test]
 fn parse_select_group_by_cube() {
-    let dialects = TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {})],
-    };
+    let dialects = tested_dialects!(PostgreSqlDialect);
     let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, CUBE (brand, size)";
     let select = dialects.verified_only_select(sql);
     assert_eq!(
@@ -2052,22 +2044,19 @@ fn parse_alter_table_alter_column_type() {
         _ => unreachable!(),
     }
 
-    let res = Parser::parse_sql(
-        &GenericDialect {},
-        &format!("{} ALTER COLUMN is_active TYPE TEXT", alter_stmt),
-    );
+    let res = Parser::<GenericDialect>::parse_sql(&format!(
+        "{} ALTER COLUMN is_active TYPE TEXT",
+        alter_stmt
+    ));
     assert_eq!(
         ParserError::ParserError("Expected SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN, found: TYPE".to_string()),
         res.unwrap_err()
     );
 
-    let res = Parser::parse_sql(
-        &GenericDialect {},
-        &format!(
-            "{} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'",
-            alter_stmt
-        ),
-    );
+    let res = Parser::<GenericDialect>::parse_sql(&format!(
+        "{} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'",
+        alter_stmt
+    ));
     assert_eq!(
         ParserError::ParserError("Expected end of statement, found: USING".to_string()),
         res.unwrap_err()

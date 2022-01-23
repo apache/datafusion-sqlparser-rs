@@ -34,63 +34,21 @@ pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
 pub use crate::keywords;
 
-/// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
-/// to `true` if `parser.dialect` is one of the `Dialect`s specified.
-macro_rules! dialect_of {
-    ( $parsed_dialect: ident is $($dialect_type: ty)|+ ) => {
-        ($($parsed_dialect.dialect.is::<$dialect_type>())||+)
-    };
-}
-
 pub trait Dialect: Debug + Any {
     /// Determine if a character starts a quoted identifier. The default
     /// implementation, accepting "double quoted" ids is both ANSI-compliant
     /// and appropriate for most dialects (with the notable exception of
     /// MySQL, MS SQL, and sqlite). You can accept one of characters listed
     /// in `Word::matching_end_quote` here
-    fn is_delimited_identifier_start(&self, ch: char) -> bool {
+    fn is_delimited_identifier_start(ch: char) -> bool {
         ch == '"'
     }
     /// Determine if a character is a valid start character for an unquoted identifier
-    fn is_identifier_start(&self, ch: char) -> bool;
+    fn is_identifier_start(ch: char) -> bool;
     /// Determine if a character is a valid unquoted identifier character
-    fn is_identifier_part(&self, ch: char) -> bool;
-}
+    fn is_identifier_part(ch: char) -> bool;
 
-impl dyn Dialect {
-    #[inline]
-    pub fn is<T: Dialect>(&self) -> bool {
-        // borrowed from `Any` implementation
-        TypeId::of::<T>() == self.type_id()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::ansi::AnsiDialect;
-    use super::generic::GenericDialect;
-    use super::*;
-
-    struct DialectHolder<'a> {
-        dialect: &'a dyn Dialect,
-    }
-
-    #[test]
-    fn test_is_dialect() {
-        let generic_dialect: &dyn Dialect = &GenericDialect {};
-        let ansi_dialect: &dyn Dialect = &AnsiDialect {};
-
-        let generic_holder = DialectHolder {
-            dialect: generic_dialect,
-        };
-        let ansi_holder = DialectHolder {
-            dialect: ansi_dialect,
-        };
-
-        assert!(dialect_of!(generic_holder is GenericDialect |  AnsiDialect),);
-        assert!(!dialect_of!(generic_holder is  AnsiDialect));
-        assert!(dialect_of!(ansi_holder is AnsiDialect));
-        assert!(dialect_of!(ansi_holder is GenericDialect | AnsiDialect));
-        assert!(!dialect_of!(ansi_holder is GenericDialect | MsSqlDialect));
+    fn is<T: Dialect>() -> bool {
+        TypeId::of::<Self>() == TypeId::of::<T>()
     }
 }

@@ -16,11 +16,11 @@ use crate::dialect::Dialect;
 pub struct MsSqlDialect {}
 
 impl Dialect for MsSqlDialect {
-    fn is_delimited_identifier_start(&self, ch: char) -> bool {
+    fn is_delimited_identifier_start(ch: char) -> bool {
         ch == '"' || ch == '['
     }
 
-    fn is_identifier_start(&self, ch: char) -> bool {
+    fn is_identifier_start(ch: char) -> bool {
         // See https://docs.microsoft.com/en-us/sql/relational-databases/databases/database-identifiers?view=sql-server-2017#rules-for-regular-identifiers
         // We don't support non-latin "letters" currently.
         ('a'..='z').contains(&ch)
@@ -30,7 +30,7 @@ impl Dialect for MsSqlDialect {
             || ch == '@'
     }
 
-    fn is_identifier_part(&self, ch: char) -> bool {
+    fn is_identifier_part(ch: char) -> bool {
         ('a'..='z').contains(&ch)
             || ('A'..='Z').contains(&ch)
             || ('0'..='9').contains(&ch)

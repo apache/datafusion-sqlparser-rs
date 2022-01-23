@@ -16,7 +16,7 @@ use crate::dialect::Dialect;
 pub struct MySqlDialect {}
 
 impl Dialect for MySqlDialect {
-    fn is_identifier_start(&self, ch: char) -> bool {
+    fn is_identifier_start(ch: char) -> bool {
         // See https://dev.mysql.com/doc/refman/8.0/en/identifiers.html.
         // We don't yet support identifiers beginning with numbers, as that
         // makes it hard to distinguish numeric literals.
@@ -27,11 +27,11 @@ impl Dialect for MySqlDialect {
             || ('\u{0080}'..='\u{ffff}').contains(&ch)
     }
 
-    fn is_identifier_part(&self, ch: char) -> bool {
-        self.is_identifier_start(ch) || ('0'..='9').contains(&ch)
+    fn is_identifier_part(ch: char) -> bool {
+        Self::is_identifier_start(ch) || ('0'..='9').contains(&ch)
     }
 
-    fn is_delimited_identifier_start(&self, ch: char) -> bool {
+    fn is_delimited_identifier_start(ch: char) -> bool {
         ch == '`'
     }
 }

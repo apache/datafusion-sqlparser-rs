@@ -208,7 +208,5 @@ fn from_cte() {
 }
 
 fn hive() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(HiveDialect {})],
-    }
+    tested_dialects!(HiveDialect)
 }

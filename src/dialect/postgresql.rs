@@ -13,17 +13,17 @@
 use crate::dialect::Dialect;
 
 #[derive(Debug)]
-pub struct PostgreSqlDialect {}
+pub struct PostgreSqlDialect;
 
 impl Dialect for PostgreSqlDialect {
-    fn is_identifier_start(&self, ch: char) -> bool {
+    fn is_identifier_start(ch: char) -> bool {
         // See https://www.postgresql.org/docs/11/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
         // We don't yet support identifiers beginning with "letters with
         // diacritical marks and non-Latin letters"
         ('a'..='z').contains(&ch) || ('A'..='Z').contains(&ch) || ch == '_'
     }
 
-    fn is_identifier_part(&self, ch: char) -> bool {
+    fn is_identifier_part(ch: char) -> bool {
         ('a'..='z').contains(&ch)
             || ('A'..='Z').contains(&ch)
             || ('0'..='9').contains(&ch)

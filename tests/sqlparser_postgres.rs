@@ -835,13 +835,9 @@ fn parse_comments() {
 }
 
 fn pg() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {})],
-    }
+    tested_dialects!(PostgreSqlDialect)
 }
 
 fn pg_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(GenericDialect {})],
-    }
+    tested_dialects!(PostgreSqlDialect, GenericDialect)
 }

@@ -21,6 +21,7 @@ use alloc::{
     vec::Vec,
 };
 use core::fmt;
+use core::marker::PhantomData;
 
 use log::debug;
 
@@ -104,33 +105,32 @@ impl fmt::Display for ParserError {
 #[cfg(feature = "std")]
 impl std::error::Error for ParserError {}
 
-pub struct Parser<'a> {
+pub struct Parser<D: Dialect = GenericDialect> {
     tokens: Vec<Token>,
     /// The index of the first unprocessed token in `self.tokens`
     index: usize,
-    dialect: &'a dyn Dialect,
+    dialect: PhantomData<D>,
 }
 
-impl<'a> Parser<'a> {
+impl<D: Dialect> Parser<D> {
     /// Parse the specified tokens
-    pub fn new(tokens: Vec<Token>, dialect: &'a dyn Dialect) -> Self {
+    pub fn new(tokens: Vec<Token>) -> Self {
         Parser {
             tokens,
             index: 0,
-            dialect,
+            dialect: PhantomData,
         }
     }
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
-    pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
-        let mut tokenizer = Tokenizer::new(dialect, sql);
+    pub fn parse_sql(sql: &str) -> Result<Vec<Statement>, ParserError> {
+        let mut tokenizer = Tokenizer::<D>::new(sql);
         let tokens = tokenizer.tokenize()?;
-        let mut parser = Parser::new(tokens, dialect);
+        let mut parser = Parser::<D>::new(tokens);
         debug!("Parsing sql '{}'...", sql);
         parser.parse_statements()
     }
 
-    /// Parse all tokens into a vector of statements.
     pub fn parse_statements(&mut self) -> Result<Vec<Statement>, ParserError> {
         let mut stmts = Vec::new();
         let mut expecting_statement_delimiter = false;
@@ -192,13 +192,11 @@ impl<'a> Parser<'a> {
                 Keyword::DEALLOCATE => Ok(self.parse_deallocate()?),
                 Keyword::EXECUTE => Ok(self.parse_execute()?),
                 Keyword::PREPARE => Ok(self.parse_prepare()?),
-                Keyword::REPLACE if dialect_of!(self is SQLiteDialect ) => {
+                Keyword::REPLACE if D::is::<SQLiteDialect>() => {
                     self.prev_token();
                     Ok(self.parse_insert()?)
                 }
-                Keyword::COMMENT if dialect_of!(self is PostgreSqlDialect) => {
-                    Ok(self.parse_comment()?)
-                }
+                Keyword::COMMENT if D::is::<PostgreSqlDialect>() => Ok(self.parse_comment()?),
                 _ => self.expected("an SQL statement", Token::Word(w)),
             },
             Token::LParen => {
@@ -467,7 +465,7 @@ impl<'a> Parser<'a> {
             | tok @ Token::PGCubeRoot
             | tok @ Token::AtSign
             | tok @ Token::Tilde
-                if dialect_of!(self is PostgreSqlDialect) =>
+                if D::is::<PostgreSqlDialect>() =>
             {
                 let op = match tok {
                     Token::DoubleExclamationMark => UnaryOperator::PGPrefixFactorial,
@@ -609,7 +607,7 @@ impl<'a> Parser<'a> {
     /// parse a group by expr. a group by expr can be one of group sets, roll up, cube, or simple
     /// expr.
     fn parse_group_by_expr(&mut self) -> Result<Expr, ParserError> {
-        if dialect_of!(self is PostgreSqlDialect) {
+        if D::is::<PostgreSqlDialect>() {
             if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
                 self.expect_token(&Token::LParen)?;
                 let result = self.parse_comma_separated(|p| p.parse_tuple(false, true))?;
@@ -983,15 +981,13 @@ impl<'a> Parser<'a> {
             Token::Caret => Some(BinaryOperator::BitwiseXor),
             Token::Ampersand => Some(BinaryOperator::BitwiseAnd),
             Token::Div => Some(BinaryOperator::Divide),
-            Token::ShiftLeft if dialect_of!(self is PostgreSqlDialect) => {
+            Token::ShiftLeft if D::is::<PostgreSqlDialect>() => {
                 Some(BinaryOperator::PGBitwiseShiftLeft)
             }
-            Token::ShiftRight if dialect_of!(self is PostgreSqlDialect) => {
+            Token::ShiftRight if D::is::<PostgreSqlDialect>() => {
                 Some(BinaryOperator::PGBitwiseShiftRight)
             }
-            Token::Sharp if dialect_of!(self is PostgreSqlDialect) => {
-                Some(BinaryOperator::PGBitwiseXor)
-            }
+            Token::Sharp if D::is::<PostgreSqlDialect>() => Some(BinaryOperator::PGBitwiseXor),
             Token::Tilde => Some(BinaryOperator::PGRegexMatch),
             Token::TildeAsterisk => Some(BinaryOperator::PGRegexIMatch),
             Token::ExclamationMarkTilde => Some(BinaryOperator::PGRegexNotMatch),
@@ -1349,7 +1345,7 @@ impl<'a> Parser<'a> {
     /// Parse a comma-separated list of 1+ items accepted by `F`
     pub fn parse_comma_separated<T, F>(&mut self, mut f: F) -> Result<Vec<T>, ParserError>
     where
-        F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
+        F: FnMut(&mut Parser<D>) -> Result<T, ParserError>,
     {
         let mut values = vec![];
         loop {
@@ -1366,7 +1362,7 @@ impl<'a> Parser<'a> {
     #[must_use]
     fn maybe_parse<T, F>(&mut self, mut f: F) -> Option<T>
     where
-        F: FnMut(&mut Parser) -> Result<T, ParserError>,
+        F: FnMut(&mut Parser<D>) -> Result<T, ParserError>,
     {
         let index = self.index;
         if let Ok(t) = f(self) {
@@ -1806,14 +1802,14 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             Ok(Some(ColumnOption::Check(expr)))
         } else if self.parse_keyword(Keyword::AUTO_INCREMENT)
-            && dialect_of!(self is MySqlDialect |  GenericDialect)
+            && (D::is::<MySqlDialect>() || D::is::<GenericDialect>())
         {
             // Support AUTO_INCREMENT for MySQL
             Ok(Some(ColumnOption::DialectSpecific(vec![
                 Token::make_keyword("AUTO_INCREMENT"),
             ])))
         } else if self.parse_keyword(Keyword::AUTOINCREMENT)
-            && dialect_of!(self is SQLiteDialect |  GenericDialect)
+            && (D::is::<SQLiteDialect>() || D::is::<GenericDialect>())
         {
             // Support AUTOINCREMENT for SQLite
             Ok(Some(ColumnOption::DialectSpecific(vec![
@@ -1952,7 +1948,7 @@ impl<'a> Parser<'a> {
                 }
             }
         } else if self.parse_keyword(Keyword::RENAME) {
-            if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::CONSTRAINT) {
+            if D::is::<PostgreSqlDialect>() && self.parse_keyword(Keyword::CONSTRAINT) {
                 let old_name = self.parse_identifier()?;
                 self.expect_keyword(Keyword::TO)?;
                 let new_name = self.parse_identifier()?;
@@ -2030,7 +2026,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::ALTER) {
             let _ = self.parse_keyword(Keyword::COLUMN);
             let column_name = self.parse_identifier()?;
-            let is_postgresql = dialect_of!(self is PostgreSqlDialect);
+            let is_postgresql = D::is::<PostgreSqlDialect>();
 
             let op = if self.parse_keywords(&[Keyword::SET, Keyword::NOT, Keyword::NULL]) {
                 AlterColumnOperation::SetNotNull {}
@@ -2992,7 +2988,7 @@ impl<'a> Parser<'a> {
                 // is a nested join `(foo JOIN bar)`, not followed by other joins.
                 self.expect_token(&Token::RParen)?;
                 Ok(TableFactor::NestedJoin(Box::new(table_and_joins)))
-            } else if dialect_of!(self is SnowflakeDialect | GenericDialect) {
+            } else if D::is::<SnowflakeDialect>() || D::is::<GenericDialect>() {
                 // Dialect-specific behavior: Snowflake diverges from the
                 // standard and from most of the other implementations by
                 // allowing extra parentheses not only around a join (B), but
@@ -3237,7 +3233,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an INSERT statement
     pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
-        let or = if !dialect_of!(self is SQLiteDialect) {
+        let or = if !D::is::<SQLiteDialect>() {
             None
         } else if self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]) {
             Some(SqliteOnConflict::Replace)

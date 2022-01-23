@@ -119,12 +119,8 @@ fn parse_mssql_bin_literal() {
 }
 
 fn ms() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(MsSqlDialect {})],
-    }
+    tested_dialects!(MsSqlDialect)
 }
 fn ms_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(MsSqlDialect {}), Box::new(GenericDialect {})],
-    }
+    tested_dialects!(MsSqlDialect, GenericDialect)
 }

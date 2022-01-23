@@ -578,13 +578,9 @@ fn parse_substring_in_select() {
 }
 
 fn mysql() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {})],
-    }
+    tested_dialects!(MySqlDialect)
 }
 
 fn mysql_and_generic() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![Box::new(MySqlDialect {}), Box::new(GenericDialect {})],
-    }
+    tested_dialects!(MySqlDialect, GenericDialect)
 }

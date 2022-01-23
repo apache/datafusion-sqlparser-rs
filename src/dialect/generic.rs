@@ -16,7 +16,7 @@ use crate::dialect::Dialect;
 pub struct GenericDialect;
 
 impl Dialect for GenericDialect {
-    fn is_identifier_start(&self, ch: char) -> bool {
+    fn is_identifier_start(ch: char) -> bool {
         ('a'..='z').contains(&ch)
             || ('A'..='Z').contains(&ch)
             || ch == '_'
@@ -24,7 +24,7 @@ impl Dialect for GenericDialect {
             || ch == '@'
     }
 
-    fn is_identifier_part(&self, ch: char) -> bool {
+    fn is_identifier_part(ch: char) -> bool {
         ('a'..='z').contains(&ch)
             || ('A'..='Z').contains(&ch)
             || ('0'..='9').contains(&ch)

@@ -126,23 +126,28 @@ impl<'a> Parser<'a> {
         let mut tokenizer = Tokenizer::new(dialect, sql);
         let tokens = tokenizer.tokenize()?;
         let mut parser = Parser::new(tokens, dialect);
+        debug!("Parsing sql '{}'...", sql);
+        parser.parse_statements()
+    }
+
+    /// Parse all tokens into a vector of statements.
+    pub fn parse_statements(&mut self) -> Result<Vec<Statement>, ParserError> {
         let mut stmts = Vec::new();
         let mut expecting_statement_delimiter = false;
-        debug!("Parsing sql '{}'...", sql);
         loop {
             // ignore empty statements (between successive statement delimiters)
-            while parser.consume_token(&Token::SemiColon) {
+            while self.consume_token(&Token::SemiColon) {
                 expecting_statement_delimiter = false;
             }
 
-            if parser.peek_token() == Token::EOF {
+            if self.peek_token() == Token::EOF {
                 break;
             }
             if expecting_statement_delimiter {
-                return parser.expected("end of statement", parser.peek_token());
+                return self.expected("end of statement", self.peek_token());
             }
 
-            let statement = parser.parse_statement()?;
+            let statement = self.parse_statement()?;
             stmts.push(statement);
             expecting_statement_delimiter = true;
         }

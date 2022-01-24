@@ -3629,30 +3629,3 @@ impl Word {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::test_utils::all_dialects;
-
-    #[test]
-    fn test_prev_index() {
-        let sql = "SELECT version";
-        all_dialects().run_parser_method(sql, |parser| {
-            assert_eq!(parser.peek_token(), Token::make_keyword("SELECT"));
-            assert_eq!(parser.next_token(), Token::make_keyword("SELECT"));
-            parser.prev_token();
-            assert_eq!(parser.next_token(), Token::make_keyword("SELECT"));
-            assert_eq!(parser.next_token(), Token::make_word("version", None));
-            parser.prev_token();
-            assert_eq!(parser.peek_token(), Token::make_word("version", None));
-            assert_eq!(parser.next_token(), Token::make_word("version", None));
-            assert_eq!(parser.peek_token(), Token::EOF);
-            parser.prev_token();
-            assert_eq!(parser.next_token(), Token::make_word("version", None));
-            assert_eq!(parser.next_token(), Token::EOF);
-            assert_eq!(parser.next_token(), Token::EOF);
-            parser.prev_token();
-        });
-    }
-}

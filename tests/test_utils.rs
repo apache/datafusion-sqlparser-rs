@@ -10,12 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// This module contains internal utilities used for testing the library.
-/// While technically public, the library's users are not supposed to rely
-/// on this module, as it will change without notice.
-//
-// Integration tests (i.e. everything under `tests/`) import this
-// via `tests/test_utils/mod.rs`.
+#![allow(dead_code)]
 
 #[cfg(not(feature = "std"))]
 use alloc::{
@@ -26,10 +21,20 @@ use alloc::{
 };
 use core::fmt::Debug;
 
-use crate::ast::*;
-use crate::dialect::*;
-use crate::parser::{Parser, ParserError};
-use crate::tokenizer::Tokenizer;
+use sqlparser::ast::*;
+use sqlparser::dialect::*;
+use sqlparser::parser::{Parser, ParserError};
+use sqlparser::tokenizer::Tokenizer;
+
+#[macro_export]
+macro_rules! nest {
+    ($base:expr $(, $join:expr)*) => {
+        TableFactor::NestedJoin(Box::new(TableWithJoins {
+            relation: $base,
+            joins: vec![$(join($join)),*]
+        }))
+    };
+}
 
 /// Tests use the methods on this struct to invoke the parser on one or
 /// multiple dialects.

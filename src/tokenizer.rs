@@ -49,6 +49,8 @@ pub enum Token {
     Char(char),
     /// Single quoted string: i.e: 'string'
     SingleQuotedString(String),
+    /// Double quoted string: i.e: 'string'
+    DoubleQuotedString(String),
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
     /// Hexadecimal string literal: i.e.: X'deadbeef'
@@ -149,6 +151,7 @@ impl fmt::Display for Token {
             Token::Number(ref n, l) => write!(f, "{}{long}", n, long = if *l { "L" } else { "" }),
             Token::Char(ref c) => write!(f, "{}", c),
             Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
+            Token::DoubleQuotedString(ref s) => write!(f, "{:#?}", s),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
             Token::HexStringLiteral(ref s) => write!(f, "X'{}'", s),
             Token::Comma => f.write_str(","),
@@ -337,6 +340,7 @@ impl<'a> Tokenizer<'a> {
                 Token::Word(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
                 Token::Number(s, _) => self.col += s.len() as u64,
                 Token::SingleQuotedString(s) => self.col += s.len() as u64,
+                Token::DoubleQuotedString(s) => self.col += s.len() as u64,
                 _ => self.col += 1,
             }
 
@@ -427,6 +431,11 @@ impl<'a> Tokenizer<'a> {
                             quote_end
                         ))
                     }
+                }
+                '"' => {
+                    let s = self.tokenize_double_quoted_string(chars)?;
+
+                    Ok(Some(Token::DoubleQuotedString(s)))
                 }
                 // numbers and period
                 '0'..='9' | '.' => {
@@ -668,7 +677,47 @@ impl<'a> Tokenizer<'a> {
                 }
             }
         }
-        self.tokenizer_error("Unterminated string literal")
+        self.tokenizer_error("Unterminated string literal with single quoted")
+    }
+
+    fn tokenize_double_quoted_string(
+        &self,
+        chars: &mut Peekable<Chars<'_>>,
+    ) -> Result<String, TokenizerError> {
+        let mut s = String::new();
+        chars.next(); // consume the opening quote
+
+        // slash escaping is specific to MySQL dialect
+        let mut is_escaped = false;
+        while let Some(&ch) = chars.peek() {
+            match ch {
+                '"' => {
+                    chars.next(); // consume
+                    if is_escaped {
+                        s.push(ch);
+                        is_escaped = false;
+                    } else if chars.peek().map(|c| *c == '"').unwrap_or(false) {
+                        s.push(ch);
+                        chars.next();
+                    } else {
+                        return Ok(s);
+                    }
+                }
+                '\\' => {
+                    if dialect_of!(self is MySqlDialect) {
+                        is_escaped = !is_escaped;
+                    } else {
+                        s.push(ch);
+                    }
+                    chars.next();
+                }
+                _ => {
+                    chars.next(); // consume
+                    s.push(ch);
+                }
+            }
+        }
+        self.tokenizer_error("Unterminated string literal double quoted")
     }
 
     fn tokenize_multiline_comment(

@@ -223,6 +223,39 @@ fn parse_escaped_string() {
 }
 
 #[test]
+fn parse_escaped_double_quoated_string() {
+    let sql = r#"SELECT "I\"m fine""#;
+
+    let stmt = mysql().one_statement_parses_to(sql, "");
+
+    match stmt {
+        Statement::Query(query) => match query.body {
+            SetExpr::Select(value) => {
+                let expr = expr_from_projection(only(&value.projection));
+                assert_eq!(
+                    *expr,
+                    Expr::Value(Value::DoubleQuotedString("I\"m fine".to_string()))
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
+
+    let sql = r#"SELECT "I""m fine""#;
+
+    let projection = mysql().verified_only_select(sql).projection;
+    let item = projection.get(0).unwrap();
+
+    match &item {
+        SelectItem::UnnamedExpr(Expr::Value(value)) => {
+            assert_eq!(*value, Value::DoubleQuotedString("I\"m fine".to_string()));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_with_minimum_display_width() {
     let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3), bar_smallint SMALLINT(5), bar_int INT(11), bar_bigint BIGINT(20))";
     match mysql().verified_stmt(sql) {

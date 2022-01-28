@@ -65,7 +65,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Number(v, l) => write!(f, "{}{long}", v, long = if *l { "L" } else { "" }),
-            Value::DoubleQuotedString(v) => write!(f, "\"{}\"", v),
+            Value::DoubleQuotedString(v) => write!(f, "\"{}\"", escape_double_quote_string(v)),
             Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
             Value::NationalStringLiteral(v) => write!(f, "N'{}'", v),
             Value::HexStringLiteral(v) => write!(f, "X'{}'", v),
@@ -137,6 +137,25 @@ impl fmt::Display for DateTimeField {
             DateTimeField::Second => "SECOND",
         })
     }
+}
+
+pub struct EscapeDoubleQuoteString<'a>(&'a str);
+
+impl<'a> fmt::Display for EscapeDoubleQuoteString<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for c in self.0.chars() {
+            if c == '"' {
+                write!(f, "\"\"")?;
+            } else {
+                write!(f, "{}", c)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+pub fn escape_double_quote_string(s: &str) -> EscapeDoubleQuoteString<'_> {
+    EscapeDoubleQuoteString(s)
 }
 
 pub struct EscapeSingleQuoteString<'a>(&'a str);

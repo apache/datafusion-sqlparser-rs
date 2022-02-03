@@ -2102,7 +2102,7 @@ impl<'a> Parser<'a> {
                     Keyword::DELIMITER => {
                         delimiter = Some(self.parse_identifier()?);
                         continue;
-                    },
+                    }
                     Keyword::CSV => {
                         self.expect_keyword(Keyword::HEADER)?;
                         csv_header = true

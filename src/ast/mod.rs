@@ -1051,7 +1051,7 @@ impl fmt::Display for Statement {
                 values,
                 delimiter,
                 filename,
-                csv_header
+                csv_header,
             } => {
                 write!(f, "COPY {}", table_name)?;
                 if !columns.is_empty() {
@@ -1083,7 +1083,7 @@ impl fmt::Display for Statement {
                         }
                     }
                 }
-                if filename.is_none(){
+                if filename.is_none() {
                     write!(f, "\n\\.")?;
                 }
                 Ok(())

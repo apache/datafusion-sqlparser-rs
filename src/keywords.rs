@@ -173,6 +173,7 @@ define_keywords!(
     DEFAULT,
     DELETE,
     DELIMITED,
+    DELIMITER,
     DENSE_RANK,
     DEREF,
     DESC,

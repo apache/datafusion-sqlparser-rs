@@ -670,6 +670,12 @@ pub enum Statement {
         columns: Vec<Ident>,
         /// VALUES a vector of values to be copied
         values: Vec<Option<String>>,
+        /// file name of the data to be copied from
+        filename: Option<Ident>,
+        /// delimiter character
+        delimiter: Option<Ident>,
+        /// CSV HEADER
+        csv_header: bool,
     },
     /// UPDATE
     Update {
@@ -1043,13 +1049,28 @@ impl fmt::Display for Statement {
                 table_name,
                 columns,
                 values,
+                delimiter,
+                filename,
+                csv_header
             } => {
                 write!(f, "COPY {}", table_name)?;
                 if !columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(columns))?;
                 }
-                write!(f, " FROM stdin; ")?;
+
+                if let Some(name) = filename {
+                    write!(f, " FROM {}", name)?;
+                } else {
+                    write!(f, " FROM stdin ")?;
+                }
+                if let Some(delimiter) = delimiter {
+                    write!(f, " DELIMITER {}", delimiter)?;
+                }
+                if *csv_header {
+                    write!(f, " CSV HEADER")?;
+                }
                 if !values.is_empty() {
+                    write!(f, ";")?;
                     writeln!(f)?;
                     let mut delim = "";
                     for v in values {
@@ -1062,7 +1083,10 @@ impl fmt::Display for Statement {
                         }
                     }
                 }
-                write!(f, "\n\\.")
+                if filename.is_none(){
+                    write!(f, "\n\\.")?;
+                }
+                Ok(())
             }
             Statement::Update {
                 table,

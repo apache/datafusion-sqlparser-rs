@@ -418,8 +418,26 @@ impl<'a> Tokenizer<'a> {
                 quote_start if self.dialect.is_delimited_identifier_start(quote_start) => {
                     chars.next(); // consume the opening quote
                     let quote_end = Word::matching_end_quote(quote_start);
-                    let s = peeking_take_while(chars, |ch| ch != quote_end);
-                    if chars.next() == Some(quote_end) {
+                    let mut last_char = None;
+                    let s = {
+                        let mut s = String::new();
+                        while let Some(ch) = chars.next() {
+                            if ch == quote_end {
+                                if chars.peek() == Some(&quote_end) {
+                                    chars.next();
+                                    s.push(ch);
+                                } else {
+                                    last_char = Some(quote_end);
+                                    break;
+                                }
+                            } else {
+                                s.push(ch);
+                            }
+                        }
+                        s
+                    };
+
+                    if last_char == Some(quote_end) {
                         Ok(Some(Token::make_word(&s, Some(quote_start))))
                     } else {
                         self.tokenizer_error(format!(

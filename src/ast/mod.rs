@@ -1548,7 +1548,7 @@ impl fmt::Display for Privileges {
                 )
             }
             Privileges::Actions(actions) => {
-                write!(f, "{}", display_comma_separated(actions).to_string())
+                write!(f, "{}", display_comma_separated(actions))
             }
         }
     }

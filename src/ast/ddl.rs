@@ -92,7 +92,7 @@ impl fmt::Display for AlterTableOperation {
             ),
             AlterTableOperation::AddConstraint(c) => write!(f, "ADD {}", c),
             AlterTableOperation::AddColumn { column_def } => {
-                write!(f, "ADD COLUMN {}", column_def.to_string())
+                write!(f, "ADD COLUMN {}", column_def)
             }
             AlterTableOperation::AlterColumn { column_name, op } => {
                 write!(f, "ALTER COLUMN {} {}", column_name, op)

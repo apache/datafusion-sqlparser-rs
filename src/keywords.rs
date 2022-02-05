@@ -437,6 +437,7 @@ define_keywords!(
     SUBSTRING_REGEX,
     SUCCEEDS,
     SUM,
+    SUPER,
     SYMMETRIC,
     SYNC,
     SYSTEM,

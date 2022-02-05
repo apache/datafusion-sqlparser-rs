@@ -2499,17 +2499,18 @@ impl<'a> Parser<'a> {
                 vec![]
             };
 
-            let limit = if self.parse_keyword(Keyword::LIMIT) {
-                self.parse_limit()?
-            } else {
-                None
-            };
+            let mut limit = None;
+            let mut offset = None;
 
-            let offset = if self.parse_keyword(Keyword::OFFSET) {
-                Some(self.parse_offset()?)
-            } else {
-                None
-            };
+            for _x in 0..2 {
+                if limit.is_none() && self.parse_keyword(Keyword::LIMIT) {
+                    limit = self.parse_limit()?
+                }
+
+                if offset.is_none() && self.parse_keyword(Keyword::OFFSET) {
+                    offset = Some(self.parse_offset()?)
+                }
+            }
 
             let fetch = if self.parse_keyword(Keyword::FETCH) {
                 Some(self.parse_fetch()?)

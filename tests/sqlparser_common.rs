@@ -4077,6 +4077,40 @@ fn verified_expr(query: &str) -> Expr {
 }
 
 #[test]
+fn parse_offset_and_limit() {
+    let sql = "SELECT foo FROM bar LIMIT 2 OFFSET 2";
+    let expect = Some(Offset {
+        value: Expr::Value(number("2")),
+        rows: OffsetRows::None,
+    });
+    let ast = verified_query(sql);
+    assert_eq!(ast.offset, expect);
+    assert_eq!(ast.limit, Some(Expr::Value(number("2"))));
+
+    // different order is OK
+    one_statement_parses_to("SELECT foo FROM bar OFFSET 2 LIMIT 2", sql);
+
+    // Can't repeat OFFSET / LIMIT
+    let res = parse_sql_statements("SELECT foo FROM bar OFFSET 2 OFFSET 2");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: OFFSET".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("SELECT foo FROM bar LIMIT 2 LIMIT 2");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: LIMIT".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("SELECT foo FROM bar OFFSET 2 LIMIT 2 OFFSET 2");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: OFFSET".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_time_functions() {
     let sql = "SELECT CURRENT_TIMESTAMP()";
     let select = verified_only_select(sql);

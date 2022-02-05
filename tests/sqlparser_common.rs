@@ -20,13 +20,14 @@
 
 #[macro_use]
 mod test_utils;
-use test_utils::{all_dialects, expr_from_projection, join, number, only, table, table_alias};
-
 use matches::assert_matches;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, SQLiteDialect};
+use sqlparser::dialect::{GenericDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
+use test_utils::{
+    all_dialects, expr_from_projection, join, number, only, table, table_alias, TestedDialects,
+};
 
 #[test]
 fn parse_insert_values() {
@@ -140,25 +141,25 @@ fn parse_update() {
     let sql = "UPDATE t SET a = 1, b = 2, c = 3 WHERE d";
     match verified_stmt(sql) {
         Statement::Update {
-            table_name,
+            table,
             assignments,
             selection,
             ..
         } => {
-            assert_eq!(table_name.to_string(), "t".to_string());
+            assert_eq!(table.to_string(), "t".to_string());
             assert_eq!(
                 assignments,
                 vec![
                     Assignment {
-                        id: "a".into(),
+                        id: vec!["a".into()],
                         value: Expr::Value(number("1")),
                     },
                     Assignment {
-                        id: "b".into(),
+                        id: vec!["b".into()],
                         value: Expr::Value(number("2")),
                     },
                     Assignment {
-                        id: "c".into(),
+                        id: vec!["c".into()],
                         value: Expr::Value(number("3")),
                     },
                 ]
@@ -183,6 +184,55 @@ fn parse_update() {
         ParserError::ParserError("Expected end of statement, found: extrabadstuff".to_string()),
         res.unwrap_err()
     );
+}
+
+#[test]
+fn parse_update_with_table_alias() {
+    let sql = "UPDATE users AS u SET u.username = 'new_user' WHERE u.username = 'old_user'";
+    match verified_stmt(sql) {
+        Statement::Update {
+            table,
+            assignments,
+            selection,
+        } => {
+            assert_eq!(
+                TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName(vec![Ident::new("users")]),
+                        alias: Some(TableAlias {
+                            name: Ident::new("u"),
+                            columns: vec![]
+                        }),
+                        args: vec![],
+                        with_hints: vec![],
+                    },
+                    joins: vec![]
+                },
+                table
+            );
+            assert_eq!(
+                vec![Assignment {
+                    id: vec![Ident::new("u"), Ident::new("username")],
+                    value: Expr::Value(Value::SingleQuotedString("new_user".to_string()))
+                }],
+                assignments
+            );
+            assert_eq!(
+                Some(Expr::BinaryOp {
+                    left: Box::new(Expr::CompoundIdentifier(vec![
+                        Ident::new("u"),
+                        Ident::new("username")
+                    ])),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "old_user".to_string()
+                    )))
+                }),
+                selection
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]
@@ -278,6 +328,31 @@ fn parse_select_distinct() {
 }
 
 #[test]
+fn parse_select_distinct_two_fields() {
+    let sql = "SELECT DISTINCT name, id FROM customer";
+    let select = verified_only_select(sql);
+    assert!(select.distinct);
+    one_statement_parses_to("SELECT DISTINCT (name, id) FROM customer", sql);
+    assert_eq!(
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
+        &select.projection[0]
+    );
+    assert_eq!(
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
+        &select.projection[1]
+    );
+}
+
+#[test]
+fn parse_select_distinct_missing_paren() {
+    let result = parse_sql_statements("SELECT DISTINCT (name, id FROM customer");
+    assert_eq!(
+        ParserError::ParserError("Expected ), found: FROM".to_string()),
+        result.unwrap_err(),
+    );
+}
+
+#[test]
 fn parse_select_all() {
     one_statement_parses_to("SELECT ALL name FROM customer", "SELECT name FROM customer");
 }
@@ -313,10 +388,19 @@ fn parse_select_wildcard() {
         ])),
         only(&select.projection)
     );
+
+    let sql = "SELECT * + * FROM foo;";
+    let result = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: +".to_string()),
+        result.unwrap_err(),
+    );
 }
 
 #[test]
 fn parse_count_wildcard() {
+    verified_only_select("SELECT COUNT(*) FROM Order WHERE id = 10");
+
     verified_only_select(
         "SELECT COUNT(Employee.*) FROM Order JOIN Employee ON Order.employee = Employee.id",
     );
@@ -375,7 +459,7 @@ fn parse_select_count_wildcard() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("COUNT")]),
-            args: vec![FunctionArg::Unnamed(Expr::Wildcard)],
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
             over: None,
             distinct: false,
         }),
@@ -390,10 +474,10 @@ fn parse_select_count_distinct() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("COUNT")]),
-            args: vec![FunctionArg::Unnamed(Expr::UnaryOp {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::UnaryOp {
                 op: UnaryOperator::Plus,
                 expr: Box::new(Expr::Identifier(Ident::new("x"))),
-            })],
+            }))],
             over: None,
             distinct: true,
         }),
@@ -1040,6 +1124,65 @@ fn parse_select_group_by() {
 }
 
 #[test]
+fn parse_select_group_by_grouping_sets() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {})],
+    };
+    let sql =
+        "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, GROUPING SETS ((brand), (size), ())";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        vec![
+            Expr::Identifier(Ident::new("size")),
+            Expr::GroupingSets(vec![
+                vec![Expr::Identifier(Ident::new("brand"))],
+                vec![Expr::Identifier(Ident::new("size"))],
+                vec![],
+            ])
+        ],
+        select.group_by
+    );
+}
+
+#[test]
+fn parse_select_group_by_rollup() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {})],
+    };
+    let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, ROLLUP (brand, size)";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        vec![
+            Expr::Identifier(Ident::new("size")),
+            Expr::Rollup(vec![
+                vec![Expr::Identifier(Ident::new("brand"))],
+                vec![Expr::Identifier(Ident::new("size"))],
+            ])
+        ],
+        select.group_by
+    );
+}
+
+#[test]
+fn parse_select_group_by_cube() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {})],
+    };
+    let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, CUBE (brand, size)";
+    let select = dialects.verified_only_select(sql);
+    assert_eq!(
+        vec![
+            Expr::Identifier(Ident::new("size")),
+            Expr::Cube(vec![
+                vec![Expr::Identifier(Ident::new("brand"))],
+                vec![Expr::Identifier(Ident::new("size"))],
+            ])
+        ],
+        select.group_by
+    );
+}
+
+#[test]
 fn parse_select_having() {
     let sql = "SELECT foo FROM bar GROUP BY foo HAVING COUNT(*) > 1";
     let select = verified_only_select(sql);
@@ -1047,7 +1190,7 @@ fn parse_select_having() {
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("COUNT")]),
-                args: vec![FunctionArg::Unnamed(Expr::Wildcard)],
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
                 over: None,
                 distinct: false,
             })),
@@ -1833,6 +1976,108 @@ fn parse_alter_table_drop_column() {
 }
 
 #[test]
+fn parse_alter_table_alter_column() {
+    let alter_stmt = "ALTER TABLE tab";
+    match verified_stmt(&format!(
+        "{} ALTER COLUMN is_active SET NOT NULL",
+        alter_stmt
+    )) {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::AlterColumn { column_name, op },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("is_active", column_name.to_string());
+            assert_eq!(op, AlterColumnOperation::SetNotNull {});
+        }
+        _ => unreachable!(),
+    }
+
+    one_statement_parses_to(
+        "ALTER TABLE tab ALTER is_active DROP NOT NULL",
+        "ALTER TABLE tab ALTER COLUMN is_active DROP NOT NULL",
+    );
+
+    match verified_stmt(&format!(
+        "{} ALTER COLUMN is_active SET DEFAULT false",
+        alter_stmt
+    )) {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::AlterColumn { column_name, op },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("is_active", column_name.to_string());
+            assert_eq!(
+                op,
+                AlterColumnOperation::SetDefault {
+                    value: Expr::Value(Value::Boolean(false))
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt(&format!(
+        "{} ALTER COLUMN is_active DROP DEFAULT",
+        alter_stmt
+    )) {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::AlterColumn { column_name, op },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("is_active", column_name.to_string());
+            assert_eq!(op, AlterColumnOperation::DropDefault {});
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_alter_column_type() {
+    let alter_stmt = "ALTER TABLE tab";
+    match verified_stmt("ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT") {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::AlterColumn { column_name, op },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("is_active", column_name.to_string());
+            assert_eq!(
+                op,
+                AlterColumnOperation::SetDataType {
+                    data_type: DataType::Text,
+                    using: None,
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let res = Parser::parse_sql(
+        &GenericDialect {},
+        &format!("{} ALTER COLUMN is_active TYPE TEXT", alter_stmt),
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN, found: TYPE".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = Parser::parse_sql(
+        &GenericDialect {},
+        &format!(
+            "{} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'",
+            alter_stmt
+        ),
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: USING".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_bad_constraint() {
     let res = parse_sql_statements("ALTER TABLE tab ADD");
     assert_eq!(
@@ -1856,7 +2101,9 @@ fn parse_scalar_function_in_projection() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("sqrt")]),
-            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident::new("id")))],
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                Expr::Identifier(Ident::new("id"))
+            ))],
             over: None,
             distinct: false,
         }),
@@ -1923,11 +2170,15 @@ fn parse_named_argument_function() {
             args: vec![
                 FunctionArg::Named {
                     name: Ident::new("a"),
-                    arg: Expr::Value(Value::SingleQuotedString("1".to_owned()))
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "1".to_owned()
+                    ))),
                 },
                 FunctionArg::Named {
                     name: Ident::new("b"),
-                    arg: Expr::Value(Value::SingleQuotedString("2".to_owned()))
+                    arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
+                        "2".to_owned()
+                    ))),
                 },
             ],
             over: None,
@@ -2187,9 +2438,9 @@ fn parse_table_function() {
         TableFactor::TableFunction { expr, alias } => {
             let expected_expr = Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("FUN")]),
-                args: vec![FunctionArg::Unnamed(Expr::Value(
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                     Value::SingleQuotedString("1".to_owned()),
-                ))],
+                )))],
                 over: None,
                 distinct: false,
             });
@@ -3477,14 +3728,22 @@ fn parse_set_transaction() {
     // TRANSACTION, so no need to duplicate the tests here. We just do a quick
     // sanity check.
     match verified_stmt("SET TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE") {
-        Statement::SetTransaction { modes } => assert_eq!(
+        Statement::SetTransaction {
             modes,
-            vec![
-                TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
-                TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
-                TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable),
-            ]
-        ),
+            session,
+            snapshot,
+        } => {
+            assert_eq!(
+                modes,
+                vec![
+                    TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
+                    TransactionMode::AccessMode(TransactionAccessMode::ReadWrite),
+                    TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable),
+                ]
+            );
+            assert!(!session);
+            assert_eq!(snapshot, None);
+        }
         _ => unreachable!(),
     }
 }
@@ -3590,6 +3849,202 @@ fn parse_drop_index() {
 }
 
 #[test]
+fn parse_grant() {
+    let sql = "GRANT SELECT, INSERT, UPDATE (shape, size), USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
+    match verified_stmt(sql) {
+        Statement::Grant {
+            privileges,
+            objects,
+            grantees,
+            with_grant_option,
+            granted_by,
+            ..
+        } => match (privileges, objects) {
+            (Privileges::Actions(actions), GrantObjects::Tables(objects)) => {
+                assert_eq!(
+                    vec![
+                        Action::Select { columns: None },
+                        Action::Insert { columns: None },
+                        Action::Update {
+                            columns: Some(vec![
+                                Ident {
+                                    value: "shape".into(),
+                                    quote_style: None
+                                },
+                                Ident {
+                                    value: "size".into(),
+                                    quote_style: None
+                                }
+                            ])
+                        },
+                        Action::Usage,
+                        Action::Delete,
+                        Action::Truncate,
+                        Action::References { columns: None },
+                        Action::Trigger,
+                    ],
+                    actions
+                );
+                assert_eq!(
+                    vec!["abc", "def"],
+                    objects.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert_eq!(
+                    vec!["xyz", "m"],
+                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert!(with_grant_option);
+                assert_eq!("jj", granted_by.unwrap().to_string());
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    let sql2 = "GRANT INSERT ON ALL TABLES IN SCHEMA public TO browser";
+    match verified_stmt(sql2) {
+        Statement::Grant {
+            privileges,
+            objects,
+            grantees,
+            with_grant_option,
+            ..
+        } => match (privileges, objects) {
+            (Privileges::Actions(actions), GrantObjects::AllTablesInSchema { schemas }) => {
+                assert_eq!(vec![Action::Insert { columns: None }], actions);
+                assert_eq!(
+                    vec!["public"],
+                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert_eq!(
+                    vec!["browser"],
+                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert!(!with_grant_option);
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    let sql3 = "GRANT USAGE, SELECT ON SEQUENCE p TO u";
+    match verified_stmt(sql3) {
+        Statement::Grant {
+            privileges,
+            objects,
+            grantees,
+            granted_by,
+            ..
+        } => match (privileges, objects, granted_by) {
+            (Privileges::Actions(actions), GrantObjects::Sequences(objects), None) => {
+                assert_eq!(
+                    vec![Action::Usage, Action::Select { columns: None }],
+                    actions
+                );
+                assert_eq!(
+                    vec!["p"],
+                    objects.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+                assert_eq!(
+                    vec!["u"],
+                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    let sql4 = "GRANT ALL PRIVILEGES ON aa, b TO z";
+    match verified_stmt(sql4) {
+        Statement::Grant { privileges, .. } => {
+            assert_eq!(
+                Privileges::All {
+                    with_privileges_keyword: true
+                },
+                privileges
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    let sql5 = "GRANT ALL ON SCHEMA aa, b TO z";
+    match verified_stmt(sql5) {
+        Statement::Grant {
+            privileges,
+            objects,
+            ..
+        } => match (privileges, objects) {
+            (
+                Privileges::All {
+                    with_privileges_keyword,
+                },
+                GrantObjects::Schemas(schemas),
+            ) => {
+                assert!(!with_privileges_keyword);
+                assert_eq!(
+                    vec!["aa", "b"],
+                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+
+    let sql6 = "GRANT USAGE ON ALL SEQUENCES IN SCHEMA bus TO a, beta WITH GRANT OPTION";
+    match verified_stmt(sql6) {
+        Statement::Grant {
+            privileges,
+            objects,
+            ..
+        } => match (privileges, objects) {
+            (Privileges::Actions(actions), GrantObjects::AllSequencesInSchema { schemas }) => {
+                assert_eq!(vec![Action::Usage], actions);
+                assert_eq!(
+                    vec!["bus"],
+                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
+                );
+            }
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_revoke() {
+    let sql = "REVOKE ALL PRIVILEGES ON users, auth FROM analyst CASCADE";
+    match verified_stmt(sql) {
+        Statement::Revoke {
+            privileges,
+            objects: GrantObjects::Tables(tables),
+            grantees,
+            cascade,
+            granted_by,
+        } => {
+            assert_eq!(
+                Privileges::All {
+                    with_privileges_keyword: true
+                },
+                privileges
+            );
+            assert_eq!(
+                vec!["users", "auth"],
+                tables.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert_eq!(
+                vec!["analyst"],
+                grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert!(cascade);
+            assert_eq!(None, granted_by);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn all_keywords_sorted() {
     // assert!(ALL_KEYWORDS.is_sorted())
     let mut copy = Vec::from(ALL_KEYWORDS);
@@ -3634,4 +4089,52 @@ fn parse_offset_and_limit() {
 
     // Verifying different order
     one_statement_parses_to("SELECT foo FROM bar OFFSET 2 LIMIT 2", sql);
+}
+
+#[test]
+fn parse_time_functions() {
+    let sql = "SELECT CURRENT_TIMESTAMP()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT CURRENT_TIMESTAMP", sql);
+
+    let sql = "SELECT CURRENT_TIME()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("CURRENT_TIME")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT CURRENT_TIME", sql);
+
+    let sql = "SELECT CURRENT_DATE()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("CURRENT_DATE")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT CURRENT_DATE", sql);
 }

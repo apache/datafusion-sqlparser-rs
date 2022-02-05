@@ -31,8 +31,8 @@ use core::str::Chars;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::dialect::Dialect;
 use crate::dialect::SnowflakeDialect;
+use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
 /// SQL Token enumeration
@@ -411,6 +411,7 @@ impl<'a> Tokenizer<'a> {
                 // string
                 '\'' => {
                     let s = self.tokenize_single_quoted_string(chars)?;
+
                     Ok(Some(Token::SingleQuotedString(s)))
                 }
                 // delimited (quoted) identifier
@@ -636,17 +637,30 @@ impl<'a> Tokenizer<'a> {
     ) -> Result<String, TokenizerError> {
         let mut s = String::new();
         chars.next(); // consume the opening quote
+
+        // slash escaping is specific to MySQL dialect
+        let mut is_escaped = false;
         while let Some(&ch) = chars.peek() {
             match ch {
                 '\'' => {
                     chars.next(); // consume
-                    let escaped_quote = chars.peek().map(|c| *c == '\'').unwrap_or(false);
-                    if escaped_quote {
-                        s.push('\'');
+                    if is_escaped {
+                        s.push(ch);
+                        is_escaped = false;
+                    } else if chars.peek().map(|c| *c == '\'').unwrap_or(false) {
+                        s.push(ch);
                         chars.next();
                     } else {
                         return Ok(s);
                     }
+                }
+                '\\' => {
+                    if dialect_of!(self is MySqlDialect) {
+                        is_escaped = !is_escaped;
+                    } else {
+                        s.push(ch);
+                    }
+                    chars.next();
                 }
                 _ => {
                     chars.next(); // consume

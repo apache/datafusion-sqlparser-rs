@@ -2503,11 +2503,11 @@ impl<'a> Parser<'a> {
             let mut offset = None;
 
             for _x in 0..2 {
-                if self.parse_keyword(Keyword::LIMIT) {
+                if limit.is_none() && self.parse_keyword(Keyword::LIMIT) {
                     limit = self.parse_limit()?
                 }
 
-                if self.parse_keyword(Keyword::OFFSET) {
+                if offset.is_none() && self.parse_keyword(Keyword::OFFSET) {
                     offset = Some(self.parse_offset()?)
                 }
             }

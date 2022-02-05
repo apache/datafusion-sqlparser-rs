@@ -4087,8 +4087,27 @@ fn parse_offset_and_limit() {
     assert_eq!(ast.offset, expect);
     assert_eq!(ast.limit, Some(Expr::Value(number("2"))));
 
-    // Verifying different order
+    // different order is OK
     one_statement_parses_to("SELECT foo FROM bar OFFSET 2 LIMIT 2", sql);
+
+    // Can't repeat OFFSET / LIMIT
+    let res = parse_sql_statements("SELECT foo FROM bar OFFSET 2 OFFSET 2");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: OFFSET".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("SELECT foo FROM bar LIMIT 2 LIMIT 2");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: LIMIT".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("SELECT foo FROM bar OFFSET 2 LIMIT 2 OFFSET 2");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: OFFSET".to_string()),
+        res.unwrap_err()
+    );
 }
 
 #[test]

@@ -408,6 +408,9 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     Ok(Expr::Value(self.parse_value()?))
                 }
+                Keyword::CURRENT_TIMESTAMP | Keyword::CURRENT_TIME | Keyword::CURRENT_DATE => {
+                    self.parse_time_functions(ObjectName(vec![w.to_ident()]))
+                }
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CAST => self.parse_cast_expr(),
                 Keyword::TRY_CAST => self.parse_try_cast_expr(),
@@ -549,6 +552,20 @@ impl<'a> Parser<'a> {
             args,
             over,
             distinct,
+        }))
+    }
+
+    pub fn parse_time_functions(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
+        let args = if self.consume_token(&Token::LParen) {
+            self.parse_optional_args()?
+        } else {
+            vec![]
+        };
+        Ok(Expr::Function(Function {
+            name,
+            args,
+            over: None,
+            distinct: false,
         }))
     }
 
@@ -2631,7 +2648,18 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // Not Sure if Top should be cheked here as well. Trino doesn't support TOP.
+        let is_l_parent = if distinct {
+            self.consume_token(&Token::LParen)
+        } else {
+            false
+        };
+
         let projection = self.parse_comma_separated(Parser::parse_select_item)?;
+
+        if is_l_parent {
+            self.consume_token(&Token::RParen);
+        }
 
         // Note that for keywords to be properly handled here, they need to be
         // added to `RESERVED_FOR_COLUMN_ALIAS` / `RESERVED_FOR_TABLE_ALIAS`,

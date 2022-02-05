@@ -328,6 +328,22 @@ fn parse_select_distinct() {
 }
 
 #[test]
+fn parse_select_distinct_two_fields() {
+    let sql = "SELECT DISTINCT name, id FROM customer";
+    let select = verified_only_select(sql);
+    assert!(select.distinct);
+    one_statement_parses_to("SELECT DISTINCT (name, id) FROM customer", sql);
+    assert_eq!(
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
+        &select.projection[0]
+    );
+    assert_eq!(
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
+        &select.projection[1]
+    );
+}
+
+#[test]
 fn parse_select_all() {
     one_statement_parses_to("SELECT ALL name FROM customer", "SELECT name FROM customer");
 }
@@ -4049,4 +4065,52 @@ fn verified_only_select(query: &str) -> Select {
 
 fn verified_expr(query: &str) -> Expr {
     all_dialects().verified_expr(query)
+}
+
+#[test]
+fn parse_time_functions() {
+    let sql = "SELECT CURRENT_TIMESTAMP()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT CURRENT_TIMESTAMP", sql);
+
+    let sql = "SELECT CURRENT_TIME()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("CURRENT_TIME")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT CURRENT_TIME", sql);
+
+    let sql = "SELECT CURRENT_DATE()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("CURRENT_DATE")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT CURRENT_DATE", sql);
 }

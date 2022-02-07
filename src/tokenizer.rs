@@ -1304,11 +1304,11 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"a " b"#.into(), Some('"')),
+            Token::make_word(r#"a " b"#, Some('"')),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"a ""#.into(), Some('"')),
+            Token::make_word(r#"a ""#, Some('"')),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"c """#.into(), Some('"')),
+            Token::make_word(r#"c """#, Some('"')),
             Token::Whitespace(Whitespace::Space),
         ];
         compare(expected, tokens);

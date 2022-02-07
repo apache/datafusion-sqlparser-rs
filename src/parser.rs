@@ -2087,13 +2087,44 @@ impl<'a> Parser<'a> {
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
-        self.expect_keywords(&[Keyword::FROM, Keyword::STDIN])?;
-        self.expect_token(&Token::SemiColon)?;
-        let values = self.parse_tsv();
+        self.expect_keywords(&[Keyword::FROM])?;
+        let mut filename = None;
+        // check whether data has to be copied form table or std in.
+        if !self.parse_keyword(Keyword::STDIN) {
+            filename = Some(self.parse_identifier()?)
+        }
+        // parse copy options.
+        let mut delimiter = None;
+        let mut csv_header = false;
+        loop {
+            if let Some(keyword) = self.parse_one_of_keywords(&[Keyword::DELIMITER, Keyword::CSV]) {
+                match keyword {
+                    Keyword::DELIMITER => {
+                        delimiter = Some(self.parse_identifier()?);
+                        continue;
+                    }
+                    Keyword::CSV => {
+                        self.expect_keyword(Keyword::HEADER)?;
+                        csv_header = true
+                    }
+                    _ => unreachable!("something wrong while parsing copy statment :("),
+                }
+            }
+            break;
+        }
+        // copy the values from stdin if there is no file to be copied from.
+        let mut values = vec![];
+        if filename.is_none() {
+            self.expect_token(&Token::SemiColon)?;
+            values = self.parse_tsv();
+        }
         Ok(Statement::Copy {
             table_name,
             columns,
             values,
+            filename,
+            delimiter,
+            csv_header,
         })
     }
 

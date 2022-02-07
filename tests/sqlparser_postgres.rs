@@ -891,6 +891,11 @@ fn parse_comments() {
     }
 }
 
+#[test]
+fn parse_quoted_identifier() {
+    pg_and_generic().verified_stmt(r#"SELECT "quoted "" ident""#);
+}
+
 fn pg() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {})],

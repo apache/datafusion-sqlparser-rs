@@ -1296,6 +1296,24 @@ mod tests {
         compare(expected, tokens);
     }
 
+    #[test]
+    fn tokenize_quoted_identifier() {
+        let sql = r#" "a "" b" "a """ "c """"" "#;
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word(r#"a " b"#.into(), Some('"')),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word(r#"a ""#.into(), Some('"')),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word(r#"c """#.into(), Some('"')),
+            Token::Whitespace(Whitespace::Space),
+        ];
+        compare(expected, tokens);
+    }
+
     fn compare(expected: Vec<Token>, actual: Vec<Token>) {
         //println!("------------------------------");
         //println!("tokens   = {:?}", actual);

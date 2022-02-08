@@ -332,7 +332,6 @@ fn parse_select_distinct_two_fields() {
     let sql = "SELECT DISTINCT name, id FROM customer";
     let select = verified_only_select(sql);
     assert!(select.distinct);
-    one_statement_parses_to("SELECT DISTINCT (name, id) FROM customer", sql);
     assert_eq!(
         &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
         &select.projection[0]
@@ -340,6 +339,19 @@ fn parse_select_distinct_two_fields() {
     assert_eq!(
         &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
         &select.projection[1]
+    );
+}
+
+#[test]
+fn parse_select_distinct_tuple() {
+    let sql = "SELECT DISTINCT (name, id) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &vec![SelectItem::UnnamedExpr(Expr::Tuple(vec![
+            Expr::Identifier(Ident::new("name")),
+            Expr::Identifier(Ident::new("id")),
+        ]))],
+        &select.projection
     );
 }
 
@@ -1034,6 +1046,44 @@ fn parse_between_with_expr() {
 }
 
 #[test]
+fn parse_tuples() {
+    let sql = "SELECT (1, 2), (1), ('foo', 3, baz)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        vec![
+            SelectItem::UnnamedExpr(Expr::Tuple(vec![
+                Expr::Value(number("1")),
+                Expr::Value(number("2"))
+            ])),
+            SelectItem::UnnamedExpr(Expr::Nested(Box::new(Expr::Value(number("1"))))),
+            SelectItem::UnnamedExpr(Expr::Tuple(vec![
+                Expr::Value(Value::SingleQuotedString("foo".into())),
+                Expr::Value(number("3")),
+                Expr::Identifier(Ident::new("baz"))
+            ]))
+        ],
+        select.projection
+    );
+}
+
+#[test]
+fn parse_tuple_invalid() {
+    let sql = "select (1";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected ), found: EOF".to_string()),
+        res.unwrap_err()
+    );
+
+    let sql = "select (), 2";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected an expression:, found: )".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_select_order_by() {
     fn chk(sql: &str) {
         let select = verified_query(sql);
@@ -1120,6 +1170,12 @@ fn parse_select_group_by() {
             Expr::Identifier(Ident::new("fname")),
         ],
         select.group_by
+    );
+
+    // Tuples can also be in the set
+    one_statement_parses_to(
+        "SELECT id, fname, lname FROM customer GROUP BY (lname, fname)",
+        "SELECT id, fname, lname FROM customer GROUP BY (lname, fname)",
     );
 }
 

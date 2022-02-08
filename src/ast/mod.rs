@@ -284,6 +284,8 @@ pub enum Expr {
     Cube(Vec<Vec<Expr>>),
     /// The `ROLLUP` expr.
     Rollup(Vec<Vec<Expr>>),
+    /// ROW / TUPLE a single value, such as `SELECT (1, 2)`
+    Tuple(Vec<Expr>),
 }
 
 impl fmt::Display for Expr {
@@ -444,6 +446,9 @@ impl fmt::Display for Expr {
                 }
 
                 write!(f, ")")
+            }
+            Expr::Tuple(exprs) => {
+                write!(f, "({})", display_comma_separated(exprs))
             }
         }
     }

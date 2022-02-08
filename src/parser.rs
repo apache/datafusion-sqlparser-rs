@@ -494,7 +494,12 @@ impl<'a> Parser<'a> {
                         self.prev_token();
                         Expr::Subquery(Box::new(self.parse_query()?))
                     } else {
-                        Expr::Nested(Box::new(self.parse_expr()?))
+                        let exprs = self.parse_comma_separated(Parser::parse_expr)?;
+                        match exprs.len() {
+                            0 => unreachable!(), // parse_comma_separated ensures 1 or more
+                            1 => Expr::Nested(Box::new(exprs.into_iter().next().unwrap())),
+                            _ => Expr::Tuple(exprs),
+                        }
                     };
                 self.expect_token(&Token::RParen)?;
                 Ok(expr)
@@ -2739,18 +2744,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        // Not Sure if Top should be cheked here as well. Trino doesn't support TOP.
-        let is_l_paren = if distinct {
-            self.consume_token(&Token::LParen)
-        } else {
-            false
-        };
-
         let projection = self.parse_comma_separated(Parser::parse_select_item)?;
-
-        if is_l_paren && !self.consume_token(&Token::RParen) {
-            return self.expected(")", self.peek_token());
-        }
 
         // Note that for keywords to be properly handled here, they need to be
         // added to `RESERVED_FOR_COLUMN_ALIAS` / `RESERVED_FOR_TABLE_ALIAS`,

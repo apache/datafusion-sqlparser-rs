@@ -2541,6 +2541,11 @@ impl<'a> Parser<'a> {
                 if offset.is_none() && self.parse_keyword(Keyword::OFFSET) {
                     offset = Some(self.parse_offset()?)
                 }
+
+                if offset.is_none() && self.consume_token(&Token::Comma) {
+                    // mysql style LIMIT 10, offset 5
+                    offset = Some(self.parse_offset()?)
+                }
             }
 
             let fetch = if self.parse_keyword(Keyword::FETCH) {

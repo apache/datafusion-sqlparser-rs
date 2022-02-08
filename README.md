@@ -110,10 +110,12 @@ Please be aware that, while we hope to review PRs in a reasonably
 timely fashion, it may take a while. In order to speed the process,
 please make sure the PR passes all CI checks, and includes tests
 demonstrating your code works as intended (and to avoid
-regressions). PRs without tests will not be reviewed or merged.  Since
-the CI ensures that `cargo test`, `cargo fmt`, and `cargo clippy`,
-pass you will likely want to run all three commands locally before
-submitting your PR.
+regressions). Remember to also test error paths.
+
+PRs without tests will not be reviewed or merged.  Since the CI
+ensures that `cargo test`, `cargo fmt`, and `cargo clippy`, pass you
+will likely want to run all three commands locally before submitting
+your PR.
 
 
 If you are unable to submit a patch, feel free to file an issue instead. Please

@@ -1522,6 +1522,8 @@ impl<'a> Parser<'a> {
             query: None,
             without_rowid: false,
             like: None,
+            default_charset: None,
+            engine: None,
         })
     }
 
@@ -1696,6 +1698,26 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let engine = if self.parse_keyword(Keyword::ENGINE) {
+            self.expect_token(&Token::Eq)?;
+            match self.next_token() {
+                Token::Word(w) => Some(w.value),
+                unexpected => self.expected("identifier", unexpected)?,
+            }
+        } else {
+            None
+        };
+
+        let default_charset = if self.parse_keywords(&[Keyword::DEFAULT, Keyword::CHARSET]) {
+            self.expect_token(&Token::Eq)?;
+            match self.next_token() {
+                Token::Word(w) => Some(w.value),
+                unexpected => self.expected("identifier", unexpected)?,
+            }
+        } else {
+            None
+        };
+
         Ok(Statement::CreateTable {
             name: table_name,
             temporary,
@@ -1713,6 +1735,8 @@ impl<'a> Parser<'a> {
             query,
             without_rowid,
             like,
+            engine,
+            default_charset,
         })
     }
 
@@ -1778,8 +1802,15 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_optional_column_option(&mut self) -> Result<Option<ColumnOption>, ParserError> {
-        if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
+        if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
+            Ok(Some(ColumnOption::CharacterSet(self.parse_object_name()?)))
+        } else if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) {
             Ok(Some(ColumnOption::NotNull))
+        } else if self.parse_keywords(&[Keyword::COMMENT]) {
+            match self.next_token() {
+                Token::SingleQuotedString(value, ..) => Ok(Some(ColumnOption::Comment(value))),
+                unexpected => self.expected("string", unexpected),
+            }
         } else if self.parse_keyword(Keyword::NULL) {
             Ok(Some(ColumnOption::Null))
         } else if self.parse_keyword(Keyword::DEFAULT) {
@@ -2301,6 +2332,8 @@ impl<'a> Parser<'a> {
                     let (precision, scale) = self.parse_optional_precision_scale()?;
                     Ok(DataType::Decimal(precision, scale))
                 }
+                Keyword::ENUM => Ok(DataType::Enum(self.parse_string_values()?)),
+                Keyword::SET => Ok(DataType::Set(self.parse_string_values()?)),
                 _ => {
                     self.prev_token();
                     let type_name = self.parse_object_name()?;
@@ -2309,6 +2342,23 @@ impl<'a> Parser<'a> {
             },
             unexpected => self.expected("a data type name", unexpected),
         }
+    }
+
+    pub fn parse_string_values(&mut self) -> Result<Vec<String>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let mut values = Vec::new();
+        loop {
+            match self.next_token() {
+                Token::SingleQuotedString(value) => values.push(value),
+                unexpected => self.expected("a string", unexpected)?,
+            }
+            match self.next_token() {
+                Token::Comma => (),
+                Token::RParen => break,
+                unexpected => self.expected(", or }", unexpected)?,
+            }
+        }
+        Ok(values)
     }
 
     /// Parse `AS identifier` (or simply `identifier` if it's not a reserved keyword)

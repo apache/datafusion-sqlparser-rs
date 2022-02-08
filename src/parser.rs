@@ -3240,22 +3240,38 @@ impl<'a> Parser<'a> {
                 with_privileges_keyword: self.parse_keyword(Keyword::PRIVILEGES),
             }
         } else {
-            Privileges::Actions(
-                self.parse_comma_separated(Parser::parse_grant_permission)?
-                    .into_iter()
-                    .map(|(kw, columns)| match kw {
-                        Keyword::DELETE => Action::Delete,
-                        Keyword::INSERT => Action::Insert { columns },
-                        Keyword::REFERENCES => Action::References { columns },
-                        Keyword::SELECT => Action::Select { columns },
-                        Keyword::TRIGGER => Action::Trigger,
-                        Keyword::TRUNCATE => Action::Truncate,
-                        Keyword::UPDATE => Action::Update { columns },
-                        Keyword::USAGE => Action::Usage,
-                        _ => unreachable!(),
-                    })
-                    .collect(),
-            )
+            let (actions, err): (Vec<_>, Vec<_>) = self
+                .parse_comma_separated(Parser::parse_grant_permission)?
+                .into_iter()
+                .map(|(kw, columns)| match kw {
+                    Keyword::DELETE => Ok(Action::Delete),
+                    Keyword::INSERT => Ok(Action::Insert { columns }),
+                    Keyword::REFERENCES => Ok(Action::References { columns }),
+                    Keyword::SELECT => Ok(Action::Select { columns }),
+                    Keyword::TRIGGER => Ok(Action::Trigger),
+                    Keyword::TRUNCATE => Ok(Action::Truncate),
+                    Keyword::UPDATE => Ok(Action::Update { columns }),
+                    Keyword::USAGE => Ok(Action::Usage),
+                    Keyword::CONNECT => Ok(Action::Connect),
+                    Keyword::CREATE => Ok(Action::Create),
+                    Keyword::EXECUTE => Ok(Action::Execute),
+                    Keyword::TEMPORARY => Ok(Action::Temporary),
+                    // This will cover all future added keywords to
+                    // parse_grant_permission and unhandled in this
+                    // match
+                    _ => Err(kw),
+                })
+                .partition(Result::is_ok);
+
+            if !err.is_empty() {
+                let errors: Vec<Keyword> = err.into_iter().filter_map(|x| x.err()).collect();
+                return Err(ParserError::ParserError(format!(
+                    "INTERNAL ERROR: GRANT/REVOKE unexpected keyword(s) - {:?}",
+                    errors
+                )));
+            }
+            let act = actions.into_iter().filter_map(|x| x.ok()).collect();
+            Privileges::Actions(act)
         };
 
         self.expect_keyword(Keyword::ON)?;

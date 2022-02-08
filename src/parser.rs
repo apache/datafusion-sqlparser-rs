@@ -3256,7 +3256,9 @@ impl<'a> Parser<'a> {
                     Keyword::CREATE => Ok(Action::Create),
                     Keyword::EXECUTE => Ok(Action::Execute),
                     Keyword::TEMPORARY => Ok(Action::Temporary),
-                    // This will cover all future added keywords to parse_grant_permission and unhandled in this match
+                    // This will cover all future added keywords to
+                    // parse_grant_permission and unhandled in this
+                    // match
                     _ => Err(kw),
                 })
                 .partition(Result::is_ok);
@@ -3264,7 +3266,7 @@ impl<'a> Parser<'a> {
             if !err.is_empty() {
                 let errors: Vec<Keyword> = err.into_iter().filter_map(|x| x.err()).collect();
                 return Err(ParserError::ParserError(format!(
-                    "GRANT/REVOKE unexpected keyword(s) - {:?}",
+                    "INTERNAL ERROR: GRANT/REVOKE unexpected keyword(s) - {:?}",
                     errors
                 )));
             }

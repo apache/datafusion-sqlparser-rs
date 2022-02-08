@@ -23,7 +23,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::fmt;
+use core::fmt::{self, Write};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -127,7 +127,18 @@ impl From<&str> for Ident {
 impl fmt::Display for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.quote_style {
-            Some(q) if q == '"' || q == '\'' || q == '`' => write!(f, "{}{}{}", q, self.value, q),
+            Some(q) if q == '"' || q == '\'' || q == '`' => {
+                f.write_char(q)?;
+                let mut first = true;
+                for s in self.value.split_inclusive(q) {
+                    if !first {
+                        f.write_char(q)?;
+                    }
+                    first = false;
+                    f.write_str(s)?;
+                }
+                f.write_char(q)
+            }
             Some(q) if q == '[' => write!(f, "[{}]", self.value),
             None => f.write_str(&self.value),
             _ => panic!("unexpected quote style"),
@@ -670,6 +681,12 @@ pub enum Statement {
         columns: Vec<Ident>,
         /// VALUES a vector of values to be copied
         values: Vec<Option<String>>,
+        /// file name of the data to be copied from
+        filename: Option<Ident>,
+        /// delimiter character
+        delimiter: Option<Ident>,
+        /// CSV HEADER
+        csv_header: bool,
     },
     /// UPDATE
     Update {
@@ -717,6 +734,8 @@ pub enum Statement {
         query: Option<Box<Query>>,
         without_rowid: bool,
         like: Option<ObjectName>,
+        engine: Option<String>,
+        default_charset: Option<String>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -1043,13 +1062,28 @@ impl fmt::Display for Statement {
                 table_name,
                 columns,
                 values,
+                delimiter,
+                filename,
+                csv_header,
             } => {
                 write!(f, "COPY {}", table_name)?;
                 if !columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(columns))?;
                 }
-                write!(f, " FROM stdin; ")?;
+
+                if let Some(name) = filename {
+                    write!(f, " FROM {}", name)?;
+                } else {
+                    write!(f, " FROM stdin ")?;
+                }
+                if let Some(delimiter) = delimiter {
+                    write!(f, " DELIMITER {}", delimiter)?;
+                }
+                if *csv_header {
+                    write!(f, " CSV HEADER")?;
+                }
                 if !values.is_empty() {
+                    write!(f, ";")?;
                     writeln!(f)?;
                     let mut delim = "";
                     for v in values {
@@ -1062,7 +1096,10 @@ impl fmt::Display for Statement {
                         }
                     }
                 }
-                write!(f, "\n\\.")
+                if filename.is_none() {
+                    write!(f, "\n\\.")?;
+                }
+                Ok(())
             }
             Statement::Update {
                 table,
@@ -1147,6 +1184,8 @@ impl fmt::Display for Statement {
                 query,
                 without_rowid,
                 like,
+                default_charset,
+                engine,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -1271,6 +1310,12 @@ impl fmt::Display for Statement {
                 }
                 if let Some(query) = query {
                     write!(f, " AS {}", query)?;
+                }
+                if let Some(engine) = engine {
+                    write!(f, " ENGINE={}", engine)?;
+                }
+                if let Some(default_charset) = default_charset {
+                    write!(f, " DEFAULT CHARSET={}", default_charset)?;
                 }
                 Ok(())
             }
@@ -1548,7 +1593,7 @@ impl fmt::Display for Privileges {
                 )
             }
             Privileges::Actions(actions) => {
-                write!(f, "{}", display_comma_separated(actions).to_string())
+                write!(f, "{}", display_comma_separated(actions))
             }
         }
     }

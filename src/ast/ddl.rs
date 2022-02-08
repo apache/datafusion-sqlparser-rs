@@ -14,12 +14,13 @@
 //! (commonly referred to as Data Definition Language, or DDL)
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, string::ToString, vec::Vec};
+use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 use core::fmt;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::ast::value::escape_single_quote_string;
 use crate::ast::{display_comma_separated, display_separated, DataType, Expr, Ident, ObjectName};
 use crate::tokenizer::Token;
 
@@ -31,8 +32,12 @@ pub enum AlterTableOperation {
     AddConstraint(TableConstraint),
     /// `ADD [ COLUMN ] <column_def>`
     AddColumn { column_def: ColumnDef },
-    /// TODO: implement `DROP CONSTRAINT <name>`
-    DropConstraint { name: Ident },
+    /// `DROP CONSTRAINT [ IF EXISTS ] <name>`
+    DropConstraint {
+        if_exists: bool,
+        name: Ident,
+        cascade: bool,
+    },
     /// `DROP [ COLUMN ] [ IF EXISTS ] <column_name> [ CASCADE ]`
     DropColumn {
         column_name: Ident,
@@ -92,7 +97,7 @@ impl fmt::Display for AlterTableOperation {
             ),
             AlterTableOperation::AddConstraint(c) => write!(f, "ADD {}", c),
             AlterTableOperation::AddColumn { column_def } => {
-                write!(f, "ADD COLUMN {}", column_def.to_string())
+                write!(f, "ADD COLUMN {}", column_def)
             }
             AlterTableOperation::AlterColumn { column_name, op } => {
                 write!(f, "ALTER COLUMN {} {}", column_name, op)
@@ -106,7 +111,19 @@ impl fmt::Display for AlterTableOperation {
                 display_comma_separated(partitions),
                 ie = if *if_exists { " IF EXISTS" } else { "" }
             ),
-            AlterTableOperation::DropConstraint { name } => write!(f, "DROP CONSTRAINT {}", name),
+            AlterTableOperation::DropConstraint {
+                if_exists,
+                name,
+                cascade,
+            } => {
+                write!(
+                    f,
+                    "DROP CONSTRAINT {}{}{}",
+                    if *if_exists { "IF EXISTS " } else { "" },
+                    name,
+                    if *cascade { " CASCADE" } else { "" },
+                )
+            }
             AlterTableOperation::DropColumn {
                 column_name,
                 if_exists,
@@ -338,7 +355,9 @@ pub enum ColumnOption {
     /// `DEFAULT <restricted-expr>`
     Default(Expr),
     /// `{ PRIMARY KEY | UNIQUE }`
-    Unique { is_primary: bool },
+    Unique {
+        is_primary: bool,
+    },
     /// A referential integrity constraint (`[FOREIGN KEY REFERENCES
     /// <foreign_table> (<referred_columns>)
     /// { [ON DELETE <referential_action>] [ON UPDATE <referential_action>] |
@@ -356,6 +375,8 @@ pub enum ColumnOption {
     /// - MySQL's `AUTO_INCREMENT` or SQLite's `AUTOINCREMENT`
     /// - ...
     DialectSpecific(Vec<Token>),
+    CharacterSet(ObjectName),
+    Comment(String),
 }
 
 impl fmt::Display for ColumnOption {
@@ -388,6 +409,8 @@ impl fmt::Display for ColumnOption {
             }
             Check(expr) => write!(f, "CHECK ({})", expr),
             DialectSpecific(val) => write!(f, "{}", display_separated(val, " ")),
+            CharacterSet(n) => write!(f, "CHARACTER SET {}", n),
+            Comment(v) => write!(f, "COMMENT '{}'", escape_single_quote_string(v)),
         }
     }
 }

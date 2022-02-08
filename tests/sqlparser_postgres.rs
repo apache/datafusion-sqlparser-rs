@@ -405,6 +405,63 @@ PHP	₱ USD $
 }
 
 #[test]
+fn test_copy() {
+    let stmt = pg().verified_stmt("COPY users FROM 'data.csv'");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            filename: Some(Ident {
+                value: "data.csv".to_string(),
+                quote_style: Some('\'')
+            }),
+            values: vec![],
+            delimiter: None,
+            csv_header: false
+        }
+    );
+
+    let stmt = pg().verified_stmt("COPY users FROM 'data.csv' DELIMITER ','");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            filename: Some(Ident {
+                value: "data.csv".to_string(),
+                quote_style: Some('\'')
+            }),
+            values: vec![],
+            delimiter: Some(Ident {
+                value: ",".to_string(),
+                quote_style: Some('\'')
+            }),
+            csv_header: false,
+        }
+    );
+
+    let stmt = pg().verified_stmt("COPY users FROM 'data.csv' DELIMITER ',' CSV HEADER");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            filename: Some(Ident {
+                value: "data.csv".to_string(),
+                quote_style: Some('\'')
+            }),
+            values: vec![],
+            delimiter: Some(Ident {
+                value: ",".to_string(),
+                quote_style: Some('\'')
+            }),
+            csv_header: true,
+        }
+    )
+}
+
+#[test]
 fn parse_set() {
     let stmt = pg_and_generic().verified_stmt("SET a = b");
     assert_eq!(
@@ -832,6 +889,11 @@ fn parse_comments() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_quoted_identifier() {
+    pg_and_generic().verified_stmt(r#"SELECT "quoted "" ident""#);
 }
 
 fn pg() -> TestedDialects {

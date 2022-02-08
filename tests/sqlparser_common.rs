@@ -328,6 +328,31 @@ fn parse_select_distinct() {
 }
 
 #[test]
+fn parse_select_distinct_two_fields() {
+    let sql = "SELECT DISTINCT name, id FROM customer";
+    let select = verified_only_select(sql);
+    assert!(select.distinct);
+    one_statement_parses_to("SELECT DISTINCT (name, id) FROM customer", sql);
+    assert_eq!(
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
+        &select.projection[0]
+    );
+    assert_eq!(
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
+        &select.projection[1]
+    );
+}
+
+#[test]
+fn parse_select_distinct_missing_paren() {
+    let result = parse_sql_statements("SELECT DISTINCT (name, id FROM customer");
+    assert_eq!(
+        ParserError::ParserError("Expected ), found: FROM".to_string()),
+        result.unwrap_err(),
+    );
+}
+
+#[test]
 fn parse_select_all() {
     one_statement_parses_to("SELECT ALL name FROM customer", "SELECT name FROM customer");
 }
@@ -2048,6 +2073,54 @@ fn parse_alter_table_alter_column_type() {
     );
     assert_eq!(
         ParserError::ParserError("Expected end of statement, found: USING".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
+fn parse_alter_table_drop_constraint() {
+    let alter_stmt = "ALTER TABLE tab";
+    match verified_stmt("ALTER TABLE tab DROP CONSTRAINT constraint_name CASCADE") {
+        Statement::AlterTable {
+            name,
+            operation:
+                AlterTableOperation::DropConstraint {
+                    name: constr_name,
+                    if_exists,
+                    cascade,
+                },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("constraint_name", constr_name.to_string());
+            assert!(!if_exists);
+            assert!(cascade);
+        }
+        _ => unreachable!(),
+    }
+    match verified_stmt("ALTER TABLE tab DROP CONSTRAINT IF EXISTS constraint_name") {
+        Statement::AlterTable {
+            name,
+            operation:
+                AlterTableOperation::DropConstraint {
+                    name: constr_name,
+                    if_exists,
+                    cascade,
+                },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("constraint_name", constr_name.to_string());
+            assert!(if_exists);
+            assert!(!cascade);
+        }
+        _ => unreachable!(),
+    }
+
+    let res = Parser::parse_sql(
+        &GenericDialect {},
+        &format!("{} DROP CONSTRAINT is_active TEXT", alter_stmt),
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: TEXT".to_string()),
         res.unwrap_err()
     );
 }
@@ -4053,4 +4126,86 @@ fn verified_only_select(query: &str) -> Select {
 
 fn verified_expr(query: &str) -> Expr {
     all_dialects().verified_expr(query)
+}
+
+#[test]
+fn parse_offset_and_limit() {
+    let sql = "SELECT foo FROM bar LIMIT 2 OFFSET 2";
+    let expect = Some(Offset {
+        value: Expr::Value(number("2")),
+        rows: OffsetRows::None,
+    });
+    let ast = verified_query(sql);
+    assert_eq!(ast.offset, expect);
+    assert_eq!(ast.limit, Some(Expr::Value(number("2"))));
+
+    // different order is OK
+    one_statement_parses_to("SELECT foo FROM bar OFFSET 2 LIMIT 2", sql);
+
+    // Can't repeat OFFSET / LIMIT
+    let res = parse_sql_statements("SELECT foo FROM bar OFFSET 2 OFFSET 2");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: OFFSET".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("SELECT foo FROM bar LIMIT 2 LIMIT 2");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: LIMIT".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("SELECT foo FROM bar OFFSET 2 LIMIT 2 OFFSET 2");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: OFFSET".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
+fn parse_time_functions() {
+    let sql = "SELECT CURRENT_TIMESTAMP()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT CURRENT_TIMESTAMP", sql);
+
+    let sql = "SELECT CURRENT_TIME()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("CURRENT_TIME")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT CURRENT_TIME", sql);
+
+    let sql = "SELECT CURRENT_DATE()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("CURRENT_DATE")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT CURRENT_DATE", sql);
 }

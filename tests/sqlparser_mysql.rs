@@ -156,6 +156,93 @@ fn parse_create_table_auto_increment() {
 }
 
 #[test]
+fn parse_create_table_set_enum() {
+    let sql = "CREATE TABLE foo (bar SET('a', 'b'), baz ENUM('a', 'b'))";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::new("bar"),
+                        data_type: DataType::Set(vec!["a".to_string(), "b".to_string()]),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("baz"),
+                        data_type: DataType::Enum(vec!["a".to_string(), "b".to_string()]),
+                        collation: None,
+                        options: vec![],
+                    }
+                ],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_engine_default_charset() {
+    let sql = "CREATE TABLE foo (id INT(11)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable {
+            name,
+            columns,
+            engine,
+            default_charset,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::new("id"),
+                    data_type: DataType::Int(Some(11)),
+                    collation: None,
+                    options: vec![],
+                },],
+                columns
+            );
+            assert_eq!(engine, Some("InnoDB".to_string()));
+            assert_eq!(default_charset, Some("utf8mb3".to_string()));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_comment_character_set() {
+    let sql = "CREATE TABLE foo (s TEXT CHARACTER SET utf8mb4 COMMENT 'comment')";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::new("s"),
+                    data_type: DataType::Text,
+                    collation: None,
+                    options: vec![
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::CharacterSet(ObjectName(vec![Ident::new(
+                                "utf8mb4"
+                            )]))
+                        },
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Comment("comment".to_string())
+                        }
+                    ],
+                },],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_quote_identifiers() {
     let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INT PRIMARY KEY)";
     match mysql().verified_stmt(sql) {
@@ -176,6 +263,37 @@ fn parse_quote_identifiers() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_quote_identifiers_2() {
+    let sql = "SELECT `quoted `` identifier`";
+    assert_eq!(
+        mysql().verified_stmt(sql),
+        Statement::Query(Box::new(Query {
+            with: None,
+            body: SetExpr::Select(Box::new(Select {
+                distinct: false,
+                top: None,
+                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
+                    value: "quoted ` identifier".into(),
+                    quote_style: Some('`'),
+                }))],
+                from: vec![],
+                lateral_views: vec![],
+                selection: None,
+                group_by: vec![],
+                cluster_by: vec![],
+                distribute_by: vec![],
+                sort_by: vec![],
+                having: None,
+            })),
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            fetch: None,
+        }))
+    );
 }
 
 #[test]

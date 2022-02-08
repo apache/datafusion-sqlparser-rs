@@ -2078,6 +2078,54 @@ fn parse_alter_table_alter_column_type() {
 }
 
 #[test]
+fn parse_alter_table_drop_constraint() {
+    let alter_stmt = "ALTER TABLE tab";
+    match verified_stmt("ALTER TABLE tab DROP CONSTRAINT constraint_name CASCADE") {
+        Statement::AlterTable {
+            name,
+            operation:
+                AlterTableOperation::DropConstraint {
+                    name: constr_name,
+                    if_exists,
+                    cascade,
+                },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("constraint_name", constr_name.to_string());
+            assert!(!if_exists);
+            assert!(cascade);
+        }
+        _ => unreachable!(),
+    }
+    match verified_stmt("ALTER TABLE tab DROP CONSTRAINT IF EXISTS constraint_name") {
+        Statement::AlterTable {
+            name,
+            operation:
+                AlterTableOperation::DropConstraint {
+                    name: constr_name,
+                    if_exists,
+                    cascade,
+                },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("constraint_name", constr_name.to_string());
+            assert!(if_exists);
+            assert!(!cascade);
+        }
+        _ => unreachable!(),
+    }
+
+    let res = Parser::parse_sql(
+        &GenericDialect {},
+        &format!("{} DROP CONSTRAINT is_active TEXT", alter_stmt),
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: TEXT".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_bad_constraint() {
     let res = parse_sql_statements("ALTER TABLE tab ADD");
     assert_eq!(

@@ -1270,6 +1270,14 @@ fn parse_limit_accepts_all() {
 }
 
 #[test]
+fn parse_limit_my_sql_syntax() {
+    one_statement_parses_to(
+        "SELECT id, fname, lname FROM customer LIMIT 5, 10",
+        "SELECT id, fname, lname FROM customer LIMIT 5 OFFSET 10",
+    );
+}
+
+#[test]
 fn parse_cast() {
     let sql = "SELECT CAST(id AS BIGINT) FROM customer";
     let select = verified_only_select(sql);

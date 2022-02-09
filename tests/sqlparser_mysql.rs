@@ -223,7 +223,7 @@ fn parse_escaped_string() {
 }
 
 #[test]
-fn parse_escaped_double_quoated_string() {
+fn parse_escaped_double_quoted_string() {
     let sql = r#"SELECT "I\"m fine""#;
 
     let stmt = mysql().one_statement_parses_to(sql, "");

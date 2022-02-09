@@ -49,7 +49,7 @@ pub enum Token {
     Char(char),
     /// Single quoted string: i.e: 'string'
     SingleQuotedString(String),
-    /// Double quoted string: i.e: 'string'
+    /// Double quoted string: i.e: "string"
     DoubleQuotedString(String),
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),

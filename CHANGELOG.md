@@ -19,16 +19,23 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 * Support `DROP CONSTRAINT [ IF EXISTS ] <name> [ CASCADE ]` (#396) - Thanks @tvallotton
 * Support parsing tuples and add `Expr::Tuple` (#414) - @alamb
 * Support MySQL style `LIMIT X, Y` (#415) - @alamb
+* Support `SESSION TRANSACTION` and `TRANSACTION SNAPSHOT`. (#379) - Thanks @poonai
+* Support `ALTER COLUMN` and `RENAME CONSTRAINT`  (#381) - Thanks @zhamlin
+* Support for Map access, add ClickHouse dialect (#382)  - Thanks @monadbobo
 
 ### Changed
+* Restrict where wildcard (`*`) can appear, add to `FunctionArgExpr` remove `Expr::[Qualified]Wildcard`, (#378) - Thanks @panarch
 * Update simple_logger requirement from 1.9 to 2.1 (#403)
 * export all methods of parser (#397) - Thanks @neverchanje!
 * Clarify maintenance status on README (#416) - @alamb
+
+@panarch
 
 ### Fixed
 * Fix new clippy errors (#412) - @alamb
 * Fix panic with `GRANT/REVOKE` in `CONNECT`, `CREATE`, `EXECUTE` or `TEMPORARY`  - Thanks @evgenyx00
 * Handle double quotes inside quoted identifiers correctly (#411) - Thanks @Marwes
+* Handle mysql backslash escaping (#373) - Thanks @vasilev-alex
 
 ## [0.13.0] 2021-12-10
 

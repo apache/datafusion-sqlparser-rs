@@ -292,6 +292,7 @@ fn parse_quote_identifiers_2() {
             limit: None,
             offset: None,
             fetch: None,
+            lock: None,
         }))
     );
 }
@@ -417,6 +418,7 @@ fn parse_simple_insert() {
                     limit: None,
                     offset: None,
                     fetch: None,
+                    lock: None,
                 }),
                 source
             );
@@ -469,6 +471,7 @@ fn parse_insert_with_on_duplicate_update() {
                     limit: None,
                     offset: None,
                     fetch: None,
+                    lock: None,
                 }),
                 source
             );
@@ -686,7 +689,8 @@ fn parse_substring_in_select() {
                     order_by: vec![],
                     limit: None,
                     offset: None,
-                    fetch: None
+                    fetch: None,
+                    lock: None,
                 }),
                 query
             );

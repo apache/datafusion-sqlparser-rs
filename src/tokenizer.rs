@@ -1093,7 +1093,7 @@ mod tests {
         assert_eq!(
             tokenizer.tokenize(),
             Err(TokenizerError {
-                message: "Unterminated string literal".to_string(),
+                message: "Unterminated string literal with single quoted".to_string(),
                 line: 1,
                 col: 8
             })

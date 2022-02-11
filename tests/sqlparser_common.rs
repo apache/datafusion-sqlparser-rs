@@ -22,7 +22,9 @@
 mod test_utils;
 use matches::assert_matches;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, PostgreSqlDialect, SQLiteDialect};
+use sqlparser::dialect::{
+    AnsiDialect, GenericDialect, MsSqlDialect, PostgreSqlDialect, SQLiteDialect, SnowflakeDialect,
+};
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
 use test_utils::{
@@ -4158,6 +4160,42 @@ fn test_revoke() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_placeholder() {
+    let sql = "SELECT * FROM student WHERE id = ?";
+    let ast = verified_only_select(sql);
+    assert_eq!(
+        ast.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("id"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Value(Value::Placeholder("?".into())))
+        })
+    );
+
+    let dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(MsSqlDialect {}),
+            Box::new(AnsiDialect {}),
+            Box::new(SnowflakeDialect {}),
+            // Note: `$` is the starting word for the HiveDialect identifier
+            // Box::new(sqlparser::dialect::HiveDialect {}),
+        ],
+    };
+    let sql = "SELECT * FROM student WHERE id = $Id1";
+    let ast = dialects.verified_only_select(sql);
+    assert_eq!(
+        ast.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("id"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Value(Value::Placeholder("$Id1".into())))
+        })
+    );
 }
 
 #[test]

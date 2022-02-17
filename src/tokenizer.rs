@@ -139,6 +139,8 @@ pub enum Token {
     PGSquareRoot,
     /// `||/` , a cube root math operator in PostgreSQL
     PGCubeRoot,
+    /// `?` or `$` , a prepared statement arg placeholder
+    Placeholder(String),
 }
 
 impl fmt::Display for Token {
@@ -194,6 +196,7 @@ impl fmt::Display for Token {
             Token::ShiftRight => f.write_str(">>"),
             Token::PGSquareRoot => f.write_str("|/"),
             Token::PGCubeRoot => f.write_str("||/"),
+            Token::Placeholder(ref s) => write!(f, "{}", s),
         }
     }
 }
@@ -337,6 +340,7 @@ impl<'a> Tokenizer<'a> {
                 Token::Word(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
                 Token::Number(s, _) => self.col += s.len() as u64,
                 Token::SingleQuotedString(s) => self.col += s.len() as u64,
+                Token::Placeholder(s) => self.col += s.len() as u64,
                 _ => self.col += 1,
             }
 
@@ -598,6 +602,15 @@ impl<'a> Tokenizer<'a> {
                 }
                 '#' => self.consume_and_return(chars, Token::Sharp),
                 '@' => self.consume_and_return(chars, Token::AtSign),
+                '?' => self.consume_and_return(chars, Token::Placeholder(String::from("?"))),
+                '$' => {
+                    chars.next();
+                    let s = peeking_take_while(
+                        chars,
+                        |ch| matches!(ch, '0'..='9' | 'A'..='Z' | 'a'..='z'),
+                    );
+                    Ok(Some(Token::Placeholder(String::from("$") + &s)))
+                }
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),

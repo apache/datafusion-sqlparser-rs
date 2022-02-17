@@ -783,6 +783,46 @@ fn parse_array_index_expr() {
         .map(|s| Expr::Value(Value::Number(s.to_string(), false)))
         .collect();
 
+    let sql = "SELECT foo[0] FROM foos";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        &Expr::ArrayIndex {
+            obj: Box::new(Expr::Identifier(Ident::new("foo"))),
+            indexs: vec![num[0].clone()],
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let sql = "SELECT foo[0][0] FROM foos";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        &Expr::ArrayIndex {
+            obj: Box::new(Expr::Identifier(Ident::new("foo"))),
+            indexs: vec![num[0].clone(), num[0].clone()],
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let sql = r#"SELECT bar[0]["baz"]["fooz"] FROM foos"#;
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        &Expr::ArrayIndex {
+            obj: Box::new(Expr::Identifier(Ident::new("bar"))),
+            indexs: vec![
+                num[0].clone(),
+                Expr::Identifier(Ident {
+                    value: "baz".to_string(),
+                    quote_style: Some('"')
+                }),
+                Expr::Identifier(Ident {
+                    value: "fooz".to_string(),
+                    quote_style: Some('"')
+                })
+            ],
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
     let sql = "SELECT (CAST(ARRAY[ARRAY[2, 3]] AS INT[][]))[1][2]";
     let select = pg().verified_only_select(sql);
     assert_eq!(

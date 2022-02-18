@@ -3619,8 +3619,8 @@ impl<'a> Parser<'a> {
     /// Parse a FOR UPDATE/FOR SHARE clause
     pub fn parse_lock(&mut self) -> Result<LockType, ParserError> {
         match self.expect_one_of_keywords(&[Keyword::UPDATE, Keyword::SHARE])? {
-            Keyword::UPDATE => Ok(LockType::Exclusive),
-            Keyword::SHARE => Ok(LockType::Shared),
+            Keyword::UPDATE => Ok(LockType::Update),
+            Keyword::SHARE => Ok(LockType::Share),
             _ => unreachable!(),
         }
     }

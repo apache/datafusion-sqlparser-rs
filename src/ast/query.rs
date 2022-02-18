@@ -585,15 +585,15 @@ impl fmt::Display for Fetch {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum LockType {
-    Shared,
-    Exclusive,
+    Share,
+    Update,
 }
 
 impl fmt::Display for LockType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let select_lock = match self {
-            LockType::Shared => "FOR SHARE",
-            LockType::Exclusive => "FOR UPDATE",
+            LockType::Share => "FOR SHARE",
+            LockType::Update => "FOR UPDATE",
         };
         write!(f, "{}", select_lock)
     }

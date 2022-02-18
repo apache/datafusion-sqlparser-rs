@@ -286,6 +286,13 @@ pub enum Expr {
     Rollup(Vec<Vec<Expr>>),
     /// ROW / TUPLE a single value, such as `SELECT (1, 2)`
     Tuple(Vec<Expr>),
+    /// An array index expression e.g. `(ARRAY[1, 2])[1]` or `(current_schemas(FALSE))[1]`
+    ArrayIndex {
+        obj: Box<Expr>,
+        indexs: Vec<Expr>,
+    },
+    /// An array expression e.g. `ARRAY[1, 2]`
+    Array(Vec<Expr>),
 }
 
 impl fmt::Display for Expr {
@@ -449,6 +456,16 @@ impl fmt::Display for Expr {
             }
             Expr::Tuple(exprs) => {
                 write!(f, "({})", display_comma_separated(exprs))
+            }
+            Expr::ArrayIndex { obj, indexs } => {
+                write!(f, "{}", obj)?;
+                for i in indexs {
+                    write!(f, "[{}]", i)?;
+                }
+                Ok(())
+            }
+            Expr::Array(set) => {
+                write!(f, "ARRAY[{}]", display_comma_separated(set))
             }
         }
     }

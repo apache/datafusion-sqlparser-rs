@@ -18,9 +18,6 @@
 mod test_utils;
 use test_utils::*;
 
-#[cfg(feature = "bigdecimal")]
-use bigdecimal::BigDecimal;
-use sqlparser::ast::Expr::{Identifier, MapAccess};
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
@@ -774,51 +771,72 @@ fn parse_pg_regex_match_ops() {
 }
 
 #[test]
-fn parse_map_access_expr() {
-    #[cfg(not(feature = "bigdecimal"))]
-    let zero = "0".to_string();
+fn parse_array_index_expr() {
     #[cfg(feature = "bigdecimal")]
-    let zero = BigDecimal::parse_bytes(b"0", 10).unwrap();
+    let num: Vec<Expr> = (0..=10)
+        .into_iter()
+        .map(|s| Expr::Value(Value::Number(bigdecimal::BigDecimal::from(s), false)))
+        .collect();
+    #[cfg(not(feature = "bigdecimal"))]
+    let num: Vec<Expr> = (0..=10)
+        .into_iter()
+        .map(|s| Expr::Value(Value::Number(s.to_string(), false)))
+        .collect();
+
     let sql = "SELECT foo[0] FROM foos";
-    let select = pg_and_generic().verified_only_select(sql);
+    let select = pg().verified_only_select(sql);
     assert_eq!(
-        &MapAccess {
-            column: Box::new(Identifier(Ident {
-                value: "foo".to_string(),
-                quote_style: None
-            })),
-            keys: vec![Expr::Value(Value::Number(zero.clone(), false))]
+        &Expr::ArrayIndex {
+            obj: Box::new(Expr::Identifier(Ident::new("foo"))),
+            indexs: vec![num[0].clone()],
         },
         expr_from_projection(only(&select.projection)),
     );
+
     let sql = "SELECT foo[0][0] FROM foos";
-    let select = pg_and_generic().verified_only_select(sql);
+    let select = pg().verified_only_select(sql);
     assert_eq!(
-        &MapAccess {
-            column: Box::new(Identifier(Ident {
-                value: "foo".to_string(),
-                quote_style: None
-            })),
-            keys: vec![
-                Expr::Value(Value::Number(zero.clone(), false)),
-                Expr::Value(Value::Number(zero.clone(), false))
-            ]
+        &Expr::ArrayIndex {
+            obj: Box::new(Expr::Identifier(Ident::new("foo"))),
+            indexs: vec![num[0].clone(), num[0].clone()],
         },
         expr_from_projection(only(&select.projection)),
     );
+
     let sql = r#"SELECT bar[0]["baz"]["fooz"] FROM foos"#;
-    let select = pg_and_generic().verified_only_select(sql);
+    let select = pg().verified_only_select(sql);
     assert_eq!(
-        &MapAccess {
-            column: Box::new(Identifier(Ident {
-                value: "bar".to_string(),
-                quote_style: None
-            })),
-            keys: vec![
-                Expr::Value(Value::Number(zero, false)),
-                Expr::Value(Value::SingleQuotedString("baz".to_string())),
-                Expr::Value(Value::SingleQuotedString("fooz".to_string()))
-            ]
+        &Expr::ArrayIndex {
+            obj: Box::new(Expr::Identifier(Ident::new("bar"))),
+            indexs: vec![
+                num[0].clone(),
+                Expr::Identifier(Ident {
+                    value: "baz".to_string(),
+                    quote_style: Some('"')
+                }),
+                Expr::Identifier(Ident {
+                    value: "fooz".to_string(),
+                    quote_style: Some('"')
+                })
+            ],
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let sql = "SELECT (CAST(ARRAY[ARRAY[2, 3]] AS INT[][]))[1][2]";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        &Expr::ArrayIndex {
+            obj: Box::new(Expr::Nested(Box::new(Expr::Cast {
+                expr: Box::new(Expr::Array(vec![Expr::Array(vec![
+                    num[2].clone(),
+                    num[3].clone(),
+                ])])),
+                data_type: DataType::Array(Box::new(DataType::Array(Box::new(DataType::Int(
+                    None
+                )))))
+            }))),
+            indexs: vec![num[1].clone(), num[2].clone()],
         },
         expr_from_projection(only(&select.projection)),
     );

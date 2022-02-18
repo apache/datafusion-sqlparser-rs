@@ -420,6 +420,7 @@ impl<'a> Parser<'a> {
                 Keyword::TRIM => self.parse_trim_expr(),
                 Keyword::INTERVAL => self.parse_literal_interval(),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
+                Keyword::ARRAY => self.parse_array_expr(),
                 Keyword::NOT => Ok(Expr::UnaryOp {
                     op: UnaryOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
@@ -503,6 +504,10 @@ impl<'a> Parser<'a> {
                     };
                 self.expect_token(&Token::RParen)?;
                 Ok(expr)
+            }
+            Token::Placeholder(_) => {
+                self.prev_token();
+                Ok(Expr::Value(self.parse_value()?))
             }
             unexpected => self.expected("an expression:", unexpected),
         }?;
@@ -820,6 +825,13 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_array_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LBracket)?;
+        let exprs = self.parse_comma_separated(Parser::parse_expr)?;
+        self.expect_token(&Token::RBracket)?;
+        Ok(Expr::Array(exprs))
+    }
+
     /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.
     pub fn parse_listagg_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
@@ -1083,11 +1095,30 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
             })
         } else if Token::LBracket == tok {
+            if dialect_of!(self is PostgreSqlDialect) {
+                // parse index
+                return self.parse_array_index(expr);
+            }
             self.parse_map_access(expr)
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             parser_err!(format!("No infix parser for token {:?}", tok))
         }
+    }
+
+    pub fn parse_array_index(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+        let index = self.parse_expr()?;
+        self.expect_token(&Token::RBracket)?;
+        let mut indexs: Vec<Expr> = vec![index];
+        while self.consume_token(&Token::LBracket) {
+            let index = self.parse_expr()?;
+            self.expect_token(&Token::RBracket)?;
+            indexs.push(index);
+        }
+        Ok(Expr::ArrayIndex {
+            obj: Box::new(expr),
+            indexs,
+        })
     }
 
     pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
@@ -1202,7 +1233,7 @@ impl<'a> Parser<'a> {
             Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
-            Token::LBracket | Token::RBracket => Ok(10),
+            Token::LBracket => Ok(10),
             _ => Ok(0),
         }
     }
@@ -2234,6 +2265,7 @@ impl<'a> Parser<'a> {
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
+            Token::Placeholder(ref s) => Ok(Value::Placeholder(s.to_string())),
             unexpected => self.expected("a value", unexpected),
         }
     }
@@ -2287,7 +2319,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)
     pub fn parse_data_type(&mut self) -> Result<DataType, ParserError> {
-        match self.next_token() {
+        let mut data = match self.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::BOOLEAN => Ok(DataType::Boolean),
                 Keyword::FLOAT => Ok(DataType::Float(self.parse_optional_precision()?)),
@@ -2332,15 +2364,7 @@ impl<'a> Parser<'a> {
                 Keyword::INTERVAL => Ok(DataType::Interval),
                 Keyword::REGCLASS => Ok(DataType::Regclass),
                 Keyword::STRING => Ok(DataType::String),
-                Keyword::TEXT => {
-                    if self.consume_token(&Token::LBracket) {
-                        // Note: this is postgresql-specific
-                        self.expect_token(&Token::RBracket)?;
-                        Ok(DataType::Array(Box::new(DataType::Text)))
-                    } else {
-                        Ok(DataType::Text)
-                    }
-                }
+                Keyword::TEXT => Ok(DataType::Text),
                 Keyword::BYTEA => Ok(DataType::Bytea),
                 Keyword::NUMERIC | Keyword::DECIMAL | Keyword::DEC => {
                     let (precision, scale) = self.parse_optional_precision_scale()?;
@@ -2355,7 +2379,14 @@ impl<'a> Parser<'a> {
                 }
             },
             unexpected => self.expected("a data type name", unexpected),
+        }?;
+
+        // Parse array data types. Note: this is postgresql-specific
+        while self.consume_token(&Token::LBracket) {
+            self.expect_token(&Token::RBracket)?;
+            data = DataType::Array(Box::new(data))
         }
+        Ok(data)
     }
 
     pub fn parse_string_values(&mut self) -> Result<Vec<String>, ParserError> {

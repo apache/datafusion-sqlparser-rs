@@ -83,7 +83,7 @@ impl fmt::Display for AlterTableOperation {
             ),
             AlterTableOperation::AddConstraint(c) => write!(f, "ADD {}", c),
             AlterTableOperation::AddColumn { column_def } => {
-                write!(f, "ADD COLUMN {}", column_def.to_string())
+                write!(f, "ADD COLUMN {}", column_def)
             }
             AlterTableOperation::DropPartitions {
                 partitions,

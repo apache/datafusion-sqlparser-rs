@@ -1560,7 +1560,7 @@ impl<'a> Parser<'a> {
             like: None,
             default_charset: None,
             engine: None,
-            collate: None,
+            collation: None,
         })
     }
 
@@ -1755,7 +1755,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let collate = if self.parse_keywords(&[Keyword::COLLATE]) {
+        let collation = if self.parse_keywords(&[Keyword::COLLATE]) {
             self.expect_token(&Token::Eq)?;
             match self.next_token() {
                 Token::Word(w) => Some(w.value),
@@ -1784,7 +1784,7 @@ impl<'a> Parser<'a> {
             like,
             engine,
             default_charset,
-            collate,
+            collation,
         })
     }
 

@@ -212,6 +212,32 @@ fn parse_create_table_engine_default_charset() {
 }
 
 #[test]
+fn parse_create_table_collate() {
+    let sql = "CREATE TABLE foo (id INT(11)) COLLATE=utf8mb4_0900_ai_ci";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable {
+            name,
+            columns,
+            collation,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::new("id"),
+                    data_type: DataType::Int(Some(11)),
+                    collation: None,
+                    options: vec![],
+                },],
+                columns
+            );
+            assert_eq!(collation, Some("utf8mb4_0900_ai_ci".to_string()));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_comment_character_set() {
     let sql = "CREATE TABLE foo (s TEXT CHARACTER SET utf8mb4 COMMENT 'comment')";
     match mysql().verified_stmt(sql) {

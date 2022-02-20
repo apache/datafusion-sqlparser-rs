@@ -758,7 +758,7 @@ pub enum Statement {
         like: Option<ObjectName>,
         engine: Option<String>,
         default_charset: Option<String>,
-        collate: Option<String>,
+        collation: Option<String>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -1209,7 +1209,7 @@ impl fmt::Display for Statement {
                 like,
                 default_charset,
                 engine,
-                collate,
+                collation,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -1341,8 +1341,8 @@ impl fmt::Display for Statement {
                 if let Some(default_charset) = default_charset {
                     write!(f, " DEFAULT CHARSET={}", default_charset)?;
                 }
-                if let Some(collate) = collate {
-                    write!(f, " COLLATE={}", collate)?;
+                if let Some(collation) = collation {
+                    write!(f, " COLLATE={}", collation)?;
                 }
                 Ok(())
             }

@@ -381,6 +381,29 @@ fn parse_create_table_with_minimum_display_width() {
 }
 
 #[test]
+fn parse_create_table_unsigned() {
+    let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3) UNSIGNED)";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::new("bar_tinyint"),
+                    data_type: DataType::TinyInt(Some(3)),
+                    collation: None,
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::Unsigned
+                    }],
+                },],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 #[cfg(not(feature = "bigdecimal"))]
 fn parse_simple_insert() {
     let sql = r"INSERT INTO tasks (title, priority) VALUES ('Test Some Inserts', 1), ('Test Entry 2', 2), ('Test Entry 3', 3)";

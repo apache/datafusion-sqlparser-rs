@@ -1143,6 +1143,18 @@ impl<'a> Parser<'a> {
 
     /// Parses the parens following the `[ NOT ] IN` operator
     pub fn parse_in(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
+        // BigQuery allows `IN UNNEST(array_expression)`
+        // https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
+        if self.parse_keyword(Keyword::UNNEST) {
+            self.expect_token(&Token::LParen)?;
+            let array_expr = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            return Ok(Expr::InUnnest {
+                expr: Box::new(expr),
+                array_expr: Box::new(array_expr),
+                negated,
+            });
+        }
         self.expect_token(&Token::LParen)?;
         let in_op = if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
             self.prev_token();

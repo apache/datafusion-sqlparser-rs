@@ -2649,6 +2649,12 @@ impl<'a> Parser<'a> {
                 None
             };
 
+            let lock = if self.parse_keyword(Keyword::FOR) {
+                Some(self.parse_lock()?)
+            } else {
+                None
+            };
+
             Ok(Query {
                 with,
                 body,
@@ -2656,6 +2662,7 @@ impl<'a> Parser<'a> {
                 limit,
                 offset,
                 fetch,
+                lock,
             })
         } else {
             let insert = self.parse_insert()?;
@@ -2667,6 +2674,7 @@ impl<'a> Parser<'a> {
                 order_by: vec![],
                 offset: None,
                 fetch: None,
+                lock: None,
             })
         }
     }
@@ -3637,6 +3645,15 @@ impl<'a> Parser<'a> {
             percent,
             quantity,
         })
+    }
+
+    /// Parse a FOR UPDATE/FOR SHARE clause
+    pub fn parse_lock(&mut self) -> Result<LockType, ParserError> {
+        match self.expect_one_of_keywords(&[Keyword::UPDATE, Keyword::SHARE])? {
+            Keyword::UPDATE => Ok(LockType::Update),
+            Keyword::SHARE => Ok(LockType::Share),
+            _ => unreachable!(),
+        }
     }
 
     pub fn parse_values(&mut self) -> Result<Values, ParserError> {

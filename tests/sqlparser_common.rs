@@ -4163,6 +4163,17 @@ fn test_revoke() {
 }
 
 #[test]
+fn test_lock() {
+    let sql = "SELECT * FROM student WHERE id = '1' FOR UPDATE";
+    let ast = verified_query(sql);
+    assert_eq!(ast.lock.unwrap(), LockType::Update);
+
+    let sql = "SELECT * FROM student WHERE id = '1' FOR SHARE";
+    let ast = verified_query(sql);
+    assert_eq!(ast.lock.unwrap(), LockType::Share);
+}
+
+#[test]
 fn test_placeholder() {
     let sql = "SELECT * FROM student WHERE id = ?";
     let ast = verified_only_select(sql);

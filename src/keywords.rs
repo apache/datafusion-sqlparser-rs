@@ -415,6 +415,7 @@ define_keywords!(
     SESSION_USER,
     SET,
     SETS,
+    SHARE,
     SHOW,
     SIMILAR,
     SMALLINT,

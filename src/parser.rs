@@ -1560,6 +1560,7 @@ impl<'a> Parser<'a> {
             like: None,
             default_charset: None,
             engine: None,
+            collation: None,
         })
     }
 
@@ -1754,6 +1755,16 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let collation = if self.parse_keywords(&[Keyword::COLLATE]) {
+            self.expect_token(&Token::Eq)?;
+            match self.next_token() {
+                Token::Word(w) => Some(w.value),
+                unexpected => self.expected("identifier", unexpected)?,
+            }
+        } else {
+            None
+        };
+
         Ok(Statement::CreateTable {
             name: table_name,
             temporary,
@@ -1773,6 +1784,7 @@ impl<'a> Parser<'a> {
             like,
             engine,
             default_charset,
+            collation,
         })
     }
 

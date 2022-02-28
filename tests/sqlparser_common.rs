@@ -1367,6 +1367,21 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(MINUTE FROM d)");
     verified_stmt("SELECT EXTRACT(SECOND FROM d)");
+    verified_stmt("SELECT EXTRACT(CENTURY FROM d)");
+    verified_stmt("SELECT EXTRACT(DECADE FROM d)");
+    verified_stmt("SELECT EXTRACT(DOW FROM d)");
+    verified_stmt("SELECT EXTRACT(DOY FROM d)");
+    verified_stmt("SELECT EXTRACT(EPOCH FROM d)");
+    verified_stmt("SELECT EXTRACT(ISODOW FROM d)");
+    verified_stmt("SELECT EXTRACT(ISOYEAR FROM d)");
+    verified_stmt("SELECT EXTRACT(JULIAN FROM d)");
+    verified_stmt("SELECT EXTRACT(MICROSECONDS FROM d)");
+    verified_stmt("SELECT EXTRACT(MILLENIUM FROM d)");
+    verified_stmt("SELECT EXTRACT(MILLISECONDS FROM d)");
+    verified_stmt("SELECT EXTRACT(QUARTER FROM d)");
+    verified_stmt("SELECT EXTRACT(TIMEZONE FROM d)");
+    verified_stmt("SELECT EXTRACT(TIMEZONE_HOUR FROM d)");
+    verified_stmt("SELECT EXTRACT(TIMEZONE_MINUTE FROM d)");
 
     let res = parse_sql_statements("SELECT EXTRACT(MILLISECOND FROM d)");
     assert_eq!(

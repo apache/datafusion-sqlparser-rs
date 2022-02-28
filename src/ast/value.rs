@@ -127,6 +127,21 @@ pub enum DateTimeField {
     Hour,
     Minute,
     Second,
+    Century,
+    Decade,
+    Dow,
+    Doy,
+    Epoch,
+    Isodow,
+    Isoyear,
+    Julian,
+    Microseconds,
+    Millenium,
+    Milliseconds,
+    Quarter,
+    Timezone,
+    TimezoneHour,
+    TimezoneMinute,
 }
 
 impl fmt::Display for DateTimeField {
@@ -138,6 +153,21 @@ impl fmt::Display for DateTimeField {
             DateTimeField::Hour => "HOUR",
             DateTimeField::Minute => "MINUTE",
             DateTimeField::Second => "SECOND",
+            DateTimeField::Century => "CENTURY",
+            DateTimeField::Decade => "DECADE",
+            DateTimeField::Dow => "DOW",
+            DateTimeField::Doy => "DOY",
+            DateTimeField::Epoch => "EPOCH",
+            DateTimeField::Isodow => "ISODOW",
+            DateTimeField::Isoyear => "ISOYEAR",
+            DateTimeField::Julian => "JULIAN",
+            DateTimeField::Microseconds => "MICROSECONDS",
+            DateTimeField::Millenium => "MILLENIUM",
+            DateTimeField::Milliseconds => "MILLISECONDS",
+            DateTimeField::Quarter => "QUARTER",
+            DateTimeField::Timezone => "TIMEZONE",
+            DateTimeField::TimezoneHour => "TIMEZONE_HOUR",
+            DateTimeField::TimezoneMinute => "TIMEZONE_MINUTE",
         })
     }
 }

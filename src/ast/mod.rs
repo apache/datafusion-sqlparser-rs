@@ -189,6 +189,12 @@ pub enum Expr {
         subquery: Box<Query>,
         negated: bool,
     },
+    /// `[ NOT ] IN UNNEST(array_expression)`
+    InUnnest {
+        expr: Box<Expr>,
+        array_expr: Box<Expr>,
+        negated: bool,
+    },
     /// `<expr> [ NOT ] BETWEEN <low> AND <high>`
     Between {
         expr: Box<Expr>,
@@ -334,6 +340,17 @@ impl fmt::Display for Expr {
                 expr,
                 if *negated { "NOT " } else { "" },
                 subquery
+            ),
+            Expr::InUnnest {
+                expr,
+                array_expr,
+                negated,
+            } => write!(
+                f,
+                "{} {}IN UNNEST({})",
+                expr,
+                if *negated { "NOT " } else { "" },
+                array_expr
             ),
             Expr::Between {
                 expr,

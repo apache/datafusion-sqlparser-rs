@@ -904,6 +904,27 @@ fn parse_in_subquery() {
 }
 
 #[test]
+fn parse_in_unnest() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE segment {}IN UNNEST(expr)",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::InUnnest {
+                expr: Box::new(Expr::Identifier(Ident::new("segment"))),
+                array_expr: Box::new(verified_expr("expr")),
+                negated,
+            },
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
+}
+
+#[test]
 fn parse_string_agg() {
     let sql = "SELECT a || b";
 

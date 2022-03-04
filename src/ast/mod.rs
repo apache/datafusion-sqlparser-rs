@@ -157,6 +157,24 @@ impl fmt::Display for ObjectName {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Array {
+    pub elem: Vec<Expr>,
+    pub named: bool,
+}
+
+impl fmt::Display for Array {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}[{}]",
+            if self.named { "ARRAY" } else { "" },
+            display_comma_separated(&self.elem)
+        )
+    }
+}
+
 /// An SQL expression of any type.
 ///
 /// The parser does not distinguish between expressions of different types
@@ -298,7 +316,7 @@ pub enum Expr {
         indexs: Vec<Expr>,
     },
     /// An array expression e.g. `ARRAY[1, 2]`
-    Array(Vec<Expr>),
+    Array(Array),
 }
 
 impl fmt::Display for Expr {
@@ -482,7 +500,7 @@ impl fmt::Display for Expr {
                 Ok(())
             }
             Expr::Array(set) => {
-                write!(f, "ARRAY[{}]", display_comma_separated(set))
+                write!(f, "{}", set)
             }
         }
     }

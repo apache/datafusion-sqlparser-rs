@@ -15,6 +15,7 @@
 
 #[macro_use]
 mod test_utils;
+
 use test_utils::*;
 
 use sqlparser::ast::Expr::{Identifier, MapAccess};
@@ -30,7 +31,7 @@ fn parse_map_access_expr() {
         &MapAccess {
             column: Box::new(Identifier(Ident {
                 value: "string_values".to_string(),
-                quote_style: None
+                quote_style: None,
             })),
             keys: vec![Expr::Function(Function {
                 name: ObjectName(vec!["indexOf".into()]),
@@ -40,14 +41,30 @@ fn parse_map_access_expr() {
                     )))),
                     FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                         Value::SingleQuotedString("endpoint".to_string())
-                    )))
+                    ))),
                 ],
                 over: None,
-                distinct: false
-            })]
+                distinct: false,
+            })],
         },
         expr_from_projection(only(&select.projection)),
     );
+}
+
+#[test]
+fn parse_array_expr() {
+    let sql = "SELECT ['1', '2'] FROM test";
+    let select = clickhouse().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Array(Array {
+            elem: vec![
+                Expr::Value(Value::SingleQuotedString("1".to_string())),
+                Expr::Value(Value::SingleQuotedString("2".to_string()))
+            ],
+            named: false,
+        }),
+        expr_from_projection(only(&select.projection))
+    )
 }
 
 fn clickhouse() -> TestedDialects {

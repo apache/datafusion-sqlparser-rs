@@ -41,20 +41,34 @@ pub enum DataType {
     Blob(u64),
     /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
     Decimal(Option<u64>, Option<u64>),
+    /// Unsigned decimal type with optional precision and scale e.g. DECIMAL(10,2) UNSIGNED
+    UnsignedDecimal(Option<u64>, Option<u64>),
     /// Floating point with optional precision e.g. FLOAT(8)
     Float(Option<u64>),
+    /// Unsigned floating point with optional precision e.g. FLOAT(8) UNSIGNED
+    UnsignedFloat(Option<u64>),
     /// Tiny integer with optional display width e.g. TINYINT or TINYINT(3)
     TinyInt(Option<u64>),
+    /// Unsigned tiny integer with optional display width e.g. TINYINT UNSIGNED or TINYINT(3) UNSIGNED
+    UnsignedTinyInt(Option<u64>),
     /// Small integer with optional display width e.g. SMALLINT or SMALLINT(5)
     SmallInt(Option<u64>),
+    /// Unsigned small integer with optional display width e.g. SMALLINT UNSIGNED or SMALLINT(5) UNSIGNED
+    UnsignedSmallInt(Option<u64>),
     /// Integer with optional display width e.g. INT or INT(11)
     Int(Option<u64>),
+    /// Unsigned integer with optional display width e.g. INT UNSIGNED or INT(11) UNSIGNED
+    UnsignedInt(Option<u64>),
     /// Big integer with optional display width e.g. BIGINT or BIGINT(20)
     BigInt(Option<u64>),
+    /// Unsigned big integer with optional display width e.g. BIGINT UNSIGNED or BIGINT(20) UNSIGNED
+    UnsignedBigInt(Option<u64>),
     /// Floating point e.g. REAL
     Real,
     /// Double e.g. DOUBLE PRECISION
     Double,
+    /// Double e.g. DOUBLE PRECISION
+    UnsignedDouble,
     /// Boolean
     Boolean,
     /// Date

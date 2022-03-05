@@ -2352,7 +2352,14 @@ impl<'a> Parser<'a> {
                     let _ = self.parse_keyword(Keyword::PRECISION);
                     Ok(DataType::Double)
                 }
-                Keyword::TINYINT => Ok(DataType::TinyInt(self.parse_optional_precision()?)),
+                Keyword::TINYINT => {
+                    let optional_precision = self.parse_optional_precision();
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::UnsignedTinyInt(optional_precision?))
+                    } else {
+                        Ok(DataType::TinyInt(optional_precision?))
+                    }
+                }
                 Keyword::SMALLINT => Ok(DataType::SmallInt(self.parse_optional_precision()?)),
                 Keyword::INT | Keyword::INTEGER => {
                     Ok(DataType::Int(self.parse_optional_precision()?))

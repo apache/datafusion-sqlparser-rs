@@ -416,12 +416,9 @@ fn parse_create_table_unsigned() {
             assert_eq!(
                 vec![ColumnDef {
                     name: Ident::new("bar_tinyint"),
-                    data_type: DataType::TinyInt(Some(3)),
+                    data_type: DataType::UnsignedTinyInt(Some(3)),
                     collation: None,
-                    options: vec![ColumnOptionDef {
-                        name: None,
-                        option: ColumnOption::Unsigned
-                    }],
+                    options: vec![],
                 },],
                 columns
             );

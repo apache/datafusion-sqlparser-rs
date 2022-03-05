@@ -100,9 +100,9 @@ pub enum DataType {
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DataType::Char(size) => format_type_with_optional_length(f, "CHAR", size),
+            DataType::Char(size) => format_type_with_optional_length(f, "CHAR", size, false),
             DataType::Varchar(size) => {
-                format_type_with_optional_length(f, "CHARACTER VARYING", size)
+                format_type_with_optional_length(f, "CHARACTER VARYING", size, false)
             }
             DataType::Uuid => write!(f, "UUID"),
             DataType::Clob(size) => write!(f, "CLOB({})", size),
@@ -113,18 +113,45 @@ impl fmt::Display for DataType {
                 if let Some(scale) = scale {
                     write!(f, "NUMERIC({},{})", precision.unwrap(), scale)
                 } else {
-                    format_type_with_optional_length(f, "NUMERIC", precision)
+                    format_type_with_optional_length(f, "NUMERIC", precision, false)
                 }
             }
-            DataType::Float(size) => format_type_with_optional_length(f, "FLOAT", size),
-            DataType::TinyInt(zerofill) => format_type_with_optional_length(f, "TINYINT", zerofill),
-            DataType::SmallInt(zerofill) => {
-                format_type_with_optional_length(f, "SMALLINT", zerofill)
+            DataType::UnsignedDecimal(precision, scale) => {
+                if let Some(scale) = scale {
+                    write!(f, "NUMERIC({},{}) UNSIGNED", precision.unwrap(), scale)
+                } else {
+                    format_type_with_optional_length(f, "NUMERIC", precision, true)
+                }
             }
-            DataType::Int(zerofill) => format_type_with_optional_length(f, "INT", zerofill),
-            DataType::BigInt(zerofill) => format_type_with_optional_length(f, "BIGINT", zerofill),
+            DataType::Float(size) => format_type_with_optional_length(f, "FLOAT", size, false),
+            DataType::UnsignedFloat(size) => {
+                format_type_with_optional_length(f, "FLOAT", size, true)
+            }
+            DataType::TinyInt(zerofill) => {
+                format_type_with_optional_length(f, "TINYINT", zerofill, false)
+            }
+            DataType::UnsignedTinyInt(zerofill) => {
+                format_type_with_optional_length(f, "TINYINT", zerofill, true)
+            }
+            DataType::SmallInt(zerofill) => {
+                format_type_with_optional_length(f, "SMALLINT", zerofill, false)
+            }
+            DataType::UnsignedSmallInt(zerofill) => {
+                format_type_with_optional_length(f, "SMALLINT", zerofill, true)
+            }
+            DataType::Int(zerofill) => format_type_with_optional_length(f, "INT", zerofill, false),
+            DataType::UnsignedInt(zerofill) => {
+                format_type_with_optional_length(f, "INT", zerofill, true)
+            }
+            DataType::BigInt(zerofill) => {
+                format_type_with_optional_length(f, "BIGINT", zerofill, false)
+            }
+            DataType::UnsignedBigInt(zerofill) => {
+                format_type_with_optional_length(f, "BIGINT", zerofill, true)
+            }
             DataType::Real => write!(f, "REAL"),
             DataType::Double => write!(f, "DOUBLE"),
+            DataType::UnsignedDouble => write!(f, "DOUBLE UNSIGNED"),
             DataType::Boolean => write!(f, "BOOLEAN"),
             DataType::Date => write!(f, "DATE"),
             DataType::Time => write!(f, "TIME"),
@@ -164,10 +191,14 @@ fn format_type_with_optional_length(
     f: &mut fmt::Formatter,
     sql_type: &'static str,
     len: &Option<u64>,
+    unsigned: bool,
 ) -> fmt::Result {
     write!(f, "{}", sql_type)?;
     if let Some(len) = len {
         write!(f, "({})", len)?;
+    }
+    if unsigned {
+        write!(f, " UNSIGNED")?;
     }
     Ok(())
 }

@@ -1935,11 +1935,6 @@ impl<'a> Parser<'a> {
             Ok(Some(ColumnOption::DialectSpecific(vec![
                 Token::make_keyword("AUTOINCREMENT"),
             ])))
-        } else if self.parse_keyword(Keyword::UNSIGNED)
-            && dialect_of!(self is MySqlDialect |  GenericDialect)
-        {
-            // Support UNSIGNED for MySQL
-            Ok(Some(ColumnOption::Unsigned))
         } else {
             Ok(None)
         }

@@ -1853,19 +1853,6 @@ impl<'a> Parser<'a> {
                 break;
             };
         }
-        if self.parse_keyword(Keyword::UNSIGNED) {
-            println!(
-                "{}",
-                ColumnOptionDef {
-                    name: None,
-                    option: ColumnOption::Unsigned
-                }
-            );
-            options.push(ColumnOptionDef {
-                name: None,
-                option: ColumnOption::Unsigned,
-            });
-        };
         Ok(ColumnDef {
             name,
             data_type,

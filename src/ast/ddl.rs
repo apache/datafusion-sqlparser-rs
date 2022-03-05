@@ -377,7 +377,6 @@ pub enum ColumnOption {
     DialectSpecific(Vec<Token>),
     CharacterSet(ObjectName),
     Comment(String),
-    Unsigned,
 }
 
 impl fmt::Display for ColumnOption {
@@ -412,7 +411,6 @@ impl fmt::Display for ColumnOption {
             DialectSpecific(val) => write!(f, "{}", display_separated(val, " ")),
             CharacterSet(n) => write!(f, "CHARACTER SET {}", n),
             Comment(v) => write!(f, "COMMENT '{}'", escape_single_quote_string(v)),
-            Unsigned => write!(f, "UNSIGNED"),
         }
     }
 }

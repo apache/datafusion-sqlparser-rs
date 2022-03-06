@@ -41,12 +41,8 @@ pub enum DataType {
     Blob(u64),
     /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
     Decimal(Option<u64>, Option<u64>),
-    /// Unsigned decimal type with optional precision and scale e.g. DECIMAL(10,2) UNSIGNED
-    UnsignedDecimal(Option<u64>, Option<u64>),
     /// Floating point with optional precision e.g. FLOAT(8)
     Float(Option<u64>),
-    /// Unsigned floating point with optional precision e.g. FLOAT(8) UNSIGNED
-    UnsignedFloat(Option<u64>),
     /// Tiny integer with optional display width e.g. TINYINT or TINYINT(3)
     TinyInt(Option<u64>),
     /// Unsigned tiny integer with optional display width e.g. TINYINT UNSIGNED or TINYINT(3) UNSIGNED
@@ -67,8 +63,6 @@ pub enum DataType {
     Real,
     /// Double e.g. DOUBLE PRECISION
     Double,
-    /// Double e.g. DOUBLE PRECISION
-    UnsignedDouble,
     /// Boolean
     Boolean,
     /// Date
@@ -116,17 +110,7 @@ impl fmt::Display for DataType {
                     format_type_with_optional_length(f, "NUMERIC", precision, false)
                 }
             }
-            DataType::UnsignedDecimal(precision, scale) => {
-                if let Some(scale) = scale {
-                    write!(f, "NUMERIC({},{}) UNSIGNED", precision.unwrap(), scale)
-                } else {
-                    format_type_with_optional_length(f, "NUMERIC", precision, true)
-                }
-            }
             DataType::Float(size) => format_type_with_optional_length(f, "FLOAT", size, false),
-            DataType::UnsignedFloat(size) => {
-                format_type_with_optional_length(f, "FLOAT", size, true)
-            }
             DataType::TinyInt(zerofill) => {
                 format_type_with_optional_length(f, "TINYINT", zerofill, false)
             }
@@ -151,7 +135,6 @@ impl fmt::Display for DataType {
             }
             DataType::Real => write!(f, "REAL"),
             DataType::Double => write!(f, "DOUBLE"),
-            DataType::UnsignedDouble => write!(f, "DOUBLE UNSIGNED"),
             DataType::Boolean => write!(f, "BOOLEAN"),
             DataType::Date => write!(f, "DATE"),
             DataType::Time => write!(f, "TIME"),

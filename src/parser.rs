@@ -2350,7 +2350,7 @@ impl<'a> Parser<'a> {
                 Keyword::REAL => Ok(DataType::Real),
                 Keyword::DOUBLE => {
                     let _ = self.parse_keyword(Keyword::PRECISION);
-                        Ok(DataType::Double)
+                    Ok(DataType::Double)
                 }
                 Keyword::TINYINT => {
                     let optional_precision = self.parse_optional_precision();

@@ -187,6 +187,7 @@ impl<'a> Parser<'a> {
                 Keyword::DEALLOCATE => Ok(self.parse_deallocate()?),
                 Keyword::EXECUTE => Ok(self.parse_execute()?),
                 Keyword::PREPARE => Ok(self.parse_prepare()?),
+                Keyword::MERGE => Ok(self.parse_merge()?),
                 Keyword::REPLACE if dialect_of!(self is SQLiteDialect ) => {
                     self.prev_token();
                     Ok(self.parse_insert()?)
@@ -3888,6 +3889,90 @@ impl<'a> Parser<'a> {
             object_type,
             object_name,
             comment,
+        })
+    }
+
+    pub fn parse_merge_clauses(&mut self) -> Result<Vec<MergeClause>, ParserError> {
+        let mut clauses: Vec<MergeClause> = vec![];
+        loop {
+            if self.peek_token() == Token::EOF {
+                break;
+            }
+            self.expect_keyword(Keyword::WHEN)?;
+
+            let is_not_matched = self.parse_keyword(Keyword::NOT);
+            self.expect_keyword(Keyword::MATCHED)?;
+
+            let predicate = if self.parse_keyword(Keyword::AND) {
+                Some(self.parse_expr()?)
+            } else {
+                None
+            };
+
+            self.expect_keyword(Keyword::THEN)?;
+
+            clauses.push(
+                match self.parse_one_of_keywords(&[
+                    Keyword::UPDATE,
+                    Keyword::INSERT,
+                    Keyword::DELETE,
+                ]) {
+                    Some(Keyword::UPDATE) => {
+                        if is_not_matched {
+                            parser_err!("UPDATE in NOT MATCHED merge clause")?;
+                        }
+                        self.expect_keyword(Keyword::SET)?;
+                        let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
+                        MergeClause::MatchedUpdate {
+                            predicate,
+                            assignments,
+                        }
+                    }
+                    Some(Keyword::DELETE) => {
+                        if is_not_matched {
+                            parser_err!("DELETE in NOT MATCHED merge clause")?;
+                        }
+                        MergeClause::MatchedDelete(predicate)
+                    }
+                    Some(Keyword::INSERT) => {
+                        if !is_not_matched {
+                            parser_err!("INSERT in MATCHED merge clause")?;
+                        }
+                        let columns = self.parse_parenthesized_column_list(Optional)?;
+                        self.expect_keyword(Keyword::VALUES)?;
+                        let values = self.parse_values()?;
+                        MergeClause::NotMatched {
+                            predicate,
+                            columns,
+                            values,
+                        }
+                    }
+                    Some(_) => parser_err!("expected UPDATE, DELETE or INSERT in merge clause")?,
+                    None => parser_err!("expected UPDATE, DELETE or INSERT in merge clause")?,
+                },
+            );
+        }
+        Ok(clauses)
+    }
+
+    pub fn parse_merge(&mut self) -> Result<Statement, ParserError> {
+        self.expect_keyword(Keyword::INTO)?;
+
+        let table = self.parse_table_factor()?;
+
+        self.expect_keyword(Keyword::USING)?;
+        let source = self.parse_query_body(0)?;
+        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        self.expect_keyword(Keyword::ON)?;
+        let on = self.parse_expr()?;
+        let clauses = self.parse_merge_clauses()?;
+
+        Ok(Statement::Merge {
+            table,
+            source: Box::new(source),
+            alias,
+            on: Box::new(on),
+            clauses,
         })
     }
 }

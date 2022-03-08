@@ -3919,7 +3919,9 @@ impl<'a> Parser<'a> {
                 ]) {
                     Some(Keyword::UPDATE) => {
                         if is_not_matched {
-                            parser_err!("UPDATE in NOT MATCHED merge clause")?;
+                            return Err(ParserError::ParserError(
+                                "UPDATE in NOT MATCHED merge clause".to_string(),
+                            ));
                         }
                         self.expect_keyword(Keyword::SET)?;
                         let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
@@ -3930,13 +3932,17 @@ impl<'a> Parser<'a> {
                     }
                     Some(Keyword::DELETE) => {
                         if is_not_matched {
-                            parser_err!("DELETE in NOT MATCHED merge clause")?;
+                            return Err(ParserError::ParserError(
+                                "DELETE in NOT MATCHED merge clause".to_string(),
+                            ));
                         }
                         MergeClause::MatchedDelete(predicate)
                     }
                     Some(Keyword::INSERT) => {
                         if !is_not_matched {
-                            parser_err!("INSERT in MATCHED merge clause")?;
+                            return Err(ParserError::ParserError(
+                                "INSERT in MATCHED merge clause".to_string(),
+                            ));
                         }
                         let columns = self.parse_parenthesized_column_list(Optional)?;
                         self.expect_keyword(Keyword::VALUES)?;
@@ -3947,8 +3953,16 @@ impl<'a> Parser<'a> {
                             values,
                         }
                     }
-                    Some(_) => parser_err!("expected UPDATE, DELETE or INSERT in merge clause")?,
-                    None => parser_err!("expected UPDATE, DELETE or INSERT in merge clause")?,
+                    Some(_) => {
+                        return Err(ParserError::ParserError(
+                            "expected UPDATE, DELETE or INSERT in merge clause".to_string(),
+                        ))
+                    }
+                    None => {
+                        return Err(ParserError::ParserError(
+                            "expected UPDATE, DELETE or INSERT in merge clause".to_string(),
+                        ))
+                    }
                 },
             );
         }

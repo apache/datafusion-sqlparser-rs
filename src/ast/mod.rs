@@ -159,7 +159,8 @@ impl fmt::Display for ObjectName {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// Represetns
+/// Represents an Array Expression, either
+/// `ARRAY[..]`, or `[..]`
 pub struct Array {
     /// The list of expressions between brackets
     pub elem: Vec<Expr>,

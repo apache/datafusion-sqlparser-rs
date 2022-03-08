@@ -2247,7 +2247,7 @@ fn parse_bad_constraint() {
 #[test]
 fn parse_scalar_function_in_projection() {
     let names = vec![
-        "sqrt", // array is also valid function name
+        "sqrt",
         "array", "foo",
     ];
 

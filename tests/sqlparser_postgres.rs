@@ -828,10 +828,13 @@ fn parse_array_index_expr() {
     assert_eq!(
         &Expr::ArrayIndex {
             obj: Box::new(Expr::Nested(Box::new(Expr::Cast {
-                expr: Box::new(Expr::Array(vec![Expr::Array(vec![
-                    num[2].clone(),
-                    num[3].clone(),
-                ])])),
+                expr: Box::new(Expr::Array(Array {
+                    elem: vec![Expr::Array(Array {
+                        elem: vec![num[2].clone(), num[3].clone(),],
+                        named: true,
+                    })],
+                    named: true,
+                })),
                 data_type: DataType::Array(Box::new(DataType::Array(Box::new(DataType::Int(
                     None
                 )))))

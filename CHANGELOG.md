@@ -8,6 +8,27 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.15.0] 2022-03-07
+
+
+### Added
+
+* Support for ClickHouse array types (e.g. [1,2,3]) (#429) - Thanks @monadbobo
+* Support for `unsigned tinyint`, `unsigned int`, `unsigned smallint` and `unsigned bigint` datatypes (#428) - Thanks @watarukura
+* Support additional keywords for `EXTRACT`  (#427) - Thanks @mobuchowski
+* Support IN UNNEST(expression) (#426) - Thanks @komukomo
+* Support COLLATION keywork on CREATE TABLE (#424) - Thanks @watarukura
+* Support FOR UPDATE/FOR SHARE clause (#418) - Thanks @gamife
+* Support prepared statement placeholder arg `?` and `$` (#420) - Thanks @gamife
+* Support array expressions such as `ARRAY[1,2]` , `foo[1]` and `INT[][]` (#419) - Thanks @gamife
+
+### Changed:
+* remove Travis CI (#421) - Thanks @efx
+
+### Fixed:
+* Allow `array` to be used as a function name again (#432) - @alamb
+* Update docstring reference to `Query` (#423) - Thanks @max-sixty
+
 ## [0.14.0] 2022-02-09
 
 ### Added

@@ -420,7 +420,11 @@ impl<'a> Parser<'a> {
                 Keyword::TRIM => self.parse_trim_expr(),
                 Keyword::INTERVAL => self.parse_literal_interval(),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
-                Keyword::ARRAY => self.parse_array_expr(true),
+                // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as function call
+                Keyword::ARRAY if self.peek_token() == Token::LBracket => {
+                    self.expect_token(&Token::LBracket)?;
+                    self.parse_array_expr(true)
+                }
                 Keyword::NOT => Ok(Expr::UnaryOp {
                     op: UnaryOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
@@ -450,6 +454,7 @@ impl<'a> Parser<'a> {
                     _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word
+            // array `[1, 2, 3]`
             Token::LBracket => self.parse_array_expr(false),
             tok @ Token::Minus | tok @ Token::Plus => {
                 let op = if tok == Token::Plus {
@@ -826,10 +831,9 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parses an array expression `[ex1, ex2, ..]`
+    /// if `named` is `true`, came from an expression like  `ARRAY[ex1, ex2]`
     pub fn parse_array_expr(&mut self, named: bool) -> Result<Expr, ParserError> {
-        if named {
-            self.expect_token(&Token::LBracket)?;
-        }
         let exprs = self.parse_comma_separated(Parser::parse_expr)?;
         self.expect_token(&Token::RBracket)?;
         Ok(Expr::Array(Array { elem: exprs, named }))

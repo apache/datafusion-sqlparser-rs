@@ -1282,7 +1282,7 @@ impl<'a> Parser<'a> {
             Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
-            Token::LBracket => Ok(10),
+            Token::LBracket => Ok(50),
             _ => Ok(0),
         }
     }

@@ -1384,6 +1384,7 @@ fn parse_extract() {
     one_statement_parses_to("SELECT EXTRACT(year from d)", "SELECT EXTRACT(YEAR FROM d)");
 
     verified_stmt("SELECT EXTRACT(MONTH FROM d)");
+    verified_stmt("SELECT EXTRACT(WEEK FROM d)");
     verified_stmt("SELECT EXTRACT(DAY FROM d)");
     verified_stmt("SELECT EXTRACT(HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(MINUTE FROM d)");

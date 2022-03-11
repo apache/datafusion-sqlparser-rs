@@ -909,6 +909,7 @@ impl<'a> Parser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::YEAR => Ok(DateTimeField::Year),
                 Keyword::MONTH => Ok(DateTimeField::Month),
+                Keyword::WEEK => Ok(DateTimeField::Week),
                 Keyword::DAY => Ok(DateTimeField::Day),
                 Keyword::HOUR => Ok(DateTimeField::Hour),
                 Keyword::MINUTE => Ok(DateTimeField::Minute),
@@ -966,6 +967,7 @@ impl<'a> Parser<'a> {
                 if [
                     Keyword::YEAR,
                     Keyword::MONTH,
+                    Keyword::WEEK,
                     Keyword::DAY,
                     Keyword::HOUR,
                     Keyword::MINUTE,

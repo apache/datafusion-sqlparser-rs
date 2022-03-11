@@ -427,6 +427,7 @@ define_keywords!(
     SQLSTATE,
     SQLWARNING,
     SQRT,
+    STAGE,
     START,
     STATIC,
     STATISTICS,

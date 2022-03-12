@@ -851,9 +851,7 @@ pub enum Statement {
     /// SHOW <variable>
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    ShowVariable {
-        variable: Vec<Ident>,
-    },
+    ShowVariable { variable: Vec<Ident> },
     /// SHOW CREATE TABLE
     ///
     /// Note: this is a MySQL-specific statement.
@@ -871,9 +869,7 @@ pub enum Statement {
         filter: Option<ShowStatementFilter>,
     },
     /// `{ BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...`
-    StartTransaction {
-        modes: Vec<TransactionMode>,
-    },
+    StartTransaction { modes: Vec<TransactionMode> },
     /// `SET TRANSACTION ...`
     SetTransaction {
         modes: Vec<TransactionMode>,
@@ -889,13 +885,9 @@ pub enum Statement {
         comment: Option<String>,
     },
     /// `COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
-    Commit {
-        chain: bool,
-    },
+    Commit { chain: bool },
     /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
-    Rollback {
-        chain: bool,
-    },
+    Rollback { chain: bool },
     /// CREATE SCHEMA
     CreateSchema {
         schema_name: ObjectName,
@@ -932,17 +924,11 @@ pub enum Statement {
     /// `DEALLOCATE [ PREPARE ] { name | ALL }`
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Deallocate {
-        name: Ident,
-        prepare: bool,
-    },
+    Deallocate { name: Ident, prepare: bool },
     /// `EXECUTE name [ ( parameter [, ...] ) ]`
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Execute {
-        name: Ident,
-        parameters: Vec<Expr>,
-    },
+    Execute { name: Ident, parameters: Vec<Expr> },
     /// `PREPARE name [ ( data_type [, ...] ) ] AS statement`
     ///
     /// Note: this is a PostgreSQL-specific statement.
@@ -971,8 +957,19 @@ pub enum Statement {
         statement: Box<Statement>,
     },
     /// SAVEPOINT -- define a new savepoint within the current transaction
-    Savepoint {
-        name: Ident,
+    Savepoint { name: Ident },
+    // MERGE INTO statement, based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
+    Merge {
+        // Specifies the table to merge
+        table: TableFactor,
+        // Specifies the table or subquery to join with the target table
+        source: Box<SetExpr>,
+        // Specifies alias to the table that is joined with target table
+        alias: Option<TableAlias>,
+        // Specifies the expression on which to join the target table and source
+        on: Box<Expr>,
+        // Specifies the actions to perform when values match or do not match.
+        clauses: Vec<MergeClause>,
     },
 }
 
@@ -1628,6 +1625,20 @@ impl fmt::Display for Statement {
                 write!(f, "SAVEPOINT ")?;
                 write!(f, "{}", name)
             }
+            Statement::Merge {
+                table,
+                source,
+                alias,
+                on,
+                clauses,
+            } => {
+                write!(f, "MERGE INTO {} USING {} ", table, source)?;
+                if let Some(a) = alias {
+                    write!(f, "as {} ", a)?;
+                };
+                write!(f, "ON {} ", on)?;
+                write!(f, "{}", display_separated(clauses, " "))
+            }
         }
     }
 }
@@ -2155,6 +2166,68 @@ impl fmt::Display for SqliteOnConflict {
             Fail => write!(f, "FAIL"),
             Ignore => write!(f, "IGNORE"),
             Replace => write!(f, "REPLACE"),
+        }
+    }
+}
+
+///  
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum MergeClause {
+    MatchedUpdate {
+        predicate: Option<Expr>,
+        assignments: Vec<Assignment>,
+    },
+    MatchedDelete(Option<Expr>),
+    NotMatched {
+        predicate: Option<Expr>,
+        columns: Vec<Ident>,
+        values: Values,
+    },
+}
+
+impl fmt::Display for MergeClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use MergeClause::*;
+        write!(f, "WHEN")?;
+        match self {
+            MatchedUpdate {
+                predicate,
+                assignments,
+            } => {
+                write!(f, " MATCHED")?;
+                if let Some(pred) = predicate {
+                    write!(f, " AND {}", pred)?;
+                }
+                write!(
+                    f,
+                    " THEN UPDATE SET {}",
+                    display_comma_separated(assignments)
+                )
+            }
+            MatchedDelete(predicate) => {
+                write!(f, " MATCHED")?;
+                if let Some(pred) = predicate {
+                    write!(f, " AND {}", pred)?;
+                }
+                write!(f, " THEN DELETE")
+            }
+            NotMatched {
+                predicate,
+                columns,
+                values,
+            } => {
+                write!(f, " NOT MATCHED")?;
+                if let Some(pred) = predicate {
+                    write!(f, " AND {}", pred)?;
+                }
+                write!(
+                    f,
+                    " THEN INSERT ({}) {}",
+                    display_comma_separated(columns),
+                    values
+                )
+            }
         }
     }
 }

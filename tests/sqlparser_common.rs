@@ -1384,6 +1384,7 @@ fn parse_extract() {
     one_statement_parses_to("SELECT EXTRACT(year from d)", "SELECT EXTRACT(YEAR FROM d)");
 
     verified_stmt("SELECT EXTRACT(MONTH FROM d)");
+    verified_stmt("SELECT EXTRACT(WEEK FROM d)");
     verified_stmt("SELECT EXTRACT(DAY FROM d)");
     verified_stmt("SELECT EXTRACT(HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(MINUTE FROM d)");
@@ -4198,6 +4199,144 @@ fn test_revoke() {
             );
             assert!(cascade);
             assert_eq!(None, granted_by);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_merge() {
+    let sql = "MERGE INTO s.bar AS dest USING (SELECT * FROM s.foo) as stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
+    match verified_stmt(sql) {
+        Statement::Merge {
+            table,
+            source,
+            alias,
+            on,
+            clauses,
+        } => {
+            assert_eq!(
+                table,
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("s"), Ident::new("bar")]),
+                    alias: Some(TableAlias {
+                        name: Ident::new("dest"),
+                        columns: vec![]
+                    }),
+                    args: vec![],
+                    with_hints: vec![]
+                }
+            );
+            assert_eq!(
+                source,
+                Box::new(SetExpr::Query(Box::new(Query {
+                    with: None,
+                    body: SetExpr::Select(Box::new(Select {
+                        distinct: false,
+                        top: None,
+                        projection: vec![SelectItem::Wildcard],
+                        from: vec![TableWithJoins {
+                            relation: TableFactor::Table {
+                                name: ObjectName(vec![Ident::new("s"), Ident::new("foo")]),
+                                alias: None,
+                                args: vec![],
+                                with_hints: vec![],
+                            },
+                            joins: vec![]
+                        }],
+                        lateral_views: vec![],
+                        selection: None,
+                        group_by: vec![],
+                        cluster_by: vec![],
+                        distribute_by: vec![],
+                        sort_by: vec![],
+                        having: None
+                    })),
+                    order_by: vec![],
+                    limit: None,
+                    offset: None,
+                    fetch: None,
+                    lock: None
+                })))
+            );
+            assert_eq!(
+                alias,
+                Some(TableAlias {
+                    name: Ident::new("stg"),
+                    columns: vec![]
+                })
+            );
+            assert_eq!(
+                on,
+                Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::CompoundIdentifier(vec![
+                            Ident::new("dest"),
+                            Ident::new("D")
+                        ])),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::CompoundIdentifier(vec![
+                            Ident::new("stg"),
+                            Ident::new("D")
+                        ]))
+                    }),
+                    op: BinaryOperator::And,
+                    right: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::CompoundIdentifier(vec![
+                            Ident::new("dest"),
+                            Ident::new("E")
+                        ])),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::CompoundIdentifier(vec![
+                            Ident::new("stg"),
+                            Ident::new("E")
+                        ]))
+                    })
+                })
+            );
+            assert_eq!(
+                clauses,
+                vec![
+                    MergeClause::NotMatched {
+                        predicate: None,
+                        columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C")],
+                        values: Values(vec![vec![
+                            Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("A")]),
+                            Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("B")]),
+                            Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("C")]),
+                        ]])
+                    },
+                    MergeClause::MatchedUpdate {
+                        predicate: Some(Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("dest"),
+                                Ident::new("A")
+                            ])),
+                            op: BinaryOperator::Eq,
+                            right: Box::new(Expr::Value(Value::SingleQuotedString(
+                                "a".to_string()
+                            )))
+                        }),
+                        assignments: vec![
+                            Assignment {
+                                id: vec![Ident::new("dest"), Ident::new("F")],
+                                value: Expr::CompoundIdentifier(vec![
+                                    Ident::new("stg"),
+                                    Ident::new("F")
+                                ])
+                            },
+                            Assignment {
+                                id: vec![Ident::new("dest"), Ident::new("G")],
+                                value: Expr::CompoundIdentifier(vec![
+                                    Ident::new("stg"),
+                                    Ident::new("G")
+                                ])
+                            }
+                        ]
+                    },
+                    MergeClause::MatchedDelete(None)
+                ]
+            )
         }
         _ => unreachable!(),
     }

@@ -123,6 +123,7 @@ impl fmt::Display for Value {
 pub enum DateTimeField {
     Year,
     Month,
+    Week,
     Day,
     Hour,
     Minute,
@@ -149,6 +150,7 @@ impl fmt::Display for DateTimeField {
         f.write_str(match self {
             DateTimeField::Year => "YEAR",
             DateTimeField::Month => "MONTH",
+            DateTimeField::Week => "WEEK",
             DateTimeField::Day => "DAY",
             DateTimeField::Hour => "HOUR",
             DateTimeField::Minute => "MINUTE",

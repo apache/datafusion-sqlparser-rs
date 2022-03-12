@@ -956,6 +956,19 @@ pub enum Statement {
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
     },
+    // MERGE INTO statement, based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
+    Merge {
+        // Specifies the table to merge
+        table: TableFactor,
+        // Specifies the table or subquery to join with the target table
+        source: Box<SetExpr>,
+        // Specifies alias to the table that is joined with target table
+        alias: Option<TableAlias>,
+        // Specifies the expression on which to join the target table and source
+        on: Box<Expr>,
+        // Specifies the actions to perform when values match or do not match.
+        clauses: Vec<MergeClause>,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -1606,6 +1619,20 @@ impl fmt::Display for Statement {
                     write!(f, "NULL")
                 }
             }
+            Statement::Merge {
+                table,
+                source,
+                alias,
+                on,
+                clauses,
+            } => {
+                write!(f, "MERGE INTO {} USING {} ", table, source)?;
+                if let Some(a) = alias {
+                    write!(f, "as {} ", a)?;
+                };
+                write!(f, "ON {} ", on)?;
+                write!(f, "{}", display_separated(clauses, " "))
+            }
         }
     }
 }
@@ -2133,6 +2160,68 @@ impl fmt::Display for SqliteOnConflict {
             Fail => write!(f, "FAIL"),
             Ignore => write!(f, "IGNORE"),
             Replace => write!(f, "REPLACE"),
+        }
+    }
+}
+
+///  
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum MergeClause {
+    MatchedUpdate {
+        predicate: Option<Expr>,
+        assignments: Vec<Assignment>,
+    },
+    MatchedDelete(Option<Expr>),
+    NotMatched {
+        predicate: Option<Expr>,
+        columns: Vec<Ident>,
+        values: Values,
+    },
+}
+
+impl fmt::Display for MergeClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use MergeClause::*;
+        write!(f, "WHEN")?;
+        match self {
+            MatchedUpdate {
+                predicate,
+                assignments,
+            } => {
+                write!(f, " MATCHED")?;
+                if let Some(pred) = predicate {
+                    write!(f, " AND {}", pred)?;
+                }
+                write!(
+                    f,
+                    " THEN UPDATE SET {}",
+                    display_comma_separated(assignments)
+                )
+            }
+            MatchedDelete(predicate) => {
+                write!(f, " MATCHED")?;
+                if let Some(pred) = predicate {
+                    write!(f, " AND {}", pred)?;
+                }
+                write!(f, " THEN DELETE")
+            }
+            NotMatched {
+                predicate,
+                columns,
+                values,
+            } => {
+                write!(f, " NOT MATCHED")?;
+                if let Some(pred) = predicate {
+                    write!(f, " AND {}", pred)?;
+                }
+                write!(
+                    f,
+                    " THEN INSERT ({}) {}",
+                    display_comma_separated(columns),
+                    values
+                )
+            }
         }
     }
 }

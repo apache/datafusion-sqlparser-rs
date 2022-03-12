@@ -295,6 +295,7 @@ define_keywords!(
     LOWER,
     MANAGEDLOCATION,
     MATCH,
+    MATCHED,
     MATERIALIZED,
     MAX,
     MEMBER,

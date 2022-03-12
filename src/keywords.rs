@@ -518,6 +518,7 @@ define_keywords!(
     VERSIONING,
     VIEW,
     VIRTUAL,
+    WEEK,
     WHEN,
     WHENEVER,
     WHERE,

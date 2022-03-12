@@ -179,6 +179,7 @@ impl<'a> Parser<'a> {
                 // standard `START TRANSACTION` statement. It is supported
                 // by at least PostgreSQL and MySQL.
                 Keyword::BEGIN => Ok(self.parse_begin()?),
+                Keyword::SAVEPOINT => Ok(self.parse_savepoint()?),
                 Keyword::COMMIT => Ok(self.parse_commit()?),
                 Keyword::ROLLBACK => Ok(self.parse_rollback()?),
                 Keyword::ASSERT => Ok(self.parse_assert()?),
@@ -364,6 +365,11 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Statement::Assert { condition, message })
+    }
+
+    pub fn parse_savepoint(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_identifier()?;
+        Ok(Statement::Savepoint { name })
     }
 
     /// Parse an expression prefix

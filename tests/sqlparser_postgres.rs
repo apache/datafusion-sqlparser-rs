@@ -872,6 +872,16 @@ fn test_transaction_statement() {
 }
 
 #[test]
+fn test_savepoint() {
+    match pg().verified_stmt("SAVEPOINT test1") {
+        Statement::Savepoint { name } => {
+            assert_eq!(Ident::new("test1"), name);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_comments() {
     match pg().verified_stmt("COMMENT ON COLUMN tab.name IS 'comment'") {
         Statement::Comment {

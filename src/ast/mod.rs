@@ -956,6 +956,8 @@ pub enum Statement {
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
     },
+    /// SAVEPOINT -- define a new savepoint within the current transaction
+    Savepoint { name: Ident },
     // MERGE INTO statement, based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
     Merge {
         // Specifies the table to merge
@@ -1618,6 +1620,10 @@ impl fmt::Display for Statement {
                 } else {
                     write!(f, "NULL")
                 }
+            }
+            Statement::Savepoint { name } => {
+                write!(f, "SAVEPOINT ")?;
+                write!(f, "{}", name)
             }
             Statement::Merge {
                 table,

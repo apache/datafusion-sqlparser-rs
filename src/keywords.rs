@@ -274,6 +274,7 @@ define_keywords!(
     LIKE,
     LIKE_REGEX,
     LIMIT,
+    LIST,
     LISTAGG,
     LN,
     LOCAL,

@@ -727,7 +727,7 @@ impl<'a> Tokenizer<'a> {
                 }
             }
         }
-        self.tokenizer_error("Unterminated string literal")
+        Ok(s)
     }
 
     fn tokenize_multiline_comment(
@@ -1287,6 +1287,18 @@ mod tests {
             Token::AtString("abc/a/b/c".to_string()),
             Token::Whitespace(Whitespace::Newline),
             Token::make_word("d", None),
+        ];
+        compare(expected, tokens);
+
+        let sql = String::from("list @abc/e/f/g");
+
+        let dialect = SnowflakeDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::make_word("list", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::AtString("abc/e/f/g".to_string()),
         ];
         compare(expected, tokens);
     }

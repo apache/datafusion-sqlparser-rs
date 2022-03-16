@@ -50,6 +50,7 @@ pub enum Token {
     /// Single quoted string: i.e: 'string'
     SingleQuotedString(String),
     BackQuotedString(String),
+    AtString(String),
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
     /// Hexadecimal string literal: i.e.: X'deadbeef'
@@ -134,7 +135,7 @@ pub enum Token {
     ExclamationMark,
     /// Double Exclamation Mark `!!` used for PostgreSQL prefix factorial operator
     DoubleExclamationMark,
-    /// AtSign `@` used for PostgreSQL abs operator
+    // AtSign `@` used for PostgreSQL abs operator
     AtSign,
     /// `|/`, a square root math operator in PostgreSQL
     PGSquareRoot,
@@ -151,6 +152,7 @@ impl fmt::Display for Token {
             Token::Char(ref c) => write!(f, "{}", c),
             Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
             Token::BackQuotedString(ref s) => write!(f, "`{}`", s),
+            Token::AtString(ref s) => write!(f, "@{}", s),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
             Token::HexStringLiteral(ref s) => write!(f, "X'{}'", s),
             Token::Comma => f.write_str(","),
@@ -340,6 +342,7 @@ impl<'a> Tokenizer<'a> {
                 Token::Word(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
                 Token::Number(s, _) => self.col += s.len() as u64,
                 Token::SingleQuotedString(s) => self.col += s.len() as u64,
+                Token::AtString(s) => self.col += s.len() as u64,
                 _ => self.col += 1,
             }
 
@@ -420,6 +423,11 @@ impl<'a> Tokenizer<'a> {
                 '`' => {
                     let s = self.tokenize_back_quoted_string(chars)?;
                     Ok(Some(Token::BackQuotedString(s)))
+                }
+                // at string, not pg @
+                '@' if dialect_of!(self is SnowflakeDialect) => {
+                    let s = self.tokenize_at_string(chars)?;
+                    Ok(Some(Token::AtString(s)))
                 }
                 // delimited (quoted) identifier
                 quote_start if self.dialect.is_delimited_identifier_start(quote_start) => {
@@ -691,6 +699,26 @@ impl<'a> Tokenizer<'a> {
             match ch {
                 '`' => {
                     chars.next(); // consume
+                    return Ok(s);
+                }
+                _ => {
+                    chars.next(); // consume
+                    s.push(ch);
+                }
+            }
+        }
+        self.tokenizer_error("Unterminated string literal")
+    }
+
+    fn tokenize_at_string(
+        &self,
+        chars: &mut Peekable<Chars<'_>>,
+    ) -> Result<String, TokenizerError> {
+        let mut s = String::new();
+        chars.next(); // consume the opening quote
+        while let Some(&ch) = chars.peek() {
+            match ch {
+                '\n' | '\t' | '\r' | ' ' => {
                     return Ok(s);
                 }
                 _ => {
@@ -1242,6 +1270,23 @@ mod tests {
             Token::Whitespace(Whitespace::Newline),
             Token::make_word("line4", None),
             Token::Whitespace(Whitespace::Newline),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_at_string() {
+        let sql = String::from("list @abc/a/b/c\nd");
+
+        let dialect = SnowflakeDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::make_word("list", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::AtString("abc/a/b/c".to_string()),
+            Token::Whitespace(Whitespace::Newline),
+            Token::make_word("d", None),
         ];
         compare(expected, tokens);
     }

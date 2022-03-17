@@ -736,7 +736,7 @@ pub enum Statement {
         file_format: Option<FileFormat>,
         source: Box<Query>,
     },
-    Copy {
+    CopyFrom {
         /// TABLE
         table_name: ObjectName,
         /// COLUMNS
@@ -744,6 +744,20 @@ pub enum Statement {
         /// VALUES a vector of values to be copied
         values: Vec<Option<String>>,
         /// file name of the data to be copied from
+        filename: Option<Ident>,
+        /// delimiter character
+        delimiter: Option<Ident>,
+        /// CSV HEADER
+        csv_header: bool,
+    },
+    CopyTo {
+        /// TABLE
+        table_name: ObjectName,
+        /// COLUMNS
+        columns: Vec<Ident>,
+        /// VALUES a vector of values to be copied
+        values: Vec<Option<String>>,
+        /// file name of the data to be copied to
         filename: Option<Ident>,
         /// delimiter character
         delimiter: Option<Ident>,
@@ -1136,7 +1150,7 @@ impl fmt::Display for Statement {
                 }
             }
 
-            Statement::Copy {
+            Statement::CopyFrom {
                 table_name,
                 columns,
                 values,

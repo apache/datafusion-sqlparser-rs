@@ -2233,7 +2233,22 @@ impl<'a> Parser<'a> {
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
-        self.expect_keywords(&[Keyword::FROM])?;
+
+        if self.parse_keyword(Keyword::FROM) {
+            self.parse_copy_from(table_name, columns)
+        } else if self.parse_keyword(Keyword::TO) {
+            self.parse_copy_to(table_name, columns)
+        } else {
+            self.expected("an object type after CREATE", self.peek_token())
+        }
+    }
+
+    /// Parse a copy from statement
+    pub fn parse_copy_from(
+        &mut self,
+        table_name: ObjectName,
+        columns: Vec<Ident>,
+    ) -> Result<Statement, ParserError> {
         let mut filename = None;
         // check whether data has to be copied form table or std in.
         if !self.parse_keyword(Keyword::STDIN) {
@@ -2258,13 +2273,56 @@ impl<'a> Parser<'a> {
             }
             break;
         }
-        // copy the values from stdin if there is no file to be copied from.
         let mut values = vec![];
         if filename.is_none() {
             self.expect_token(&Token::SemiColon)?;
             values = self.parse_tsv();
         }
-        Ok(Statement::Copy {
+        Ok(Statement::CopyFrom {
+            table_name,
+            columns,
+            values,
+            filename,
+            delimiter,
+            csv_header,
+        })
+    }
+
+    pub fn parse_copy_to(
+        &mut self,
+        table_name: ObjectName,
+        columns: Vec<Ident>,
+    ) -> Result<Statement, ParserError> {
+        let mut filename = None;
+        // check whether data has to be copied form table or std in.
+        if !self.parse_keyword(Keyword::STDIN) {
+            filename = Some(self.parse_identifier()?)
+        }
+        // parse copy options.
+        let mut delimiter = None;
+        let mut csv_header = false;
+        loop {
+            if let Some(keyword) = self.parse_one_of_keywords(&[Keyword::DELIMITER, Keyword::CSV]) {
+                match keyword {
+                    Keyword::DELIMITER => {
+                        delimiter = Some(self.parse_identifier()?);
+                        continue;
+                    }
+                    Keyword::CSV => {
+                        self.expect_keyword(Keyword::HEADER)?;
+                        csv_header = true
+                    }
+                    _ => unreachable!("something wrong while parsing copy statment :("),
+                }
+            }
+            break;
+        }
+        let mut values = vec![];
+        if filename.is_none() {
+            self.expect_token(&Token::SemiColon)?;
+            values = self.parse_tsv();
+        }
+        Ok(Statement::CopyFrom {
             table_name,
             columns,
             values,

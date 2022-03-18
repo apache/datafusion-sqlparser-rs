@@ -2322,7 +2322,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::SemiColon)?;
             values = self.parse_tsv();
         }
-        Ok(Statement::CopyFrom {
+        Ok(Statement::CopyTo {
             table_name,
             columns,
             values,

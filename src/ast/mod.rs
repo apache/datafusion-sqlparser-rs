@@ -1193,6 +1193,50 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+
+            Statement::CopyTo {
+                table_name,
+                columns,
+                values,
+                delimiter,
+                filename,
+                csv_header,
+            } => {
+                write!(f, "COPY {}", table_name)?;
+                if !columns.is_empty() {
+                    write!(f, " ({})", display_comma_separated(columns))?;
+                }
+
+                if let Some(name) = filename {
+                    write!(f, " TO {}", name)?;
+                } else {
+                    write!(f, " TO stdin ")?;
+                }
+                if let Some(delimiter) = delimiter {
+                    write!(f, " DELIMITER {}", delimiter)?;
+                }
+                if *csv_header {
+                    write!(f, " CSV HEADER")?;
+                }
+                if !values.is_empty() {
+                    write!(f, ";")?;
+                    writeln!(f)?;
+                    let mut delim = "";
+                    for v in values {
+                        write!(f, "{}", delim)?;
+                        delim = "\t";
+                        if let Some(v) = v {
+                            write!(f, "{}", v)?;
+                        } else {
+                            write!(f, "\\N")?;
+                        }
+                    }
+                }
+                if filename.is_none() {
+                    write!(f, "\n\\.")?;
+                }
+                Ok(())
+            }
             Statement::Update {
                 table,
                 assignments,

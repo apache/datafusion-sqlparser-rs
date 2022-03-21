@@ -736,7 +736,7 @@ pub enum Statement {
         file_format: Option<FileFormat>,
         source: Box<Query>,
     },
-    CopyFrom {
+    Copy {
         /// TABLE
         table_name: ObjectName,
         /// COLUMNS
@@ -749,20 +749,8 @@ pub enum Statement {
         delimiter: Option<Ident>,
         /// CSV HEADER
         csv_header: bool,
-    },
-    CopyTo {
-        /// TABLE
-        table_name: ObjectName,
-        /// COLUMNS
-        columns: Vec<Ident>,
-        /// VALUES a vector of values to be copied
-        values: Vec<Option<String>>,
-        /// file name of the data to be copied to
-        filename: Option<Ident>,
-        /// delimiter character
-        delimiter: Option<Ident>,
-        /// CSV HEADER
-        csv_header: bool,
+        /// Is 'COPY TO'
+        to: bool,
     },
     /// UPDATE
     Update {
@@ -1150,13 +1138,14 @@ impl fmt::Display for Statement {
                 }
             }
 
-            Statement::CopyFrom {
+            Statement::Copy {
                 table_name,
                 columns,
                 values,
                 delimiter,
                 filename,
                 csv_header,
+                to,
             } => {
                 write!(f, "COPY {}", table_name)?;
                 if !columns.is_empty() {
@@ -1164,53 +1153,18 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(name) = filename {
-                    write!(f, " FROM {}", name)?;
-                } else {
-                    write!(f, " FROM stdin ")?;
-                }
-                if let Some(delimiter) = delimiter {
-                    write!(f, " DELIMITER {}", delimiter)?;
-                }
-                if *csv_header {
-                    write!(f, " CSV HEADER")?;
-                }
-                if !values.is_empty() {
-                    write!(f, ";")?;
-                    writeln!(f)?;
-                    let mut delim = "";
-                    for v in values {
-                        write!(f, "{}", delim)?;
-                        delim = "\t";
-                        if let Some(v) = v {
-                            write!(f, "{}", v)?;
-                        } else {
-                            write!(f, "\\N")?;
-                        }
+                    // println!("To: {}", *to);
+                    if *to {
+                        write!(f, " TO {}", name)?
+                    } else {
+                        write!(f, " FROM {}", name)?;
                     }
-                }
-                if filename.is_none() {
-                    write!(f, "\n\\.")?;
-                }
-                Ok(())
-            }
-
-            Statement::CopyTo {
-                table_name,
-                columns,
-                values,
-                delimiter,
-                filename,
-                csv_header,
-            } => {
-                write!(f, "COPY {}", table_name)?;
-                if !columns.is_empty() {
-                    write!(f, " ({})", display_comma_separated(columns))?;
-                }
-
-                if let Some(name) = filename {
-                    write!(f, " TO {}", name)?;
                 } else {
-                    write!(f, " TO stdin ")?;
+                    if *to {
+                        write!(f, " TO stdin ")?
+                    } else {
+                        write!(f, " FROM stdin ")?;
+                    }
                 }
                 if let Some(delimiter) = delimiter {
                     write!(f, " DELIMITER {}", delimiter)?;

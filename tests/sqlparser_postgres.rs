@@ -406,7 +406,7 @@ fn test_copy_from() {
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv'");
     assert_eq!(
         stmt,
-        Statement::CopyFrom {
+        Statement::Copy {
             table_name: ObjectName(vec!["users".into()]),
             columns: vec![],
             filename: Some(Ident {
@@ -415,14 +415,15 @@ fn test_copy_from() {
             }),
             values: vec![],
             delimiter: None,
-            csv_header: false
+            csv_header: false,
+            to: false
         }
     );
 
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv' DELIMITER ','");
     assert_eq!(
         stmt,
-        Statement::CopyFrom {
+        Statement::Copy {
             table_name: ObjectName(vec!["users".into()]),
             columns: vec![],
             filename: Some(Ident {
@@ -435,13 +436,14 @@ fn test_copy_from() {
                 quote_style: Some('\'')
             }),
             csv_header: false,
+            to: false
         }
     );
 
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv' DELIMITER ',' CSV HEADER");
     assert_eq!(
         stmt,
-        Statement::CopyFrom {
+        Statement::Copy {
             table_name: ObjectName(vec!["users".into()]),
             columns: vec![],
             filename: Some(Ident {
@@ -454,6 +456,7 @@ fn test_copy_from() {
                 quote_style: Some('\'')
             }),
             csv_header: true,
+            to: false
         }
     )
 }
@@ -463,7 +466,7 @@ fn test_copy_to() {
     let stmt = pg().verified_stmt("COPY users TO 'data.csv'");
     assert_eq!(
         stmt,
-        Statement::CopyTo {
+        Statement::Copy {
             table_name: ObjectName(vec!["users".into()]),
             columns: vec![],
             filename: Some(Ident {
@@ -472,14 +475,15 @@ fn test_copy_to() {
             }),
             values: vec![],
             delimiter: None,
-            csv_header: false
+            csv_header: false,
+            to: true
         }
     );
 
     let stmt = pg().verified_stmt("COPY users TO 'data.csv' DELIMITER ','");
     assert_eq!(
         stmt,
-        Statement::CopyTo {
+        Statement::Copy {
             table_name: ObjectName(vec!["users".into()]),
             columns: vec![],
             filename: Some(Ident {
@@ -492,13 +496,14 @@ fn test_copy_to() {
                 quote_style: Some('\'')
             }),
             csv_header: false,
+            to: true
         }
     );
 
     let stmt = pg().verified_stmt("COPY users TO 'data.csv' DELIMITER ',' CSV HEADER");
     assert_eq!(
         stmt,
-        Statement::CopyTo {
+        Statement::Copy {
             table_name: ObjectName(vec!["users".into()]),
             columns: vec![],
             filename: Some(Ident {
@@ -511,6 +516,7 @@ fn test_copy_to() {
                 quote_style: Some('\'')
             }),
             csv_header: true,
+            to: true
         }
     )
 }

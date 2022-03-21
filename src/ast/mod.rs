@@ -1159,12 +1159,10 @@ impl fmt::Display for Statement {
                     } else {
                         write!(f, " FROM {}", name)?;
                     }
+                } else if *to {
+                    write!(f, " TO stdin ")?
                 } else {
-                    if *to {
-                        write!(f, " TO stdin ")?
-                    } else {
-                        write!(f, " FROM stdin ")?;
-                    }
+                    write!(f, " FROM stdin ")?;
                 }
                 if let Some(delimiter) = delimiter {
                     write!(f, " DELIMITER {}", delimiter)?;

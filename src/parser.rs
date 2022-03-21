@@ -2234,10 +2234,9 @@ impl<'a> Parser<'a> {
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
         let to_or_from = self.expect_one_of_keywords(&[Keyword::FROM, Keyword::TO])?;
-        let to: bool;
-        match to_or_from {
-            Keyword::TO => to = true,
-            Keyword::FROM => to = false,
+        let to: bool = match to_or_from {
+            Keyword::TO => true,
+            Keyword::FROM => false,
             _ => unreachable!("something wrong while parsing copy statment :("),
         };
         let mut filename = None;

@@ -963,7 +963,7 @@ impl<'a> Parser<'a> {
         // don't currently try to parse it. (The sign can instead be included
         // inside the value string.)
 
-        // MySQL allows for expressions following the INTERVAL keyword. If the 
+        // MySQL allows for expressions following the INTERVAL keyword. If the
         // dialect isn't MySQL a string literal is expected.
         let value = if dialect_of!(self is MySqlDialect) {
             self.parse_expr()?

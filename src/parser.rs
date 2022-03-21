@@ -952,6 +952,9 @@ impl<'a> Parser<'a> {
     ///   4. `INTERVAL '1:1:1.1' HOUR (5) TO SECOND (5)`
     ///   5. `INTERVAL '1.1' SECOND (2, 2)`
     ///   6. `INTERVAL '1:1' HOUR (5) TO MINUTE (5)`
+    ///   7. `INTERVAL 1 DAY` (mysql)
+    ///   8. `INTERVAL table.column DAY` (mysql)
+    ///   9. `INTERVAL INTERVAL CAST(6/4 AS DECIMAL(3,1)) HOUR` (mysql)
     ///
     /// Note that we do not currently attempt to parse the quoted value.
     pub fn parse_literal_interval(&mut self) -> Result<Expr, ParserError> {
@@ -960,9 +963,13 @@ impl<'a> Parser<'a> {
         // don't currently try to parse it. (The sign can instead be included
         // inside the value string.)
 
-        // The first token in an interval is a string literal which specifies
-        // the duration of the interval.
-        let value = self.parse_literal_string()?;
+        // MySQL allows for expressions following the INTERVAL keyword. If the 
+        // dialect isn't MySQL a string literal is expected.
+        let value = if dialect_of!(self is MySqlDialect) {
+            self.parse_expr()?
+        } else {
+            Value::SingleQuotedString(self.parse_literal_string()?).into()
+        };
 
         // Following the string literal is a qualifier which indicates the units
         // of the duration specified in the string literal.
@@ -1029,7 +1036,7 @@ impl<'a> Parser<'a> {
             };
 
         Ok(Expr::Value(Value::Interval {
-            value,
+            value: Box::new(value),
             leading_field,
             leading_precision,
             last_field,

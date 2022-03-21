@@ -19,6 +19,8 @@ use bigdecimal::BigDecimal;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use super::Expr;
+
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -47,7 +49,7 @@ pub enum Value {
     /// that the `<leading_field>` units >= the units in `<last_field>`,
     /// so the user will have to reject intervals like `HOUR TO YEAR`.
     Interval {
-        value: String,
+        value: Box<Expr>,
         leading_field: Option<DateTimeField>,
         leading_precision: Option<u64>,
         last_field: Option<DateTimeField>,
@@ -78,17 +80,31 @@ impl fmt::Display for Value {
                 leading_precision: Some(leading_precision),
                 last_field,
                 fractional_seconds_precision: Some(fractional_seconds_precision),
-            } => {
+            } if matches!(value.as_ref(), Expr::Value(Value::SingleQuotedString(_))) => {
+                let value = match value.as_ref() {
+                    Expr::Value(v) => v,
+                    _ => unreachable!(),
+                };
+
                 // When the leading field is SECOND, the parser guarantees that
                 // the last field is None.
                 assert!(last_field.is_none());
                 write!(
                     f,
-                    "INTERVAL '{}' SECOND ({}, {})",
-                    escape_single_quote_string(value),
-                    leading_precision,
-                    fractional_seconds_precision
+                    "INTERVAL {} SECOND ({}, {})",
+                    value, leading_precision, fractional_seconds_precision
                 )
+            }
+            Value::Interval {
+                value,
+                leading_field: Some(leading_field),
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            } if !matches!(value.as_ref(), Expr::Value(Value::SingleQuotedString(_))) => {
+                write!(f, "INTERVAL {} {}", value, leading_field)?;
+
+                Ok(())
             }
             Value::Interval {
                 value,
@@ -97,6 +113,11 @@ impl fmt::Display for Value {
                 last_field,
                 fractional_seconds_precision,
             } => {
+                let value = match value.as_ref() {
+                    Expr::Value(Value::SingleQuotedString(v)) => v,
+                    _ => unreachable!(),
+                };
+
                 write!(f, "INTERVAL '{}'", escape_single_quote_string(value))?;
                 if let Some(leading_field) = leading_field {
                     write!(f, " {}", leading_field)?;
@@ -115,6 +136,12 @@ impl fmt::Display for Value {
             Value::Null => write!(f, "NULL"),
             Value::Placeholder(v) => write!(f, "{}", v),
         }
+    }
+}
+
+impl From<Value> for Expr {
+    fn from(inner: Value) -> Self {
+        Expr::Value(inner)
     }
 }
 

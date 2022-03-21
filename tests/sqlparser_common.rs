@@ -2463,11 +2463,14 @@ fn parse_literal_timestamp() {
 
 #[test]
 fn parse_literal_interval() {
+    fn interval_value(inner: &'static str) -> Box<Expr> {
+        Box::new(Expr::Value(Value::SingleQuotedString(inner.into())))
+    }
     let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Value(Value::Interval {
-            value: "1-1".into(),
+            value: interval_value("1-1"),
             leading_field: Some(DateTimeField::Year),
             leading_precision: None,
             last_field: Some(DateTimeField::Month),
@@ -2480,7 +2483,7 @@ fn parse_literal_interval() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Value(Value::Interval {
-            value: "01:01.01".into(),
+            value: interval_value("01:01.01"),
             leading_field: Some(DateTimeField::Minute),
             leading_precision: Some(5),
             last_field: Some(DateTimeField::Second),
@@ -2493,7 +2496,7 @@ fn parse_literal_interval() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Value(Value::Interval {
-            value: "1".into(),
+            value: interval_value("1"),
             leading_field: Some(DateTimeField::Second),
             leading_precision: Some(5),
             last_field: None,
@@ -2506,7 +2509,7 @@ fn parse_literal_interval() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Value(Value::Interval {
-            value: "10".into(),
+            value: interval_value("10"),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: None,
             last_field: None,
@@ -2519,7 +2522,7 @@ fn parse_literal_interval() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Value(Value::Interval {
-            value: "10".into(),
+            value: interval_value("10"),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: Some(1),
             last_field: None,
@@ -2532,7 +2535,7 @@ fn parse_literal_interval() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Value(Value::Interval {
-            value: "1 DAY".into(),
+            value: interval_value("1 DAY"),
             leading_field: None,
             leading_precision: None,
             last_field: None,

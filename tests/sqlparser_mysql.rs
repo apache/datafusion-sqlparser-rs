@@ -765,6 +765,17 @@ fn parse_substring_in_select() {
     }
 }
 
+#[test]
+fn test_temporal_intervals() {
+    mysql().verified_only_select("SELECT NOW() + INTERVAL '1' DAY");
+    mysql().verified_only_select("SELECT NOW() + INTERVAL 1 DAY");
+    mysql().verified_only_select("SELECT NOW() + INTERVAL table.column DAY");
+    mysql().one_statement_parses_to(
+        "SELECT NOW() + INTERVAL CAST(6/4 AS DECIMAL(3,1)) HOUR",
+        "SELECT NOW() + INTERVAL CAST(6 / 4 AS NUMERIC(3,1)) HOUR",
+    );
+}
+
 fn mysql() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],

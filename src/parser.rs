@@ -2248,7 +2248,6 @@ impl<'a> Parser<'a> {
         // parse copy options.
         let mut delimiter = None;
         let mut csv_header = false;
-
         loop {
             if let Some(keyword) = self.parse_one_of_keywords(&[Keyword::DELIMITER, Keyword::CSV]) {
                 match keyword {

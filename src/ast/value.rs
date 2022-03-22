@@ -11,7 +11,7 @@
 // limitations under the License.
 
 #[cfg(not(feature = "std"))]
-use alloc::string::String;
+use alloc::{boxed::Box, string::String};
 use core::fmt;
 
 #[cfg(feature = "bigdecimal")]
@@ -118,7 +118,7 @@ impl fmt::Display for Value {
                     _ => unreachable!(),
                 };
 
-                write!(f, "INTERVAL '{}'", escape_single_quote_string(value))?;
+                write!(f, "INTERVAL '{}'", escape_single_quote_string(&value))?;
                 if let Some(leading_field) = leading_field {
                     write!(f, " {}", leading_field)?;
                 }

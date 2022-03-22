@@ -749,7 +749,7 @@ pub enum Statement {
         delimiter: Option<Ident>,
         /// CSV HEADER
         csv_header: bool,
-        /// Is 'COPY TO'
+        /// If true, is a 'COPY TO' statement. If false is a 'COPY FROM'
         to: bool,
     },
     /// UPDATE
@@ -1153,7 +1153,6 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(name) = filename {
-                    // println!("To: {}", *to);
                     if *to {
                         write!(f, " TO {}", name)?
                     } else {

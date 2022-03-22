@@ -749,6 +749,8 @@ pub enum Statement {
         delimiter: Option<Ident>,
         /// CSV HEADER
         csv_header: bool,
+        /// If true, is a 'COPY TO' statement. If false is a 'COPY FROM'
+        to: bool,
     },
     /// UPDATE
     Update {
@@ -1143,6 +1145,7 @@ impl fmt::Display for Statement {
                 delimiter,
                 filename,
                 csv_header,
+                to,
             } => {
                 write!(f, "COPY {}", table_name)?;
                 if !columns.is_empty() {
@@ -1150,7 +1153,13 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(name) = filename {
-                    write!(f, " FROM {}", name)?;
+                    if *to {
+                        write!(f, " TO {}", name)?
+                    } else {
+                        write!(f, " FROM {}", name)?;
+                    }
+                } else if *to {
+                    write!(f, " TO stdin ")?
                 } else {
                     write!(f, " FROM stdin ")?;
                 }

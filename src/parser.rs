@@ -2233,7 +2233,12 @@ impl<'a> Parser<'a> {
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
-        self.expect_keywords(&[Keyword::FROM])?;
+        let to_or_from = self.expect_one_of_keywords(&[Keyword::FROM, Keyword::TO])?;
+        let to: bool = match to_or_from {
+            Keyword::TO => true,
+            Keyword::FROM => false,
+            _ => unreachable!("something wrong while parsing copy statment :("),
+        };
         let mut filename = None;
         // check whether data has to be copied form table or std in.
         if !self.parse_keyword(Keyword::STDIN) {
@@ -2271,6 +2276,7 @@ impl<'a> Parser<'a> {
             filename,
             delimiter,
             csv_header,
+            to,
         })
     }
 

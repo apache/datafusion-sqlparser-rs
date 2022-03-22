@@ -402,7 +402,7 @@ PHP	₱ USD $
 }
 
 #[test]
-fn test_copy() {
+fn test_copy_from() {
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv'");
     assert_eq!(
         stmt,
@@ -415,7 +415,8 @@ fn test_copy() {
             }),
             values: vec![],
             delimiter: None,
-            csv_header: false
+            csv_header: false,
+            to: false
         }
     );
 
@@ -435,6 +436,7 @@ fn test_copy() {
                 quote_style: Some('\'')
             }),
             csv_header: false,
+            to: false
         }
     );
 
@@ -454,6 +456,67 @@ fn test_copy() {
                 quote_style: Some('\'')
             }),
             csv_header: true,
+            to: false
+        }
+    )
+}
+
+#[test]
+fn test_copy_to() {
+    let stmt = pg().verified_stmt("COPY users TO 'data.csv'");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            filename: Some(Ident {
+                value: "data.csv".to_string(),
+                quote_style: Some('\'')
+            }),
+            values: vec![],
+            delimiter: None,
+            csv_header: false,
+            to: true
+        }
+    );
+
+    let stmt = pg().verified_stmt("COPY users TO 'data.csv' DELIMITER ','");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            filename: Some(Ident {
+                value: "data.csv".to_string(),
+                quote_style: Some('\'')
+            }),
+            values: vec![],
+            delimiter: Some(Ident {
+                value: ",".to_string(),
+                quote_style: Some('\'')
+            }),
+            csv_header: false,
+            to: true
+        }
+    );
+
+    let stmt = pg().verified_stmt("COPY users TO 'data.csv' DELIMITER ',' CSV HEADER");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            filename: Some(Ident {
+                value: "data.csv".to_string(),
+                quote_style: Some('\'')
+            }),
+            values: vec![],
+            delimiter: Some(Ident {
+                value: ",".to_string(),
+                quote_style: Some('\'')
+            }),
+            csv_header: true,
+            to: true
         }
     )
 }

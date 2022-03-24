@@ -745,8 +745,10 @@ pub enum Statement {
         to: bool,
         /// target
         target: CopyTarget,
-        /// WITH
+        /// WITH options (from PostgreSQL version 9.0)
         options: Vec<CopyOption>,
+        /// WITH options (before PostgreSQL version 9.0)
+        legacy_options: Vec<CopyLegacyOption>,
         /// VALUES a vector of values to be copied
         values: Vec<Option<String>>,
     },
@@ -1142,6 +1144,7 @@ impl fmt::Display for Statement {
                 to,
                 target,
                 options,
+                legacy_options,
                 values,
             } => {
                 write!(f, "COPY {}", table_name)?;
@@ -1151,6 +1154,9 @@ impl fmt::Display for Statement {
                 write!(f, " {} {}", if *to { "TO" } else { "FROM" }, target)?;
                 if !options.is_empty() {
                     write!(f, " ({})", display_comma_separated(options))?;
+                }
+                if !legacy_options.is_empty() {
+                    write!(f, " {}", display_separated(legacy_options, " "))?;
                 }
                 if !values.is_empty() {
                     writeln!(f, ";")?;
@@ -2226,12 +2232,67 @@ impl fmt::Display for CopyOption {
             Header(false) => write!(f, "HEADER FALSE"),
             Quote(char) => write!(f, "QUOTE '{}'", char),
             Escape(char) => write!(f, "ESCAPE '{}'", char),
+            ForceQuote(columns) => write!(f, "FORCE_QUOTE ({})", display_comma_separated(columns)),
+            ForceNotNull(columns) => {
+                write!(f, "FORCE_NOT_NULL ({})", display_comma_separated(columns))
+            }
+            ForceNull(columns) => write!(f, "FORCE_NULL ({})", display_comma_separated(columns)),
+            Encoding(name) => write!(f, "ENCODING '{}'", value::escape_single_quote_string(name)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum CopyLegacyOption {
+    /// BINARY
+    Binary,
+    /// DELIMITER [ AS ] 'delimiter_character'
+    Delimiter(char),
+    /// NULL [ AS ] 'null_string'
+    Null(String),
+    /// CSV ...
+    Csv(Vec<CopyLegacyCsvOption>),
+}
+
+impl fmt::Display for CopyLegacyOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use CopyLegacyOption::*;
+        match self {
+            Binary => write!(f, "BINARY"),
+            Delimiter(char) => write!(f, "DELIMITER '{}'", char),
+            Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),
+            Csv(opts) => write!(f, "CSV {}", display_separated(opts, " ")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum CopyLegacyCsvOption {
+    /// HEADER
+    Header,
+    /// QUOTE [ AS ] 'quote_character'
+    Quote(char),
+    /// ESCAPE [ AS ] 'escape_character'
+    Escape(char),
+    /// FORCE_QUOTE { column_name [, ...] | * }
+    ForceQuote(Vec<Ident>),
+    /// FORCE_NOT_NULL column_name [, ...]
+    ForceNotNull(Vec<Ident>),
+}
+
+impl fmt::Display for CopyLegacyCsvOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use CopyLegacyCsvOption::*;
+        match self {
+            Header => write!(f, "HEADER"),
+            Quote(char) => write!(f, "QUOTE '{}'", char),
+            Escape(char) => write!(f, "ESCAPE '{}'", char),
             ForceQuote(columns) => write!(f, "FORCE_QUOTE {}", display_comma_separated(columns)),
             ForceNotNull(columns) => {
                 write!(f, "FORCE_NOT_NULL {}", display_comma_separated(columns))
             }
-            ForceNull(columns) => write!(f, "FORCE_NULL {}", display_comma_separated(columns)),
-            Encoding(name) => write!(f, "ENCODING '{}'", value::escape_single_quote_string(name)),
         }
     }
 }

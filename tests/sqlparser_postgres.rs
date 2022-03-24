@@ -408,6 +408,7 @@ fn parse_copy() {
                 CopyOption::Escape('\\'),
                 CopyOption::Encoding("utf8".to_string()),
             ],
+            legacy_options: vec![],
             values: vec![],
         }
     );
@@ -453,6 +454,7 @@ fn test_copy_from() {
                 filename: "data.csv".to_string(),
             },
             options: vec![],
+            legacy_options: vec![],
             values: vec![],
         }
     );
@@ -467,7 +469,8 @@ fn test_copy_from() {
             target: CopyTarget::File {
                 filename: "data.csv".to_string(),
             },
-            options: vec![CopyOption::Delimiter(',')],
+            options: vec![],
+            legacy_options: vec![CopyLegacyOption::Delimiter(',')],
             values: vec![],
         }
     );
@@ -482,7 +485,11 @@ fn test_copy_from() {
             target: CopyTarget::File {
                 filename: "data.csv".to_string(),
             },
-            options: vec![CopyOption::Delimiter(','), CopyOption::Header(true)],
+            options: vec![],
+            legacy_options: vec![
+                CopyLegacyOption::Delimiter(','),
+                CopyLegacyOption::Csv(vec![CopyLegacyCsvOption::Header])
+            ],
             values: vec![],
         }
     )
@@ -501,6 +508,7 @@ fn test_copy_to() {
                 filename: "data.csv".to_string(),
             },
             options: vec![],
+            legacy_options: vec![],
             values: vec![],
         }
     );
@@ -515,7 +523,8 @@ fn test_copy_to() {
             target: CopyTarget::File {
                 filename: "data.csv".to_string(),
             },
-            options: vec![CopyOption::Delimiter(',')],
+            options: vec![],
+            legacy_options: vec![CopyLegacyOption::Delimiter(',')],
             values: vec![],
         }
     );
@@ -530,7 +539,11 @@ fn test_copy_to() {
             target: CopyTarget::File {
                 filename: "data.csv".to_string(),
             },
-            options: vec![CopyOption::Delimiter(','), CopyOption::Header(true)],
+            options: vec![],
+            legacy_options: vec![
+                CopyLegacyOption::Delimiter(','),
+                CopyLegacyOption::Csv(vec![CopyLegacyCsvOption::Header])
+            ],
             values: vec![],
         }
     )

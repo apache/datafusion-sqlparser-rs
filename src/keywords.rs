@@ -238,6 +238,7 @@ define_keywords!(
     HIVEVAR,
     HOLD,
     HOUR,
+    IDENTIFIED,
     IDENTITY,
     IF,
     IGNORE,

@@ -39,6 +39,10 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
+#[macro_use]
+#[cfg(test)]
+extern crate pretty_assertions;
+
 pub mod ast;
 #[macro_use]
 pub mod dialect;

@@ -139,6 +139,8 @@ pub enum Token {
     PGSquareRoot,
     /// `||/` , a cube root math operator in PostgreSQL
     PGCubeRoot,
+    /// `?` or `$` , a prepared statement arg placeholder
+    Placeholder(String),
 }
 
 impl fmt::Display for Token {
@@ -194,6 +196,7 @@ impl fmt::Display for Token {
             Token::ShiftRight => f.write_str(">>"),
             Token::PGSquareRoot => f.write_str("|/"),
             Token::PGCubeRoot => f.write_str("||/"),
+            Token::Placeholder(ref s) => write!(f, "{}", s),
         }
     }
 }
@@ -337,6 +340,7 @@ impl<'a> Tokenizer<'a> {
                 Token::Word(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
                 Token::Number(s, _) => self.col += s.len() as u64,
                 Token::SingleQuotedString(s) => self.col += s.len() as u64,
+                Token::Placeholder(s) => self.col += s.len() as u64,
                 _ => self.col += 1,
             }
 
@@ -418,8 +422,9 @@ impl<'a> Tokenizer<'a> {
                 quote_start if self.dialect.is_delimited_identifier_start(quote_start) => {
                     chars.next(); // consume the opening quote
                     let quote_end = Word::matching_end_quote(quote_start);
-                    let s = peeking_take_while(chars, |ch| ch != quote_end);
-                    if chars.next() == Some(quote_end) {
+                    let (s, last_char) = parse_quoted_ident(chars, quote_end);
+
+                    if last_char == Some(quote_end) {
                         Ok(Some(Token::make_word(&s, Some(quote_start))))
                     } else {
                         self.tokenizer_error(format!(
@@ -597,6 +602,15 @@ impl<'a> Tokenizer<'a> {
                 }
                 '#' => self.consume_and_return(chars, Token::Sharp),
                 '@' => self.consume_and_return(chars, Token::AtSign),
+                '?' => self.consume_and_return(chars, Token::Placeholder(String::from("?"))),
+                '$' => {
+                    chars.next();
+                    let s = peeking_take_while(
+                        chars,
+                        |ch| matches!(ch, '0'..='9' | 'A'..='Z' | 'a'..='z'),
+                    );
+                    Ok(Some(Token::Placeholder(String::from("$") + &s)))
+                }
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),
@@ -726,6 +740,25 @@ fn peeking_take_while(
         }
     }
     s
+}
+
+fn parse_quoted_ident(chars: &mut Peekable<Chars<'_>>, quote_end: char) -> (String, Option<char>) {
+    let mut last_char = None;
+    let mut s = String::new();
+    while let Some(ch) = chars.next() {
+        if ch == quote_end {
+            if chars.peek() == Some(&quote_end) {
+                chars.next();
+                s.push(ch);
+            } else {
+                last_char = Some(quote_end);
+                break;
+            }
+        } else {
+            s.push(ch);
+        }
+    }
+    (s, last_char)
 }
 
 #[cfg(test)]
@@ -1272,6 +1305,24 @@ mod tests {
             Token::ExclamationMarkTildeAsterisk,
             Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_quoted_identifier() {
+        let sql = r#" "a "" b" "a """ "c """"" "#;
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word(r#"a " b"#, Some('"')),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word(r#"a ""#, Some('"')),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word(r#"c """#, Some('"')),
+            Token::Whitespace(Whitespace::Space),
         ];
         compare(expected, tokens);
     }

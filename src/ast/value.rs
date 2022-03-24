@@ -59,6 +59,8 @@ pub enum Value {
     },
     /// `NULL` value
     Null,
+    /// `?` or `$` Prepared statement arg placeholder
+    Placeholder(String),
 }
 
 impl fmt::Display for Value {
@@ -111,6 +113,7 @@ impl fmt::Display for Value {
                 Ok(())
             }
             Value::Null => write!(f, "NULL"),
+            Value::Placeholder(v) => write!(f, "{}", v),
         }
     }
 }
@@ -120,10 +123,26 @@ impl fmt::Display for Value {
 pub enum DateTimeField {
     Year,
     Month,
+    Week,
     Day,
     Hour,
     Minute,
     Second,
+    Century,
+    Decade,
+    Dow,
+    Doy,
+    Epoch,
+    Isodow,
+    Isoyear,
+    Julian,
+    Microseconds,
+    Millenium,
+    Milliseconds,
+    Quarter,
+    Timezone,
+    TimezoneHour,
+    TimezoneMinute,
 }
 
 impl fmt::Display for DateTimeField {
@@ -131,10 +150,26 @@ impl fmt::Display for DateTimeField {
         f.write_str(match self {
             DateTimeField::Year => "YEAR",
             DateTimeField::Month => "MONTH",
+            DateTimeField::Week => "WEEK",
             DateTimeField::Day => "DAY",
             DateTimeField::Hour => "HOUR",
             DateTimeField::Minute => "MINUTE",
             DateTimeField::Second => "SECOND",
+            DateTimeField::Century => "CENTURY",
+            DateTimeField::Decade => "DECADE",
+            DateTimeField::Dow => "DOW",
+            DateTimeField::Doy => "DOY",
+            DateTimeField::Epoch => "EPOCH",
+            DateTimeField::Isodow => "ISODOW",
+            DateTimeField::Isoyear => "ISOYEAR",
+            DateTimeField::Julian => "JULIAN",
+            DateTimeField::Microseconds => "MICROSECONDS",
+            DateTimeField::Millenium => "MILLENIUM",
+            DateTimeField::Milliseconds => "MILLISECONDS",
+            DateTimeField::Quarter => "QUARTER",
+            DateTimeField::Timezone => "TIMEZONE",
+            DateTimeField::TimezoneHour => "TIMEZONE_HOUR",
+            DateTimeField::TimezoneMinute => "TIMEZONE_MINUTE",
         })
     }
 }

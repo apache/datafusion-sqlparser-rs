@@ -35,6 +35,8 @@ pub struct Query {
     pub offset: Option<Offset>,
     /// `FETCH { FIRST | NEXT } <N> [ PERCENT ] { ROW | ROWS } | { ONLY | WITH TIES }`
     pub fetch: Option<Fetch>,
+    /// `FOR { UPDATE | SHARE }`
+    pub lock: Option<LockType>,
 }
 
 impl fmt::Display for Query {
@@ -54,6 +56,9 @@ impl fmt::Display for Query {
         }
         if let Some(ref fetch) = self.fetch {
             write!(f, " {}", fetch)?;
+        }
+        if let Some(ref lock) = self.lock {
+            write!(f, " {}", lock)?;
         }
         Ok(())
     }
@@ -121,7 +126,7 @@ impl fmt::Display for SetOperator {
 }
 
 /// A restricted variant of `SELECT` (without CTEs/`ORDER BY`), which may
-/// appear either as the only body item of an `SQLQuery`, or as an operand
+/// appear either as the only body item of a `Query`, or as an operand
 /// to a set operation like `UNION`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -574,6 +579,23 @@ impl fmt::Display for Fetch {
         } else {
             write!(f, "FETCH FIRST ROWS {}", extension)
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum LockType {
+    Share,
+    Update,
+}
+
+impl fmt::Display for LockType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let select_lock = match self {
+            LockType::Share => "FOR SHARE",
+            LockType::Update => "FOR UPDATE",
+        };
+        write!(f, "{}", select_lock)
     }
 }
 

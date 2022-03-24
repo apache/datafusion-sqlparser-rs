@@ -94,16 +94,29 @@ reasons:
 
 ## Contributing
 
-Contributions are highly encouraged!
+Contributions are highly encouraged! However, the bandwidth we have to
+maintain this crate is fairly limited.
 
-Pull requests that add support for or fix a bug in a feature in the SQL
-standard, or a feature in a popular RDBMS, like Microsoft SQL Server or
-PostgreSQL, will almost certainly be accepted after a brief review. For
-particularly large or invasive changes, consider opening an issue first,
-especially if you are a first time contributor, so that you can coordinate with
-the maintainers. CI will ensure that your code passes `cargo test`,
-`cargo fmt`, and `cargo clippy`, so you will likely want to run all three
-commands locally before submitting your PR.
+Pull requests that add support for or fix a bug in a feature in the
+SQL standard, or a feature in a popular RDBMS, like Microsoft SQL
+Server or PostgreSQL, will likely be accepted after a brief
+review.
+
+The current maintainers do not plan for any substantial changes to
+this crate's API at this time. And thus, PRs proposing major refactors
+are not likely to be accepted.
+
+Please be aware that, while we hope to review PRs in a reasonably
+timely fashion, it may take a while. In order to speed the process,
+please make sure the PR passes all CI checks, and includes tests
+demonstrating your code works as intended (and to avoid
+regressions). Remember to also test error paths.
+
+PRs without tests will not be reviewed or merged.  Since the CI
+ensures that `cargo test`, `cargo fmt`, and `cargo clippy`, pass you
+will likely want to run all three commands locally before submitting
+your PR.
+
 
 If you are unable to submit a patch, feel free to file an issue instead. Please
 try to include:
@@ -114,12 +127,11 @@ try to include:
   * links to documentation for the feature for a few of the most popular
     databases that support it.
 
-Please be aware that, while we strive to address bugs and review PRs quickly, we
-make no such guarantees for feature requests. If you need support for a feature,
-you will likely need to implement it yourself. Our goal as maintainers is to
-facilitate the integration of various features from various contributors, but
-not to provide the implementations ourselves, as we simply don't have the
-resources.
+If you need support for a feature, you will likely need to implement
+it yourself. Our goal as maintainers is to facilitate the integration
+of various features from various contributors, but not to provide the
+implementations ourselves, as we simply don't have the resources.
+
 
 [tdop-tutorial]: https://eli.thegreenplace.net/2010/01/02/top-down-operator-precedence-parsing
 [`cargo fmt`]: https://github.com/rust-lang/rustfmt#on-the-stable-toolchain

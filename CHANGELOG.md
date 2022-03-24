@@ -8,8 +8,57 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.15.0] 2022-03-07
 
-## [0.13.0] 2020-12-10
+
+### Added
+
+* Support for ClickHouse array types (e.g. [1,2,3]) (#429) - Thanks @monadbobo
+* Support for `unsigned tinyint`, `unsigned int`, `unsigned smallint` and `unsigned bigint` datatypes (#428) - Thanks @watarukura
+* Support additional keywords for `EXTRACT`  (#427) - Thanks @mobuchowski
+* Support IN UNNEST(expression) (#426) - Thanks @komukomo
+* Support COLLATION keywork on CREATE TABLE (#424) - Thanks @watarukura
+* Support FOR UPDATE/FOR SHARE clause (#418) - Thanks @gamife
+* Support prepared statement placeholder arg `?` and `$` (#420) - Thanks @gamife
+* Support array expressions such as `ARRAY[1,2]` , `foo[1]` and `INT[][]` (#419) - Thanks @gamife
+
+### Changed:
+* remove Travis CI (#421) - Thanks @efx
+
+### Fixed:
+* Allow `array` to be used as a function name again (#432) - @alamb
+* Update docstring reference to `Query` (#423) - Thanks @max-sixty
+
+## [0.14.0] 2022-02-09
+
+### Added
+* Support `CURRENT_TIMESTAMP`, `CURRENT_TIME`, and `CURRENT_DATE` (#391) - Thanks @yuval-illumex
+* SUPPORT `SUPER` keyword (#387) - Thanks @flaneur2020
+* Support differing orders of `OFFSET` `LIMIT` as well as `LIMIT` `OFFSET` (#413) - Thanks @yuval-illumex
+* Support for `FROM <filename>`, `DELIMITER`, and `CSV HEADER` options for `COPY` command (#409) - Thanks @poonai
+* Support `CHARSET` and `ENGINE` clauses on `CREATE TABLE` for mysql (#392) - Thanks @antialize
+* Support `DROP CONSTRAINT [ IF EXISTS ] <name> [ CASCADE ]` (#396) - Thanks @tvallotton
+* Support parsing tuples and add `Expr::Tuple` (#414) - @alamb
+* Support MySQL style `LIMIT X, Y` (#415) - @alamb
+* Support `SESSION TRANSACTION` and `TRANSACTION SNAPSHOT`. (#379) - Thanks @poonai
+* Support `ALTER COLUMN` and `RENAME CONSTRAINT`  (#381) - Thanks @zhamlin
+* Support for Map access, add ClickHouse dialect (#382)  - Thanks @monadbobo
+
+### Changed
+* Restrict where wildcard (`*`) can appear, add to `FunctionArgExpr` remove `Expr::[Qualified]Wildcard`, (#378) - Thanks @panarch
+* Update simple_logger requirement from 1.9 to 2.1 (#403)
+* export all methods of parser (#397) - Thanks @neverchanje!
+* Clarify maintenance status on README (#416) - @alamb
+
+@panarch
+
+### Fixed
+* Fix new clippy errors (#412) - @alamb
+* Fix panic with `GRANT/REVOKE` in `CONNECT`, `CREATE`, `EXECUTE` or `TEMPORARY`  - Thanks @evgenyx00
+* Handle double quotes inside quoted identifiers correctly (#411) - Thanks @Marwes
+* Handle mysql backslash escaping (#373) - Thanks @vasilev-alex
+
+## [0.13.0] 2021-12-10
 
 ### Added
 * Add ALTER TABLE CHANGE COLUMN, extend the UPDATE statement with ON clause (#375) - Thanks @0xA537FD!
@@ -23,7 +72,7 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 * Fix clippy errors (#367, #374) - Thanks @Jimexist!
 
 
-## [0.12.0] 2020-10-14
+## [0.12.0] 2021-10-14
 
 ### Added
 * Add support for [NOT] IS DISTINCT FROM (#306) - @Dandandan
@@ -32,7 +81,7 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 * Move the keywords module - Thanks @koushiro!
 
 
-## [0.11.0] 2020-09-24
+## [0.11.0] 2021-09-24
 
 ### Added
 * Support minimum display width for integer data types (#337) Thanks @vasilev-alex!
@@ -51,7 +100,7 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 * Support parsing hexadecimal literals that start with `0x` (#324) - Thanks @TheSchemm!
 
 
-## [0.10.0] 2020-08-23
+## [0.10.0] 2021-08-23
 
 ### Added
 * Support for `no_std` (#332) - Thanks @koushiro!
@@ -69,12 +118,12 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 - Update links to reflect repository move to `sqlparser-rs` GitHub org (#333) - Thanks @andygrove
 - Add default value for `WindowFrame` (#313) - Thanks @Jimexist!
 
-## [0.9.0] 2020-03-21
+## [0.9.0] 2021-03-21
 
 ### Added
 * Add support for `TRY_CAST` syntax (#299) - Thanks @seddonm1!
 
-## [0.8.0] 2020-02-20
+## [0.8.0] 2021-02-20
 
 ### Added
 * Introduce Hive QL dialect `HiveDialect` and syntax (#235) - Thanks @hntd187!

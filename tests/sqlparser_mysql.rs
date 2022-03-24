@@ -156,6 +156,119 @@ fn parse_create_table_auto_increment() {
 }
 
 #[test]
+fn parse_create_table_set_enum() {
+    let sql = "CREATE TABLE foo (bar SET('a', 'b'), baz ENUM('a', 'b'))";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::new("bar"),
+                        data_type: DataType::Set(vec!["a".to_string(), "b".to_string()]),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("baz"),
+                        data_type: DataType::Enum(vec!["a".to_string(), "b".to_string()]),
+                        collation: None,
+                        options: vec![],
+                    }
+                ],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_engine_default_charset() {
+    let sql = "CREATE TABLE foo (id INT(11)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable {
+            name,
+            columns,
+            engine,
+            default_charset,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::new("id"),
+                    data_type: DataType::Int(Some(11)),
+                    collation: None,
+                    options: vec![],
+                },],
+                columns
+            );
+            assert_eq!(engine, Some("InnoDB".to_string()));
+            assert_eq!(default_charset, Some("utf8mb3".to_string()));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_collate() {
+    let sql = "CREATE TABLE foo (id INT(11)) COLLATE=utf8mb4_0900_ai_ci";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable {
+            name,
+            columns,
+            collation,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::new("id"),
+                    data_type: DataType::Int(Some(11)),
+                    collation: None,
+                    options: vec![],
+                },],
+                columns
+            );
+            assert_eq!(collation, Some("utf8mb4_0900_ai_ci".to_string()));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_comment_character_set() {
+    let sql = "CREATE TABLE foo (s TEXT CHARACTER SET utf8mb4 COMMENT 'comment')";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::new("s"),
+                    data_type: DataType::Text,
+                    collation: None,
+                    options: vec![
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::CharacterSet(ObjectName(vec![Ident::new(
+                                "utf8mb4"
+                            )]))
+                        },
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Comment("comment".to_string())
+                        }
+                    ],
+                },],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_quote_identifiers() {
     let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INT PRIMARY KEY)";
     match mysql().verified_stmt(sql) {
@@ -176,6 +289,38 @@ fn parse_quote_identifiers() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_quote_identifiers_2() {
+    let sql = "SELECT `quoted `` identifier`";
+    assert_eq!(
+        mysql().verified_stmt(sql),
+        Statement::Query(Box::new(Query {
+            with: None,
+            body: SetExpr::Select(Box::new(Select {
+                distinct: false,
+                top: None,
+                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
+                    value: "quoted ` identifier".into(),
+                    quote_style: Some('`'),
+                }))],
+                from: vec![],
+                lateral_views: vec![],
+                selection: None,
+                group_by: vec![],
+                cluster_by: vec![],
+                distribute_by: vec![],
+                sort_by: vec![],
+                having: None,
+            })),
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            fetch: None,
+            lock: None,
+        }))
+    );
 }
 
 #[test]
@@ -263,6 +408,46 @@ fn parse_create_table_with_minimum_display_width() {
 }
 
 #[test]
+fn parse_create_table_unsigned() {
+    let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3) UNSIGNED, bar_smallint SMALLINT(5) UNSIGNED, bar_int INT(11) UNSIGNED, bar_bigint BIGINT(20) UNSIGNED)";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::new("bar_tinyint"),
+                        data_type: DataType::UnsignedTinyInt(Some(3)),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_smallint"),
+                        data_type: DataType::UnsignedSmallInt(Some(5)),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_int"),
+                        data_type: DataType::UnsignedInt(Some(11)),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_bigint"),
+                        data_type: DataType::UnsignedBigInt(Some(20)),
+                        collation: None,
+                        options: vec![],
+                    },
+                ],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 #[cfg(not(feature = "bigdecimal"))]
 fn parse_simple_insert() {
     let sql = r"INSERT INTO tasks (title, priority) VALUES ('Test Some Inserts', 1), ('Test Entry 2', 2), ('Test Entry 3', 3)";
@@ -299,6 +484,7 @@ fn parse_simple_insert() {
                     limit: None,
                     offset: None,
                     fetch: None,
+                    lock: None,
                 }),
                 source
             );
@@ -351,6 +537,7 @@ fn parse_insert_with_on_duplicate_update() {
                     limit: None,
                     offset: None,
                     fetch: None,
+                    lock: None,
                 }),
                 source
             );
@@ -568,7 +755,8 @@ fn parse_substring_in_select() {
                     order_by: vec![],
                     limit: None,
                     offset: None,
-                    fetch: None
+                    fetch: None,
+                    lock: None,
                 }),
                 query
             );

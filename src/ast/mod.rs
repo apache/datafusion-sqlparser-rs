@@ -23,7 +23,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::fmt;
+use core::fmt::{self, Write};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -35,9 +35,9 @@ pub use self::ddl::{
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    Cte, Fetch, Join, JoinConstraint, JoinOperator, LateralView, Offset, OffsetRows, OrderByExpr,
-    Query, Select, SelectItem, SetExpr, SetOperator, TableAlias, TableFactor, TableWithJoins, Top,
-    Values, With,
+    Cte, Fetch, Join, JoinConstraint, JoinOperator, LateralView, LockType, Offset, OffsetRows,
+    OrderByExpr, Query, Select, SelectItem, SetExpr, SetOperator, TableAlias, TableFactor,
+    TableWithJoins, Top, Values, With,
 };
 pub use self::value::{DateTimeField, TrimWhereField, Value};
 
@@ -127,7 +127,18 @@ impl From<&str> for Ident {
 impl fmt::Display for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.quote_style {
-            Some(q) if q == '"' || q == '\'' || q == '`' => write!(f, "{}{}{}", q, self.value, q),
+            Some(q) if q == '"' || q == '\'' || q == '`' => {
+                f.write_char(q)?;
+                let mut first = true;
+                for s in self.value.split_inclusive(q) {
+                    if !first {
+                        f.write_char(q)?;
+                    }
+                    first = false;
+                    f.write_str(s)?;
+                }
+                f.write_char(q)
+            }
             Some(q) if q == '[' => write!(f, "[{}]", self.value),
             None => f.write_str(&self.value),
             _ => panic!("unexpected quote style"),
@@ -143,6 +154,29 @@ pub struct ObjectName(pub Vec<Ident>);
 impl fmt::Display for ObjectName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", display_separated(&self.0, "."))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Represents an Array Expression, either
+/// `ARRAY[..]`, or `[..]`
+pub struct Array {
+    /// The list of expressions between brackets
+    pub elem: Vec<Expr>,
+
+    /// `true` for  `ARRAY[..]`, `false` for `[..]`
+    pub named: bool,
+}
+
+impl fmt::Display for Array {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}[{}]",
+            if self.named { "ARRAY" } else { "" },
+            display_comma_separated(&self.elem)
+        )
     }
 }
 
@@ -176,6 +210,12 @@ pub enum Expr {
     InSubquery {
         expr: Box<Expr>,
         subquery: Box<Query>,
+        negated: bool,
+    },
+    /// `[ NOT ] IN UNNEST(array_expression)`
+    InUnnest {
+        expr: Box<Expr>,
+        array_expr: Box<Expr>,
         negated: bool,
     },
     /// `<expr> [ NOT ] BETWEEN <low> AND <high>`
@@ -273,6 +313,15 @@ pub enum Expr {
     Cube(Vec<Vec<Expr>>),
     /// The `ROLLUP` expr.
     Rollup(Vec<Vec<Expr>>),
+    /// ROW / TUPLE a single value, such as `SELECT (1, 2)`
+    Tuple(Vec<Expr>),
+    /// An array index expression e.g. `(ARRAY[1, 2])[1]` or `(current_schemas(FALSE))[1]`
+    ArrayIndex {
+        obj: Box<Expr>,
+        indexs: Vec<Expr>,
+    },
+    /// An array expression e.g. `ARRAY[1, 2]`
+    Array(Array),
 }
 
 impl fmt::Display for Expr {
@@ -314,6 +363,17 @@ impl fmt::Display for Expr {
                 expr,
                 if *negated { "NOT " } else { "" },
                 subquery
+            ),
+            Expr::InUnnest {
+                expr,
+                array_expr,
+                negated,
+            } => write!(
+                f,
+                "{} {}IN UNNEST({})",
+                expr,
+                if *negated { "NOT " } else { "" },
+                array_expr
             ),
             Expr::Between {
                 expr,
@@ -433,6 +493,19 @@ impl fmt::Display for Expr {
                 }
 
                 write!(f, ")")
+            }
+            Expr::Tuple(exprs) => {
+                write!(f, "({})", display_comma_separated(exprs))
+            }
+            Expr::ArrayIndex { obj, indexs } => {
+                write!(f, "{}", obj)?;
+                for i in indexs {
+                    write!(f, "[{}]", i)?;
+                }
+                Ok(())
+            }
+            Expr::Array(set) => {
+                write!(f, "{}", set)
             }
         }
     }
@@ -668,8 +741,9 @@ pub enum Statement {
         table_name: ObjectName,
         /// COLUMNS
         columns: Vec<Ident>,
-        /// FROM / TO
+        /// If true, is a 'COPY TO' statement. If false is a 'COPY FROM'
         to: bool,
+        /// target
         target: CopyTarget,
         /// WITH
         options: Vec<CopyOption>,
@@ -722,6 +796,9 @@ pub enum Statement {
         query: Option<Box<Query>>,
         without_rowid: bool,
         like: Option<ObjectName>,
+        engine: Option<String>,
+        default_charset: Option<String>,
+        collation: Option<String>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -878,6 +955,21 @@ pub enum Statement {
         verbose: bool,
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
+    },
+    /// SAVEPOINT -- define a new savepoint within the current transaction
+    Savepoint { name: Ident },
+    // MERGE INTO statement, based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
+    Merge {
+        // Specifies the table to merge
+        table: TableFactor,
+        // Specifies the table or subquery to join with the target table
+        source: Box<SetExpr>,
+        // Specifies alias to the table that is joined with target table
+        alias: Option<TableAlias>,
+        // Specifies the expression on which to join the target table and source
+        on: Box<Expr>,
+        // Specifies the actions to perform when values match or do not match.
+        clauses: Vec<MergeClause>,
     },
 }
 
@@ -1159,6 +1251,9 @@ impl fmt::Display for Statement {
                 query,
                 without_rowid,
                 like,
+                default_charset,
+                engine,
+                collation,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -1283,6 +1378,15 @@ impl fmt::Display for Statement {
                 }
                 if let Some(query) = query {
                     write!(f, " AS {}", query)?;
+                }
+                if let Some(engine) = engine {
+                    write!(f, " ENGINE={}", engine)?;
+                }
+                if let Some(default_charset) = default_charset {
+                    write!(f, " DEFAULT CHARSET={}", default_charset)?;
+                }
+                if let Some(collation) = collation {
+                    write!(f, " COLLATE={}", collation)?;
                 }
                 Ok(())
             }
@@ -1506,6 +1610,24 @@ impl fmt::Display for Statement {
                     write!(f, "NULL")
                 }
             }
+            Statement::Savepoint { name } => {
+                write!(f, "SAVEPOINT ")?;
+                write!(f, "{}", name)
+            }
+            Statement::Merge {
+                table,
+                source,
+                alias,
+                on,
+                clauses,
+            } => {
+                write!(f, "MERGE INTO {} USING {} ", table, source)?;
+                if let Some(a) = alias {
+                    write!(f, "as {} ", a)?;
+                };
+                write!(f, "ON {} ", on)?;
+                write!(f, "{}", display_separated(clauses, " "))
+            }
         }
     }
 }
@@ -1560,7 +1682,7 @@ impl fmt::Display for Privileges {
                 )
             }
             Privileges::Actions(actions) => {
-                write!(f, "{}", display_comma_separated(actions).to_string())
+                write!(f, "{}", display_comma_separated(actions))
             }
         }
     }
@@ -2110,6 +2232,68 @@ impl fmt::Display for CopyOption {
             }
             ForceNull(columns) => write!(f, "FORCE_NULL {}", display_comma_separated(columns)),
             Encoding(name) => write!(f, "ENCODING '{}'", value::escape_single_quote_string(name)),
+        }
+    }
+}
+
+///  
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum MergeClause {
+    MatchedUpdate {
+        predicate: Option<Expr>,
+        assignments: Vec<Assignment>,
+    },
+    MatchedDelete(Option<Expr>),
+    NotMatched {
+        predicate: Option<Expr>,
+        columns: Vec<Ident>,
+        values: Values,
+    },
+}
+
+impl fmt::Display for MergeClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use MergeClause::*;
+        write!(f, "WHEN")?;
+        match self {
+            MatchedUpdate {
+                predicate,
+                assignments,
+            } => {
+                write!(f, " MATCHED")?;
+                if let Some(pred) = predicate {
+                    write!(f, " AND {}", pred)?;
+                }
+                write!(
+                    f,
+                    " THEN UPDATE SET {}",
+                    display_comma_separated(assignments)
+                )
+            }
+            MatchedDelete(predicate) => {
+                write!(f, " MATCHED")?;
+                if let Some(pred) = predicate {
+                    write!(f, " AND {}", pred)?;
+                }
+                write!(f, " THEN DELETE")
+            }
+            NotMatched {
+                predicate,
+                columns,
+                values,
+            } => {
+                write!(f, " NOT MATCHED")?;
+                if let Some(pred) = predicate {
+                    write!(f, " AND {}", pred)?;
+                }
+                write!(
+                    f,
+                    " THEN INSERT ({}) {}",
+                    display_comma_separated(columns),
+                    values
+                )
+            }
         }
     }
 }

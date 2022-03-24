@@ -22,7 +22,9 @@
 mod test_utils;
 use matches::assert_matches;
 use sqlparser::ast::*;
-use sqlparser::dialect::{GenericDialect, PostgreSqlDialect, SQLiteDialect};
+use sqlparser::dialect::{
+    AnsiDialect, GenericDialect, MsSqlDialect, PostgreSqlDialect, SQLiteDialect, SnowflakeDialect,
+};
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
 use test_utils::{
@@ -324,6 +326,43 @@ fn parse_select_distinct() {
     assert_eq!(
         &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
         only(&select.projection)
+    );
+}
+
+#[test]
+fn parse_select_distinct_two_fields() {
+    let sql = "SELECT DISTINCT name, id FROM customer";
+    let select = verified_only_select(sql);
+    assert!(select.distinct);
+    assert_eq!(
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
+        &select.projection[0]
+    );
+    assert_eq!(
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
+        &select.projection[1]
+    );
+}
+
+#[test]
+fn parse_select_distinct_tuple() {
+    let sql = "SELECT DISTINCT (name, id) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &vec![SelectItem::UnnamedExpr(Expr::Tuple(vec![
+            Expr::Identifier(Ident::new("name")),
+            Expr::Identifier(Ident::new("id")),
+        ]))],
+        &select.projection
+    );
+}
+
+#[test]
+fn parse_select_distinct_missing_paren() {
+    let result = parse_sql_statements("SELECT DISTINCT (name, id FROM customer");
+    assert_eq!(
+        ParserError::ParserError("Expected ), found: FROM".to_string()),
+        result.unwrap_err(),
     );
 }
 
@@ -865,6 +904,27 @@ fn parse_in_subquery() {
 }
 
 #[test]
+fn parse_in_unnest() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE segment {}IN UNNEST(expr)",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::InUnnest {
+                expr: Box::new(Expr::Identifier(Ident::new("segment"))),
+                array_expr: Box::new(verified_expr("expr")),
+                negated,
+            },
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
+}
+
+#[test]
 fn parse_string_agg() {
     let sql = "SELECT a || b";
 
@@ -1009,6 +1069,44 @@ fn parse_between_with_expr() {
 }
 
 #[test]
+fn parse_tuples() {
+    let sql = "SELECT (1, 2), (1), ('foo', 3, baz)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        vec![
+            SelectItem::UnnamedExpr(Expr::Tuple(vec![
+                Expr::Value(number("1")),
+                Expr::Value(number("2"))
+            ])),
+            SelectItem::UnnamedExpr(Expr::Nested(Box::new(Expr::Value(number("1"))))),
+            SelectItem::UnnamedExpr(Expr::Tuple(vec![
+                Expr::Value(Value::SingleQuotedString("foo".into())),
+                Expr::Value(number("3")),
+                Expr::Identifier(Ident::new("baz"))
+            ]))
+        ],
+        select.projection
+    );
+}
+
+#[test]
+fn parse_tuple_invalid() {
+    let sql = "select (1";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected ), found: EOF".to_string()),
+        res.unwrap_err()
+    );
+
+    let sql = "select (), 2";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected an expression:, found: )".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_select_order_by() {
     fn chk(sql: &str) {
         let select = verified_query(sql);
@@ -1095,6 +1193,12 @@ fn parse_select_group_by() {
             Expr::Identifier(Ident::new("fname")),
         ],
         select.group_by
+    );
+
+    // Tuples can also be in the set
+    one_statement_parses_to(
+        "SELECT id, fname, lname FROM customer GROUP BY (lname, fname)",
+        "SELECT id, fname, lname FROM customer GROUP BY (lname, fname)",
     );
 }
 
@@ -1189,6 +1293,14 @@ fn parse_limit_accepts_all() {
 }
 
 #[test]
+fn parse_limit_my_sql_syntax() {
+    one_statement_parses_to(
+        "SELECT id, fname, lname FROM customer LIMIT 5, 10",
+        "SELECT id, fname, lname FROM customer LIMIT 5 OFFSET 10",
+    );
+}
+
+#[test]
 fn parse_cast() {
     let sql = "SELECT CAST(id AS BIGINT) FROM customer";
     let select = verified_only_select(sql);
@@ -1272,10 +1384,26 @@ fn parse_extract() {
     one_statement_parses_to("SELECT EXTRACT(year from d)", "SELECT EXTRACT(YEAR FROM d)");
 
     verified_stmt("SELECT EXTRACT(MONTH FROM d)");
+    verified_stmt("SELECT EXTRACT(WEEK FROM d)");
     verified_stmt("SELECT EXTRACT(DAY FROM d)");
     verified_stmt("SELECT EXTRACT(HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(MINUTE FROM d)");
     verified_stmt("SELECT EXTRACT(SECOND FROM d)");
+    verified_stmt("SELECT EXTRACT(CENTURY FROM d)");
+    verified_stmt("SELECT EXTRACT(DECADE FROM d)");
+    verified_stmt("SELECT EXTRACT(DOW FROM d)");
+    verified_stmt("SELECT EXTRACT(DOY FROM d)");
+    verified_stmt("SELECT EXTRACT(EPOCH FROM d)");
+    verified_stmt("SELECT EXTRACT(ISODOW FROM d)");
+    verified_stmt("SELECT EXTRACT(ISOYEAR FROM d)");
+    verified_stmt("SELECT EXTRACT(JULIAN FROM d)");
+    verified_stmt("SELECT EXTRACT(MICROSECONDS FROM d)");
+    verified_stmt("SELECT EXTRACT(MILLENIUM FROM d)");
+    verified_stmt("SELECT EXTRACT(MILLISECONDS FROM d)");
+    verified_stmt("SELECT EXTRACT(QUARTER FROM d)");
+    verified_stmt("SELECT EXTRACT(TIMEZONE FROM d)");
+    verified_stmt("SELECT EXTRACT(TIMEZONE_HOUR FROM d)");
+    verified_stmt("SELECT EXTRACT(TIMEZONE_MINUTE FROM d)");
 
     let res = parse_sql_statements("SELECT EXTRACT(MILLISECOND FROM d)");
     assert_eq!(
@@ -2053,6 +2181,54 @@ fn parse_alter_table_alter_column_type() {
 }
 
 #[test]
+fn parse_alter_table_drop_constraint() {
+    let alter_stmt = "ALTER TABLE tab";
+    match verified_stmt("ALTER TABLE tab DROP CONSTRAINT constraint_name CASCADE") {
+        Statement::AlterTable {
+            name,
+            operation:
+                AlterTableOperation::DropConstraint {
+                    name: constr_name,
+                    if_exists,
+                    cascade,
+                },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("constraint_name", constr_name.to_string());
+            assert!(!if_exists);
+            assert!(cascade);
+        }
+        _ => unreachable!(),
+    }
+    match verified_stmt("ALTER TABLE tab DROP CONSTRAINT IF EXISTS constraint_name") {
+        Statement::AlterTable {
+            name,
+            operation:
+                AlterTableOperation::DropConstraint {
+                    name: constr_name,
+                    if_exists,
+                    cascade,
+                },
+        } => {
+            assert_eq!("tab", name.to_string());
+            assert_eq!("constraint_name", constr_name.to_string());
+            assert!(if_exists);
+            assert!(!cascade);
+        }
+        _ => unreachable!(),
+    }
+
+    let res = Parser::parse_sql(
+        &GenericDialect {},
+        &format!("{} DROP CONSTRAINT is_active TEXT", alter_stmt),
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: TEXT".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_bad_constraint() {
     let res = parse_sql_statements("ALTER TABLE tab ADD");
     assert_eq!(
@@ -2071,19 +2247,24 @@ fn parse_bad_constraint() {
 
 #[test]
 fn parse_scalar_function_in_projection() {
-    let sql = "SELECT sqrt(id) FROM foo";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("sqrt")]),
-            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                Expr::Identifier(Ident::new("id"))
-            ))],
-            over: None,
-            distinct: false,
-        }),
-        expr_from_projection(only(&select.projection))
-    );
+    let names = vec!["sqrt", "array", "foo"];
+
+    for function_name in names {
+        // like SELECT sqrt(id) FROM foo
+        let sql = dbg!(format!("SELECT {}(id) FROM foo", function_name));
+        let select = verified_only_select(&sql);
+        assert_eq!(
+            &Expr::Function(Function {
+                name: ObjectName(vec![Ident::new(function_name)]),
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                    Expr::Identifier(Ident::new("id"))
+                ))],
+                over: None,
+                distinct: false,
+            }),
+            expr_from_projection(only(&select.projection))
+        );
+    }
 }
 
 fn run_explain_analyze(query: &str, expected_verbose: bool, expected_analyze: bool) {
@@ -3825,7 +4006,7 @@ fn parse_drop_index() {
 
 #[test]
 fn parse_grant() {
-    let sql = "GRANT SELECT, INSERT, UPDATE (shape, size), USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
+    let sql = "GRANT SELECT, INSERT, UPDATE (shape, size), USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER, CONNECT, CREATE, EXECUTE, TEMPORARY ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
     match verified_stmt(sql) {
         Statement::Grant {
             privileges,
@@ -3857,6 +4038,10 @@ fn parse_grant() {
                         Action::Truncate,
                         Action::References { columns: None },
                         Action::Trigger,
+                        Action::Connect,
+                        Action::Create,
+                        Action::Execute,
+                        Action::Temporary,
                     ],
                     actions
                 );
@@ -4020,6 +4205,191 @@ fn test_revoke() {
 }
 
 #[test]
+fn parse_merge() {
+    let sql = "MERGE INTO s.bar AS dest USING (SELECT * FROM s.foo) as stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
+    match verified_stmt(sql) {
+        Statement::Merge {
+            table,
+            source,
+            alias,
+            on,
+            clauses,
+        } => {
+            assert_eq!(
+                table,
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("s"), Ident::new("bar")]),
+                    alias: Some(TableAlias {
+                        name: Ident::new("dest"),
+                        columns: vec![]
+                    }),
+                    args: vec![],
+                    with_hints: vec![]
+                }
+            );
+            assert_eq!(
+                source,
+                Box::new(SetExpr::Query(Box::new(Query {
+                    with: None,
+                    body: SetExpr::Select(Box::new(Select {
+                        distinct: false,
+                        top: None,
+                        projection: vec![SelectItem::Wildcard],
+                        from: vec![TableWithJoins {
+                            relation: TableFactor::Table {
+                                name: ObjectName(vec![Ident::new("s"), Ident::new("foo")]),
+                                alias: None,
+                                args: vec![],
+                                with_hints: vec![],
+                            },
+                            joins: vec![]
+                        }],
+                        lateral_views: vec![],
+                        selection: None,
+                        group_by: vec![],
+                        cluster_by: vec![],
+                        distribute_by: vec![],
+                        sort_by: vec![],
+                        having: None
+                    })),
+                    order_by: vec![],
+                    limit: None,
+                    offset: None,
+                    fetch: None,
+                    lock: None
+                })))
+            );
+            assert_eq!(
+                alias,
+                Some(TableAlias {
+                    name: Ident::new("stg"),
+                    columns: vec![]
+                })
+            );
+            assert_eq!(
+                on,
+                Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::CompoundIdentifier(vec![
+                            Ident::new("dest"),
+                            Ident::new("D")
+                        ])),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::CompoundIdentifier(vec![
+                            Ident::new("stg"),
+                            Ident::new("D")
+                        ]))
+                    }),
+                    op: BinaryOperator::And,
+                    right: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::CompoundIdentifier(vec![
+                            Ident::new("dest"),
+                            Ident::new("E")
+                        ])),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::CompoundIdentifier(vec![
+                            Ident::new("stg"),
+                            Ident::new("E")
+                        ]))
+                    })
+                })
+            );
+            assert_eq!(
+                clauses,
+                vec![
+                    MergeClause::NotMatched {
+                        predicate: None,
+                        columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C")],
+                        values: Values(vec![vec![
+                            Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("A")]),
+                            Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("B")]),
+                            Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("C")]),
+                        ]])
+                    },
+                    MergeClause::MatchedUpdate {
+                        predicate: Some(Expr::BinaryOp {
+                            left: Box::new(Expr::CompoundIdentifier(vec![
+                                Ident::new("dest"),
+                                Ident::new("A")
+                            ])),
+                            op: BinaryOperator::Eq,
+                            right: Box::new(Expr::Value(Value::SingleQuotedString(
+                                "a".to_string()
+                            )))
+                        }),
+                        assignments: vec![
+                            Assignment {
+                                id: vec![Ident::new("dest"), Ident::new("F")],
+                                value: Expr::CompoundIdentifier(vec![
+                                    Ident::new("stg"),
+                                    Ident::new("F")
+                                ])
+                            },
+                            Assignment {
+                                id: vec![Ident::new("dest"), Ident::new("G")],
+                                value: Expr::CompoundIdentifier(vec![
+                                    Ident::new("stg"),
+                                    Ident::new("G")
+                                ])
+                            }
+                        ]
+                    },
+                    MergeClause::MatchedDelete(None)
+                ]
+            )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_lock() {
+    let sql = "SELECT * FROM student WHERE id = '1' FOR UPDATE";
+    let ast = verified_query(sql);
+    assert_eq!(ast.lock.unwrap(), LockType::Update);
+
+    let sql = "SELECT * FROM student WHERE id = '1' FOR SHARE";
+    let ast = verified_query(sql);
+    assert_eq!(ast.lock.unwrap(), LockType::Share);
+}
+
+#[test]
+fn test_placeholder() {
+    let sql = "SELECT * FROM student WHERE id = ?";
+    let ast = verified_only_select(sql);
+    assert_eq!(
+        ast.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("id"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Value(Value::Placeholder("?".into())))
+        })
+    );
+
+    let dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(MsSqlDialect {}),
+            Box::new(AnsiDialect {}),
+            Box::new(SnowflakeDialect {}),
+            // Note: `$` is the starting word for the HiveDialect identifier
+            // Box::new(sqlparser::dialect::HiveDialect {}),
+        ],
+    };
+    let sql = "SELECT * FROM student WHERE id = $Id1";
+    let ast = dialects.verified_only_select(sql);
+    assert_eq!(
+        ast.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("id"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Value(Value::Placeholder("$Id1".into())))
+        })
+    );
+}
+
+#[test]
 fn all_keywords_sorted() {
     // assert!(ALL_KEYWORDS.is_sorted())
     let mut copy = Vec::from(ALL_KEYWORDS);
@@ -4049,4 +4419,86 @@ fn verified_only_select(query: &str) -> Select {
 
 fn verified_expr(query: &str) -> Expr {
     all_dialects().verified_expr(query)
+}
+
+#[test]
+fn parse_offset_and_limit() {
+    let sql = "SELECT foo FROM bar LIMIT 2 OFFSET 2";
+    let expect = Some(Offset {
+        value: Expr::Value(number("2")),
+        rows: OffsetRows::None,
+    });
+    let ast = verified_query(sql);
+    assert_eq!(ast.offset, expect);
+    assert_eq!(ast.limit, Some(Expr::Value(number("2"))));
+
+    // different order is OK
+    one_statement_parses_to("SELECT foo FROM bar OFFSET 2 LIMIT 2", sql);
+
+    // Can't repeat OFFSET / LIMIT
+    let res = parse_sql_statements("SELECT foo FROM bar OFFSET 2 OFFSET 2");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: OFFSET".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("SELECT foo FROM bar LIMIT 2 LIMIT 2");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: LIMIT".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("SELECT foo FROM bar OFFSET 2 LIMIT 2 OFFSET 2");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: OFFSET".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
+fn parse_time_functions() {
+    let sql = "SELECT CURRENT_TIMESTAMP()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT CURRENT_TIMESTAMP", sql);
+
+    let sql = "SELECT CURRENT_TIME()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("CURRENT_TIME")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT CURRENT_TIME", sql);
+
+    let sql = "SELECT CURRENT_DATE()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("CURRENT_DATE")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT CURRENT_DATE", sql);
 }

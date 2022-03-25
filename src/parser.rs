@@ -2281,6 +2281,7 @@ impl<'a> Parser<'a> {
     fn parse_copy_option(&mut self) -> Result<CopyOption, ParserError> {
         let ret = match self.parse_one_of_keywords(&[
             Keyword::FORMAT,
+            Keyword::FREEZE,
             Keyword::DELIMITER,
             Keyword::NULL,
             Keyword::HEADER,
@@ -2292,6 +2293,12 @@ impl<'a> Parser<'a> {
             Keyword::ENCODING,
         ]) {
             Some(Keyword::FORMAT) => CopyOption::Format(self.parse_identifier()?),
+            Some(Keyword::FREEZE) => CopyOption::Freeze(
+                match self.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]) {
+                    Some(Keyword::FALSE) => false,
+                    _ => true,
+                },
+            ),
             Some(Keyword::DELIMITER) => CopyOption::Delimiter(self.parse_literal_char()?),
             Some(Keyword::NULL) => CopyOption::Null(self.parse_literal_string()?),
             Some(Keyword::HEADER) => CopyOption::Header(
@@ -2352,17 +2359,20 @@ impl<'a> Parser<'a> {
             Keyword::HEADER,
             Keyword::QUOTE,
             Keyword::ESCAPE,
-            Keyword::FORCE_QUOTE,
-            Keyword::FORCE_NOT_NULL,
+            Keyword::FORCE,
         ]) {
             Some(Keyword::HEADER) => CopyLegacyCsvOption::Header,
             Some(Keyword::QUOTE) => CopyLegacyCsvOption::Quote(self.parse_literal_char()?),
             Some(Keyword::ESCAPE) => CopyLegacyCsvOption::Escape(self.parse_literal_char()?),
-            Some(Keyword::FORCE_QUOTE) => {
-                CopyLegacyCsvOption::ForceQuote(self.parse_parenthesized_column_list(Mandatory)?)
+            Some(Keyword::FORCE) if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) => {
+                CopyLegacyCsvOption::ForceNotNull(
+                    self.parse_comma_separated(Parser::parse_identifier)?,
+                )
             }
-            Some(Keyword::FORCE_NOT_NULL) => {
-                CopyLegacyCsvOption::ForceNotNull(self.parse_parenthesized_column_list(Mandatory)?)
+            Some(Keyword::FORCE) if self.parse_keywords(&[Keyword::QUOTE]) => {
+                CopyLegacyCsvOption::ForceQuote(
+                    self.parse_comma_separated(Parser::parse_identifier)?,
+                )
             }
             _ => self.expected("csv option", self.peek_token())?,
         };

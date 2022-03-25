@@ -2201,6 +2201,8 @@ impl fmt::Display for CopyTarget {
 pub enum CopyOption {
     /// FORMAT format_name
     Format(Ident),
+    /// FREEZE [ boolean ]
+    Freeze(bool),
     /// DELIMITER 'delimiter_character'
     Delimiter(char),
     /// NULL 'null_string'
@@ -2226,6 +2228,8 @@ impl fmt::Display for CopyOption {
         use CopyOption::*;
         match self {
             Format(name) => write!(f, "FORMAT {}", name),
+            Freeze(true) => write!(f, "FREEZE"),
+            Freeze(false) => write!(f, "FREEZE FALSE"),
             Delimiter(char) => write!(f, "DELIMITER '{}'", char),
             Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),
             Header(true) => write!(f, "HEADER"),
@@ -2276,9 +2280,9 @@ pub enum CopyLegacyCsvOption {
     Quote(char),
     /// ESCAPE [ AS ] 'escape_character'
     Escape(char),
-    /// FORCE_QUOTE { column_name [, ...] | * }
+    /// FORCE QUOTE { column_name [, ...] | * }
     ForceQuote(Vec<Ident>),
-    /// FORCE_NOT_NULL column_name [, ...]
+    /// FORCE NOT NULL column_name [, ...]
     ForceNotNull(Vec<Ident>),
 }
 
@@ -2289,9 +2293,9 @@ impl fmt::Display for CopyLegacyCsvOption {
             Header => write!(f, "HEADER"),
             Quote(char) => write!(f, "QUOTE '{}'", char),
             Escape(char) => write!(f, "ESCAPE '{}'", char),
-            ForceQuote(columns) => write!(f, "FORCE_QUOTE {}", display_comma_separated(columns)),
+            ForceQuote(columns) => write!(f, "FORCE QUOTE {}", display_comma_separated(columns)),
             ForceNotNull(columns) => {
-                write!(f, "FORCE_NOT_NULL {}", display_comma_separated(columns))
+                write!(f, "FORCE NOT NULL {}", display_comma_separated(columns))
             }
         }
     }

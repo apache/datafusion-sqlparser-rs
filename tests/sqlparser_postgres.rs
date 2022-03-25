@@ -545,7 +545,31 @@ fn parse_copy_from_before_v9_0() {
             ],
             values: vec![],
         }
-    )
+    );
+
+    // test 'AS' keyword
+    let sql = "COPY users FROM 'data.csv' DELIMITER AS ',' NULL AS 'null' CSV QUOTE AS '\"' ESCAPE AS '\\'";
+    assert_eq!(
+        pg_and_generic().one_statement_parses_to(sql, ""),
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            to: false,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![
+                CopyLegacyOption::Delimiter(','),
+                CopyLegacyOption::Null("null".into()),
+                CopyLegacyOption::Csv(vec![
+                    CopyLegacyCsvOption::Quote('\"'),
+                    CopyLegacyCsvOption::Escape('\\'),
+                ]),
+            ],
+            values: vec![],
+        }
+    );
 }
 
 #[test]

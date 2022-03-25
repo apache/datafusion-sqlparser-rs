@@ -2362,8 +2362,14 @@ impl<'a> Parser<'a> {
             Keyword::FORCE,
         ]) {
             Some(Keyword::HEADER) => CopyLegacyCsvOption::Header,
-            Some(Keyword::QUOTE) => CopyLegacyCsvOption::Quote(self.parse_literal_char()?),
-            Some(Keyword::ESCAPE) => CopyLegacyCsvOption::Escape(self.parse_literal_char()?),
+            Some(Keyword::QUOTE) => {
+                let _ = self.parse_keyword(Keyword::AS); // [ AS ]
+                CopyLegacyCsvOption::Quote(self.parse_literal_char()?)
+            }
+            Some(Keyword::ESCAPE) => {
+                let _ = self.parse_keyword(Keyword::AS); // [ AS ]
+                CopyLegacyCsvOption::Escape(self.parse_literal_char()?)
+            }
             Some(Keyword::FORCE) if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) => {
                 CopyLegacyCsvOption::ForceNotNull(
                     self.parse_comma_separated(Parser::parse_identifier)?,

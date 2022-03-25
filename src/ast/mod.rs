@@ -743,7 +743,7 @@ pub enum Statement {
         columns: Vec<Ident>,
         /// If true, is a 'COPY TO' statement. If false is a 'COPY FROM'
         to: bool,
-        /// target
+        /// The source of 'COPY FROM', or the target of 'COPY TO'
         target: CopyTarget,
         /// WITH options (from PostgreSQL version 9.0)
         options: Vec<CopyOption>,
@@ -2196,18 +2196,21 @@ impl fmt::Display for CopyTarget {
     }
 }
 
+/// An option in `COPY` statement.
+///
+/// <https://www.postgresql.org/docs/14/sql-copy.html>
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CopyOption {
     /// FORMAT format_name
     Format(Ident),
-    /// FREEZE [ boolean ]
+    /// FREEZE \[ boolean \]
     Freeze(bool),
     /// DELIMITER 'delimiter_character'
     Delimiter(char),
     /// NULL 'null_string'
     Null(String),
-    /// HEADER [ boolean ]
+    /// HEADER \[ boolean \]
     Header(bool),
     /// QUOTE 'quote_character'
     Quote(char),
@@ -2246,14 +2249,17 @@ impl fmt::Display for CopyOption {
     }
 }
 
+/// An option in `COPY` statement before PostgreSQL version 9.0.
+///
+/// <https://www.postgresql.org/docs/8.4/sql-copy.html>
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CopyLegacyOption {
     /// BINARY
     Binary,
-    /// DELIMITER [ AS ] 'delimiter_character'
+    /// DELIMITER \[ AS \] 'delimiter_character'
     Delimiter(char),
-    /// NULL [ AS ] 'null_string'
+    /// NULL \[ AS \] 'null_string'
     Null(String),
     /// CSV ...
     Csv(Vec<CopyLegacyCsvOption>),
@@ -2271,14 +2277,17 @@ impl fmt::Display for CopyLegacyOption {
     }
 }
 
+/// A `CSV` option in `COPY` statement before PostgreSQL version 9.0.
+///
+/// <https://www.postgresql.org/docs/8.4/sql-copy.html>
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CopyLegacyCsvOption {
     /// HEADER
     Header,
-    /// QUOTE [ AS ] 'quote_character'
+    /// QUOTE \[ AS \] 'quote_character'
     Quote(char),
-    /// ESCAPE [ AS ] 'escape_character'
+    /// ESCAPE \[ AS \] 'escape_character'
     Escape(char),
     /// FORCE QUOTE { column_name [, ...] | * }
     ForceQuote(Vec<Ident>),

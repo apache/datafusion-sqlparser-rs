@@ -124,7 +124,7 @@ impl<'a> Parser<'a> {
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
     pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, sql);
-        let tokens = tokenizer.tokenize()?;
+        let (tokens, _) = tokenizer.tokenize()?;
         let mut parser = Parser::new(tokens, dialect);
         let mut stmts = Vec::new();
         let mut expecting_statement_delimiter = false;
@@ -3262,7 +3262,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse an INSERT statement
-    pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
+    fn parse_insert(&mut self) -> Result<Statement, ParserError> {
         let or = if !dialect_of!(self is SQLiteDialect) {
             None
         } else if self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]) {

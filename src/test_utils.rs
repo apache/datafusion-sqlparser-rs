@@ -66,7 +66,7 @@ impl TestedDialects {
     {
         self.one_of_identical_results(|dialect| {
             let mut tokenizer = Tokenizer::new(dialect, sql);
-            let tokens = tokenizer.tokenize().unwrap();
+            let (tokens, _) = tokenizer.tokenize().unwrap();
             f(&mut Parser::new(tokens, dialect))
         })
     }

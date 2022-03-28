@@ -381,6 +381,32 @@ fn parse_select_all_distinct() {
 }
 
 #[test]
+fn parse_select_into() {
+    let sql = "SELECT * INTO table0 FROM table1";
+    one_statement_parses_to(sql, "SELECT * INTO table0 FROM table1");
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &SelectInto {
+            temporary: false,
+            unlogged: false,
+            name: ObjectName(vec![Ident::new("table0")])
+        },
+        only(&select.into)
+    );
+
+    let sql = "SELECT * INTO TEMPORARY UNLOGGED table0 FROM table1";
+    one_statement_parses_to(sql, "SELECT * INTO TEMPORARY UNLOGGED table0 FROM table1");
+
+    // Do not allow aliases here
+    let sql = "SELECT * INTO table0 asdf FROM table1";
+    let result = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: asdf".to_string()),
+        result.unwrap_err()
+    )
+}
+
+#[test]
 fn parse_select_wildcard() {
     let sql = "SELECT * FROM foo";
     let select = verified_only_select(sql);
@@ -4235,6 +4261,7 @@ fn parse_merge() {
                         distinct: false,
                         top: None,
                         projection: vec![SelectItem::Wildcard],
+                        into: None,
                         from: vec![TableWithJoins {
                             relation: TableFactor::Table {
                                 name: ObjectName(vec![Ident::new("s"), Ident::new("foo")]),

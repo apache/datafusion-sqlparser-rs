@@ -53,6 +53,7 @@ fn parse_map_access_expr() {
                     distinct: false,
                 })],
             })],
+            into: None,
             from: vec![TableWithJoins {
                 relation: Table {
                     name: ObjectName(vec![Ident::new("foos")]),

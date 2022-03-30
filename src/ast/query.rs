@@ -136,6 +136,8 @@ pub struct Select {
     pub top: Option<Top>,
     /// projection expressions
     pub projection: Vec<SelectItem>,
+    /// INTO
+    pub into: Option<SelectInto>,
     /// FROM
     pub from: Vec<TableWithJoins>,
     /// LATERAL VIEWs
@@ -161,6 +163,11 @@ impl fmt::Display for Select {
             write!(f, " {}", top)?;
         }
         write!(f, " {}", display_comma_separated(&self.projection))?;
+
+        if let Some(ref into) = self.into {
+            write!(f, " {}", into)?;
+        }
+
         if !self.from.is_empty() {
             write!(f, " FROM {}", display_comma_separated(&self.from))?;
         }
@@ -634,5 +641,22 @@ impl fmt::Display for Values {
             write!(f, "({})", display_comma_separated(row))?;
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct SelectInto {
+    pub temporary: bool,
+    pub unlogged: bool,
+    pub name: ObjectName,
+}
+
+impl fmt::Display for SelectInto {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let temporary = if self.temporary { " TEMPORARY" } else { "" };
+        let unlogged = if self.unlogged { " UNLOGGED" } else { "" };
+
+        write!(f, "INTO{}{} {}", temporary, unlogged, self.name)
     }
 }

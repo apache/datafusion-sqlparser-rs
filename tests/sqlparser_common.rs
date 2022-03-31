@@ -3387,6 +3387,25 @@ fn parse_exists_subquery() {
 }
 
 #[test]
+fn parse_create_database() {
+    let sql = "CREATE DATABASE mydb";
+    match verified_stmt(sql) {
+        Statement::CreateDatabase {
+            db_name,
+            if_not_exists,
+            location,
+            managed_location,
+        } => {
+            assert_eq!("mydb", db_name.to_string());
+            assert_eq!(false, if_not_exists);
+            assert_eq!(None, location);
+            assert_eq!(None, managed_location);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_view() {
     let sql = "CREATE VIEW myschema.myview AS SELECT foo FROM bar";
     match verified_stmt(sql) {

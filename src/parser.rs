@@ -2293,20 +2293,16 @@ impl<'a> Parser<'a> {
             Keyword::ENCODING,
         ]) {
             Some(Keyword::FORMAT) => CopyOption::Format(self.parse_identifier()?),
-            Some(Keyword::FREEZE) => CopyOption::Freeze(
-                match self.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]) {
-                    Some(Keyword::FALSE) => false,
-                    _ => true,
-                },
-            ),
+            Some(Keyword::FREEZE) => CopyOption::Freeze(!matches!(
+                self.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]),
+                Some(Keyword::FALSE)
+            )),
             Some(Keyword::DELIMITER) => CopyOption::Delimiter(self.parse_literal_char()?),
             Some(Keyword::NULL) => CopyOption::Null(self.parse_literal_string()?),
-            Some(Keyword::HEADER) => CopyOption::Header(
-                match self.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]) {
-                    Some(Keyword::FALSE) => false,
-                    _ => true,
-                },
-            ),
+            Some(Keyword::HEADER) => CopyOption::Header(!matches!(
+                self.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]),
+                Some(Keyword::FALSE)
+            )),
             Some(Keyword::QUOTE) => CopyOption::Quote(self.parse_literal_char()?),
             Some(Keyword::ESCAPE) => CopyOption::Escape(self.parse_literal_char()?),
             Some(Keyword::FORCE_QUOTE) => {

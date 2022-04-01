@@ -73,6 +73,48 @@ fn test_snowflake_single_line_tokenize() {
 }
 
 #[test]
+fn parse_colon_map_access_expr() {
+    let sql = "SELECT foo:key1:key2 FROM foos";
+    let select = snowflake_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &Expr::MapAccess {
+            column: Box::new(Expr::Identifier(Ident {
+                value: "foo".to_string(),
+                quote_style: None
+            })),
+            keys: vec![
+                Value::ColonString("key1".to_string()),
+                Value::ColonString("key2".to_string()),
+            ]
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+    let sql = r#"SELECT foo:key1.key2["key3"] FROM foos"#;
+    let select = snowflake_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &Expr::MapAccess {
+            column: Box::new(Expr::Identifier(Ident {
+                value: "foo".to_string(),
+                quote_style: None
+            })),
+            keys: vec![
+                Value::ColonString("key1".to_string()),
+                Value::PeriodString("key2".to_string()),
+                Value::SingleQuotedString("key3".to_string()),
+            ]
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let sql = "SELECT foo:key1:0 FROM foos";
+    let res = snowflake_and_generic().parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected literal string, found: 0".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn test_sf_derived_table_in_parenthesis() {
     // Nesting a subquery in an extra set of parentheses is non-standard,
     // but supported in Snowflake SQL

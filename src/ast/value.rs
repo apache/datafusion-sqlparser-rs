@@ -36,6 +36,10 @@ pub enum Value {
     NationalStringLiteral(String),
     /// X'hex value'
     HexStringLiteral(String),
+    /// :string value
+    ColonString(String),
+    /// .string value
+    PeriodString(String),
 
     DoubleQuotedString(String),
     /// Boolean value true or false
@@ -75,6 +79,8 @@ impl Value {
             Value::NationalStringLiteral(v) => Value::NationalStringLiteral(format!("-{}", v)),
             Value::HexStringLiteral(v) => Value::HexStringLiteral(format!("-{}", v)),
             Value::DoubleQuotedString(v) => Value::DoubleQuotedString(format!("-{}", v)),
+            Value::ColonString(v) => Value::ColonString(format!("-{}", v)),
+            Value::PeriodString(v) => Value::PeriodString(format!("-{}", v)),
             Value::Boolean(v) => Value::Boolean(v),
             Value::Interval {
                 value,
@@ -102,6 +108,8 @@ impl fmt::Display for Value {
             Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
             Value::NationalStringLiteral(v) => write!(f, "N'{}'", v),
             Value::HexStringLiteral(v) => write!(f, "X'{}'", v),
+            Value::ColonString(v) => write!(f, ":{}", v),
+            Value::PeriodString(v) => write!(f, ".{}", v),
             Value::Boolean(v) => write!(f, "{}", v),
             Value::Interval {
                 value,

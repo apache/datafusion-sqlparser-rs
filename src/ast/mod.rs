@@ -1218,7 +1218,7 @@ impl fmt::Display for Statement {
                 location,
                 managed_location,
             } => {
-                write!(f, "CREATE")?;
+                write!(f, "CREATE DATABASE")?;
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }

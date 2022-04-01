@@ -1521,6 +1521,8 @@ impl<'a> Parser<'a> {
             self.parse_create_virtual_table()
         } else if self.parse_keyword(Keyword::SCHEMA) {
             self.parse_create_schema()
+        } else if self.parse_keyword(Keyword::DATABASE) {
+            self.parse_create_database()
         } else {
             self.expected("an object type after CREATE", self.peek_token())
         }

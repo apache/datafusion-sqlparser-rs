@@ -3297,10 +3297,9 @@ fn parse_scalar_subqueries() {
     assert_matches!(
         verified_expr(sql),
         Expr::BinaryOp {
-        op: BinaryOperator::Plus, ..
-        //left: box Subquery { .. },
-        //right: box Subquery { .. },
-    }
+            op: BinaryOperator::Plus,
+            ..
+        }
     );
 }
 
@@ -3384,6 +3383,44 @@ fn parse_exists_subquery() {
         ),
         res.unwrap_err(),
     );
+}
+
+#[test]
+fn parse_create_database() {
+    let sql = "CREATE DATABASE mydb";
+    match verified_stmt(sql) {
+        Statement::CreateDatabase {
+            db_name,
+            if_not_exists,
+            location,
+            managed_location,
+        } => {
+            assert_eq!("mydb", db_name.to_string());
+            assert!(!if_not_exists);
+            assert_eq!(None, location);
+            assert_eq!(None, managed_location);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_database_ine() {
+    let sql = "CREATE DATABASE IF NOT EXISTS mydb";
+    match verified_stmt(sql) {
+        Statement::CreateDatabase {
+            db_name,
+            if_not_exists,
+            location,
+            managed_location,
+        } => {
+            assert_eq!("mydb", db_name.to_string());
+            assert!(if_not_exists);
+            assert_eq!(None, location);
+            assert_eq!(None, managed_location);
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

@@ -402,7 +402,7 @@ PHP	₱ USD $
 }
 
 #[test]
-fn parse_copy_from() {
+fn test_copy_from() {
     let stmt = pg().verified_stmt("COPY users FROM 'data.csv'");
     assert_eq!(
         stmt,
@@ -419,6 +419,98 @@ fn parse_copy_from() {
         }
     );
 
+    let stmt = pg().verified_stmt("COPY users FROM 'data.csv' DELIMITER ','");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            to: false,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![CopyLegacyOption::Delimiter(',')],
+            values: vec![],
+        }
+    );
+
+    let stmt = pg().verified_stmt("COPY users FROM 'data.csv' DELIMITER ',' CSV HEADER");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            to: false,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![
+                CopyLegacyOption::Delimiter(','),
+                CopyLegacyOption::Csv(vec![CopyLegacyCsvOption::Header,])
+            ],
+            values: vec![],
+        }
+    );
+}
+
+#[test]
+fn test_copy_to() {
+    let stmt = pg().verified_stmt("COPY users TO 'data.csv'");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            to: true,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![],
+            values: vec![],
+        }
+    );
+
+    let stmt = pg().verified_stmt("COPY users TO 'data.csv' DELIMITER ','");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            to: true,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![CopyLegacyOption::Delimiter(',')],
+            values: vec![],
+        }
+    );
+
+    let stmt = pg().verified_stmt("COPY users TO 'data.csv' DELIMITER ',' CSV HEADER");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            to: true,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![
+                CopyLegacyOption::Delimiter(','),
+                CopyLegacyOption::Csv(vec![CopyLegacyCsvOption::Header,])
+            ],
+            values: vec![],
+        }
+    )
+}
+
+#[test]
+fn parse_copy_from() {
     let sql = "COPY table (a, b) FROM 'file.csv' WITH 
     (
         FORMAT CSV,

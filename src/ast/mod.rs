@@ -293,6 +293,8 @@ impl fmt::Display for Expr {
                     match k {
                         k @ Value::Number(_, _) => write!(f, "[{}]", k)?,
                         Value::SingleQuotedString(s) => write!(f, "[\"{}\"]", s)?,
+                        Value::ColonString(s) => write!(f, ":{}", s)?,
+                        Value::PeriodString(s) => write!(f, ".{}", s)?,
                         _ => write!(f, "[{}]", k)?,
                     }
                 }

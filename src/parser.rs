@@ -1116,6 +1116,9 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
             })
         } else if Token::LBracket == tok {
+            self.prev_token();
+            self.parse_map_access(expr)
+        } else if Token::Colon == tok {
             self.parse_map_access(expr)
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
@@ -1123,17 +1126,39 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
-        let key = self.parse_map_key()?;
-        let tok = self.consume_token(&Token::RBracket);
-        debug!("Tok: {}", tok);
-        let mut key_parts: Vec<Value> = vec![key];
-        while self.consume_token(&Token::LBracket) {
+    pub fn parse_map_keys(&mut self) -> Result<Vec<Value>, ParserError> {
+        let mut key_parts: Vec<Value> = vec![];
+        if self.consume_token(&Token::LBracket) {
             let key = self.parse_map_key()?;
             let tok = self.consume_token(&Token::RBracket);
             debug!("Tok: {}", tok);
             key_parts.push(key);
+        } else {
+            let key = self.parse_colon_map_key()?;
+            key_parts.push(key);
         }
+
+        loop {
+            if self.consume_token(&Token::LBracket) {
+                let key = self.parse_map_key()?;
+                let tok = self.consume_token(&Token::RBracket);
+                debug!("Tok: {}", tok);
+                key_parts.push(key);
+            } else if self.consume_token(&Token::Colon) {
+                let key = self.parse_colon_map_key()?;
+                key_parts.push(key);
+            } else if self.consume_token(&Token::Period) {
+                let key = self.parse_period_map_key()?;
+                key_parts.push(key);
+            } else {
+                break;
+            }
+        }
+        Ok(key_parts)
+    }
+
+    pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
+        let key_parts = self.parse_map_keys()?;
         match expr {
             e @ Expr::Identifier(_) | e @ Expr::CompoundIdentifier(_) => Ok(Expr::MapAccess {
                 column: Box::new(e),
@@ -1241,6 +1266,7 @@ impl<'a> Parser<'a> {
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
             Token::LBracket | Token::RBracket => Ok(10),
+            Token::Colon => Ok(10),
             _ => Ok(0),
         }
     }
@@ -2219,6 +2245,26 @@ impl<'a> Parser<'a> {
             #[cfg(feature = "bigdecimal")]
             Token::Number(s, _) => Ok(Value::Number(s.parse().unwrap(), false)),
             unexpected => self.expected("literal string or number", unexpected),
+        }
+    }
+
+    /// Parse a map key colon string
+    pub fn parse_colon_map_key(&mut self) -> Result<Value, ParserError> {
+        match self.next_token() {
+            Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => {
+                Ok(Value::ColonString(value))
+            }
+            unexpected => self.expected("literal string", unexpected),
+        }
+    }
+
+    /// Parse a map key period string
+    pub fn parse_period_map_key(&mut self) -> Result<Value, ParserError> {
+        match self.next_token() {
+            Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => {
+                Ok(Value::PeriodString(value))
+            }
+            unexpected => self.expected("literal string", unexpected),
         }
     }
 

@@ -614,6 +614,7 @@ fn parse_update_with_joins() {
         Statement::Update {
             table,
             assignments,
+            from: _from,
             selection,
         } => {
             assert_eq!(

@@ -758,6 +758,8 @@ pub enum Statement {
         table: TableWithJoins,
         /// Column assignments
         assignments: Vec<Assignment>,
+        /// Table which provide value to be set
+        from: Option<TableWithJoins>,
         /// WHERE
         selection: Option<Expr>,
     },
@@ -1191,11 +1193,15 @@ impl fmt::Display for Statement {
             Statement::Update {
                 table,
                 assignments,
+                from,
                 selection,
             } => {
                 write!(f, "UPDATE {}", table)?;
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
+                }
+                if let Some(from) = from {
+                    write!(f, " FROM {}", from)?;
                 }
                 if let Some(selection) = selection {
                     write!(f, " WHERE {}", selection)?;

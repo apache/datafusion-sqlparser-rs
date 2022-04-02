@@ -195,6 +195,7 @@ fn parse_update_with_table_alias() {
         Statement::Update {
             table,
             assignments,
+            from: _from,
             selection,
         } => {
             assert_eq!(

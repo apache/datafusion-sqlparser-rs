@@ -3611,6 +3611,11 @@ impl<'a> Parser<'a> {
         let table = self.parse_table_and_joins()?;
         self.expect_keyword(Keyword::SET)?;
         let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
+        let from = if self.parse_keyword(Keyword::FROM) && dialect_of!(self is PostgreSqlDialect) {
+            Some(self.parse_table_and_joins()?)
+        } else {
+            None
+        };
         let selection = if self.parse_keyword(Keyword::WHERE) {
             Some(self.parse_expr()?)
         } else {
@@ -3619,6 +3624,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Update {
             table,
             assignments,
+            from,
             selection,
         })
     }

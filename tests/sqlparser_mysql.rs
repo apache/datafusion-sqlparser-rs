@@ -305,6 +305,7 @@ fn parse_quote_identifiers_2() {
                     value: "quoted ` identifier".into(),
                     quote_style: Some('`'),
                 }))],
+                into: None,
                 from: vec![],
                 lateral_views: vec![],
                 selection: None,
@@ -613,6 +614,7 @@ fn parse_update_with_joins() {
         Statement::Update {
             table,
             assignments,
+            from: _from,
             selection,
         } => {
             assert_eq!(
@@ -732,6 +734,7 @@ fn parse_substring_in_select() {
                                 false
                             ))))
                         })],
+                        into: None,
                         from: vec![TableWithJoins {
                             relation: TableFactor::Table {
                                 name: ObjectName(vec![Ident {

@@ -1521,6 +1521,8 @@ impl<'a> Parser<'a> {
             self.parse_create_virtual_table()
         } else if self.parse_keyword(Keyword::SCHEMA) {
             self.parse_create_schema()
+        } else if self.parse_keyword(Keyword::DATABASE) {
+            self.parse_create_database()
         } else {
             self.expected("an object type after CREATE", self.peek_token())
         }
@@ -3001,6 +3003,21 @@ impl<'a> Parser<'a> {
 
         let projection = self.parse_comma_separated(Parser::parse_select_item)?;
 
+        let into = if self.parse_keyword(Keyword::INTO) {
+            let temporary = self
+                .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
+                .is_some();
+            let unlogged = self.parse_keyword(Keyword::UNLOGGED);
+            let name = self.parse_object_name()?;
+            Some(SelectInto {
+                temporary,
+                unlogged,
+                name,
+            })
+        } else {
+            None
+        };
+
         // Note that for keywords to be properly handled here, they need to be
         // added to `RESERVED_FOR_COLUMN_ALIAS` / `RESERVED_FOR_TABLE_ALIAS`,
         // otherwise they may be parsed as an alias as part of the `projection`
@@ -3082,6 +3099,7 @@ impl<'a> Parser<'a> {
             distinct,
             top,
             projection,
+            into,
             from,
             lateral_views,
             selection,
@@ -3702,6 +3720,11 @@ impl<'a> Parser<'a> {
         let table = self.parse_table_and_joins()?;
         self.expect_keyword(Keyword::SET)?;
         let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
+        let from = if self.parse_keyword(Keyword::FROM) && dialect_of!(self is PostgreSqlDialect) {
+            Some(self.parse_table_and_joins()?)
+        } else {
+            None
+        };
         let selection = if self.parse_keyword(Keyword::WHERE) {
             Some(self.parse_expr()?)
         } else {
@@ -3710,6 +3733,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Update {
             table,
             assignments,
+            from,
             selection,
         })
     }

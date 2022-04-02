@@ -36,8 +36,8 @@ pub use self::ddl::{
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     Cte, Fetch, Join, JoinConstraint, JoinOperator, LateralView, LockType, Offset, OffsetRows,
-    OrderByExpr, Query, Select, SelectItem, SetExpr, SetOperator, TableAlias, TableFactor,
-    TableWithJoins, Top, Values, With,
+    OrderByExpr, Query, Select, SelectInto, SelectItem, SetExpr, SetOperator, TableAlias,
+    TableFactor, TableWithJoins, Top, Values, With,
 };
 pub use self::value::{DateTimeField, TrimWhereField, Value};
 
@@ -758,6 +758,8 @@ pub enum Statement {
         table: TableWithJoins,
         /// Column assignments
         assignments: Vec<Assignment>,
+        /// Table which provide value to be set
+        from: Option<TableWithJoins>,
         /// WHERE
         selection: Option<Expr>,
     },
@@ -1177,11 +1179,15 @@ impl fmt::Display for Statement {
             Statement::Update {
                 table,
                 assignments,
+                from,
                 selection,
             } => {
                 write!(f, "UPDATE {}", table)?;
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
+                }
+                if let Some(from) = from {
+                    write!(f, " FROM {}", from)?;
                 }
                 if let Some(selection) = selection {
                     write!(f, " WHERE {}", selection)?;
@@ -1204,7 +1210,7 @@ impl fmt::Display for Statement {
                 location,
                 managed_location,
             } => {
-                write!(f, "CREATE")?;
+                write!(f, "CREATE DATABASE")?;
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }

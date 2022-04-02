@@ -508,6 +508,7 @@ define_keywords!(
     UNION,
     UNIQUE,
     UNKNOWN,
+    UNLOGGED,
     UNNEST,
     UNSIGNED,
     UPDATE,
@@ -609,4 +610,5 @@ pub const RESERVED_FOR_COLUMN_ALIAS: &[Keyword] = &[
     Keyword::DISTRIBUTE,
     // Reserved only as a column alias in the `SELECT` clause
     Keyword::FROM,
+    Keyword::INTO,
 ];

@@ -8,8 +8,23 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
-## [0.15.0] 2022-03-07
 
+## [0.16.0] 2022-04-03
+
+### Added
+
+* Support `WEEK` keyword in `EXTRACT` (#436) - Thanks @Ted-Jiang
+* Support `MERGE` statement (#430) - Thanks @mobuchowski
+* Support `SAVEPOINT` statement (#438) - Thanks @poonai
+* Support `TO` clause in `COPY` (#441) - Thanks @matthewmturner
+* Support `CREATE DATABASE` statement (#451) - Thanks @matthewmturner
+* Support `FROM` clause in `UPDATE` statement (#450) - Thanks @slhmy
+* Support additional `COPY` options (#446) - Thanks @wangrunji0408
+
+### Fixed:
+* Bug in array / map access parsing (#433) - Thanks @monadbobo
+
+## [0.15.0] 2022-03-07
 
 ### Added
 

@@ -246,10 +246,24 @@ pub struct TokenWithPosition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum QueryOffset {
     Normal(u64),
     EOF,
 }
+
+impl fmt::Display for QueryOffset {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            QueryOffset::Normal(offset) => write!(f, "{}", offset),
+            QueryOffset::EOF => write!(f, "eof"),
+        }
+    }
+}
+
+pub type TokenPosition = (QueryOffset, QueryOffset);
+
+pub type TokenPositionMap = HashMap<usize, (Token, TokenPosition)>;
 
 impl fmt::Display for Word {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -338,9 +352,7 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Tokenize the statement and produce a vector of tokens
-    pub fn tokenize(
-        &mut self,
-    ) -> Result<(Vec<Token>, HashMap<usize, TokenWithPosition>), TokenizerError> {
+    pub fn tokenize(&mut self) -> Result<(Vec<Token>, TokenPositionMap), TokenizerError> {
         // let mut peekable = self.query.chars().peekable();
         let mut peekable = self.query.char_indices().peekable();
 
@@ -364,6 +376,8 @@ impl<'a> Tokenizer<'a> {
                 _ => self.col += 1,
             }
 
+            // try save position info
+
             tokens.push(token);
         }
         Ok((tokens, position_map))
@@ -374,9 +388,8 @@ impl<'a> Tokenizer<'a> {
         &self,
         chars: &mut Peekable<CharIndices<'_>>,
         token_idx: usize,
-        position_map: &mut HashMap<usize, TokenWithPosition>,
+        position_map: &mut TokenPositionMap,
     ) -> Result<Option<Token>, TokenizerError> {
-        //println!("next_token: {:?}", chars.peek());
         match chars.peek() {
             Some((pos, ch)) => {
                 let pos = *pos;
@@ -830,28 +843,30 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Save token-idx to its position in a map.
-    /// Current only support save Values and SemiColon.
+    /// Current only support save Values, SemiColon and On.
     fn save_token_position(
-        position_map: &mut HashMap<usize, TokenWithPosition>,
+        position_map: &mut HashMap<usize, (Token, TokenPosition)>,
         token: &Token,
         token_idx: usize,
         chars: &mut Peekable<CharIndices<'_>>,
         token_start: u64,
     ) {
         if token == &Token::SemiColon
-            || matches!(token, Token::Word(w) if w.keyword == Keyword::VALUES)
+            || matches!(token, Token::Word(w) if w.keyword == Keyword::VALUES || w.keyword == Keyword::ON)
         {
             let end = chars
                 .peek()
                 .map(|(end, _)| QueryOffset::Normal(*end as u64))
                 .unwrap_or(QueryOffset::EOF);
-            let token_with_position = TokenWithPosition {
-                token: token.clone(),
-                start: QueryOffset::Normal(token_start),
-                end,
-            };
+            // let token_with_position = TokenWithPosition {
+            //     token: token.clone(),
+            //     start: QueryOffset::Normal(token_start),
+            //     end,
+            // };
 
-            position_map.insert(token_idx, token_with_position);
+            let start = QueryOffset::Normal(token_start);
+
+            position_map.insert(token_idx, (token.clone(), (start, end)));
         }
     }
 }

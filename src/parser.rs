@@ -3261,8 +3261,18 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse an INSERT statement
+    /// Default parse insert statement which parse values as exprs.
     fn parse_insert(&mut self) -> Result<Statement, ParserError> {
+        self.parse_insert_with_option(false)
+    }
+
+    /// Parse insert statment which directly return values-stream(string).
+    fn parse_stream_values_insert(&mut self) -> Result<Statement, ParserError> {
+        self.parse_insert_with_option(true)
+    }
+
+    /// Parse an INSERT statement
+    fn parse_insert_with_option(&mut self, stream_values: bool) -> Result<Statement, ParserError> {
         let or = if !dialect_of!(self is SQLiteDialect) {
             None
         } else if self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]) {
@@ -3339,6 +3349,17 @@ impl<'a> Parser<'a> {
 
             let source = if format.is_some() {
                 None
+            } else if self.parse_keyword(Keyword::VALUES) && stream_values {
+                let body = SetExpr::Values(self.parse_values()?);
+
+                Some(Box::new(Query {
+                    with: None,
+                    body,
+                    order_by: vec![],
+                    limit: None,
+                    offset: None,
+                    fetch: None,
+                }))
             } else {
                 Some(Box::new(self.parse_query()?))
             };
@@ -3550,7 +3571,7 @@ impl<'a> Parser<'a> {
             parser.expect_token(&Token::RParen)?;
             Ok(exprs)
         })?;
-        Ok(Values(values))
+        Ok(Values::ExprValues(values))
     }
 
     pub fn parse_start_transaction(&mut self) -> Result<Statement, ParserError> {

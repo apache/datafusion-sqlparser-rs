@@ -109,23 +109,29 @@ pub struct Parser<'a> {
     /// The index of the first unprocessed token in `self.tokens`
     index: usize,
     dialect: &'a dyn Dialect,
+    position_map: TokenPositionMap,
 }
 
 impl<'a> Parser<'a> {
     /// Parse the specified tokens
-    pub fn new(tokens: Vec<Token>, dialect: &'a dyn Dialect) -> Self {
+    pub fn new(
+        tokens: Vec<Token>,
+        position_map: TokenPositionMap,
+        dialect: &'a dyn Dialect,
+    ) -> Self {
         Parser {
             tokens,
             index: 0,
             dialect,
+            position_map,
         }
     }
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
     pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, sql);
-        let (tokens, _) = tokenizer.tokenize()?;
-        let mut parser = Parser::new(tokens, dialect);
+        let (tokens, pos_map) = tokenizer.tokenize()?;
+        let mut parser = Parser::new(tokens, pos_map, dialect);
         let mut stmts = Vec::new();
         let mut expecting_statement_delimiter = false;
         debug!("Parsing sql '{}'...", sql);
@@ -3349,8 +3355,8 @@ impl<'a> Parser<'a> {
 
             let source = if format.is_some() {
                 None
-            } else if self.parse_keyword(Keyword::VALUES) && stream_values {
-                let body = SetExpr::Values(self.parse_values()?);
+            } else if stream_values && self.parse_keyword(Keyword::VALUES) {
+                let body = SetExpr::Values(self.parse_stream_values()?);
 
                 Some(Box::new(Query {
                     with: None,
@@ -3574,6 +3580,36 @@ impl<'a> Parser<'a> {
         Ok(Values::ExprValues(values))
     }
 
+    pub fn parse_stream_values(&mut self) -> Result<Values, ParserError> {
+        self.prev_token();
+        let values_idx = self.index;
+        let expected = self.peek_token();
+        self.next_token();
+
+        let start = self.get_token_end(values_idx, expected)?;
+
+        // skip util to on or semicolon
+        while self.peek_token() != Token::EOF
+            && self.consume_token(&Token::SemiColon)
+            && !self.parse_keyword(Keyword::ON)
+        {
+            self.next_token();
+        }
+
+        if self.peek_token() != Token::EOF {
+            return parser_err!("");
+        }
+
+        self.prev_token();
+        let values_end_idx = self.index;
+        let expected = self.peek_token();
+        self.next_token();
+
+        let end = self.get_token_start(values_end_idx, expected)?;
+
+        Ok(Values::StreamValues(start, end))
+    }
+
     pub fn parse_start_transaction(&mut self) -> Result<Statement, ParserError> {
         self.expect_keyword(Keyword::TRANSACTION)?;
         Ok(Statement::StartTransaction {
@@ -3681,6 +3717,36 @@ impl<'a> Parser<'a> {
             data_types,
             statement,
         })
+    }
+
+    fn get_token_end(&self, idx: usize, expected: Token) -> Result<QueryOffset, ParserError> {
+        let (token, (_, end)) = self.position_map.get(&idx).ok_or_else(|| {
+            ParserError::ParserError(format!(
+                "{}'s position does not exists, idx: {}",
+                expected, idx
+            ))
+        })?;
+
+        if token != &expected {
+            self.expected(&format!("{}", expected), token.clone())
+        } else {
+            Ok(end.clone())
+        }
+    }
+
+    fn get_token_start(&self, idx: usize, expected: Token) -> Result<QueryOffset, ParserError> {
+        let (token, (_, start)) = self.position_map.get(&idx).ok_or_else(|| {
+            ParserError::ParserError(format!(
+                "{}'s position does not exists, idx: {}",
+                expected, idx
+            ))
+        })?;
+
+        if token != &expected {
+            self.expected(&format!("{}", expected), token.clone())
+        } else {
+            Ok(start.clone())
+        }
     }
 }
 

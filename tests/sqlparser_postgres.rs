@@ -561,7 +561,7 @@ fn parse_prepare() {
             ]];
             match &source {
                 Some(source) => match &source.body {
-                    SetExpr::Values(Values(values)) => {
+                    SetExpr::Values(Values::ExprValues(values)) => {
                         assert_eq!(values.as_slice(), &expected_values)
                     }
                     _ => unreachable!(),

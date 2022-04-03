@@ -2235,51 +2235,160 @@ impl<'a> Parser<'a> {
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
         let table_name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
-        let to_or_from = self.expect_one_of_keywords(&[Keyword::FROM, Keyword::TO])?;
-        let to: bool = match to_or_from {
-            Keyword::TO => true,
-            Keyword::FROM => false,
-            _ => unreachable!("something wrong while parsing copy statment :("),
+        let to = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::TO]) {
+            Some(Keyword::FROM) => false,
+            Some(Keyword::TO) => true,
+            _ => self.expected("FROM or TO", self.peek_token())?,
         };
-        let mut filename = None;
-        // check whether data has to be copied form table or std in.
-        if !self.parse_keyword(Keyword::STDIN) {
-            filename = Some(self.parse_identifier()?)
-        }
-        // parse copy options.
-        let mut delimiter = None;
-        let mut csv_header = false;
-        loop {
-            if let Some(keyword) = self.parse_one_of_keywords(&[Keyword::DELIMITER, Keyword::CSV]) {
-                match keyword {
-                    Keyword::DELIMITER => {
-                        delimiter = Some(self.parse_identifier()?);
-                        continue;
-                    }
-                    Keyword::CSV => {
-                        self.expect_keyword(Keyword::HEADER)?;
-                        csv_header = true
-                    }
-                    _ => unreachable!("something wrong while parsing copy statment :("),
-                }
+        let target = if self.parse_keyword(Keyword::STDIN) {
+            CopyTarget::Stdin
+        } else if self.parse_keyword(Keyword::STDOUT) {
+            CopyTarget::Stdout
+        } else if self.parse_keyword(Keyword::PROGRAM) {
+            CopyTarget::Program {
+                command: self.parse_literal_string()?,
             }
-            break;
+        } else {
+            CopyTarget::File {
+                filename: self.parse_literal_string()?,
+            }
+        };
+        let _ = self.parse_keyword(Keyword::WITH);
+        let mut options = vec![];
+        if self.consume_token(&Token::LParen) {
+            options = self.parse_comma_separated(Parser::parse_copy_option)?;
+            self.expect_token(&Token::RParen)?;
         }
-        // copy the values from stdin if there is no file to be copied from.
-        let mut values = vec![];
-        if filename.is_none() {
+        let mut legacy_options = vec![];
+        while let Some(opt) = self.maybe_parse(|parser| parser.parse_copy_legacy_option()) {
+            legacy_options.push(opt);
+        }
+        let values = if let CopyTarget::Stdin = target {
             self.expect_token(&Token::SemiColon)?;
-            values = self.parse_tsv();
-        }
+            self.parse_tsv()
+        } else {
+            vec![]
+        };
         Ok(Statement::Copy {
             table_name,
             columns,
-            values,
-            filename,
-            delimiter,
-            csv_header,
             to,
+            target,
+            options,
+            legacy_options,
+            values,
         })
+    }
+
+    fn parse_copy_option(&mut self) -> Result<CopyOption, ParserError> {
+        let ret = match self.parse_one_of_keywords(&[
+            Keyword::FORMAT,
+            Keyword::FREEZE,
+            Keyword::DELIMITER,
+            Keyword::NULL,
+            Keyword::HEADER,
+            Keyword::QUOTE,
+            Keyword::ESCAPE,
+            Keyword::FORCE_QUOTE,
+            Keyword::FORCE_NOT_NULL,
+            Keyword::FORCE_NULL,
+            Keyword::ENCODING,
+        ]) {
+            Some(Keyword::FORMAT) => CopyOption::Format(self.parse_identifier()?),
+            Some(Keyword::FREEZE) => CopyOption::Freeze(!matches!(
+                self.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]),
+                Some(Keyword::FALSE)
+            )),
+            Some(Keyword::DELIMITER) => CopyOption::Delimiter(self.parse_literal_char()?),
+            Some(Keyword::NULL) => CopyOption::Null(self.parse_literal_string()?),
+            Some(Keyword::HEADER) => CopyOption::Header(!matches!(
+                self.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE]),
+                Some(Keyword::FALSE)
+            )),
+            Some(Keyword::QUOTE) => CopyOption::Quote(self.parse_literal_char()?),
+            Some(Keyword::ESCAPE) => CopyOption::Escape(self.parse_literal_char()?),
+            Some(Keyword::FORCE_QUOTE) => {
+                CopyOption::ForceQuote(self.parse_parenthesized_column_list(Mandatory)?)
+            }
+            Some(Keyword::FORCE_NOT_NULL) => {
+                CopyOption::ForceNotNull(self.parse_parenthesized_column_list(Mandatory)?)
+            }
+            Some(Keyword::FORCE_NULL) => {
+                CopyOption::ForceNull(self.parse_parenthesized_column_list(Mandatory)?)
+            }
+            Some(Keyword::ENCODING) => CopyOption::Encoding(self.parse_literal_string()?),
+            _ => self.expected("option", self.peek_token())?,
+        };
+        Ok(ret)
+    }
+
+    fn parse_copy_legacy_option(&mut self) -> Result<CopyLegacyOption, ParserError> {
+        let ret = match self.parse_one_of_keywords(&[
+            Keyword::BINARY,
+            Keyword::DELIMITER,
+            Keyword::NULL,
+            Keyword::CSV,
+        ]) {
+            Some(Keyword::BINARY) => CopyLegacyOption::Binary,
+            Some(Keyword::DELIMITER) => {
+                let _ = self.parse_keyword(Keyword::AS); // [ AS ]
+                CopyLegacyOption::Delimiter(self.parse_literal_char()?)
+            }
+            Some(Keyword::NULL) => {
+                let _ = self.parse_keyword(Keyword::AS); // [ AS ]
+                CopyLegacyOption::Null(self.parse_literal_string()?)
+            }
+            Some(Keyword::CSV) => CopyLegacyOption::Csv({
+                let mut opts = vec![];
+                while let Some(opt) =
+                    self.maybe_parse(|parser| parser.parse_copy_legacy_csv_option())
+                {
+                    opts.push(opt);
+                }
+                opts
+            }),
+            _ => self.expected("option", self.peek_token())?,
+        };
+        Ok(ret)
+    }
+
+    fn parse_copy_legacy_csv_option(&mut self) -> Result<CopyLegacyCsvOption, ParserError> {
+        let ret = match self.parse_one_of_keywords(&[
+            Keyword::HEADER,
+            Keyword::QUOTE,
+            Keyword::ESCAPE,
+            Keyword::FORCE,
+        ]) {
+            Some(Keyword::HEADER) => CopyLegacyCsvOption::Header,
+            Some(Keyword::QUOTE) => {
+                let _ = self.parse_keyword(Keyword::AS); // [ AS ]
+                CopyLegacyCsvOption::Quote(self.parse_literal_char()?)
+            }
+            Some(Keyword::ESCAPE) => {
+                let _ = self.parse_keyword(Keyword::AS); // [ AS ]
+                CopyLegacyCsvOption::Escape(self.parse_literal_char()?)
+            }
+            Some(Keyword::FORCE) if self.parse_keywords(&[Keyword::NOT, Keyword::NULL]) => {
+                CopyLegacyCsvOption::ForceNotNull(
+                    self.parse_comma_separated(Parser::parse_identifier)?,
+                )
+            }
+            Some(Keyword::FORCE) if self.parse_keywords(&[Keyword::QUOTE]) => {
+                CopyLegacyCsvOption::ForceQuote(
+                    self.parse_comma_separated(Parser::parse_identifier)?,
+                )
+            }
+            _ => self.expected("csv option", self.peek_token())?,
+        };
+        Ok(ret)
+    }
+
+    fn parse_literal_char(&mut self) -> Result<char, ParserError> {
+        let s = self.parse_literal_string()?;
+        if s.len() != 1 {
+            return parser_err!(format!("Expect a char, found {:?}", s));
+        }
+        Ok(s.chars().next().unwrap())
     }
 
     /// Parse a tab separated values in

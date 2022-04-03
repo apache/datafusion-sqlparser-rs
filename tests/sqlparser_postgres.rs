@@ -375,7 +375,7 @@ fn parse_drop_schema_if_exists() {
 }
 
 #[test]
-fn parse_copy_example() {
+fn parse_copy_from_stdin() {
     let sql = r#"COPY public.actor (actor_id, first_name, last_name, last_update, value) FROM stdin;
 1	PENELOPE	GUINESS	2006-02-15 09:34:33 0.11111
 2	NICK	WAHLBERG	2006-02-15 09:34:33 0.22222
@@ -487,14 +487,13 @@ fn test_copy_from() {
         Statement::Copy {
             table_name: ObjectName(vec!["users".into()]),
             columns: vec![],
-            filename: Some(Ident {
-                value: "data.csv".to_string(),
-                quote_style: Some('\'')
-            }),
+            to: false,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![],
             values: vec![],
-            delimiter: None,
-            csv_header: false,
-            to: false
         }
     );
 
@@ -504,17 +503,13 @@ fn test_copy_from() {
         Statement::Copy {
             table_name: ObjectName(vec!["users".into()]),
             columns: vec![],
-            filename: Some(Ident {
-                value: "data.csv".to_string(),
-                quote_style: Some('\'')
-            }),
+            to: false,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![CopyLegacyOption::Delimiter(',')],
             values: vec![],
-            delimiter: Some(Ident {
-                value: ",".to_string(),
-                quote_style: Some('\'')
-            }),
-            csv_header: false,
-            to: false
         }
     );
 
@@ -524,19 +519,18 @@ fn test_copy_from() {
         Statement::Copy {
             table_name: ObjectName(vec!["users".into()]),
             columns: vec![],
-            filename: Some(Ident {
-                value: "data.csv".to_string(),
-                quote_style: Some('\'')
-            }),
+            to: false,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![
+                CopyLegacyOption::Delimiter(','),
+                CopyLegacyOption::Csv(vec![CopyLegacyCsvOption::Header,])
+            ],
             values: vec![],
-            delimiter: Some(Ident {
-                value: ",".to_string(),
-                quote_style: Some('\'')
-            }),
-            csv_header: true,
-            to: false
         }
-    )
+    );
 }
 
 #[test]
@@ -547,14 +541,13 @@ fn test_copy_to() {
         Statement::Copy {
             table_name: ObjectName(vec!["users".into()]),
             columns: vec![],
-            filename: Some(Ident {
-                value: "data.csv".to_string(),
-                quote_style: Some('\'')
-            }),
+            to: true,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![],
             values: vec![],
-            delimiter: None,
-            csv_header: false,
-            to: true
         }
     );
 
@@ -564,17 +557,13 @@ fn test_copy_to() {
         Statement::Copy {
             table_name: ObjectName(vec!["users".into()]),
             columns: vec![],
-            filename: Some(Ident {
-                value: "data.csv".to_string(),
-                quote_style: Some('\'')
-            }),
+            to: true,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![CopyLegacyOption::Delimiter(',')],
             values: vec![],
-            delimiter: Some(Ident {
-                value: ",".to_string(),
-                quote_style: Some('\'')
-            }),
-            csv_header: false,
-            to: true
         }
     );
 
@@ -584,17 +573,200 @@ fn test_copy_to() {
         Statement::Copy {
             table_name: ObjectName(vec!["users".into()]),
             columns: vec![],
-            filename: Some(Ident {
-                value: "data.csv".to_string(),
-                quote_style: Some('\'')
-            }),
+            to: true,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![
+                CopyLegacyOption::Delimiter(','),
+                CopyLegacyOption::Csv(vec![CopyLegacyCsvOption::Header,])
+            ],
             values: vec![],
-            delimiter: Some(Ident {
-                value: ",".to_string(),
-                quote_style: Some('\'')
-            }),
-            csv_header: true,
-            to: true
+        }
+    )
+}
+
+#[test]
+fn parse_copy_from() {
+    let sql = "COPY table (a, b) FROM 'file.csv' WITH 
+    (
+        FORMAT CSV,
+        FREEZE,
+        FREEZE TRUE,
+        FREEZE FALSE,
+        DELIMITER ',',
+        NULL '',
+        HEADER,
+        HEADER TRUE,
+        HEADER FALSE,
+        QUOTE '\"',
+        ESCAPE '\\',
+        FORCE_QUOTE (a, b),
+        FORCE_NOT_NULL (a),
+        FORCE_NULL (b),
+        ENCODING 'utf8'
+    )";
+    assert_eq!(
+        pg_and_generic().one_statement_parses_to(sql, ""),
+        Statement::Copy {
+            table_name: ObjectName(vec!["table".into()]),
+            columns: vec!["a".into(), "b".into()],
+            to: false,
+            target: CopyTarget::File {
+                filename: "file.csv".into()
+            },
+            options: vec![
+                CopyOption::Format("CSV".into()),
+                CopyOption::Freeze(true),
+                CopyOption::Freeze(true),
+                CopyOption::Freeze(false),
+                CopyOption::Delimiter(','),
+                CopyOption::Null("".into()),
+                CopyOption::Header(true),
+                CopyOption::Header(true),
+                CopyOption::Header(false),
+                CopyOption::Quote('"'),
+                CopyOption::Escape('\\'),
+                CopyOption::ForceQuote(vec!["a".into(), "b".into()]),
+                CopyOption::ForceNotNull(vec!["a".into()]),
+                CopyOption::ForceNull(vec!["b".into()]),
+                CopyOption::Encoding("utf8".into()),
+            ],
+            legacy_options: vec![],
+            values: vec![],
+        }
+    );
+}
+
+#[test]
+fn parse_copy_to() {
+    let stmt = pg().verified_stmt("COPY users TO 'data.csv'");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            to: true,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![],
+            values: vec![],
+        }
+    );
+
+    let stmt = pg().verified_stmt("COPY country TO STDOUT (DELIMITER '|')");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["country".into()]),
+            columns: vec![],
+            to: true,
+            target: CopyTarget::Stdout,
+            options: vec![CopyOption::Delimiter('|')],
+            legacy_options: vec![],
+            values: vec![],
+        }
+    );
+
+    let stmt =
+        pg().verified_stmt("COPY country TO PROGRAM 'gzip > /usr1/proj/bray/sql/country_data.gz'");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["country".into()]),
+            columns: vec![],
+            to: true,
+            target: CopyTarget::Program {
+                command: "gzip > /usr1/proj/bray/sql/country_data.gz".into(),
+            },
+            options: vec![],
+            legacy_options: vec![],
+            values: vec![],
+        }
+    );
+}
+
+#[test]
+fn parse_copy_from_before_v9_0() {
+    let stmt = pg().verified_stmt("COPY users FROM 'data.csv' BINARY DELIMITER ',' NULL 'null' CSV HEADER QUOTE '\"' ESCAPE '\\' FORCE NOT NULL column");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            to: false,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![
+                CopyLegacyOption::Binary,
+                CopyLegacyOption::Delimiter(','),
+                CopyLegacyOption::Null("null".into()),
+                CopyLegacyOption::Csv(vec![
+                    CopyLegacyCsvOption::Header,
+                    CopyLegacyCsvOption::Quote('\"'),
+                    CopyLegacyCsvOption::Escape('\\'),
+                    CopyLegacyCsvOption::ForceNotNull(vec!["column".into()]),
+                ]),
+            ],
+            values: vec![],
+        }
+    );
+
+    // test 'AS' keyword
+    let sql = "COPY users FROM 'data.csv' DELIMITER AS ',' NULL AS 'null' CSV QUOTE AS '\"' ESCAPE AS '\\'";
+    assert_eq!(
+        pg_and_generic().one_statement_parses_to(sql, ""),
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            to: false,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![
+                CopyLegacyOption::Delimiter(','),
+                CopyLegacyOption::Null("null".into()),
+                CopyLegacyOption::Csv(vec![
+                    CopyLegacyCsvOption::Quote('\"'),
+                    CopyLegacyCsvOption::Escape('\\'),
+                ]),
+            ],
+            values: vec![],
+        }
+    );
+}
+
+#[test]
+fn parse_copy_to_before_v9_0() {
+    let stmt = pg().verified_stmt("COPY users TO 'data.csv' BINARY DELIMITER ',' NULL 'null' CSV HEADER QUOTE '\"' ESCAPE '\\' FORCE QUOTE column");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            table_name: ObjectName(vec!["users".into()]),
+            columns: vec![],
+            to: true,
+            target: CopyTarget::File {
+                filename: "data.csv".to_string(),
+            },
+            options: vec![],
+            legacy_options: vec![
+                CopyLegacyOption::Binary,
+                CopyLegacyOption::Delimiter(','),
+                CopyLegacyOption::Null("null".into()),
+                CopyLegacyOption::Csv(vec![
+                    CopyLegacyCsvOption::Header,
+                    CopyLegacyCsvOption::Quote('\"'),
+                    CopyLegacyCsvOption::Escape('\\'),
+                    CopyLegacyCsvOption::ForceQuote(vec!["column".into()]),
+                ]),
+            ],
+            values: vec![],
         }
     )
 }

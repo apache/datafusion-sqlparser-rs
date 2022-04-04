@@ -2614,7 +2614,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             SetExpr::Query(Box::new(subquery))
         } else if self.parse_keyword(Keyword::VALUES) {
-            SetExpr::Values(self.parse_values()?)
+            SetExpr::Values(Values::ExprValues(self.parse_values()?))
         } else {
             return self.expected(
                 "SELECT, VALUES, or a subquery in the query body",
@@ -3356,7 +3356,8 @@ impl<'a> Parser<'a> {
             let source = if format.is_some() {
                 None
             } else if stream_values && self.parse_keyword(Keyword::VALUES) {
-                let body = SetExpr::Values(self.parse_stream_values()?);
+                let (values_start, values_end) = self.parse_stream_values()?;
+                let body = SetExpr::Values(Values::StreamValues(values_start, values_end));
 
                 Some(Box::new(Query {
                     with: None,
@@ -3570,17 +3571,17 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_values(&mut self) -> Result<Values, ParserError> {
+    pub fn parse_values(&mut self) -> Result<Vec<Vec<Expr>>, ParserError> {
         let values = self.parse_comma_separated(|parser| {
             parser.expect_token(&Token::LParen)?;
             let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
             parser.expect_token(&Token::RParen)?;
             Ok(exprs)
         })?;
-        Ok(Values::ExprValues(values))
+        Ok(values)
     }
 
-    pub fn parse_stream_values(&mut self) -> Result<Values, ParserError> {
+    pub fn parse_stream_values(&mut self) -> Result<(QueryOffset, QueryOffset), ParserError> {
         self.prev_token();
         let values_idx = self.index;
         let expected = self.peek_token();
@@ -3602,7 +3603,7 @@ impl<'a> Parser<'a> {
             self.get_values_end(values_end_idx, expected)?
         };
 
-        Ok(Values::StreamValues(start, end))
+        Ok((start, end))
     }
 
     fn skip_values(&mut self) -> Result<(), ParserError> {

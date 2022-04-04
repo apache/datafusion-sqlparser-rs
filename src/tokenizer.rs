@@ -353,7 +353,6 @@ impl<'a> Tokenizer<'a> {
 
     /// Tokenize the statement and produce a vector of tokens
     pub fn tokenize(&mut self) -> Result<(Vec<Token>, TokenPositionMap), TokenizerError> {
-        // let mut peekable = self.query.chars().peekable();
         let mut peekable = self.query.char_indices().peekable();
 
         let mut tokens: Vec<Token> = vec![];
@@ -451,7 +450,7 @@ impl<'a> Tokenizer<'a> {
                         }
 
                         let token = Token::make_word(&s, None);
-                        Self::save_token_position(
+                        Self::save_position_if_necessary(
                             position_map,
                             &token,
                             token_idx,
@@ -482,7 +481,7 @@ impl<'a> Tokenizer<'a> {
                         let quote_end = Word::matching_end_quote(quote_start);
                         let s = peeking_take_while(chars, |ch| ch != quote_end);
 
-                        if matches!(chars.next(), Some((_, end)) if end == quote_end) {
+                        if matches!(chars.next(), Some((_, ch)) if ch == quote_end) {
                             Ok(Some(Token::make_word(&s, Some(quote_start))))
                         } else {
                             self.tokenizer_error(format!(
@@ -506,11 +505,9 @@ impl<'a> Tokenizer<'a> {
                         }
 
                         // match one period
-                        if let Some((_, c)) = chars.peek() {
-                            if c == &'.' {
-                                s.push('.');
-                                chars.next();
-                            }
+                        if matches!(chars.peek(), Some((_, ch)) if ch == &'.') {
+                            s.push('.');
+                            chars.next();
                         }
                         s += &peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
 
@@ -519,7 +516,7 @@ impl<'a> Tokenizer<'a> {
                             return Ok(Some(Token::Period));
                         }
 
-                        let long = if matches!(chars.peek(), Some((_, l)) if l == &'L') {
+                        let long = if matches!(chars.peek(), Some((_, ch)) if ch == &'L') {
                             chars.next();
                             true
                         } else {
@@ -649,7 +646,7 @@ impl<'a> Tokenizer<'a> {
                     ';' => {
                         let token = Token::SemiColon;
                         let _ = chars.next();
-                        Self::save_token_position(
+                        Self::save_position_if_necessary(
                             position_map,
                             &token,
                             token_idx,
@@ -840,9 +837,9 @@ impl<'a> Tokenizer<'a> {
         Ok(Some(t))
     }
 
-    /// Save token-idx to its position in a map.
-    /// Current only support save Values, SemiColon and On.
-    fn save_token_position(
+    /// Save token-idx to token's position in a map.
+    /// Currently only save about Values, SemiColon and On .
+    fn save_position_if_necessary(
         position_map: &mut HashMap<usize, (Token, TokenPosition)>,
         token: &Token,
         token_idx: usize,
@@ -852,17 +849,11 @@ impl<'a> Tokenizer<'a> {
         if token == &Token::SemiColon
             || matches!(token, Token::Word(w) if w.keyword == Keyword::VALUES || w.keyword == Keyword::ON)
         {
+            let start = QueryOffset::Normal(token_start);
             let end = chars
                 .peek()
                 .map(|(end, _)| QueryOffset::Normal(*end as u64))
                 .unwrap_or(QueryOffset::EOF);
-            // let token_with_position = TokenWithPosition {
-            //     token: token.clone(),
-            //     start: QueryOffset::Normal(token_start),
-            //     end,
-            // };
-
-            let start = QueryOffset::Normal(token_start);
 
             position_map.insert(token_idx, (token.clone(), (start, end)));
         }

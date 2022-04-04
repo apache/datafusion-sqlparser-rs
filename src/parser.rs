@@ -2614,7 +2614,8 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             SetExpr::Query(Box::new(subquery))
         } else if self.parse_keyword(Keyword::VALUES) {
-            SetExpr::Values(Values::ExprValues(self.parse_values()?))
+            let values = self.parse_values()?;
+            SetExpr::Values(Values::ExprValues(values))
         } else {
             return self.expected(
                 "SELECT, VALUES, or a subquery in the query body",
@@ -3277,7 +3278,7 @@ impl<'a> Parser<'a> {
         self.parse_insert_with_option(true)
     }
 
-    /// Parse an INSERT statement
+    /// Parse an INSERT statement with values option
     fn parse_insert_with_option(&mut self, stream_values: bool) -> Result<Statement, ParserError> {
         let or = if !dialect_of!(self is SQLiteDialect) {
             None
@@ -3591,7 +3592,6 @@ impl<'a> Parser<'a> {
 
         // Skip to end of the values
         self.skip_values()?;
-
 
         let end = if self.peek_token() == Token::EOF {
             QueryOffset::EOF

@@ -26,6 +26,7 @@ use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
+use sqlparser::tokenizer::QueryOffset;
 use test_utils::{
     all_dialects, expr_from_projection, join, number, only, table, table_alias, TestedDialects,
 };
@@ -123,6 +124,142 @@ fn parse_insert_values() {
     }
 
     verified_stmt("INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)");
+}
+
+#[test]
+fn parse_stream_values_insert() {
+    struct TestCase {
+        sql: String,
+        expected_table_name: String,
+        expected_columns: Vec<String>,
+        expected_values: String,
+        expected_format: String,
+    }
+
+    let tests = vec![
+        TestCase {
+            sql: "INSERT INTO t values (1,2,3);".to_string(),
+            expected_table_name: "t".to_string(),
+            expected_columns: vec![],
+            expected_values: " (1,2,3)".to_string(),
+            expected_format: "".to_string(),
+        },
+        TestCase {
+            sql: "INSERT INTO t values (1,2,3) ;".to_string(),
+            expected_table_name: "t".to_string(),
+            expected_columns: vec![],
+            expected_values: " (1,2,3) ".to_string(),
+            expected_format: "".to_string(),
+        },
+        TestCase {
+            sql: "INSERT INTO t values (1,2,3), (4,5,6) ;".to_string(),
+            expected_table_name: "t".to_string(),
+            expected_columns: vec![],
+            expected_values: " (1,2,3), (4,5,6) ".to_string(),
+            expected_format: "".to_string(),
+        },
+        TestCase {
+            sql: "INSERT INTO t(c1,c2) values (1,2) on duplicate key update c3 = 10;".to_string(),
+            expected_table_name: "t".to_string(),
+            expected_columns: vec![String::from("c1"), String::from("c2")],
+            expected_values: " (1,2) ".to_string(),
+            expected_format: "".to_string(),
+        },
+        TestCase {
+            sql: "INSERT INTO t(c1,c2) values (1,2) on duplicate key update c3 = 10;".to_string(),
+            expected_table_name: "t".to_string(),
+            expected_columns: vec![String::from("c1"), String::from("c2")],
+            expected_values: " (1,2) ".to_string(),
+            expected_format: "".to_string(),
+        },
+    ];
+
+    for test in tests.iter() {
+        let sql = test.sql.as_str();
+        let expected_table_name = test.expected_table_name.as_str();
+        let expected_columns = &test.expected_columns;
+        let expected_format = test.expected_format.as_str();
+        let expected_values = test.expected_values.as_str();
+
+        all_dialects().run_parser_method(sql, |parser| {
+            parser.next_token();
+
+            match parser.parse_stream_values_insert().unwrap() {
+                Statement::Insert {
+                    table_name,
+                    columns,
+                    source,
+                    format,
+                    ..
+                } => {
+                    assert_eq!(table_name.to_string(), expected_table_name);
+                    assert_eq!(columns.len(), expected_columns.len());
+                    for (index, column) in columns.iter().enumerate() {
+                        assert_eq!(column.value, expected_columns[index]);
+                    }
+
+                    match &source {
+                        Some(source) => match &source.body {
+                            SetExpr::Values(Values::StreamValues(start, end)) => {
+                                let values = match (start, end) {
+                                    (QueryOffset::Normal(start), QueryOffset::Normal(end)) => {
+                                        &sql[*start as usize..*end as usize]
+                                    }
+                                    (QueryOffset::Normal(start), QueryOffset::EOF) => {
+                                        &sql[*start as usize..]
+                                    }
+                                    _ => unreachable!(),
+                                };
+
+                                assert_eq!(values, expected_values)
+                            }
+                            _ => unreachable!(),
+                        },
+                        None => {
+                            assert_eq!(format.unwrap(), expected_format);
+                        }
+                    }
+                }
+                _ => unreachable!(),
+            }
+            print!("{:?}", &sql[20..29]);
+        });
+    }
+}
+
+#[test]
+fn parse_insert_stream_values_invalid() {
+    struct TestCase {
+        sql: String,
+        expected_err: ParserError,
+    }
+
+    let tests = vec![
+        TestCase {
+            sql: "INSERT into t values 1,2,3) ;".to_string(),
+            expected_err: ParserError::ParserError("Expected (, found: 1".to_string()),
+        },
+        TestCase {
+            sql: "INSERT into t values (1,2,3 ;".to_string(),
+            expected_err: ParserError::ParserError("Expected ), found: EOF".to_string()),
+        },
+        TestCase {
+            sql: "INSERT into t values (1,2,3) (4,5,6) ;".to_string(),
+            expected_err: ParserError::ParserError(
+                "VALUES end is not correct, values end: (, idx: 16".to_string(),
+            ),
+        },
+    ];
+
+    for test in tests.iter() {
+        let sql = test.sql.as_str();
+        let expected_err = &test.expected_err;
+        all_dialects().run_parser_method(sql, |parser| {
+            parser.next_token();
+            let result = parser.parse_stream_values_insert();
+            assert_eq!(&result.unwrap_err(), expected_err);
+        });
+    }
 }
 
 #[test]

@@ -3268,12 +3268,12 @@ impl<'a> Parser<'a> {
     }
 
     /// Default parse insert statement which parse values as exprs.
-    fn parse_insert(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
         self.parse_insert_with_option(false)
     }
 
     /// Parse insert statment which directly return values-stream(string).
-    fn parse_stream_values_insert(&mut self) -> Result<Statement, ParserError> {
+    pub fn parse_stream_values_insert(&mut self) -> Result<Statement, ParserError> {
         self.parse_insert_with_option(true)
     }
 
@@ -3586,28 +3586,48 @@ impl<'a> Parser<'a> {
         let expected = self.peek_token();
         self.next_token();
 
-        let start = self.get_token_end(values_idx, expected)?;
+        let start = self.get_values_start(values_idx, expected)?;
 
-        // skip util to on or semicolon
-        while self.peek_token() != Token::EOF
-            && self.consume_token(&Token::SemiColon)
-            && !self.parse_keyword(Keyword::ON)
-        {
+        // Skip to end of the values
+        self.skip_values()?;
+
+
+        let end = if self.peek_token() == Token::EOF {
+            QueryOffset::EOF
+        } else {
+            // Move to next none white space token
+            let expected = self.next_token();
+            self.prev_token();
+            let values_end_idx = self.index;
+            self.get_values_end(values_end_idx, expected)?
+        };
+
+        Ok(Values::StreamValues(start, end))
+    }
+
+    fn skip_values(&mut self) -> Result<(), ParserError> {
+        loop {
+            self.skip_row()?;
+            // end of values
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn skip_row(&mut self) -> Result<(), ParserError> {
+        self.expect_token(&Token::LParen)?;
+        while !self.consume_token(&Token::RParen) {
+            if self.peek_token() == Token::EOF {
+                return self.expected(")", Token::EOF);
+            }
+
             self.next_token();
         }
 
-        if self.peek_token() != Token::EOF {
-            return parser_err!("");
-        }
-
-        self.prev_token();
-        let values_end_idx = self.index;
-        let expected = self.peek_token();
-        self.next_token();
-
-        let end = self.get_token_start(values_end_idx, expected)?;
-
-        Ok(Values::StreamValues(start, end))
+        Ok(())
     }
 
     pub fn parse_start_transaction(&mut self) -> Result<Statement, ParserError> {
@@ -3719,7 +3739,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn get_token_end(&self, idx: usize, expected: Token) -> Result<QueryOffset, ParserError> {
+    fn get_values_start(&self, idx: usize, expected: Token) -> Result<QueryOffset, ParserError> {
         let (token, (_, end)) = self.position_map.get(&idx).ok_or_else(|| {
             ParserError::ParserError(format!(
                 "{}'s position does not exists, idx: {}",
@@ -3734,10 +3754,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn get_token_start(&self, idx: usize, expected: Token) -> Result<QueryOffset, ParserError> {
-        let (token, (_, start)) = self.position_map.get(&idx).ok_or_else(|| {
+    fn get_values_end(&self, idx: usize, expected: Token) -> Result<QueryOffset, ParserError> {
+        let (token, (start, _)) = self.position_map.get(&idx).ok_or_else(|| {
             ParserError::ParserError(format!(
-                "{}'s position does not exists, idx: {}",
+                "VALUES end is not correct, values end: {}, idx: {}",
                 expected, idx
             ))
         })?;

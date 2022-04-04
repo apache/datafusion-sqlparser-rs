@@ -376,8 +376,6 @@ impl<'a> Tokenizer<'a> {
                 _ => self.col += 1,
             }
 
-            // try save position info
-
             tokens.push(token);
         }
         Ok((tokens, position_map))

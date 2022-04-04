@@ -317,16 +317,21 @@ fn parse_insert_with_on_duplicate_update() {
             assert_eq!(
                 Some(Box::new(Query {
                     with: None,
-                    body: SetExpr::Values(Values::ExprValues(vec![vec![
-                        Expr::Value(Value::SingleQuotedString("accounting_manager".to_string())),
-                        Expr::Value(Value::SingleQuotedString(
-                            "Some description about the group".to_string()
-                        )),
-                        Expr::Value(Value::Boolean(true)),
-                        Expr::Value(Value::Boolean(true)),
-                        Expr::Value(Value::Boolean(true)),
-                        Expr::Value(Value::Boolean(true)),
-                    ]])),
+                    body: SetExpr::Values(Values(
+                        vec![vec![
+                            Expr::Value(Value::SingleQuotedString(
+                                "accounting_manager".to_string()
+                            )),
+                            Expr::Value(Value::SingleQuotedString(
+                                "Some description about the group".to_string()
+                            )),
+                            Expr::Value(Value::Boolean(true)),
+                            Expr::Value(Value::Boolean(true)),
+                            Expr::Value(Value::Boolean(true)),
+                            Expr::Value(Value::Boolean(true)),
+                        ]],
+                        StreamValues::default()
+                    )),
                     order_by: vec![],
                     limit: None,
                     offset: None,

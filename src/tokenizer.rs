@@ -252,6 +252,12 @@ pub enum QueryOffset {
     EOF,
 }
 
+impl Default for QueryOffset {
+    fn default() -> Self {
+        QueryOffset::Normal(0u64)
+    }
+}
+
 impl fmt::Display for QueryOffset {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

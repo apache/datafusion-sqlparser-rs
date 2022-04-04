@@ -2614,8 +2614,8 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             SetExpr::Query(Box::new(subquery))
         } else if self.parse_keyword(Keyword::VALUES) {
-            let values = self.parse_values()?;
-            SetExpr::Values(Values::ExprValues(values))
+            let expr_values = self.parse_values()?;
+            SetExpr::Values(Values(expr_values, StreamValues::default()))
         } else {
             return self.expected(
                 "SELECT, VALUES, or a subquery in the query body",
@@ -3357,8 +3357,8 @@ impl<'a> Parser<'a> {
             let source = if format.is_some() {
                 None
             } else if stream_values && self.parse_keyword(Keyword::VALUES) {
-                let (values_start, values_end) = self.parse_stream_values()?;
-                let body = SetExpr::Values(Values::StreamValues(values_start, values_end));
+                let stream_values = self.parse_stream_values()?;
+                let body = SetExpr::Values(Values(vec![], stream_values));
 
                 Some(Box::new(Query {
                     with: None,
@@ -3582,7 +3582,7 @@ impl<'a> Parser<'a> {
         Ok(values)
     }
 
-    pub fn parse_stream_values(&mut self) -> Result<(QueryOffset, QueryOffset), ParserError> {
+    pub fn parse_stream_values(&mut self) -> Result<StreamValues, ParserError> {
         self.prev_token();
         let values_idx = self.index;
         let expected = self.peek_token();
@@ -3603,7 +3603,7 @@ impl<'a> Parser<'a> {
             self.get_values_end(values_end_idx, expected)?
         };
 
-        Ok((start, end))
+        Ok(StreamValues { start, end })
     }
 
     fn skip_values(&mut self) -> Result<(), ParserError> {

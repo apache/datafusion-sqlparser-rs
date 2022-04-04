@@ -109,7 +109,7 @@ fn parse_insert_values() {
 
                 match &source {
                     Some(source) => match &source.body {
-                        SetExpr::Values(Values::ExprValues(values)) => {
+                        SetExpr::Values(Values(values, _)) => {
                             assert_eq!(values.as_slice(), expected_rows)
                         }
                         _ => unreachable!(),
@@ -200,8 +200,8 @@ fn parse_stream_values_insert() {
 
                     match &source {
                         Some(source) => match &source.body {
-                            SetExpr::Values(Values::StreamValues(start, end)) => {
-                                let values = match (start, end) {
+                            SetExpr::Values(Values(_, stream_values)) => {
+                                let values = match (&stream_values.start, &stream_values.end) {
                                     (QueryOffset::Normal(start), QueryOffset::Normal(end)) => {
                                         &sql[*start as usize..*end as usize]
                                     }

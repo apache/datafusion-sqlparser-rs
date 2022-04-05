@@ -274,7 +274,7 @@ fn parse_simple_insert() {
                             Expr::Value(Value::SingleQuotedString("Test Entry 3".to_string())),
                             Expr::Value(Value::Number("3".to_string(), false))
                         ]
-                    ])),
+                    ], StreamValues::default())),
                     order_by: vec![],
                     limit: None,
                     offset: None,

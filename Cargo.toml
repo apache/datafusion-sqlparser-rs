@@ -27,6 +27,7 @@ json_example = ["serde_json", "serde"]
 [dependencies]
 bigdecimal = { version = "0.3", features = ["serde"], optional = true }
 log = "0.4"
+hashbrown = "0.12.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 # serde_json is only used in examples/cli, but we have to put it outside
 # of dev-dependencies because of

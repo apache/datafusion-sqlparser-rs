@@ -27,7 +27,7 @@ use alloc::{
 use core::fmt;
 use core::iter::Peekable;
 use core::str::CharIndices;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

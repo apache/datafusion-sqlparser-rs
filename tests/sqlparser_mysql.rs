@@ -261,20 +261,25 @@ fn parse_simple_insert() {
             assert_eq!(
                 Some(Box::new(Query {
                     with: None,
-                    body: SetExpr::Values(Values(vec![
+                    body: SetExpr::Values(Values(
                         vec![
-                            Expr::Value(Value::SingleQuotedString("Test Some Inserts".to_string())),
-                            Expr::Value(Value::Number("1".to_string(), false))
+                            vec![
+                                Expr::Value(Value::SingleQuotedString(
+                                    "Test Some Inserts".to_string()
+                                )),
+                                Expr::Value(Value::Number("1".to_string(), false))
+                            ],
+                            vec![
+                                Expr::Value(Value::SingleQuotedString("Test Entry 2".to_string())),
+                                Expr::Value(Value::Number("2".to_string(), false))
+                            ],
+                            vec![
+                                Expr::Value(Value::SingleQuotedString("Test Entry 3".to_string())),
+                                Expr::Value(Value::Number("3".to_string(), false))
+                            ]
                         ],
-                        vec![
-                            Expr::Value(Value::SingleQuotedString("Test Entry 2".to_string())),
-                            Expr::Value(Value::Number("2".to_string(), false))
-                        ],
-                        vec![
-                            Expr::Value(Value::SingleQuotedString("Test Entry 3".to_string())),
-                            Expr::Value(Value::Number("3".to_string(), false))
-                        ]
-                    ])),
+                        StreamValues::default()
+                    )),
                     order_by: vec![],
                     limit: None,
                     offset: None,
@@ -317,16 +322,21 @@ fn parse_insert_with_on_duplicate_update() {
             assert_eq!(
                 Some(Box::new(Query {
                     with: None,
-                    body: SetExpr::Values(Values(vec![vec![
-                        Expr::Value(Value::SingleQuotedString("accounting_manager".to_string())),
-                        Expr::Value(Value::SingleQuotedString(
-                            "Some description about the group".to_string()
-                        )),
-                        Expr::Value(Value::Boolean(true)),
-                        Expr::Value(Value::Boolean(true)),
-                        Expr::Value(Value::Boolean(true)),
-                        Expr::Value(Value::Boolean(true)),
-                    ]])),
+                    body: SetExpr::Values(Values(
+                        vec![vec![
+                            Expr::Value(Value::SingleQuotedString(
+                                "accounting_manager".to_string()
+                            )),
+                            Expr::Value(Value::SingleQuotedString(
+                                "Some description about the group".to_string()
+                            )),
+                            Expr::Value(Value::Boolean(true)),
+                            Expr::Value(Value::Boolean(true)),
+                            Expr::Value(Value::Boolean(true)),
+                            Expr::Value(Value::Boolean(true)),
+                        ]],
+                        StreamValues::default()
+                    )),
                     order_by: vec![],
                     limit: None,
                     offset: None,

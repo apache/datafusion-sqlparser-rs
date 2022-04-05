@@ -109,23 +109,29 @@ pub struct Parser<'a> {
     /// The index of the first unprocessed token in `self.tokens`
     index: usize,
     dialect: &'a dyn Dialect,
+    position_map: TokenPositionMap,
 }
 
 impl<'a> Parser<'a> {
     /// Parse the specified tokens
-    pub fn new(tokens: Vec<Token>, dialect: &'a dyn Dialect) -> Self {
+    pub fn new(
+        tokens: Vec<Token>,
+        position_map: TokenPositionMap,
+        dialect: &'a dyn Dialect,
+    ) -> Self {
         Parser {
             tokens,
             index: 0,
             dialect,
+            position_map,
         }
     }
 
     /// Parse a SQL statement and produce an Abstract Syntax Tree (AST)
     pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, sql);
-        let tokens = tokenizer.tokenize()?;
-        let mut parser = Parser::new(tokens, dialect);
+        let (tokens, pos_map) = tokenizer.tokenize()?;
+        let mut parser = Parser::new(tokens, pos_map, dialect);
         let mut stmts = Vec::new();
         let mut expecting_statement_delimiter = false;
         debug!("Parsing sql '{}'...", sql);
@@ -2654,7 +2660,8 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             SetExpr::Query(Box::new(subquery))
         } else if self.parse_keyword(Keyword::VALUES) {
-            SetExpr::Values(self.parse_values()?)
+            let expr_values = self.parse_values()?;
+            SetExpr::Values(Values(expr_values, StreamValues::default()))
         } else {
             return self.expected(
                 "SELECT, VALUES, or a subquery in the query body",
@@ -3307,8 +3314,18 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse an INSERT statement
+    /// Default parse insert statement which parse values as exprs.
     pub fn parse_insert(&mut self) -> Result<Statement, ParserError> {
+        self.parse_insert_with_option(false)
+    }
+
+    /// Parse insert statment which directly return values-stream(string).
+    pub fn parse_stream_values_insert(&mut self) -> Result<Statement, ParserError> {
+        self.parse_insert_with_option(true)
+    }
+
+    /// Parse an INSERT statement with values option
+    fn parse_insert_with_option(&mut self, stream_values: bool) -> Result<Statement, ParserError> {
         let or = if !dialect_of!(self is SQLiteDialect) {
             None
         } else if self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]) {
@@ -3385,6 +3402,18 @@ impl<'a> Parser<'a> {
 
             let source = if format.is_some() {
                 None
+            } else if stream_values && self.parse_keyword(Keyword::VALUES) {
+                let stream_values = self.parse_stream_values()?;
+                let body = SetExpr::Values(Values(vec![], stream_values));
+
+                Some(Box::new(Query {
+                    with: None,
+                    body,
+                    order_by: vec![],
+                    limit: None,
+                    offset: None,
+                    fetch: None,
+                }))
             } else {
                 Some(Box::new(self.parse_query()?))
             };
@@ -3589,14 +3618,63 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_values(&mut self) -> Result<Values, ParserError> {
+    pub fn parse_values(&mut self) -> Result<Vec<Vec<Expr>>, ParserError> {
         let values = self.parse_comma_separated(|parser| {
             parser.expect_token(&Token::LParen)?;
             let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
             parser.expect_token(&Token::RParen)?;
             Ok(exprs)
         })?;
-        Ok(Values(values))
+        Ok(values)
+    }
+
+    pub fn parse_stream_values(&mut self) -> Result<StreamValues, ParserError> {
+        self.prev_token();
+        let values_idx = self.index;
+        let expected = self.peek_token();
+        self.next_token();
+
+        let start = self.get_values_start(values_idx, expected)?;
+
+        // Skip to end of the values
+        self.skip_values()?;
+
+        let end = if self.peek_token() == Token::EOF {
+            QueryOffset::EOF
+        } else {
+            // Move to next none white space token
+            let expected = self.next_token();
+            self.prev_token();
+            let values_end_idx = self.index;
+            self.get_values_end(values_end_idx, expected)?
+        };
+
+        Ok(StreamValues { start, end })
+    }
+
+    fn skip_values(&mut self) -> Result<(), ParserError> {
+        loop {
+            self.skip_row()?;
+            // end of values
+            if !self.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn skip_row(&mut self) -> Result<(), ParserError> {
+        self.expect_token(&Token::LParen)?;
+        while !self.consume_token(&Token::RParen) {
+            if self.peek_token() == Token::EOF {
+                return self.expected(")", Token::EOF);
+            }
+
+            self.next_token();
+        }
+
+        Ok(())
     }
 
     pub fn parse_start_transaction(&mut self) -> Result<Statement, ParserError> {
@@ -3706,6 +3784,36 @@ impl<'a> Parser<'a> {
             data_types,
             statement,
         })
+    }
+
+    fn get_values_start(&self, idx: usize, expected: Token) -> Result<QueryOffset, ParserError> {
+        let (token, (_, end)) = self.position_map.get(&idx).ok_or_else(|| {
+            ParserError::ParserError(format!(
+                "{}'s position does not exists, idx: {}",
+                expected, idx
+            ))
+        })?;
+
+        if token != &expected {
+            self.expected(&format!("{}", expected), token.clone())
+        } else {
+            Ok(end.clone())
+        }
+    }
+
+    fn get_values_end(&self, idx: usize, expected: Token) -> Result<QueryOffset, ParserError> {
+        let (token, (start, _)) = self.position_map.get(&idx).ok_or_else(|| {
+            ParserError::ParserError(format!(
+                "VALUES end is not correct, values end: {}, idx: {}",
+                expected, idx
+            ))
+        })?;
+
+        if token != &expected {
+            self.expected(&format!("{}", expected), token.clone())
+        } else {
+            Ok(start.clone())
+        }
     }
 }
 

@@ -3636,45 +3636,32 @@ impl<'a> Parser<'a> {
 
         let start = self.get_values_start(values_idx, expected)?;
 
-        // Skip to end of the values
-        self.skip_values()?;
+        // Skip to end of the values, One of ';', 'eof', 'on duplicate key update'.
+        let mut idx = self.index;
+        loop {
+            let peek_token = self.tokens.get(idx).unwrap_or(&Token::EOF);
+            match peek_token {
+                Token::EOF | Token::SemiColon => {
+                    self.index = idx;
+                    break;
+                }
+                Token::Word(w) if w.keyword == Keyword::ON => {
+                    self.index = idx;
+                    break;
+                }
+                _ => idx += 1,
+            }
+        }
 
         let end = if self.peek_token() == Token::EOF {
             QueryOffset::EOF
         } else {
-            // Move to next none white space token
-            let expected = self.next_token();
-            self.prev_token();
-            let values_end_idx = self.index;
-            self.get_values_end(values_end_idx, expected)?
+            self.get_values_end(idx, self.peek_token())?
         };
 
+        assert!(start.less_than(&end));
+
         Ok(StreamValues { start, end })
-    }
-
-    fn skip_values(&mut self) -> Result<(), ParserError> {
-        loop {
-            self.skip_row()?;
-            // end of values
-            if !self.consume_token(&Token::Comma) {
-                break;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn skip_row(&mut self) -> Result<(), ParserError> {
-        self.expect_token(&Token::LParen)?;
-        while !self.consume_token(&Token::RParen) {
-            if self.peek_token() == Token::EOF {
-                return self.expected(")", Token::EOF);
-            }
-
-            self.next_token();
-        }
-
-        Ok(())
     }
 
     pub fn parse_start_transaction(&mut self) -> Result<Statement, ParserError> {

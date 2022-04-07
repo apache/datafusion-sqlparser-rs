@@ -152,17 +152,17 @@ fn parse_stream_values_insert() {
             expected_format: "".to_string(),
         },
         TestCase {
-            sql: "INSERT INTO t values (1,2,3), (4,5,6) ;".to_string(),
+            sql: "INSERT INTO t values ;".to_string(),
             expected_table_name: "t".to_string(),
             expected_columns: vec![],
-            expected_values: " (1,2,3), (4,5,6) ".to_string(),
+            expected_values: " ".to_string(),
             expected_format: "".to_string(),
         },
         TestCase {
-            sql: "INSERT INTO t(c1,c2) values (1,2) on duplicate key update c3 = 10;".to_string(),
+            sql: "insert into t values(now(), now(), today(), today());".to_string(),
             expected_table_name: "t".to_string(),
-            expected_columns: vec![String::from("c1"), String::from("c2")],
-            expected_values: " (1,2) ".to_string(),
+            expected_columns: vec![],
+            expected_values: "(now(), now(), today(), today())".to_string(),
             expected_format: "".to_string(),
         },
         TestCase {
@@ -222,7 +222,6 @@ fn parse_stream_values_insert() {
                 }
                 _ => unreachable!(),
             }
-            print!("{:?}", &sql[20..29]);
         });
     }
 }
@@ -234,20 +233,14 @@ fn parse_insert_stream_values_invalid() {
         expected_err: ParserError,
     }
 
-    let tests = vec![
+    let tests: Vec<TestCase> = vec![
         TestCase {
-            sql: "INSERT into t values 1,2,3) ;".to_string(),
-            expected_err: ParserError::ParserError("Expected (, found: 1".to_string()),
+            sql: "INSERT into t values 1,2,3) on".to_string(),
+            expected_err: ParserError::ParserError("Expected DUPLICATE, found: EOF".to_string()),
         },
         TestCase {
-            sql: "INSERT into t values (1,2,3 ;".to_string(),
-            expected_err: ParserError::ParserError("Expected ), found: EOF".to_string()),
-        },
-        TestCase {
-            sql: "INSERT into t values (1,2,3) (4,5,6) ;".to_string(),
-            expected_err: ParserError::ParserError(
-                "VALUES end is not correct, values end: (, idx: 16".to_string(),
-            ),
+            sql: "INSERT into t values 1,2,3) on;".to_string(),
+            expected_err: ParserError::ParserError("Expected DUPLICATE, found: ;".to_string()),
         },
     ];
 

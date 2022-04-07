@@ -258,6 +258,18 @@ impl Default for QueryOffset {
     }
 }
 
+impl QueryOffset {
+    /// Since sqlparser need work in non std env, we use this replace with std order
+    pub fn less_than(&self, other: &QueryOffset) -> bool {
+        match (self, other) {
+            (QueryOffset::Normal(v1), QueryOffset::Normal(v2)) => v1 < v2,
+            (QueryOffset::Normal(_), QueryOffset::EOF) => true,
+            (QueryOffset::EOF, QueryOffset::Normal(_)) => false,
+            (QueryOffset::EOF, QueryOffset::EOF) => false,
+        }
+    }
+}
+
 impl fmt::Display for QueryOffset {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

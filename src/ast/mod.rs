@@ -841,6 +841,16 @@ pub enum Statement {
         /// deleted along with the dropped table
         purge: bool,
     },
+    /// SET [ SESSION | LOCAL ] ROLE role_name
+    ///
+    /// Note: this is a PostgreSQL-specific statement,
+    /// but may also compatible with other SQL.
+    SetRole {
+        local: bool,
+        // SESSION is the default if neither SESSION nor LOCAL appears.
+        session: bool,
+        role_name: Option<Ident>,
+    },
     /// SET <variable>
     ///
     /// Note: this is not a standard SQL statement, but it is supported by at
@@ -1453,6 +1463,24 @@ impl fmt::Display for Statement {
                 if *cascade { " CASCADE" } else { "" },
                 if *purge { " PURGE" } else { "" }
             ),
+            Statement::SetRole {
+                local,
+                session,
+                role_name,
+            } => {
+                write!(
+                    f,
+                    "SET {local}{session}ROLE",
+                    local = if *local { "LOCAL " } else { "" },
+                    session = if *session { "SESSION " } else { "" },
+                )?;
+                if let Some(role_name) = role_name {
+                    write!(f, " {}", role_name)?;
+                } else {
+                    f.write_str(" NONE")?;
+                }
+                Ok(())
+            }
             Statement::SetVariable {
                 local,
                 variable,

@@ -856,6 +856,45 @@ fn parse_set() {
 }
 
 #[test]
+fn parse_set_role() {
+    let stmt = pg_and_generic().verified_stmt("SET SESSION ROLE NONE");
+    assert_eq!(
+        stmt,
+        Statement::SetRole {
+            local: false,
+            session: true,
+            role_name: None,
+        }
+    );
+
+    let stmt = pg_and_generic().verified_stmt("SET LOCAL ROLE \"rolename\"");
+    assert_eq!(
+        stmt,
+        Statement::SetRole {
+            local: true,
+            session: false,
+            role_name: Some(Ident {
+                value: "rolename".to_string(),
+                quote_style: Some('\"'),
+            }),
+        }
+    );
+
+    let stmt = pg_and_generic().verified_stmt("SET ROLE 'rolename'");
+    assert_eq!(
+        stmt,
+        Statement::SetRole {
+            local: false,
+            session: false,
+            role_name: Some(Ident {
+                value: "rolename".to_string(),
+                quote_style: Some('\''),
+            }),
+        }
+    );
+}
+
+#[test]
 fn parse_show() {
     let stmt = pg_and_generic().verified_stmt("SHOW a a");
     assert_eq!(

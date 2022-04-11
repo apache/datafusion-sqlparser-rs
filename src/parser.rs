@@ -2565,7 +2565,7 @@ impl<'a> Parser<'a> {
                 vec![]
             };
 
-            let limit = if self.parse_keyword(Keyword::LIMIT) {
+            let mut limit = if self.parse_keyword(Keyword::LIMIT) {
                 self.parse_limit()?
             } else {
                 None
@@ -2573,6 +2573,13 @@ impl<'a> Parser<'a> {
 
             let offset = if self.parse_keyword(Keyword::OFFSET) {
                 Some(self.parse_offset()?)
+            } else if self.consume_token(&Token::Comma) {
+                let value = limit;
+                limit = Some(Expr::Value(self.parse_number_value()?));
+                Some(Offset {
+                    value: value.unwrap(),
+                    rows: OffsetRows::None,
+                })
             } else {
                 None
             };

@@ -3679,6 +3679,23 @@ fn parse_invalid_subquery_without_parens() {
 }
 
 #[test]
+fn parse_limitnm_select() {
+    let expect = Some(Offset {
+        value: Expr::Value(number("5")),
+        rows: OffsetRows::None,
+    });
+    let comma_limit = "SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5, 2";
+    let sql = "SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 2 OFFSET 5";
+    one_statement_parses_to(comma_limit, sql);
+    let select = verified_only_select(sql);
+    assert!(!select.distinct);
+    assert_eq!(3, select.projection.len());
+    let ast = verified_query(sql);
+    assert_eq!(ast.offset, expect);
+    assert_eq!(Some(Expr::Value(number("2"))), ast.limit);
+}
+
+#[test]
 fn parse_offset() {
     let expect = Some(Offset {
         value: Expr::Value(number("2")),

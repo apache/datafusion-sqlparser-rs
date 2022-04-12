@@ -731,6 +731,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::Cast {
             expr: Box::new(expr),
             data_type,
+            pg_style: false,
         })
     }
 
@@ -1215,6 +1216,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::Cast {
             expr: Box::new(expr),
             data_type: self.parse_data_type()?,
+            pg_style: true,
         })
     }
 

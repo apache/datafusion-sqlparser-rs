@@ -925,8 +925,8 @@ impl<'a> Parser<'a> {
                 Token::Arrow => {
                     self.next_token();
                     return Ok(Expr::JsonIdentifier {
-                        ident: ident,
-                        operator: operator,
+                        ident,
+                        operator,
                         right_ident: Box::new(self.parse_json_identifier(
                             Ident {
                                 value: w,
@@ -939,8 +939,8 @@ impl<'a> Parser<'a> {
                 Token::LongArrow => {
                     self.next_token();
                     return Ok(Expr::JsonIdentifier {
-                        ident: ident,
-                        operator: operator,
+                        ident,
+                        operator,
                         right_ident: Box::new(self.parse_json_identifier(
                             Ident {
                                 value: w,
@@ -952,8 +952,8 @@ impl<'a> Parser<'a> {
                 }
                 _ => {
                     return Ok(Expr::JsonIdentifier {
-                        ident: ident,
-                        operator: operator,
+                        ident,
+                        operator,
                         right_ident: Box::new(Expr::Identifier(Ident {
                             value: w,
                             quote_style: Some('\''),

@@ -3116,7 +3116,19 @@ impl<'a> Parser<'a> {
             self.parse_one_of_keywords(&[Keyword::SESSION, Keyword::LOCAL, Keyword::HIVEVAR]);
         if let Some(Keyword::HIVEVAR) = modifier {
             self.expect_token(&Token::Colon)?;
+        } else if self.parse_keyword(Keyword::ROLE) {
+            let role_name = if self.parse_keyword(Keyword::NONE) {
+                None
+            } else {
+                Some(self.parse_identifier()?)
+            };
+            return Ok(Statement::SetRole {
+                local: modifier == Some(Keyword::LOCAL),
+                session: modifier == Some(Keyword::SESSION),
+                role_name,
+            });
         }
+
         let variable = self.parse_identifier()?;
         if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
             let mut values = vec![];

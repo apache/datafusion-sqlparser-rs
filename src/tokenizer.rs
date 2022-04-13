@@ -141,6 +141,10 @@ pub enum Token {
     PGCubeRoot,
     /// `?` or `$` , a prepared statement arg placeholder
     Placeholder(String),
+    /// ->, used as a operator to extract json field in PostgreSQL
+    Arrow,
+    /// -->, used as a operator to extract json field in PostgreSQL
+    LongArrow,
 }
 
 impl fmt::Display for Token {
@@ -197,6 +201,8 @@ impl fmt::Display for Token {
             Token::PGSquareRoot => f.write_str("|/"),
             Token::PGCubeRoot => f.write_str("||/"),
             Token::Placeholder(ref s) => write!(f, "{}", s),
+            Token::Arrow => write!(f, "->"),
+            Token::LongArrow => write!(f, "-->"),
         }
     }
 }
@@ -482,6 +488,16 @@ impl<'a> Tokenizer<'a> {
                                 prefix: "--".to_owned(),
                                 comment,
                             })))
+                        }
+                        Some('>') => {
+                            chars.next();
+                            match chars.peek() {
+                                Some('>') => {
+                                    chars.next();
+                                    Ok(Some(Token::LongArrow))
+                                }
+                                _ => Ok(Some(Token::Arrow)),
+                            }
                         }
                         // a regular '-' operator
                         _ => Ok(Some(Token::Minus)),

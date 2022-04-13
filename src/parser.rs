@@ -458,6 +458,13 @@ impl<'a> Parser<'a> {
                             Ok(Expr::CompoundIdentifier(id_parts))
                         }
                     }
+                    Token::Arrow | Token::LongArrow => {
+                        if self.consume_token(&Token::Arrow) {
+                            return self.parse_json_identifier(w.to_ident(), JsonOperator::Arrow);
+                        }
+                        self.next_token();
+                        return self.parse_json_identifier(w.to_ident(), JsonOperator::LongArrow);
+                    }
                     _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word
@@ -907,6 +914,57 @@ impl<'a> Parser<'a> {
         }))
     }
 
+    pub fn parse_json_identifier(
+        &mut self,
+        ident: Ident,
+        operator: JsonOperator,
+    ) -> Result<Expr, ParserError> {
+        // parse right hand identifier.
+        if let Token::SingleQuotedString(w) = self.next_token() {
+            match self.peek_token() {
+                Token::Arrow => {
+                    self.next_token();
+                    return Ok(Expr::JsonIdentifier {
+                        ident: ident,
+                        operator: operator,
+                        right_ident: Box::new(self.parse_json_identifier(
+                            Ident {
+                                value: w,
+                                quote_style: Some('\''),
+                            },
+                            JsonOperator::Arrow,
+                        )?),
+                    });
+                }
+                Token::LongArrow => {
+                    self.next_token();
+                    return Ok(Expr::JsonIdentifier {
+                        ident: ident,
+                        operator: operator,
+                        right_ident: Box::new(self.parse_json_identifier(
+                            Ident {
+                                value: w,
+                                quote_style: Some('\''),
+                            },
+                            JsonOperator::LongArrow,
+                        )?),
+                    });
+                }
+                _ => {
+                    return Ok(Expr::JsonIdentifier {
+                        ident: ident,
+                        operator: operator,
+                        right_ident: Box::new(Expr::Identifier(Ident {
+                            value: w,
+                            quote_style: Some('\''),
+                        })),
+                    })
+                }
+            }
+        }
+
+        parser_err!(format!("expected word after {}", operator))
+    }
     // This function parses date/time fields for both the EXTRACT function-like
     // operator and interval qualifiers. EXTRACT supports a wider set of
     // date/time fields than interval qualifiers, so this function may need to

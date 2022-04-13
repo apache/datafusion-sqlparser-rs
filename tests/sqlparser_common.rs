@@ -570,6 +570,30 @@ fn parse_column_aliases() {
 }
 
 #[test]
+fn parse_column_aliases_with_back_quoted() {
+    let sql = "SELECT a.col + 1 AS `newname` FROM foo AS a";
+    let select = verified_only_select(sql);
+    let mut ident = Ident::new("newname");
+    ident.quote_style = Some('`');
+    if let SelectItem::ExprWithAlias {
+        expr: Expr::BinaryOp {
+            ref op, ref right, ..
+        },
+        ref alias,
+    } = only(&select.projection)
+    {
+        assert_eq!(&BinaryOperator::Plus, op);
+        assert_eq!(&Expr::Value(number("1")), right.as_ref());
+        assert_eq!(&ident, alias);
+    } else {
+        panic!("Expected ExprWithAlias")
+    }
+
+    // alias without AS is parsed correctly:
+    one_statement_parses_to("SELECT a.col + 1 `newname` FROM foo AS a", sql);
+}
+
+#[test]
 fn test_eof_after_as() {
     let res = parse_sql_statements("SELECT foo AS");
     assert_eq!(

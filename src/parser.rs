@@ -319,6 +319,10 @@ impl<'a> Parser<'a> {
                         Token::Mul => {
                             return Ok(WildcardExpr::QualifiedWildcard(ObjectName(id_parts)));
                         }
+                        Token::BackQuotedString(w) => {
+                            let id_part = Ident::with_quote('`', w);
+                            id_parts.push(id_part)
+                        }
                         unexpected => {
                             return self.expected("an identifier or a '*' after '.'", unexpected);
                         }
@@ -327,6 +331,26 @@ impl<'a> Parser<'a> {
             }
             Token::Mul => {
                 return Ok(WildcardExpr::Wildcard);
+            }
+            Token::BackQuotedString(w) => {
+                let mut id_parts: Vec<Ident> = vec![];
+                let id_part = Ident::with_quote('`', w);
+                id_parts.push(id_part);
+                while self.consume_token(&Token::Period) {
+                    match self.next_token() {
+                        Token::Word(s) => id_parts.push(s.to_ident()),
+                        Token::Mul => {
+                            return Ok(WildcardExpr::QualifiedWildcard(ObjectName(id_parts)));
+                        }
+                        Token::BackQuotedString(w) => {
+                            let id_part = Ident::with_quote('`', w);
+                            id_parts.push(id_part)
+                        }
+                        unexpected => {
+                            return self.expected("an identifier or a '*' after '.'", unexpected);
+                        }
+                    }
+                }
             }
             _ => (),
         };
@@ -406,6 +430,37 @@ impl<'a> Parser<'a> {
         }));
 
         let expr = match self.next_token() {
+            Token::BackQuotedString(w) => match self.peek_token() {
+                Token::LParen | Token::Period => {
+                    let mut id_parts: Vec<Ident> = vec![];
+                    let id_part = Ident::with_quote('`', w);
+                    id_parts.push(id_part);
+                    while self.consume_token(&Token::Period) {
+                        match self.next_token() {
+                            Token::Word(w) => id_parts.push(w.to_ident()),
+                            Token::BackQuotedString(w) => {
+                                let id_part = Ident::with_quote('`', w);
+                                id_parts.push(id_part)
+                            }
+                            unexpected => {
+                                return self
+                                    .expected("an identifier or a '*' after '.'", unexpected);
+                            }
+                        }
+                    }
+
+                    if self.consume_token(&Token::LParen) {
+                        self.prev_token();
+                        self.parse_function(ObjectName(id_parts))
+                    } else {
+                        Ok(Expr::CompoundIdentifier(id_parts))
+                    }
+                }
+                _ => {
+                    let id_part = Ident::with_quote('`', w);
+                    Ok(Expr::Identifier(id_part))
+                }
+            },
             Token::Word(w) => match w.keyword {
                 Keyword::TRUE | Keyword::FALSE | Keyword::NULL => {
                     self.prev_token();
@@ -433,6 +488,10 @@ impl<'a> Parser<'a> {
                         while self.consume_token(&Token::Period) {
                             match self.next_token() {
                                 Token::Word(w) => id_parts.push(w.to_ident()),
+                                Token::BackQuotedString(w) => {
+                                    let id_part = Ident::with_quote('`', w);
+                                    id_parts.push(id_part)
+                                }
                                 unexpected => {
                                     return self
                                         .expected("an identifier or a '*' after '.'", unexpected);

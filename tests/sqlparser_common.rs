@@ -470,6 +470,13 @@ fn parse_simple_select() {
     assert_eq!(3, select.projection.len());
     let select = verified_query(sql);
     assert_eq!(Some(Expr::Value(number("5"))), select.limit);
+
+    let sql = "SELECT customer.`id`, `customer`.lname, `fname`, `customer`.`id`, customer.*, `customer`.* FROM db.customer";
+    let select = verified_only_select(sql);
+    assert_eq!(6, select.projection.len());
+    let sql = "SELECT `table`.`col`";
+    let select = verified_only_select(sql);
+    assert_eq!(1, select.projection.len());
 }
 
 #[test]
@@ -513,10 +520,10 @@ fn parse_select_wildcard() {
     let select = verified_only_select(sql);
     assert_eq!(&SelectItem::Wildcard, only(&select.projection));
 
-    let sql = "SELECT foo.* FROM foo";
+    let sql = "SELECT `foo`.* FROM foo";
     let select = verified_only_select(sql);
     assert_eq!(
-        &SelectItem::QualifiedWildcard(ObjectName(vec![Ident::new("foo")])),
+        &SelectItem::QualifiedWildcard(ObjectName(vec![Ident::with_quote('`', "foo")])),
         only(&select.projection)
     );
 
@@ -591,11 +598,19 @@ fn parse_column_aliases_with_back_quoted() {
 
     // alias without AS is parsed correctly:
     one_statement_parses_to("SELECT a.col + 1 `newname` FROM foo AS a", sql);
+    let sql = "SELECT `a`.`col` + 1 AS `newname` FROM `foo` AS a";
+    one_statement_parses_to("SELECT `a`.`col` + 1 `newname` FROM `foo` AS a", sql);
 }
 
 #[test]
 fn test_eof_after_as() {
     let res = parse_sql_statements("SELECT foo AS");
+    assert_eq!(
+        ParserError::ParserError("Expected an identifier after AS, found: EOF".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("SELECT `foo` AS");
     assert_eq!(
         ParserError::ParserError("Expected an identifier after AS, found: EOF".to_string()),
         res.unwrap_err()

@@ -210,7 +210,6 @@ fn parse_stream_values_insert() {
                                     }
                                     _ => unreachable!(),
                                 };
-
                                 assert_eq!(values, expected_values)
                             }
                             _ => unreachable!(),

@@ -32,8 +32,8 @@ use hashbrown::HashMap;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::dialect::Dialect;
 use crate::dialect::SnowflakeDialect;
+use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
 /// SQL Token enumeration
@@ -50,6 +50,7 @@ pub enum Token {
     Char(char),
     /// Single quoted string: i.e: 'string'
     SingleQuotedString(String),
+    DoubleQuotedString(String),
     BackQuotedString(String),
     AtString(String),
     /// "National" string literal: i.e: N'string'
@@ -152,6 +153,7 @@ impl fmt::Display for Token {
             Token::Number(ref n, l) => write!(f, "{}{long}", n, long = if *l { "L" } else { "" }),
             Token::Char(ref c) => write!(f, "{}", c),
             Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
+            Token::DoubleQuotedString(ref s) => write!(f, "\"{}\"", s),
             Token::BackQuotedString(ref s) => write!(f, "`{}`", s),
             Token::AtString(ref s) => write!(f, "@{}", s),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
@@ -389,6 +391,9 @@ impl<'a> Tokenizer<'a> {
                 Token::Word(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
                 Token::Number(s, _) => self.col += s.len() as u64,
                 Token::SingleQuotedString(s) => self.col += s.len() as u64,
+                Token::DoubleQuotedString(s) if dialect_of!(self is MySqlDialect) => {
+                    self.col += s.len() as u64
+                }
                 Token::AtString(s) => self.col += s.len() as u64,
                 _ => self.col += 1,
             }
@@ -482,6 +487,10 @@ impl<'a> Tokenizer<'a> {
                     '\'' => {
                         let s = self.tokenize_single_quoted_string(chars)?;
                         Ok(Some(Token::SingleQuotedString(s)))
+                    }
+                    '"' if dialect_of!(self is MySqlDialect) => {
+                        let s = self.tokenize_double_quoted_string(chars)?;
+                        Ok(Some(Token::DoubleQuotedString(s)))
                     }
                     // string
                     '`' => {
@@ -744,6 +753,50 @@ impl<'a> Tokenizer<'a> {
                     let escaped_quote = chars.peek().map(|(_, c)| *c == '\'').unwrap_or(false);
                     if escaped_quote {
                         s.push('\'');
+                        chars.next();
+                    } else {
+                        return Ok(s);
+                    }
+                }
+                '\\' => {
+                    if let Some((_, c)) = chars.next() {
+                        match c {
+                            'n' => s.push('\n'),
+                            't' => s.push('\t'),
+                            'r' => s.push('\r'),
+                            'b' => s.push('\u{08}'),
+                            '0' => s.push('\0'),
+                            '\'' => s.push('\''),
+                            '\\' => s.push('\\'),
+                            '\"' => s.push('\"'),
+                            _ => {
+                                s.push('\\');
+                                s.push(c);
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    s.push(ch);
+                }
+            }
+        }
+        self.tokenizer_error("Unterminated string literal")
+    }
+
+    /// Read a double quoted string, starting with the opening quote.
+    fn tokenize_double_quoted_string(
+        &self,
+        chars: &mut Peekable<CharIndices<'_>>,
+    ) -> Result<String, TokenizerError> {
+        let mut s = String::new();
+        chars.next(); // consume the opening quote
+        while let Some((_, ch)) = chars.next() {
+            match ch {
+                '"' => {
+                    let escaped_quote = chars.peek().map(|(_, c)| *c == '"').unwrap_or(false);
+                    if escaped_quote {
+                        s.push('\"');
                         chars.next();
                     } else {
                         return Ok(s);

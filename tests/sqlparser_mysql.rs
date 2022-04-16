@@ -293,6 +293,24 @@ fn parse_simple_insert() {
 }
 
 #[test]
+fn parse_double_quoted_insert() {
+    let sql_double_quoted =
+        r#"INSERT INTO tasks (title, priority) VALUES ("Test S\"o\"m'e' In'se\"rt`s\"", 1)"#;
+    let mut double_statements = mysql().parse_sql_statements(sql_double_quoted).unwrap();
+    assert_eq!(double_statements.len(), 1);
+    let double_statement = double_statements.pop().unwrap();
+    match double_statement {
+        Statement::Insert { source, .. } => {
+            assert_eq!(
+                source.unwrap().body.to_string(),
+                "VALUES (\"Test S\"o\"m'e' In'se\"rt`s\"\", 1)"
+            )
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_insert_with_on_duplicate_update() {
     let sql = "INSERT INTO permission_groups (name, description, perm_create, perm_read, perm_update, perm_delete) VALUES ('accounting_manager', 'Some description about the group', true, true, true, true) ON DUPLICATE KEY UPDATE description = VALUES(description), perm_create = VALUES(perm_create), perm_read = VALUES(perm_read), perm_update = VALUES(perm_update), perm_delete = VALUES(perm_delete)";
 

@@ -558,7 +558,10 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
-
+            Token::DoubleQuotedString(_) if dialect_of!(self is MySqlDialect) => {
+                self.prev_token();
+                Ok(Expr::Value(self.parse_value()?))
+            }
             Token::LParen => {
                 let expr =
                     if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
@@ -2265,6 +2268,9 @@ impl<'a> Parser<'a> {
                 Err(e) => parser_err!(format!("Could not parse '{}' as number: {}", n, e)),
             },
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
+            Token::DoubleQuotedString(ref s) if dialect_of!(self is MySqlDialect) => {
+                Ok(Value::DoubleQuotedString(s.to_string()))
+            }
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
             unexpected => self.expected("a value", unexpected),

@@ -485,6 +485,7 @@ define_keywords!(
     UNIQUE,
     UNKNOWN,
     UNNEST,
+    UNSIGNED,
     UPDATE,
     UPPER,
     USAGE,

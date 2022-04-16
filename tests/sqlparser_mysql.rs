@@ -243,6 +243,46 @@ fn parse_create_table_with_minimum_display_width() {
 }
 
 #[test]
+fn parse_create_table_unsigned() {
+    let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3) UNSIGNED, bar_smallint SMALLINT(5) UNSIGNED, bar_int INT(11) UNSIGNED, bar_bigint BIGINT(20) UNSIGNED)";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::new("bar_tinyint"),
+                        data_type: DataType::UnsignedTinyInt(Some(3)),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_smallint"),
+                        data_type: DataType::UnsignedSmallInt(Some(5)),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_int"),
+                        data_type: DataType::UnsignedInt(Some(11)),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_bigint"),
+                        data_type: DataType::UnsignedBigInt(Some(20)),
+                        collation: None,
+                        options: vec![],
+                    },
+                ],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 #[cfg(not(feature = "bigdecimal"))]
 fn parse_simple_insert() {
     let sql = r"INSERT INTO tasks (title, priority) VALUES ('Test Some Inserts', 1), ('Test Entry 2', 2), ('Test Entry 3', 3)";

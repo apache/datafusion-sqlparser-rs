@@ -2352,12 +2352,38 @@ impl<'a> Parser<'a> {
                     let _ = self.parse_keyword(Keyword::PRECISION);
                     Ok(DataType::Double)
                 }
-                Keyword::TINYINT => Ok(DataType::TinyInt(self.parse_optional_precision()?)),
-                Keyword::SMALLINT => Ok(DataType::SmallInt(self.parse_optional_precision()?)),
-                Keyword::INT | Keyword::INTEGER => {
-                    Ok(DataType::Int(self.parse_optional_precision()?))
+                Keyword::TINYINT => {
+                    let optional_precision = self.parse_optional_precision();
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::UnsignedTinyInt(optional_precision?))
+                    } else {
+                        Ok(DataType::TinyInt(optional_precision?))
+                    }
                 }
-                Keyword::BIGINT => Ok(DataType::BigInt(self.parse_optional_precision()?)),
+                Keyword::SMALLINT => {
+                    let optional_precision = self.parse_optional_precision();
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::UnsignedSmallInt(optional_precision?))
+                    } else {
+                        Ok(DataType::SmallInt(optional_precision?))
+                    }
+                }
+                Keyword::INT | Keyword::INTEGER => {
+                    let optional_precision = self.parse_optional_precision();
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::UnsignedInt(optional_precision?))
+                    } else {
+                        Ok(DataType::Int(optional_precision?))
+                    }
+                }
+                Keyword::BIGINT => {
+                    let optional_precision = self.parse_optional_precision();
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::UnsignedBigInt(optional_precision?))
+                    } else {
+                        Ok(DataType::BigInt(optional_precision?))
+                    }
+                }
                 Keyword::VARCHAR => Ok(DataType::Varchar(self.parse_optional_precision()?)),
                 Keyword::CHAR | Keyword::CHARACTER => {
                     if self.parse_keyword(Keyword::VARYING) {

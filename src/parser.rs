@@ -2302,6 +2302,7 @@ impl<'a> Parser<'a> {
         match self.next_token() {
             Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => Ok(value),
             Token::SingleQuotedString(s) => Ok(s),
+            Token::DoubleQuotedString(s) if dialect_of!(self is MySqlDialect) => Ok(s),
             unexpected => self.expected("literal string", unexpected),
         }
     }
@@ -2313,6 +2314,9 @@ impl<'a> Parser<'a> {
                 Ok(Value::SingleQuotedString(value))
             }
             Token::SingleQuotedString(s) => Ok(Value::SingleQuotedString(s)),
+            Token::DoubleQuotedString(s) if dialect_of!(self is MySqlDialect) => {
+                Ok(Value::DoubleQuotedString(s))
+            }
             #[cfg(not(feature = "bigdecimal"))]
             Token::Number(s, _) => Ok(Value::Number(s, false)),
             #[cfg(feature = "bigdecimal")]

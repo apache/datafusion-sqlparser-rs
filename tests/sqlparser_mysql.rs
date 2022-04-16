@@ -333,7 +333,7 @@ fn parse_simple_insert() {
 }
 
 #[test]
-fn parse_double_quoted_insert() {
+fn parse_double_quoted() {
     let sql_double_quoted =
         r#"INSERT INTO tasks (title, priority) VALUES ("Test S\"o\"m'e' In'se\"rt`s\"", 1)"#;
     let mut double_statements = mysql().parse_sql_statements(sql_double_quoted).unwrap();
@@ -348,6 +348,20 @@ fn parse_double_quoted_insert() {
         }
         _ => unreachable!(),
     }
+
+    let select_sql = r#"SELECT obj["c"][0] FROM t4"#;
+    mysql().verified_stmt(select_sql);
+
+    let sql = r#"SELECT * FROM customers WHERE name LIKE "%a" IS NULL"#;
+    let select = mysql().verified_only_select(sql);
+    assert_eq!(
+        Expr::IsNull(Box::new(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("name"))),
+            op: BinaryOperator::Like,
+            right: Box::new(Expr::Value(Value::DoubleQuotedString("%a".to_string()))),
+        })),
+        select.selection.unwrap()
+    );
 }
 
 #[test]

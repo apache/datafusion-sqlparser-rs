@@ -4567,3 +4567,18 @@ fn parse_time_functions() {
     // Validating Parenthesis
     one_statement_parses_to("SELECT CURRENT_DATE", sql);
 }
+
+#[test]
+fn parse_position() {
+    let sql = "SELECT POSITION('@' IN field)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Position {
+            expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                "@".to_string()
+            ))),
+            from: Box::new(Expr::Identifier(Ident::new("field"))),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+}

@@ -1228,7 +1228,7 @@ impl<'a> Parser<'a> {
                 }
             };
             self.expect_token(&Token::RParen)?;
-            return Ok(in_op);
+            Ok(in_op)
         } else {
             let from = self.parse_expr()?;
             Ok(Expr::Position {

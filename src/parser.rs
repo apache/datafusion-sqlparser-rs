@@ -907,7 +907,6 @@ impl<'a> Parser<'a> {
         }))
     }
 
-
     // This function parses date/time fields for both the EXTRACT function-like
     // operator and interval qualifiers. EXTRACT supports a wider set of
     // date/time fields than interval qualifiers, so this function may need to
@@ -1159,11 +1158,11 @@ impl<'a> Parser<'a> {
                 Token::HashLongArrow => JsonOperator::HashLongArrow,
                 _ => unreachable!(),
             };
-            return Ok(Expr::JsonAccess {
+            Ok(Expr::JsonAccess {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(self.parse_expr()?),
-            });
+            })
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             parser_err!(format!("No infix parser for token {:?}", tok))

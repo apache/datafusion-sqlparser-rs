@@ -423,6 +423,7 @@ impl<'a> Parser<'a> {
                 Keyword::TRY_CAST => self.parse_try_cast_expr(),
                 Keyword::EXISTS => self.parse_exists_expr(),
                 Keyword::EXTRACT => self.parse_extract_expr(),
+                Keyword::POSITION => self.parse_position_expr(),
                 Keyword::SUBSTRING => self.parse_substring_expr(),
                 Keyword::TRIM => self.parse_trim_expr(),
                 Keyword::INTERVAL => self.parse_literal_interval(),
@@ -777,6 +778,14 @@ impl<'a> Parser<'a> {
             field,
             expr: Box::new(expr),
         })
+    }
+
+    pub fn parse_position_expr(&mut self) -> Result<Expr, ParserError> {
+        // PARSE SELECT POSITION('@' in field)
+        self.expect_token(&Token::LParen)?;
+        let res = self.parse_expr()?;
+        self.expect_token(&Token::RParen)?;
+        Ok(res)
     }
 
     pub fn parse_substring_expr(&mut self) -> Result<Expr, ParserError> {
@@ -1201,23 +1210,31 @@ impl<'a> Parser<'a> {
                 negated,
             });
         }
-        self.expect_token(&Token::LParen)?;
-        let in_op = if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
-            self.prev_token();
-            Expr::InSubquery {
-                expr: Box::new(expr),
-                subquery: Box::new(self.parse_query()?),
-                negated,
-            }
+        if self.peek_token() == Token::LParen {  
+            self.expect_token(&Token::LParen)?;
+            let in_op = if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
+                self.prev_token();
+                Expr::InSubquery {
+                    expr: Box::new(expr),
+                    subquery: Box::new(self.parse_query()?),
+                    negated,
+                }
+            } else {
+                Expr::InList {
+                    expr: Box::new(expr),
+                    list: self.parse_comma_separated(Parser::parse_expr)?,
+                    negated,
+                }
+            };
+            self.expect_token(&Token::RParen)?;
+            return Ok(in_op)
         } else {
-            Expr::InList {
+            let from = self.parse_expr()?;
+            Ok(Expr::Position {
                 expr: Box::new(expr),
-                list: self.parse_comma_separated(Parser::parse_expr)?,
-                negated,
-            }
-        };
-        self.expect_token(&Token::RParen)?;
-        Ok(in_op)
+                from: Box::new(from),
+            })
+        }
     }
 
     /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed

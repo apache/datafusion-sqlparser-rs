@@ -4574,9 +4574,7 @@ fn parse_position() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Position {
-            expr: Box::new(Expr::Value(Value::SingleQuotedString(
-                "@".to_string()
-            ))),
+            expr: Box::new(Expr::Value(Value::SingleQuotedString("@".to_string()))),
             from: Box::new(Expr::Identifier(Ident::new("field"))),
         },
         expr_from_projection(only(&select.projection))

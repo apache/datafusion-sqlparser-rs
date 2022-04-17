@@ -458,13 +458,6 @@ impl<'a> Parser<'a> {
                             Ok(Expr::CompoundIdentifier(id_parts))
                         }
                     }
-                    Token::Arrow | Token::LongArrow => {
-                        if self.consume_token(&Token::Arrow) {
-                            return self.parse_json_identifier(w.to_ident(), JsonOperator::Arrow);
-                        }
-                        self.next_token();
-                        return self.parse_json_identifier(w.to_ident(), JsonOperator::LongArrow);
-                    }
                     _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word
@@ -914,57 +907,7 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    pub fn parse_json_identifier(
-        &mut self,
-        ident: Ident,
-        operator: JsonOperator,
-    ) -> Result<Expr, ParserError> {
-        // parse right hand identifier.
-        if let Token::SingleQuotedString(w) = self.next_token() {
-            match self.peek_token() {
-                Token::Arrow => {
-                    self.next_token();
-                    return Ok(Expr::JsonIdentifier {
-                        ident,
-                        operator,
-                        right_ident: Box::new(self.parse_json_identifier(
-                            Ident {
-                                value: w,
-                                quote_style: Some('\''),
-                            },
-                            JsonOperator::Arrow,
-                        )?),
-                    });
-                }
-                Token::LongArrow => {
-                    self.next_token();
-                    return Ok(Expr::JsonIdentifier {
-                        ident,
-                        operator,
-                        right_ident: Box::new(self.parse_json_identifier(
-                            Ident {
-                                value: w,
-                                quote_style: Some('\''),
-                            },
-                            JsonOperator::LongArrow,
-                        )?),
-                    });
-                }
-                _ => {
-                    return Ok(Expr::JsonIdentifier {
-                        ident,
-                        operator,
-                        right_ident: Box::new(Expr::Identifier(Ident {
-                            value: w,
-                            quote_style: Some('\''),
-                        })),
-                    })
-                }
-            }
-        }
 
-        parser_err!(format!("expected word after {}", operator))
-    }
     // This function parses date/time fields for both the EXTRACT function-like
     // operator and interval qualifiers. EXTRACT supports a wider set of
     // date/time fields than interval qualifiers, so this function may need to
@@ -1204,6 +1147,23 @@ impl<'a> Parser<'a> {
                 return self.parse_array_index(expr);
             }
             self.parse_map_access(expr)
+        } else if Token::Arrow == tok
+            || Token::LongArrow == tok
+            || Token::HashArrow == tok
+            || Token::HashLongArrow == tok
+        {
+            let operator = match tok {
+                Token::Arrow => JsonOperator::Arrow,
+                Token::LongArrow => JsonOperator::LongArrow,
+                Token::HashArrow => JsonOperator::HashArrow,
+                Token::HashLongArrow => JsonOperator::HashLongArrow,
+                _ => unreachable!(),
+            };
+            return Ok(Expr::JsonAccess {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(self.parse_expr()?),
+            });
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             parser_err!(format!("No infix parser for token {:?}", tok))
@@ -1349,7 +1309,11 @@ impl<'a> Parser<'a> {
             Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
-            Token::LBracket => Ok(50),
+            Token::LBracket
+            | Token::LongArrow
+            | Token::Arrow
+            | Token::HashArrow
+            | Token::HashLongArrow => Ok(50),
             _ => Ok(0),
         }
     }

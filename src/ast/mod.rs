@@ -188,6 +188,10 @@ pub enum JsonOperator {
     Arrow,
     /// ->> keeps the value as text or int.
     LongArrow,
+    /// #> Extracts JSON sub-object at the specified path
+    HashArrow,
+    /// #>> Extracts JSON sub-object at the specified path as text
+    HashLongArrow,
 }
 
 impl fmt::Display for JsonOperator {
@@ -198,6 +202,12 @@ impl fmt::Display for JsonOperator {
             }
             JsonOperator::Arrow => {
                 write!(f, "->")
+            }
+            JsonOperator::HashArrow => {
+                write!(f, "#>")
+            }
+            JsonOperator::HashLongArrow => {
+                write!(f, "#>>")
             }
         }
     }
@@ -216,10 +226,10 @@ pub enum Expr {
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
     /// JsonIdentifier eg: data->'tags'
-    JsonIdentifier {
-        ident: Ident,
+    JsonAccess {
+        left: Box<Expr>,
         operator: JsonOperator,
-        right_ident: Box<Expr>,
+        right: Box<Expr>,
     },
     /// `IS NULL` operator
     IsNull(Box<Expr>),
@@ -536,14 +546,12 @@ impl fmt::Display for Expr {
             Expr::Array(set) => {
                 write!(f, "{}", set)
             }
-            Expr::JsonIdentifier {
-                ident,
+            Expr::JsonAccess {
+                left,
                 operator,
-                right_ident,
+                right,
             } => {
-                write!(f, "{}", ident)?;
-                write!(f, "{}", operator)?;
-                write!(f, "{}", right_ident)
+                write!(f, "{} {} {}", left, operator, right)
             }
         }
     }

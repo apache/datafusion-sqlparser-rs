@@ -1196,51 +1196,67 @@ fn test_savepoint() {
 
 #[test]
 fn test_json() {
-    let sql = "SELECT params->>'name' FROM events";
+    let sql = "SELECT params ->> 'name' FROM events";
     let select = pg().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonIdentifier {
-            ident: Ident::new("params"),
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::new("params"))),
             operator: JsonOperator::LongArrow,
-            right_ident: Box::new(Expr::Identifier(Ident {
-                value: "name".to_string(),
-                quote_style: Some('\''),
-            }))
+            right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()))),
         }),
         select.projection[0]
     );
 
-    let sql = "SELECT params->'name' FROM events";
+    let sql = "SELECT params -> 'name' FROM events";
     let select = pg().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonIdentifier {
-            ident: Ident::new("params"),
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::new("params"))),
             operator: JsonOperator::Arrow,
-            right_ident: Box::new(Expr::Identifier(Ident {
-                value: "name".to_string(),
-                quote_style: Some('\''),
-            }))
+            right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()))),
         }),
         select.projection[0]
     );
 
-    let sql = "SELECT info->'items'->>'product' FROM orders";
+    let sql = "SELECT info -> 'items' ->> 'product' FROM orders";
     let select = pg().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonIdentifier {
-            ident: Ident::new("info"),
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::new("info"))),
             operator: JsonOperator::Arrow,
-            right_ident: Box::new(Expr::JsonIdentifier {
-                ident: Ident {
-                    value: "items".to_string(),
-                    quote_style: Some('\'')
-                },
+            right: Box::new(Expr::JsonAccess {
+                left: Box::new(Expr::Value(Value::SingleQuotedString("items".to_string()))),
                 operator: JsonOperator::LongArrow,
-                right_ident: Box::new(Expr::Identifier(Ident {
-                    value: "product".to_string(),
-                    quote_style: Some('\''),
-                }))
-            })
+                right: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "product".to_string()
+                )))
+            }),
+        }),
+        select.projection[0]
+    );
+
+    let sql = "SELECT info #> '{a,b,c}' FROM orders";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::new("info"))),
+            operator: JsonOperator::HashArrow,
+            right: Box::new(Expr::Value(Value::SingleQuotedString(
+                "{a,b,c}".to_string()
+            ))),
+        }),
+        select.projection[0]
+    );
+
+    let sql = "SELECT info #>> '{a,b,c}' FROM orders";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::new("info"))),
+            operator: JsonOperator::HashLongArrow,
+            right: Box::new(Expr::Value(Value::SingleQuotedString(
+                "{a,b,c}".to_string()
+            ))),
         }),
         select.projection[0]
     );

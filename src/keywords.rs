@@ -336,6 +336,7 @@ define_keywords!(
     NULLIF,
     NULLS,
     NUMERIC,
+    NVARCHAR,
     OBJECT,
     OCCURRENCES_REGEX,
     OCTET_LENGTH,

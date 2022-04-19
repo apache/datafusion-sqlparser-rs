@@ -1146,6 +1146,23 @@ impl<'a> Parser<'a> {
                 return self.parse_array_index(expr);
             }
             self.parse_map_access(expr)
+        } else if Token::Arrow == tok
+            || Token::LongArrow == tok
+            || Token::HashArrow == tok
+            || Token::HashLongArrow == tok
+        {
+            let operator = match tok {
+                Token::Arrow => JsonOperator::Arrow,
+                Token::LongArrow => JsonOperator::LongArrow,
+                Token::HashArrow => JsonOperator::HashArrow,
+                Token::HashLongArrow => JsonOperator::HashLongArrow,
+                _ => unreachable!(),
+            };
+            Ok(Expr::JsonAccess {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(self.parse_expr()?),
+            })
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             parser_err!(format!("No infix parser for token {:?}", tok))
@@ -1291,7 +1308,11 @@ impl<'a> Parser<'a> {
             Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
-            Token::LBracket => Ok(50),
+            Token::LBracket
+            | Token::LongArrow
+            | Token::Arrow
+            | Token::HashArrow
+            | Token::HashLongArrow => Ok(50),
             _ => Ok(0),
         }
     }

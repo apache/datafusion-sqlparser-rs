@@ -180,6 +180,39 @@ impl fmt::Display for Array {
     }
 }
 
+/// JsonOperator
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum JsonOperator {
+    /// -> keeps the value as json
+    Arrow,
+    /// ->> keeps the value as text or int.
+    LongArrow,
+    /// #> Extracts JSON sub-object at the specified path
+    HashArrow,
+    /// #>> Extracts JSON sub-object at the specified path as text
+    HashLongArrow,
+}
+
+impl fmt::Display for JsonOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonOperator::Arrow => {
+                write!(f, "->")
+            }
+            JsonOperator::LongArrow => {
+                write!(f, "->>")
+            }
+            JsonOperator::HashArrow => {
+                write!(f, "#>")
+            }
+            JsonOperator::HashLongArrow => {
+                write!(f, "#>>")
+            }
+        }
+    }
+}
+
 /// An SQL expression of any type.
 ///
 /// The parser does not distinguish between expressions of different types
@@ -192,6 +225,12 @@ pub enum Expr {
     Identifier(Ident),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
+    /// JSON access (postgres)  eg: data->'tags'
+    JsonAccess {
+        left: Box<Expr>,
+        operator: JsonOperator,
+        right: Box<Expr>,
+    },
     /// `IS NULL` operator
     IsNull(Box<Expr>),
     /// `IS NOT NULL` operator
@@ -506,6 +545,13 @@ impl fmt::Display for Expr {
             }
             Expr::Array(set) => {
                 write!(f, "{}", set)
+            }
+            Expr::JsonAccess {
+                left,
+                operator,
+                right,
+            } => {
+                write!(f, "{} {} {}", left, operator, right)
             }
         }
     }

@@ -197,11 +197,11 @@ pub enum JsonOperator {
 impl fmt::Display for JsonOperator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            JsonOperator::LongArrow => {
-                write!(f, "->>")
-            }
             JsonOperator::Arrow => {
                 write!(f, "->")
+            }
+            JsonOperator::LongArrow => {
+                write!(f, "->>")
             }
             JsonOperator::HashArrow => {
                 write!(f, "#>")
@@ -225,7 +225,7 @@ pub enum Expr {
     Identifier(Ident),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
-    /// JsonIdentifier eg: data->'tags'
+    /// JSON access (postgres)  eg: data->'tags'
     JsonAccess {
         left: Box<Expr>,
         operator: JsonOperator,

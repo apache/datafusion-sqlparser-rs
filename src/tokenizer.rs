@@ -143,7 +143,7 @@ pub enum Token {
     Placeholder(String),
     /// ->, used as a operator to extract json field in PostgreSQL
     Arrow,
-    /// -->, used as a operator to extract json field as text in PostgreSQL
+    /// ->>, used as a operator to extract json field as text in PostgreSQL
     LongArrow,
     /// #> Extracts JSON sub-object at the specified path
     HashArrow,
@@ -206,7 +206,7 @@ impl fmt::Display for Token {
             Token::PGCubeRoot => f.write_str("||/"),
             Token::Placeholder(ref s) => write!(f, "{}", s),
             Token::Arrow => write!(f, "->"),
-            Token::LongArrow => write!(f, "-->"),
+            Token::LongArrow => write!(f, "->>"),
             Token::HashArrow => write!(f, "#>"),
             Token::HashLongArrow => write!(f, "#>>"),
         }

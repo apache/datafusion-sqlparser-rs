@@ -380,6 +380,7 @@ define_keywords!(
     PROCEDURE,
     PROGRAM,
     PURGE,
+    QUALIFY,
     QUARTER,
     QUOTE,
     RANGE,
@@ -582,6 +583,7 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     // for MSSQL-specific OUTER APPLY (seems reserved in most dialects)
     Keyword::OUTER,
     Keyword::SET,
+    Keyword::QUALIFY,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`

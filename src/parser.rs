@@ -2405,6 +2405,9 @@ impl<'a> Parser<'a> {
                     }
                     Ok(DataType::Timestamp)
                 }
+
+                Keyword::DATETIME => Ok(DataType::DateTime(self.parse_optional_precision()?)),
+
                 Keyword::TIME => {
                     // TBD: we throw away "with/without timezone" information
                     if self.parse_keyword(Keyword::WITH) || self.parse_keyword(Keyword::WITHOUT) {

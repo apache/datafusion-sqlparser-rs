@@ -164,6 +164,7 @@ define_keywords!(
     CYCLE,
     DATABASE,
     DATE,
+    DATETIME,
     DAY,
     DEALLOCATE,
     DEC,

@@ -69,6 +69,8 @@ pub enum DataType {
     Time,
     /// Timestamp
     Timestamp,
+    /// DateTime without tz
+    DateTime(Option<u64>),
     /// Interval
     Interval,
     /// Regclass used in postgresql serial
@@ -140,6 +142,7 @@ impl fmt::Display for DataType {
             DataType::Bytea => write!(f, "BYTEA"),
             DataType::Array(ty) => write!(f, "{}[]", ty),
             DataType::Custom(ty) => write!(f, "{}", ty),
+            DataType::DateTime(n) => format_type_with_optional_length(f, "DATETIME", n, false),
         }
     }
 }

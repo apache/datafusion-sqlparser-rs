@@ -4575,7 +4575,7 @@ fn parse_position() {
     assert_eq!(
         &Expr::Position {
             expr: Box::new(Expr::Value(Value::SingleQuotedString("@".to_string()))),
-            from: Box::new(Expr::Identifier(Ident::new("field"))),
+            r#in: Box::new(Expr::Identifier(Ident::new("field"))),
         },
         expr_from_projection(only(&select.projection))
     );

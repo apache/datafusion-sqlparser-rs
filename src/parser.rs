@@ -1233,7 +1233,7 @@ impl<'a> Parser<'a> {
             let from = self.parse_expr()?;
             Ok(Expr::Position {
                 expr: Box::new(expr),
-                from: Box::new(from),
+                r#in: Box::new(from),
             })
         }
     }

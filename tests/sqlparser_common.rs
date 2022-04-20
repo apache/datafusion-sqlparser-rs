@@ -1365,6 +1365,16 @@ fn parse_cast() {
         "SELECT CAST(id AS DECIMAL) FROM customer",
         "SELECT CAST(id AS NUMERIC) FROM customer",
     );
+
+    let sql = "SELECT CAST(id AS NVARCHAR(50)) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Nvarchar(Some(50))
+        },
+        expr_from_projection(only(&select.projection))
+    );
 }
 
 #[test]

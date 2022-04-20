@@ -101,7 +101,7 @@ impl fmt::Display for DataType {
                 format_type_with_optional_length(f, "CHARACTER VARYING", size, false)
             }
             DataType::Nvarchar(size) => {
-                format_type_with_optional_length(f, "NUMERIC CHARACTER VARYING", size, false)
+                format_type_with_optional_length(f, "NVARCHAR", size, false)
             }
             DataType::Uuid => write!(f, "UUID"),
             DataType::Clob(size) => write!(f, "CLOB({})", size),

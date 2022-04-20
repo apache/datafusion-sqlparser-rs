@@ -1303,7 +1303,7 @@ fn test_json() {
 
 #[test]
 fn test_composite_value() {
-    let sql = "SELECT (on_hand.item).name FROM on_hand WHERE (on_hand.item).price > 9.99";
+    let sql = "SELECT (on_hand.item).name FROM on_hand WHERE (on_hand.item).price > 9";
     let select = pg().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::CompositeAccess {
@@ -1316,6 +1316,10 @@ fn test_composite_value() {
         select.projection[0]
     );
 
+    #[cfg(feature = "bigdecimal")]
+    let num: Expr = Expr::Value(Value::Number(bigdecimal::BigDecimal::from(9), false));
+    #[cfg(not(feature = "bigdecimal"))]
+    let num: Expr = Expr::Value(Value::Number("9".to_string(), false));
     assert_eq!(
         select.selection,
         Some(Expr::BinaryOp {
@@ -1327,7 +1331,7 @@ fn test_composite_value() {
                 ]))))
             }),
             op: BinaryOperator::Gt,
-            right: Box::new(Expr::Value(Value::Number("9.99".to_string(), false)))
+            right: Box::new(num)
         })
     );
 

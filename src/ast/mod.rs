@@ -231,6 +231,11 @@ pub enum Expr {
         operator: JsonOperator,
         right: Box<Expr>,
     },
+    /// CompositeAccess (postgres) eg: SELECT (information_schema._pg_expandarray(array['i','i'])).n
+    CompositeAccess {
+        expr: Box<Expr>,
+        key: Ident,
+    },
     /// `IS NULL` operator
     IsNull(Box<Expr>),
     /// `IS NOT NULL` operator
@@ -552,6 +557,9 @@ impl fmt::Display for Expr {
                 right,
             } => {
                 write!(f, "{} {} {}", left, operator, right)
+            }
+            Expr::CompositeAccess { expr, key } => {
+                write!(f, "{}.{}", expr, key)
             }
         }
     }

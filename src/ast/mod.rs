@@ -1283,15 +1283,15 @@ impl fmt::Display for Statement {
                     "CREATE {or_replace}{external}{global}{temporary}TABLE {if_not_exists}{name}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     external = if *external { "EXTERNAL " } else { "" },
-                    global = if global.is_some() {
-                        if global.unwrap() == true {
-                            "GLOBAL "
-                        } else {
-                            "LOCAL "
-                        }
-                    } else {
-                        ""
-                    },
+                    global = global
+                        .map(|global| {
+                            if global == true {
+                                "GLOBAL "
+                            } else {
+                                "LOCAL "
+                            }
+                        })
+                        .unwrap_or(""),
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     temporary = if *temporary { "TEMPORARY " } else { "" },
                     name = name,

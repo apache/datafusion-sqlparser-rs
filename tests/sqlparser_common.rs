@@ -4575,10 +4575,12 @@ fn parse_position() {
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("POSITION")]),
-            args: vec![FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Expr(Expr::Position {
+            args: vec![FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Expr(
+                Expr::Position {
                     expr: Box::new(Expr::Value(Value::SingleQuotedString("@".to_string()))),
                     r#in: Box::new(Expr::Identifier(Ident::new("field"))),
-            }))],
+                }
+            ))],
             over: None,
             distinct: false,
         }),

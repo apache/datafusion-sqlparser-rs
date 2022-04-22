@@ -1285,7 +1285,7 @@ impl fmt::Display for Statement {
                     external = if *external { "EXTERNAL " } else { "" },
                     global = global
                         .map(|global| {
-                            if global == true {
+                            if global {
                                 "GLOBAL "
                             } else {
                                 "LOCAL "

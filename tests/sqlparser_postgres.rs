@@ -140,7 +140,7 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "last_update".into(),
-                        data_type: DataType::Timestamp,
+                        data_type: DataType::Timestamp(None),
                         collation: None,
                         options: vec![
                             ColumnOptionDef {

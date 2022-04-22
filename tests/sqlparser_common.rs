@@ -1594,19 +1594,36 @@ fn parse_try_cast() {
 
 #[test]
 fn parse_datatypes() {
-    let sql = "SELECT TRY_CAST(id AS DATETIME(3)) FROM customer";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        &Expr::TryCast {
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::DateTime(Some(3))
-        },
-        expr_from_projection(only(&select.projection))
-    );
-    one_statement_parses_to(
-        "SELECT TRY_CAST(id AS DateTime) FROM customer",
-        "SELECT TRY_CAST(id AS DATETIME) FROM customer",
-    );
+    {
+        let sql = "SELECT TRY_CAST(id AS DATETIME(3)) FROM customer";
+        let select = verified_only_select(sql);
+        assert_eq!(
+            &Expr::TryCast {
+                expr: Box::new(Expr::Identifier(Ident::new("id"))),
+                data_type: DataType::DateTime(Some(3))
+            },
+            expr_from_projection(only(&select.projection))
+        );
+        one_statement_parses_to(
+            "SELECT TRY_CAST(id AS DateTime) FROM customer",
+            "SELECT TRY_CAST(id AS DATETIME) FROM customer",
+        );
+    }
+    {
+        let sql = "SELECT TRY_CAST(id AS TIMESTAMP(3)) FROM customer";
+        let select = verified_only_select(sql);
+        assert_eq!(
+            &Expr::TryCast {
+                expr: Box::new(Expr::Identifier(Ident::new("id"))),
+                data_type: DataType::Timestamp(Some(3))
+            },
+            expr_from_projection(only(&select.projection))
+        );
+        one_statement_parses_to(
+            "SELECT TRY_CAST(id AS TimeStamp) FROM customer",
+            "SELECT TRY_CAST(id AS TIMESTAMP) FROM customer",
+        );
+    }
 }
 
 #[test]
@@ -2569,7 +2586,7 @@ fn parse_literal_timestamp() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::Timestamp,
+            data_type: DataType::Timestamp(None),
             value: "1999-01-01 01:23:34".into()
         },
         expr_from_projection(only(&select.projection)),

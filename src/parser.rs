@@ -1519,11 +1519,20 @@ impl<'a> Parser<'a> {
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
         let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
+        let local = self.parse_one_of_keywords(&[Keyword::LOCAL]).is_some();
+        let global = self.parse_one_of_keywords(&[Keyword::GLOBAL]).is_some();
+        let global: Option<bool> = if global {
+            Some(true)
+        } else if local {
+            Some(false)
+        } else {
+            None
+        };
         let temporary = self
             .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
             .is_some();
         if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table(or_replace, temporary)
+            self.parse_create_table(or_replace, temporary, global)
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
             self.parse_create_view(or_replace)
@@ -1633,6 +1642,7 @@ impl<'a> Parser<'a> {
             or_replace,
             if_not_exists,
             external: true,
+            global: None,
             temporary: false,
             file_format,
             location,
@@ -1642,6 +1652,7 @@ impl<'a> Parser<'a> {
             default_charset: None,
             engine: None,
             collation: None,
+            on_commit: None,
         })
     }
 
@@ -1790,6 +1801,7 @@ impl<'a> Parser<'a> {
         &mut self,
         or_replace: bool,
         temporary: bool,
+        global: Option<bool>,
     ) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name()?;
@@ -1846,6 +1858,23 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let on_commit: Option<OnCommit> =
+            if self.parse_keywords(&[Keyword::ON, Keyword::COMMIT, Keyword::DELETE, Keyword::ROWS])
+            {
+                Some(OnCommit::DeleteRows)
+            } else if self.parse_keywords(&[
+                Keyword::ON,
+                Keyword::COMMIT,
+                Keyword::PRESERVE,
+                Keyword::ROWS,
+            ]) {
+                Some(OnCommit::PreserveRows)
+            } else if self.parse_keywords(&[Keyword::ON, Keyword::COMMIT, Keyword::DROP]) {
+                Some(OnCommit::Drop)
+            } else {
+                None
+            };
+
         Ok(Statement::CreateTable {
             name: table_name,
             temporary,
@@ -1858,6 +1887,7 @@ impl<'a> Parser<'a> {
             hive_distribution,
             hive_formats: Some(hive_formats),
             external: false,
+            global,
             file_format: None,
             location: None,
             query,
@@ -1866,6 +1896,7 @@ impl<'a> Parser<'a> {
             engine,
             default_charset,
             collation,
+            on_commit,
         })
     }
 

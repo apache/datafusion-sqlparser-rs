@@ -831,6 +831,7 @@ pub enum Statement {
         or_replace: bool,
         temporary: bool,
         external: bool,
+        global: Option<bool>,
         if_not_exists: bool,
         /// Table name
         name: ObjectName,
@@ -849,6 +850,7 @@ pub enum Statement {
         engine: Option<String>,
         default_charset: Option<String>,
         collation: Option<String>,
+        on_commit: Option<OnCommit>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -1313,6 +1315,7 @@ impl fmt::Display for Statement {
                 hive_distribution,
                 hive_formats,
                 external,
+                global,
                 temporary,
                 file_format,
                 location,
@@ -1322,6 +1325,7 @@ impl fmt::Display for Statement {
                 default_charset,
                 engine,
                 collation,
+                on_commit,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -1332,9 +1336,18 @@ impl fmt::Display for Statement {
                 //   `CREATE TABLE t (a INT) AS SELECT a from t2`
                 write!(
                     f,
-                    "CREATE {or_replace}{external}{temporary}TABLE {if_not_exists}{name}",
+                    "CREATE {or_replace}{external}{global}{temporary}TABLE {if_not_exists}{name}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     external = if *external { "EXTERNAL " } else { "" },
+                    global = global
+                        .map(|global| {
+                            if global {
+                                "GLOBAL "
+                            } else {
+                                "LOCAL "
+                            }
+                        })
+                        .unwrap_or(""),
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     temporary = if *temporary { "TEMPORARY " } else { "" },
                     name = name,
@@ -1456,6 +1469,17 @@ impl fmt::Display for Statement {
                 if let Some(collation) = collation {
                     write!(f, " COLLATE={}", collation)?;
                 }
+
+                if on_commit.is_some() {
+                    let on_commit = match on_commit {
+                        Some(OnCommit::DeleteRows) => "ON COMMIT DELETE ROWS",
+                        Some(OnCommit::PreserveRows) => "ON COMMIT PRESERVE ROWS",
+                        Some(OnCommit::Drop) => "ON COMMIT DROP",
+                        None => "",
+                    };
+                    write!(f, " {}", on_commit)?;
+                }
+
                 Ok(())
             }
             Statement::CreateVirtualTable {
@@ -2274,6 +2298,14 @@ impl fmt::Display for CopyTarget {
             ),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum OnCommit {
+    DeleteRows,
+    PreserveRows,
+    Drop,
 }
 
 /// An option in `COPY` statement.

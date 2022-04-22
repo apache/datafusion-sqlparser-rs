@@ -1347,6 +1347,21 @@ fn parse_quoted_identifier() {
     pg_and_generic().verified_stmt(r#"SELECT "quoted "" ident""#);
 }
 
+#[test]
+fn parse_local_and_global() {
+    pg_and_generic().verified_stmt("CREATE LOCAL TEMPORARY TABLE table (COL INT)");
+}
+
+#[test]
+fn parse_on_commit() {
+    pg_and_generic()
+        .verified_stmt("CREATE TEMPORARY TABLE table (COL INT) ON COMMIT PRESERVE ROWS");
+
+    pg_and_generic().verified_stmt("CREATE TEMPORARY TABLE table (COL INT) ON COMMIT DELETE ROWS");
+
+    pg_and_generic().verified_stmt("CREATE TEMPORARY TABLE table (COL INT) ON COMMIT DROP");
+}
+
 fn pg() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {})],

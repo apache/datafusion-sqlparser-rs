@@ -2403,7 +2403,7 @@ impl<'a> Parser<'a> {
                     if self.parse_keyword(Keyword::WITH) || self.parse_keyword(Keyword::WITHOUT) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
                     }
-                    Ok(DataType::Timestamp)
+                    Ok(DataType::Timestamp(self.parse_optional_precision()?))
                 }
 
                 Keyword::DATETIME => Ok(DataType::DateTime(self.parse_optional_precision()?)),

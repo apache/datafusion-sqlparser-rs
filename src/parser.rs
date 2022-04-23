@@ -1975,6 +1975,17 @@ impl<'a> Parser<'a> {
             Ok(Some(ColumnOption::Null))
         } else if self.parse_keyword(Keyword::DEFAULT) {
             Ok(Some(ColumnOption::Default(self.parse_expr()?)))
+        } else if self.parse_keywords(&[Keyword::NOT, Keyword::DEFERRABLE]) {
+            Ok(Some(ColumnOption::NotDeferrable))
+        } else if self.parse_keywords(&[Keyword::DEFERRABLE, Keyword::INITIALLY, Keyword::DEFERRED])
+        {
+            Ok(Some(ColumnOption::DeferrableInitiallyDeferred))
+        } else if self.parse_keywords(&[
+            Keyword::DEFERRABLE,
+            Keyword::INITIALLY,
+            Keyword::IMMEDIATE,
+        ]) {
+            Ok(Some(ColumnOption::DeferrableInitiallyImmediate))
         } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY]) {
             Ok(Some(ColumnOption::Unique { is_primary: true }))
         } else if self.parse_keyword(Keyword::UNIQUE) {

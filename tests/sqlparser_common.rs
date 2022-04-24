@@ -952,6 +952,17 @@ fn parse_in_unnest() {
 }
 
 #[test]
+fn parse_in_error() {
+    // <expr> IN <expr> is no valid
+    let sql = "SELECT * FROM customers WHERE segment in segment";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected (, found: segment".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_string_agg() {
     let sql = "SELECT a || b";
 

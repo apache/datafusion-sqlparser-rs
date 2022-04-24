@@ -180,6 +180,39 @@ impl fmt::Display for Array {
     }
 }
 
+/// JsonOperator
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum JsonOperator {
+    /// -> keeps the value as json
+    Arrow,
+    /// ->> keeps the value as text or int.
+    LongArrow,
+    /// #> Extracts JSON sub-object at the specified path
+    HashArrow,
+    /// #>> Extracts JSON sub-object at the specified path as text
+    HashLongArrow,
+}
+
+impl fmt::Display for JsonOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonOperator::Arrow => {
+                write!(f, "->")
+            }
+            JsonOperator::LongArrow => {
+                write!(f, "->>")
+            }
+            JsonOperator::HashArrow => {
+                write!(f, "#>")
+            }
+            JsonOperator::HashLongArrow => {
+                write!(f, "#>>")
+            }
+        }
+    }
+}
+
 /// An SQL expression of any type.
 ///
 /// The parser does not distinguish between expressions of different types
@@ -192,6 +225,12 @@ pub enum Expr {
     Identifier(Ident),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
+    /// JSON access (postgres)  eg: data->'tags'
+    JsonAccess {
+        left: Box<Expr>,
+        operator: JsonOperator,
+        right: Box<Expr>,
+    },
     /// `IS NULL` operator
     IsNull(Box<Expr>),
     /// `IS NOT NULL` operator
@@ -513,6 +552,13 @@ impl fmt::Display for Expr {
             Expr::Array(set) => {
                 write!(f, "{}", set)
             }
+            Expr::JsonAccess {
+                left,
+                operator,
+                right,
+            } => {
+                write!(f, "{} {} {}", left, operator, right)
+            }
         }
     }
 }
@@ -791,6 +837,7 @@ pub enum Statement {
         or_replace: bool,
         temporary: bool,
         external: bool,
+        global: Option<bool>,
         if_not_exists: bool,
         /// Table name
         name: ObjectName,
@@ -809,6 +856,7 @@ pub enum Statement {
         engine: Option<String>,
         default_charset: Option<String>,
         collation: Option<String>,
+        on_commit: Option<OnCommit>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -846,6 +894,16 @@ pub enum Statement {
         /// Hive allows you specify whether the table's stored data will be
         /// deleted along with the dropped table
         purge: bool,
+    },
+    /// SET [ SESSION | LOCAL ] ROLE role_name
+    ///
+    /// Note: this is a PostgreSQL-specific statement,
+    /// but may also compatible with other SQL.
+    SetRole {
+        local: bool,
+        // SESSION is the default if neither SESSION nor LOCAL appears.
+        session: bool,
+        role_name: Option<Ident>,
     },
     /// SET <variable>
     ///
@@ -1263,6 +1321,7 @@ impl fmt::Display for Statement {
                 hive_distribution,
                 hive_formats,
                 external,
+                global,
                 temporary,
                 file_format,
                 location,
@@ -1272,6 +1331,7 @@ impl fmt::Display for Statement {
                 default_charset,
                 engine,
                 collation,
+                on_commit,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -1282,9 +1342,18 @@ impl fmt::Display for Statement {
                 //   `CREATE TABLE t (a INT) AS SELECT a from t2`
                 write!(
                     f,
-                    "CREATE {or_replace}{external}{temporary}TABLE {if_not_exists}{name}",
+                    "CREATE {or_replace}{external}{global}{temporary}TABLE {if_not_exists}{name}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     external = if *external { "EXTERNAL " } else { "" },
+                    global = global
+                        .map(|global| {
+                            if global {
+                                "GLOBAL "
+                            } else {
+                                "LOCAL "
+                            }
+                        })
+                        .unwrap_or(""),
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     temporary = if *temporary { "TEMPORARY " } else { "" },
                     name = name,
@@ -1406,6 +1475,17 @@ impl fmt::Display for Statement {
                 if let Some(collation) = collation {
                     write!(f, " COLLATE={}", collation)?;
                 }
+
+                if on_commit.is_some() {
+                    let on_commit = match on_commit {
+                        Some(OnCommit::DeleteRows) => "ON COMMIT DELETE ROWS",
+                        Some(OnCommit::PreserveRows) => "ON COMMIT PRESERVE ROWS",
+                        Some(OnCommit::Drop) => "ON COMMIT DROP",
+                        None => "",
+                    };
+                    write!(f, " {}", on_commit)?;
+                }
+
                 Ok(())
             }
             Statement::CreateVirtualTable {
@@ -1459,6 +1539,24 @@ impl fmt::Display for Statement {
                 if *cascade { " CASCADE" } else { "" },
                 if *purge { " PURGE" } else { "" }
             ),
+            Statement::SetRole {
+                local,
+                session,
+                role_name,
+            } => {
+                write!(
+                    f,
+                    "SET {local}{session}ROLE",
+                    local = if *local { "LOCAL " } else { "" },
+                    session = if *session { "SESSION " } else { "" },
+                )?;
+                if let Some(role_name) = role_name {
+                    write!(f, " {}", role_name)?;
+                } else {
+                    f.write_str(" NONE")?;
+                }
+                Ok(())
+            }
             Statement::SetVariable {
                 local,
                 variable,
@@ -2206,6 +2304,14 @@ impl fmt::Display for CopyTarget {
             ),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum OnCommit {
+    DeleteRows,
+    PreserveRows,
+    Drop,
 }
 
 /// An option in `COPY` statement.

@@ -29,6 +29,8 @@ pub enum DataType {
     Char(Option<u64>),
     /// Variable-length character type e.g. VARCHAR(10)
     Varchar(Option<u64>),
+    /// Variable-length character type e.g. NVARCHAR(10)
+    Nvarchar(Option<u64>),
     /// Uuid type
     Uuid,
     /// Large character object e.g. CLOB(1000)
@@ -97,6 +99,9 @@ impl fmt::Display for DataType {
             DataType::Char(size) => format_type_with_optional_length(f, "CHAR", size, false),
             DataType::Varchar(size) => {
                 format_type_with_optional_length(f, "CHARACTER VARYING", size, false)
+            }
+            DataType::Nvarchar(size) => {
+                format_type_with_optional_length(f, "NVARCHAR", size, false)
             }
             DataType::Uuid => write!(f, "UUID"),
             DataType::Clob(size) => write!(f, "CLOB({})", size),

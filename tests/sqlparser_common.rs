@@ -952,6 +952,17 @@ fn parse_in_unnest() {
 }
 
 #[test]
+fn parse_in_error() {
+    // <expr> IN <expr> is no valid
+    let sql = "SELECT * FROM customers WHERE segment in segment";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected (, found: segment".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_string_agg() {
     let sql = "SELECT a || b";
 
@@ -1364,6 +1375,16 @@ fn parse_cast() {
     one_statement_parses_to(
         "SELECT CAST(id AS DECIMAL) FROM customer",
         "SELECT CAST(id AS NUMERIC) FROM customer",
+    );
+
+    let sql = "SELECT CAST(id AS NVARCHAR(50)) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Nvarchar(Some(50))
+        },
+        expr_from_projection(only(&select.projection))
     );
 }
 

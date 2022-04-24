@@ -856,6 +856,45 @@ fn parse_set() {
 }
 
 #[test]
+fn parse_set_role() {
+    let stmt = pg_and_generic().verified_stmt("SET SESSION ROLE NONE");
+    assert_eq!(
+        stmt,
+        Statement::SetRole {
+            local: false,
+            session: true,
+            role_name: None,
+        }
+    );
+
+    let stmt = pg_and_generic().verified_stmt("SET LOCAL ROLE \"rolename\"");
+    assert_eq!(
+        stmt,
+        Statement::SetRole {
+            local: true,
+            session: false,
+            role_name: Some(Ident {
+                value: "rolename".to_string(),
+                quote_style: Some('\"'),
+            }),
+        }
+    );
+
+    let stmt = pg_and_generic().verified_stmt("SET ROLE 'rolename'");
+    assert_eq!(
+        stmt,
+        Statement::SetRole {
+            local: false,
+            session: false,
+            role_name: Some(Ident {
+                value: "rolename".to_string(),
+                quote_style: Some('\''),
+            }),
+        }
+    );
+}
+
+#[test]
 fn parse_show() {
     let stmt = pg_and_generic().verified_stmt("SHOW a a");
     assert_eq!(
@@ -1195,6 +1234,74 @@ fn test_savepoint() {
 }
 
 #[test]
+fn test_json() {
+    let sql = "SELECT params ->> 'name' FROM events";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::new("params"))),
+            operator: JsonOperator::LongArrow,
+            right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()))),
+        }),
+        select.projection[0]
+    );
+
+    let sql = "SELECT params -> 'name' FROM events";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::new("params"))),
+            operator: JsonOperator::Arrow,
+            right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()))),
+        }),
+        select.projection[0]
+    );
+
+    let sql = "SELECT info -> 'items' ->> 'product' FROM orders";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::new("info"))),
+            operator: JsonOperator::Arrow,
+            right: Box::new(Expr::JsonAccess {
+                left: Box::new(Expr::Value(Value::SingleQuotedString("items".to_string()))),
+                operator: JsonOperator::LongArrow,
+                right: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "product".to_string()
+                )))
+            }),
+        }),
+        select.projection[0]
+    );
+
+    let sql = "SELECT info #> '{a,b,c}' FROM orders";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::new("info"))),
+            operator: JsonOperator::HashArrow,
+            right: Box::new(Expr::Value(Value::SingleQuotedString(
+                "{a,b,c}".to_string()
+            ))),
+        }),
+        select.projection[0]
+    );
+
+    let sql = "SELECT info #>> '{a,b,c}' FROM orders";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::new("info"))),
+            operator: JsonOperator::HashLongArrow,
+            right: Box::new(Expr::Value(Value::SingleQuotedString(
+                "{a,b,c}".to_string()
+            ))),
+        }),
+        select.projection[0]
+    );
+}
+
+#[test]
 fn parse_comments() {
     match pg().verified_stmt("COMMENT ON COLUMN tab.name IS 'comment'") {
         Statement::Comment {
@@ -1238,6 +1345,21 @@ fn parse_comments() {
 #[test]
 fn parse_quoted_identifier() {
     pg_and_generic().verified_stmt(r#"SELECT "quoted "" ident""#);
+}
+
+#[test]
+fn parse_local_and_global() {
+    pg_and_generic().verified_stmt("CREATE LOCAL TEMPORARY TABLE table (COL INT)");
+}
+
+#[test]
+fn parse_on_commit() {
+    pg_and_generic()
+        .verified_stmt("CREATE TEMPORARY TABLE table (COL INT) ON COMMIT PRESERVE ROWS");
+
+    pg_and_generic().verified_stmt("CREATE TEMPORARY TABLE table (COL INT) ON COMMIT DELETE ROWS");
+
+    pg_and_generic().verified_stmt("CREATE TEMPORARY TABLE table (COL INT) ON COMMIT DROP");
 }
 
 fn pg() -> TestedDialects {

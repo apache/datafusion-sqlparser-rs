@@ -141,6 +141,14 @@ pub enum Token {
     PGCubeRoot,
     /// `?` or `$` , a prepared statement arg placeholder
     Placeholder(String),
+    /// ->, used as a operator to extract json field in PostgreSQL
+    Arrow,
+    /// ->>, used as a operator to extract json field as text in PostgreSQL
+    LongArrow,
+    /// #> Extracts JSON sub-object at the specified path
+    HashArrow,
+    /// #>> Extracts JSON sub-object at the specified path as text
+    HashLongArrow,
 }
 
 impl fmt::Display for Token {
@@ -197,6 +205,10 @@ impl fmt::Display for Token {
             Token::PGSquareRoot => f.write_str("|/"),
             Token::PGCubeRoot => f.write_str("||/"),
             Token::Placeholder(ref s) => write!(f, "{}", s),
+            Token::Arrow => write!(f, "->"),
+            Token::LongArrow => write!(f, "->>"),
+            Token::HashArrow => write!(f, "#>"),
+            Token::HashLongArrow => write!(f, "#>>"),
         }
     }
 }
@@ -483,6 +495,16 @@ impl<'a> Tokenizer<'a> {
                                 comment,
                             })))
                         }
+                        Some('>') => {
+                            chars.next();
+                            match chars.peek() {
+                                Some('>') => {
+                                    chars.next();
+                                    Ok(Some(Token::LongArrow))
+                                }
+                                _ => Ok(Some(Token::Arrow)),
+                            }
+                        }
                         // a regular '-' operator
                         _ => Ok(Some(Token::Minus)),
                     }
@@ -600,7 +622,22 @@ impl<'a> Tokenizer<'a> {
                         _ => Ok(Some(Token::Tilde)),
                     }
                 }
-                '#' => self.consume_and_return(chars, Token::Sharp),
+                '#' => {
+                    chars.next();
+                    match chars.peek() {
+                        Some('>') => {
+                            chars.next();
+                            match chars.peek() {
+                                Some('>') => {
+                                    chars.next();
+                                    Ok(Some(Token::HashLongArrow))
+                                }
+                                _ => Ok(Some(Token::HashArrow)),
+                            }
+                        }
+                        _ => Ok(Some(Token::Sharp)),
+                    }
+                }
                 '@' => self.consume_and_return(chars, Token::AtSign),
                 '?' => self.consume_and_return(chars, Token::Placeholder(String::from("?"))),
                 '$' => {

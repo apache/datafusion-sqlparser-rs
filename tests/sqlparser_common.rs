@@ -4643,3 +4643,20 @@ fn parse_position() {
         expr_from_projection(only(&select.projection))
     );
 }
+
+#[test]
+fn parse_position_negative() {
+    let sql = "SELECT POSITION(foo) from bar";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Position function must include IN keyword".to_string()),
+        res.unwrap_err()
+    );
+
+    let sql = "SELECT POSITION(foo IN) from bar";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected an expression:, found: )".to_string()),
+        res.unwrap_err()
+    );
+}

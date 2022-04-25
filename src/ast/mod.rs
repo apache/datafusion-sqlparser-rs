@@ -291,6 +291,11 @@ pub enum Expr {
         field: DateTimeField,
         expr: Box<Expr>,
     },
+    /// POSITION(<expr> in <expr>)
+    Position {
+        expr: Box<Expr>,
+        r#in: Box<Expr>,
+    },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     Substring {
         expr: Box<Expr>,
@@ -438,6 +443,7 @@ impl fmt::Display for Expr {
             Expr::Cast { expr, data_type } => write!(f, "CAST({} AS {})", expr, data_type),
             Expr::TryCast { expr, data_type } => write!(f, "TRY_CAST({} AS {})", expr, data_type),
             Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
+            Expr::Position { expr, r#in } => write!(f, "POSITION({} IN {})", expr, r#in),
             Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),
             Expr::Nested(ast) => write!(f, "({})", ast),
             Expr::Value(v) => write!(f, "{}", v),

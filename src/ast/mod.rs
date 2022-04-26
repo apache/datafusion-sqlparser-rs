@@ -764,6 +764,8 @@ pub enum Statement {
     Insert {
         /// Only for Sqlite
         or: Option<SqliteOnConflict>,
+        /// INTO - optional keyword
+        into: bool,
         /// TABLE
         table_name: ObjectName,
         /// COLUMNS
@@ -1037,6 +1039,8 @@ pub enum Statement {
     Savepoint { name: Ident },
     // MERGE INTO statement, based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
     Merge {
+        // optional INTO keyword
+        into: bool,
         // Specifies the table to merge
         table: TableFactor,
         // Specifies the table or subquery to join with the target table
@@ -1182,6 +1186,7 @@ impl fmt::Display for Statement {
             }
             Statement::Insert {
                 or,
+                into,
                 table_name,
                 overwrite,
                 partitioned,
@@ -1196,9 +1201,10 @@ impl fmt::Display for Statement {
                 } else {
                     write!(
                         f,
-                        "INSERT {act}{tbl} {table_name} ",
+                        "INSERT{over}{int}{tbl} {table_name} ",
                         table_name = table_name,
-                        act = if *overwrite { "OVERWRITE" } else { "INTO" },
+                        over = if *overwrite { " OVERWRITE" } else { "" },
+                        int = if *into { " INTO" } else { "" },
                         tbl = if *table { " TABLE" } else { "" }
                     )?;
                 }
@@ -1749,13 +1755,18 @@ impl fmt::Display for Statement {
                 write!(f, "{}", name)
             }
             Statement::Merge {
+                into,
                 table,
                 source,
                 alias,
                 on,
                 clauses,
             } => {
-                write!(f, "MERGE INTO {} USING {} ", table, source)?;
+                write!(
+                    f,
+                    "MERGE{int} {table} USING {source} ",
+                    int = if *into { " INTO" } else { "" }
+                )?;
                 if let Some(a) = alias {
                     write!(f, "as {} ", a)?;
                 };

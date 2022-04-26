@@ -330,6 +330,47 @@ fn parse_simple_insert() {
         }
         _ => unreachable!(),
     }
+
+    let sql = r"INSERT INTO array_test (nums) VALUES ([1, 2, 3]), ([4, 5, 6])";
+    match mysql().verified_stmt(sql) {
+        Statement::Insert {
+            table_name,
+            columns,
+            source,
+            on,
+            ..
+        } => {
+            assert_eq!(ObjectName(vec![Ident::new("array_test")]), table_name);
+            assert_eq!(vec![Ident::new("nums")], columns);
+            assert!(on.is_none());
+            assert_eq!(
+                Some(Box::new(Query {
+                    with: None,
+                    body: SetExpr::Values(Values(
+                        vec![
+                            vec![Expr::Array(vec![
+                                Expr::Value(number("1")),
+                                Expr::Value(number("2")),
+                                Expr::Value(number("3"))
+                            ]),],
+                            vec![Expr::Array(vec![
+                                Expr::Value(number("4")),
+                                Expr::Value(number("5")),
+                                Expr::Value(number("6"))
+                            ]),],
+                        ],
+                        StreamValues::default()
+                    )),
+                    order_by: vec![],
+                    limit: None,
+                    offset: None,
+                    fetch: None,
+                })),
+                source,
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

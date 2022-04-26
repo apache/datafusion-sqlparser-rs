@@ -194,7 +194,7 @@ fn parse_create_table_from_pg_dump() {
             store_id smallint NOT NULL,
             first_name character varying(45) NOT NULL,
             last_name character varying(45) NOT NULL,
-            info text[],
+            info text,
             address_id smallint NOT NULL,
             activebool boolean DEFAULT true NOT NULL,
             create_date date DEFAULT now()::DATE NOT NULL,
@@ -210,7 +210,7 @@ fn parse_create_table_from_pg_dump() {
             store_id SMALLINT NOT NULL, \
             first_name CHARACTER VARYING(45) NOT NULL, \
             last_name CHARACTER VARYING(45) NOT NULL, \
-            info TEXT[], \
+            info TEXT, \
             address_id SMALLINT NOT NULL, \
             activebool BOOLEAN DEFAULT true NOT NULL, \
             create_date DATE DEFAULT now()::DATE NOT NULL, \
@@ -228,7 +228,7 @@ fn parse_create_table_with_inherit() {
                CREATE TABLE bazaar.settings (\
                settings_id UUID PRIMARY KEY DEFAULT uuid_generate_v4() NOT NULL, \
                user_id UUID UNIQUE, \
-               value TEXT[], \
+               value TEXT, \
                use_metric BOOLEAN DEFAULT true\
                )";
     pg().verified_stmt(sql);

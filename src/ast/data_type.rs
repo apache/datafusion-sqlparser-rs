@@ -140,7 +140,7 @@ impl fmt::Display for DataType {
             DataType::Text => write!(f, "TEXT"),
             DataType::String => write!(f, "STRING"),
             DataType::Bytea => write!(f, "BYTEA"),
-            DataType::Array(ty) => write!(f, "{}[]", ty),
+            DataType::Array(ty) => write!(f, "ARRAY({})", ty),
             DataType::Custom(ty) => write!(f, "{}", ty),
             DataType::DateTime(n) => format_type_with_optional_length(f, "DATETIME", n, false),
         }

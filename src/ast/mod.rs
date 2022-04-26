@@ -282,6 +282,8 @@ pub enum Expr {
     Cube(Vec<Vec<Expr>>),
     /// The `ROLLUP` expr.
     Rollup(Vec<Vec<Expr>>),
+    /// The `Array` expr
+    Array(Vec<Expr>),
 }
 
 impl fmt::Display for Expr {
@@ -460,6 +462,16 @@ impl fmt::Display for Expr {
 
                 write!(f, ")")
             }
+            Expr::Array(exprs) => write!(
+                f,
+                "[{}]",
+                exprs
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<String>>()
+                    .as_slice()
+                    .join(", ")
+            ),
         }
     }
 }

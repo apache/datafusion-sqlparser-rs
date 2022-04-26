@@ -1765,6 +1765,48 @@ fn parse_drop_schema() {
 }
 
 #[test]
+fn parse_deferrable_column_options() {
+    let sql_deferrable_deferred = r#"
+       CREATE TABLE test_table (fkey_id INT NOT NULL REFERENCES other_table (id) DEFERRABLE INITIALLY DEFERRED)"#;
+
+    match verified_stmt(sql_deferrable_deferred.trim()) {
+        Statement::CreateTable { columns: c, .. } => {
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident {
+                        value: "fkey_id".into(),
+                        quote_style: None,
+                    },
+                    data_type: DataType::Int(None),
+                    collation: None,
+                    options: vec![
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull
+                        },
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::ForeignKey {
+                                foreign_table: ObjectName(vec!["other_table".into()]),
+                                referred_columns: vec!["id".into()],
+                                on_delete: None,
+                                on_update: None,
+                            }
+                        },
+                        ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::DeferrableInitiallyDeferred
+                        }
+                    ]
+                }],
+                c,
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_as() {
     let sql = "CREATE TABLE t AS SELECT * FROM a";
 

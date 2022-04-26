@@ -431,7 +431,12 @@ impl<'a> Tokenizer<'a> {
                     Ok(Some(Token::SingleQuotedString(s)))
                 }
                 // delimited (quoted) identifier
-                quote_start if self.dialect.is_delimited_identifier_start(quote_start) => {
+                quote_start
+                    if self.dialect.is_delimited_identifier_start(ch)
+                        && self
+                            .dialect
+                            .is_proper_identifier_inside_quotes(chars.clone()) =>
+                {
                     chars.next(); // consume the opening quote
                     let quote_end = Word::matching_end_quote(quote_start);
                     let (s, last_char) = parse_quoted_ident(chars, quote_end);

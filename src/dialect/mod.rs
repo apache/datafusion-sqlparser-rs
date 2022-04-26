@@ -17,11 +17,14 @@ mod hive;
 mod mssql;
 mod mysql;
 mod postgresql;
+mod redshift;
 mod snowflake;
 mod sqlite;
 
 use core::any::{Any, TypeId};
 use core::fmt::Debug;
+use std::iter::Peekable;
+use std::str::Chars;
 
 pub use self::ansi::AnsiDialect;
 pub use self::clickhouse::ClickHouseDialect;
@@ -30,6 +33,7 @@ pub use self::hive::HiveDialect;
 pub use self::mssql::MsSqlDialect;
 pub use self::mysql::MySqlDialect;
 pub use self::postgresql::PostgreSqlDialect;
+pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
 pub use crate::keywords;
@@ -50,6 +54,10 @@ pub trait Dialect: Debug + Any {
     /// in `Word::matching_end_quote` here
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"'
+    }
+    /// Determine if quoted characters are proper for identifier
+    fn is_proper_identifier_inside_quotes(&self, mut _chars: Peekable<Chars<'_>>) -> bool {
+        true
     }
     /// Determine if a character is a valid start character for an unquoted identifier
     fn is_identifier_start(&self, ch: char) -> bool;

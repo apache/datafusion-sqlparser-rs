@@ -589,7 +589,7 @@ fn test_copy_to() {
 
 #[test]
 fn parse_copy_from() {
-    let sql = "COPY table (a, b) FROM 'file.csv' WITH 
+    let sql = "COPY table (a, b) FROM 'file.csv' WITH
     (
         FORMAT CSV,
         FREEZE,

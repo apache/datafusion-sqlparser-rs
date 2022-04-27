@@ -361,6 +361,22 @@ impl<'a> Tokenizer<'a> {
         Ok(tokens)
     }
 
+    fn consume_sharp(&self, chars: &mut Peekable<Chars<'_>>) -> Result<Option<Token>, TokenizerError> {
+        match chars.peek() {
+            Some('>') => {
+                chars.next();
+                match chars.peek() {
+                    Some('>') => {
+                        chars.next();
+                        return Ok(Some(Token::HashLongArrow))
+                    }
+                    _ => return Ok(Some(Token::HashArrow)),
+                }
+            }
+            _ => return Ok(Some(Token::Sharp)),
+        }
+    }
+
     /// Get the next token or return None
     fn next_token(&self, chars: &mut Peekable<Chars<'_>>) -> Result<Option<Token>, TokenizerError> {
         //println!("next_token: {:?}", chars.peek());
@@ -423,19 +439,7 @@ impl<'a> Tokenizer<'a> {
                         return Ok(Some(Token::Number(s, false)));
                     }
                     if s == "#" {
-                        match chars.peek() {
-                            Some('>') => {
-                                chars.next();
-                                match chars.peek() {
-                                    Some('>') => {
-                                        chars.next();
-                                        return Ok(Some(Token::HashLongArrow))
-                                    }
-                                    _ => Ok(Some(Token::HashArrow)),
-                                }
-                            }
-                            _ => Ok(Some(Token::Sharp)),
-                        }
+                        self.consume_sharp(chars)
                     } else {
                         Ok(Some(Token::make_word(&s, None)))
                     }
@@ -641,19 +645,7 @@ impl<'a> Tokenizer<'a> {
                 }
                 '#' => {
                     chars.next();
-                    match chars.peek() {
-                        Some('>') => {
-                            chars.next();
-                            match chars.peek() {
-                                Some('>') => {
-                                    chars.next();
-                                    Ok(Some(Token::HashLongArrow))
-                                }
-                                _ => Ok(Some(Token::HashArrow)),
-                            }
-                        }
-                        _ => Ok(Some(Token::Sharp)),
-                    }
+                    self.consume_sharp(chars)
                 }
                 '@' => self.consume_and_return(chars, Token::AtSign),
                 '?' => self.consume_and_return(chars, Token::Placeholder(String::from("?"))),

@@ -361,14 +361,17 @@ impl<'a> Tokenizer<'a> {
         Ok(tokens)
     }
 
-    fn consume_sharp(&self, chars: &mut Peekable<Chars<'_>>) -> Result<Option<Token>, TokenizerError> {
+    fn consume_sharp(
+        &self,
+        chars: &mut Peekable<Chars<'_>>,
+    ) -> Result<Option<Token>, TokenizerError> {
         match chars.peek() {
             Some('>') => {
                 chars.next();
                 match chars.peek() {
                     Some('>') => {
                         chars.next();
-                        return Ok(Some(Token::HashLongArrow))
+                        return Ok(Some(Token::HashLongArrow));
                     }
                     _ => return Ok(Some(Token::HashArrow)),
                 }
@@ -443,7 +446,6 @@ impl<'a> Tokenizer<'a> {
                     } else {
                         Ok(Some(Token::make_word(&s, None)))
                     }
-                    
                 }
                 // string
                 '\'' => {

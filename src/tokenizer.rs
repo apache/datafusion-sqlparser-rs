@@ -371,12 +371,12 @@ impl<'a> Tokenizer<'a> {
                 match chars.peek() {
                     Some('>') => {
                         chars.next();
-                        return Ok(Some(Token::HashLongArrow));
+                        Ok(Some(Token::HashLongArrow))
                     }
-                    _ => return Ok(Some(Token::HashArrow)),
+                    _ => Ok(Some(Token::HashArrow)),
                 }
             }
-            _ => return Ok(Some(Token::Sharp)),
+            _ => Ok(Some(Token::Sharp)),
         }
     }
 

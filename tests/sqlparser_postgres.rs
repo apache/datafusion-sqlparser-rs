@@ -1373,3 +1373,13 @@ fn pg_and_generic() -> TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(GenericDialect {})],
     }
 }
+
+#[test]
+fn test_sharp() {
+    let sql = "SELECT #_of_values";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("#_of_values"))),
+        select.projection[0]
+    );
+}

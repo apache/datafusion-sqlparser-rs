@@ -422,7 +422,24 @@ impl<'a> Tokenizer<'a> {
                         s += s2.as_str();
                         return Ok(Some(Token::Number(s, false)));
                     }
-                    Ok(Some(Token::make_word(&s, None)))
+                    if s == "#" {
+                        match chars.peek() {
+                            Some('>') => {
+                                chars.next();
+                                match chars.peek() {
+                                    Some('>') => {
+                                        chars.next();
+                                        return Ok(Some(Token::HashLongArrow))
+                                    }
+                                    _ => Ok(Some(Token::HashArrow)),
+                                }
+                            }
+                            _ => Ok(Some(Token::Sharp)),
+                        }
+                    } else {
+                        Ok(Some(Token::make_word(&s, None)))
+                    }
+                    
                 }
                 // string
                 '\'' => {

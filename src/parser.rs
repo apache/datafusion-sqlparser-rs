@@ -1059,6 +1059,7 @@ impl<'a> Parser<'a> {
     /// Parse an operator following an expression
     pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
         let tok = self.next_token();
+
         let regular_binary_operator = match &tok {
             Token::Spaceship => Some(BinaryOperator::Spaceship),
             Token::DoubleEq => Some(BinaryOperator::Eq),
@@ -1111,11 +1112,29 @@ impl<'a> Parser<'a> {
         };
 
         if let Some(op) = regular_binary_operator {
-            Ok(Expr::BinaryOp {
-                left: Box::new(expr),
-                op,
-                right: Box::new(self.parse_subexpr(precedence)?),
-            })
+            if let Some(keyword) = self.parse_one_of_keywords(&[Keyword::ANY, Keyword::ALL]) {
+                self.expect_token(&Token::LParen)?;
+                let right = self.parse_subexpr(precedence)?;
+                self.expect_token(&Token::RParen)?;
+
+                let right = match keyword {
+                    Keyword::ALL => Box::new(Expr::AllOp(Box::new(right))),
+                    Keyword::ANY => Box::new(Expr::AnyOp(Box::new(right))),
+                    _ => unreachable!(),
+                };
+
+                Ok(Expr::BinaryOp {
+                    left: Box::new(expr),
+                    op,
+                    right,
+                })
+            } else {
+                Ok(Expr::BinaryOp {
+                    left: Box::new(expr),
+                    op,
+                    right: Box::new(self.parse_subexpr(precedence)?),
+                })
+            }
         } else if let Token::Word(w) = &tok {
             match w.keyword {
                 Keyword::IS => {

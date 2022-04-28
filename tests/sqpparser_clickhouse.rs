@@ -118,6 +118,37 @@ fn parse_array_expr() {
     )
 }
 
+#[test]
+fn parse_create() {
+    let sql = "CREATE TABLE TEST (a STRING, b UInt64) ENGINE=MergeTree ORDER BY a";
+    let stm = clickhouse().verified_stmt(sql);
+    match stm {
+        Statement::CreateTable {
+            clickhouse_order, ..
+        } => assert_eq!(
+            clickhouse_order,
+            Some(vec!(Ident {
+                value: "a".to_string(),
+                quote_style: None
+            }))
+        ),
+        _ => panic!("Expected Create tabme"),
+    }
+}
+
+
+#[test]
+fn parse_select_from_create() {
+    let sql = "CREATE TABLE TEST ENGINE=MergeTree ORDER BY a AS SELECT * FROM source";
+    clickhouse().verified_stmt(sql);
+}
+
+#[test]
+fn parse_select_from_create_s3() {
+    let sql = "CREATE TABLE TEST ENGINE=S3 ORDER BY a AS SELECT * FROM source";
+    clickhouse().verified_stmt(sql);
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],

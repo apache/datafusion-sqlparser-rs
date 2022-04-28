@@ -857,6 +857,8 @@ pub enum Statement {
         default_charset: Option<String>,
         collation: Option<String>,
         on_commit: Option<OnCommit>,
+        clickhouse_order: Option<Vec<Ident>>,
+        query_after: Option<Box<Query>>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -1332,6 +1334,8 @@ impl fmt::Display for Statement {
                 engine,
                 collation,
                 on_commit,
+                clickhouse_order,
+                query_after,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -1364,7 +1368,7 @@ impl fmt::Display for Statement {
                         write!(f, ", ")?;
                     }
                     write!(f, "{})", display_comma_separated(constraints))?;
-                } else if query.is_none() && like.is_none() {
+                } else if query.is_none() && query_after.is_none() && like.is_none() {
                     // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
                     write!(f, " ()")?;
                 }
@@ -1474,6 +1478,14 @@ impl fmt::Display for Statement {
                 }
                 if let Some(collation) = collation {
                     write!(f, " COLLATE={}", collation)?;
+                }
+
+                if let Some(clickhouse_order) = clickhouse_order {
+                    write!(f, " ORDER BY {}", display_comma_separated(clickhouse_order))?;
+                }
+
+                if let Some(query_after) = query_after {
+                    write!(f, " AS {}", query_after)?;
                 }
 
                 if on_commit.is_some() {

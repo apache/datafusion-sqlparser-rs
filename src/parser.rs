@@ -1672,6 +1672,8 @@ impl<'a> Parser<'a> {
             engine: None,
             collation: None,
             on_commit: None,
+            clickhouse_order: None,
+            query_after: None,
         })
     }
 
@@ -1877,6 +1879,20 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let clickhouse_order = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_identifier).ok()
+        } else {
+            None
+        };
+
+        //in clickhouse, query comes after engine = 
+
+        let query_after = if self.parse_keyword(Keyword::AS) {
+            Some(Box::new(self.parse_query()?))
+        } else {
+            None
+        };
+
         let on_commit: Option<OnCommit> =
             if self.parse_keywords(&[Keyword::ON, Keyword::COMMIT, Keyword::DELETE, Keyword::ROWS])
             {
@@ -1916,6 +1932,8 @@ impl<'a> Parser<'a> {
             default_charset,
             collation,
             on_commit,
+            clickhouse_order,
+            query_after,
         })
     }
 

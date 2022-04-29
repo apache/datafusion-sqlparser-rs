@@ -1005,6 +1005,13 @@ pub enum Statement {
         data_types: Vec<DataType>,
         statement: Box<Statement>,
     },
+    /// See <https://clickhouse.com/docs/ru/sql-reference/statements/kill/>
+    /// See <https://dev.mysql.com/doc/refman/8.0/en/kill.html>
+    Kill {
+        modifier: Option<KillType>,
+        // processlist_id
+        id: u64,
+    },
     /// EXPLAIN TABLE
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/explain.html>
     ExplainTable {
@@ -1047,6 +1054,15 @@ impl fmt::Display for Statement {
     #[allow(clippy::cognitive_complexity)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Statement::Kill { modifier, id } => {
+                write!(f, "KILL ")?;
+
+                if let Some(m) = modifier {
+                    write!(f, "{} ", m)?;
+                }
+
+                write!(f, "{}", id)
+            }
             Statement::ExplainTable {
                 describe_alias,
                 table_name,
@@ -2093,6 +2109,26 @@ impl fmt::Display for ObjectType {
             ObjectType::View => "VIEW",
             ObjectType::Index => "INDEX",
             ObjectType::Schema => "SCHEMA",
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum KillType {
+    Connection,
+    Query,
+    Mutation,
+}
+
+impl fmt::Display for KillType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            // MySQL
+            KillType::Connection => "CONNECTION",
+            KillType::Query => "QUERY",
+            // Clickhouse supports Mutation
+            KillType::Mutation => "MUTATION",
         })
     }
 }

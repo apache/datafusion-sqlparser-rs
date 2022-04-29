@@ -118,6 +118,18 @@ fn parse_array_expr() {
     )
 }
 
+#[test]
+fn parse_kill() {
+    let stmt = clickhouse().verified_stmt("KILL MUTATION 5");
+    assert_eq!(
+        stmt,
+        Statement::Kill {
+            modifier: Some(KillType::Mutation),
+            id: 5,
+        }
+    );
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],

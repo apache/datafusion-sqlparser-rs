@@ -480,6 +480,9 @@ impl<'a> Parser<'a> {
                     op: UnaryOperator::Not,
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
                 }),
+                Keyword::ARRAY => Ok(Expr::Array(
+                    self.parse_token_wrapped_exprs(&Token::LParen, &Token::RParen)?,
+                )),
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {
@@ -577,6 +580,13 @@ impl<'a> Parser<'a> {
                     };
                 self.expect_token(&Token::RParen)?;
                 Ok(expr)
+            }
+            Token::LBracket => {
+                self.prev_token();
+                Ok(Expr::Array(self.parse_token_wrapped_exprs(
+                    &Token::LBracket,
+                    &Token::RBracket,
+                )?))
             }
             unexpected => self.expected("an expression:", unexpected),
         }?;
@@ -1335,7 +1345,7 @@ impl<'a> Parser<'a> {
             Token::Mul | Token::Divide | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
             Token::ExclamationMark => Ok(50),
-            Token::LBracket | Token::RBracket => Ok(10),
+            Token::LBracket => Ok(10),
             Token::Colon => Ok(10),
             _ => Ok(0),
         }
@@ -2421,19 +2431,22 @@ impl<'a> Parser<'a> {
                 Keyword::INTERVAL => Ok(DataType::Interval),
                 Keyword::REGCLASS => Ok(DataType::Regclass),
                 Keyword::STRING => Ok(DataType::String),
-                Keyword::TEXT => {
-                    if self.consume_token(&Token::LBracket) {
-                        // Note: this is postgresql-specific
-                        self.expect_token(&Token::RBracket)?;
-                        Ok(DataType::Array(Box::new(DataType::Text)))
-                    } else {
-                        Ok(DataType::Text)
-                    }
-                }
+                Keyword::TEXT => Ok(DataType::Text),
                 Keyword::BYTEA => Ok(DataType::Bytea),
                 Keyword::NUMERIC | Keyword::DECIMAL | Keyword::DEC => {
                     let (precision, scale) = self.parse_optional_precision_scale()?;
                     Ok(DataType::Decimal(precision, scale))
+                }
+                Keyword::ARRAY => {
+                    if self.consume_token(&Token::LParen) {
+                        let data_type = self.parse_data_type()?;
+                        self.expect_token(&Token::RParen)?;
+                        Ok(DataType::Array(Box::new(data_type)))
+                    } else {
+                        self.prev_token();
+                        let type_name = self.parse_object_name()?;
+                        Ok(DataType::Custom(type_name))
+                    }
                 }
                 _ => {
                     self.prev_token();
@@ -2577,6 +2590,24 @@ impl<'a> Parser<'a> {
             Ok(vec![])
         } else {
             self.expected("a list of columns in parentheses", self.peek_token())
+        }
+    }
+
+    /// Parse a comma-separated list from a wrapped expression
+    pub fn parse_token_wrapped_exprs(
+        &mut self,
+        left: &Token,
+        right: &Token,
+    ) -> Result<Vec<Expr>, ParserError> {
+        if self.consume_token(left) {
+            let exprs = self.parse_comma_separated(Parser::parse_expr)?;
+            self.expect_token(right)?;
+            Ok(exprs)
+        } else {
+            self.expected(
+                format!("an array of expressions in {} and {}", left, right).as_str(),
+                self.peek_token(),
+            )
         }
     }
 

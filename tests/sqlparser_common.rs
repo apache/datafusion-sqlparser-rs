@@ -1872,6 +1872,30 @@ fn parse_create_table() {
         _ => unreachable!(),
     }
 
+    let sql = "CREATE TABLE array_test (\
+               arr ARRAY(INT),
+               )";
+    let ast = one_statement_parses_to(
+        sql,
+        "CREATE TABLE array_test (\
+         arr ARRAY(INT))",
+    );
+    match ast {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!("array_test", name.to_string());
+            assert_eq!(
+                columns,
+                vec![ColumnDef {
+                    name: "arr".into(),
+                    data_type: DataType::Array(Box::new(DataType::Int(None))),
+                    collation: None,
+                    options: vec![],
+                },]
+            );
+        }
+        _ => unreachable!(),
+    }
+
     let res = parse_sql_statements("CREATE TABLE t (a int NOT NULL GARBAGE)");
     assert!(res
         .unwrap_err()

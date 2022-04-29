@@ -96,7 +96,8 @@ fn parse_map_access_expr() {
             cluster_by: vec![],
             distribute_by: vec![],
             sort_by: vec![],
-            having: None
+            having: None,
+            qualify: None
         },
         select
     );

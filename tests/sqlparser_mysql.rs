@@ -314,6 +314,7 @@ fn parse_quote_identifiers_2() {
                 distribute_by: vec![],
                 sort_by: vec![],
                 having: None,
+                qualify: None
             })),
             order_by: vec![],
             limit: None,
@@ -754,6 +755,7 @@ fn parse_substring_in_select() {
                         distribute_by: vec![],
                         sort_by: vec![],
                         having: None,
+                        qualify: None
                     })),
                     order_by: vec![],
                     limit: None,

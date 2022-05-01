@@ -4626,6 +4626,11 @@ fn parse_is_boolean() {
         "SELECT f FROM foo WHERE field = true",
     );
 
+    one_statement_parses_to(
+        "SELECT f from foo where field is false",
+        "SELECT f FROM foo WHERE field = false",
+    );
+
     let sql = "SELECT f from foo where field is 0";
     let res = parse_sql_statements(sql);
     assert_eq!(

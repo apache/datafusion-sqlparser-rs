@@ -2879,7 +2879,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    // KILL [CONNECTION | QUERY] processlist_id
+    // KILL [CONNECTION | QUERY | MUTATION] processlist_id
     pub fn parse_kill(&mut self) -> Result<Statement, ParserError> {
         let modifier_keyword =
             self.parse_one_of_keywords(&[Keyword::CONNECTION, Keyword::QUERY, Keyword::MUTATION]);

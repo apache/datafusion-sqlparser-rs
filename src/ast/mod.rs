@@ -1005,6 +1005,8 @@ pub enum Statement {
         data_types: Vec<DataType>,
         statement: Box<Statement>,
     },
+    /// KILL [CONNECTION | QUERY | MUTATION]
+    ///
     /// See <https://clickhouse.com/docs/ru/sql-reference/statements/kill/>
     /// See <https://dev.mysql.com/doc/refman/8.0/en/kill.html>
     Kill {
@@ -2464,7 +2466,7 @@ impl fmt::Display for CopyLegacyCsvOption {
     }
 }
 
-///  
+///
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum MergeClause {

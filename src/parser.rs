@@ -1130,9 +1130,21 @@ impl<'a> Parser<'a> {
                     {
                         let expr2 = self.parse_expr()?;
                         Ok(Expr::IsNotDistinctFrom(Box::new(expr), Box::new(expr2)))
+                    } else if let Some(right) =
+                        self.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE])
+                    {
+                        let mut val = Value::Boolean(true);
+                        if right == Keyword::FALSE {
+                            val = Value::Boolean(false);
+                        }
+                        Ok(Expr::BinaryOp {
+                            left: Box::new(expr),
+                            op: BinaryOperator::Eq,
+                            right: Box::new(Expr::Value(val)),
+                        })
                     } else {
                         self.expected(
-                            "[NOT] NULL or [NOT] DISTINCT FROM after IS",
+                            "[NOT] NULL or [NOT] DISTINCT FROM TRUE FALSE after IS",
                             self.peek_token(),
                         )
                     }

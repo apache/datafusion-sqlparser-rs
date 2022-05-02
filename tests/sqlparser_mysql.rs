@@ -770,6 +770,36 @@ fn parse_substring_in_select() {
     }
 }
 
+#[test]
+fn parse_kill() {
+    let stmt = mysql_and_generic().verified_stmt("KILL CONNECTION 5");
+    assert_eq!(
+        stmt,
+        Statement::Kill {
+            modifier: Some(KillType::Connection),
+            id: 5,
+        }
+    );
+
+    let stmt = mysql_and_generic().verified_stmt("KILL QUERY 5");
+    assert_eq!(
+        stmt,
+        Statement::Kill {
+            modifier: Some(KillType::Query),
+            id: 5,
+        }
+    );
+
+    let stmt = mysql_and_generic().verified_stmt("KILL 5");
+    assert_eq!(
+        stmt,
+        Statement::Kill {
+            modifier: None,
+            id: 5,
+        }
+    );
+}
+
 fn mysql() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],

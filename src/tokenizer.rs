@@ -648,6 +648,10 @@ impl<'a> Tokenizer<'a> {
                     );
                     Ok(Some(Token::Placeholder(String::from("$") + &s)))
                 }
+                //whitespace check (including unicode chars) should be last as it covers some of the chars above
+                ch if ch.is_whitespace() => {
+                    self.consume_and_return(chars, Token::Whitespace(Whitespace::Space))
+                }
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),

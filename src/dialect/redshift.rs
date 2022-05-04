@@ -19,10 +19,12 @@ use super::PostgreSqlDialect;
 #[derive(Debug)]
 pub struct RedshiftSqlDialect {}
 
-// In most cases the redshift dialect is identical to postgres dialect.
-// However there is no distinguish between datatype array in postgres and super in Redsfhit, where the sql syntax is similar
-// e.g the SQL SELECT a[1][2] FROM b In postgres Dialect and Redshift's have totally different meaning.
-// In Postgres dialect, the query will be parsed as an array, while in Redshift it will be an json path
+// In most cases the redshift dialect is identical to [`PostgresSqlDialect`].
+// 
+// Notable differences: 
+// 1. Redshift treats brackets `[` and `]` differently. For example, `SQL SELECT a[1][2] FROM b`
+// in the Postgres dialect, the query will be parsed as an array, while in the Redshift dialect it will 
+// be a json path
 impl Dialect for RedshiftSqlDialect {
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '"' || ch == '['

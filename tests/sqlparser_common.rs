@@ -1322,6 +1322,45 @@ fn parse_select_having() {
     assert!(select.having.is_some());
 }
 
+#[cfg(feature = "bigdecimal")]
+#[test]
+fn parse_select_qualify() {
+    let sql = "SELECT i, p, o FROM qt QUALIFY ROW_NUMBER() OVER (PARTITION BY p ORDER BY o) = 1";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Function(Function {
+                name: ObjectName(vec![Ident::new("ROW_NUMBER")]),
+                args: vec![],
+                over: Some(WindowSpec {
+                    partition_by: vec![Expr::Identifier(Ident::new("p"))],
+                    order_by: vec![OrderByExpr {
+                        expr: Expr::Identifier(Ident::new("o")),
+                        asc: None,
+                        nulls_first: None
+                    }],
+                    window_frame: None
+                }),
+                distinct: false
+            })),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Value(number("1")))
+        }),
+        select.qualify
+    );
+
+    let sql = "SELECT i, p, o, ROW_NUMBER() OVER (PARTITION BY p ORDER BY o) AS row_num FROM qt QUALIFY row_num = 1";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("row_num"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Value(number("1")))
+        }),
+        select.qualify
+    );
+}
+
 #[test]
 fn parse_limit_accepts_all() {
     one_statement_parses_to(
@@ -4336,7 +4375,8 @@ fn parse_merge() {
                         cluster_by: vec![],
                         distribute_by: vec![],
                         sort_by: vec![],
-                        having: None
+                        having: None,
+                        qualify: None
                     })),
                     order_by: vec![],
                     limit: None,
@@ -4615,6 +4655,28 @@ fn parse_position_negative() {
     let res = parse_sql_statements(sql);
     assert_eq!(
         ParserError::ParserError("Expected an expression:, found: )".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
+fn parse_is_boolean() {
+    one_statement_parses_to(
+        "SELECT f from foo where field is true",
+        "SELECT f FROM foo WHERE field = true",
+    );
+
+    one_statement_parses_to(
+        "SELECT f from foo where field is false",
+        "SELECT f FROM foo WHERE field = false",
+    );
+
+    let sql = "SELECT f from foo where field is 0";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected [NOT] NULL or [NOT] DISTINCT FROM TRUE FALSE after IS, found: 0".to_string()
+        ),
         res.unwrap_err()
     );
 }

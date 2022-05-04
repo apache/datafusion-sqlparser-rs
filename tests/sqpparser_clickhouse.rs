@@ -96,7 +96,8 @@ fn parse_map_access_expr() {
             cluster_by: vec![],
             distribute_by: vec![],
             sort_by: vec![],
-            having: None
+            having: None,
+            qualify: None
         },
         select
     );
@@ -116,6 +117,18 @@ fn parse_array_expr() {
         }),
         expr_from_projection(only(&select.projection))
     )
+}
+
+#[test]
+fn parse_kill() {
+    let stmt = clickhouse().verified_stmt("KILL MUTATION 5");
+    assert_eq!(
+        stmt,
+        Statement::Kill {
+            modifier: Some(KillType::Mutation),
+            id: 5,
+        }
+    );
 }
 
 fn clickhouse() -> TestedDialects {

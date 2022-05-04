@@ -154,6 +154,7 @@ impl<'a> Parser<'a> {
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
         match self.next_token() {
             Token::Word(w) => match w.keyword {
+                Keyword::KILL => Ok(self.parse_kill()?),
                 Keyword::DESCRIBE => Ok(self.parse_explain(true)?),
                 Keyword::EXPLAIN => Ok(self.parse_explain(false)?),
                 Keyword::ANALYZE => Ok(self.parse_analyze()?),
@@ -1130,9 +1131,21 @@ impl<'a> Parser<'a> {
                     {
                         let expr2 = self.parse_expr()?;
                         Ok(Expr::IsNotDistinctFrom(Box::new(expr), Box::new(expr2)))
+                    } else if let Some(right) =
+                        self.parse_one_of_keywords(&[Keyword::TRUE, Keyword::FALSE])
+                    {
+                        let mut val = Value::Boolean(true);
+                        if right == Keyword::FALSE {
+                            val = Value::Boolean(false);
+                        }
+                        Ok(Expr::BinaryOp {
+                            left: Box::new(expr),
+                            op: BinaryOperator::Eq,
+                            right: Box::new(Expr::Value(val)),
+                        })
                     } else {
                         self.expected(
-                            "[NOT] NULL or [NOT] DISTINCT FROM after IS",
+                            "[NOT] NULL or [NOT] DISTINCT FROM TRUE FALSE after IS",
                             self.peek_token(),
                         )
                     }
@@ -2866,6 +2879,32 @@ impl<'a> Parser<'a> {
         })
     }
 
+    // KILL [CONNECTION | QUERY | MUTATION] processlist_id
+    pub fn parse_kill(&mut self) -> Result<Statement, ParserError> {
+        let modifier_keyword =
+            self.parse_one_of_keywords(&[Keyword::CONNECTION, Keyword::QUERY, Keyword::MUTATION]);
+
+        let id = self.parse_literal_uint()?;
+
+        let modifier = match modifier_keyword {
+            Some(Keyword::CONNECTION) => Some(KillType::Connection),
+            Some(Keyword::QUERY) => Some(KillType::Query),
+            Some(Keyword::MUTATION) => {
+                if dialect_of!(self is ClickHouseDialect | GenericDialect) {
+                    Some(KillType::Mutation)
+                } else {
+                    self.expected(
+                        "Unsupported type for KILL, allowed: CONNECTION | QUERY",
+                        self.peek_token(),
+                    )?
+                }
+            }
+            _ => None,
+        };
+
+        Ok(Statement::Kill { modifier, id })
+    }
+
     pub fn parse_explain(&mut self, describe_alias: bool) -> Result<Statement, ParserError> {
         let analyze = self.parse_keyword(Keyword::ANALYZE);
         let verbose = self.parse_keyword(Keyword::VERBOSE);
@@ -3167,6 +3206,12 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let qualify = if self.parse_keyword(Keyword::QUALIFY) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
         Ok(Select {
             distinct,
             top,
@@ -3180,6 +3225,7 @@ impl<'a> Parser<'a> {
             distribute_by,
             sort_by,
             having,
+            qualify,
         })
     }
 

@@ -314,6 +314,7 @@ fn parse_quote_identifiers_2() {
                 distribute_by: vec![],
                 sort_by: vec![],
                 having: None,
+                qualify: None
             })),
             order_by: vec![],
             limit: None,
@@ -754,6 +755,7 @@ fn parse_substring_in_select() {
                         distribute_by: vec![],
                         sort_by: vec![],
                         having: None,
+                        qualify: None
                     })),
                     order_by: vec![],
                     limit: None,
@@ -766,6 +768,36 @@ fn parse_substring_in_select() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_kill() {
+    let stmt = mysql_and_generic().verified_stmt("KILL CONNECTION 5");
+    assert_eq!(
+        stmt,
+        Statement::Kill {
+            modifier: Some(KillType::Connection),
+            id: 5,
+        }
+    );
+
+    let stmt = mysql_and_generic().verified_stmt("KILL QUERY 5");
+    assert_eq!(
+        stmt,
+        Statement::Kill {
+            modifier: Some(KillType::Query),
+            id: 5,
+        }
+    );
+
+    let stmt = mysql_and_generic().verified_stmt("KILL 5");
+    assert_eq!(
+        stmt,
+        Statement::Kill {
+            modifier: None,
+            id: 5,
+        }
+    );
 }
 
 fn mysql() -> TestedDialects {

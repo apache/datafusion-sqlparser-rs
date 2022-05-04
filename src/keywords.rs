@@ -136,6 +136,7 @@ define_keywords!(
     COMPUTE,
     CONDITION,
     CONNECT,
+    CONNECTION,
     CONSTRAINT,
     CONTAINS,
     CONVERT,
@@ -279,6 +280,7 @@ define_keywords!(
     JSONFILE,
     JULIAN,
     KEY,
+    KILL,
     LAG,
     LANGUAGE,
     LARGE,
@@ -319,6 +321,7 @@ define_keywords!(
     MONTH,
     MSCK,
     MULTISET,
+    MUTATION,
     NATIONAL,
     NATURAL,
     NCHAR,
@@ -382,7 +385,9 @@ define_keywords!(
     PROCEDURE,
     PROGRAM,
     PURGE,
+    QUALIFY,
     QUARTER,
+    QUERY,
     QUOTE,
     RANGE,
     RANK,
@@ -584,6 +589,7 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     // for MSSQL-specific OUTER APPLY (seems reserved in most dialects)
     Keyword::OUTER,
     Keyword::SET,
+    Keyword::QUALIFY,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`

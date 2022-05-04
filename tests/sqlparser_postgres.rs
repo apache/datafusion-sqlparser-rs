@@ -450,6 +450,7 @@ fn parse_update_set_from() {
                             distribute_by: vec![],
                             sort_by: vec![],
                             having: None,
+                            qualify: None
                         })),
                         order_by: vec![],
                         limit: None,

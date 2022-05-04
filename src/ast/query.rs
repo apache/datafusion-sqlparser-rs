@@ -154,6 +154,8 @@ pub struct Select {
     pub sort_by: Vec<Expr>,
     /// HAVING
     pub having: Option<Expr>,
+    /// QUALIFY (Snowflake)
+    pub qualify: Option<Expr>,
 }
 
 impl fmt::Display for Select {
@@ -201,6 +203,9 @@ impl fmt::Display for Select {
         }
         if let Some(ref having) = self.having {
             write!(f, " HAVING {}", having)?;
+        }
+        if let Some(ref qualify) = self.qualify {
+            write!(f, " QUALIFY {}", qualify)?;
         }
         Ok(())
     }

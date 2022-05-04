@@ -18,6 +18,7 @@
 mod test_utils;
 use test_utils::*;
 
+use sqlparser::ast::Value::Boolean;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
@@ -780,7 +781,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variable: "a".into(),
+            variable: ObjectName(vec![Ident::new("a")]),
             value: vec![SetVariableValue::Ident("b".into())],
         }
     );
@@ -791,7 +792,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variable: "a".into(),
+            variable: ObjectName(vec![Ident::new("a")]),
             value: vec![SetVariableValue::Literal(Value::SingleQuotedString(
                 "b".into()
             ))],
@@ -804,7 +805,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variable: "a".into(),
+            variable: ObjectName(vec![Ident::new("a")]),
             value: vec![SetVariableValue::Literal(number("0"))],
         }
     );
@@ -815,7 +816,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variable: "a".into(),
+            variable: ObjectName(vec![Ident::new("a")]),
             value: vec![SetVariableValue::Ident("DEFAULT".into())],
         }
     );
@@ -826,8 +827,39 @@ fn parse_set() {
         Statement::SetVariable {
             local: true,
             hivevar: false,
-            variable: "a".into(),
+            variable: ObjectName(vec![Ident::new("a")]),
             value: vec![SetVariableValue::Ident("b".into())],
+        }
+    );
+
+    let stmt = pg_and_generic().verified_stmt("SET a.b.c = b");
+    assert_eq!(
+        stmt,
+        Statement::SetVariable {
+            local: false,
+            hivevar: false,
+            variable: ObjectName(vec![Ident::new("a"), Ident::new("b"), Ident::new("c")]),
+            value: vec![SetVariableValue::Ident("b".into())],
+        }
+    );
+
+    let stmt = pg_and_generic().one_statement_parses_to(
+        "SET hive.tez.auto.reducer.parallelism=false",
+        "SET hive.tez.auto.reducer.parallelism = false",
+    );
+    assert_eq!(
+        stmt,
+        Statement::SetVariable {
+            local: false,
+            hivevar: false,
+            variable: ObjectName(vec![
+                Ident::new("hive"),
+                Ident::new("tez"),
+                Ident::new("auto"),
+                Ident::new("reducer"),
+                Ident::new("parallelism")
+            ]),
+            value: vec![SetVariableValue::Literal(Boolean(false))],
         }
     );
 

@@ -3247,7 +3247,7 @@ impl<'a> Parser<'a> {
             });
         }
 
-        let variable = self.parse_identifier()?;
+        let variable = self.parse_object_name()?;
         if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
             let mut values = vec![];
             loop {
@@ -3268,14 +3268,14 @@ impl<'a> Parser<'a> {
                     value: values,
                 });
             }
-        } else if variable.value == "CHARACTERISTICS" {
+        } else if variable.to_string() == "CHARACTERISTICS" {
             self.expect_keywords(&[Keyword::AS, Keyword::TRANSACTION])?;
             Ok(Statement::SetTransaction {
                 modes: self.parse_transaction_modes()?,
                 snapshot: None,
                 session: true,
             })
-        } else if variable.value == "TRANSACTION" && modifier.is_none() {
+        } else if variable.to_string() == "TRANSACTION" && modifier.is_none() {
             if self.parse_keyword(Keyword::SNAPSHOT) {
                 let snaphot_id = self.parse_value()?;
                 return Ok(Statement::SetTransaction {

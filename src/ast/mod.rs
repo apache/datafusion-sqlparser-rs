@@ -913,7 +913,7 @@ pub enum Statement {
     SetVariable {
         local: bool,
         hivevar: bool,
-        variable: Ident,
+        variable: ObjectName,
         value: Vec<SetVariableValue>,
     },
     /// SHOW <variable>

@@ -4330,12 +4330,11 @@ fn test_revoke() {
 
 #[test]
 fn parse_merge() {
-    let sql = "MERGE INTO s.bar AS dest USING (SELECT * FROM s.foo) as stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
+    let sql = "MERGE INTO s.bar AS dest USING (SELECT * FROM s.foo) AS stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
     match verified_stmt(sql) {
         Statement::Merge {
             table,
             source,
-            alias,
             on,
             clauses,
         } => {
@@ -4353,44 +4352,47 @@ fn parse_merge() {
             );
             assert_eq!(
                 source,
-                Box::new(SetExpr::Query(Box::new(Query {
-                    with: None,
-                    body: SetExpr::Select(Box::new(Select {
-                        distinct: false,
-                        top: None,
-                        projection: vec![SelectItem::Wildcard],
-                        into: None,
-                        from: vec![TableWithJoins {
-                            relation: TableFactor::Table {
-                                name: ObjectName(vec![Ident::new("s"), Ident::new("foo")]),
-                                alias: None,
-                                args: vec![],
-                                with_hints: vec![],
-                            },
-                            joins: vec![]
-                        }],
-                        lateral_views: vec![],
-                        selection: None,
-                        group_by: vec![],
-                        cluster_by: vec![],
-                        distribute_by: vec![],
-                        sort_by: vec![],
-                        having: None,
-                        qualify: None
-                    })),
-                    order_by: vec![],
-                    limit: None,
-                    offset: None,
-                    fetch: None,
-                    lock: None
-                })))
-            );
-            assert_eq!(
-                alias,
-                Some(TableAlias {
-                    name: Ident::new("stg"),
-                    columns: vec![]
-                })
+                TableFactor::Derived {
+                    lateral: false,
+                    subquery: Box::new(Query {
+                        with: None,
+                        body: SetExpr::Select(Box::new(Select {
+                            distinct: false,
+                            top: None,
+                            projection: vec![SelectItem::Wildcard],
+                            into: None,
+                            from: vec![TableWithJoins {
+                                relation: TableFactor::Table {
+                                    name: ObjectName(vec![Ident::new("s"), Ident::new("foo")]),
+                                    alias: None,
+                                    args: vec![],
+                                    with_hints: vec![]
+                                },
+                                joins: vec![]
+                            }],
+                            lateral_views: vec![],
+                            selection: None,
+                            group_by: vec![],
+                            cluster_by: vec![],
+                            distribute_by: vec![],
+                            sort_by: vec![],
+                            having: None,
+                            qualify: None,
+                        })),
+                        order_by: vec![],
+                        limit: None,
+                        offset: None,
+                        fetch: None,
+                        lock: None
+                    }),
+                    alias: Some(TableAlias {
+                        name: Ident {
+                            value: "stg".to_string(),
+                            quote_style: None
+                        },
+                        columns: vec![]
+                    })
+                }
             );
             assert_eq!(
                 on,
@@ -4466,6 +4468,18 @@ fn parse_merge() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_merge_into_using_table() {
+    let sql = "MERGE INTO target_table USING source_table \
+        ON target_table.id = source_table.oooid \
+        WHEN MATCHED THEN \
+            UPDATE SET target_table.description = source_table.description \
+        WHEN NOT MATCHED THEN \
+            INSERT (ID, description) VALUES (source_table.id, source_table.description)";
+
+    verified_stmt(sql);
 }
 
 #[test]

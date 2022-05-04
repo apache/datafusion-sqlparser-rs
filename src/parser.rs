@@ -4252,16 +4252,14 @@ impl<'a> Parser<'a> {
         let table = self.parse_table_factor()?;
 
         self.expect_keyword(Keyword::USING)?;
-        let source = self.parse_query_body(0)?;
-        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        let source = self.parse_table_factor()?;
         self.expect_keyword(Keyword::ON)?;
         let on = self.parse_expr()?;
         let clauses = self.parse_merge_clauses()?;
 
         Ok(Statement::Merge {
             table,
-            source: Box::new(source),
-            alias,
+            source: source,
             on: Box::new(on),
             clauses,
         })

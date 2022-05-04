@@ -141,6 +141,7 @@ pub fn all_dialects() -> TestedDialects {
             Box::new(AnsiDialect {}),
             Box::new(SnowflakeDialect {}),
             Box::new(HiveDialect {}),
+            Box::new(RedshiftSqlDialect {}),
         ],
     }
 }

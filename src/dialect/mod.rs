@@ -23,8 +23,8 @@ mod sqlite;
 
 use core::any::{Any, TypeId};
 use core::fmt::Debug;
-use std::iter::Peekable;
-use std::str::Chars;
+use core::iter::Peekable;
+use core::str::Chars;
 
 pub use self::ansi::AnsiDialect;
 pub use self::clickhouse::ClickHouseDialect;

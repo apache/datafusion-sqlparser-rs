@@ -45,7 +45,7 @@ fn brackets_over_db_schema_table_name_with_whites_paces() {
         Ok(statements) => {
             assert_eq!(statements.len(), 1);
         }
-        Err(e) => assert!(false, "failed to parse: {}", e),
+        _ => unreachable!(),
     }
 }
 

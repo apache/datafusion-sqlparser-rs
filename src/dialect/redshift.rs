@@ -11,8 +11,8 @@
 // limitations under the License.
 
 use crate::dialect::Dialect;
-use std::iter::Peekable;
-use std::str::Chars;
+use core::iter::Peekable;
+use core::str::Chars;
 
 use super::PostgreSqlDialect;
 
@@ -20,10 +20,10 @@ use super::PostgreSqlDialect;
 pub struct RedshiftSqlDialect {}
 
 // In most cases the redshift dialect is identical to [`PostgresSqlDialect`].
-// 
-// Notable differences: 
+//
+// Notable differences:
 // 1. Redshift treats brackets `[` and `]` differently. For example, `SQL SELECT a[1][2] FROM b`
-// in the Postgres dialect, the query will be parsed as an array, while in the Redshift dialect it will 
+// in the Postgres dialect, the query will be parsed as an array, while in the Redshift dialect it will
 // be a json path
 impl Dialect for RedshiftSqlDialect {
     fn is_delimited_identifier_start(&self, ch: char) -> bool {

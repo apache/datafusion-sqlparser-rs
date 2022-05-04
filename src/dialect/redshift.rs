@@ -32,9 +32,9 @@ impl Dialect for RedshiftSqlDialect {
     /// It's needed to distinguish treating square brackets as quotes from
     /// treating them as json path. If there is identifier then we assume
     /// there is no json path.
-    fn is_proper_identifier_inside_quotes(&self, mut _chars: Peekable<Chars<'_>>) -> bool {
-        _chars.next();
-        let mut not_white_chars = _chars.skip_while(|ch| ch.is_whitespace()).peekable();
+    fn is_proper_identifier_inside_quotes(&self, mut chars: Peekable<Chars<'_>>) -> bool {
+        chars.next();
+        let mut not_white_chars = chars.skip_while(|ch| ch.is_whitespace()).peekable();
         if let Some(&ch) = not_white_chars.peek() {
             return self.is_identifier_start(ch);
         }

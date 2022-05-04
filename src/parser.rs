@@ -4259,7 +4259,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement::Merge {
             table,
-            source: source,
+            source,
             on: Box::new(on),
             clauses,
         })

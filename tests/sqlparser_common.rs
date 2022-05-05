@@ -1000,7 +1000,7 @@ fn parse_bitwise_ops() {
 
 #[test]
 fn parse_binary_any() {
-    let select = verified_only_select(&"SELECT a = ANY(b)");
+    let select = verified_only_select("SELECT a = ANY(b)");
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("a"))),
@@ -1013,7 +1013,7 @@ fn parse_binary_any() {
 
 #[test]
 fn parse_binary_all() {
-    let select = verified_only_select(&"SELECT a = ALL(b)");
+    let select = verified_only_select("SELECT a = ALL(b)");
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("a"))),

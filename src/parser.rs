@@ -1173,7 +1173,7 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
             })
         } else if Token::LBracket == tok {
-            if dialect_of!(self is PostgreSqlDialect) {
+            if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
                 // parse index
                 return self.parse_array_index(expr);
             }

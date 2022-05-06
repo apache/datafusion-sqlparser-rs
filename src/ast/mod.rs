@@ -270,6 +270,10 @@ pub enum Expr {
         op: BinaryOperator,
         right: Box<Expr>,
     },
+    /// Any operation e.g. `1 ANY (1)` or `foo > ANY(bar)`, It will be wrapped in the right side of BinaryExpr
+    AnyOp(Box<Expr>),
+    /// ALL operation e.g. `1 ALL (1)` or `foo > ALL(bar)`, It will be wrapped in the right side of BinaryExpr
+    AllOp(Box<Expr>),
     /// Unary operation e.g. `NOT foo`
     UnaryOp {
         op: UnaryOperator,
@@ -433,6 +437,8 @@ impl fmt::Display for Expr {
                 high
             ),
             Expr::BinaryOp { left, op, right } => write!(f, "{} {} {}", left, op, right),
+            Expr::AnyOp(expr) => write!(f, "ANY({})", expr),
+            Expr::AllOp(expr) => write!(f, "ALL({})", expr),
             Expr::UnaryOp { op, expr } => {
                 if op == &UnaryOperator::PGPostfixFactorial {
                     write!(f, "{}{}", expr, op)

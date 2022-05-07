@@ -2778,6 +2778,13 @@ fn parse_table_function() {
 }
 
 #[test]
+fn parse_unnest() {
+    let sql = "SELECT * FROM UNNEST([10, 20, 30]) as numbers WITH OFFSET";
+    let select = verified_only_select(sql);
+    println!("{:?}", select);
+}
+
+#[test]
 fn parse_delimited_identifiers() {
     // check that quoted identifiers in any position remain quoted after serialization
     let select = verified_only_select(

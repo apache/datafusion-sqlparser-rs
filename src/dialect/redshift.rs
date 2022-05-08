@@ -14,8 +14,6 @@ use crate::dialect::Dialect;
 use core::iter::Peekable;
 use core::str::Chars;
 
-use super::PostgreSqlDialect;
-
 #[derive(Debug)]
 pub struct RedshiftSqlDialect {}
 
@@ -44,10 +42,17 @@ impl Dialect for RedshiftSqlDialect {
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {
-        PostgreSqlDialect {}.is_identifier_start(ch)
+        // Extends Postgres dialect with sharp
+        ('a'..='z').contains(&ch) || ('A'..='Z').contains(&ch) || ch == '_' || ch == '#'
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        PostgreSqlDialect {}.is_identifier_part(ch)
+        // Extends Postgres dialect with sharp
+        ('a'..='z').contains(&ch)
+            || ('A'..='Z').contains(&ch)
+            || ('0'..='9').contains(&ch)
+            || ch == '$'
+            || ch == '_'
+            || ch == '#'
     }
 }

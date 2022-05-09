@@ -335,6 +335,8 @@ pub enum Expr {
         data_type: DataType,
         value: String,
     },
+    /// Access a map-like object by field (e.g. `column['field']` or `column[4]`
+    /// <https://clickhouse.com/docs/en/sql-reference/data-types/map/>
     MapAccess {
         column: Box<Expr>,
         keys: Vec<Expr>,

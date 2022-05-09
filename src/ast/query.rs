@@ -654,6 +654,7 @@ impl fmt::Display for Values {
 pub struct SelectInto {
     pub temporary: bool,
     pub unlogged: bool,
+    pub table: bool,
     pub name: ObjectName,
 }
 
@@ -661,7 +662,8 @@ impl fmt::Display for SelectInto {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let temporary = if self.temporary { " TEMPORARY" } else { "" };
         let unlogged = if self.unlogged { " UNLOGGED" } else { "" };
+        let table = if self.table { " TABLE" } else { "" };
 
-        write!(f, "INTO{}{} {}", temporary, unlogged, self.name)
+        write!(f, "INTO{}{}{} {}", temporary, unlogged, table, self.name)
     }
 }

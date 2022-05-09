@@ -3802,8 +3802,11 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let action = self.expect_one_of_keywords(&[Keyword::INTO, Keyword::OVERWRITE])?;
-        let overwrite = action == Keyword::OVERWRITE;
+
+        let action = self.parse_one_of_keywords(&[Keyword::INTO, Keyword::OVERWRITE]);
+        let into = action == Some(Keyword::INTO);
+        let overwrite = action == Some(Keyword::OVERWRITE);
+
         let local = self.parse_keyword(Keyword::LOCAL);
 
         if self.parse_keyword(Keyword::DIRECTORY) {
@@ -3854,6 +3857,7 @@ impl<'a> Parser<'a> {
             Ok(Statement::Insert {
                 or,
                 table_name,
+                into,
                 overwrite,
                 partitioned,
                 columns,
@@ -4266,7 +4270,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_merge(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::INTO)?;
+        let into = self.parse_keyword(Keyword::INTO);
 
         let table = self.parse_table_factor()?;
 
@@ -4278,6 +4282,7 @@ impl<'a> Parser<'a> {
         let clauses = self.parse_merge_clauses()?;
 
         Ok(Statement::Merge {
+            into,
             table,
             source: Box::new(source),
             alias,

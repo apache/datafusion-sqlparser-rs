@@ -41,6 +41,9 @@ fn parse_insert_values() {
     let rows1 = vec![row.clone()];
     let rows2 = vec![row.clone(), row];
 
+    let sql = "INSERT customer VALUES (1, 2, 3)";
+    check_one(sql, "customer", &[], &rows1);
+
     let sql = "INSERT INTO customer VALUES (1, 2, 3)";
     check_one(sql, "customer", &[], &rows1);
 
@@ -89,16 +92,6 @@ fn parse_insert_values() {
     }
 
     verified_stmt("INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)");
-}
-
-#[test]
-fn parse_insert_invalid() {
-    let sql = "INSERT public.customer (id, name, active) VALUES (1, 2, 3)";
-    let res = parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError("Expected one of INTO or OVERWRITE, found: public".to_string()),
-        res.unwrap_err()
-    );
 }
 
 #[test]
@@ -4357,14 +4350,29 @@ fn test_revoke() {
 #[test]
 fn parse_merge() {
     let sql = "MERGE INTO s.bar AS dest USING (SELECT * FROM s.foo) as stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
-    match verified_stmt(sql) {
-        Statement::Merge {
-            table,
-            source,
-            alias,
-            on,
-            clauses,
-        } => {
+    let sql_no_into = "MERGE s.bar AS dest USING (SELECT * FROM s.foo) as stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
+    match (verified_stmt(sql), verified_stmt(sql_no_into)) {
+        (
+            Statement::Merge {
+                into,
+                table,
+                source,
+                alias,
+                on,
+                clauses,
+            },
+            Statement::Merge {
+                into: no_into,
+                table: table_no_into,
+                source: source_no_into,
+                alias: alias_no_into,
+                on: on_no_into,
+                clauses: clauses_no_into,
+            },
+        ) => {
+            assert!(into);
+            assert!(!no_into);
+
             assert_eq!(
                 table,
                 TableFactor::Table {
@@ -4377,6 +4385,8 @@ fn parse_merge() {
                     with_hints: vec![]
                 }
             );
+            assert_eq!(table, table_no_into);
+
             assert_eq!(
                 source,
                 Box::new(SetExpr::Query(Box::new(Query {
@@ -4411,6 +4421,8 @@ fn parse_merge() {
                     lock: None
                 })))
             );
+            assert_eq!(source, source_no_into);
+
             assert_eq!(
                 alias,
                 Some(TableAlias {
@@ -4418,6 +4430,8 @@ fn parse_merge() {
                     columns: vec![]
                 })
             );
+            assert_eq!(alias, alias_no_into);
+
             assert_eq!(
                 on,
                 Box::new(Expr::BinaryOp {
@@ -4446,6 +4460,8 @@ fn parse_merge() {
                     })
                 })
             );
+            assert_eq!(on, on_no_into);
+
             assert_eq!(
                 clauses,
                 vec![
@@ -4488,7 +4504,8 @@ fn parse_merge() {
                     },
                     MergeClause::MatchedDelete(None)
                 ]
-            )
+            );
+            assert_eq!(clauses, clauses_no_into);
         }
         _ => unreachable!(),
     }

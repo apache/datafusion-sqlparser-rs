@@ -1335,6 +1335,67 @@ fn test_json() {
 }
 
 #[test]
+fn test_composite_value() {
+    let sql = "SELECT (on_hand.item).name FROM on_hand WHERE (on_hand.item).price > 9";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::CompositeAccess {
+            key: Ident::new("name"),
+            expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("on_hand"),
+                Ident::new("item")
+            ]))))
+        }),
+        select.projection[0]
+    );
+
+    #[cfg(feature = "bigdecimal")]
+    let num: Expr = Expr::Value(Value::Number(bigdecimal::BigDecimal::from(9), false));
+    #[cfg(not(feature = "bigdecimal"))]
+    let num: Expr = Expr::Value(Value::Number("9".to_string(), false));
+    assert_eq!(
+        select.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::CompositeAccess {
+                key: Ident::new("price"),
+                expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("on_hand"),
+                    Ident::new("item")
+                ]))))
+            }),
+            op: BinaryOperator::Gt,
+            right: Box::new(num)
+        })
+    );
+
+    let sql = "SELECT (information_schema._pg_expandarray(ARRAY['i', 'i'])).n";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::CompositeAccess {
+            key: Ident::new("n"),
+            expr: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
+                name: ObjectName(vec![
+                    Ident::new("information_schema"),
+                    Ident::new("_pg_expandarray")
+                ]),
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Array(
+                    Array {
+                        elem: vec![
+                            Expr::Value(Value::SingleQuotedString("i".to_string())),
+                            Expr::Value(Value::SingleQuotedString("i".to_string())),
+                        ],
+                        named: true
+                    }
+                )))],
+                over: None,
+                distinct: false,
+            }))))
+        }),
+        select.projection[0]
+    );
+}
+
+#[test]
 fn parse_comments() {
     match pg().verified_stmt("COMMENT ON COLUMN tab.name IS 'comment'") {
         Statement::Comment {

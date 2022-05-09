@@ -383,13 +383,17 @@ fn parse_select_into() {
         &SelectInto {
             temporary: false,
             unlogged: false,
+            table: false,
             name: ObjectName(vec![Ident::new("table0")])
         },
         only(&select.into)
     );
 
-    let sql = "SELECT * INTO TEMPORARY UNLOGGED table0 FROM table1";
-    one_statement_parses_to(sql, "SELECT * INTO TEMPORARY UNLOGGED table0 FROM table1");
+    let sql = "SELECT * INTO TEMPORARY UNLOGGED TABLE table0 FROM table1";
+    one_statement_parses_to(
+        sql,
+        "SELECT * INTO TEMPORARY UNLOGGED TABLE table0 FROM table1",
+    );
 
     // Do not allow aliases here
     let sql = "SELECT * INTO table0 asdf FROM table1";

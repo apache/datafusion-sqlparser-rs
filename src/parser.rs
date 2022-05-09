@@ -3138,10 +3138,12 @@ impl<'a> Parser<'a> {
                 .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
                 .is_some();
             let unlogged = self.parse_keyword(Keyword::UNLOGGED);
+            let table = self.parse_keyword(Keyword::TABLE);
             let name = self.parse_object_name()?;
             Some(SelectInto {
                 temporary,
                 unlogged,
+                table,
                 name,
             })
         } else {

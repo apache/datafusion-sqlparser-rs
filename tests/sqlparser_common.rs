@@ -23,7 +23,8 @@ mod test_utils;
 use matches::assert_matches;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
-    AnsiDialect, GenericDialect, MsSqlDialect, PostgreSqlDialect, SQLiteDialect, SnowflakeDialect,
+    AnsiDialect, GenericDialect, HiveDialect, MsSqlDialect, PostgreSqlDialect, SQLiteDialect,
+    SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
@@ -1752,6 +1753,53 @@ fn parse_create_table() {
         .unwrap_err()
         .to_string()
         .contains("Expected constraint details after CONSTRAINT <name>"));
+}
+
+#[test]
+fn parse_create_table_hive_array() {
+    // Parsing [] type arrays does not work in MsSql since [ is used in is_delimited_identifier_start
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(HiveDialect {})],
+    };
+    let sql = "CREATE TABLE IF NOT EXISTS something (key int, val array<int>)";
+    match dialects.one_statement_parses_to(
+        sql,
+        "CREATE TABLE IF NOT EXISTS something (key INT, val INT[])",
+    ) {
+        Statement::CreateTable {
+            if_not_exists,
+            name,
+            columns,
+            ..
+        } => {
+            assert!(if_not_exists);
+            assert_eq!(name, ObjectName(vec!["something".into()]));
+            assert_eq!(
+                columns,
+                vec![
+                    ColumnDef {
+                        name: Ident::new("key"),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("val"),
+                        data_type: DataType::Array(Box::new(DataType::Int(None))),
+                        collation: None,
+                        options: vec![],
+                    },
+                ],
+            )
+        }
+        _ => unreachable!(),
+    }
+
+    let res = parse_sql_statements("CREATE TABLE IF NOT EXISTS something (key int, val array<int)");
+    assert!(res
+        .unwrap_err()
+        .to_string()
+        .contains("Expected >, found: )"));
 }
 
 #[test]

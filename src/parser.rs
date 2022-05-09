@@ -2700,6 +2700,15 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::ENUM => Ok(DataType::Enum(self.parse_string_values()?)),
                 Keyword::SET => Ok(DataType::Set(self.parse_string_values()?)),
+                Keyword::ARRAY => {
+                    // Hive array syntax. Note that nesting arrays - or other Hive syntax
+                    // that ends with > will fail due to "C++" problem - >> is parsed as
+                    // Token::ShiftRight
+                    self.expect_token(&Token::Lt)?;
+                    let inside_type = self.parse_data_type()?;
+                    self.expect_token(&Token::Gt)?;
+                    Ok(DataType::Array(Box::new(inside_type)))
+                }
                 _ => {
                     self.prev_token();
                     let type_name = self.parse_object_name()?;
@@ -2709,7 +2718,8 @@ impl<'a> Parser<'a> {
             unexpected => self.expected("a data type name", unexpected),
         }?;
 
-        // Parse array data types. Note: this is postgresql-specific
+        // Parse array data types. Note: this is postgresql-specific and different from
+        // Keyword::ARRAY syntax from above
         while self.consume_token(&Token::LBracket) {
             self.expect_token(&Token::RBracket)?;
             data = DataType::Array(Box::new(data))

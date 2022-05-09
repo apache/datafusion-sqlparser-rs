@@ -13,6 +13,7 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 
 ### Added
 
+* Support for postgres composite types (#466) - Thanks @poonai
 * Support `TABLE` keyword with SELECT INTO (#487) - Thanks @MazterQyou
 * Support `ANY`/`ALL` operators (#477) - Thanks @ovr
 * Support `ArrayIndex` in `GenericDialect` (#480) - Thanks @ovr

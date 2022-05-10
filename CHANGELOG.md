@@ -13,6 +13,9 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 
 ### Added
 
+
+
+* Support `#` as first character in field name for `RedShift` dialect (#485) - Thanks @yuval-illumex
 * Support for postgres composite types (#466) - Thanks @poonai
 * Support `TABLE` keyword with SELECT INTO (#487) - Thanks @MazterQyou
 * Support `ANY`/`ALL` operators (#477) - Thanks @ovr
@@ -30,6 +33,8 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 * Improve docstrings for `KILL` statement (#481) - Thanks @alamb
 * Add negative tests for `POSITION` (#469) - Thanks @alamb
 * Add negative tests for `IN` parsing (#468) - Thanks @alamb
+* Suppport table names (as well as subqueries) as source in `MERGE` statements (#483) - Thanks @mskrzypkows
+
 
 ### Fixed:
 * `INTO` keyword is optional for `INSERT`, `MERGE`  (#473) - Thanks @mobuchowski

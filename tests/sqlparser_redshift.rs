@@ -100,3 +100,13 @@ fn redshift() -> TestedDialects {
         dialects: vec![Box::new(RedshiftSqlDialect {})],
     }
 }
+
+#[test]
+fn test_sharp() {
+    let sql = "SELECT #_of_values";
+    let select = redshift().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("#_of_values"))),
+        select.projection[0]
+    );
+}

@@ -231,6 +231,11 @@ pub enum Expr {
         operator: JsonOperator,
         right: Box<Expr>,
     },
+    /// CompositeAccess (postgres) eg: SELECT (information_schema._pg_expandarray(array['i','i'])).n
+    CompositeAccess {
+        expr: Box<Expr>,
+        key: Ident,
+    },
     /// `IS NULL` operator
     IsNull(Box<Expr>),
     /// `IS NOT NULL` operator
@@ -270,6 +275,10 @@ pub enum Expr {
         op: BinaryOperator,
         right: Box<Expr>,
     },
+    /// Any operation e.g. `1 ANY (1)` or `foo > ANY(bar)`, It will be wrapped in the right side of BinaryExpr
+    AnyOp(Box<Expr>),
+    /// ALL operation e.g. `1 ALL (1)` or `foo > ALL(bar)`, It will be wrapped in the right side of BinaryExpr
+    AllOp(Box<Expr>),
     /// Unary operation e.g. `NOT foo`
     UnaryOp {
         op: UnaryOperator,
@@ -433,6 +442,8 @@ impl fmt::Display for Expr {
                 high
             ),
             Expr::BinaryOp { left, op, right } => write!(f, "{} {} {}", left, op, right),
+            Expr::AnyOp(expr) => write!(f, "ANY({})", expr),
+            Expr::AllOp(expr) => write!(f, "ALL({})", expr),
             Expr::UnaryOp { op, expr } => {
                 if op == &UnaryOperator::PGPostfixFactorial {
                     write!(f, "{}{}", expr, op)
@@ -558,6 +569,9 @@ impl fmt::Display for Expr {
                 right,
             } => {
                 write!(f, "{} {} {}", left, operator, right)
+            }
+            Expr::CompositeAccess { expr, key } => {
+                write!(f, "{}.{}", expr, key)
             }
         }
     }
@@ -764,6 +778,8 @@ pub enum Statement {
     Insert {
         /// Only for Sqlite
         or: Option<SqliteOnConflict>,
+        /// INTO - optional keyword
+        into: bool,
         /// TABLE
         table_name: ObjectName,
         /// COLUMNS
@@ -913,7 +929,7 @@ pub enum Statement {
     SetVariable {
         local: bool,
         hivevar: bool,
-        variable: Ident,
+        variable: ObjectName,
         value: Vec<SetVariableValue>,
     },
     /// SHOW <variable>
@@ -1037,6 +1053,8 @@ pub enum Statement {
     Savepoint { name: Ident },
     // MERGE INTO statement, based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
     Merge {
+        // optional INTO keyword
+        into: bool,
         // Specifies the table to merge
         table: TableFactor,
         // Specifies the table or subquery to join with the target table
@@ -1180,6 +1198,7 @@ impl fmt::Display for Statement {
             }
             Statement::Insert {
                 or,
+                into,
                 table_name,
                 overwrite,
                 partitioned,
@@ -1194,9 +1213,10 @@ impl fmt::Display for Statement {
                 } else {
                     write!(
                         f,
-                        "INSERT {act}{tbl} {table_name} ",
+                        "INSERT{over}{int}{tbl} {table_name} ",
                         table_name = table_name,
-                        act = if *overwrite { "OVERWRITE" } else { "INTO" },
+                        over = if *overwrite { " OVERWRITE" } else { "" },
+                        int = if *into { " INTO" } else { "" },
                         tbl = if *table { " TABLE" } else { "" }
                     )?;
                 }
@@ -1747,12 +1767,17 @@ impl fmt::Display for Statement {
                 write!(f, "{}", name)
             }
             Statement::Merge {
+                into,
                 table,
                 source,
                 on,
                 clauses,
             } => {
-                write!(f, "MERGE INTO {} USING {} ", table, source)?;
+                write!(
+                    f,
+                    "MERGE{int} {table} USING {source} ",
+                    int = if *into { " INTO" } else { "" }
+                )?;
                 write!(f, "ON {} ", on)?;
                 write!(f, "{}", display_separated(clauses, " "))
             }

@@ -41,6 +41,9 @@ fn parse_insert_values() {
     let rows1 = vec![row.clone()];
     let rows2 = vec![row.clone(), row];
 
+    let sql = "INSERT customer VALUES (1, 2, 3)";
+    check_one(sql, "customer", &[], &rows1);
+
     let sql = "INSERT INTO customer VALUES (1, 2, 3)";
     check_one(sql, "customer", &[], &rows1);
 
@@ -89,16 +92,6 @@ fn parse_insert_values() {
     }
 
     verified_stmt("INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)");
-}
-
-#[test]
-fn parse_insert_invalid() {
-    let sql = "INSERT public.customer (id, name, active) VALUES (1, 2, 3)";
-    let res = parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError("Expected one of INTO or OVERWRITE, found: public".to_string()),
-        res.unwrap_err()
-    );
 }
 
 #[test]
@@ -390,13 +383,17 @@ fn parse_select_into() {
         &SelectInto {
             temporary: false,
             unlogged: false,
+            table: false,
             name: ObjectName(vec![Ident::new("table0")])
         },
         only(&select.into)
     );
 
-    let sql = "SELECT * INTO TEMPORARY UNLOGGED table0 FROM table1";
-    one_statement_parses_to(sql, "SELECT * INTO TEMPORARY UNLOGGED table0 FROM table1");
+    let sql = "SELECT * INTO TEMPORARY UNLOGGED TABLE table0 FROM table1";
+    one_statement_parses_to(
+        sql,
+        "SELECT * INTO TEMPORARY UNLOGGED TABLE table0 FROM table1",
+    );
 
     // Do not allow aliases here
     let sql = "SELECT * INTO table0 asdf FROM table1";
@@ -996,6 +993,32 @@ fn parse_bitwise_ops() {
             select.projection[0]
         );
     }
+}
+
+#[test]
+fn parse_binary_any() {
+    let select = verified_only_select("SELECT a = ANY(b)");
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::AnyOp(Box::new(Expr::Identifier(Ident::new("b"))))),
+        }),
+        select.projection[0]
+    );
+}
+
+#[test]
+fn parse_binary_all() {
+    let select = verified_only_select("SELECT a = ALL(b)");
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::AllOp(Box::new(Expr::Identifier(Ident::new("b"))))),
+        }),
+        select.projection[0]
+    );
 }
 
 #[test]
@@ -4331,13 +4354,27 @@ fn test_revoke() {
 #[test]
 fn parse_merge() {
     let sql = "MERGE INTO s.bar AS dest USING (SELECT * FROM s.foo) AS stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
-    match verified_stmt(sql) {
-        Statement::Merge {
-            table,
-            source,
-            on,
-            clauses,
-        } => {
+    let sql_no_into = "MERGE s.bar AS dest USING (SELECT * FROM s.foo) AS stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
+    match (verified_stmt(sql), verified_stmt(sql_no_into)) {
+        (
+            Statement::Merge {
+                into,
+                table,
+                source,
+                on,
+                clauses,
+            },
+            Statement::Merge {
+                into: no_into,
+                table: table_no_into,
+                source: source_no_into,
+                on: on_no_into,
+                clauses: clauses_no_into,
+            },
+        ) => {
+            assert!(into);
+            assert!(!no_into);
+
             assert_eq!(
                 table,
                 TableFactor::Table {
@@ -4350,6 +4387,8 @@ fn parse_merge() {
                     with_hints: vec![]
                 }
             );
+            assert_eq!(table, table_no_into);
+
             assert_eq!(
                 source,
                 TableFactor::Derived {
@@ -4394,6 +4433,8 @@ fn parse_merge() {
                     })
                 }
             );
+            assert_eq!(source, source_no_into);
+
             assert_eq!(
                 on,
                 Box::new(Expr::BinaryOp {
@@ -4422,6 +4463,8 @@ fn parse_merge() {
                     })
                 })
             );
+            assert_eq!(on, on_no_into);
+
             assert_eq!(
                 clauses,
                 vec![
@@ -4464,7 +4507,8 @@ fn parse_merge() {
                     },
                     MergeClause::MatchedDelete(None)
                 ]
-            )
+            );
+            assert_eq!(clauses, clauses_no_into);
         }
         _ => unreachable!(),
     }

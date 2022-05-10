@@ -518,7 +518,18 @@ impl<'a> Parser<'a> {
                         }
                     };
                 self.expect_token(&Token::RParen)?;
-                Ok(expr)
+                if !self.consume_token(&Token::Period) {
+                    return Ok(expr);
+                }
+                let tok = self.next_token();
+                let key = match tok {
+                    Token::Word(word) => word.to_ident(),
+                    _ => return parser_err!(format!("Expected identifier, found: {}", tok)),
+                };
+                Ok(Expr::CompositeAccess {
+                    expr: Box::new(expr),
+                    key,
+                })
             }
             Token::Placeholder(_) => {
                 self.prev_token();
@@ -1060,6 +1071,7 @@ impl<'a> Parser<'a> {
     /// Parse an operator following an expression
     pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
         let tok = self.next_token();
+
         let regular_binary_operator = match &tok {
             Token::Spaceship => Some(BinaryOperator::Spaceship),
             Token::DoubleEq => Some(BinaryOperator::Eq),
@@ -1112,11 +1124,29 @@ impl<'a> Parser<'a> {
         };
 
         if let Some(op) = regular_binary_operator {
-            Ok(Expr::BinaryOp {
-                left: Box::new(expr),
-                op,
-                right: Box::new(self.parse_subexpr(precedence)?),
-            })
+            if let Some(keyword) = self.parse_one_of_keywords(&[Keyword::ANY, Keyword::ALL]) {
+                self.expect_token(&Token::LParen)?;
+                let right = self.parse_subexpr(precedence)?;
+                self.expect_token(&Token::RParen)?;
+
+                let right = match keyword {
+                    Keyword::ALL => Box::new(Expr::AllOp(Box::new(right))),
+                    Keyword::ANY => Box::new(Expr::AnyOp(Box::new(right))),
+                    _ => unreachable!(),
+                };
+
+                Ok(Expr::BinaryOp {
+                    left: Box::new(expr),
+                    op,
+                    right,
+                })
+            } else {
+                Ok(Expr::BinaryOp {
+                    left: Box::new(expr),
+                    op,
+                    right: Box::new(self.parse_subexpr(precedence)?),
+                })
+            }
         } else if let Token::Word(w) = &tok {
             match w.keyword {
                 Keyword::IS => {
@@ -1173,7 +1203,7 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
             })
         } else if Token::LBracket == tok {
-            if dialect_of!(self is PostgreSqlDialect) {
+            if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
                 // parse index
                 return self.parse_array_index(expr);
             }
@@ -3119,10 +3149,12 @@ impl<'a> Parser<'a> {
                 .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
                 .is_some();
             let unlogged = self.parse_keyword(Keyword::UNLOGGED);
+            let table = self.parse_keyword(Keyword::TABLE);
             let name = self.parse_object_name()?;
             Some(SelectInto {
                 temporary,
                 unlogged,
+                table,
                 name,
             })
         } else {
@@ -3247,7 +3279,7 @@ impl<'a> Parser<'a> {
             });
         }
 
-        let variable = self.parse_identifier()?;
+        let variable = self.parse_object_name()?;
         if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
             let mut values = vec![];
             loop {
@@ -3268,14 +3300,14 @@ impl<'a> Parser<'a> {
                     value: values,
                 });
             }
-        } else if variable.value == "CHARACTERISTICS" {
+        } else if variable.to_string() == "CHARACTERISTICS" {
             self.expect_keywords(&[Keyword::AS, Keyword::TRANSACTION])?;
             Ok(Statement::SetTransaction {
                 modes: self.parse_transaction_modes()?,
                 snapshot: None,
                 session: true,
             })
-        } else if variable.value == "TRANSACTION" && modifier.is_none() {
+        } else if variable.to_string() == "TRANSACTION" && modifier.is_none() {
             if self.parse_keyword(Keyword::SNAPSHOT) {
                 let snaphot_id = self.parse_value()?;
                 return Ok(Statement::SetTransaction {
@@ -3783,8 +3815,11 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let action = self.expect_one_of_keywords(&[Keyword::INTO, Keyword::OVERWRITE])?;
-        let overwrite = action == Keyword::OVERWRITE;
+
+        let action = self.parse_one_of_keywords(&[Keyword::INTO, Keyword::OVERWRITE]);
+        let into = action == Some(Keyword::INTO);
+        let overwrite = action == Some(Keyword::OVERWRITE);
+
         let local = self.parse_keyword(Keyword::LOCAL);
 
         if self.parse_keyword(Keyword::DIRECTORY) {
@@ -3835,6 +3870,7 @@ impl<'a> Parser<'a> {
             Ok(Statement::Insert {
                 or,
                 table_name,
+                into,
                 overwrite,
                 partitioned,
                 columns,
@@ -4247,7 +4283,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_merge(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::INTO)?;
+        let into = self.parse_keyword(Keyword::INTO);
 
         let table = self.parse_table_factor()?;
 
@@ -4258,6 +4294,7 @@ impl<'a> Parser<'a> {
         let clauses = self.parse_merge_clauses()?;
 
         Ok(Statement::Merge {
+            into,
             table,
             source,
             on: Box::new(on),

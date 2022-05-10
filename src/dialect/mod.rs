@@ -11,6 +11,7 @@
 // limitations under the License.
 
 mod ansi;
+mod bigquery;
 mod clickhouse;
 mod generic;
 mod hive;
@@ -27,6 +28,7 @@ use core::iter::Peekable;
 use core::str::Chars;
 
 pub use self::ansi::AnsiDialect;
+pub use self::bigquery::BigQueryDialect;
 pub use self::clickhouse::ClickHouseDialect;
 pub use self::generic::GenericDialect;
 pub use self::hive::HiveDialect;

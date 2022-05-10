@@ -1234,15 +1234,15 @@ impl<'a> Parser<'a> {
     pub fn parse_array_index(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         let index = self.parse_expr()?;
         self.expect_token(&Token::RBracket)?;
-        let mut indexs: Vec<Expr> = vec![index];
+        let mut indexes: Vec<Expr> = vec![index];
         while self.consume_token(&Token::LBracket) {
             let index = self.parse_expr()?;
             self.expect_token(&Token::RBracket)?;
-            indexs.push(index);
+            indexes.push(index);
         }
         Ok(Expr::ArrayIndex {
             obj: Box::new(expr),
-            indexs,
+            indexes,
         })
     }
 

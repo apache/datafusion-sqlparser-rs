@@ -2563,6 +2563,7 @@ impl<'a> Parser<'a> {
     pub fn parse_number_value(&mut self) -> Result<Value, ParserError> {
         match self.parse_value()? {
             v @ Value::Number(_, _) => Ok(v),
+            v @ Value::Placeholder(_) => Ok(v),
             _ => {
                 self.prev_token();
                 self.expected("literal number", self.peek_token())

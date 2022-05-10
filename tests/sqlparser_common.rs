@@ -2789,7 +2789,7 @@ fn parse_unnest() {
                     name: Ident::new("numbers"),
                     columns: vec![],
                 }),
-                expr: Expr::Identifier(Ident::new("expr")),
+                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
                 with_offset: true,
             },
             joins: vec![],

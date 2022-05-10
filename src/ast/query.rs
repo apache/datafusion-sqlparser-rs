@@ -361,7 +361,7 @@ pub enum TableFactor {
     /// +---------+--------+
     UNNEST {
         alias: Option<TableAlias>,
-        expr: Expr,
+        array_expr: Box<Expr>,
         with_offset: bool,
     },
     /// Represents a parenthesized table factor. The SQL spec only allows a
@@ -417,10 +417,10 @@ impl fmt::Display for TableFactor {
             }
             TableFactor::UNNEST {
                 alias,
-                expr,
+                array_expr,
                 with_offset,
             } => {
-                write!(f, "UNNEST({})", expr)?;
+                write!(f, "UNNEST({})", array_expr)?;
                 if let Some(alias) = alias {
                     write!(f, " AS {}", alias)?;
                 }

@@ -3627,7 +3627,7 @@ impl<'a> Parser<'a> {
 
             Ok(TableFactor::UNNEST {
                 alias,
-                expr,
+                array_expr: Box::new(expr),
                 with_offset,
             })
         } else {

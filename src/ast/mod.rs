@@ -1058,9 +1058,7 @@ pub enum Statement {
         // Specifies the table to merge
         table: TableFactor,
         // Specifies the table or subquery to join with the target table
-        source: Box<SetExpr>,
-        // Specifies alias to the table that is joined with target table
-        alias: Option<TableAlias>,
+        source: TableFactor,
         // Specifies the expression on which to join the target table and source
         on: Box<Expr>,
         // Specifies the actions to perform when values match or do not match.
@@ -1772,7 +1770,6 @@ impl fmt::Display for Statement {
                 into,
                 table,
                 source,
-                alias,
                 on,
                 clauses,
             } => {
@@ -1781,9 +1778,6 @@ impl fmt::Display for Statement {
                     "MERGE{int} {table} USING {source} ",
                     int = if *into { " INTO" } else { "" }
                 )?;
-                if let Some(a) = alias {
-                    write!(f, "as {} ", a)?;
-                };
                 write!(f, "ON {} ", on)?;
                 write!(f, "{}", display_separated(clauses, " "))
             }

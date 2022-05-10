@@ -2779,9 +2779,22 @@ fn parse_table_function() {
 
 #[test]
 fn parse_unnest() {
-    let sql = "SELECT * FROM UNNEST([10, 20, 30]) as numbers WITH OFFSET";
+    let sql = "SELECT * FROM UNNEST(expr) AS numbers WITH OFFSET";
     let select = verified_only_select(sql);
-    println!("{:?}", select);
+    assert_eq!(
+        select.from,
+        vec![TableWithJoins {
+            relation: TableFactor::UNNEST {
+                alias: Some(TableAlias {
+                    name: Ident::new("numbers"),
+                    columns: vec![],
+                }),
+                expr: Expr::Identifier(Ident::new("expr")),
+                with_offset: true,
+            },
+            joins: vec![],
+        }]
+    );
 }
 
 #[test]

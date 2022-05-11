@@ -1615,6 +1615,8 @@ impl<'a> Parser<'a> {
             self.parse_create_schema()
         } else if self.parse_keyword(Keyword::DATABASE) {
             self.parse_create_database()
+        } else if dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::FUNCTION) {
+            self.parse_create_function(temporary)
         } else {
             self.expected("an object type after CREATE", self.peek_token())
         }
@@ -1668,6 +1670,42 @@ impl<'a> Parser<'a> {
             if_not_exists: ine,
             location,
             managed_location,
+        })
+    }
+
+    pub fn parse_optional_create_function_using(
+        &mut self,
+    ) -> Result<Option<CreateFunctionUsing>, ParserError> {
+        if !self.parse_keyword(Keyword::USING) {
+            return Ok(None);
+        };
+        let keyword =
+            self.expect_one_of_keywords(&[Keyword::JAR, Keyword::FILE, Keyword::ARCHIVE])?;
+
+        let uri = self.parse_literal_string()?;
+
+        match keyword {
+            Keyword::JAR => Ok(Some(CreateFunctionUsing::Jar(uri))),
+            Keyword::FILE => Ok(Some(CreateFunctionUsing::File(uri))),
+            Keyword::ARCHIVE => Ok(Some(CreateFunctionUsing::Archive(uri))),
+            _ => self.expected(
+                "JAR, FILE or ARCHIVE, got {:?}",
+                Token::make_keyword(format!("{:?}", keyword).as_str()),
+            ),
+        }
+    }
+
+    pub fn parse_create_function(&mut self, temporary: bool) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name()?;
+        self.expect_keyword(Keyword::AS)?;
+        let class_name = self.parse_literal_string()?;
+        let using = self.parse_optional_create_function_using()?;
+
+        Ok(Statement::CreateFunction {
+            temporary,
+            name,
+            class_name,
+            using,
         })
     }
 

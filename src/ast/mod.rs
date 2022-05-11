@@ -981,6 +981,15 @@ pub enum Statement {
         location: Option<String>,
         managed_location: Option<String>,
     },
+    /// CREATE FUNCTION
+    ///
+    /// Hive: https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction
+    CreateFunction {
+        temporary: bool,
+        name: ObjectName,
+        class_name: String,
+        using: Option<CreateFunctionUsing>,
+    },
     /// `ASSERT <condition> [AS <message>]`
     Assert {
         condition: Expr,
@@ -1317,6 +1326,22 @@ impl fmt::Display for Statement {
                 }
                 if let Some(ml) = managed_location {
                     write!(f, " MANAGEDLOCATION '{}'", ml)?;
+                }
+                Ok(())
+            }
+            Statement::CreateFunction {
+                temporary,
+                name,
+                class_name,
+                using,
+            } => {
+                write!(
+                    f,
+                    "CREATE {temp}FUNCTION {name} AS '{class_name}'",
+                    temp = if *temporary { "TEMPORARY " } else { "" },
+                )?;
+                if let Some(u) = using {
+                    write!(f, " {}", u)?;
                 }
                 Ok(())
             }
@@ -2564,6 +2589,25 @@ impl fmt::Display for DiscardObject {
             DiscardObject::PLANS => f.write_str("PLANS"),
             DiscardObject::SEQUENCES => f.write_str("SEQUENCES"),
             DiscardObject::TEMP => f.write_str("TEMP"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum CreateFunctionUsing {
+    Jar(String),
+    File(String),
+    Archive(String),
+}
+
+impl fmt::Display for CreateFunctionUsing {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "USING ")?;
+        match self {
+            CreateFunctionUsing::Jar(uri) => write!(f, "JAR '{uri}'"),
+            CreateFunctionUsing::File(uri) => write!(f, "FILE '{uri}'"),
+            CreateFunctionUsing::Archive(uri) => write!(f, "ARCHIVE '{uri}'"),
         }
     }
 }

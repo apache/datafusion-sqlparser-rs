@@ -4300,7 +4300,7 @@ impl Word {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::all_dialects;
+    use crate::test_utils::{all_dialects, TestedDialects};
 
     #[test]
     fn test_prev_index() {
@@ -4320,6 +4320,42 @@ mod tests {
             assert_eq!(parser.next_token(), Token::EOF);
             assert_eq!(parser.next_token(), Token::EOF);
             parser.prev_token();
+        });
+    }
+
+    #[test]
+    fn test_parse_limit() {
+        let sql = "SELECT * FROM user LIMIT 1";
+        all_dialects().run_parser_method(sql, |parser| {
+            let ast = parser.parse_query().unwrap();
+            assert_eq!(ast.to_string(), sql.to_string());
+        });
+
+        let sql = "SELECT * FROM user LIMIT $1 OFFSET $2";
+        let dialects = TestedDialects {
+            dialects: vec![
+                Box::new(PostgreSqlDialect {}),
+                Box::new(ClickHouseDialect {}),
+                Box::new(GenericDialect {}),
+                Box::new(MsSqlDialect {}),
+                Box::new(SnowflakeDialect {}),
+            ],
+        };
+
+        dialects.run_parser_method(sql, |parser| {
+            let ast = parser.parse_query().unwrap();
+            assert_eq!(ast.to_string(), sql.to_string());
+        });
+
+        let sql = "SELECT * FROM user LIMIT ? OFFSET ?";
+        let dialects = TestedDialects {
+            dialects: vec![
+                Box::new(MySqlDialect {}),
+            ],
+        };
+        dialects.run_parser_method(sql, |parser| {
+            let ast = parser.parse_query().unwrap();
+            assert_eq!(ast.to_string(), sql.to_string());
         });
     }
 }

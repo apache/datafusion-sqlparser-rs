@@ -15,7 +15,9 @@
 //! Test SQL syntax specific to Hive. The parser based on the generic dialect
 //! is also tested (on the inputs it can handle).
 
+use sqlparser::ast::{Ident, ObjectName, SetVariableValue, Statement};
 use sqlparser::dialect::HiveDialect;
+use sqlparser::parser::ParserError;
 use sqlparser::test_utils::*;
 
 #[test]
@@ -203,6 +205,31 @@ fn from_cte() {
     let rename =
         "WITH cte AS (SELECT * FROM a.b) FROM cte INSERT INTO TABLE a.b PARTITION (a) SELECT *";
     println!("{}", hive().verified_stmt(rename));
+}
+
+#[test]
+fn set_statement_with_minus() {
+    assert_eq!(
+        hive().verified_stmt("SET hive.tez.java.opts = -Xmx4g"),
+        Statement::SetVariable {
+            local: false,
+            hivevar: false,
+            variable: ObjectName(vec![
+                Ident::new("hive"),
+                Ident::new("tez"),
+                Ident::new("java"),
+                Ident::new("opts")
+            ]),
+            value: vec![SetVariableValue::Ident("-Xmx4g".into())],
+        }
+    );
+
+    assert_eq!(
+        hive().parse_sql_statements("SET hive.tez.java.opts = -"),
+        Err(ParserError::ParserError(
+            "Expected word, found: EOF".to_string()
+        ))
+    )
 }
 
 fn hive() -> TestedDialects {

@@ -1254,6 +1254,21 @@ mod tests {
     }
 
     #[test]
+    fn tokenize_unicode_whitespace() {
+        let sql = String::from(" \u{2003}\n");
+
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::Whitespace(Whitespace::Space),
+            Token::Whitespace(Whitespace::Space),
+            Token::Whitespace(Whitespace::Newline),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
     fn tokenize_mismatched_quotes() {
         let sql = String::from("\"foo");
 

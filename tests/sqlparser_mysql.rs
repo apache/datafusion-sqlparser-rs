@@ -331,7 +331,7 @@ fn parse_simple_insert() {
         _ => unreachable!(),
     }
 
-    let sql = r"INSERT INTO array_test (nums) VALUES ([1, 2, 3]), ([4, 5, 6])";
+    let sql = r"INSERT INTO array_test (nums) VALUES ([]), ([1, 2, 3]), ([4, 5, 6])";
     match mysql().verified_stmt(sql) {
         Statement::Insert {
             table_name,
@@ -348,6 +348,7 @@ fn parse_simple_insert() {
                     with: None,
                     body: SetExpr::Values(Values(
                         vec![
+                            vec![Expr::Array(vec![]),],
                             vec![Expr::Array(vec![
                                 Expr::Value(number("1")),
                                 Expr::Value(number("2")),

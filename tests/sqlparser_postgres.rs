@@ -682,8 +682,12 @@ fn parse_pg_regex_match_ops() {
 fn parse_map_access_expr() {
     #[cfg(not(feature = "bigdecimal"))]
     let zero = "0".to_string();
+    #[cfg(not(feature = "bigdecimal"))]
+    let one = "1".to_string();
     #[cfg(feature = "bigdecimal")]
     let zero = BigDecimal::parse_bytes(b"0", 10).unwrap();
+    #[cfg(feature = "bigdecimal")]
+    let one = BigDecimal::parse_bytes(b"1", 10).unwrap();
     let sql = "SELECT foo[0] FROM foos";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
@@ -720,10 +724,51 @@ fn parse_map_access_expr() {
                 quote_style: None
             })),
             keys: vec![
-                Value::Number(zero, false),
+                Value::Number(zero.clone(), false),
                 Value::SingleQuotedString("baz".to_string()),
                 Value::SingleQuotedString("fooz".to_string())
             ]
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+    let sql = "SELECT [0, 1][0]";
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &MapAccess {
+            column: Box::new(Expr::Array(vec![
+                Expr::Value(Value::Number(zero.clone(), false)),
+                Expr::Value(Value::Number(one.clone(), false)),
+            ])),
+            keys: vec![Value::Number(zero.clone(), false),]
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+    let sql = "SELECT ([0, 1])[0]";
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &MapAccess {
+            column: Box::new(Expr::Nested(Box::new(Expr::Array(vec![
+                Expr::Value(Value::Number(zero.clone(), false)),
+                Expr::Value(Value::Number(one, false)),
+            ])))),
+            keys: vec![Value::Number(zero.clone(), false),]
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+    let sql = "SELECT parse_json('[0, 1]')[0]";
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &MapAccess {
+            column: Box::new(Expr::Function(Function {
+                name: ObjectName(vec![Ident::new("parse_json")]),
+                params: vec![],
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                    Value::SingleQuotedString("[0, 1]".to_string())
+                )))],
+                over: None,
+                distinct: false,
+            })),
+            keys: vec![Value::Number(zero, false),]
         },
         expr_from_projection(only(&select.projection)),
     );

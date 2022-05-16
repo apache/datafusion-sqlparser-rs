@@ -1239,7 +1239,11 @@ impl<'a> Parser<'a> {
     pub fn parse_map_access(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         let key_parts = self.parse_map_keys()?;
         match expr {
-            e @ Expr::Identifier(_) | e @ Expr::CompoundIdentifier(_) => Ok(Expr::MapAccess {
+            e @ Expr::Identifier(_)
+            | e @ Expr::CompoundIdentifier(_)
+            | e @ Expr::Array(_)
+            | e @ Expr::Nested(_)
+            | e @ Expr::Function(_) => Ok(Expr::MapAccess {
                 column: Box::new(e),
                 keys: key_parts,
             }),
@@ -2600,6 +2604,9 @@ impl<'a> Parser<'a> {
         right: &Token,
     ) -> Result<Vec<Expr>, ParserError> {
         if self.consume_token(left) {
+            if self.consume_token(right) {
+                return Ok(vec![]);
+            }
             let exprs = self.parse_comma_separated(Parser::parse_expr)?;
             self.expect_token(right)?;
             Ok(exprs)

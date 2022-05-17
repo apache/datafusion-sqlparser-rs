@@ -690,6 +690,26 @@ fn parse_unary_math() {
 }
 
 #[test]
+fn parse_is_false() {
+    use self::Expr::*;
+    let sql = "a IS FALSE";
+    assert_eq!(
+        IsFalse(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+}
+
+#[test]
+fn parse_is_true() {
+    use self::Expr::*;
+    let sql = "a IS TRUE";
+    assert_eq!(
+        IsTrue(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+}
+
+#[test]
 fn parse_is_null() {
     use self::Expr::*;
     let sql = "a IS NULL";

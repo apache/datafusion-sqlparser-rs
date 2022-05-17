@@ -233,6 +233,10 @@ pub enum Expr {
     },
     /// CompositeAccess (postgres) eg: SELECT (information_schema._pg_expandarray(array['i','i'])).n
     CompositeAccess { expr: Box<Expr>, key: Ident },
+    /// `IS FALSE` operator
+    IsFalse(Box<Expr>),
+    /// `IS TRUE` operator
+    IsTrue(Box<Expr>),
     /// `IS NULL` operator
     IsNull(Box<Expr>),
     /// `IS NOT NULL` operator
@@ -379,6 +383,8 @@ impl fmt::Display for Expr {
                 Ok(())
             }
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
+            Expr::IsTrue(ast) => write!(f, "{} IS TRUE", ast),
+            Expr::IsFalse(ast) => write!(f, "{} IS FALSE", ast),
             Expr::IsNull(ast) => write!(f, "{} IS NULL", ast),
             Expr::IsNotNull(ast) => write!(f, "{} IS NOT NULL", ast),
             Expr::InList {

@@ -36,6 +36,9 @@ pub struct Query {
     pub offset: Option<Offset>,
     /// `FETCH { FIRST | NEXT } <N> [ PERCENT ] { ROW | ROWS } | { ONLY | WITH TIES }`
     pub fetch: Option<Fetch>,
+
+    /// `FORMAT <format>`
+    pub format: Option<String>,
 }
 
 impl fmt::Display for Query {
@@ -55,6 +58,10 @@ impl fmt::Display for Query {
         }
         if let Some(ref fetch) = self.fetch {
             write!(f, " {}", fetch)?;
+        }
+
+        if let Some(ref format) = self.format {
+            write!(f, " FORMAT {}", format)?;
         }
         Ok(())
     }

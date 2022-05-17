@@ -545,6 +545,15 @@ fn parse_select_wildcard() {
 }
 
 #[test]
+fn parse_select_with_format() {
+    let ast = verified_query("SELECT foo FROM bar LIMIT 3 FORMAT json");
+    assert_eq!(ast.format, Some("json".to_string()));
+
+    let ast = verified_query("SELECT foo FROM bar FORMAT CSV");
+    assert_eq!(ast.format, Some("CSV".to_string()));
+}
+
+#[test]
 fn parse_count_wildcard() {
     verified_only_select("SELECT COUNT(*) FROM Order WHERE id = 10");
 

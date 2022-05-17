@@ -2729,6 +2729,16 @@ impl<'a> Parser<'a> {
                 None
             };
 
+            let format = if self.parse_keyword(Keyword::FORMAT) {
+                if self.parse_keyword(Keyword::CSV) {
+                    Some("CSV".to_string())
+                } else {
+                    Some(self.parse_literal_string()?)
+                }
+            } else {
+                None
+            };
+
             Ok(Query {
                 with,
                 body,
@@ -2736,6 +2746,7 @@ impl<'a> Parser<'a> {
                 limit,
                 offset,
                 fetch,
+                format,
             })
         } else {
             let insert = self.parse_insert()?;
@@ -2747,6 +2758,7 @@ impl<'a> Parser<'a> {
                 order_by: vec![],
                 offset: None,
                 fetch: None,
+                format: None,
             })
         }
     }
@@ -3559,6 +3571,7 @@ impl<'a> Parser<'a> {
                     limit: None,
                     offset: None,
                     fetch: None,
+                    format: None,
                 }))
             } else {
                 Some(Box::new(self.parse_query()?))

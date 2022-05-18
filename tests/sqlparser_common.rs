@@ -4944,3 +4944,10 @@ fn parse_discard() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_with_lots_of_stack_recursion() {
+    let sql = "(".repeat(1000);
+    let res = parse_sql_statements(&sql);
+    assert_eq!(ParserError::RecursionLimitExceeded, res.unwrap_err());
+}

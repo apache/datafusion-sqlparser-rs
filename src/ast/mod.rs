@@ -324,6 +324,8 @@ pub enum Expr {
     /// as well as constants of other types (a non-standard PostgreSQL extension).
     TypedString { data_type: DataType, value: String },
     /// Access a map-like object by field (e.g. `column['field']` or `column[4]`
+    /// Note that depending on the dialect, struct like accesses may be
+    /// parsed as [`ArrayIndex`] or [`MapAccess`] 
     /// <https://clickhouse.com/docs/en/sql-reference/data-types/map/>
     MapAccess { column: Box<Expr>, keys: Vec<Expr> },
     /// Scalar function call e.g. `LEFT(foo, 5)`

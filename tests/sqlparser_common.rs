@@ -4740,3 +4740,30 @@ fn parse_is_boolean() {
         res.unwrap_err()
     );
 }
+
+#[test]
+fn parse_discard() {
+    let sql = "DISCARD ALL";
+    match verified_stmt(sql) {
+        Statement::Discard { object_type, .. } => assert_eq!(object_type, DiscardObject::ALL),
+        _ => unreachable!(),
+    }
+
+    let sql = "DISCARD PLANS";
+    match verified_stmt(sql) {
+        Statement::Discard { object_type, .. } => assert_eq!(object_type, DiscardObject::PLANS),
+        _ => unreachable!(),
+    }
+
+    let sql = "DISCARD SEQUENCES";
+    match verified_stmt(sql) {
+        Statement::Discard { object_type, .. } => assert_eq!(object_type, DiscardObject::SEQUENCES),
+        _ => unreachable!(),
+    }
+
+    let sql = "DISCARD TEMP";
+    match verified_stmt(sql) {
+        Statement::Discard { object_type, .. } => assert_eq!(object_type, DiscardObject::TEMP),
+        _ => unreachable!(),
+    }
+}

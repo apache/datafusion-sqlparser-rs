@@ -2732,6 +2732,8 @@ impl<'a> Parser<'a> {
             let format = if self.parse_keyword(Keyword::FORMAT) {
                 if self.parse_keyword(Keyword::CSV) {
                     Some("CSV".to_string())
+                } else if self.parse_keyword(Keyword::PARQUET) {
+                    Some("PARQUET".to_string())
                 } else {
                     Some(self.parse_literal_string()?)
                 }

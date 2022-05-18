@@ -551,6 +551,9 @@ fn parse_select_with_format() {
 
     let ast = verified_query("SELECT foo FROM bar FORMAT CSV");
     assert_eq!(ast.format, Some("CSV".to_string()));
+
+    let ast = verified_query("SELECT foo FROM bar FORMAT PARQUET");
+    assert_eq!(ast.format, Some("PARQUET".to_string()));
 }
 
 #[test]

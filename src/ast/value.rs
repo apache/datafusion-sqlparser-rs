@@ -30,6 +30,8 @@ pub enum Value {
     Number(BigDecimal, bool),
     /// 'string value'
     SingleQuotedString(String),
+    /// e'string value'
+    EscapedStringLiteral(String),
     /// N'string value'
     NationalStringLiteral(String),
     /// X'hex value'
@@ -69,6 +71,7 @@ impl fmt::Display for Value {
             Value::Number(v, l) => write!(f, "{}{long}", v, long = if *l { "L" } else { "" }),
             Value::DoubleQuotedString(v) => write!(f, "\"{}\"", v),
             Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
+            Value::EscapedStringLiteral(v) => write!(f, "E'{}'", escape_escaped_string(v)),
             Value::NationalStringLiteral(v) => write!(f, "N'{}'", v),
             Value::HexStringLiteral(v) => write!(f, "X'{}'", v),
             Value::Boolean(v) => write!(f, "{}", v),
@@ -191,6 +194,40 @@ impl<'a> fmt::Display for EscapeSingleQuoteString<'a> {
 
 pub fn escape_single_quote_string(s: &str) -> EscapeSingleQuoteString<'_> {
     EscapeSingleQuoteString(s)
+}
+
+pub struct EscapeEscapedStringLiteral<'a>(&'a str);
+
+impl<'a> fmt::Display for EscapeEscapedStringLiteral<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut is_escaped = true;
+
+        for c in self.0.chars() {
+            match c {
+                '\'' => {
+                    write!(f, "\'\'")?;
+                }
+                '\\' => {
+                    if is_escaped {
+                        write!(f, r#"\\"#)?;
+                    } else {
+                        is_escaped = true;
+                    }
+                }
+                '\n' => {
+                    write!(f, r#"\n"#)?;
+                }
+                _ => {
+                    write!(f, "{}", c)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+pub fn escape_escaped_string(s: &str) -> EscapeEscapedStringLiteral<'_> {
+    EscapeEscapedStringLiteral(s)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

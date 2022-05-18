@@ -1467,3 +1467,26 @@ fn pg_and_generic() -> TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(GenericDialect {})],
     }
 }
+
+#[test]
+fn parse_escaped_literal_string() {
+    let sql = r#"SELECT E's1 \n s1', E's2 \\n s2', E's3 \\\n s3', E's4 \\\\n s4'"#;
+    let select = pg().verified_only_select(sql);
+    assert_eq!(4, select.projection.len());
+    assert_eq!(
+        &Expr::Value(Value::EscapedStringLiteral("s1 \n s1".to_string())),
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Value(Value::EscapedStringLiteral("s2 \\n s2".to_string())),
+        expr_from_projection(&select.projection[1])
+    );
+    assert_eq!(
+        &Expr::Value(Value::EscapedStringLiteral("s3 \\\n s3".to_string())),
+        expr_from_projection(&select.projection[2])
+    );
+    assert_eq!(
+        &Expr::Value(Value::EscapedStringLiteral("s4 \\\\n s4".to_string())),
+        expr_from_projection(&select.projection[3])
+    );
+}

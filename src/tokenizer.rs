@@ -51,6 +51,8 @@ pub enum Token {
     SingleQuotedString(String),
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
+    /// "escaped" string literal, which are an extension to the SQL standard: i.e: e'first \n second' or E 'first \n second'
+    EscapedStringLiteral(String),
     /// Hexadecimal string literal: i.e.: X'deadbeef'
     HexStringLiteral(String),
     /// Comma
@@ -160,6 +162,7 @@ impl fmt::Display for Token {
             Token::Char(ref c) => write!(f, "{}", c),
             Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
+            Token::EscapedStringLiteral(ref s) => write!(f, "E'{}'", s),
             Token::HexStringLiteral(ref s) => write!(f, "X'{}'", s),
             Token::Comma => f.write_str(","),
             Token::Whitespace(ws) => write!(f, "{}", ws),
@@ -388,6 +391,21 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "N"
                             let s = self.tokenize_word('N', chars);
+                            Ok(Some(Token::make_word(&s, None)))
+                        }
+                    }
+                }
+                // PostgreSQL accepts "escape" string constants, which are an extension to the SQL standard.
+                x @ 'e' | x @ 'E' => {
+                    chars.next(); // consume, to check the next char
+                    match chars.peek() {
+                        Some('\'') => {
+                            let s = self.tokenize_escaped_single_quoted_string(chars)?;
+                            Ok(Some(Token::EscapedStringLiteral(s)))
+                        }
+                        _ => {
+                            // regular identifier starting with an "X"
+                            let s = self.tokenize_word(x, chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -688,6 +706,58 @@ impl<'a> Tokenizer<'a> {
             self.dialect.is_identifier_part(ch)
         }));
         s
+    }
+
+    /// Read a single quoted string, starting with the opening quote.
+    fn tokenize_escaped_single_quoted_string(
+        &self,
+        chars: &mut Peekable<Chars<'_>>,
+    ) -> Result<String, TokenizerError> {
+        let mut s = String::new();
+        chars.next(); // consume the opening quote
+
+        // slash escaping is specific to MySQL dialect
+        let mut is_escaped = false;
+        while let Some(&ch) = chars.peek() {
+            println!("-> {}", ch);
+            match ch {
+                '\'' => {
+                    chars.next(); // consume
+                    if chars.peek().map(|c| *c == '\'').unwrap_or(false) {
+                        s.push(ch);
+                        chars.next();
+                    } else {
+                        return Ok(s);
+                    }
+                }
+                '\\' => {
+                    if is_escaped {
+                        s.push('\\');
+                        is_escaped = false;
+                    } else {
+                        is_escaped = true;
+                    }
+
+                    chars.next();
+                }
+                'n' => {
+                    if is_escaped {
+                        s.push('\n');
+                        is_escaped = false;
+                    } else {
+                        s.push(ch);
+                    }
+
+                    chars.next();
+                }
+                _ => {
+                    is_escaped = false;
+                    chars.next(); // consume
+                    s.push(ch);
+                }
+            }
+        }
+        self.tokenizer_error("Unterminated encoded string literal")
     }
 
     /// Read a single quoted string, starting with the opening quote.

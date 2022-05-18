@@ -719,7 +719,6 @@ impl<'a> Tokenizer<'a> {
         // slash escaping is specific to MySQL dialect
         let mut is_escaped = false;
         while let Some(&ch) = chars.peek() {
-            println!("-> {}", ch);
             match ch {
                 '\'' => {
                     chars.next(); // consume

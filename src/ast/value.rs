@@ -205,7 +205,7 @@ impl<'a> fmt::Display for EscapeEscapedStringLiteral<'a> {
         for c in self.0.chars() {
             match c {
                 '\'' => {
-                    write!(f, "\'\'")?;
+                    write!(f, r#"\'"#)?;
                 }
                 '\\' => {
                     if is_escaped {
@@ -216,6 +216,12 @@ impl<'a> fmt::Display for EscapeEscapedStringLiteral<'a> {
                 }
                 '\n' => {
                     write!(f, r#"\n"#)?;
+                }
+                '\t' => {
+                    write!(f, r#"\t"#)?;
+                }
+                '\r' => {
+                    write!(f, r#"\r"#)?;
                 }
                 _ => {
                     write!(f, "{}", c)?;

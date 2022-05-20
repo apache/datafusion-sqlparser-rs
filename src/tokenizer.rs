@@ -716,13 +716,29 @@ impl<'a> Tokenizer<'a> {
         let mut s = String::new();
         chars.next(); // consume the opening quote
 
-        // slash escaping is specific to MySQL dialect
+        // slash escaping
         let mut is_escaped = false;
         while let Some(&ch) = chars.peek() {
+            macro_rules! escape_control_character {
+                ($ESCAPED:expr) => {{
+                    if is_escaped {
+                        s.push($ESCAPED);
+                        is_escaped = false;
+                    } else {
+                        s.push(ch);
+                    }
+
+                    chars.next();
+                }};
+            }
+
             match ch {
                 '\'' => {
                     chars.next(); // consume
-                    if chars.peek().map(|c| *c == '\'').unwrap_or(false) {
+                    if is_escaped {
+                        s.push(ch);
+                        is_escaped = false;
+                    } else if chars.peek().map(|c| *c == '\'').unwrap_or(false) {
                         s.push(ch);
                         chars.next();
                     } else {
@@ -739,16 +755,9 @@ impl<'a> Tokenizer<'a> {
 
                     chars.next();
                 }
-                'n' => {
-                    if is_escaped {
-                        s.push('\n');
-                        is_escaped = false;
-                    } else {
-                        s.push(ch);
-                    }
-
-                    chars.next();
-                }
+                'r' => escape_control_character!('\r'),
+                'n' => escape_control_character!('\n'),
+                't' => escape_control_character!('\t'),
                 _ => {
                     is_escaped = false;
                     chars.next(); // consume

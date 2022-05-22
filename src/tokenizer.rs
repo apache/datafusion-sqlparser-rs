@@ -653,6 +653,10 @@ impl<'a> Tokenizer<'a> {
                     );
                     Ok(Some(Token::Placeholder(String::from("$") + &s)))
                 }
+                //whitespace check (including unicode chars) should be last as it covers some of the chars above
+                ch if ch.is_whitespace() => {
+                    self.consume_and_return(chars, Token::Whitespace(Whitespace::Space))
+                }
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),
@@ -1249,6 +1253,21 @@ mod tests {
         let expected = vec![
             Token::Whitespace(Whitespace::Newline),
             Token::Whitespace(Whitespace::MultiLineComment("* Comment *".to_string())),
+            Token::Whitespace(Whitespace::Newline),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_unicode_whitespace() {
+        let sql = String::from(" \u{2003}\n");
+
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let expected = vec![
+            Token::Whitespace(Whitespace::Space),
+            Token::Whitespace(Whitespace::Space),
             Token::Whitespace(Whitespace::Newline),
         ];
         compare(expected, tokens);

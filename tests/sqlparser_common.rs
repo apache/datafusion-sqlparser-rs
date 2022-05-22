@@ -23,8 +23,8 @@ mod test_utils;
 use matches::assert_matches;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
-    AnsiDialect, GenericDialect, HiveDialect, MsSqlDialect, PostgreSqlDialect, SQLiteDialect,
-    SnowflakeDialect,
+    AnsiDialect, BigQueryDialect, GenericDialect, HiveDialect, MsSqlDialect, PostgreSqlDialect,
+    SQLiteDialect, SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
@@ -4604,6 +4604,7 @@ fn test_placeholder() {
             Box::new(PostgreSqlDialect {}),
             Box::new(MsSqlDialect {}),
             Box::new(AnsiDialect {}),
+            Box::new(BigQueryDialect {}),
             Box::new(SnowflakeDialect {}),
             // Note: `$` is the starting word for the HiveDialect identifier
             // Box::new(sqlparser::dialect::HiveDialect {}),

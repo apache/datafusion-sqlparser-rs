@@ -18,6 +18,7 @@
 mod test_utils;
 use test_utils::*;
 
+use sqlparser::ast::Value::Boolean;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
@@ -780,7 +781,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variable: "a".into(),
+            variable: ObjectName(vec![Ident::new("a")]),
             value: vec![SetVariableValue::Ident("b".into())],
         }
     );
@@ -791,7 +792,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variable: "a".into(),
+            variable: ObjectName(vec![Ident::new("a")]),
             value: vec![SetVariableValue::Literal(Value::SingleQuotedString(
                 "b".into()
             ))],
@@ -804,7 +805,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variable: "a".into(),
+            variable: ObjectName(vec![Ident::new("a")]),
             value: vec![SetVariableValue::Literal(number("0"))],
         }
     );
@@ -815,7 +816,7 @@ fn parse_set() {
         Statement::SetVariable {
             local: false,
             hivevar: false,
-            variable: "a".into(),
+            variable: ObjectName(vec![Ident::new("a")]),
             value: vec![SetVariableValue::Ident("DEFAULT".into())],
         }
     );
@@ -826,8 +827,39 @@ fn parse_set() {
         Statement::SetVariable {
             local: true,
             hivevar: false,
-            variable: "a".into(),
+            variable: ObjectName(vec![Ident::new("a")]),
             value: vec![SetVariableValue::Ident("b".into())],
+        }
+    );
+
+    let stmt = pg_and_generic().verified_stmt("SET a.b.c = b");
+    assert_eq!(
+        stmt,
+        Statement::SetVariable {
+            local: false,
+            hivevar: false,
+            variable: ObjectName(vec![Ident::new("a"), Ident::new("b"), Ident::new("c")]),
+            value: vec![SetVariableValue::Ident("b".into())],
+        }
+    );
+
+    let stmt = pg_and_generic().one_statement_parses_to(
+        "SET hive.tez.auto.reducer.parallelism=false",
+        "SET hive.tez.auto.reducer.parallelism = false",
+    );
+    assert_eq!(
+        stmt,
+        Statement::SetVariable {
+            local: false,
+            hivevar: false,
+            variable: ObjectName(vec![
+                Ident::new("hive"),
+                Ident::new("tez"),
+                Ident::new("auto"),
+                Ident::new("reducer"),
+                Ident::new("parallelism")
+            ]),
+            value: vec![SetVariableValue::Literal(Boolean(false))],
         }
     );
 
@@ -1141,7 +1173,7 @@ fn parse_array_index_expr() {
     assert_eq!(
         &Expr::ArrayIndex {
             obj: Box::new(Expr::Identifier(Ident::new("foo"))),
-            indexs: vec![num[0].clone()],
+            indexes: vec![num[0].clone()],
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -1151,7 +1183,7 @@ fn parse_array_index_expr() {
     assert_eq!(
         &Expr::ArrayIndex {
             obj: Box::new(Expr::Identifier(Ident::new("foo"))),
-            indexs: vec![num[0].clone(), num[0].clone()],
+            indexes: vec![num[0].clone(), num[0].clone()],
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -1161,7 +1193,7 @@ fn parse_array_index_expr() {
     assert_eq!(
         &Expr::ArrayIndex {
             obj: Box::new(Expr::Identifier(Ident::new("bar"))),
-            indexs: vec![
+            indexes: vec![
                 num[0].clone(),
                 Expr::Identifier(Ident {
                     value: "baz".to_string(),
@@ -1192,7 +1224,7 @@ fn parse_array_index_expr() {
                     None
                 )))))
             }))),
-            indexs: vec![num[1].clone(), num[2].clone()],
+            indexes: vec![num[1].clone(), num[2].clone()],
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -1297,6 +1329,67 @@ fn test_json() {
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "{a,b,c}".to_string()
             ))),
+        }),
+        select.projection[0]
+    );
+}
+
+#[test]
+fn test_composite_value() {
+    let sql = "SELECT (on_hand.item).name FROM on_hand WHERE (on_hand.item).price > 9";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::CompositeAccess {
+            key: Ident::new("name"),
+            expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("on_hand"),
+                Ident::new("item")
+            ]))))
+        }),
+        select.projection[0]
+    );
+
+    #[cfg(feature = "bigdecimal")]
+    let num: Expr = Expr::Value(Value::Number(bigdecimal::BigDecimal::from(9), false));
+    #[cfg(not(feature = "bigdecimal"))]
+    let num: Expr = Expr::Value(Value::Number("9".to_string(), false));
+    assert_eq!(
+        select.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::CompositeAccess {
+                key: Ident::new("price"),
+                expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("on_hand"),
+                    Ident::new("item")
+                ]))))
+            }),
+            op: BinaryOperator::Gt,
+            right: Box::new(num)
+        })
+    );
+
+    let sql = "SELECT (information_schema._pg_expandarray(ARRAY['i', 'i'])).n";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::CompositeAccess {
+            key: Ident::new("n"),
+            expr: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
+                name: ObjectName(vec![
+                    Ident::new("information_schema"),
+                    Ident::new("_pg_expandarray")
+                ]),
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Array(
+                    Array {
+                        elem: vec![
+                            Expr::Value(Value::SingleQuotedString("i".to_string())),
+                            Expr::Value(Value::SingleQuotedString("i".to_string())),
+                        ],
+                        named: true
+                    }
+                )))],
+                over: None,
+                distinct: false,
+            }))))
         }),
         select.projection[0]
     );

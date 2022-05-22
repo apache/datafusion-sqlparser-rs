@@ -231,6 +231,11 @@ pub enum Expr {
         operator: JsonOperator,
         right: Box<Expr>,
     },
+    /// CompositeAccess (postgres) eg: SELECT (information_schema._pg_expandarray(array['i','i'])).n
+    CompositeAccess {
+        expr: Box<Expr>,
+        key: Ident,
+    },
     /// `IS NULL` operator
     IsNull(Box<Expr>),
     /// `IS NOT NULL` operator
@@ -366,7 +371,7 @@ pub enum Expr {
     /// An array index expression e.g. `(ARRAY[1, 2])[1]` or `(current_schemas(FALSE))[1]`
     ArrayIndex {
         obj: Box<Expr>,
-        indexs: Vec<Expr>,
+        indexes: Vec<Expr>,
     },
     /// An array expression e.g. `ARRAY[1, 2]`
     Array(Array),
@@ -548,9 +553,9 @@ impl fmt::Display for Expr {
             Expr::Tuple(exprs) => {
                 write!(f, "({})", display_comma_separated(exprs))
             }
-            Expr::ArrayIndex { obj, indexs } => {
+            Expr::ArrayIndex { obj, indexes } => {
                 write!(f, "{}", obj)?;
-                for i in indexs {
+                for i in indexes {
                     write!(f, "[{}]", i)?;
                 }
                 Ok(())
@@ -564,6 +569,9 @@ impl fmt::Display for Expr {
                 right,
             } => {
                 write!(f, "{} {} {}", left, operator, right)
+            }
+            Expr::CompositeAccess { expr, key } => {
+                write!(f, "{}.{}", expr, key)
             }
         }
     }
@@ -770,6 +778,8 @@ pub enum Statement {
     Insert {
         /// Only for Sqlite
         or: Option<SqliteOnConflict>,
+        /// INTO - optional keyword
+        into: bool,
         /// TABLE
         table_name: ObjectName,
         /// COLUMNS
@@ -919,7 +929,7 @@ pub enum Statement {
     SetVariable {
         local: bool,
         hivevar: bool,
-        variable: Ident,
+        variable: ObjectName,
         value: Vec<SetVariableValue>,
     },
     /// SHOW <variable>
@@ -1043,12 +1053,12 @@ pub enum Statement {
     Savepoint { name: Ident },
     // MERGE INTO statement, based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
     Merge {
+        // optional INTO keyword
+        into: bool,
         // Specifies the table to merge
         table: TableFactor,
         // Specifies the table or subquery to join with the target table
-        source: Box<SetExpr>,
-        // Specifies alias to the table that is joined with target table
-        alias: Option<TableAlias>,
+        source: TableFactor,
         // Specifies the expression on which to join the target table and source
         on: Box<Expr>,
         // Specifies the actions to perform when values match or do not match.
@@ -1188,6 +1198,7 @@ impl fmt::Display for Statement {
             }
             Statement::Insert {
                 or,
+                into,
                 table_name,
                 overwrite,
                 partitioned,
@@ -1202,9 +1213,10 @@ impl fmt::Display for Statement {
                 } else {
                     write!(
                         f,
-                        "INSERT {act}{tbl} {table_name} ",
+                        "INSERT{over}{int}{tbl} {table_name} ",
                         table_name = table_name,
-                        act = if *overwrite { "OVERWRITE" } else { "INTO" },
+                        over = if *overwrite { " OVERWRITE" } else { "" },
+                        int = if *into { " INTO" } else { "" },
                         tbl = if *table { " TABLE" } else { "" }
                     )?;
                 }
@@ -1755,16 +1767,17 @@ impl fmt::Display for Statement {
                 write!(f, "{}", name)
             }
             Statement::Merge {
+                into,
                 table,
                 source,
-                alias,
                 on,
                 clauses,
             } => {
-                write!(f, "MERGE INTO {} USING {} ", table, source)?;
-                if let Some(a) = alias {
-                    write!(f, "as {} ", a)?;
-                };
+                write!(
+                    f,
+                    "MERGE{int} {table} USING {source} ",
+                    int = if *into { " INTO" } else { "" }
+                )?;
                 write!(f, "ON {} ", on)?;
                 write!(f, "{}", display_separated(clauses, " "))
             }

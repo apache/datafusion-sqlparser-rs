@@ -9,6 +9,38 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
 
+## [0.17.0] 2022-05-09
+
+### Added
+
+
+
+* Support `#` as first character in field name for `RedShift` dialect (#485) - Thanks @yuval-illumex
+* Support for postgres composite types (#466) - Thanks @poonai
+* Support `TABLE` keyword with SELECT INTO (#487) - Thanks @MazterQyou
+* Support `ANY`/`ALL` operators (#477) - Thanks @ovr
+* Support `ArrayIndex` in `GenericDialect` (#480) - Thanks @ovr
+* Support `Redshift` dialect, handle square brackets properly (#471) - Thanks @mskrzypkows
+* Support `KILL` statement (#479) - Thanks @ovr
+* Support `QUALIFY` clause on `SELECT` for `Snowflake` dialect (#465) - Thanks @mobuchowski
+* Support `POSITION(x IN y)` function  syntax  (#463)  @yuval-illumex
+* Support  `global`,`local`, `on commit` for `create temporary table` (#456) - Thanks @gandronchik
+* Support `NVARCHAR` data type (#462) - Thanks @yuval-illumex
+* Support for postgres json operators `->`, `->>`, `#>`, and `#>>` (#458) - Thanks @poonai
+* Support `SET ROLE` statement (#455) - Thanks @slhmy
+
+### Changed:
+* Improve docstrings for `KILL` statement (#481) - Thanks @alamb
+* Add negative tests for `POSITION` (#469) - Thanks @alamb
+* Add negative tests for `IN` parsing (#468) - Thanks @alamb
+* Suppport table names (as well as subqueries) as source in `MERGE` statements (#483) - Thanks @mskrzypkows
+
+
+### Fixed:
+* `INTO` keyword is optional for `INSERT`, `MERGE`  (#473) - Thanks @mobuchowski
+* Support `IS TRUE` and `IS FALSE` expressions in boolean filter (#474) - Thanks @yuval-illumex
+* Support fully qualified object names in `SET VARIABLE` (#484) - Thanks mobuchowski
+
 ## [0.16.0] 2022-04-03
 
 ### Added
@@ -64,8 +96,6 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 * Update simple_logger requirement from 1.9 to 2.1 (#403)
 * export all methods of parser (#397) - Thanks @neverchanje!
 * Clarify maintenance status on README (#416) - @alamb
-
-@panarch
 
 ### Fixed
 * Fix new clippy errors (#412) - @alamb

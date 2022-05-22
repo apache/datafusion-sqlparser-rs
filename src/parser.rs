@@ -518,7 +518,18 @@ impl<'a> Parser<'a> {
                         }
                     };
                 self.expect_token(&Token::RParen)?;
-                Ok(expr)
+                if !self.consume_token(&Token::Period) {
+                    return Ok(expr);
+                }
+                let tok = self.next_token();
+                let key = match tok {
+                    Token::Word(word) => word.to_ident(),
+                    _ => return parser_err!(format!("Expected identifier, found: {}", tok)),
+                };
+                Ok(Expr::CompositeAccess {
+                    expr: Box::new(expr),
+                    key,
+                })
             }
             Token::Placeholder(_) => {
                 self.prev_token();
@@ -1223,15 +1234,15 @@ impl<'a> Parser<'a> {
     pub fn parse_array_index(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         let index = self.parse_expr()?;
         self.expect_token(&Token::RBracket)?;
-        let mut indexs: Vec<Expr> = vec![index];
+        let mut indexes: Vec<Expr> = vec![index];
         while self.consume_token(&Token::LBracket) {
             let index = self.parse_expr()?;
             self.expect_token(&Token::RBracket)?;
-            indexs.push(index);
+            indexes.push(index);
         }
         Ok(Expr::ArrayIndex {
             obj: Box::new(expr),
-            indexs,
+            indexes,
         })
     }
 
@@ -3139,10 +3150,12 @@ impl<'a> Parser<'a> {
                 .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
                 .is_some();
             let unlogged = self.parse_keyword(Keyword::UNLOGGED);
+            let table = self.parse_keyword(Keyword::TABLE);
             let name = self.parse_object_name()?;
             Some(SelectInto {
                 temporary,
                 unlogged,
+                table,
                 name,
             })
         } else {
@@ -3267,7 +3280,7 @@ impl<'a> Parser<'a> {
             });
         }
 
-        let variable = self.parse_identifier()?;
+        let variable = self.parse_object_name()?;
         if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
             let mut values = vec![];
             loop {
@@ -3288,14 +3301,14 @@ impl<'a> Parser<'a> {
                     value: values,
                 });
             }
-        } else if variable.value == "CHARACTERISTICS" {
+        } else if variable.to_string() == "CHARACTERISTICS" {
             self.expect_keywords(&[Keyword::AS, Keyword::TRANSACTION])?;
             Ok(Statement::SetTransaction {
                 modes: self.parse_transaction_modes()?,
                 snapshot: None,
                 session: true,
             })
-        } else if variable.value == "TRANSACTION" && modifier.is_none() {
+        } else if variable.to_string() == "TRANSACTION" && modifier.is_none() {
             if self.parse_keyword(Keyword::SNAPSHOT) {
                 let snaphot_id = self.parse_value()?;
                 return Ok(Statement::SetTransaction {
@@ -3803,8 +3816,11 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let action = self.expect_one_of_keywords(&[Keyword::INTO, Keyword::OVERWRITE])?;
-        let overwrite = action == Keyword::OVERWRITE;
+
+        let action = self.parse_one_of_keywords(&[Keyword::INTO, Keyword::OVERWRITE]);
+        let into = action == Some(Keyword::INTO);
+        let overwrite = action == Some(Keyword::OVERWRITE);
+
         let local = self.parse_keyword(Keyword::LOCAL);
 
         if self.parse_keyword(Keyword::DIRECTORY) {
@@ -3855,6 +3871,7 @@ impl<'a> Parser<'a> {
             Ok(Statement::Insert {
                 or,
                 table_name,
+                into,
                 overwrite,
                 partitioned,
                 columns,
@@ -4267,21 +4284,20 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_merge(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::INTO)?;
+        let into = self.parse_keyword(Keyword::INTO);
 
         let table = self.parse_table_factor()?;
 
         self.expect_keyword(Keyword::USING)?;
-        let source = self.parse_query_body(0)?;
-        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        let source = self.parse_table_factor()?;
         self.expect_keyword(Keyword::ON)?;
         let on = self.parse_expr()?;
         let clauses = self.parse_merge_clauses()?;
 
         Ok(Statement::Merge {
+            into,
             table,
-            source: Box::new(source),
-            alias,
+            source,
             on: Box::new(on),
             clauses,
         })

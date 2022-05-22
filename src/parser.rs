@@ -166,6 +166,7 @@ impl<'a> Parser<'a> {
                 Keyword::MSCK => Ok(self.parse_msck()?),
                 Keyword::CREATE => Ok(self.parse_create()?),
                 Keyword::DROP => Ok(self.parse_drop()?),
+                Keyword::DISCARD => Ok(self.parse_discard()?),
                 Keyword::DELETE => Ok(self.parse_delete()?),
                 Keyword::INSERT => Ok(self.parse_insert()?),
                 Keyword::UPDATE => Ok(self.parse_update()?),
@@ -1784,6 +1785,24 @@ impl<'a> Parser<'a> {
             cascade,
             purge,
         })
+    }
+
+    pub fn parse_discard(&mut self) -> Result<Statement, ParserError> {
+        let object_type = if self.parse_keyword(Keyword::ALL) {
+            DiscardObject::ALL
+        } else if self.parse_keyword(Keyword::PLANS) {
+            DiscardObject::PLANS
+        } else if self.parse_keyword(Keyword::SEQUENCES) {
+            DiscardObject::SEQUENCES
+        } else if self.parse_keyword(Keyword::TEMP) || self.parse_keyword(Keyword::TEMPORARY) {
+            DiscardObject::TEMP
+        } else {
+            return self.expected(
+                "ALL, PLANS, SEQUENCES, TEMP or TEMPORARY after DISCARD",
+                self.peek_token(),
+            );
+        };
+        Ok(Statement::Discard { object_type })
     }
 
     pub fn parse_create_index(&mut self, unique: bool) -> Result<Statement, ParserError> {

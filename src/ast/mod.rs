@@ -357,9 +357,8 @@ pub enum Expr {
     Rollup(Vec<Vec<Expr>>),
     /// ROW / TUPLE a single value, such as `SELECT (1, 2)`
     Tuple(Vec<Expr>),
-    /// An array index expression e.g. `(ARRAY[1, 2])[1]` or
-    /// `(current_schemas(FALSE))[1]`
-    ArrayIndex { obj: Box<Expr>, indexs: Vec<Expr> },
+    /// An array index expression e.g. `(ARRAY[1, 2])[1]` or `(current_schemas(FALSE))[1]`
+    ArrayIndex { obj: Box<Expr>, indexes: Vec<Expr> },
     /// An array expression e.g. `ARRAY[1, 2]`
     Array(Array),
 }

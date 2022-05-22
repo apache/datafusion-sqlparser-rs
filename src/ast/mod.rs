@@ -232,10 +232,7 @@ pub enum Expr {
         right: Box<Expr>,
     },
     /// CompositeAccess (postgres) eg: SELECT (information_schema._pg_expandarray(array['i','i'])).n
-    CompositeAccess {
-        expr: Box<Expr>,
-        key: Ident,
-    },
+    CompositeAccess { expr: Box<Expr>, key: Ident },
     /// `IS NULL` operator
     IsNull(Box<Expr>),
     /// `IS NOT NULL` operator
@@ -280,10 +277,7 @@ pub enum Expr {
     /// ALL operation e.g. `1 ALL (1)` or `foo > ALL(bar)`, It will be wrapped in the right side of BinaryExpr
     AllOp(Box<Expr>),
     /// Unary operation e.g. `NOT foo`
-    UnaryOp {
-        op: UnaryOperator,
-        expr: Box<Expr>,
-    },
+    UnaryOp { op: UnaryOperator, expr: Box<Expr> },
     /// CAST an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
     Cast {
         expr: Box<Expr>,
@@ -301,10 +295,7 @@ pub enum Expr {
         expr: Box<Expr>,
     },
     /// POSITION(<expr> in <expr>)
-    Position {
-        expr: Box<Expr>,
-        r#in: Box<Expr>,
-    },
+    Position { expr: Box<Expr>, r#in: Box<Expr> },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     Substring {
         expr: Box<Expr>,
@@ -331,14 +322,12 @@ pub enum Expr {
     /// A constant of form `<data_type> 'value'`.
     /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
     /// as well as constants of other types (a non-standard PostgreSQL extension).
-    TypedString {
-        data_type: DataType,
-        value: String,
-    },
-    MapAccess {
-        column: Box<Expr>,
-        keys: Vec<Expr>,
-    },
+    TypedString { data_type: DataType, value: String },
+    /// Access a map-like object by field (e.g. `column['field']` or `column[4]`
+    /// Note that depending on the dialect, struct like accesses may be
+    /// parsed as [`ArrayIndex`] or [`MapAccess`]
+    /// <https://clickhouse.com/docs/en/sql-reference/data-types/map/>
+    MapAccess { column: Box<Expr>, keys: Vec<Expr> },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
@@ -369,10 +358,7 @@ pub enum Expr {
     /// ROW / TUPLE a single value, such as `SELECT (1, 2)`
     Tuple(Vec<Expr>),
     /// An array index expression e.g. `(ARRAY[1, 2])[1]` or `(current_schemas(FALSE))[1]`
-    ArrayIndex {
-        obj: Box<Expr>,
-        indexes: Vec<Expr>,
-    },
+    ArrayIndex { obj: Box<Expr>, indexes: Vec<Expr> },
     /// An array expression e.g. `ARRAY[1, 2]`
     Array(Array),
 }

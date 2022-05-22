@@ -4349,9 +4349,7 @@ mod tests {
 
         let sql = "SELECT * FROM user LIMIT ? OFFSET ?";
         let dialects = TestedDialects {
-            dialects: vec![
-                Box::new(MySqlDialect {}),
-            ],
+            dialects: vec![Box::new(MySqlDialect {})],
         };
         dialects.run_parser_method(sql, |parser| {
             let ast = parser.parse_query().unwrap();

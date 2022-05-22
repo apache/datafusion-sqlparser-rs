@@ -44,10 +44,12 @@ impl Dialect for RedshiftSqlDialect {
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {
-        PostgreSqlDialect {}.is_identifier_start(ch)
+        // Extends Postgres dialect with sharp
+        PostgreSqlDialect {}.is_identifier_start(ch) || ch == '#'
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        PostgreSqlDialect {}.is_identifier_part(ch)
+        // Extends Postgres dialect with sharp
+        PostgreSqlDialect {}.is_identifier_part(ch) || ch == '#'
     }
 }

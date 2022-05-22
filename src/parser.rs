@@ -1234,15 +1234,15 @@ impl<'a> Parser<'a> {
     pub fn parse_array_index(&mut self, expr: Expr) -> Result<Expr, ParserError> {
         let index = self.parse_expr()?;
         self.expect_token(&Token::RBracket)?;
-        let mut indexs: Vec<Expr> = vec![index];
+        let mut indexes: Vec<Expr> = vec![index];
         while self.consume_token(&Token::LBracket) {
             let index = self.parse_expr()?;
             self.expect_token(&Token::RBracket)?;
-            indexs.push(index);
+            indexes.push(index);
         }
         Ok(Expr::ArrayIndex {
             obj: Box::new(expr),
-            indexs,
+            indexes,
         })
     }
 
@@ -4288,8 +4288,7 @@ impl<'a> Parser<'a> {
         let table = self.parse_table_factor()?;
 
         self.expect_keyword(Keyword::USING)?;
-        let source = self.parse_query_body(0)?;
-        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        let source = self.parse_table_factor()?;
         self.expect_keyword(Keyword::ON)?;
         let on = self.parse_expr()?;
         let clauses = self.parse_merge_clauses()?;
@@ -4297,8 +4296,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Merge {
             into,
             table,
-            source: Box::new(source),
-            alias,
+            source,
             on: Box::new(on),
             clauses,
         })

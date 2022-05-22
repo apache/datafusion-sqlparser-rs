@@ -1173,7 +1173,7 @@ fn parse_array_index_expr() {
     assert_eq!(
         &Expr::ArrayIndex {
             obj: Box::new(Expr::Identifier(Ident::new("foo"))),
-            indexs: vec![num[0].clone()],
+            indexes: vec![num[0].clone()],
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -1183,7 +1183,7 @@ fn parse_array_index_expr() {
     assert_eq!(
         &Expr::ArrayIndex {
             obj: Box::new(Expr::Identifier(Ident::new("foo"))),
-            indexs: vec![num[0].clone(), num[0].clone()],
+            indexes: vec![num[0].clone(), num[0].clone()],
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -1193,7 +1193,7 @@ fn parse_array_index_expr() {
     assert_eq!(
         &Expr::ArrayIndex {
             obj: Box::new(Expr::Identifier(Ident::new("bar"))),
-            indexs: vec![
+            indexes: vec![
                 num[0].clone(),
                 Expr::Identifier(Ident {
                     value: "baz".to_string(),
@@ -1224,7 +1224,7 @@ fn parse_array_index_expr() {
                     None
                 )))))
             }))),
-            indexs: vec![num[1].clone(), num[2].clone()],
+            indexes: vec![num[1].clone(), num[2].clone()],
         },
         expr_from_projection(only(&select.projection)),
     );

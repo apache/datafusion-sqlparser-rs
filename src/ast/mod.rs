@@ -325,7 +325,7 @@ pub enum Expr {
     TypedString { data_type: DataType, value: String },
     /// Access a map-like object by field (e.g. `column['field']` or `column[4]`
     /// Note that depending on the dialect, struct like accesses may be
-    /// parsed as [`ArrayIndex`] or [`MapAccess`] 
+    /// parsed as [`ArrayIndex`] or [`MapAccess`]
     /// <https://clickhouse.com/docs/en/sql-reference/data-types/map/>
     MapAccess { column: Box<Expr>, keys: Vec<Expr> },
     /// Scalar function call e.g. `LEFT(foo, 5)`
@@ -357,7 +357,8 @@ pub enum Expr {
     Rollup(Vec<Vec<Expr>>),
     /// ROW / TUPLE a single value, such as `SELECT (1, 2)`
     Tuple(Vec<Expr>),
-    /// An array index expression e.g. `(ARRAY[1, 2])[1]` or `(current_schemas(FALSE))[1]`
+    /// An array index expression e.g. `(ARRAY[1, 2])[1]` or
+    /// `(current_schemas(FALSE))[1]`
     ArrayIndex { obj: Box<Expr>, indexs: Vec<Expr> },
     /// An array expression e.g. `ARRAY[1, 2]`
     Array(Array),
@@ -539,9 +540,9 @@ impl fmt::Display for Expr {
             Expr::Tuple(exprs) => {
                 write!(f, "({})", display_comma_separated(exprs))
             }
-            Expr::ArrayIndex { obj, indexs } => {
+            Expr::ArrayIndex { obj, indexes } => {
                 write!(f, "{}", obj)?;
-                for i in indexs {
+                for i in indexes {
                     write!(f, "[{}]", i)?;
                 }
                 Ok(())
@@ -1044,9 +1045,7 @@ pub enum Statement {
         // Specifies the table to merge
         table: TableFactor,
         // Specifies the table or subquery to join with the target table
-        source: Box<SetExpr>,
-        // Specifies alias to the table that is joined with target table
-        alias: Option<TableAlias>,
+        source: TableFactor,
         // Specifies the expression on which to join the target table and source
         on: Box<Expr>,
         // Specifies the actions to perform when values match or do not match.
@@ -1758,7 +1757,6 @@ impl fmt::Display for Statement {
                 into,
                 table,
                 source,
-                alias,
                 on,
                 clauses,
             } => {
@@ -1767,9 +1765,6 @@ impl fmt::Display for Statement {
                     "MERGE{int} {table} USING {source} ",
                     int = if *into { " INTO" } else { "" }
                 )?;
-                if let Some(a) = alias {
-                    write!(f, "as {} ", a)?;
-                };
                 write!(f, "ON {} ", on)?;
                 write!(f, "{}", display_separated(clauses, " "))
             }

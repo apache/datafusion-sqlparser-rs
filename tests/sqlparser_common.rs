@@ -23,7 +23,8 @@ mod test_utils;
 use matches::assert_matches;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
-    AnsiDialect, GenericDialect, MsSqlDialect, PostgreSqlDialect, SQLiteDialect, SnowflakeDialect,
+    AnsiDialect, BigQueryDialect, GenericDialect, MsSqlDialect, PostgreSqlDialect, SQLiteDialect,
+    SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
@@ -4353,15 +4354,14 @@ fn test_revoke() {
 
 #[test]
 fn parse_merge() {
-    let sql = "MERGE INTO s.bar AS dest USING (SELECT * FROM s.foo) as stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
-    let sql_no_into = "MERGE s.bar AS dest USING (SELECT * FROM s.foo) as stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
+    let sql = "MERGE INTO s.bar AS dest USING (SELECT * FROM s.foo) AS stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
+    let sql_no_into = "MERGE s.bar AS dest USING (SELECT * FROM s.foo) AS stg ON dest.D = stg.D AND dest.E = stg.E WHEN NOT MATCHED THEN INSERT (A, B, C) VALUES (stg.A, stg.B, stg.C) WHEN MATCHED AND dest.A = 'a' THEN UPDATE SET dest.F = stg.F, dest.G = stg.G WHEN MATCHED THEN DELETE";
     match (verified_stmt(sql), verified_stmt(sql_no_into)) {
         (
             Statement::Merge {
                 into,
                 table,
                 source,
-                alias,
                 on,
                 clauses,
             },
@@ -4369,7 +4369,6 @@ fn parse_merge() {
                 into: no_into,
                 table: table_no_into,
                 source: source_no_into,
-                alias: alias_no_into,
                 on: on_no_into,
                 clauses: clauses_no_into,
             },
@@ -4393,48 +4392,49 @@ fn parse_merge() {
 
             assert_eq!(
                 source,
-                Box::new(SetExpr::Query(Box::new(Query {
-                    with: None,
-                    body: SetExpr::Select(Box::new(Select {
-                        distinct: false,
-                        top: None,
-                        projection: vec![SelectItem::Wildcard],
-                        into: None,
-                        from: vec![TableWithJoins {
-                            relation: TableFactor::Table {
-                                name: ObjectName(vec![Ident::new("s"), Ident::new("foo")]),
-                                alias: None,
-                                args: vec![],
-                                with_hints: vec![],
-                            },
-                            joins: vec![]
-                        }],
-                        lateral_views: vec![],
-                        selection: None,
-                        group_by: vec![],
-                        cluster_by: vec![],
-                        distribute_by: vec![],
-                        sort_by: vec![],
-                        having: None,
-                        qualify: None
-                    })),
-                    order_by: vec![],
-                    limit: None,
-                    offset: None,
-                    fetch: None,
-                    lock: None
-                })))
+                TableFactor::Derived {
+                    lateral: false,
+                    subquery: Box::new(Query {
+                        with: None,
+                        body: SetExpr::Select(Box::new(Select {
+                            distinct: false,
+                            top: None,
+                            projection: vec![SelectItem::Wildcard],
+                            into: None,
+                            from: vec![TableWithJoins {
+                                relation: TableFactor::Table {
+                                    name: ObjectName(vec![Ident::new("s"), Ident::new("foo")]),
+                                    alias: None,
+                                    args: vec![],
+                                    with_hints: vec![]
+                                },
+                                joins: vec![]
+                            }],
+                            lateral_views: vec![],
+                            selection: None,
+                            group_by: vec![],
+                            cluster_by: vec![],
+                            distribute_by: vec![],
+                            sort_by: vec![],
+                            having: None,
+                            qualify: None,
+                        })),
+                        order_by: vec![],
+                        limit: None,
+                        offset: None,
+                        fetch: None,
+                        lock: None
+                    }),
+                    alias: Some(TableAlias {
+                        name: Ident {
+                            value: "stg".to_string(),
+                            quote_style: None
+                        },
+                        columns: vec![]
+                    })
+                }
             );
             assert_eq!(source, source_no_into);
-
-            assert_eq!(
-                alias,
-                Some(TableAlias {
-                    name: Ident::new("stg"),
-                    columns: vec![]
-                })
-            );
-            assert_eq!(alias, alias_no_into);
 
             assert_eq!(
                 on,
@@ -4516,6 +4516,18 @@ fn parse_merge() {
 }
 
 #[test]
+fn test_merge_into_using_table() {
+    let sql = "MERGE INTO target_table USING source_table \
+        ON target_table.id = source_table.oooid \
+        WHEN MATCHED THEN \
+            UPDATE SET target_table.description = source_table.description \
+        WHEN NOT MATCHED THEN \
+            INSERT (ID, description) VALUES (source_table.id, source_table.description)";
+
+    verified_stmt(sql);
+}
+
+#[test]
 fn test_lock() {
     let sql = "SELECT * FROM student WHERE id = '1' FOR UPDATE";
     let ast = verified_query(sql);
@@ -4545,6 +4557,7 @@ fn test_placeholder() {
             Box::new(PostgreSqlDialect {}),
             Box::new(MsSqlDialect {}),
             Box::new(AnsiDialect {}),
+            Box::new(BigQueryDialect {}),
             Box::new(SnowflakeDialect {}),
             // Note: `$` is the starting word for the HiveDialect identifier
             // Box::new(sqlparser::dialect::HiveDialect {}),

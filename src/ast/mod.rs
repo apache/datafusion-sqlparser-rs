@@ -371,7 +371,7 @@ pub enum Expr {
     /// An array index expression e.g. `(ARRAY[1, 2])[1]` or `(current_schemas(FALSE))[1]`
     ArrayIndex {
         obj: Box<Expr>,
-        indexs: Vec<Expr>,
+        indexes: Vec<Expr>,
     },
     /// An array expression e.g. `ARRAY[1, 2]`
     Array(Array),
@@ -553,9 +553,9 @@ impl fmt::Display for Expr {
             Expr::Tuple(exprs) => {
                 write!(f, "({})", display_comma_separated(exprs))
             }
-            Expr::ArrayIndex { obj, indexs } => {
+            Expr::ArrayIndex { obj, indexes } => {
                 write!(f, "{}", obj)?;
-                for i in indexs {
+                for i in indexes {
                     write!(f, "[{}]", i)?;
                 }
                 Ok(())

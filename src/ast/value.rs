@@ -30,7 +30,8 @@ pub enum Value {
     Number(BigDecimal, bool),
     /// 'string value'
     SingleQuotedString(String),
-    /// e'string value'
+    /// e'string value' (postgres extension)
+    /// <https://www.postgresql.org/docs/8.3/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS
     EscapedStringLiteral(String),
     /// N'string value'
     NationalStringLiteral(String),

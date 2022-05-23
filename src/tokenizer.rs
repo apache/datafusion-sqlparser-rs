@@ -404,7 +404,7 @@ impl<'a> Tokenizer<'a> {
                             Ok(Some(Token::EscapedStringLiteral(s)))
                         }
                         _ => {
-                            // regular identifier starting with an "X"
+                            // regular identifier starting with an "E" or "e"
                             let s = self.tokenize_word(x, chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }

@@ -174,13 +174,16 @@ impl fmt::Display for DateTimeField {
     }
 }
 
-pub struct EscapeSingleQuoteString<'a>(&'a str);
+pub struct EscapeQuotedString<'a> {
+    string: &'a str,
+    quote: char,
+}
 
-impl<'a> fmt::Display for EscapeSingleQuoteString<'a> {
+impl<'a> fmt::Display for EscapeQuotedString<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for c in self.0.chars() {
-            if c == '\'' {
-                write!(f, "\'\'")?;
+        for c in self.string.chars() {
+            if c == self.quote {
+                write!(f, "{q}{q}", q = self.quote)?;
             } else {
                 write!(f, "{}", c)?;
             }
@@ -189,8 +192,12 @@ impl<'a> fmt::Display for EscapeSingleQuoteString<'a> {
     }
 }
 
-pub fn escape_single_quote_string(s: &str) -> EscapeSingleQuoteString<'_> {
-    EscapeSingleQuoteString(s)
+pub fn escape_quoted_string(string: &str, quote: char) -> EscapeQuotedString<'_> {
+    EscapeQuotedString { string, quote }
+}
+
+pub fn escape_single_quote_string(s: &str) -> EscapeQuotedString<'_> {
+    escape_quoted_string(s, '\'')
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

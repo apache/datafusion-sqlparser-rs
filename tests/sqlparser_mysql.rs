@@ -293,7 +293,7 @@ fn parse_quote_identifiers() {
 
 #[test]
 fn parse_quote_identifiers_2() {
-    let sql = "SELECT `quoted `` identifier`";
+    let sql = "SELECT ```quoted `` identifier```";
     assert_eq!(
         mysql().verified_stmt(sql),
         Statement::Query(Box::new(Query {
@@ -302,7 +302,7 @@ fn parse_quote_identifiers_2() {
                 distinct: false,
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "quoted ` identifier".into(),
+                    value: "`quoted ` identifier`".into(),
                     quote_style: Some('`'),
                 }))],
                 into: None,

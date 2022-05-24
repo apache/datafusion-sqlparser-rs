@@ -1470,9 +1470,10 @@ fn pg_and_generic() -> TestedDialects {
 
 #[test]
 fn parse_escaped_literal_string() {
-    let sql = r#"SELECT E's1 \n s1', E's2 \\n s2', E's3 \\\n s3', E's4 \\\\n s4', E'\''"#;
+    let sql =
+        r#"SELECT E's1 \n s1', E's2 \\n s2', E's3 \\\n s3', E's4 \\\\n s4', E'\'', E'foo \\'"#;
     let select = pg().verified_only_select(sql);
-    assert_eq!(5, select.projection.len());
+    assert_eq!(6, select.projection.len());
     assert_eq!(
         &Expr::Value(Value::EscapedStringLiteral("s1 \n s1".to_string())),
         expr_from_projection(&select.projection[0])
@@ -1492,5 +1493,9 @@ fn parse_escaped_literal_string() {
     assert_eq!(
         &Expr::Value(Value::EscapedStringLiteral("'".to_string())),
         expr_from_projection(&select.projection[4])
+    );
+    assert_eq!(
+        &Expr::Value(Value::EscapedStringLiteral("foo \\".to_string())),
+        expr_from_projection(&select.projection[5])
     );
 }

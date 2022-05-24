@@ -413,7 +413,7 @@ fn parse_update_set_from() {
                 relation: TableFactor::Table {
                     name: ObjectName(vec![Ident::new("t1")]),
                     alias: None,
-                    args: vec![],
+                    args: None,
                     with_hints: vec![],
                 },
                 joins: vec![],
@@ -439,7 +439,7 @@ fn parse_update_set_from() {
                                 relation: TableFactor::Table {
                                     name: ObjectName(vec![Ident::new("t1")]),
                                     alias: None,
-                                    args: vec![],
+                                    args: None,
                                     with_hints: vec![],
                                 },
                                 joins: vec![],

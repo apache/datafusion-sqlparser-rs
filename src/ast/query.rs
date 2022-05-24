@@ -337,7 +337,11 @@ pub enum TableFactor {
         /// Arguments of a table-valued function, as supported by Postgres
         /// and MSSQL. Note that deprecated MSSQL `FROM foo (NOLOCK)` syntax
         /// will also be parsed as `args`.
-        args: Vec<FunctionArg>,
+        ///
+        /// This field's value is `Some(v)`, where `v` is a (possibly empty)
+        /// vector of arguments, in the case of a table-valued function call,
+        /// whereas it's `None` in the case of a regular table name.
+        args: Option<Vec<FunctionArg>>,
         /// MSSQL-specific `WITH (...)` hints such as NOLOCK.
         with_hints: Vec<Expr>,
     },
@@ -370,7 +374,7 @@ impl fmt::Display for TableFactor {
                 with_hints,
             } => {
                 write!(f, "{}", name)?;
-                if !args.is_empty() {
+                if let Some(args) = args {
                     write!(f, "({})", display_comma_separated(args))?;
                 }
                 if let Some(alias) = alias {

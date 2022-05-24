@@ -200,7 +200,7 @@ fn parse_update_with_table_alias() {
                             name: Ident::new("u"),
                             columns: vec![]
                         }),
-                        args: vec![],
+                        args: None,
                         with_hints: vec![],
                     },
                     joins: vec![]
@@ -2793,7 +2793,7 @@ fn parse_delimited_identifiers() {
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
-            assert!(args.is_empty());
+            assert!(args.is_none());
             assert!(with_hints.is_empty());
         }
         _ => panic!("Expecting TableFactor::Table"),
@@ -2913,6 +2913,12 @@ fn parse_from_advanced() {
 }
 
 #[test]
+fn parse_nullary_table_valued_function() {
+    let sql = "SELECT * FROM fn()";
+    let _select = verified_only_select(sql);
+}
+
+#[test]
 fn parse_implicit_join() {
     let sql = "SELECT * FROM t1, t2";
     let select = verified_only_select(sql);
@@ -2922,7 +2928,7 @@ fn parse_implicit_join() {
                 relation: TableFactor::Table {
                     name: ObjectName(vec!["t1".into()]),
                     alias: None,
-                    args: vec![],
+                    args: None,
                     with_hints: vec![],
                 },
                 joins: vec![],
@@ -2931,7 +2937,7 @@ fn parse_implicit_join() {
                 relation: TableFactor::Table {
                     name: ObjectName(vec!["t2".into()]),
                     alias: None,
-                    args: vec![],
+                    args: None,
                     with_hints: vec![],
                 },
                 joins: vec![],
@@ -2948,14 +2954,14 @@ fn parse_implicit_join() {
                 relation: TableFactor::Table {
                     name: ObjectName(vec!["t1a".into()]),
                     alias: None,
-                    args: vec![],
+                    args: None,
                     with_hints: vec![],
                 },
                 joins: vec![Join {
                     relation: TableFactor::Table {
                         name: ObjectName(vec!["t1b".into()]),
                         alias: None,
-                        args: vec![],
+                        args: None,
                         with_hints: vec![],
                     },
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
@@ -2965,14 +2971,14 @@ fn parse_implicit_join() {
                 relation: TableFactor::Table {
                     name: ObjectName(vec!["t2a".into()]),
                     alias: None,
-                    args: vec![],
+                    args: None,
                     with_hints: vec![],
                 },
                 joins: vec![Join {
                     relation: TableFactor::Table {
                         name: ObjectName(vec!["t2b".into()]),
                         alias: None,
-                        args: vec![],
+                        args: None,
                         with_hints: vec![],
                     },
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
@@ -2992,7 +2998,7 @@ fn parse_cross_join() {
             relation: TableFactor::Table {
                 name: ObjectName(vec![Ident::new("t2")]),
                 alias: None,
-                args: vec![],
+                args: None,
                 with_hints: vec![],
             },
             join_operator: JoinOperator::CrossJoin
@@ -3012,7 +3018,7 @@ fn parse_joins_on() {
             relation: TableFactor::Table {
                 name: ObjectName(vec![Ident::new(relation.into())]),
                 alias,
-                args: vec![],
+                args: None,
                 with_hints: vec![],
             },
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
@@ -3065,7 +3071,7 @@ fn parse_joins_using() {
             relation: TableFactor::Table {
                 name: ObjectName(vec![Ident::new(relation.into())]),
                 alias,
-                args: vec![],
+                args: None,
                 with_hints: vec![],
             },
             join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
@@ -3110,7 +3116,7 @@ fn parse_natural_join() {
             relation: TableFactor::Table {
                 name: ObjectName(vec![Ident::new("t2")]),
                 alias: None,
-                args: vec![],
+                args: None,
                 with_hints: vec![],
             },
             join_operator: f(JoinConstraint::Natural),
@@ -3348,7 +3354,7 @@ fn parse_derived_tables() {
                 relation: TableFactor::Table {
                     name: ObjectName(vec!["t2".into()]),
                     alias: None,
-                    args: vec![],
+                    args: None,
                     with_hints: vec![],
                 },
                 join_operator: JoinOperator::Inner(JoinConstraint::Natural),
@@ -4431,7 +4437,7 @@ fn parse_merge() {
                         name: Ident::new("dest"),
                         columns: vec![]
                     }),
-                    args: vec![],
+                    args: None,
                     with_hints: vec![]
                 }
             );
@@ -4452,7 +4458,7 @@ fn parse_merge() {
                                 relation: TableFactor::Table {
                                     name: ObjectName(vec![Ident::new("s"), Ident::new("foo")]),
                                     alias: None,
-                                    args: vec![],
+                                    args: None,
                                     with_hints: vec![]
                                 },
                                 joins: vec![]

@@ -201,19 +201,13 @@ pub struct EscapeEscapedStringLiteral<'a>(&'a str);
 
 impl<'a> fmt::Display for EscapeEscapedStringLiteral<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut is_escaped = true;
-
         for c in self.0.chars() {
             match c {
                 '\'' => {
                     write!(f, r#"\'"#)?;
                 }
                 '\\' => {
-                    if is_escaped {
-                        write!(f, r#"\\"#)?;
-                    } else {
-                        is_escaped = true;
-                    }
+                    write!(f, r#"\\"#)?;
                 }
                 '\n' => {
                     write!(f, r#"\n"#)?;

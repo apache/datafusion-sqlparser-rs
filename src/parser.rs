@@ -496,7 +496,8 @@ impl<'a> Parser<'a> {
                     expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
                 })
             }
-            Token::EscapedStringLiteral(_) if dialect_of!(self is PostgreSqlDialect) => {
+            Token::EscapedStringLiteral(_) if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
+            {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
@@ -2602,7 +2603,9 @@ impl<'a> Parser<'a> {
         match self.next_token() {
             Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => Ok(value),
             Token::SingleQuotedString(s) => Ok(s),
-            Token::EscapedStringLiteral(s) if dialect_of!(self is PostgreSqlDialect) => Ok(s),
+            Token::EscapedStringLiteral(s) if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
+                Ok(s)
+            }
             unexpected => self.expected("literal string", unexpected),
         }
     }

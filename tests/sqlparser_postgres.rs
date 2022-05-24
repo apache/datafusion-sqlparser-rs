@@ -1472,7 +1472,7 @@ fn pg_and_generic() -> TestedDialects {
 fn parse_escaped_literal_string() {
     let sql =
         r#"SELECT E's1 \n s1', E's2 \\n s2', E's3 \\\n s3', E's4 \\\\n s4', E'\'', E'foo \\'"#;
-    let select = pg().verified_only_select(sql);
+    let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(6, select.projection.len());
     assert_eq!(
         &Expr::Value(Value::EscapedStringLiteral("s1 \n s1".to_string())),
@@ -1501,7 +1501,10 @@ fn parse_escaped_literal_string() {
 
     let sql = r#"SELECT E'\'"#;
     assert_eq!(
-        pg().parse_sql_statements(sql).unwrap_err().to_string(),
+        pg_and_generic()
+            .parse_sql_statements(sql)
+            .unwrap_err()
+            .to_string(),
         "sql parser error: Unterminated encoded string literal at Line: 1, Column 8"
     );
 }

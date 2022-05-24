@@ -4575,6 +4575,23 @@ fn test_merge_into_using_table() {
 }
 
 #[test]
+fn test_merge_with_delimiter() {
+    let sql = "MERGE INTO target_table USING source_table \
+    ON target_table.id = source_table.oooid \
+    WHEN MATCHED THEN \
+        UPDATE SET target_table.description = source_table.description \
+    WHEN NOT MATCHED THEN \
+        INSERT (ID, description) VALUES (source_table.id, source_table.description);";
+
+    match parse_sql_statements(sql) {
+        Ok(_) => {
+            assert!(true);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn test_lock() {
     let sql = "SELECT * FROM student WHERE id = '1' FOR UPDATE";
     let ast = verified_query(sql);

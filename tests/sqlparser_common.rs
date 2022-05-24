@@ -2779,8 +2779,11 @@ fn parse_table_function() {
 
 #[test]
 fn parse_unnest() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(BigQueryDialect {}), Box::new(GenericDialect {})],
+    };
     let sql = "SELECT * FROM UNNEST(expr) AS numbers WITH OFFSET";
-    let select = verified_only_select(sql);
+    let select = dialects.verified_only_select(sql);
     assert_eq!(
         select.from,
         vec![TableWithJoins {

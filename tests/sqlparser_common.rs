@@ -4584,9 +4584,7 @@ fn test_merge_with_delimiter() {
         INSERT (ID, description) VALUES (source_table.id, source_table.description);";
 
     match parse_sql_statements(sql) {
-        Ok(_) => {
-            assert!(true);
-        }
+        Ok(_) => {}
         _ => unreachable!(),
     }
 }

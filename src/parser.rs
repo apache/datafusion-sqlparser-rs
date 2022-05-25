@@ -525,17 +525,18 @@ impl<'a> Parser<'a> {
                     };
                 self.expect_token(&Token::RParen)?;
                 if !self.consume_token(&Token::Period) {
-                    return Ok(expr);
+                    Ok(expr)
+                } else {
+                    let tok = self.next_token();
+                    let key = match tok {
+                        Token::Word(word) => word.to_ident(),
+                        _ => return parser_err!(format!("Expected identifier, found: {}", tok)),
+                    };
+                    Ok(Expr::CompositeAccess {
+                        expr: Box::new(expr),
+                        key,
+                    })
                 }
-                let tok = self.next_token();
-                let key = match tok {
-                    Token::Word(word) => word.to_ident(),
-                    _ => return parser_err!(format!("Expected identifier, found: {}", tok)),
-                };
-                Ok(Expr::CompositeAccess {
-                    expr: Box::new(expr),
-                    key,
-                })
             }
             Token::Placeholder(_) => {
                 self.prev_token();

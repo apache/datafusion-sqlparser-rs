@@ -562,6 +562,15 @@ fn parse_collate() {
 }
 
 #[test]
+fn parse_collate_after_parens() {
+    let sql = "SELECT (name) COLLATE \"de_DE\" FROM customer";
+    assert_matches!(
+        only(&all_dialects().verified_only_select(sql).projection),
+        SelectItem::UnnamedExpr(Expr::Collate { .. })
+    );
+}
+
+#[test]
 fn parse_select_string_predicate() {
     let sql = "SELECT id, fname, lname FROM customer \
                WHERE salary <> 'Not Provided' AND salary <> ''";

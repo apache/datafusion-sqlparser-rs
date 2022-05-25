@@ -895,6 +895,29 @@ pub enum Statement {
         /// deleted along with the dropped table
         purge: bool,
     },
+    /// DECLARE - Declaring Cursor Variables
+    ///
+    /// Note: this is a PostgreSQL-specific statement,
+    /// but may also compatible with other SQL.
+    Declare {
+        /// Cursor name
+        name: Ident,
+        /// Causes the cursor to return data in binary rather than in text format.
+        binary: bool,
+        /// None = Not specified
+        /// Some(true) = INSENSITIVE
+        /// Some(false) = ASENSITIVE
+        sensitive: Option<bool>,
+        /// None = Not specified
+        /// Some(true) = SCROLL
+        /// Some(false) = NO SCROLL
+        scroll: Option<bool>,
+        /// None = Not specified
+        /// Some(true) = WITH HOLD, specifies that the cursor can continue to be used after the transaction that created it successfully commits
+        /// Some(false) = WITHOUT HOLD, specifies that the cursor cannot be used outside of the transaction that created it
+        hold: Option<bool>,
+        query: Box<Query>,
+    },
     /// FETCH - retrieve rows from a query using a cursor
     ///
     /// Note: this is a PostgreSQL-specific statement,
@@ -1125,6 +1148,48 @@ impl fmt::Display for Statement {
                 write!(f, "{}", statement)
             }
             Statement::Query(s) => write!(f, "{}", s),
+            Statement::Declare {
+                name,
+                binary,
+                sensitive,
+                scroll,
+                hold,
+                query,
+            } => {
+                write!(f, "DECLARE {} ", name)?;
+
+                if *binary {
+                    write!(f, "BINARY ")?;
+                }
+
+                if let Some(sensitive) = sensitive {
+                    if *sensitive {
+                        write!(f, "INSENSITIVE ")?;
+                    } else {
+                        write!(f, "ASENSITIVE ")?;
+                    }
+                }
+
+                if let Some(scroll) = scroll {
+                    if *scroll {
+                        write!(f, "SCROLL ")?;
+                    } else {
+                        write!(f, "NO SCROLL ")?;
+                    }
+                }
+
+                write!(f, "CURSOR ")?;
+
+                if let Some(hold) = hold {
+                    if *hold {
+                        write!(f, "WITH HOLD ")?;
+                    } else {
+                        write!(f, "WITHOUT HOLD ")?;
+                    }
+                }
+
+                write!(f, "FOR {}", query)
+            }
             Statement::Fetch {
                 name,
                 direction,

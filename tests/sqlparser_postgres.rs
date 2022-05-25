@@ -1515,6 +1515,23 @@ fn parse_escaped_literal_string() {
 }
 
 #[test]
+fn parse_declare() {
+    pg_and_generic()
+        .verified_stmt("DECLARE \"SQL_CUR0x7fa44801bc00\" CURSOR WITH HOLD FOR SELECT 1");
+    pg_and_generic()
+        .verified_stmt("DECLARE \"SQL_CUR0x7fa44801bc00\" CURSOR WITHOUT HOLD FOR SELECT 1");
+    pg_and_generic().verified_stmt("DECLARE \"SQL_CUR0x7fa44801bc00\" BINARY CURSOR FOR SELECT 1");
+    pg_and_generic()
+        .verified_stmt("DECLARE \"SQL_CUR0x7fa44801bc00\" ASENSITIVE CURSOR FOR SELECT 1");
+    pg_and_generic()
+        .verified_stmt("DECLARE \"SQL_CUR0x7fa44801bc00\" INSENSITIVE CURSOR FOR SELECT 1");
+    pg_and_generic().verified_stmt("DECLARE \"SQL_CUR0x7fa44801bc00\" SCROLL CURSOR FOR SELECT 1");
+    pg_and_generic()
+        .verified_stmt("DECLARE \"SQL_CUR0x7fa44801bc00\" NO SCROLL CURSOR FOR SELECT 1");
+    pg_and_generic().verified_stmt("DECLARE \"SQL_CUR0x7fa44801bc00\" BINARY INSENSITIVE SCROLL CURSOR WITH HOLD FOR SELECT * FROM table_name LIMIT 2222");
+}
+
+#[test]
 fn parse_fetch() {
     pg_and_generic().verified_stmt("FETCH 2048 IN \"SQL_CUR0x7fa44801bc00\"");
     pg_and_generic().verified_stmt("FETCH 2048 IN \"SQL_CUR0x7fa44801bc00\" INTO \"new_table\"");

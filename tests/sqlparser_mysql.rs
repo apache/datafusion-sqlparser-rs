@@ -626,7 +626,7 @@ fn parse_update_with_joins() {
                             name: Ident::new("o"),
                             columns: vec![]
                         }),
-                        args: vec![],
+                        args: None,
                         with_hints: vec![],
                     },
                     joins: vec![Join {
@@ -636,7 +636,7 @@ fn parse_update_with_joins() {
                                 name: Ident::new("c"),
                                 columns: vec![]
                             }),
-                            args: vec![],
+                            args: None,
                             with_hints: vec![],
                         },
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
@@ -743,7 +743,7 @@ fn parse_substring_in_select() {
                                     quote_style: None
                                 }]),
                                 alias: None,
-                                args: vec![],
+                                args: None,
                                 with_hints: vec![]
                             },
                             joins: vec![]

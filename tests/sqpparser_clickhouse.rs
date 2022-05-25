@@ -58,7 +58,7 @@ fn parse_map_access_expr() {
                 relation: Table {
                     name: ObjectName(vec![Ident::new("foos")]),
                     alias: None,
-                    args: vec![],
+                    args: None,
                     with_hints: vec![],
                 },
                 joins: vec![]

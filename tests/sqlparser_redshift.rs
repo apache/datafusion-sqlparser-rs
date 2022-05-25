@@ -43,7 +43,7 @@ fn test_square_brackets_over_db_schema_table_name() {
                     }
                 ]),
                 alias: None,
-                args: vec![],
+                args: None,
                 with_hints: vec![],
             },
             joins: vec![],
@@ -87,7 +87,7 @@ fn test_double_quotes_over_db_schema_table_name() {
                     }
                 ]),
                 alias: None,
-                args: vec![],
+                args: None,
                 with_hints: vec![],
             },
             joins: vec![],

@@ -3623,9 +3623,9 @@ impl<'a> Parser<'a> {
             let name = self.parse_object_name()?;
             // Postgres, MSSQL: table-valued functions:
             let args = if self.consume_token(&Token::LParen) {
-                self.parse_optional_args()?
+                Some(self.parse_optional_args()?)
             } else {
-                vec![]
+                None
             };
             let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
             // MSSQL-specific table hints:

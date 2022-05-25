@@ -29,7 +29,7 @@ fn parse_table_identifiers() {
                 relation: TableFactor::Table {
                     name: ObjectName(expected),
                     alias: None,
-                    args: vec![],
+                    args: None,
                     with_hints: vec![],
                 },
                 joins: vec![]

@@ -177,7 +177,7 @@ pub fn table(name: impl Into<String>) -> TableFactor {
     TableFactor::Table {
         name: ObjectName(vec![Ident::new(name.into())]),
         alias: None,
-        args: vec![],
+        args: None,
         with_hints: vec![],
     }
 }

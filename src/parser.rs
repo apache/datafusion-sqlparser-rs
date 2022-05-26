@@ -2533,6 +2533,30 @@ impl<'a> Parser<'a> {
         Ok(ObjectName(idents))
     }
 
+    /// Parse a possible time travel point, e.g.
+    ///   `select * from t at(snapshot => xxxxxxxx);`
+    pub fn parse_at(&mut self) -> Result<Option<Instant>, ParserError> {
+        if self.parse_keyword(Keyword::AT) {
+            self.expect_token(&Token::LParen)?;
+
+            // only supports instant specified by snapshot id currently
+            self.expect_keyword(Keyword::SNAPSHOT)?;
+            self.expect_token(&Token::RArrow)?;
+            let snapshot = match self.next_token() {
+                Token::Word(w) => Ok(w.value),
+                Token::SingleQuotedString(s) => Ok(s),
+                Token::DoubleQuotedString(s) => Ok(s),
+                Token::BackQuotedString(s) => Ok(s),
+                unexpected => self.expected("snapshot id", unexpected),
+            }?;
+
+            self.expect_token(&Token::RParen)?;
+            Ok(Some(Instant::SnapshotID(snapshot)))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Parse identifiers strictly i.e. don't parse keywords
     pub fn parse_identifiers_non_keywords(&mut self) -> Result<Vec<Ident>, ParserError> {
         let mut idents = vec![];
@@ -3273,6 +3297,7 @@ impl<'a> Parser<'a> {
             }
         } else {
             let name = self.parse_object_name()?;
+            let instant: Option<Instant> = self.parse_at()?;
             // Postgres, MSSQL: table-valued functions:
             let args = if self.consume_token(&Token::LParen) {
                 self.parse_optional_args()?
@@ -3296,6 +3321,7 @@ impl<'a> Parser<'a> {
                 alias,
                 args,
                 with_hints,
+                instant,
             })
         }
     }

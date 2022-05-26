@@ -318,6 +318,12 @@ impl fmt::Display for TableWithJoins {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Instant {
+    SnapshotID(String),
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -331,6 +337,9 @@ pub enum TableFactor {
         args: Vec<FunctionArg>,
         /// MSSQL-specific `WITH (...)` hints such as NOLOCK.
         with_hints: Vec<Expr>,
+
+        // Instant of table history
+        instant: Option<Instant>,
     },
     Derived {
         lateral: bool,
@@ -359,6 +368,7 @@ impl fmt::Display for TableFactor {
                 alias,
                 args,
                 with_hints,
+                instant,
             } => {
                 write!(f, "{}", name)?;
                 if !args.is_empty() {
@@ -369,6 +379,12 @@ impl fmt::Display for TableFactor {
                 }
                 if !with_hints.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_hints))?;
+                }
+
+                if let Some(v) = instant {
+                    match v {
+                        Instant::SnapshotID(id) => write!(f, " at (snapshot -> {})", id)?,
+                    }
                 }
                 Ok(())
             }

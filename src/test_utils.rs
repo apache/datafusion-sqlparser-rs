@@ -178,6 +178,7 @@ pub fn table(name: impl Into<String>) -> TableFactor {
         alias: None,
         args: vec![],
         with_hints: vec![],
+        instant: None,
     }
 }
 

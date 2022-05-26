@@ -1438,7 +1438,12 @@ fn parse_comments() {
 
 #[test]
 fn parse_quoted_identifier() {
-    pg_and_generic().verified_stmt(r#"SELECT """quoted "" ident""""#);
+    pg_and_generic().verified_stmt(r#"SELECT "quoted "" ident""#);
+}
+
+#[test]
+fn parse_quoted_identifier_2() {
+    pg_and_generic().verified_stmt(r#"SELECT """quoted ident""""#);
 }
 
 #[test]

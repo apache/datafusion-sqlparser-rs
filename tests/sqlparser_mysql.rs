@@ -293,7 +293,7 @@ fn parse_quote_identifiers() {
 
 #[test]
 fn parse_quote_identifiers_2() {
-    let sql = "SELECT ```quoted `` identifier```";
+    let sql = "SELECT `quoted `` identifier`";
     assert_eq!(
         mysql().verified_stmt(sql),
         Statement::Query(Box::new(Query {
@@ -302,7 +302,41 @@ fn parse_quote_identifiers_2() {
                 distinct: false,
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "`quoted ` identifier`".into(),
+                    value: "quoted ` identifier".into(),
+                    quote_style: Some('`'),
+                }))],
+                into: None,
+                from: vec![],
+                lateral_views: vec![],
+                selection: None,
+                group_by: vec![],
+                cluster_by: vec![],
+                distribute_by: vec![],
+                sort_by: vec![],
+                having: None,
+                qualify: None
+            })),
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            fetch: None,
+            lock: None,
+        }))
+    );
+}
+
+#[test]
+fn parse_quote_identifiers_3() {
+    let sql = "SELECT ```quoted identifier```";
+    assert_eq!(
+        mysql().verified_stmt(sql),
+        Statement::Query(Box::new(Query {
+            with: None,
+            body: SetExpr::Select(Box::new(Select {
+                distinct: false,
+                top: None,
+                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
+                    value: "`quoted identifier`".into(),
                     quote_style: Some('`'),
                 }))],
                 into: None,

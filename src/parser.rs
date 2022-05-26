@@ -3609,32 +3609,29 @@ impl<'a> Parser<'a> {
                 // appearing alone in parentheses (e.g. `FROM (mytable)`)
                 self.expected("joined table", self.peek_token())
             }
-        } else if dialect_of!(self is BigQueryDialect | GenericDialect) {
-            if self.parse_keyword(Keyword::UNNEST) {
-                self.expect_token(&Token::LParen)?;
-                let expr = self.parse_expr()?;
-                self.expect_token(&Token::RParen)?;
+        } else if dialect_of!(self is BigQueryDialect | GenericDialect)
+            && self.parse_keyword(Keyword::UNNEST)
+        {
+            self.expect_token(&Token::LParen)?;
+            let expr = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
 
-                let alias =
-                    match self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS) {
-                        Ok(Some(alias)) => Some(alias),
-                        Ok(None) => None,
-                        Err(e) => return Err(e),
-                    };
+            let alias = match self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS) {
+                Ok(Some(alias)) => Some(alias),
+                Ok(None) => None,
+                Err(e) => return Err(e),
+            };
 
-                let with_offset = match self.expect_keywords(&[Keyword::WITH, Keyword::OFFSET]) {
-                    Ok(()) => true,
-                    Err(_) => false,
-                };
+            let with_offset = match self.expect_keywords(&[Keyword::WITH, Keyword::OFFSET]) {
+                Ok(()) => true,
+                Err(_) => false,
+            };
 
-                Ok(TableFactor::UNNEST {
-                    alias,
-                    array_expr: Box::new(expr),
-                    with_offset,
-                })
-            } else {
-                self.expected("UNNEST", self.peek_token())
-            }
+            Ok(TableFactor::UNNEST {
+                alias,
+                array_expr: Box::new(expr),
+                with_offset,
+            })
         } else {
             let name = self.parse_object_name()?;
             // Postgres, MSSQL: table-valued functions:

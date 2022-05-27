@@ -355,6 +355,19 @@ pub enum TableFactor {
         expr: Expr,
         alias: Option<TableAlias>,
     },
+    /// SELECT * FROM UNNEST ([10,20,30]) as numbers WITH OFFSET;
+    /// +---------+--------+
+    /// | numbers | offset |
+    /// +---------+--------+
+    /// | 10      | 0      |
+    /// | 20      | 1      |
+    /// | 30      | 2      |
+    /// +---------+--------+
+    UNNEST {
+        alias: Option<TableAlias>,
+        array_expr: Box<Expr>,
+        with_offset: bool,
+    },
     /// Represents a parenthesized table factor. The SQL spec only allows a
     /// join expression (`(foo <JOIN> bar [ <JOIN> baz ... ])`) to be nested,
     /// possibly several times.
@@ -403,6 +416,20 @@ impl fmt::Display for TableFactor {
                 write!(f, "TABLE({})", expr)?;
                 if let Some(alias) = alias {
                     write!(f, " AS {}", alias)?;
+                }
+                Ok(())
+            }
+            TableFactor::UNNEST {
+                alias,
+                array_expr,
+                with_offset,
+            } => {
+                write!(f, "UNNEST({})", array_expr)?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {}", alias)?;
+                }
+                if *with_offset {
+                    write!(f, " WITH OFFSET")?;
                 }
                 Ok(())
             }

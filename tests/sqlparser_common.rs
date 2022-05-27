@@ -2787,6 +2787,84 @@ fn parse_table_function() {
 }
 
 #[test]
+fn parse_unnest() {
+    fn chk(alias: bool, with_offset: bool, dialects: &TestedDialects, want: Vec<TableWithJoins>) {
+        let sql = &format!(
+            "SELECT * FROM UNNEST(expr){}{}",
+            if alias { " AS numbers" } else { "" },
+            if with_offset { " WITH OFFSET" } else { "" },
+        );
+        let select = dialects.verified_only_select(sql);
+        assert_eq!(select.from, want);
+    }
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(BigQueryDialect {}), Box::new(GenericDialect {})],
+    };
+    // 1. both Alias and WITH OFFSET clauses.
+    chk(
+        true,
+        true,
+        &dialects,
+        vec![TableWithJoins {
+            relation: TableFactor::UNNEST {
+                alias: Some(TableAlias {
+                    name: Ident::new("numbers"),
+                    columns: vec![],
+                }),
+                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                with_offset: true,
+            },
+            joins: vec![],
+        }],
+    );
+    // 2. neither Alias nor WITH OFFSET clause.
+    chk(
+        false,
+        false,
+        &dialects,
+        vec![TableWithJoins {
+            relation: TableFactor::UNNEST {
+                alias: None,
+                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                with_offset: false,
+            },
+            joins: vec![],
+        }],
+    );
+    // 3. Alias but no WITH OFFSET clause.
+    chk(
+        false,
+        true,
+        &dialects,
+        vec![TableWithJoins {
+            relation: TableFactor::UNNEST {
+                alias: None,
+                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                with_offset: true,
+            },
+            joins: vec![],
+        }],
+    );
+    // 4. WITH OFFSET but no Alias.
+    chk(
+        true,
+        false,
+        &dialects,
+        vec![TableWithJoins {
+            relation: TableFactor::UNNEST {
+                alias: Some(TableAlias {
+                    name: Ident::new("numbers"),
+                    columns: vec![],
+                }),
+                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                with_offset: false,
+            },
+            joins: vec![],
+        }],
+    );
+}
+
+#[test]
 fn parse_delimited_identifiers() {
     // check that quoted identifiers in any position remain quoted after serialization
     let select = verified_only_select(

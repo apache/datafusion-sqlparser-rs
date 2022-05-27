@@ -3242,6 +3242,7 @@ impl<'a> Parser<'a> {
         } else {
             vec![]
         };
+
         let mut lateral_views = vec![];
         loop {
             if self.parse_keywords(&[Keyword::LATERAL, Keyword::VIEW]) {
@@ -3490,7 +3491,6 @@ impl<'a> Parser<'a> {
 
     pub fn parse_table_and_joins(&mut self) -> Result<TableWithJoins, ParserError> {
         let relation = self.parse_table_factor()?;
-
         // Note that for keywords to be properly handled here, they need to be
         // added to `RESERVED_FOR_TABLE_ALIAS`, otherwise they may be parsed as
         // a table alias.
@@ -3635,6 +3635,7 @@ impl<'a> Parser<'a> {
                     match &mut table_and_joins.relation {
                         TableFactor::Derived { alias, .. }
                         | TableFactor::Table { alias, .. }
+                        | TableFactor::UNNEST { alias, .. }
                         | TableFactor::TableFunction { alias, .. } => {
                             // but not `FROM (mytable AS alias1) AS alias2`.
                             if let Some(inner_alias) = alias {
@@ -3658,6 +3659,29 @@ impl<'a> Parser<'a> {
                 // appearing alone in parentheses (e.g. `FROM (mytable)`)
                 self.expected("joined table", self.peek_token())
             }
+        } else if dialect_of!(self is BigQueryDialect | GenericDialect)
+            && self.parse_keyword(Keyword::UNNEST)
+        {
+            self.expect_token(&Token::LParen)?;
+            let expr = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+
+            let alias = match self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS) {
+                Ok(Some(alias)) => Some(alias),
+                Ok(None) => None,
+                Err(e) => return Err(e),
+            };
+
+            let with_offset = match self.expect_keywords(&[Keyword::WITH, Keyword::OFFSET]) {
+                Ok(()) => true,
+                Err(_) => false,
+            };
+
+            Ok(TableFactor::UNNEST {
+                alias,
+                array_expr: Box::new(expr),
+                with_offset,
+            })
         } else {
             let name = self.parse_object_name()?;
             // Postgres, MSSQL: table-valued functions:

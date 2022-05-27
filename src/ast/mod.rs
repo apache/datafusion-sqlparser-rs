@@ -23,7 +23,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::fmt::{self, Write};
+use core::fmt;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -128,16 +128,8 @@ impl fmt::Display for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.quote_style {
             Some(q) if q == '"' || q == '\'' || q == '`' => {
-                f.write_char(q)?;
-                let mut first = true;
-                for s in self.value.split_inclusive(q) {
-                    if !first {
-                        f.write_char(q)?;
-                    }
-                    first = false;
-                    f.write_str(s)?;
-                }
-                f.write_char(q)
+                let escaped = value::escape_quoted_string(&self.value, q);
+                write!(f, "{}{}{}", q, escaped, q)
             }
             Some(q) if q == '[' => write!(f, "[{}]", self.value),
             None => f.write_str(&self.value),

@@ -1442,6 +1442,11 @@ fn parse_quoted_identifier() {
 }
 
 #[test]
+fn parse_quoted_identifier_2() {
+    pg_and_generic().verified_stmt(r#"SELECT """quoted ident""""#);
+}
+
+#[test]
 fn parse_local_and_global() {
     pg_and_generic().verified_stmt("CREATE LOCAL TEMPORARY TABLE table (COL INT)");
 }

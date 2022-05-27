@@ -326,6 +326,40 @@ fn parse_quote_identifiers_2() {
 }
 
 #[test]
+fn parse_quote_identifiers_3() {
+    let sql = "SELECT ```quoted identifier```";
+    assert_eq!(
+        mysql().verified_stmt(sql),
+        Statement::Query(Box::new(Query {
+            with: None,
+            body: SetExpr::Select(Box::new(Select {
+                distinct: false,
+                top: None,
+                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
+                    value: "`quoted identifier`".into(),
+                    quote_style: Some('`'),
+                }))],
+                into: None,
+                from: vec![],
+                lateral_views: vec![],
+                selection: None,
+                group_by: vec![],
+                cluster_by: vec![],
+                distribute_by: vec![],
+                sort_by: vec![],
+                having: None,
+                qualify: None
+            })),
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            fetch: None,
+            lock: None,
+        }))
+    );
+}
+
+#[test]
 fn parse_unterminated_escape() {
     let sql = r#"SELECT 'I\'m not fine\'"#;
     let result = std::panic::catch_unwind(|| mysql().one_statement_parses_to(sql, ""));

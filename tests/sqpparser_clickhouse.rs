@@ -51,6 +51,7 @@ fn parse_map_access_expr() {
                     ],
                     over: None,
                     distinct: false,
+                    special: false,
                 })],
             })],
             into: None,
@@ -85,7 +86,8 @@ fn parse_map_access_expr() {
                                 ))),
                             ],
                             over: None,
-                            distinct: false
+                            distinct: false,
+                            special: false,
                         })]
                     }),
                     op: BinaryOperator::NotEq,

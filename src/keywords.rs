@@ -169,6 +169,7 @@ define_keywords!(
     DATA,
     DATABASE,
     DATE,
+    DATETIME,
     DAY,
     DEALLOCATE,
     DEC,

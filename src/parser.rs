@@ -2733,6 +2733,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::UUID => Ok(DataType::Uuid),
                 Keyword::DATE => Ok(DataType::Date),
+                Keyword::DATETIME => Ok(DataType::Datetime),
                 Keyword::TIMESTAMP => {
                     // TBD: we throw away "with/without timezone" information
                     if self.parse_keyword(Keyword::WITH) || self.parse_keyword(Keyword::WITHOUT) {

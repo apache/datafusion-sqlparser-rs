@@ -2616,6 +2616,19 @@ fn parse_literal_time() {
 }
 
 #[test]
+fn parse_literal_datetime() {
+    let sql = "SELECT DATETIME '1999-01-01 01:23:34.45'";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::TypedString {
+            data_type: DataType::Datetime,
+            value: "1999-01-01 01:23:34.45".into()
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn parse_literal_timestamp() {
     let sql = "SELECT TIMESTAMP '1999-01-01 01:23:34'";
     let select = verified_only_select(sql);

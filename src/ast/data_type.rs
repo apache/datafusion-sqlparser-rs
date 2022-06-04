@@ -71,6 +71,8 @@ pub enum DataType {
     Date,
     /// Time
     Time,
+    /// Datetime
+    Datetime,
     /// Timestamp
     Timestamp,
     /// Interval
@@ -143,6 +145,7 @@ impl fmt::Display for DataType {
             DataType::Boolean => write!(f, "BOOLEAN"),
             DataType::Date => write!(f, "DATE"),
             DataType::Time => write!(f, "TIME"),
+            DataType::Datetime => write!(f, "DATETIME"),
             DataType::Timestamp => write!(f, "TIMESTAMP"),
             DataType::Interval => write!(f, "INTERVAL"),
             DataType::Regclass => write!(f, "REGCLASS"),

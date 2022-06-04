@@ -895,6 +895,17 @@ pub enum Statement {
         /// deleted along with the dropped table
         purge: bool,
     },
+    /// FETCH - retrieve rows from a query using a cursor
+    ///
+    /// Note: this is a PostgreSQL-specific statement,
+    /// but may also compatible with other SQL.
+    Fetch {
+        /// Cursor name
+        name: Ident,
+        direction: FetchDirection,
+        /// Optional, It's possible to fetch rows form cursor to the table
+        into: Option<ObjectName>,
+    },
     /// DISCARD [ ALL | PLANS | SEQUENCES | TEMPORARY | TEMP ]
     ///
     /// Note: this is a PostgreSQL-specific statement,
@@ -1114,6 +1125,21 @@ impl fmt::Display for Statement {
                 write!(f, "{}", statement)
             }
             Statement::Query(s) => write!(f, "{}", s),
+            Statement::Fetch {
+                name,
+                direction,
+                into,
+            } => {
+                write!(f, "FETCH {} ", direction)?;
+
+                write!(f, "IN {}", name)?;
+
+                if let Some(into) = into {
+                    write!(f, " INTO {}", into)?;
+                }
+
+                Ok(())
+            }
             Statement::Directory {
                 overwrite,
                 local,
@@ -1856,6 +1882,69 @@ impl fmt::Display for Privileges {
                 write!(f, "{}", display_comma_separated(actions))
             }
         }
+    }
+}
+
+/// Specific direction for FETCH statement
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum FetchDirection {
+    Count { limit: Value },
+    Next,
+    Prior,
+    First,
+    Last,
+    Absolute { limit: Value },
+    Relative { limit: Value },
+    All,
+    // FORWARD
+    // FORWARD count
+    Forward { limit: Option<Value> },
+    ForwardAll,
+    // BACKWARD
+    // BACKWARD count
+    Backward { limit: Option<Value> },
+    BackwardAll,
+}
+
+impl fmt::Display for FetchDirection {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FetchDirection::Count { limit } => f.write_str(&limit.to_string())?,
+            FetchDirection::Next => f.write_str("NEXT")?,
+            FetchDirection::Prior => f.write_str("PRIOR")?,
+            FetchDirection::First => f.write_str("FIRST")?,
+            FetchDirection::Last => f.write_str("LAST")?,
+            FetchDirection::Absolute { limit } => {
+                f.write_str("ABSOLUTE ")?;
+                f.write_str(&limit.to_string())?;
+            }
+            FetchDirection::Relative { limit } => {
+                f.write_str("RELATIVE ")?;
+                f.write_str(&limit.to_string())?;
+            }
+            FetchDirection::All => f.write_str("ALL")?,
+            FetchDirection::Forward { limit } => {
+                f.write_str("FORWARD")?;
+
+                if let Some(l) = limit {
+                    f.write_str(" ")?;
+                    f.write_str(&l.to_string())?;
+                }
+            }
+            FetchDirection::ForwardAll => f.write_str("FORWARD ALL")?,
+            FetchDirection::Backward { limit } => {
+                f.write_str("BACKWARD")?;
+
+                if let Some(l) = limit {
+                    f.write_str(" ")?;
+                    f.write_str(&l.to_string())?;
+                }
+            }
+            FetchDirection::BackwardAll => f.write_str("BACKWARD ALL")?,
+        };
+
+        Ok(())
     }
 }
 

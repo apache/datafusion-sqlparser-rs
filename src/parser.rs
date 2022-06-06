@@ -167,6 +167,7 @@ impl<'a> Parser<'a> {
                 Keyword::CREATE => Ok(self.parse_create()?),
                 Keyword::DROP => Ok(self.parse_drop()?),
                 Keyword::DISCARD => Ok(self.parse_discard()?),
+                Keyword::DECLARE => Ok(self.parse_declare()?),
                 Keyword::FETCH => Ok(self.parse_fetch_statement()?),
                 Keyword::DELETE => Ok(self.parse_delete()?),
                 Keyword::INSERT => Ok(self.parse_insert()?),
@@ -1822,6 +1823,56 @@ impl<'a> Parser<'a> {
             names,
             cascade,
             purge,
+        })
+    }
+
+    /// DECLARE name [ BINARY ] [ ASENSITIVE | INSENSITIVE ] [ [ NO ] SCROLL ]
+    //     CURSOR [ { WITH | WITHOUT } HOLD ] FOR query
+    pub fn parse_declare(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_identifier()?;
+
+        let binary = self.parse_keyword(Keyword::BINARY);
+        let sensitive = if self.parse_keyword(Keyword::INSENSITIVE) {
+            Some(true)
+        } else if self.parse_keyword(Keyword::ASENSITIVE) {
+            Some(false)
+        } else {
+            None
+        };
+        let scroll = if self.parse_keyword(Keyword::SCROLL) {
+            Some(true)
+        } else if self.parse_keywords(&[Keyword::NO, Keyword::SCROLL]) {
+            Some(false)
+        } else {
+            None
+        };
+
+        self.expect_keyword(Keyword::CURSOR)?;
+
+        let hold = match self.parse_one_of_keywords(&[Keyword::WITH, Keyword::WITHOUT]) {
+            Some(keyword) => {
+                self.expect_keyword(Keyword::HOLD)?;
+
+                match keyword {
+                    Keyword::WITH => Some(true),
+                    Keyword::WITHOUT => Some(false),
+                    _ => unreachable!(),
+                }
+            }
+            None => None,
+        };
+
+        self.expect_keyword(Keyword::FOR)?;
+
+        let query = self.parse_query()?;
+
+        Ok(Statement::Declare {
+            name,
+            binary,
+            sensitive,
+            scroll,
+            hold,
+            query: Box::new(query),
         })
     }
 

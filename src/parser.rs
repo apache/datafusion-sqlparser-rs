@@ -174,6 +174,7 @@ impl<'a> Parser<'a> {
                 Keyword::UPDATE => Ok(self.parse_update()?),
                 Keyword::ALTER => Ok(self.parse_alter()?),
                 Keyword::COPY => Ok(self.parse_copy()?),
+                Keyword::CLOSE => Ok(self.parse_close()?),
                 Keyword::SET => Ok(self.parse_set()?),
                 Keyword::SHOW => Ok(self.parse_show()?),
                 Keyword::GRANT => Ok(self.parse_grant()?),
@@ -2561,6 +2562,18 @@ impl<'a> Parser<'a> {
             legacy_options,
             values,
         })
+    }
+
+    pub fn parse_close(&mut self) -> Result<Statement, ParserError> {
+        let cursor = if self.parse_keyword(Keyword::ALL) {
+            CloseCursor::All
+        } else {
+            let name = self.parse_identifier()?;
+
+            CloseCursor::Specific { name }
+        };
+
+        Ok(Statement::Close { cursor })
     }
 
     fn parse_copy_option(&mut self) -> Result<CopyOption, ParserError> {

@@ -20,6 +20,7 @@
 
 #[macro_use]
 mod test_utils;
+
 use matches::assert_matches;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
@@ -28,6 +29,7 @@ use sqlparser::dialect::{
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
+
 use test_utils::{
     all_dialects, expr_from_projection, join, number, only, table, table_alias, TestedDialects,
 };
@@ -4941,6 +4943,26 @@ fn parse_discard() {
     let sql = "DISCARD TEMP";
     match verified_stmt(sql) {
         Statement::Discard { object_type, .. } => assert_eq!(object_type, DiscardObject::TEMP),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_cursor() {
+    let sql = r#"CLOSE my_cursor"#;
+    match verified_stmt(sql) {
+        Statement::Close { cursor } => assert_eq!(
+            cursor,
+            CloseCursor::Specific {
+                name: Ident::new("my_cursor"),
+            }
+        ),
+        _ => unreachable!(),
+    }
+
+    let sql = r#"CLOSE ALL"#;
+    match verified_stmt(sql) {
+        Statement::Close { cursor } => assert_eq!(cursor, CloseCursor::All),
         _ => unreachable!(),
     }
 }

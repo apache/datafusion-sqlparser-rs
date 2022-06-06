@@ -804,6 +804,11 @@ pub enum Statement {
         /// VALUES a vector of values to be copied
         values: Vec<Option<String>>,
     },
+    /// Close - closes the portal underlying an open cursor.
+    Close {
+        /// Cursor name
+        cursor: CloseCursor,
+    },
     /// UPDATE
     Update {
         /// TABLE
@@ -1391,6 +1396,11 @@ impl fmt::Display for Statement {
                 if let Some(selection) = selection {
                     write!(f, " WHERE {}", selection)?;
                 }
+                Ok(())
+            }
+            Statement::Close { cursor } => {
+                write!(f, "CLOSE {}", cursor)?;
+
                 Ok(())
             }
             Statement::CreateDatabase {
@@ -2154,6 +2164,22 @@ impl fmt::Display for FunctionArg {
         match self {
             FunctionArg::Named { name, arg } => write!(f, "{} => {}", name, arg),
             FunctionArg::Unnamed(unnamed_arg) => write!(f, "{}", unnamed_arg),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum CloseCursor {
+    All,
+    Specific { name: Ident },
+}
+
+impl fmt::Display for CloseCursor {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CloseCursor::All => write!(f, "ALL"),
+            CloseCursor::Specific { name } => write!(f, "{}", name),
         }
     }
 }

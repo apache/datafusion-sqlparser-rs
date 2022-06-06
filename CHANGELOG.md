@@ -9,11 +9,38 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
 
-## [0.17.0] 2022-05-09
+## [0.18.0] 2022-06-06
 
 ### Added
 
+* Support `CLOSE` (cursors) (#515) - Thanks @ovr
+* Support `DECLARE` (cursors) (#509) - Thanks @ovr
+* Support `FETCH` (cursors) (#510) - Thanks @ovr
+* Support `DATETIME` keyword (#512) - Thanks @komukomo
+* Support `UNNEST` as a table factor (#493) - Thanks @sivchari
+* Support `CREATE FUNCTION` (hive flavor) (#496) - Thanks @mobuchowski
+* Support placeholders (`$` or `?`) in `LIMIT` clause (#494) - Thanks @step-baby
+* Support escaped string literals (PostgreSQL) (#502) - Thanks @ovr
+* Support  `IS TRUE` and `IS FALSE` (#499) - Thanks @ovr
+* Support `DISCARD [ALL | PLANS | SEQUENCES | TEMPORARY | TEMP]` (#500) - Thanks @gandronchik
+* Support `array<..>` HIVE data types (#491) - Thanks @mobuchowski
+* Support `SET` values that begin with `-` #495  - Thanks @mobuchowski
+* Support unicode whitespace (#482) - Thanks @alexsatori
+* Support `BigQuery` dialect (#490) - Thanks @komukomo
 
+### Changed:
+* Add docs for MapAccess (#489) - Thanks @alamb
+* Rename `ArrayIndex::indexs` to `ArrayIndex::indexes` (#492) - Thanks @alamb
+
+### Fixed:
+* Fix escaping of trailing quote in quoted identifiers (#505) - Thanks @razzolini-qpq
+* Fix parsing of `COLLATE` after parentheses in expressions (#507) - Thanks @razzolini-qpq
+* Distinguish tables and nullary functions in `FROM` (#506) - Thanks @razzolini-qpq
+* Fix `MERGE INTO` semicolon handling (#508) - Thanks @mskrzypkows
+
+## [0.17.0] 2022-05-09
+
+### Added
 
 * Support `#` as first character in field name for `RedShift` dialect (#485) - Thanks @yuval-illumex
 * Support for postgres composite types (#466) - Thanks @poonai

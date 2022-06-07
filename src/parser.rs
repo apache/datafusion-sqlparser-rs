@@ -991,6 +991,7 @@ impl<'a> Parser<'a> {
     ///   4. `INTERVAL '1:1:1.1' HOUR (5) TO SECOND (5)`
     ///   5. `INTERVAL '1.1' SECOND (2, 2)`
     ///   6. `INTERVAL '1:1' HOUR (5) TO MINUTE (5)`
+    ///   7. (MySql and BigQuey only):`INTERVAL 1 DAY`
     ///
     /// Note that we do not currently attempt to parse the quoted value.
     pub fn parse_literal_interval(&mut self) -> Result<Expr, ParserError> {
@@ -1001,13 +1002,13 @@ impl<'a> Parser<'a> {
 
         // The first token in an interval is a string literal which specifies
         // the duration of the interval.
-        let value = self.parse_literal_string()?;
+        let value = self.parse_expr()?;
 
         // Following the string literal is a qualifier which indicates the units
         // of the duration specified in the string literal.
         //
         // Note that PostgreSQL allows omitting the qualifier, so we provide
-        // this more general implemenation.
+        // this more general implementation.
         let leading_field = match self.peek_token() {
             Token::Word(kw)
                 if [
@@ -1068,7 +1069,7 @@ impl<'a> Parser<'a> {
             };
 
         Ok(Expr::Value(Value::Interval {
-            value,
+            value: Box::new(value),
             leading_field,
             leading_precision,
             last_field,

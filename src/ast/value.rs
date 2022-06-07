@@ -19,6 +19,8 @@ use bigdecimal::BigDecimal;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use super::Expr;
+
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -50,7 +52,7 @@ pub enum Value {
     /// that the `<leading_field>` units >= the units in `<last_field>`,
     /// so the user will have to reject intervals like `HOUR TO YEAR`.
     Interval {
-        value: String,
+        value: Box<Expr>,
         leading_field: Option<DateTimeField>,
         leading_precision: Option<u64>,
         last_field: Option<DateTimeField>,
@@ -88,10 +90,8 @@ impl fmt::Display for Value {
                 assert!(last_field.is_none());
                 write!(
                     f,
-                    "INTERVAL '{}' SECOND ({}, {})",
-                    escape_single_quote_string(value),
-                    leading_precision,
-                    fractional_seconds_precision
+                    "INTERVAL {} SECOND ({}, {})",
+                    value, leading_precision, fractional_seconds_precision
                 )
             }
             Value::Interval {
@@ -101,7 +101,7 @@ impl fmt::Display for Value {
                 last_field,
                 fractional_seconds_precision,
             } => {
-                write!(f, "INTERVAL '{}'", escape_single_quote_string(value))?;
+                write!(f, "INTERVAL {}", value)?;
                 if let Some(leading_field) = leading_field {
                     write!(f, " {}", leading_field)?;
                 }

@@ -217,6 +217,18 @@ pub enum Expr {
     Identifier(Ident),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
+    /// Multi-part identifier with a column number, e.g. [alias.]$file_col_num[.element] (snowflake)
+    CompoundIdentifierWithColumnNumber {
+        alias: Ident,
+        col_num: String,
+        element: Option<Ident>
+    },
+    /// Operator that extracts a value from semi-structured like v:attr[0].name (snowflake)
+    GetPathExpression {
+        idents: Vec<Ident>,
+        col_num: Option<String>,
+        path: Vec<String>
+    },
     /// JSON access (postgres)  eg: data->'tags'
     JsonAccess {
         left: Box<Expr>,
@@ -375,6 +387,22 @@ impl fmt::Display for Expr {
                 Ok(())
             }
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
+            Expr::CompoundIdentifierWithColumnNumber {
+                alias,
+                col_num,
+                element
+            } => match element {
+                None => write!(f, "{}.{}", alias, col_num),
+                Some(inner) => write!(f, "{}.{}.{}", alias, col_num, inner),
+            },
+            Expr::GetPathExpression {
+                idents,
+                col_num,
+                path
+            } => match col_num {
+                None => write!(f, "{}:{}", display_separated(idents, "."), display_separated(path, ".")),
+                Some(inner) =>  write!(f, "{}.{}:{}", display_separated(idents, "."), inner, display_separated(path, ".")),
+            },
             Expr::IsTrue(ast) => write!(f, "{} IS TRUE", ast),
             Expr::IsFalse(ast) => write!(f, "{} IS FALSE", ast),
             Expr::IsNull(ast) => write!(f, "{} IS NULL", ast),

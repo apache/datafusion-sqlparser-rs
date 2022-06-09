@@ -100,6 +100,12 @@ fn test_single_table_in_parenthesis() {
 }
 
 #[test]
+fn test_snowflake_variables() {
+    let sql = "SELECT a.$1 AS a, a.$1.b AS b, a.$1:c AS c, d:d AS d, e$f AS f FROM @g AS g";
+    snowflake().verified_stmt(sql);
+}
+
+#[test]
 fn test_single_table_in_parenthesis_with_alias() {
     snowflake_and_generic().one_statement_parses_to(
         "SELECT * FROM (a NATURAL JOIN (b) c )",

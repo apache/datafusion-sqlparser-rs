@@ -316,6 +316,9 @@ impl<'a> Parser<'a> {
 
                 while self.consume_token(&Token::Period) {
                     match self.next_token() {
+                        Token::Placeholder(_s) => if id_parts.len()==1 {
+                            // do nothing -> wildcard expression does not occur together with id column number placeholder
+                        }
                         Token::Word(w) => id_parts.push(w.to_ident()),
                         Token::Mul => {
                             return Ok(WildcardExpr::QualifiedWildcard(ObjectName(id_parts)));
@@ -440,23 +443,46 @@ impl<'a> Parser<'a> {
                     expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
                 }),
                 // Here `w` is a word, check if it's a part of a multi-part
-                // identifier, a function call, or a simple identifier:
+                // identifier, a function call, a multi-part identifier with column number,
+                // identifier with get-path expression or a simple identifier:
                 _ => match self.peek_token() {
-                    Token::LParen | Token::Period => {
+                    Token::LParen | Token::Period | Token::Colon => {
                         let mut id_parts: Vec<Ident> = vec![w.to_ident()];
-                        while self.consume_token(&Token::Period) {
+                        let mut col_num:Option<String> = None;
+                        let mut with_path = false;
+                        let mut path : Vec<String> = vec![];
+                        if self.peek_token()==Token::Colon { with_path = true }
+                        while self.consume_token(&Token::Period) | self.consume_token(&Token::Colon) {
                             match self.next_token() {
-                                Token::Word(w) => id_parts.push(w.to_ident()),
+                                Token::Placeholder(s) if id_parts.len()==1 && dialect_of!(self is SnowflakeDialect) => col_num = Some(s),
+                                Token::Word(w) if with_path && dialect_of!(self is SnowflakeDialect) => path.push(w.value),
+                                Token::Word(w) if !with_path => id_parts.push(w.to_ident()),
                                 unexpected => {
                                     return self
                                         .expected("an identifier or a '*' after '.'", unexpected);
                                 }
+                            }
+                            if self.peek_token()==Token::Colon {
+                                if with_path { return self.expected("a word after ':'", Token::Colon) };
+                                with_path = true
                             }
                         }
 
                         if self.consume_token(&Token::LParen) {
                             self.prev_token();
                             self.parse_function(ObjectName(id_parts))
+                        } else if dialect_of!(self is SnowflakeDialect) && with_path {
+                            Ok(Expr::GetPathExpression {
+                                idents: id_parts,
+                                col_num,
+                                path
+                            })
+                        } else if dialect_of!(self is SnowflakeDialect) && col_num.is_some() {
+                            Ok(Expr::CompoundIdentifierWithColumnNumber {
+                                alias: id_parts[0].clone(),
+                                col_num: col_num.unwrap(),
+                                element: if id_parts.len()>= 2 { Some(id_parts[1].clone()) } else { None }
+                            })
                         } else {
                             Ok(Expr::CompoundIdentifier(id_parts))
                         }

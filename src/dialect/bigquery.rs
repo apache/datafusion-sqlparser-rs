@@ -18,7 +18,7 @@ pub struct BigQueryDialect;
 impl Dialect for BigQueryDialect {
     // See https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#identifiers
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
-        ch == '`'
+        ch == '`' || ch == '"'
     }
 
     fn is_identifier_start(&self, ch: char) -> bool {
@@ -31,5 +31,6 @@ impl Dialect for BigQueryDialect {
             || ('0'..='9').contains(&ch)
             || ch == '_'
             || ch == '-'
+            || ch == '\''
     }
 }

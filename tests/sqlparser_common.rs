@@ -3591,16 +3591,19 @@ fn parse_exists_subquery() {
     let sql = "SELECT * FROM t WHERE EXISTS (SELECT 1)";
     let select = verified_only_select(sql);
     assert_eq!(
-        Expr::Exists(Box::new(expected_inner.clone())),
+        Expr::Exists {
+            negated: false,
+            subquery: Box::new(expected_inner.clone())
+        },
         select.selection.unwrap(),
     );
 
     let sql = "SELECT * FROM t WHERE NOT EXISTS (SELECT 1)";
     let select = verified_only_select(sql);
     assert_eq!(
-        Expr::UnaryOp {
-            op: UnaryOperator::Not,
-            expr: Box::new(Expr::Exists(Box::new(expected_inner))),
+        Expr::Exists {
+            negated: true,
+            subquery: Box::new(expected_inner)
         },
         select.selection.unwrap(),
     );

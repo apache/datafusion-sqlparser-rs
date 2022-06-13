@@ -11,6 +11,8 @@
 // limitations under the License.
 
 #[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+#[cfg(not(feature = "std"))]
 use alloc::string::String;
 use core::fmt;
 

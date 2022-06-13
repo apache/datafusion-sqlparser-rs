@@ -2688,7 +2688,7 @@ fn parse_literal_interval() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Value(Value::Interval {
-            value: Box::new(Expr::Value(Value::Number(String::from("5"), false))),
+            value: Box::new(Expr::Value(number("5"))),
             leading_field: Some(DateTimeField::Day),
             leading_precision: None,
             last_field: None,

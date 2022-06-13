@@ -988,7 +988,8 @@ impl<'a> Parser<'a> {
         match self.peek_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::EXISTS => {
-                    let negated = self.parse_keyword(Keyword::EXISTS);
+                    let negated = true;
+                    let _ = self.parse_keyword(Keyword::EXISTS);
                     self.parse_exists_expr(negated)
                 }
                 _ => Ok(Expr::UnaryOp {

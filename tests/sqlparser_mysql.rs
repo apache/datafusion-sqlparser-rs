@@ -834,6 +834,31 @@ fn parse_kill() {
     );
 }
 
+#[test]
+fn parse_table_colum_option_on_update() {
+    let sql1 = "CREATE TABLE foo (`modification_time` DATETIME ON UPDATE)";
+    match mysql().verified_stmt(sql1) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::with_quote('`', "modification_time"),
+                    data_type: DataType::Datetime,
+                    collation: None,
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
+                            "ON UPDATE"
+                        )]),
+                    },],
+                }],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
 fn mysql() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],

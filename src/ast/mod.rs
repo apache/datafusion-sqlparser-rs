@@ -337,9 +337,9 @@ pub enum Expr {
         results: Vec<Expr>,
         else_result: Option<Box<Expr>>,
     },
-    /// An exists expression `EXISTS(SELECT ...)`, used in expressions like
-    /// `WHERE EXISTS (SELECT ...)`.
-    Exists(Box<Query>),
+    /// An exists expression `[ NOT ] EXISTS(SELECT ...)`, used in expressions like
+    /// `WHERE [ NOT ] EXISTS (SELECT ...)`.
+    Exists { subquery: Box<Query>, negated: bool },
     /// A parenthesized subquery `(SELECT ...)`, used in expression like
     /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
     Subquery(Box<Query>),
@@ -466,7 +466,12 @@ impl fmt::Display for Expr {
                 }
                 write!(f, " END")
             }
-            Expr::Exists(s) => write!(f, "EXISTS ({})", s),
+            Expr::Exists { subquery, negated } => write!(
+                f,
+                "{}EXISTS ({})",
+                if *negated { "NOT " } else { "" },
+                subquery
+            ),
             Expr::Subquery(s) => write!(f, "({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
             Expr::GroupingSets(sets) => {

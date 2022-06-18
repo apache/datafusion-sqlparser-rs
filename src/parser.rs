@@ -2859,12 +2859,20 @@ impl<'a> Parser<'a> {
                         Ok(DataType::SmallInt(optional_precision?))
                     }
                 }
-                Keyword::INT | Keyword::INTEGER => {
+                Keyword::INT => {
                     let optional_precision = self.parse_optional_precision();
                     if self.parse_keyword(Keyword::UNSIGNED) {
                         Ok(DataType::UnsignedInt(optional_precision?))
                     } else {
                         Ok(DataType::Int(optional_precision?))
+                    }
+                }
+                Keyword::INTEGER => {
+                    let optional_precision = self.parse_optional_precision();
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::UnsignedInteger(optional_precision?))
+                    } else {
+                        Ok(DataType::Integer(optional_precision?))
                     }
                 }
                 Keyword::BIGINT => {

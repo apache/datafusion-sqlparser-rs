@@ -55,8 +55,12 @@ pub enum DataType {
     UnsignedSmallInt(Option<u64>),
     /// Integer with optional display width e.g. INT or INT(11)
     Int(Option<u64>),
+    /// Integer with optional display width e.g. INTEGER or INTEGER(11)
+    Integer(Option<u64>),
     /// Unsigned integer with optional display width e.g. INT UNSIGNED or INT(11) UNSIGNED
     UnsignedInt(Option<u64>),
+    /// Unsigned integer with optional display width e.g. INT UNSIGNED or INT(11) UNSIGNED
+    UnsignedInteger(Option<u64>),
     /// Big integer with optional display width e.g. BIGINT or BIGINT(20)
     BigInt(Option<u64>),
     /// Unsigned big integer with optional display width e.g. BIGINT UNSIGNED or BIGINT(20) UNSIGNED
@@ -133,6 +137,10 @@ impl fmt::Display for DataType {
             DataType::Int(zerofill) => format_type_with_optional_length(f, "INT", zerofill, false),
             DataType::UnsignedInt(zerofill) => {
                 format_type_with_optional_length(f, "INT", zerofill, true)
+            }
+            DataType::Integer(zerofill) => format_type_with_optional_length(f, "INTEGER", zerofill, false),
+            DataType::UnsignedInteger(zerofill) => {
+                format_type_with_optional_length(f, "INTEGER", zerofill, true)
             }
             DataType::BigInt(zerofill) => {
                 format_type_with_optional_length(f, "BIGINT", zerofill, false)

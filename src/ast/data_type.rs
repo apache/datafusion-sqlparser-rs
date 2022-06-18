@@ -138,7 +138,9 @@ impl fmt::Display for DataType {
             DataType::UnsignedInt(zerofill) => {
                 format_type_with_optional_length(f, "INT", zerofill, true)
             }
-            DataType::Integer(zerofill) => format_type_with_optional_length(f, "INTEGER", zerofill, false),
+            DataType::Integer(zerofill) => {
+                format_type_with_optional_length(f, "INTEGER", zerofill, false)
+            }
             DataType::UnsignedInteger(zerofill) => {
                 format_type_with_optional_length(f, "INTEGER", zerofill, true)
             }

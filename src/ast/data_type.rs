@@ -59,7 +59,7 @@ pub enum DataType {
     Integer(Option<u64>),
     /// Unsigned integer with optional display width e.g. INT UNSIGNED or INT(11) UNSIGNED
     UnsignedInt(Option<u64>),
-    /// Unsigned integer with optional display width e.g. INT UNSIGNED or INT(11) UNSIGNED
+    /// Unsigned integer with optional display width e.g. INTGER UNSIGNED or INTEGER(11) UNSIGNED
     UnsignedInteger(Option<u64>),
     /// Big integer with optional display width e.g. BIGINT or BIGINT(20)
     BigInt(Option<u64>),

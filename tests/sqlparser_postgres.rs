@@ -35,7 +35,7 @@ fn parse_create_table_with_defaults() {
             activebool boolean DEFAULT true NOT NULL,
             create_date date DEFAULT now()::text NOT NULL,
             last_update timestamp without time zone DEFAULT now() NOT NULL,
-            active integer NOT NULL
+            active int NOT NULL
     ) WITH (fillfactor = 20, user_catalog_table = true, autovacuum_vacuum_threshold = 100)";
     match pg_and_generic().one_statement_parses_to(sql, "") {
         Statement::CreateTable {
@@ -55,7 +55,7 @@ fn parse_create_table_with_defaults() {
                 vec![
                     ColumnDef {
                         name: "customer_id".into(),
-                        data_type: DataType::Int(None),
+                        data_type: DataType::Integer(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -201,10 +201,10 @@ fn parse_create_table_from_pg_dump() {
             create_date1 date DEFAULT 'now'::TEXT::date NOT NULL,
             last_update timestamp without time zone DEFAULT now(),
             release_year public.year,
-            active integer
+            active int
         )";
     pg().one_statement_parses_to(sql, "CREATE TABLE public.customer (\
-            customer_id INT DEFAULT nextval(CAST('public.customer_customer_id_seq' AS REGCLASS)) NOT NULL, \
+            customer_id INTEGER DEFAULT nextval(CAST('public.customer_customer_id_seq' AS REGCLASS)) NOT NULL, \
             store_id SMALLINT NOT NULL, \
             first_name CHARACTER VARYING(45) NOT NULL, \
             last_name CHARACTER VARYING(45) NOT NULL, \

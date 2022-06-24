@@ -1500,7 +1500,7 @@ impl fmt::Display for Statement {
                 //   `CREATE TABLE t (a INT) AS SELECT a from t2`
                 write!(
                     f,
-                    "CREATE {or_replace}{external}{global}{temporary}TABLE {if_not_exists}{name}",
+                    "CREATE {or_replace}{external}{global}{temporary}TABLE {if_not_exists}{name}{on_cluster}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     external = if *external { "EXTERNAL " } else { "" },
                     global = global
@@ -1515,6 +1515,10 @@ impl fmt::Display for Statement {
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     temporary = if *temporary { "TEMPORARY " } else { "" },
                     name = name,
+                    on_cluster = match on_cluster {
+                        Some(s) => format!(" ON CLUSTER {}", s.replace("{", "'{").replace("}", "}'")),
+                        None => "".to_string()
+                    }
                 )?;
                 if !columns.is_empty() || !constraints.is_empty() {
                     write!(f, " ({}", display_comma_separated(columns))?;

@@ -867,6 +867,7 @@ pub enum Statement {
         default_charset: Option<String>,
         collation: Option<String>,
         on_commit: Option<OnCommit>,
+        on_cluster: Option<String>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -1488,6 +1489,7 @@ impl fmt::Display for Statement {
                 engine,
                 collation,
                 on_commit,
+                on_cluster,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:

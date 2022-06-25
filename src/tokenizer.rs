@@ -351,11 +351,11 @@ impl<'a> Tokenizer<'a> {
                 }
 
                 Token::Whitespace(Whitespace::Tab) => self.col += 4,
-                Token::Word(w) if w.quote_style == None => self.col += w.value.len() as u64,
-                Token::Word(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
-                Token::Number(s, _) => self.col += s.len() as u64,
-                Token::SingleQuotedString(s) => self.col += s.len() as u64,
-                Token::Placeholder(s) => self.col += s.len() as u64,
+                Token::Word(w) if w.quote_style == None => self.col += w.value.chars().count() as u64,
+                Token::Word(w) if w.quote_style != None => self.col += w.value.chars().count() as u64 + 2,
+                Token::Number(s, _) => self.col += s.chars().count() as u64,
+                Token::SingleQuotedString(s) => self.col += s.chars().count() as u64,
+                Token::Placeholder(s) => self.col += s.chars().count() as u64,
                 _ => self.col += 1,
             }
 

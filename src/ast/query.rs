@@ -367,6 +367,7 @@ pub enum TableFactor {
         alias: Option<TableAlias>,
         array_expr: Box<Expr>,
         with_offset: bool,
+        with_offset_alias: Option<TableAlias>,
     },
     /// Represents a parenthesized table factor. The SQL spec only allows a
     /// join expression (`(foo <JOIN> bar [ <JOIN> baz ... ])`) to be nested,
@@ -423,6 +424,7 @@ impl fmt::Display for TableFactor {
                 alias,
                 array_expr,
                 with_offset,
+                with_offset_alias,
             } => {
                 write!(f, "UNNEST({})", array_expr)?;
                 if let Some(alias) = alias {
@@ -430,6 +432,9 @@ impl fmt::Display for TableFactor {
                 }
                 if *with_offset {
                     write!(f, " WITH OFFSET")?;
+                }
+                if let Some(alias) = with_offset_alias {
+                    write!(f, " AS {}", alias)?;
                 }
                 Ok(())
             }

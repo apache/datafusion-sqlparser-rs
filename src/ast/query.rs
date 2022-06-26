@@ -367,7 +367,7 @@ pub enum TableFactor {
         alias: Option<TableAlias>,
         array_expr: Box<Expr>,
         with_offset: bool,
-        with_offset_alias: Option<TableAlias>,
+        with_offset_alias: Option<Ident>,
     },
     /// Represents a parenthesized table factor. The SQL spec only allows a
     /// join expression (`(foo <JOIN> bar [ <JOIN> baz ... ])`) to be nested,

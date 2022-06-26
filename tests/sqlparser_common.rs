@@ -2944,10 +2944,7 @@ fn parse_unnest() {
                 }),
                 array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
                 with_offset: false,
-                with_offset_alias: Some(TableAlias {
-                    name: Ident::new("with_offset_alias"),
-                    columns: vec![],
-                }),
+                with_offset_alias: Some(Ident::new("with_offset_alias")),
             },
             joins: vec![],
         }],

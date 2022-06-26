@@ -3840,7 +3840,7 @@ impl<'a> Parser<'a> {
             };
 
             let with_offset_alias =
-                match self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS) {
+                match self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS) {
                     Ok(Some(alias)) => Some(alias),
                     Ok(None) => None,
                     Err(e) => return Err(e),

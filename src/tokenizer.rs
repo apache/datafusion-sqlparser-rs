@@ -49,6 +49,8 @@ pub enum Token {
     Char(char),
     /// Single quoted string: i.e: 'string'
     SingleQuotedString(String),
+    /// Double quoted string: i.e: "string"
+    DoubleQuotedString(String),
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
     /// "escaped" string literal, which are an extension to the SQL standard: i.e: e'first \n second' or E 'first \n second'
@@ -161,6 +163,7 @@ impl fmt::Display for Token {
             Token::Number(ref n, l) => write!(f, "{}{long}", n, long = if *l { "L" } else { "" }),
             Token::Char(ref c) => write!(f, "{}", c),
             Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
+            Token::DoubleQuotedString(ref s) => write!(f, "\"{}\"", s),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
             Token::EscapedStringLiteral(ref s) => write!(f, "E'{}'", s),
             Token::HexStringLiteral(ref s) => write!(f, "X'{}'", s),
@@ -385,7 +388,7 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('\'') => {
                             // N'...' - a <national character string literal>
-                            let s = self.tokenize_single_quoted_string(chars)?;
+                            let s = self.tokenize_quoted_string(chars, '\'')?;
                             Ok(Some(Token::NationalStringLiteral(s)))
                         }
                         _ => {
@@ -417,7 +420,7 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('\'') => {
                             // X'...' - a <binary string literal>
-                            let s = self.tokenize_single_quoted_string(chars)?;
+                            let s = self.tokenize_quoted_string(chars, '\'')?;
                             Ok(Some(Token::HexStringLiteral(s)))
                         }
                         _ => {
@@ -442,11 +445,19 @@ impl<'a> Tokenizer<'a> {
                     }
                     Ok(Some(Token::make_word(&s, None)))
                 }
-                // string
+                // single quoted string
                 '\'' => {
-                    let s = self.tokenize_single_quoted_string(chars)?;
+                    let s = self.tokenize_quoted_string(chars, '\'')?;
 
                     Ok(Some(Token::SingleQuotedString(s)))
+                }
+                // double quoted string
+                '\"' if !self.dialect.is_delimited_identifier_start(ch)
+                    && !self.dialect.is_identifier_start(ch) =>
+                {
+                    let s = self.tokenize_quoted_string(chars, '"')?;
+
+                    Ok(Some(Token::DoubleQuotedString(s)))
                 }
                 // delimited (quoted) identifier
                 quote_start
@@ -769,9 +780,10 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Read a single quoted string, starting with the opening quote.
-    fn tokenize_single_quoted_string(
+    fn tokenize_quoted_string(
         &self,
         chars: &mut Peekable<Chars<'_>>,
+        quote_style: char,
     ) -> Result<String, TokenizerError> {
         let mut s = String::new();
         chars.next(); // consume the opening quote
@@ -780,12 +792,12 @@ impl<'a> Tokenizer<'a> {
         let mut is_escaped = false;
         while let Some(&ch) = chars.peek() {
             match ch {
-                '\'' => {
+                char if char == quote_style => {
                     chars.next(); // consume
                     if is_escaped {
                         s.push(ch);
                         is_escaped = false;
-                    } else if chars.peek().map(|c| *c == '\'').unwrap_or(false) {
+                    } else if chars.peek().map(|c| *c == quote_style).unwrap_or(false) {
                         s.push(ch);
                         chars.next();
                     } else {

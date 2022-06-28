@@ -19,6 +19,21 @@ use sqlparser::ast::*;
 use sqlparser::dialect::BigQueryDialect;
 
 #[test]
+fn parse_literal_string() {
+    let sql = r#"SELECT 'single', "double""#;
+    let select = bigquery().verified_only_select(sql);
+    assert_eq!(2, select.projection.len());
+    assert_eq!(
+        &Expr::Value(Value::SingleQuotedString("single".to_string())),
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Value(Value::DoubleQuotedString("double".to_string())),
+        expr_from_projection(&select.projection[1])
+    );
+}
+
+#[test]
 fn parse_table_identifiers() {
     fn test_table_ident(ident: &str, expected: Vec<Ident>) {
         let sql = format!("SELECT 1 FROM {}", ident);

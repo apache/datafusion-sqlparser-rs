@@ -3842,10 +3842,18 @@ impl<'a> Parser<'a> {
                 Err(_) => false,
             };
 
+            let with_offset_alias =
+                match self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS) {
+                    Ok(Some(alias)) => Some(alias),
+                    Ok(None) => None,
+                    Err(e) => return Err(e),
+                };
+
             Ok(TableFactor::UNNEST {
                 alias,
                 array_expr: Box::new(expr),
                 with_offset,
+                with_offset_alias,
             })
         } else {
             let name = self.parse_object_name()?;

@@ -2837,11 +2837,22 @@ fn parse_table_function() {
 
 #[test]
 fn parse_unnest() {
-    fn chk(alias: bool, with_offset: bool, dialects: &TestedDialects, want: Vec<TableWithJoins>) {
+    fn chk(
+        alias: bool,
+        with_offset: bool,
+        with_offset_alias: bool,
+        dialects: &TestedDialects,
+        want: Vec<TableWithJoins>,
+    ) {
         let sql = &format!(
-            "SELECT * FROM UNNEST(expr){}{}",
+            "SELECT * FROM UNNEST(expr){}{}{}",
             if alias { " AS numbers" } else { "" },
             if with_offset { " WITH OFFSET" } else { "" },
+            if with_offset_alias {
+                " AS with_offset_alias"
+            } else {
+                ""
+            },
         );
         let select = dialects.verified_only_select(sql);
         assert_eq!(select.from, want);
@@ -2853,6 +2864,7 @@ fn parse_unnest() {
     chk(
         true,
         true,
+        false,
         &dialects,
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
@@ -2862,6 +2874,7 @@ fn parse_unnest() {
                 }),
                 array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
                 with_offset: true,
+                with_offset_alias: None,
             },
             joins: vec![],
         }],
@@ -2870,12 +2883,14 @@ fn parse_unnest() {
     chk(
         false,
         false,
+        false,
         &dialects,
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: None,
                 array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
                 with_offset: false,
+                with_offset_alias: None,
             },
             joins: vec![],
         }],
@@ -2884,12 +2899,14 @@ fn parse_unnest() {
     chk(
         false,
         true,
+        false,
         &dialects,
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: None,
                 array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
                 with_offset: true,
+                with_offset_alias: None,
             },
             joins: vec![],
         }],
@@ -2897,6 +2914,7 @@ fn parse_unnest() {
     // 4. WITH OFFSET but no Alias.
     chk(
         true,
+        false,
         false,
         &dialects,
         vec![TableWithJoins {
@@ -2907,6 +2925,26 @@ fn parse_unnest() {
                 }),
                 array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
                 with_offset: false,
+                with_offset_alias: None,
+            },
+            joins: vec![],
+        }],
+    );
+    // 5. WITH OFFSET and WITH OFFSET Alias
+    chk(
+        true,
+        false,
+        true,
+        &dialects,
+        vec![TableWithJoins {
+            relation: TableFactor::UNNEST {
+                alias: Some(TableAlias {
+                    name: Ident::new("numbers"),
+                    columns: vec![],
+                }),
+                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                with_offset: false,
+                with_offset_alias: Some(Ident::new("with_offset_alias")),
             },
             joins: vec![],
         }],

@@ -883,9 +883,17 @@ impl<'a> Parser<'a> {
     /// Parses an array expression `[ex1, ex2, ..]`
     /// if `named` is `true`, came from an expression like  `ARRAY[ex1, ex2]`
     pub fn parse_array_expr(&mut self, named: bool) -> Result<Expr, ParserError> {
-        let exprs = self.parse_comma_separated(Parser::parse_expr)?;
-        self.expect_token(&Token::RBracket)?;
-        Ok(Expr::Array(Array { elem: exprs, named }))
+        if self.peek_token() == Token::RBracket {
+            let _ = self.next_token();
+            Ok(Expr::Array(Array {
+                elem: vec![],
+                named,
+            }))
+        } else {
+            let exprs = self.parse_comma_separated(Parser::parse_expr)?;
+            self.expect_token(&Token::RBracket)?;
+            Ok(Expr::Array(Array { elem: exprs, named }))
+        }
     }
 
     /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.

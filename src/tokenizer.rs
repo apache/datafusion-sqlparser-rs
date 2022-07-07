@@ -1213,6 +1213,22 @@ mod tests {
     }
 
     #[test]
+    fn tokenize_unterminated_string_literal_utf8() {
+        let sql = String::from("SELECT \"なにか\" FROM Y WHERE \"なにか\" = 'test;");
+
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        assert_eq!(
+            tokenizer.tokenize(),
+            Err(TokenizerError {
+                message: "Unterminated string literal".to_string(),
+                line: 1,
+                col: 35
+            })
+        );
+    }
+
+    #[test]
     fn tokenize_invalid_string_cols() {
         let sql = String::from("\n\nSELECT * FROM table\tمصطفىh");
 

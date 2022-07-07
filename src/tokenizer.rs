@@ -354,11 +354,15 @@ impl<'a> Tokenizer<'a> {
                 }
 
                 Token::Whitespace(Whitespace::Tab) => self.col += 4,
-                Token::Word(w) if w.quote_style == None => self.col += w.value.len() as u64,
-                Token::Word(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
-                Token::Number(s, _) => self.col += s.len() as u64,
-                Token::SingleQuotedString(s) => self.col += s.len() as u64,
-                Token::Placeholder(s) => self.col += s.len() as u64,
+                Token::Word(w) if w.quote_style == None => {
+                    self.col += w.value.chars().count() as u64
+                }
+                Token::Word(w) if w.quote_style != None => {
+                    self.col += w.value.chars().count() as u64 + 2
+                }
+                Token::Number(s, _) => self.col += s.chars().count() as u64,
+                Token::SingleQuotedString(s) => self.col += s.chars().count() as u64,
+                Token::Placeholder(s) => self.col += s.chars().count() as u64,
                 _ => self.col += 1,
             }
 
@@ -1216,6 +1220,22 @@ mod tests {
                 message: "Unterminated string literal".to_string(),
                 line: 1,
                 col: 8
+            })
+        );
+    }
+
+    #[test]
+    fn tokenize_unterminated_string_literal_utf8() {
+        let sql = String::from("SELECT \"なにか\" FROM Y WHERE \"なにか\" = 'test;");
+
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        assert_eq!(
+            tokenizer.tokenize(),
+            Err(TokenizerError {
+                message: "Unterminated string literal".to_string(),
+                line: 1,
+                col: 35
             })
         );
     }

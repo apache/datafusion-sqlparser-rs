@@ -442,14 +442,14 @@ impl<'a> Parser<'a> {
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {
-                    Token::LParen | Token::Period => {
+                    Token::LParen | Token::Period | Token::Colon => {
                         let mut id_parts: Vec<Ident> = vec![w.to_ident()];
-                        while self.consume_token(&Token::Period) {
+                        while self.consume_token(&Token::Period) || self.consume_token(&Token::Colon) {
                             match self.next_token() {
                                 Token::Word(w) => id_parts.push(w.to_ident()),
                                 unexpected => {
                                     return self
-                                        .expected("an identifier or a '*' after '.'", unexpected);
+                                        .expected("an identifier or a '*' after '.' or ':'", unexpected);
                                 }
                             }
                         }

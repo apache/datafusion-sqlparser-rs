@@ -1213,6 +1213,28 @@ impl<'a> Parser<'a> {
                         )
                     }
                 }
+                Keyword::AT => {
+                    // if self.parse_keyword(Keyword::TIME) {
+                    //     self.expect_keyword(Keyword::ZONE)?;
+                    if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {
+                        let time_zone = self.next_token();
+                        match time_zone {
+                            Token::SingleQuotedString(time_zone) => {
+                                log::trace!("Peek token: {:?}", self.peek_token());
+                                Ok(Expr::AtTimeZone {
+                                    timestamp: Box::new(expr),
+                                    time_zone,
+                                })
+                            }
+                            tok => self.expected(
+                                "Expected Token::SingleQuotedString after AT TIME ZONE",
+                                tok,
+                            ),
+                        }
+                    } else {
+                        self.expected("Expected Token::Word after AT", tok)
+                    }
+                }
                 Keyword::NOT | Keyword::IN | Keyword::BETWEEN => {
                     self.prev_token();
                     let negated = self.parse_keyword(Keyword::NOT);
@@ -1358,15 +1380,32 @@ impl<'a> Parser<'a> {
     const UNARY_NOT_PREC: u8 = 15;
     const BETWEEN_PREC: u8 = 20;
     const PLUS_MINUS_PREC: u8 = 30;
+    const TIME_ZONE_PREC: u8 = 20;
 
     /// Get the precedence of the next token
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
         let token = self.peek_token();
         debug!("get_next_precedence() {:?}", token);
+        let token_0 = self.peek_nth_token(0);
+        let token_1 = self.peek_nth_token(1);
+        let token_2 = self.peek_nth_token(2);
+        debug!("0: {token_0} 1: {token_1} 2: {token_2}");
         match token {
             Token::Word(w) if w.keyword == Keyword::OR => Ok(5),
             Token::Word(w) if w.keyword == Keyword::AND => Ok(10),
             Token::Word(w) if w.keyword == Keyword::XOR => Ok(24),
+
+            Token::Word(w) if w.keyword == Keyword::AT => {
+                match (self.peek_nth_token(1), self.peek_nth_token(2)) {
+                    (Token::Word(w), Token::Word(w2))
+                        if w.keyword == Keyword::TIME && w2.keyword == Keyword::ZONE =>
+                    {
+                        Ok(Self::TIME_ZONE_PREC)
+                    }
+                    _ => Ok(0),
+                }
+            }
+
             Token::Word(w) if w.keyword == Keyword::NOT => match self.peek_nth_token(1) {
                 // The precedence of NOT varies depending on keyword that
                 // follows it. If it is followed by IN, BETWEEN, or LIKE,

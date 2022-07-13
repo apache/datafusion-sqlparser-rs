@@ -313,7 +313,7 @@ fn parse_quote_identifiers_2() {
         mysql().verified_stmt(sql),
         Statement::Query(Box::new(Query {
             with: None,
-            body: SetExpr::Select(Box::new(Select {
+            body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: false,
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
@@ -330,7 +330,7 @@ fn parse_quote_identifiers_2() {
                 sort_by: vec![],
                 having: None,
                 qualify: None
-            })),
+            }))),
             order_by: vec![],
             limit: None,
             offset: None,
@@ -347,7 +347,7 @@ fn parse_quote_identifiers_3() {
         mysql().verified_stmt(sql),
         Statement::Query(Box::new(Query {
             with: None,
-            body: SetExpr::Select(Box::new(Select {
+            body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: false,
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
@@ -364,7 +364,7 @@ fn parse_quote_identifiers_3() {
                 sort_by: vec![],
                 having: None,
                 qualify: None
-            })),
+            }))),
             order_by: vec![],
             limit: None,
             offset: None,
@@ -392,7 +392,7 @@ fn parse_escaped_string() {
     let stmt = mysql().one_statement_parses_to(sql, "");
 
     match stmt {
-        Statement::Query(query) => match query.body {
+        Statement::Query(query) => match *query.body {
             SetExpr::Select(value) => {
                 let expr = expr_from_projection(only(&value.projection));
                 assert_eq!(
@@ -517,7 +517,7 @@ fn parse_simple_insert() {
             assert_eq!(
                 Box::new(Query {
                     with: None,
-                    body: SetExpr::Values(Values(vec![
+                    body: Box::new(SetExpr::Values(Values(vec![
                         vec![
                             Expr::Value(Value::SingleQuotedString("Test Some Inserts".to_string())),
                             Expr::Value(Value::Number("1".to_string(), false))
@@ -530,7 +530,7 @@ fn parse_simple_insert() {
                             Expr::Value(Value::SingleQuotedString("Test Entry 3".to_string())),
                             Expr::Value(Value::Number("3".to_string(), false))
                         ]
-                    ])),
+                    ]))),
                     order_by: vec![],
                     limit: None,
                     offset: None,
@@ -574,7 +574,7 @@ fn parse_insert_with_on_duplicate_update() {
             assert_eq!(
                 Box::new(Query {
                     with: None,
-                    body: SetExpr::Values(Values(vec![vec![
+                    body: Box::new(SetExpr::Values(Values(vec![vec![
                         Expr::Value(Value::SingleQuotedString("accounting_manager".to_string())),
                         Expr::Value(Value::SingleQuotedString(
                             "Some description about the group".to_string()
@@ -583,7 +583,7 @@ fn parse_insert_with_on_duplicate_update() {
                         Expr::Value(Value::Boolean(true)),
                         Expr::Value(Value::Boolean(true)),
                         Expr::Value(Value::Boolean(true)),
-                    ]])),
+                    ]]))),
                     order_by: vec![],
                     limit: None,
                     offset: None,
@@ -767,7 +767,7 @@ fn parse_substring_in_select() {
             assert_eq!(
                 Box::new(Query {
                     with: None,
-                    body: SetExpr::Select(Box::new(Select {
+                    body: Box::new(SetExpr::Select(Box::new(Select {
                         distinct: true,
                         top: None,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
@@ -805,7 +805,7 @@ fn parse_substring_in_select() {
                         sort_by: vec![],
                         having: None,
                         qualify: None
-                    })),
+                    }))),
                     order_by: vec![],
                     limit: None,
                     offset: None,

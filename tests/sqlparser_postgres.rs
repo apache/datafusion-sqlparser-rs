@@ -427,7 +427,7 @@ fn parse_update_set_from() {
                     lateral: false,
                     subquery: Box::new(Query {
                         with: None,
-                        body: SetExpr::Select(Box::new(Select {
+                        body: Box::new(SetExpr::Select(Box::new(Select {
                             distinct: false,
                             top: None,
                             projection: vec![
@@ -452,7 +452,7 @@ fn parse_update_set_from() {
                             sort_by: vec![],
                             having: None,
                             qualify: None
-                        })),
+                        }))),
                         order_by: vec![],
                         limit: None,
                         offset: None,
@@ -1042,7 +1042,7 @@ fn parse_prepare() {
                 Expr::Identifier("a2".into()),
                 Expr::Identifier("a3".into()),
             ]];
-            match &source.body {
+            match &*source.body {
                 SetExpr::Values(Values(values)) => assert_eq!(values.as_slice(), &expected_values),
                 _ => unreachable!(),
             }

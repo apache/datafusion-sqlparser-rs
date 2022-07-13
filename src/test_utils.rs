@@ -115,7 +115,7 @@ impl TestedDialects {
     /// Ensures that `sql` parses as a single [Select], and is not modified
     /// after a serialization round-trip.
     pub fn verified_only_select(&self, query: &str) -> Select {
-        match self.verified_query(query).body {
+        match *self.verified_query(query).body {
             SetExpr::Select(s) => *s,
             _ => panic!("Expected SetExpr::Select"),
         }

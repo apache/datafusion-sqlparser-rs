@@ -85,7 +85,7 @@ fn parse_insert_values() {
                 for (index, column) in columns.iter().enumerate() {
                     assert_eq!(column, &Ident::new(expected_columns[index].clone()));
                 }
-                match &source.body {
+                match &*source.body {
                     SetExpr::Values(Values(values)) => assert_eq!(values.as_slice(), expected_rows),
                     _ => unreachable!(),
                 }
@@ -3976,7 +3976,7 @@ fn parse_offset() {
     assert_eq!(ast.offset, expect);
     let ast = verified_query("SELECT foo FROM (SELECT * FROM bar OFFSET 2 ROWS) OFFSET 2 ROWS");
     assert_eq!(ast.offset, expect);
-    match ast.body {
+    match *ast.body {
         SetExpr::Select(s) => match only(s.from).relation {
             TableFactor::Derived { subquery, .. } => {
                 assert_eq!(subquery.offset, expect);
@@ -4070,7 +4070,7 @@ fn parse_fetch() {
         "SELECT foo FROM (SELECT * FROM bar FETCH FIRST 2 ROWS ONLY) FETCH FIRST 2 ROWS ONLY",
     );
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
-    match ast.body {
+    match *ast.body {
         SetExpr::Select(s) => match only(s.from).relation {
             TableFactor::Derived { subquery, .. } => {
                 assert_eq!(subquery.fetch, fetch_first_two_rows_only);
@@ -4088,7 +4088,7 @@ fn parse_fetch() {
         })
     );
     assert_eq!(ast.fetch, fetch_first_two_rows_only);
-    match ast.body {
+    match *ast.body {
         SetExpr::Select(s) => match only(s.from).relation {
             TableFactor::Derived { subquery, .. } => {
                 assert_eq!(
@@ -4626,7 +4626,7 @@ fn parse_merge() {
                     lateral: false,
                     subquery: Box::new(Query {
                         with: None,
-                        body: SetExpr::Select(Box::new(Select {
+                        body: Box::new(SetExpr::Select(Box::new(Select {
                             distinct: false,
                             top: None,
                             projection: vec![SelectItem::Wildcard],
@@ -4648,7 +4648,7 @@ fn parse_merge() {
                             sort_by: vec![],
                             having: None,
                             qualify: None,
-                        })),
+                        }))),
                         order_by: vec![],
                         limit: None,
                         offset: None,

@@ -3132,7 +3132,12 @@ impl<'a> Parser<'a> {
 
     pub fn parse_delete(&mut self) -> Result<Statement, ParserError> {
         self.expect_keyword(Keyword::FROM)?;
-        let table_name = self.parse_object_name()?;
+        let table_name = self.parse_table_factor()?;
+        let using = if self.parse_keyword(Keyword::USING) {
+            Some(self.parse_table_factor()?)
+        } else {
+            None
+        };
         let selection = if self.parse_keyword(Keyword::WHERE) {
             Some(self.parse_expr()?)
         } else {
@@ -3141,6 +3146,7 @@ impl<'a> Parser<'a> {
 
         Ok(Statement::Delete {
             table_name,
+            using,
             selection,
         })
     }

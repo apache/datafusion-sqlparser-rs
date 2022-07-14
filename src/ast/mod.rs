@@ -863,6 +863,7 @@ pub enum Statement {
         query: Option<Box<Query>>,
         without_rowid: bool,
         like: Option<ObjectName>,
+        clone: Option<ObjectName>,
         engine: Option<String>,
         default_charset: Option<String>,
         collation: Option<String>,
@@ -1484,6 +1485,7 @@ impl fmt::Display for Statement {
                 query,
                 without_rowid,
                 like,
+                clone,
                 default_charset,
                 engine,
                 collation,
@@ -1520,7 +1522,7 @@ impl fmt::Display for Statement {
                         write!(f, ", ")?;
                     }
                     write!(f, "{})", display_comma_separated(constraints))?;
-                } else if query.is_none() && like.is_none() {
+                } else if query.is_none() && like.is_none() && clone.is_none() {
                     // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
                     write!(f, " ()")?;
                 }
@@ -1533,6 +1535,11 @@ impl fmt::Display for Statement {
                 if let Some(l) = like {
                     write!(f, " LIKE {}", l)?;
                 }
+
+                if let Some(c) = clone {
+                    write!(f, " CLONE {}", c)?;
+                }
+
                 match hive_distribution {
                     HiveDistributionStyle::PARTITIONED { columns } => {
                         write!(f, " PARTITIONED BY ({})", display_comma_separated(columns))?;

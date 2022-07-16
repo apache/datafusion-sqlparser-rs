@@ -26,7 +26,7 @@ pub struct Query {
     /// WITH (common table expressions, or CTEs)
     pub with: Option<With>,
     /// SELECT or UNION / EXCEPT / INTERSECT
-    pub body: SetExpr,
+    pub body: Box<SetExpr>,
     /// ORDER BY
     pub order_by: Vec<OrderByExpr>,
     /// `LIMIT { <N> | ALL }`

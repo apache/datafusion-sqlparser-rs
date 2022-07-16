@@ -3216,7 +3216,7 @@ impl<'a> Parser<'a> {
         };
 
         if !self.parse_keyword(Keyword::INSERT) {
-            let body = self.parse_query_body(0)?;
+            let body = Box::new(self.parse_query_body(0)?);
 
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
                 self.parse_comma_separated(Parser::parse_order_by_expr)?
@@ -3268,7 +3268,7 @@ impl<'a> Parser<'a> {
 
             Ok(Query {
                 with,
-                body: SetExpr::Insert(insert),
+                body: Box::new(SetExpr::Insert(insert)),
                 limit: None,
                 order_by: vec![],
                 offset: None,

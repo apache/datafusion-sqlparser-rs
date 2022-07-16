@@ -1993,6 +1993,18 @@ fn parse_create_table_with_options() {
 }
 
 #[test]
+fn parse_create_table_clone() {
+    let sql = "CREATE OR REPLACE TABLE a CLONE a_tmp";
+    match verified_stmt(sql) {
+        Statement::CreateTable { name, clone, .. } => {
+            assert_eq!(ObjectName(vec![Ident::new("a")]), name);
+            assert_eq!(Some(ObjectName(vec![(Ident::new("a_tmp"))])), clone)
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_trailing_comma() {
     let sql = "CREATE TABLE foo (bar int,)";
     all_dialects().one_statement_parses_to(sql, "CREATE TABLE foo (bar INT)");

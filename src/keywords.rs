@@ -126,6 +126,7 @@ define_keywords!(
     CHAR_LENGTH,
     CHECK,
     CLOB,
+    CLONE,
     CLOSE,
     CLUSTER,
     COALESCE,

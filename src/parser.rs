@@ -1774,6 +1774,7 @@ impl<'a> Parser<'a> {
             query: None,
             without_rowid: false,
             like: None,
+            clone: None,
             default_charset: None,
             engine: None,
             collation: None,
@@ -2064,6 +2065,13 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+
+        let clone = if self.parse_keyword(Keyword::CLONE) {
+            self.parse_object_name().ok()
+        } else {
+            None
+        };
+
         // parse optional column list (schema)
         let (columns, constraints) = self.parse_columns()?;
 
@@ -2147,6 +2155,7 @@ impl<'a> Parser<'a> {
             query,
             without_rowid,
             like,
+            clone,
             engine,
             default_charset,
             collation,

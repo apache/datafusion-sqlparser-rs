@@ -3254,9 +3254,9 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
             && dialect_of!(self is MySqlDialect)
         {
-            Ok(Some(ColumnOption::DialectSpecific(vec![
-                Token::make_keyword("ON UPDATE"),
-            ])))
+            let expr = self.parse_expr()?;
+            Self::check_on_update_expr_is_valid(&expr)?;
+            Ok(Some(ColumnOption::OnUpdate(expr)))
         } else {
             Ok(None)
         }
@@ -6317,6 +6317,25 @@ impl<'a> Parser<'a> {
     /// The index of the first unprocessed token.
     pub fn index(&self) -> usize {
         self.index
+    }
+
+    fn check_on_update_expr_is_valid(expr: &Expr) -> Result<(), ParserError> {
+        let valid_object_names: [ObjectName; 4] = [
+            ObjectName(vec!["CURRENT_TIMESTAMP".into()]),
+            ObjectName(vec!["LOCALTIME".into()]),
+            ObjectName(vec!["LOCALTIMESTAMP".into()]),
+            ObjectName(vec!["NOW".into()]),
+        ];
+
+        if let Expr::Function(f) = expr {
+            if valid_object_names.contains(&f.name) {
+                return Ok(());
+            }
+        }
+        Err(ParserError::ParserError(format!(
+            "Expected one of '{}' after ON UPDATE in column definition",
+            valid_object_names.map(|x| x.to_string()).join("', '")
+        )))
     }
 }
 

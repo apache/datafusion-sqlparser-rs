@@ -540,6 +540,8 @@ pub enum ColumnOption {
     /// - MySQL's `AUTO_INCREMENT` or SQLite's `AUTOINCREMENT`
     /// - ...
     DialectSpecific(Vec<Token>),
+    /// MySql specific ON UPDATE <expr>
+    OnUpdate(Expr),
     CharacterSet(ObjectName),
     Comment(String),
 }
@@ -576,6 +578,7 @@ impl fmt::Display for ColumnOption {
             DialectSpecific(val) => write!(f, "{}", display_separated(val, " ")),
             CharacterSet(n) => write!(f, "CHARACTER SET {}", n),
             Comment(v) => write!(f, "COMMENT '{}'", escape_single_quote_string(v)),
+            OnUpdate(expr) => write!(f, "ON UPDATE {}", expr),
         }
     }
 }

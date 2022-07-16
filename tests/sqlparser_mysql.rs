@@ -1031,7 +1031,7 @@ fn parse_kill() {
 
 #[test]
 fn parse_table_colum_option_on_update() {
-    let sql1 = "CREATE TABLE foo (`modification_time` DATETIME ON UPDATE)";
+    let sql1 = "CREATE TABLE foo (`modification_time` DATETIME ON UPDATE CURRENT_TIMESTAMP())";
     match mysql().verified_stmt(sql1) {
         Statement::CreateTable { name, columns, .. } => {
             assert_eq!(name.to_string(), "foo");
@@ -1042,9 +1042,13 @@ fn parse_table_colum_option_on_update() {
                     collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,
-                        option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
-                            "ON UPDATE"
-                        )]),
+                        option: ColumnOption::OnUpdate(Expr::Function(Function {
+                            name: ObjectName(vec!["CURRENT_TIMESTAMP".into()]),
+                            args: vec![],
+                            over: None,
+                            distinct: false,
+                            special: false,
+                        })),
                     },],
                 }],
                 columns
@@ -1052,6 +1056,13 @@ fn parse_table_colum_option_on_update() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_table_colum_option_on_update_error() {
+    let sql1 = "CREATE TABLE foo (`modification_time` DATETIME ON UPDATE BOO())";
+    assert_eq!(mysql().parse_sql_statements(sql1).unwrap_err(),
+               sqlparser::parser::ParserError::ParserError("Expected one of 'CURRENT_TIMESTAMP', 'LOCALTIME', 'LOCALTIMESTAMP', 'NOW' after ON UPDATE in column definition".to_string()));
 }
 
 #[test]

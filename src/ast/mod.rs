@@ -830,7 +830,9 @@ pub enum Statement {
     /// DELETE
     Delete {
         /// FROM
-        table_name: ObjectName,
+        table_name: TableFactor,
+        /// USING (Snowflake, Postgres)
+        using: Option<TableFactor>,
         /// WHERE
         selection: Option<Expr>,
     },
@@ -1398,9 +1400,13 @@ impl fmt::Display for Statement {
             }
             Statement::Delete {
                 table_name,
+                using,
                 selection,
             } => {
                 write!(f, "DELETE FROM {}", table_name)?;
+                if let Some(using) = using {
+                    write!(f, " USING {}", using)?;
+                }
                 if let Some(selection) = selection {
                     write!(f, " WHERE {}", selection)?;
                 }

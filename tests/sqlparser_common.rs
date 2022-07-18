@@ -253,7 +253,12 @@ fn parse_delete_statement() {
     match verified_stmt(sql) {
         Statement::Delete { table_name, .. } => {
             assert_eq!(
-                ObjectName(vec![Ident::with_quote('"', "table")]),
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::with_quote('"', "table")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![]
+                },
                 table_name
             );
         }
@@ -269,16 +274,80 @@ fn parse_where_delete_statement() {
     match verified_stmt(sql) {
         Statement::Delete {
             table_name,
+            using,
             selection,
-            ..
         } => {
-            assert_eq!(ObjectName(vec![Ident::new("foo")]), table_name);
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("foo")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![]
+                },
+                table_name,
+            );
 
+            assert_eq!(None, using);
             assert_eq!(
                 Expr::BinaryOp {
                     left: Box::new(Expr::Identifier(Ident::new("name"))),
                     op: Eq,
                     right: Box::new(Expr::Value(number("5"))),
+                },
+                selection.unwrap(),
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_where_delete_with_alias_statement() {
+    use self::BinaryOperator::*;
+
+    let sql = "DELETE FROM basket AS a USING basket AS b WHERE a.id < b.id";
+    match verified_stmt(sql) {
+        Statement::Delete {
+            table_name,
+            using,
+            selection,
+        } => {
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("basket")]),
+                    alias: Some(TableAlias {
+                        name: Ident::new("a"),
+                        columns: vec![]
+                    }),
+                    args: None,
+                    with_hints: vec![]
+                },
+                table_name,
+            );
+
+            assert_eq!(
+                Some(TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("basket")]),
+                    alias: Some(TableAlias {
+                        name: Ident::new("b"),
+                        columns: vec![]
+                    }),
+                    args: None,
+                    with_hints: vec![]
+                }),
+                using
+            );
+            assert_eq!(
+                Expr::BinaryOp {
+                    left: Box::new(Expr::CompoundIdentifier(vec![
+                        Ident::new("a"),
+                        Ident::new("id")
+                    ])),
+                    op: Lt,
+                    right: Box::new(Expr::CompoundIdentifier(vec![
+                        Ident::new("b"),
+                        Ident::new("id")
+                    ])),
                 },
                 selection.unwrap(),
             );

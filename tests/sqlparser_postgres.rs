@@ -1228,6 +1228,16 @@ fn parse_array_index_expr() {
         },
         expr_from_projection(only(&select.projection)),
     );
+
+    let sql = "SELECT ARRAY[]";
+    let select = pg_and_generic().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Array(sqlparser::ast::Array {
+            elem: vec![],
+            named: true
+        }),
+        expr_from_projection(only(&select.projection)),
+    );
 }
 
 #[test]

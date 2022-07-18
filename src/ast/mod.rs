@@ -285,6 +285,11 @@ pub enum Expr {
         expr: Box<Expr>,
         data_type: DataType,
     },
+    /// AT a timestamp to a different timezone e.g. `FROM_UNIXTIME(0) AT TIME ZONE 'UTC-06:00'`
+    AtTimeZone {
+        timestamp: Box<Expr>,
+        time_zone: String,
+    },
     /// EXTRACT(DateTimeField FROM <expr>)
     Extract {
         field: DateTimeField,
@@ -561,6 +566,12 @@ impl fmt::Display for Expr {
             }
             Expr::CompositeAccess { expr, key } => {
                 write!(f, "{}.{}", expr, key)
+            }
+            Expr::AtTimeZone {
+                timestamp,
+                time_zone,
+            } => {
+                write!(f, "{} AT TIME ZONE '{}'", timestamp, time_zone)
             }
         }
     }

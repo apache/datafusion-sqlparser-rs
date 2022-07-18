@@ -2872,6 +2872,65 @@ fn parse_literal_interval() {
 }
 
 #[test]
+fn parse_at_timezone() {
+    let zero = Expr::Value(number("0"));
+    let sql = "SELECT FROM_UNIXTIME(0) AT TIME ZONE 'UTC-06:00' FROM t";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::AtTimeZone {
+            timestamp: Box::new(Expr::Function(Function {
+                name: ObjectName(vec![Ident {
+                    value: "FROM_UNIXTIME".to_string(),
+                    quote_style: None
+                }]),
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(zero.clone()))],
+                over: None,
+                distinct: false
+            })),
+            time_zone: "UTC-06:00".to_string()
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
+    let sql = r#"SELECT DATE_FORMAT(FROM_UNIXTIME(0) AT TIME ZONE 'UTC-06:00', '%Y-%m-%dT%H') AS "hour" FROM t"#;
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &SelectItem::ExprWithAlias {
+            expr: Expr::Function(Function {
+                name: ObjectName(vec![Ident {
+                    value: "DATE_FORMAT".to_string(),
+                    quote_style: None,
+                },],),
+                args: vec![
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::AtTimeZone {
+                        timestamp: Box::new(Expr::Function(Function {
+                            name: ObjectName(vec![Ident {
+                                value: "FROM_UNIXTIME".to_string(),
+                                quote_style: None,
+                            },],),
+                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(zero,),),],
+                            over: None,
+                            distinct: false,
+                        },)),
+                        time_zone: "UTC-06:00".to_string(),
+                    },),),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        Value::SingleQuotedString("%Y-%m-%dT%H".to_string(),),
+                    ),),),
+                ],
+                over: None,
+                distinct: false,
+            },),
+            alias: Ident {
+                value: "hour".to_string(),
+                quote_style: Some('"',),
+            },
+        },
+        only(&select.projection),
+    );
+}
+
+#[test]
 fn parse_simple_math_expr_plus() {
     let sql = "SELECT a + b, 2 + a, 2.5 + a, a_f + b_f, 2 + a_f, 2.5 + a_f FROM c";
     verified_only_select(sql);

@@ -128,6 +128,7 @@ fn parse_show_create() {
         ShowCreateObject::Event,
         ShowCreateObject::Function,
         ShowCreateObject::Procedure,
+        ShowCreateObject::View,
     ] {
         assert_eq!(
             mysql_and_generic().verified_stmt(format!("SHOW CREATE {} myident", obj_type).as_str()),

@@ -3610,12 +3610,14 @@ impl<'a> Parser<'a> {
             Keyword::FUNCTION,
             Keyword::PROCEDURE,
             Keyword::EVENT,
+            Keyword::VIEW,
         ])? {
             Keyword::TABLE => Ok(ShowCreateObject::Table),
             Keyword::TRIGGER => Ok(ShowCreateObject::Trigger),
             Keyword::FUNCTION => Ok(ShowCreateObject::Function),
             Keyword::PROCEDURE => Ok(ShowCreateObject::Procedure),
             Keyword::EVENT => Ok(ShowCreateObject::Event),
+            Keyword::VIEW => Ok(ShowCreateObject::View),
             keyword => Err(ParserError::ParserError(format!(
                 "Unable to map keyword to ShowCreateObject: {:?}",
                 keyword

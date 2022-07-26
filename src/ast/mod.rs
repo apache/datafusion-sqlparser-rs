@@ -867,6 +867,8 @@ pub enum Statement {
         default_charset: Option<String>,
         collation: Option<String>,
         on_commit: Option<OnCommit>,
+        /// Click house "ON CLUSTER" clause: 
+        /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
         on_cluster: Option<String>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`

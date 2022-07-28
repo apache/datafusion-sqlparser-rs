@@ -243,7 +243,7 @@ pub struct Word {
     /// The value of the token, without the enclosing quotes, and with the
     /// escape sequences (if any) processed (TODO: escapes are not handled)
     pub value: String,
-    /// An oidentifier can be "quoted" (&lt;delimited identifier> in ANSI parlance).
+    /// An identifier can be "quoted" (&lt;delimited identifier> in ANSI parlance).
     /// The standard and most implementations allow using double quotes for this,
     /// but some implementations support other quoting styles as well (e.g. \[MS SQL])
     pub quote_style: Option<char>,

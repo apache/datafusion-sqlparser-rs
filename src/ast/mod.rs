@@ -883,6 +883,9 @@ pub enum Statement {
         default_charset: Option<String>,
         collation: Option<String>,
         on_commit: Option<OnCommit>,
+        /// Click house "ON CLUSTER" clause:
+        /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
+        on_cluster: Option<String>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -1509,6 +1512,7 @@ impl fmt::Display for Statement {
                 engine,
                 collation,
                 on_commit,
+                on_cluster,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -1535,6 +1539,13 @@ impl fmt::Display for Statement {
                     temporary = if *temporary { "TEMPORARY " } else { "" },
                     name = name,
                 )?;
+                if let Some(on_cluster) = on_cluster {
+                    write!(
+                        f,
+                        " ON CLUSTER {}",
+                        on_cluster.replace('{', "'{").replace('}', "}'")
+                    )?;
+                }
                 if !columns.is_empty() || !constraints.is_empty() {
                     write!(f, " ({}", display_comma_separated(columns))?;
                     if !columns.is_empty() && !constraints.is_empty() {

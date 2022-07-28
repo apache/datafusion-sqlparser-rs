@@ -1996,6 +1996,27 @@ fn parse_create_table_as() {
 }
 
 #[test]
+fn parse_create_table_on_cluster() {
+    // Using single-quote literal to define current cluster
+    let sql = "CREATE TABLE t ON CLUSTER '{cluster}' (a INT, b INT)";
+    match verified_stmt(sql) {
+        Statement::CreateTable { on_cluster, .. } => {
+            assert_eq!(on_cluster.unwrap(), "{cluster}".to_string());
+        }
+        _ => unreachable!(),
+    }
+
+    // Using explicitly declared cluster name
+    let sql = "CREATE TABLE t ON CLUSTER my_cluster (a INT, b INT)";
+    match verified_stmt(sql) {
+        Statement::CreateTable { on_cluster, .. } => {
+            assert_eq!(on_cluster.unwrap(), "my_cluster".to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_or_replace_table() {
     let sql = "CREATE OR REPLACE TABLE t (a INT)";
 

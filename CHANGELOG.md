@@ -9,6 +9,33 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
 
+## [0.19.0] 2022-07-28
+
+### Added
+
+* Support `ON CLUSTER` for `CREATE TABLE` statement (ClickHouse DDL) (#527) - Thanks @andyrichardson
+* Support empty `ARRAY` literals (#532) - Thanks @bitemyapp
+* Support `AT TIME ZONE` clause (#539) - Thanks @bitemyapp
+* Support `USING` clause and table aliases in `DELETE` (#541) - Thanks @mobuchowski
+* Support `SHOW CREATE VIEW` statement (#536) - Thanks @mrob95
+* Support `CLONE` clause in `CREATE TABLE` statements (#542) - Thanks @mobuchowski
+* Support `WITH OFFSET Alias` in table references (#528) - Thanks @sivchari
+* Support double quoted (`"`) literal strings:  (#530) - Thanks @komukomo
+* Support `ON UPDATE` clause on column definitions in `CREATE TABLE` statements (#522) - Thanks @frolovdev
+
+
+### Changed:
+
+* `Box`ed `Query` body to save stack space (#540) - Thanks @5tan
+* Distinguish between `INT` and `INTEGER` types (#525) - Thanks @frolovdev
+* Parse `WHERE NOT EXISTS` as `Expr::Exists` rather than `Expr::UnaryOp` for consistency (#523) - Thanks @frolovdev
+* Support `Expr` instead of `String` for argument to `INTERVAL` (#517) - Thanks @togami2864
+
+### Fixed:
+
+* Report characters instead of bytes in error messages (#529) - Thanks @michael-2956
+
+
 ## [0.18.0] 2022-06-06
 
 ### Added

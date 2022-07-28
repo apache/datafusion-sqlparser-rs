@@ -2063,7 +2063,7 @@ impl<'a> Parser<'a> {
         // Clickhouse has `ON CLUSTER 'cluster'` syntax for DDLs
         let on_cluster = if self.parse_keywords(&[Keyword::ON, Keyword::CLUSTER]) {
             match self.next_token() {
-                Token::SingleQuotedString(s) => Some(s.to_string()),
+                Token::SingleQuotedString(s) => Some(s),
                 Token::Word(s) => Some(s.to_string()),
                 unexpected => self.expected("identifier or cluster literal", unexpected)?,
             }

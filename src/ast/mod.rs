@@ -867,7 +867,7 @@ pub enum Statement {
         default_charset: Option<String>,
         collation: Option<String>,
         on_commit: Option<OnCommit>,
-        /// Click house "ON CLUSTER" clause: 
+        /// Click house "ON CLUSTER" clause:
         /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
         on_cluster: Option<String>,
     },
@@ -1502,7 +1502,7 @@ impl fmt::Display for Statement {
                 //   `CREATE TABLE t (a INT) AS SELECT a from t2`
                 write!(
                     f,
-                    "CREATE {or_replace}{external}{global}{temporary}TABLE {if_not_exists}{name}{on_cluster}",
+                    "CREATE {or_replace}{external}{global}{temporary}TABLE {if_not_exists}{name}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     external = if *external { "EXTERNAL " } else { "" },
                     global = global
@@ -1517,11 +1517,14 @@ impl fmt::Display for Statement {
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     temporary = if *temporary { "TEMPORARY " } else { "" },
                     name = name,
-                    on_cluster = match on_cluster {
-                        Some(s) => format!(" ON CLUSTER {}", s.replace("{", "'{").replace("}", "}'")),
-                        None => "".to_string()
-                    }
                 )?;
+                if let Some(on_cluster) = on_cluster {
+                    write!(
+                        f,
+                        " ON CLUSTER {}",
+                        on_cluster.replace('{', "'{").replace('}', "}'")
+                    )?;
+                }
                 if !columns.is_empty() || !constraints.is_empty() {
                     write!(f, " ({}", display_comma_separated(columns))?;
                     if !columns.is_empty() && !constraints.is_empty() {

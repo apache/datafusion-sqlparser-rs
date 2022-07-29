@@ -18,6 +18,7 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::ast::ObjectName;
+use crate::dialect::{Dialect, DialectDisplay};
 
 use super::value::escape_single_quote_string;
 
@@ -99,15 +100,15 @@ pub enum DataType {
     Set(Vec<String>),
 }
 
-impl fmt::Display for DataType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for DataType {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         match self {
-            DataType::Char(size) => format_type_with_optional_length(f, "CHAR", size, false),
+            DataType::Char(size) => format_type_with_optional_length(f, dialect, "CHAR", size, false),
             DataType::Varchar(size) => {
-                format_type_with_optional_length(f, "CHARACTER VARYING", size, false)
+                format_type_with_optional_length(f, dialect, "CHARACTER VARYING", size, false)
             }
             DataType::Nvarchar(size) => {
-                format_type_with_optional_length(f, "NVARCHAR", size, false)
+                format_type_with_optional_length(f, dialect, "NVARCHAR", size, false)
             }
             DataType::Uuid => write!(f, "UUID"),
             DataType::Clob(size) => write!(f, "CLOB({})", size),
@@ -118,37 +119,37 @@ impl fmt::Display for DataType {
                 if let Some(scale) = scale {
                     write!(f, "NUMERIC({},{})", precision.unwrap(), scale)
                 } else {
-                    format_type_with_optional_length(f, "NUMERIC", precision, false)
+                    format_type_with_optional_length(f, dialect, "NUMERIC", precision, false)
                 }
             }
-            DataType::Float(size) => format_type_with_optional_length(f, "FLOAT", size, false),
+            DataType::Float(size) => format_type_with_optional_length(f, dialect, "FLOAT", size, false),
             DataType::TinyInt(zerofill) => {
-                format_type_with_optional_length(f, "TINYINT", zerofill, false)
+                format_type_with_optional_length(f, dialect, "TINYINT", zerofill, false)
             }
             DataType::UnsignedTinyInt(zerofill) => {
-                format_type_with_optional_length(f, "TINYINT", zerofill, true)
+                format_type_with_optional_length(f, dialect, "TINYINT", zerofill, true)
             }
             DataType::SmallInt(zerofill) => {
-                format_type_with_optional_length(f, "SMALLINT", zerofill, false)
+                format_type_with_optional_length(f, dialect, "SMALLINT", zerofill, false)
             }
             DataType::UnsignedSmallInt(zerofill) => {
-                format_type_with_optional_length(f, "SMALLINT", zerofill, true)
+                format_type_with_optional_length(f, dialect, "SMALLINT", zerofill, true)
             }
-            DataType::Int(zerofill) => format_type_with_optional_length(f, "INT", zerofill, false),
+            DataType::Int(zerofill) => format_type_with_optional_length(f, dialect, "INT", zerofill, false),
             DataType::UnsignedInt(zerofill) => {
-                format_type_with_optional_length(f, "INT", zerofill, true)
+                format_type_with_optional_length(f, dialect, "INT", zerofill, true)
             }
             DataType::Integer(zerofill) => {
-                format_type_with_optional_length(f, "INTEGER", zerofill, false)
+                format_type_with_optional_length(f, dialect, "INTEGER", zerofill, false)
             }
             DataType::UnsignedInteger(zerofill) => {
-                format_type_with_optional_length(f, "INTEGER", zerofill, true)
+                format_type_with_optional_length(f, dialect, "INTEGER", zerofill, true)
             }
             DataType::BigInt(zerofill) => {
-                format_type_with_optional_length(f, "BIGINT", zerofill, false)
+                format_type_with_optional_length(f, dialect, "BIGINT", zerofill, false)
             }
             DataType::UnsignedBigInt(zerofill) => {
-                format_type_with_optional_length(f, "BIGINT", zerofill, true)
+                format_type_with_optional_length(f, dialect, "BIGINT", zerofill, true)
             }
             DataType::Real => write!(f, "REAL"),
             DataType::Double => write!(f, "DOUBLE"),
@@ -162,15 +163,15 @@ impl fmt::Display for DataType {
             DataType::Text => write!(f, "TEXT"),
             DataType::String => write!(f, "STRING"),
             DataType::Bytea => write!(f, "BYTEA"),
-            DataType::Array(ty) => write!(f, "{}[]", ty),
-            DataType::Custom(ty) => write!(f, "{}", ty),
+            DataType::Array(ty) => write!(f, "{}[]", ty.sql(dialect)?),
+            DataType::Custom(ty) => write!(f, "{}", ty.sql(dialect)?),
             DataType::Enum(vals) => {
                 write!(f, "ENUM(")?;
                 for (i, v) in vals.iter().enumerate() {
                     if i != 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "'{}'", escape_single_quote_string(v))?;
+                    write!(f, "'{}'", escape_single_quote_string(v).sql(dialect)?)?;
                 }
                 write!(f, ")")
             }
@@ -180,7 +181,7 @@ impl fmt::Display for DataType {
                     if i != 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "'{}'", escape_single_quote_string(v))?;
+                    write!(f, "'{}'", escape_single_quote_string(v).sql(dialect)?)?;
                 }
                 write!(f, ")")
             }
@@ -189,7 +190,8 @@ impl fmt::Display for DataType {
 }
 
 fn format_type_with_optional_length(
-    f: &mut fmt::Formatter,
+    f: &mut (dyn fmt::Write),
+    _dialect: &Dialect,
     sql_type: &'static str,
     len: &Option<u64>,
     unsigned: bool,

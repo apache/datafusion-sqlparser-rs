@@ -52,3 +52,4 @@ pub mod tokenizer;
 // unit-tests and by the integration tests <https://stackoverflow.com/a/44541071/1026>
 // External users are not supposed to rely on this module.
 pub mod test_utils;
+pub mod dialect;

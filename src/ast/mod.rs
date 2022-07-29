@@ -26,6 +26,7 @@ use core::fmt;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use crate::dialect::{Dialect, DialectDisplay};
 
 pub use self::data_type::DataType;
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -38,22 +39,22 @@ pub use self::value::{DateTimeField, TrimWhereField, Value};
 
 struct DisplaySeparated<'a, T>
 where
-    T: fmt::Display,
+    T: DialectDisplay,
 {
     slice: &'a [T],
     sep: &'static str,
 }
 
-impl<'a, T> fmt::Display for DisplaySeparated<'a, T>
+impl<'a, T> DialectDisplay for DisplaySeparated<'a, T>
 where
-    T: fmt::Display,
+    T: DialectDisplay,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         let mut delim = "";
         for t in self.slice {
             write!(f, "{}", delim)?;
             delim = self.sep;
-            write!(f, "{}", t)?;
+            write!(f, "{}", t.sql(dialect)?)?;
         }
         Ok(())
     }
@@ -61,14 +62,14 @@ where
 
 fn display_separated<'a, T>(slice: &'a [T], sep: &'static str) -> DisplaySeparated<'a, T>
 where
-    T: fmt::Display,
+    T: DialectDisplay,
 {
     DisplaySeparated { slice, sep }
 }
 
 fn display_comma_separated<T>(slice: &[T]) -> DisplaySeparated<'_, T>
 where
-    T: fmt::Display,
+    T: DialectDisplay,
 {
     DisplaySeparated { slice, sep: ", " }
 }
@@ -119,12 +120,12 @@ impl From<&str> for Ident {
     }
 }
 
-impl fmt::Display for Ident {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for Ident {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         match self.quote_style {
             Some(q) if q == '"' || q == '\'' || q == '`' => {
                 let escaped = value::escape_quoted_string(&self.value, q);
-                write!(f, "{}{}{}", q, escaped, q)
+                write!(f, "{}{}{}", q, escaped.sql(dialect)?, q)
             }
             Some(q) if q == '[' => write!(f, "[{}]", self.value),
             None => f.write_str(&self.value),
@@ -138,9 +139,9 @@ impl fmt::Display for Ident {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ObjectName(pub Vec<Ident>);
 
-impl fmt::Display for ObjectName {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", display_separated(&self.0, "."))
+impl DialectDisplay for ObjectName {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
+        write!(f, "{}", display_separated(&self.0, ".").sql(dialect)?)
     }
 }
 
@@ -156,13 +157,13 @@ pub struct Array {
     pub named: bool,
 }
 
-impl fmt::Display for Array {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for Array {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         write!(
             f,
             "{}[{}]",
             if self.named { "ARRAY" } else { "" },
-            display_comma_separated(&self.elem)
+            display_comma_separated(&self.elem).sql(dialect)?
         )
     }
 }
@@ -181,8 +182,8 @@ pub enum JsonOperator {
     HashLongArrow,
 }
 
-impl fmt::Display for JsonOperator {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl DialectDisplay for JsonOperator {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         match self {
             JsonOperator::Arrow => {
                 write!(f, "->")
@@ -359,26 +360,26 @@ pub enum Expr {
     Array(Array),
 }
 
-impl fmt::Display for Expr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for Expr {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         match self {
-            Expr::Identifier(s) => write!(f, "{}", s),
+            Expr::Identifier(s) => write!(f, "{}", s.sql(dialect)?),
             Expr::MapAccess { column, keys } => {
-                write!(f, "{}", column)?;
+                write!(f, "{}", column.sql(dialect)?)?;
                 for k in keys {
                     match k {
-                        k @ Expr::Value(Value::Number(_, _)) => write!(f, "[{}]", k)?,
+                        k @ Expr::Value(Value::Number(_, _)) => write!(f, "[{}]", k.sql(dialect)?)?,
                         Expr::Value(Value::SingleQuotedString(s)) => write!(f, "[\"{}\"]", s)?,
-                        _ => write!(f, "[{}]", k)?,
+                        _ => write!(f, "[{}]", k.sql(dialect)?)?,
                     }
                 }
                 Ok(())
             }
-            Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
-            Expr::IsTrue(ast) => write!(f, "{} IS TRUE", ast),
-            Expr::IsFalse(ast) => write!(f, "{} IS FALSE", ast),
-            Expr::IsNull(ast) => write!(f, "{} IS NULL", ast),
-            Expr::IsNotNull(ast) => write!(f, "{} IS NOT NULL", ast),
+            Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".").sql(dialect)?),
+            Expr::IsTrue(ast) => write!(f, "{} IS TRUE", ast.sql(dialect)?),
+            Expr::IsFalse(ast) => write!(f, "{} IS FALSE", ast.sql(dialect)?),
+            Expr::IsNull(ast) => write!(f, "{} IS NULL", ast.sql(dialect)?),
+            Expr::IsNotNull(ast) => write!(f, "{} IS NOT NULL", ast.sql(dialect)?),
             Expr::InList {
                 expr,
                 list,
@@ -386,9 +387,9 @@ impl fmt::Display for Expr {
             } => write!(
                 f,
                 "{} {}IN ({})",
-                expr,
+                expr.sql(dialect)?,
                 if *negated { "NOT " } else { "" },
-                display_comma_separated(list)
+                display_comma_separated(list).sql(dialect)?
             ),
             Expr::InSubquery {
                 expr,
@@ -397,9 +398,9 @@ impl fmt::Display for Expr {
             } => write!(
                 f,
                 "{} {}IN ({})",
-                expr,
+                expr.sql(dialect)?,
                 if *negated { "NOT " } else { "" },
-                subquery
+                subquery.sql(dialect)?
             ),
             Expr::InUnnest {
                 expr,
@@ -408,9 +409,9 @@ impl fmt::Display for Expr {
             } => write!(
                 f,
                 "{} {}IN UNNEST({})",
-                expr,
+                expr.sql(dialect)?,
                 if *negated { "NOT " } else { "" },
-                array_expr
+                array_expr.sql(dialect)?
             ),
             Expr::Between {
                 expr,
@@ -420,33 +421,33 @@ impl fmt::Display for Expr {
             } => write!(
                 f,
                 "{} {}BETWEEN {} AND {}",
-                expr,
+                expr.sql(dialect)?,
                 if *negated { "NOT " } else { "" },
-                low,
-                high
+                low.sql(dialect)?,
+                high.sql(dialect)?
             ),
-            Expr::BinaryOp { left, op, right } => write!(f, "{} {} {}", left, op, right),
-            Expr::AnyOp(expr) => write!(f, "ANY({})", expr),
-            Expr::AllOp(expr) => write!(f, "ALL({})", expr),
+            Expr::BinaryOp { left, op, right } => write!(f, "{} {} {}", left.sql(dialect)?, op.sql(dialect)?, right.sql(dialect)?),
+            Expr::AnyOp(expr) => write!(f, "ANY({})", expr.sql(dialect)?),
+            Expr::AllOp(expr) => write!(f, "ALL({})", expr.sql(dialect)?),
             Expr::UnaryOp { op, expr } => {
                 if op == &UnaryOperator::PGPostfixFactorial {
-                    write!(f, "{}{}", expr, op)
+                    write!(f, "{}{}", expr.sql(dialect)?, op.sql(dialect)?)
                 } else {
-                    write!(f, "{} {}", op, expr)
+                    write!(f, "{} {}", op.sql(dialect)?, expr.sql(dialect)?)
                 }
             }
-            Expr::Cast { expr, data_type } => write!(f, "CAST({} AS {})", expr, data_type),
-            Expr::TryCast { expr, data_type } => write!(f, "TRY_CAST({} AS {})", expr, data_type),
-            Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
-            Expr::Position { expr, r#in } => write!(f, "POSITION({} IN {})", expr, r#in),
-            Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),
-            Expr::Nested(ast) => write!(f, "({})", ast),
-            Expr::Value(v) => write!(f, "{}", v),
+            Expr::Cast { expr, data_type } => write!(f, "CAST({} AS {})", expr.sql(dialect)?, data_type.sql(dialect)?),
+            Expr::TryCast { expr, data_type } => write!(f, "TRY_CAST({} AS {})", expr.sql(dialect)?, data_type.sql(dialect)?),
+            Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field.sql(dialect)?, expr.sql(dialect)?),
+            Expr::Position { expr, r#in } => write!(f, "POSITION({} IN {})", expr.sql(dialect)?, r#in.sql(dialect)?),
+            Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr.sql(dialect)?, collation.sql(dialect)?),
+            Expr::Nested(ast) => write!(f, "({})", ast.sql(dialect)?),
+            Expr::Value(v) => write!(f, "{}", v.sql(dialect)?),
             Expr::TypedString { data_type, value } => {
-                write!(f, "{}", data_type)?;
-                write!(f, " '{}'", &value::escape_single_quote_string(value))
+                write!(f, "{}", data_type.sql(dialect)?)?;
+                write!(f, " '{}'", &value::escape_single_quote_string(value).sql(dialect)?)
             }
-            Expr::Function(fun) => write!(f, "{}", fun),
+            Expr::Function(fun) => write!(f, "{}", fun.sql(dialect)?),
             Expr::Case {
                 operand,
                 conditions,
@@ -455,14 +456,14 @@ impl fmt::Display for Expr {
             } => {
                 write!(f, "CASE")?;
                 if let Some(operand) = operand {
-                    write!(f, " {}", operand)?;
+                    write!(f, " {}", operand.sql(dialect)?)?;
                 }
                 for (c, r) in conditions.iter().zip(results) {
-                    write!(f, " WHEN {} THEN {}", c, r)?;
+                    write!(f, " WHEN {} THEN {}", c.sql(dialect)?, r.sql(dialect)?)?;
                 }
 
                 if let Some(else_result) = else_result {
-                    write!(f, " ELSE {}", else_result)?;
+                    write!(f, " ELSE {}", else_result.sql(dialect)?)?;
                 }
                 write!(f, " END")
             }
@@ -470,17 +471,17 @@ impl fmt::Display for Expr {
                 f,
                 "{}EXISTS ({})",
                 if *negated { "NOT " } else { "" },
-                subquery
+                subquery.sql(dialect)?
             ),
-            Expr::Subquery(s) => write!(f, "({})", s),
-            Expr::ListAgg(listagg) => write!(f, "{}", listagg),
+            Expr::Subquery(s) => write!(f, "({})", s.sql(dialect)?),
+            Expr::ListAgg(listagg) => write!(f, "{}", listagg.sql(dialect)?),
             Expr::GroupingSets(sets) => {
                 write!(f, "GROUPING SETS (")?;
                 let mut sep = "";
                 for set in sets {
                     write!(f, "{}", sep)?;
                     sep = ", ";
-                    write!(f, "({})", display_comma_separated(set))?;
+                    write!(f, "({})", display_comma_separated(set).sql(dialect)?)?;
                 }
                 write!(f, ")")
             }
@@ -491,9 +492,9 @@ impl fmt::Display for Expr {
                     write!(f, "{}", sep)?;
                     sep = ", ";
                     if set.len() == 1 {
-                        write!(f, "{}", set[0])?;
+                        write!(f, "{}", set[0].sql(dialect)?)?;
                     } else {
-                        write!(f, "({})", display_comma_separated(set))?;
+                        write!(f, "({})", display_comma_separated(set).sql(dialect)?)?;
                     }
                 }
                 write!(f, ")")
@@ -505,9 +506,9 @@ impl fmt::Display for Expr {
                     write!(f, "{}", sep)?;
                     sep = ", ";
                     if set.len() == 1 {
-                        write!(f, "{}", set[0])?;
+                        write!(f, "{}", set[0].sql(dialect)?)?;
                     } else {
-                        write!(f, "({})", display_comma_separated(set))?;
+                        write!(f, "({})", display_comma_separated(set).sql(dialect)?)?;
                     }
                 }
                 write!(f, ")")
@@ -517,56 +518,56 @@ impl fmt::Display for Expr {
                 substring_from,
                 substring_for,
             } => {
-                write!(f, "SUBSTRING({}", expr)?;
+                write!(f, "SUBSTRING({}", expr.sql(dialect)?)?;
                 if let Some(from_part) = substring_from {
-                    write!(f, " FROM {}", from_part)?;
+                    write!(f, " FROM {}", from_part.sql(dialect)?)?;
                 }
                 if let Some(from_part) = substring_for {
-                    write!(f, " FOR {}", from_part)?;
+                    write!(f, " FOR {}", from_part.sql(dialect)?)?;
                 }
 
                 write!(f, ")")
             }
-            Expr::IsDistinctFrom(a, b) => write!(f, "{} IS DISTINCT FROM {}", a, b),
-            Expr::IsNotDistinctFrom(a, b) => write!(f, "{} IS NOT DISTINCT FROM {}", a, b),
+            Expr::IsDistinctFrom(a, b) => write!(f, "{} IS DISTINCT FROM {}", a.sql(dialect)?, b.sql(dialect)?),
+            Expr::IsNotDistinctFrom(a, b) => write!(f, "{} IS NOT DISTINCT FROM {}", a.sql(dialect)?, b.sql(dialect)?),
             Expr::Trim { expr, trim_where } => {
                 write!(f, "TRIM(")?;
                 if let Some((ident, trim_char)) = trim_where {
-                    write!(f, "{} {} FROM {}", ident, trim_char, expr)?;
+                    write!(f, "{} {} FROM {}", ident.sql(dialect)?, trim_char.sql(dialect)?, expr.sql(dialect)?)?;
                 } else {
-                    write!(f, "{}", expr)?;
+                    write!(f, "{}", expr.sql(dialect)?)?;
                 }
 
                 write!(f, ")")
             }
             Expr::Tuple(exprs) => {
-                write!(f, "({})", display_comma_separated(exprs))
+                write!(f, "({})", display_comma_separated(exprs).sql(dialect)?)
             }
             Expr::ArrayIndex { obj, indexes } => {
-                write!(f, "{}", obj)?;
+                write!(f, "{}", obj.sql(dialect)?)?;
                 for i in indexes {
-                    write!(f, "[{}]", i)?;
+                    write!(f, "[{}]", i.sql(dialect)?)?;
                 }
                 Ok(())
             }
             Expr::Array(set) => {
-                write!(f, "{}", set)
+                write!(f, "{}", set.sql(dialect)?)
             }
             Expr::JsonAccess {
                 left,
                 operator,
                 right,
             } => {
-                write!(f, "{} {} {}", left, operator, right)
+                write!(f, "{} {} {}", left.sql(dialect)?, operator.sql(dialect)?, right.sql(dialect)?)
             }
             Expr::CompositeAccess { expr, key } => {
-                write!(f, "{}.{}", expr, key)
+                write!(f, "{}.{}", expr.sql(dialect)?, key.sql(dialect)?)
             }
             Expr::AtTimeZone {
                 timestamp,
                 time_zone,
             } => {
-                write!(f, "{} AT TIME ZONE '{}'", timestamp, time_zone)
+                write!(f, "{} AT TIME ZONE '{}'", timestamp.sql(dialect)?, time_zone)
             }
         }
     }
@@ -581,21 +582,21 @@ pub struct WindowSpec {
     pub window_frame: Option<WindowFrame>,
 }
 
-impl fmt::Display for WindowSpec {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for WindowSpec {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         let mut delim = "";
         if !self.partition_by.is_empty() {
             delim = " ";
             write!(
                 f,
                 "PARTITION BY {}",
-                display_comma_separated(&self.partition_by)
+                display_comma_separated(&self.partition_by).sql(dialect)?
             )?;
         }
         if !self.order_by.is_empty() {
             f.write_str(delim)?;
             delim = " ";
-            write!(f, "ORDER BY {}", display_comma_separated(&self.order_by))?;
+            write!(f, "ORDER BY {}", display_comma_separated(&self.order_by).sql(dialect)?)?;
         }
         if let Some(window_frame) = &self.window_frame {
             f.write_str(delim)?;
@@ -603,10 +604,10 @@ impl fmt::Display for WindowSpec {
                 write!(
                     f,
                     "{} BETWEEN {} AND {}",
-                    window_frame.units, window_frame.start_bound, end_bound
+                    window_frame.units.sql(dialect)?, window_frame.start_bound.sql(dialect)?, end_bound.sql(dialect)?
                 )?;
             } else {
-                write!(f, "{} {}", window_frame.units, window_frame.start_bound)?;
+                write!(f, "{} {}", window_frame.units.sql(dialect)?, window_frame.start_bound.sql(dialect)?)?;
             }
         }
         Ok(())
@@ -651,8 +652,8 @@ pub enum WindowFrameUnits {
     Groups,
 }
 
-impl fmt::Display for WindowFrameUnits {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for WindowFrameUnits {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         f.write_str(match self {
             WindowFrameUnits::Rows => "ROWS",
             WindowFrameUnits::Range => "RANGE",
@@ -673,8 +674,8 @@ pub enum WindowFrameBound {
     Following(Option<u64>),
 }
 
-impl fmt::Display for WindowFrameBound {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for WindowFrameBound {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         match self {
             WindowFrameBound::CurrentRow => f.write_str("CURRENT ROW"),
             WindowFrameBound::Preceding(None) => f.write_str("UNBOUNDED PRECEDING"),
@@ -693,8 +694,8 @@ pub enum AddDropSync {
     SYNC,
 }
 
-impl fmt::Display for AddDropSync {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for AddDropSync {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         match self {
             AddDropSync::SYNC => f.write_str("SYNC PARTITIONS"),
             AddDropSync::DROP => f.write_str("DROP PARTITIONS"),
@@ -714,8 +715,8 @@ pub enum ShowCreateObject {
     View,
 }
 
-impl fmt::Display for ShowCreateObject {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for ShowCreateObject {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         match self {
             ShowCreateObject::Event => f.write_str("EVENT"),
             ShowCreateObject::Function => f.write_str("FUNCTION"),
@@ -734,8 +735,8 @@ pub enum CommentObject {
     Table,
 }
 
-impl fmt::Display for CommentObject {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for CommentObject {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         match self {
             CommentObject::Column => f.write_str("COLUMN"),
             CommentObject::Table => f.write_str("TABLE"),
@@ -765,21 +766,21 @@ pub enum FetchDirection {
     BackwardAll,
 }
 
-impl fmt::Display for FetchDirection {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for FetchDirection {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         match self {
-            FetchDirection::Count { limit } => f.write_str(&limit.to_string())?,
+            FetchDirection::Count { limit } => f.write_str(&limit.sql(dialect)?)?,
             FetchDirection::Next => f.write_str("NEXT")?,
             FetchDirection::Prior => f.write_str("PRIOR")?,
             FetchDirection::First => f.write_str("FIRST")?,
             FetchDirection::Last => f.write_str("LAST")?,
             FetchDirection::Absolute { limit } => {
                 f.write_str("ABSOLUTE ")?;
-                f.write_str(&limit.to_string())?;
+                f.write_str(&limit.sql(dialect)?)?;
             }
             FetchDirection::Relative { limit } => {
                 f.write_str("RELATIVE ")?;
-                f.write_str(&limit.to_string())?;
+                f.write_str(&limit.sql(dialect)?)?;
             }
             FetchDirection::All => f.write_str("ALL")?,
             FetchDirection::Forward { limit } => {
@@ -787,7 +788,7 @@ impl fmt::Display for FetchDirection {
 
                 if let Some(l) = limit {
                     f.write_str(" ")?;
-                    f.write_str(&l.to_string())?;
+                    f.write_str(&l.sql(dialect)?)?;
                 }
             }
             FetchDirection::ForwardAll => f.write_str("FORWARD ALL")?,
@@ -796,7 +797,7 @@ impl fmt::Display for FetchDirection {
 
                 if let Some(l) = limit {
                     f.write_str(" ")?;
-                    f.write_str(&l.to_string())?;
+                    f.write_str(&l.sql(dialect)?)?;
                 }
             }
             FetchDirection::BackwardAll => f.write_str("BACKWARD ALL")?,
@@ -824,8 +825,8 @@ pub enum Action {
     Usage,
 }
 
-impl fmt::Display for Action {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for Action {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         match self {
             Action::Connect => f.write_str("CONNECT")?,
             Action::Create => f.write_str("CREATE")?,
@@ -846,7 +847,7 @@ impl fmt::Display for Action {
             | Action::Select { columns }
             | Action::Update { columns } => {
                 if let Some(columns) = columns {
-                    write!(f, " ({})", display_comma_separated(columns))?;
+                    write!(f, " ({})", display_comma_separated(columns).sql(dialect)?)?;
                 }
             }
             _ => (),
@@ -871,30 +872,30 @@ pub enum GrantObjects {
     Tables(Vec<ObjectName>),
 }
 
-impl fmt::Display for GrantObjects {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for GrantObjects {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         match self {
             GrantObjects::Sequences(sequences) => {
-                write!(f, "SEQUENCE {}", display_comma_separated(sequences))
+                write!(f, "SEQUENCE {}", display_comma_separated(sequences).sql(dialect)?)
             }
             GrantObjects::Schemas(schemas) => {
-                write!(f, "SCHEMA {}", display_comma_separated(schemas))
+                write!(f, "SCHEMA {}", display_comma_separated(schemas).sql(dialect)?)
             }
             GrantObjects::Tables(tables) => {
-                write!(f, "{}", display_comma_separated(tables))
+                write!(f, "{}", display_comma_separated(tables).sql(dialect)?)
             }
             GrantObjects::AllSequencesInSchema { schemas } => {
                 write!(
                     f,
                     "ALL SEQUENCES IN SCHEMA {}",
-                    display_comma_separated(schemas)
+                    display_comma_separated(schemas).sql(dialect)?
                 )
             }
             GrantObjects::AllTablesInSchema { schemas } => {
                 write!(
                     f,
                     "ALL TABLES IN SCHEMA {}",
-                    display_comma_separated(schemas)
+                    display_comma_separated(schemas).sql(dialect)?
                 )
             }
         }
@@ -909,9 +910,9 @@ pub struct Assignment {
     pub value: Expr,
 }
 
-impl fmt::Display for Assignment {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} = {}", display_separated(&self.id, "."), self.value)
+impl DialectDisplay for Assignment {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
+        write!(f, "{} = {}", display_separated(&self.id, ".").sql(dialect)?, self.value.sql(dialect)?)
     }
 }
 
@@ -925,11 +926,11 @@ pub enum FunctionArgExpr {
     Wildcard,
 }
 
-impl fmt::Display for FunctionArgExpr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for FunctionArgExpr {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         match self {
-            FunctionArgExpr::Expr(expr) => write!(f, "{}", expr),
-            FunctionArgExpr::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
+            FunctionArgExpr::Expr(expr) => write!(f, "{}", expr.sql(dialect)?),
+            FunctionArgExpr::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix.sql(dialect)?),
             FunctionArgExpr::Wildcard => f.write_str("*"),
         }
     }
@@ -942,11 +943,11 @@ pub enum FunctionArg {
     Unnamed(FunctionArgExpr),
 }
 
-impl fmt::Display for FunctionArg {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for FunctionArg {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         match self {
-            FunctionArg::Named { name, arg } => write!(f, "{} => {}", name, arg),
-            FunctionArg::Unnamed(unnamed_arg) => write!(f, "{}", unnamed_arg),
+            FunctionArg::Named { name, arg } => write!(f, "{} => {}", name.sql(dialect)?, arg.sql(dialect)?),
+            FunctionArg::Unnamed(unnamed_arg) => write!(f, "{}", unnamed_arg.sql(dialect)?),
         }
     }
 }
@@ -958,11 +959,11 @@ pub enum CloseCursor {
     Specific { name: Ident },
 }
 
-impl fmt::Display for CloseCursor {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for CloseCursor {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         match self {
             CloseCursor::All => write!(f, "ALL"),
-            CloseCursor::Specific { name } => write!(f, "{}", name),
+            CloseCursor::Specific { name } => write!(f, "{}", name.sql(dialect)?),
         }
     }
 }
@@ -978,17 +979,17 @@ pub struct Function {
     pub distinct: bool,
 }
 
-impl fmt::Display for Function {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for Function {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         write!(
             f,
             "{}({}{})",
-            self.name,
+            self.name.sql(dialect)?,
             if self.distinct { "DISTINCT " } else { "" },
-            display_comma_separated(&self.args),
+            display_comma_separated(&self.args).sql(dialect)?,
         )?;
         if let Some(o) = &self.over {
-            write!(f, " OVER ({})", o)?;
+            write!(f, " OVER ({})", o.sql(dialect)?)?;
         }
         Ok(())
     }
@@ -1007,8 +1008,8 @@ pub enum FileFormat {
     JSONFILE,
 }
 
-impl fmt::Display for FileFormat {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for FileFormat {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         use self::FileFormat::*;
         f.write_str(match self {
             TEXTFILE => "TEXTFILE",
@@ -1034,26 +1035,26 @@ pub struct ListAgg {
     pub within_group: Vec<OrderByExpr>,
 }
 
-impl fmt::Display for ListAgg {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for ListAgg {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         write!(
             f,
             "LISTAGG({}{}",
             if self.distinct { "DISTINCT " } else { "" },
-            self.expr
+            self.expr.sql(dialect)?
         )?;
         if let Some(separator) = &self.separator {
-            write!(f, ", {}", separator)?;
+            write!(f, ", {}", separator.sql(dialect)?)?;
         }
         if let Some(on_overflow) = &self.on_overflow {
-            write!(f, "{}", on_overflow)?;
+            write!(f, "{}", on_overflow.sql(dialect)?)?;
         }
         write!(f, ")")?;
         if !self.within_group.is_empty() {
             write!(
                 f,
                 " WITHIN GROUP (ORDER BY {})",
-                display_comma_separated(&self.within_group)
+                display_comma_separated(&self.within_group).sql(dialect)?
             )?;
         }
         Ok(())
@@ -1074,15 +1075,15 @@ pub enum ListAggOnOverflow {
     },
 }
 
-impl fmt::Display for ListAggOnOverflow {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for ListAggOnOverflow {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         write!(f, " ON OVERFLOW")?;
         match self {
             ListAggOnOverflow::Error => write!(f, " ERROR"),
             ListAggOnOverflow::Truncate { filler, with_count } => {
                 write!(f, " TRUNCATE")?;
                 if let Some(filler) = filler {
-                    write!(f, " {}", filler)?;
+                    write!(f, " {}", filler.sql(dialect)?)?;
                 }
                 if *with_count {
                     write!(f, " WITH")?;
@@ -1104,8 +1105,8 @@ pub enum ObjectType {
     Schema,
 }
 
-impl fmt::Display for ObjectType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for ObjectType {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         f.write_str(match self {
             ObjectType::Table => "TABLE",
             ObjectType::View => "VIEW",
@@ -1123,8 +1124,8 @@ pub enum KillType {
     Mutation,
 }
 
-impl fmt::Display for KillType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for KillType {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         f.write_str(match self {
             // MySQL
             KillType::Connection => "CONNECTION",
@@ -1142,9 +1143,9 @@ pub struct SqlOption {
     pub value: Value,
 }
 
-impl fmt::Display for SqlOption {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} = {}", self.name, self.value)
+impl DialectDisplay for SqlOption {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
+        write!(f, "{} = {}", self.name.sql(dialect)?, self.value.sql(dialect)?)
     }
 }
 
@@ -1155,12 +1156,12 @@ pub enum TransactionMode {
     IsolationLevel(TransactionIsolationLevel),
 }
 
-impl fmt::Display for TransactionMode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for TransactionMode {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         use TransactionMode::*;
         match self {
-            AccessMode(access_mode) => write!(f, "{}", access_mode),
-            IsolationLevel(iso_level) => write!(f, "ISOLATION LEVEL {}", iso_level),
+            AccessMode(access_mode) => write!(f, "{}", access_mode.sql(dialect)?),
+            IsolationLevel(iso_level) => write!(f, "ISOLATION LEVEL {}", iso_level.sql(dialect)?),
         }
     }
 }
@@ -1172,8 +1173,8 @@ pub enum TransactionAccessMode {
     ReadWrite,
 }
 
-impl fmt::Display for TransactionAccessMode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for TransactionAccessMode {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         use TransactionAccessMode::*;
         f.write_str(match self {
             ReadOnly => "READ ONLY",
@@ -1191,8 +1192,8 @@ pub enum TransactionIsolationLevel {
     Serializable,
 }
 
-impl fmt::Display for TransactionIsolationLevel {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for TransactionIsolationLevel {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         use TransactionIsolationLevel::*;
         f.write_str(match self {
             ReadUncommitted => "READ UNCOMMITTED",
@@ -1211,13 +1212,13 @@ pub enum ShowStatementFilter {
     Where(Expr),
 }
 
-impl fmt::Display for ShowStatementFilter {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for ShowStatementFilter {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         use ShowStatementFilter::*;
         match self {
-            Like(pattern) => write!(f, "LIKE '{}'", value::escape_single_quote_string(pattern)),
-            ILike(pattern) => write!(f, "ILIKE {}", value::escape_single_quote_string(pattern)),
-            Where(expr) => write!(f, "WHERE {}", expr),
+            Like(pattern) => write!(f, "LIKE '{}'", value::escape_single_quote_string(pattern).sql(dialect)?),
+            ILike(pattern) => write!(f, "ILIKE {}", value::escape_single_quote_string(pattern).sql(dialect)?),
+            Where(expr) => write!(f, "WHERE {}", expr.sql(dialect)?),
         }
     }
 }
@@ -1229,12 +1230,12 @@ pub enum SetVariableValue {
     Literal(Value),
 }
 
-impl fmt::Display for SetVariableValue {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for SetVariableValue {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         use SetVariableValue::*;
         match self {
-            Ident(ident) => write!(f, "{}", ident),
-            Literal(literal) => write!(f, "{}", literal),
+            Ident(ident) => write!(f, "{}", ident.sql(dialect)?),
+            Literal(literal) => write!(f, "{}", literal.sql(dialect)?),
         }
     }
 }
@@ -1252,8 +1253,8 @@ pub enum SqliteOnConflict {
     Replace,
 }
 
-impl fmt::Display for SqliteOnConflict {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for SqliteOnConflict {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         use SqliteOnConflict::*;
         match self {
             Rollback => write!(f, "ROLLBACK"),
@@ -1280,17 +1281,17 @@ pub enum CopyTarget {
     },
 }
 
-impl fmt::Display for CopyTarget {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for CopyTarget {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         use CopyTarget::*;
         match self {
             Stdin { .. } => write!(f, "STDIN"),
             Stdout => write!(f, "STDOUT"),
-            File { filename } => write!(f, "'{}'", value::escape_single_quote_string(filename)),
+            File { filename } => write!(f, "'{}'", value::escape_single_quote_string(filename).sql(dialect)?),
             Program { command } => write!(
                 f,
                 "PROGRAM '{}'",
-                value::escape_single_quote_string(command)
+                value::escape_single_quote_string(command).sql(dialect)?
             ),
         }
     }
@@ -1334,25 +1335,25 @@ pub enum CopyOption {
     Encoding(String),
 }
 
-impl fmt::Display for CopyOption {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for CopyOption {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         use CopyOption::*;
         match self {
-            Format(name) => write!(f, "FORMAT {}", name),
+            Format(name) => write!(f, "FORMAT {}", name.sql(dialect)?),
             Freeze(true) => write!(f, "FREEZE"),
             Freeze(false) => write!(f, "FREEZE FALSE"),
             Delimiter(char) => write!(f, "DELIMITER '{}'", char),
-            Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),
+            Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string).sql(dialect)?),
             Header(true) => write!(f, "HEADER"),
             Header(false) => write!(f, "HEADER FALSE"),
             Quote(char) => write!(f, "QUOTE '{}'", char),
             Escape(char) => write!(f, "ESCAPE '{}'", char),
-            ForceQuote(columns) => write!(f, "FORCE_QUOTE ({})", display_comma_separated(columns)),
+            ForceQuote(columns) => write!(f, "FORCE_QUOTE ({})", display_comma_separated(columns).sql(dialect)?),
             ForceNotNull(columns) => {
-                write!(f, "FORCE_NOT_NULL ({})", display_comma_separated(columns))
+                write!(f, "FORCE_NOT_NULL ({})", display_comma_separated(columns).sql(dialect)?)
             }
-            ForceNull(columns) => write!(f, "FORCE_NULL ({})", display_comma_separated(columns)),
-            Encoding(name) => write!(f, "ENCODING '{}'", value::escape_single_quote_string(name)),
+            ForceNull(columns) => write!(f, "FORCE_NULL ({})", display_comma_separated(columns).sql(dialect)?),
+            Encoding(name) => write!(f, "ENCODING '{}'", value::escape_single_quote_string(name).sql(dialect)?),
         }
     }
 }
@@ -1373,14 +1374,14 @@ pub enum CopyLegacyOption {
     Csv(Vec<CopyLegacyCsvOption>),
 }
 
-impl fmt::Display for CopyLegacyOption {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for CopyLegacyOption {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         use CopyLegacyOption::*;
         match self {
             Binary => write!(f, "BINARY"),
             Delimiter(char) => write!(f, "DELIMITER '{}'", char),
-            Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),
-            Csv(opts) => write!(f, "CSV {}", display_separated(opts, " ")),
+            Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string).sql(dialect)?),
+            Csv(opts) => write!(f, "CSV {}", display_separated(opts, " ").sql(dialect)?),
         }
     }
 }
@@ -1403,16 +1404,16 @@ pub enum CopyLegacyCsvOption {
     ForceNotNull(Vec<Ident>),
 }
 
-impl fmt::Display for CopyLegacyCsvOption {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for CopyLegacyCsvOption {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         use CopyLegacyCsvOption::*;
         match self {
             Header => write!(f, "HEADER"),
             Quote(char) => write!(f, "QUOTE '{}'", char),
             Escape(char) => write!(f, "ESCAPE '{}'", char),
-            ForceQuote(columns) => write!(f, "FORCE QUOTE {}", display_comma_separated(columns)),
+            ForceQuote(columns) => write!(f, "FORCE QUOTE {}", display_comma_separated(columns).sql(dialect)?),
             ForceNotNull(columns) => {
-                write!(f, "FORCE NOT NULL {}", display_comma_separated(columns))
+                write!(f, "FORCE NOT NULL {}", display_comma_separated(columns).sql(dialect)?)
             }
         }
     }
@@ -1434,8 +1435,8 @@ pub enum MergeClause {
     },
 }
 
-impl fmt::Display for MergeClause {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for MergeClause {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         use MergeClause::*;
         write!(f, "WHEN")?;
         match self {
@@ -1445,18 +1446,18 @@ impl fmt::Display for MergeClause {
             } => {
                 write!(f, " MATCHED")?;
                 if let Some(pred) = predicate {
-                    write!(f, " AND {}", pred)?;
+                    write!(f, " AND {}", pred.sql(dialect)?)?;
                 }
                 write!(
                     f,
                     " THEN UPDATE SET {}",
-                    display_comma_separated(assignments)
+                    display_comma_separated(assignments).sql(dialect)?
                 )
             }
             MatchedDelete(predicate) => {
                 write!(f, " MATCHED")?;
                 if let Some(pred) = predicate {
-                    write!(f, " AND {}", pred)?;
+                    write!(f, " AND {}", pred.sql(dialect)?)?;
                 }
                 write!(f, " THEN DELETE")
             }
@@ -1467,13 +1468,13 @@ impl fmt::Display for MergeClause {
             } => {
                 write!(f, " NOT MATCHED")?;
                 if let Some(pred) = predicate {
-                    write!(f, " AND {}", pred)?;
+                    write!(f, " AND {}", pred.sql(dialect)?)?;
                 }
                 write!(
                     f,
                     " THEN INSERT ({}) {}",
-                    display_comma_separated(columns),
-                    values
+                    display_comma_separated(columns).sql(dialect)?,
+                    values.sql(dialect)?
                 )
             }
         }
@@ -1489,8 +1490,8 @@ pub enum DiscardObject {
     TEMP,
 }
 
-impl fmt::Display for DiscardObject {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for DiscardObject {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         match self {
             DiscardObject::ALL => f.write_str("ALL"),
             DiscardObject::PLANS => f.write_str("PLANS"),
@@ -1508,8 +1509,8 @@ pub enum CreateFunctionUsing {
     Archive(String),
 }
 
-impl fmt::Display for CreateFunctionUsing {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for CreateFunctionUsing {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         write!(f, "USING ")?;
         match self {
             CreateFunctionUsing::Jar(uri) => write!(f, "JAR '{uri}'"),
@@ -1531,19 +1532,21 @@ mod tests {
 
     #[test]
     fn test_grouping_sets_display() {
+        let dialect: Dialect = Default::default();
+
         // a and b in different group
         let grouping_sets = Expr::GroupingSets(vec![
             vec![Expr::Identifier(Ident::new("a"))],
             vec![Expr::Identifier(Ident::new("b"))],
         ]);
-        assert_eq!("GROUPING SETS ((a), (b))", format!("{}", grouping_sets));
+        assert_eq!("GROUPING SETS ((a), (b))", format!("{}", grouping_sets.sql(&dialect).unwrap()));
 
         // a and b in the same group
         let grouping_sets = Expr::GroupingSets(vec![vec![
             Expr::Identifier(Ident::new("a")),
             Expr::Identifier(Ident::new("b")),
         ]]);
-        assert_eq!("GROUPING SETS ((a, b))", format!("{}", grouping_sets));
+        assert_eq!("GROUPING SETS ((a, b))", format!("{}", grouping_sets.sql(&dialect).unwrap()));
 
         // (a, b) and (c, d) in different group
         let grouping_sets = Expr::GroupingSets(vec![
@@ -1558,26 +1561,28 @@ mod tests {
         ]);
         assert_eq!(
             "GROUPING SETS ((a, b), (c, d))",
-            format!("{}", grouping_sets)
+            format!("{}", grouping_sets.sql(&dialect).unwrap())
         );
     }
 
     #[test]
     fn test_rollup_display() {
+        let dialect: Dialect = Default::default();
+
         let rollup = Expr::Rollup(vec![vec![Expr::Identifier(Ident::new("a"))]]);
-        assert_eq!("ROLLUP (a)", format!("{}", rollup));
+        assert_eq!("ROLLUP (a)", format!("{}", rollup.sql(&dialect).unwrap()));
 
         let rollup = Expr::Rollup(vec![vec![
             Expr::Identifier(Ident::new("a")),
             Expr::Identifier(Ident::new("b")),
         ]]);
-        assert_eq!("ROLLUP ((a, b))", format!("{}", rollup));
+        assert_eq!("ROLLUP ((a, b))", format!("{}", rollup.sql(&dialect).unwrap()));
 
         let rollup = Expr::Rollup(vec![
             vec![Expr::Identifier(Ident::new("a"))],
             vec![Expr::Identifier(Ident::new("b"))],
         ]);
-        assert_eq!("ROLLUP (a, b)", format!("{}", rollup));
+        assert_eq!("ROLLUP (a, b)", format!("{}", rollup.sql(&dialect).unwrap()));
 
         let rollup = Expr::Rollup(vec![
             vec![Expr::Identifier(Ident::new("a"))],
@@ -1587,25 +1592,27 @@ mod tests {
             ],
             vec![Expr::Identifier(Ident::new("d"))],
         ]);
-        assert_eq!("ROLLUP (a, (b, c), d)", format!("{}", rollup));
+        assert_eq!("ROLLUP (a, (b, c), d)", format!("{}", rollup.sql(&dialect).unwrap()));
     }
 
     #[test]
     fn test_cube_display() {
+        let dialect: Dialect = Default::default();
+
         let cube = Expr::Cube(vec![vec![Expr::Identifier(Ident::new("a"))]]);
-        assert_eq!("CUBE (a)", format!("{}", cube));
+        assert_eq!("CUBE (a)", format!("{}", cube.sql(&dialect).unwrap()));
 
         let cube = Expr::Cube(vec![vec![
             Expr::Identifier(Ident::new("a")),
             Expr::Identifier(Ident::new("b")),
         ]]);
-        assert_eq!("CUBE ((a, b))", format!("{}", cube));
+        assert_eq!("CUBE ((a, b))", format!("{}", cube.sql(&dialect).unwrap()));
 
         let cube = Expr::Cube(vec![
             vec![Expr::Identifier(Ident::new("a"))],
             vec![Expr::Identifier(Ident::new("b"))],
         ]);
-        assert_eq!("CUBE (a, b)", format!("{}", cube));
+        assert_eq!("CUBE (a, b)", format!("{}", cube.sql(&dialect).unwrap()));
 
         let cube = Expr::Cube(vec![
             vec![Expr::Identifier(Ident::new("a"))],
@@ -1615,6 +1622,6 @@ mod tests {
             ],
             vec![Expr::Identifier(Ident::new("d"))],
         ]);
-        assert_eq!("CUBE (a, (b, c), d)", format!("{}", cube));
+        assert_eq!("CUBE (a, (b, c), d)", format!("{}", cube.sql(&dialect).unwrap()));
     }
 }

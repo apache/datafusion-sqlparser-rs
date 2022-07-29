@@ -12,6 +12,7 @@
 
 #![warn(clippy::all)]
 
+use sqlparser::dialect::DialectDisplay;
 use sqlparser::parser::*;
 
 fn main() {
@@ -22,5 +23,5 @@ fn main() {
 
     let ast = Parser::parse_sql_query(sql).unwrap();
 
-    println!("AST: {:?}", ast);
+    println!("AST: {:?}", ast.sql(&Default::default()).unwrap());
 }

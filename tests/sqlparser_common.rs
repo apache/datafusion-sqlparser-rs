@@ -23,6 +23,7 @@ mod test_utils;
 
 use matches::assert_matches;
 use sqlparser::ast::*;
+use sqlparser::dialect::DialectDisplay;
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
 use sqlparser::test_utils::{
@@ -2312,7 +2313,7 @@ fn parse_ctes() {
     fn assert_ctes_in_select(expected: &[&str], sel: &Query) {
         for (i, exp) in expected.iter().enumerate() {
             let Cte { alias, query, .. } = &sel.with.as_ref().unwrap().cte_tables[i];
-            assert_eq!(*exp, query.to_string());
+            assert_eq!(*exp, query.sql(&Default::default()).unwrap());
             assert_eq!(
                 if i == 0 {
                     Ident::new("a")
@@ -2775,7 +2776,7 @@ fn lateral_derived() {
             assert_eq!(lateral_in, lateral);
             assert_eq!(Ident::new("order"), alias.name);
             assert_eq!(
-                subquery.to_string(),
+                subquery.sql(&Default::default()).unwrap(),
                 "SELECT * FROM order WHERE order.customer = customer.id LIMIT 3"
             );
         } else {

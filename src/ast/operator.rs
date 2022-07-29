@@ -14,6 +14,7 @@ use core::fmt;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use crate::dialect::{Dialect, DialectDisplay};
 
 /// Unary operators
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -36,8 +37,8 @@ pub enum UnaryOperator {
     PGAbs,
 }
 
-impl fmt::Display for UnaryOperator {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for UnaryOperator {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         f.write_str(match self {
             UnaryOperator::Plus => "+",
             UnaryOperator::Minus => "-",
@@ -88,8 +89,8 @@ pub enum BinaryOperator {
     PGRegexNotIMatch,
 }
 
-impl fmt::Display for BinaryOperator {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for BinaryOperator {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         f.write_str(match self {
             BinaryOperator::Plus => "+",
             BinaryOperator::Minus => "-",

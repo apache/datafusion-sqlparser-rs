@@ -64,6 +64,7 @@ pub enum IsLateral {
 }
 
 use IsLateral::*;
+use crate::dialect::DialectDisplay;
 
 pub enum WildcardExpr {
     Expr(Expr),
@@ -2310,7 +2311,7 @@ impl Parser {
                             if let Some(inner_alias) = alias {
                                 return Err(ParserError::ParserError(format!(
                                     "duplicate alias {}",
-                                    inner_alias
+                                    inner_alias.sql(&Default::default()).unwrap()
                                 )));
                             }
                             // Act as if the alias was specified normally next

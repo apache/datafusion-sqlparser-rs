@@ -20,6 +20,7 @@ use core::fmt;
 use bigdecimal::BigDecimal;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use crate::dialect::{Dialect, DialectDisplay};
 
 use super::Expr;
 
@@ -70,13 +71,13 @@ pub enum Value {
     Placeholder(String),
 }
 
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for Value {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         match self {
             Value::Number(v, l) => write!(f, "{}{long}", v, long = if *l { "L" } else { "" }),
             Value::DoubleQuotedString(v) => write!(f, "\"{}\"", v),
-            Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
-            Value::EscapedStringLiteral(v) => write!(f, "E'{}'", escape_escaped_string(v)),
+            Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v).sql(dialect)?),
+            Value::EscapedStringLiteral(v) => write!(f, "E'{}'", escape_escaped_string(v).sql(dialect)?),
             Value::NationalStringLiteral(v) => write!(f, "N'{}'", v),
             Value::HexStringLiteral(v) => write!(f, "X'{}'", v),
             Value::Boolean(v) => write!(f, "{}", v),
@@ -93,7 +94,7 @@ impl fmt::Display for Value {
                 write!(
                     f,
                     "INTERVAL {} SECOND ({}, {})",
-                    value, leading_precision, fractional_seconds_precision
+                    value.sql(dialect)?, leading_precision, fractional_seconds_precision
                 )
             }
             Value::Interval {
@@ -103,15 +104,15 @@ impl fmt::Display for Value {
                 last_field,
                 fractional_seconds_precision,
             } => {
-                write!(f, "INTERVAL {}", value)?;
+                write!(f, "INTERVAL {}", value.sql(dialect)?)?;
                 if let Some(leading_field) = leading_field {
-                    write!(f, " {}", leading_field)?;
+                    write!(f, " {}", leading_field.sql(dialect)?)?;
                 }
                 if let Some(leading_precision) = leading_precision {
                     write!(f, " ({})", leading_precision)?;
                 }
                 if let Some(last_field) = last_field {
-                    write!(f, " TO {}", last_field)?;
+                    write!(f, " TO {}", last_field.sql(dialect)?)?;
                 }
                 if let Some(fractional_seconds_precision) = fractional_seconds_precision {
                     write!(f, " ({})", fractional_seconds_precision)?;
@@ -151,8 +152,8 @@ pub enum DateTimeField {
     TimezoneMinute,
 }
 
-impl fmt::Display for DateTimeField {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for DateTimeField {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         f.write_str(match self {
             DateTimeField::Year => "YEAR",
             DateTimeField::Month => "MONTH",
@@ -185,8 +186,8 @@ pub struct EscapeQuotedString<'a> {
     quote: char,
 }
 
-impl<'a> fmt::Display for EscapeQuotedString<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl<'a> DialectDisplay for EscapeQuotedString<'a> {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         for c in self.string.chars() {
             if c == self.quote {
                 write!(f, "{q}{q}", q = self.quote)?;
@@ -208,8 +209,8 @@ pub fn escape_single_quote_string(s: &str) -> EscapeQuotedString<'_> {
 
 pub struct EscapeEscapedStringLiteral<'a>(&'a str);
 
-impl<'a> fmt::Display for EscapeEscapedStringLiteral<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl<'a> DialectDisplay for EscapeEscapedStringLiteral<'a> {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         for c in self.0.chars() {
             match c {
                 '\'' => {
@@ -248,8 +249,8 @@ pub enum TrimWhereField {
     Trailing,
 }
 
-impl fmt::Display for TrimWhereField {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for TrimWhereField {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         use TrimWhereField::*;
         f.write_str(match self {
             Both => "BOTH",

@@ -15,8 +15,10 @@ use alloc::{boxed::Box, vec::Vec};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use std::fmt::Write;
 
 use crate::ast::*;
+use crate::dialect::{Dialect, DialectDisplay};
 
 /// The most complete variant of a `SELECT` query expression, optionally
 /// including `WITH`, `UNION` / other set operations, and `ORDER BY`.
@@ -39,26 +41,26 @@ pub struct Query {
     pub lock: Option<LockType>,
 }
 
-impl fmt::Display for Query {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for Query {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         if let Some(ref with) = self.with {
-            write!(f, "{} ", with)?;
+            write!(f, "{} ", with.sql(dialect)?)?;
         }
-        write!(f, "{}", self.body)?;
+        write!(f, "{}", self.body.sql(dialect)?)?;
         if !self.order_by.is_empty() {
-            write!(f, " ORDER BY {}", display_comma_separated(&self.order_by))?;
+            write!(f, " ORDER BY {}", display_comma_separated(&self.order_by).sql(dialect)?)?;
         }
         if let Some(ref limit) = self.limit {
-            write!(f, " LIMIT {}", limit)?;
+            write!(f, " LIMIT {}", limit.sql(dialect)?)?;
         }
         if let Some(ref offset) = self.offset {
-            write!(f, " {}", offset)?;
+            write!(f, " {}", offset.sql(dialect)?)?;
         }
         if let Some(ref fetch) = self.fetch {
-            write!(f, " {}", fetch)?;
+            write!(f, " {}", fetch.sql(dialect)?)?;
         }
         if let Some(ref lock) = self.lock {
-            write!(f, " {}", lock)?;
+            write!(f, " {}", lock.sql(dialect)?)?;
         }
         Ok(())
     }
@@ -85,12 +87,12 @@ pub enum SetExpr {
     Values(Values),
 }
 
-impl fmt::Display for SetExpr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for SetExpr {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         match self {
-            SetExpr::Select(s) => write!(f, "{}", s),
-            SetExpr::Query(q) => write!(f, "({})", q),
-            SetExpr::Values(v) => write!(f, "{}", v),
+            SetExpr::Select(s) => write!(f, "{}", s.sql(dialect)?),
+            SetExpr::Query(q) => write!(f, "({})", q.sql(dialect)?),
+            SetExpr::Values(v) => write!(f, "{}", v.sql(dialect)?),
             SetExpr::SetOperation {
                 left,
                 right,
@@ -98,7 +100,12 @@ impl fmt::Display for SetExpr {
                 all,
             } => {
                 let all_str = if *all { " ALL" } else { "" };
-                write!(f, "{} {}{} {}", left, op, all_str, right)
+                write!(f, "{} {}{} {}",
+                       left.sql(dialect)?,
+                       op.sql(dialect)?,
+                       all_str,
+                       right.sql(dialect)?,
+                )
             }
         }
     }
@@ -112,8 +119,8 @@ pub enum SetOperator {
     Intersect,
 }
 
-impl fmt::Display for SetOperator {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for SetOperator {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         f.write_str(match self {
             SetOperator::Union => "UNION",
             SetOperator::Except => "EXCEPT",
@@ -155,54 +162,54 @@ pub struct Select {
     pub qualify: Option<Expr>,
 }
 
-impl fmt::Display for Select {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for Select {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         write!(f, "SELECT{}", if self.distinct { " DISTINCT" } else { "" })?;
         if let Some(ref top) = self.top {
-            write!(f, " {}", top)?;
+            write!(f, " {}", top.sql(dialect)?)?;
         }
-        write!(f, " {}", display_comma_separated(&self.projection))?;
+        write!(f, " {}", display_comma_separated(&self.projection).sql(dialect)?)?;
 
         if let Some(ref into) = self.into {
-            write!(f, " {}", into)?;
+            write!(f, " {}", into.sql(dialect)?)?;
         }
 
         if !self.from.is_empty() {
-            write!(f, " FROM {}", display_comma_separated(&self.from))?;
+            write!(f, " FROM {}", display_comma_separated(&self.from).sql(dialect)?)?;
         }
         if !self.lateral_views.is_empty() {
             for lv in &self.lateral_views {
-                write!(f, "{}", lv)?;
+                write!(f, "{}", lv.sql(dialect)?)?;
             }
         }
         if let Some(ref selection) = self.selection {
-            write!(f, " WHERE {}", selection)?;
+            write!(f, " WHERE {}", selection.sql(dialect)?)?;
         }
         if !self.group_by.is_empty() {
-            write!(f, " GROUP BY {}", display_comma_separated(&self.group_by))?;
+            write!(f, " GROUP BY {}", display_comma_separated(&self.group_by).sql(dialect)?)?;
         }
         if !self.cluster_by.is_empty() {
             write!(
                 f,
                 " CLUSTER BY {}",
-                display_comma_separated(&self.cluster_by)
+                display_comma_separated(&self.cluster_by).sql(dialect)?
             )?;
         }
         if !self.distribute_by.is_empty() {
             write!(
                 f,
                 " DISTRIBUTE BY {}",
-                display_comma_separated(&self.distribute_by)
+                display_comma_separated(&self.distribute_by).sql(dialect)?
             )?;
         }
         if !self.sort_by.is_empty() {
-            write!(f, " SORT BY {}", display_comma_separated(&self.sort_by))?;
+            write!(f, " SORT BY {}", display_comma_separated(&self.sort_by).sql(dialect)?)?;
         }
         if let Some(ref having) = self.having {
-            write!(f, " HAVING {}", having)?;
+            write!(f, " HAVING {}", having.sql(dialect)?)?;
         }
         if let Some(ref qualify) = self.qualify {
-            write!(f, " QUALIFY {}", qualify)?;
+            write!(f, " QUALIFY {}", qualify.sql(dialect)?)?;
         }
         Ok(())
     }
@@ -222,20 +229,20 @@ pub struct LateralView {
     pub outer: bool,
 }
 
-impl fmt::Display for LateralView {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for LateralView {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         write!(
             f,
             " LATERAL VIEW{outer} {} {}",
-            self.lateral_view,
-            self.lateral_view_name,
+            self.lateral_view.sql(dialect)?,
+            self.lateral_view_name.sql(dialect)?,
             outer = if self.outer { " OUTER" } else { "" }
         )?;
         if !self.lateral_col_alias.is_empty() {
             write!(
                 f,
                 " AS {}",
-                display_comma_separated(&self.lateral_col_alias)
+                display_comma_separated(&self.lateral_col_alias).sql(dialect)?
             )?;
         }
         Ok(())
@@ -249,13 +256,13 @@ pub struct With {
     pub cte_tables: Vec<Cte>,
 }
 
-impl fmt::Display for With {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for With {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         write!(
             f,
             "WITH {}{}",
             if self.recursive { "RECURSIVE " } else { "" },
-            display_comma_separated(&self.cte_tables)
+            display_comma_separated(&self.cte_tables).sql(dialect)?
         )
     }
 }
@@ -272,11 +279,11 @@ pub struct Cte {
     pub from: Option<Ident>,
 }
 
-impl fmt::Display for Cte {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} AS ({})", self.alias, self.query)?;
+impl DialectDisplay for Cte {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
+        write!(f, "{} AS ({})", self.alias.sql(dialect)?, self.query.sql(dialect)?)?;
         if let Some(ref fr) = self.from {
-            write!(f, " FROM {}", fr)?;
+            write!(f, " FROM {}", fr.sql(dialect)?)?;
         }
         Ok(())
     }
@@ -296,12 +303,12 @@ pub enum SelectItem {
     Wildcard,
 }
 
-impl fmt::Display for SelectItem {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for SelectItem {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         match &self {
-            SelectItem::UnnamedExpr(expr) => write!(f, "{}", expr),
-            SelectItem::ExprWithAlias { expr, alias } => write!(f, "{} AS {}", expr, alias),
-            SelectItem::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
+            SelectItem::UnnamedExpr(expr) => write!(f, "{}", expr.sql(dialect)?),
+            SelectItem::ExprWithAlias { expr, alias } => write!(f, "{} AS {}", expr.sql(dialect)?, alias.sql(dialect)?),
+            SelectItem::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix.sql(dialect)?),
             SelectItem::Wildcard => write!(f, "*"),
         }
     }
@@ -314,11 +321,11 @@ pub struct TableWithJoins {
     pub joins: Vec<Join>,
 }
 
-impl fmt::Display for TableWithJoins {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.relation)?;
+impl DialectDisplay for TableWithJoins {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
+        write!(f, "{}", self.relation.sql(dialect)?)?;
         for join in &self.joins {
-            write!(f, "{}", join)?;
+            write!(f, "{}", join.sql(dialect)?)?;
         }
         Ok(())
     }
@@ -375,8 +382,8 @@ pub enum TableFactor {
     NestedJoin(Box<TableWithJoins>),
 }
 
-impl fmt::Display for TableFactor {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for TableFactor {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         match self {
             TableFactor::Table {
                 name,
@@ -384,15 +391,15 @@ impl fmt::Display for TableFactor {
                 args,
                 with_hints,
             } => {
-                write!(f, "{}", name)?;
+                write!(f, "{}", name.sql(dialect)?)?;
                 if let Some(args) = args {
-                    write!(f, "({})", display_comma_separated(args))?;
+                    write!(f, "({})", display_comma_separated(args).sql(dialect)?)?;
                 }
                 if let Some(alias) = alias {
-                    write!(f, " AS {}", alias)?;
+                    write!(f, " AS {}", alias.sql(dialect)?)?;
                 }
                 if !with_hints.is_empty() {
-                    write!(f, " WITH ({})", display_comma_separated(with_hints))?;
+                    write!(f, " WITH ({})", display_comma_separated(with_hints).sql(dialect)?)?;
                 }
                 Ok(())
             }
@@ -404,16 +411,16 @@ impl fmt::Display for TableFactor {
                 if *lateral {
                     write!(f, "LATERAL ")?;
                 }
-                write!(f, "({})", subquery)?;
+                write!(f, "({})", subquery.sql(dialect)?)?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {}", alias)?;
+                    write!(f, " AS {}", alias.sql(dialect)?)?;
                 }
                 Ok(())
             }
             TableFactor::TableFunction { expr, alias } => {
-                write!(f, "TABLE({})", expr)?;
+                write!(f, "TABLE({})", expr.sql(dialect)?)?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {}", alias)?;
+                    write!(f, " AS {}", alias.sql(dialect)?)?;
                 }
                 Ok(())
             }
@@ -423,19 +430,19 @@ impl fmt::Display for TableFactor {
                 with_offset,
                 with_offset_alias,
             } => {
-                write!(f, "UNNEST({})", array_expr)?;
+                write!(f, "UNNEST({})", array_expr.sql(dialect)?)?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {}", alias)?;
+                    write!(f, " AS {}", alias.sql(dialect)?)?;
                 }
                 if *with_offset {
                     write!(f, " WITH OFFSET")?;
                 }
                 if let Some(alias) = with_offset_alias {
-                    write!(f, " AS {}", alias)?;
+                    write!(f, " AS {}", alias.sql(dialect)?)?;
                 }
                 Ok(())
             }
-            TableFactor::NestedJoin(table_reference) => write!(f, "({})", table_reference),
+            TableFactor::NestedJoin(table_reference) => write!(f, "({})", table_reference.sql(dialect)?),
         }
     }
 }
@@ -447,11 +454,11 @@ pub struct TableAlias {
     pub columns: Vec<Ident>,
 }
 
-impl fmt::Display for TableAlias {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.name)?;
+impl DialectDisplay for TableAlias {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
+        write!(f, "{}", self.name.sql(dialect)?)?;
         if !self.columns.is_empty() {
-            write!(f, " ({})", display_comma_separated(&self.columns))?;
+            write!(f, " ({})", display_comma_separated(&self.columns).sql(dialect)?)?;
         }
         Ok(())
     }
@@ -464,61 +471,60 @@ pub struct Join {
     pub join_operator: JoinOperator,
 }
 
-impl fmt::Display for Join {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for Join {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         fn prefix(constraint: &JoinConstraint) -> &'static str {
             match constraint {
                 JoinConstraint::Natural => "NATURAL ",
                 _ => "",
             }
         }
-        fn suffix(constraint: &'_ JoinConstraint) -> impl fmt::Display + '_ {
-            struct Suffix<'a>(&'a JoinConstraint);
-            impl<'a> fmt::Display for Suffix<'a> {
-                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                    match self.0 {
-                        JoinConstraint::On(expr) => write!(f, " ON {}", expr),
-                        JoinConstraint::Using(attrs) => {
-                            write!(f, " USING({})", display_comma_separated(attrs))
-                        }
-                        _ => Ok(()),
-                    }
+        fn suffix(constraint: &'_ JoinConstraint, dialect: &Dialect) -> Result<String, fmt::Error> {
+
+            let mut repr = String::new();
+            match constraint {
+                JoinConstraint::On(expr) => {
+                    write!(repr, " ON {}", expr.sql(dialect)?)?;
                 }
+                JoinConstraint::Using(attrs) => {
+                    write!(repr, " USING({})", display_comma_separated(attrs).sql(dialect)?)?;
+                }
+                _ => {}
             }
-            Suffix(constraint)
+            Ok(repr)
         }
         match &self.join_operator {
             JoinOperator::Inner(constraint) => write!(
                 f,
                 " {}JOIN {}{}",
                 prefix(constraint),
-                self.relation,
-                suffix(constraint)
+                self.relation.sql(dialect)?,
+                suffix(constraint, dialect)?
             ),
             JoinOperator::LeftOuter(constraint) => write!(
                 f,
                 " {}LEFT JOIN {}{}",
                 prefix(constraint),
-                self.relation,
-                suffix(constraint)
+                self.relation.sql(dialect)?,
+                suffix(constraint, dialect)?
             ),
             JoinOperator::RightOuter(constraint) => write!(
                 f,
                 " {}RIGHT JOIN {}{}",
                 prefix(constraint),
-                self.relation,
-                suffix(constraint)
+                self.relation.sql(dialect)?,
+                suffix(constraint, dialect)?
             ),
             JoinOperator::FullOuter(constraint) => write!(
                 f,
                 " {}FULL JOIN {}{}",
                 prefix(constraint),
-                self.relation,
-                suffix(constraint)
+                self.relation.sql(dialect)?,
+                suffix(constraint, dialect)?
             ),
-            JoinOperator::CrossJoin => write!(f, " CROSS JOIN {}", self.relation),
-            JoinOperator::CrossApply => write!(f, " CROSS APPLY {}", self.relation),
-            JoinOperator::OuterApply => write!(f, " OUTER APPLY {}", self.relation),
+            JoinOperator::CrossJoin => write!(f, " CROSS JOIN {}", self.relation.sql(dialect)?),
+            JoinOperator::CrossApply => write!(f, " CROSS APPLY {}", self.relation.sql(dialect)?),
+            JoinOperator::OuterApply => write!(f, " OUTER APPLY {}", self.relation.sql(dialect)?),
         }
     }
 }
@@ -557,9 +563,9 @@ pub struct OrderByExpr {
     pub nulls_first: Option<bool>,
 }
 
-impl fmt::Display for OrderByExpr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.expr)?;
+impl DialectDisplay for OrderByExpr {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
+        write!(f, "{}", self.expr.sql(dialect)?)?;
         match self.asc {
             Some(true) => write!(f, " ASC")?,
             Some(false) => write!(f, " DESC")?,
@@ -581,9 +587,9 @@ pub struct Offset {
     pub rows: OffsetRows,
 }
 
-impl fmt::Display for Offset {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "OFFSET {}{}", self.value, self.rows)
+impl DialectDisplay for Offset {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
+        write!(f, "OFFSET {}{}", self.value.sql(dialect)?, self.rows.sql(dialect)?)
     }
 }
 
@@ -597,8 +603,8 @@ pub enum OffsetRows {
     Rows,
 }
 
-impl fmt::Display for OffsetRows {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for OffsetRows {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         match self {
             OffsetRows::None => Ok(()),
             OffsetRows::Row => write!(f, " ROW"),
@@ -615,12 +621,12 @@ pub struct Fetch {
     pub quantity: Option<Expr>,
 }
 
-impl fmt::Display for Fetch {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for Fetch {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         let extension = if self.with_ties { "WITH TIES" } else { "ONLY" };
         if let Some(ref quantity) = self.quantity {
             let percent = if self.percent { " PERCENT" } else { "" };
-            write!(f, "FETCH FIRST {}{} ROWS {}", quantity, percent, extension)
+            write!(f, "FETCH FIRST {}{} ROWS {}", quantity.sql(dialect)?, percent, extension)
         } else {
             write!(f, "FETCH FIRST ROWS {}", extension)
         }
@@ -634,8 +640,8 @@ pub enum LockType {
     Update,
 }
 
-impl fmt::Display for LockType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for LockType {
+    fn fmt(&self, f: &mut (dyn fmt::Write), _dialect: &Dialect) -> fmt::Result {
         let select_lock = match self {
             LockType::Share => "FOR SHARE",
             LockType::Update => "FOR UPDATE",
@@ -653,12 +659,12 @@ pub struct Top {
     pub quantity: Option<Expr>,
 }
 
-impl fmt::Display for Top {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for Top {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         let extension = if self.with_ties { " WITH TIES" } else { "" };
         if let Some(ref quantity) = self.quantity {
             let percent = if self.percent { " PERCENT" } else { "" };
-            write!(f, "TOP ({}){}{}", quantity, percent, extension)
+            write!(f, "TOP ({}){}{}", quantity.sql(dialect)?, percent, extension)
         } else {
             write!(f, "TOP{}", extension)
         }
@@ -669,14 +675,14 @@ impl fmt::Display for Top {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Values(pub Vec<Vec<Expr>>);
 
-impl fmt::Display for Values {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for Values {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         write!(f, "VALUES ")?;
         let mut delim = "";
         for row in &self.0 {
             write!(f, "{}", delim)?;
             delim = ", ";
-            write!(f, "({})", display_comma_separated(row))?;
+            write!(f, "({})", display_comma_separated(row).sql(dialect)?)?;
         }
         Ok(())
     }
@@ -691,12 +697,12 @@ pub struct SelectInto {
     pub name: ObjectName,
 }
 
-impl fmt::Display for SelectInto {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl DialectDisplay for SelectInto {
+    fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
         let temporary = if self.temporary { " TEMPORARY" } else { "" };
         let unlogged = if self.unlogged { " UNLOGGED" } else { "" };
         let table = if self.table { " TABLE" } else { "" };
 
-        write!(f, "INTO{}{}{} {}", temporary, unlogged, table, self.name)
+        write!(f, "INTO{}{}{} {}", temporary, unlogged, table, self.name.sql(dialect)?)
     }
 }

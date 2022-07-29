@@ -17,6 +17,7 @@
 use std::fs;
 
 use simple_logger::SimpleLogger;
+use sqlparser::dialect::{Dialect, DialectDisplay};
 use sqlparser::parser::Parser;
 
 fn main() {
@@ -46,11 +47,12 @@ $ cargo run --feature json_example --example cli FILENAME.sql [--dialectname]
         chars.as_str()
     };
     let parse_result = Parser::parse_sql_query(without_bom);
+    let dialect: Dialect = Default::default();
     match parse_result {
         Ok(query) => {
             println!(
                 "Round-trip:\n'{}'",
-                query
+                query.sql(&dialect).unwrap()
             );
 
             if cfg!(feature = "json_example") {

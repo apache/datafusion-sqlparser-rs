@@ -22,11 +22,11 @@
 mod test_utils;
 
 use matches::assert_matches;
-use sqlparser::ast::*;
-use sqlparser::dialect::DialectDisplay;
-use sqlparser::keywords::ALL_KEYWORDS;
-use sqlparser::parser::{Parser, ParserError};
-use sqlparser::test_utils::{
+use sqlgen::ast::*;
+use sqlgen::dialect::DialectDisplay;
+use sqlgen::keywords::ALL_KEYWORDS;
+use sqlgen::parser::{Parser, ParserError};
+use sqlgen::test_utils::{
     parse_sql_query, query_parses_to, run_parser_method, verified_expr, verified_only_select,
     verified_query,
 };

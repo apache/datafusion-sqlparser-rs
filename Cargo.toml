@@ -1,12 +1,11 @@
 [package]
-name = "sqlparser"
-description = "Extensible SQL Lexer and Parser with support for ANSI SQL:2011"
-version = "0.19.0"
-authors = ["Andy Grove <andygrove73@gmail.com>"]
-homepage = "https://github.com/sqlparser-rs/sqlparser-rs"
-documentation = "https://docs.rs/sqlparser/"
+name = "sqlgen"
+description = "SQL Lexer, Parser, AST, and Dialect-Aware SQL Generator"
+version = "0.1.0"
+authors = ["Jon Mease <jonmmease@gmail.com>"]
+homepage = "https://github.com/vegafusion/sqlgen-rs"
 keywords = [ "ansi", "sql", "lexer", "parser" ]
-repository = "https://github.com/sqlparser-rs/sqlparser-rs"
+repository = "https://github.com/vegafusion/sqlgen-rs"
 license = "Apache-2.0"
 include = [
     "src/**/*.rs",
@@ -15,7 +14,7 @@ include = [
 edition = "2021"
 
 [lib]
-name = "sqlparser"
+name = "sqlgen"
 path = "src/lib.rs"
 
 [features]

@@ -127,7 +127,13 @@ impl<'a> Parser<'a> {
         let tokens = tokenizer.tokenize()?;
         let mut parser = Parser::new(tokens, dialect);
         debug!("Parsing sql '{}'...", sql);
-        parser.parse_query()
+        let query = parser.parse_query()?;
+
+        if parser.peek_token() == Token::EOF {
+            Ok(query)
+        } else {
+            Err(ParserError::ParserError(format!("Expected end of query, found: {}", parser.peek_token())))
+        }
     }
 
     /// Parse a new expression including wildcard & qualified wildcard

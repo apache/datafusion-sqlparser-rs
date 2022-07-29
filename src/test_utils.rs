@@ -71,45 +71,28 @@ impl TestedDialects {
         })
     }
 
-    pub fn parse_sql_statements(&self, sql: &str) -> Result<Vec<Statement>, ParserError> {
-        self.one_of_identical_results(|dialect| Parser::parse_sql(dialect, sql))
-        // To fail the `ensure_multiple_dialects_are_tested` test:
-        // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)
-    }
-
     /// Ensures that `sql` parses as a single statement and returns it.
     /// If non-empty `canonical` SQL representation is provided,
     /// additionally asserts that parsing `sql` results in the same parse
     /// tree as parsing `canonical`, and that serializing it back to string
     /// results in the `canonical` representation.
-    pub fn one_statement_parses_to(&self, sql: &str, canonical: &str) -> Statement {
-        let mut statements = self.parse_sql_statements(sql).unwrap();
-        assert_eq!(statements.len(), 1);
+    pub fn query_parses_to(&self, sql: &str, canonical: &str) -> Query {
+        let query = self.parse_sql_query(sql).unwrap();
 
         if !canonical.is_empty() && sql != canonical {
-            assert_eq!(self.parse_sql_statements(canonical).unwrap(), statements);
+            assert_eq!(self.parse_sql_query(canonical).unwrap(), query);
         }
-
-        let only_statement = statements.pop().unwrap();
-        if !canonical.is_empty() {
-            assert_eq!(canonical, only_statement.to_string())
-        }
-        only_statement
+        query
     }
 
-    /// Ensures that `sql` parses as a single [Statement], and is not modified
-    /// after a serialization round-trip.
-    pub fn verified_stmt(&self, query: &str) -> Statement {
-        self.one_statement_parses_to(query, query)
+    pub fn parse_sql_query(&self, sql: &str) -> Result<Query, ParserError> {
+        Parser::parse_sql_query(&**self.dialects.first().unwrap(), sql)
     }
 
     /// Ensures that `sql` parses as a single [Query], and is not modified
     /// after a serialization round-trip.
     pub fn verified_query(&self, sql: &str) -> Query {
-        match self.verified_stmt(sql) {
-            Statement::Query(query) => *query,
-            _ => panic!("Expected Query"),
-        }
+        self.parse_sql_query(sql).unwrap()
     }
 
     /// Ensures that `sql` parses as a single [Select], and is not modified

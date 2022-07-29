@@ -10,7 +10,7 @@ pub struct Dialect {
 impl Default for Dialect {
     fn default() -> Self {
         Self {
-            quote_style: Some('"')
+            quote_style: None
         }
     }
 }

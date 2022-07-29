@@ -11,9 +11,7 @@
 // limitations under the License.
 
 #![warn(clippy::all)]
-
-use sqlparser::dialect::DialectDisplay;
-use sqlparser::parser::*;
+use sqlgen::parser::Parser;
 
 fn main() {
     let sql = "SELECT a, b, 123, myfunc(b) \
@@ -23,5 +21,5 @@ fn main() {
 
     let ast = Parser::parse_sql_query(sql).unwrap();
 
-    println!("AST: {:?}", ast.sql(&Default::default()).unwrap());
+    println!("AST: {:?}", ast);
 }

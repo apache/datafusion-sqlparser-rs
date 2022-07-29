@@ -122,7 +122,7 @@ impl From<&str> for Ident {
 
 impl DialectDisplay for Ident {
     fn fmt(&self, f: &mut (dyn fmt::Write), dialect: &Dialect) -> fmt::Result {
-        match self.quote_style {
+        match dialect.quote_style {
             Some(q) if q == '"' || q == '\'' || q == '`' => {
                 let escaped = value::escape_quoted_string(&self.value, q);
                 write!(f, "{}{}{}", q, escaped.sql(dialect)?, q)

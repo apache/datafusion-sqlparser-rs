@@ -27,106 +27,16 @@ use alloc::{
 use core::fmt::Debug;
 
 use crate::ast::*;
-use crate::dialect::*;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Tokenizer;
 
-/// Tests use the methods on this struct to invoke the parser on one or
-/// multiple dialects.
-pub struct TestedDialects {
-    pub dialects: Vec<Box<dyn Dialect>>,
-}
-
-impl TestedDialects {
-    /// Run the given function for all of `self.dialects`, assert that they
-    /// return the same result, and return that result.
-    pub fn one_of_identical_results<F, T: Debug + PartialEq>(&self, f: F) -> T
-    where
-        F: Fn(&dyn Dialect) -> T,
-    {
-        let parse_results = self.dialects.iter().map(|dialect| (dialect, f(&**dialect)));
-        parse_results
-            .fold(None, |s, (dialect, parsed)| {
-                if let Some((prev_dialect, prev_parsed)) = s {
-                    assert_eq!(
-                        prev_parsed, parsed,
-                        "Parse results with {:?} are different from {:?}",
-                        prev_dialect, dialect
-                    );
-                }
-                Some((dialect, parsed))
-            })
-            .unwrap()
-            .1
-    }
-
-    pub fn run_parser_method<F, T: Debug + PartialEq>(&self, sql: &str, f: F) -> T
-    where
-        F: Fn(&mut Parser) -> T,
-    {
-        self.one_of_identical_results(|dialect| {
-            let mut tokenizer = Tokenizer::new(dialect, sql);
-            let tokens = tokenizer.tokenize().unwrap();
-            f(&mut Parser::new(tokens, dialect))
-        })
-    }
-
-    /// Ensures that `sql` parses as a single statement and returns it.
-    /// If non-empty `canonical` SQL representation is provided,
-    /// additionally asserts that parsing `sql` results in the same parse
-    /// tree as parsing `canonical`, and that serializing it back to string
-    /// results in the `canonical` representation.
-    pub fn query_parses_to(&self, sql: &str, canonical: &str) -> Query {
-        let query = self.parse_sql_query(sql).unwrap();
-
-        if !canonical.is_empty() && sql != canonical {
-            assert_eq!(self.parse_sql_query(canonical).unwrap(), query);
-        }
-        query
-    }
-
-    pub fn parse_sql_query(&self, sql: &str) -> Result<Query, ParserError> {
-        Parser::parse_sql_query(&**self.dialects.first().unwrap(), sql)
-    }
-
-    /// Ensures that `sql` parses as a single [Query], and is not modified
-    /// after a serialization round-trip.
-    pub fn verified_query(&self, sql: &str) -> Query {
-        self.parse_sql_query(sql).unwrap()
-    }
-
-    /// Ensures that `sql` parses as a single [Select], and is not modified
-    /// after a serialization round-trip.
-    pub fn verified_only_select(&self, query: &str) -> Select {
-        match *self.verified_query(query).body {
-            SetExpr::Select(s) => *s,
-            _ => panic!("Expected SetExpr::Select"),
-        }
-    }
-
-    /// Ensures that `sql` parses as an expression, and is not modified
-    /// after a serialization round-trip.
-    pub fn verified_expr(&self, sql: &str) -> Expr {
-        let ast = self
-            .run_parser_method(sql, |parser| parser.parse_expr())
-            .unwrap();
-        assert_eq!(sql, &ast.to_string(), "round-tripping without changes");
-        ast
-    }
-}
-
-pub fn all_dialects() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(MsSqlDialect {}),
-            Box::new(AnsiDialect {}),
-            Box::new(SnowflakeDialect {}),
-            Box::new(HiveDialect {}),
-            Box::new(RedshiftSqlDialect {}),
-        ],
-    }
+pub fn run_parser_method<F, T: Debug + PartialEq>(sql: &str, f: F) -> T
+where
+    F: Fn(&mut Parser) -> T,
+{
+    let mut tokenizer = Tokenizer::new(sql);
+    let tokens = tokenizer.tokenize().unwrap();
+    f(&mut Parser::new(tokens))
 }
 
 pub fn only<T>(v: impl IntoIterator<Item = T>) -> T {
@@ -136,6 +46,47 @@ pub fn only<T>(v: impl IntoIterator<Item = T>) -> T {
     } else {
         panic!("only called on collection without exactly one item")
     }
+}
+
+/// Ensures that `sql` parses as a single statement and returns it.
+/// If non-empty `canonical` SQL representation is provided,
+/// additionally asserts that parsing `sql` results in the same parse
+/// tree as parsing `canonical`, and that serializing it back to string
+/// results in the `canonical` representation.
+pub fn query_parses_to(sql: &str, canonical: &str) -> Query {
+    let query = parse_sql_query(sql).unwrap();
+
+    if !canonical.is_empty() && sql != canonical {
+        assert_eq!(parse_sql_query(canonical).unwrap(), query);
+    }
+    query
+}
+
+pub fn parse_sql_query(sql: &str) -> Result<Query, ParserError> {
+    Parser::parse_sql_query(sql)
+}
+
+/// Ensures that `sql` parses as a single [Query], and is not modified
+/// after a serialization round-trip.
+pub fn verified_query(sql: &str) -> Query {
+    parse_sql_query(sql).unwrap()
+}
+
+/// Ensures that `sql` parses as a single [Select], and is not modified
+/// after a serialization round-trip.
+pub fn verified_only_select(query: &str) -> Select {
+    match *verified_query(query).body {
+        SetExpr::Select(s) => *s,
+        _ => panic!("Expected SetExpr::Select"),
+    }
+}
+
+/// Ensures that `sql` parses as an expression, and is not modified
+/// after a serialization round-trip.
+pub fn verified_expr(sql: &str) -> Expr {
+    let ast = run_parser_method(sql, |parser| parser.parse_expr()).unwrap();
+    assert_eq!(sql, &ast.to_string(), "round-tripping without changes");
+    ast
 }
 
 pub fn expr_from_projection(item: &SelectItem) -> &Expr {

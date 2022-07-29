@@ -25,7 +25,6 @@ use core::fmt;
 use log::debug;
 
 use crate::ast::*;
-use crate::dialect::*;
 use crate::keywords::{self, Keyword};
 use crate::tokenizer::*;
 
@@ -104,35 +103,33 @@ impl fmt::Display for ParserError {
 #[cfg(feature = "std")]
 impl std::error::Error for ParserError {}
 
-pub struct Parser<'a> {
+pub struct Parser {
     tokens: Vec<Token>,
     /// The index of the first unprocessed token in `self.tokens`
     index: usize,
-    dialect: &'a dyn Dialect,
 }
 
-impl<'a> Parser<'a> {
+impl Parser {
     /// Parse the specified tokens
-    pub fn new(tokens: Vec<Token>, dialect: &'a dyn Dialect) -> Self {
-        Parser {
-            tokens,
-            index: 0,
-            dialect,
-        }
+    pub fn new(tokens: Vec<Token>) -> Self {
+        Parser { tokens, index: 0 }
     }
 
     /// Parse a SQL query and produce an Abstract Syntax Tree (AST)
-    pub fn parse_sql_query(dialect: &dyn Dialect, sql: &str) -> Result<Query, ParserError> {
-        let mut tokenizer = Tokenizer::new(dialect, sql);
+    pub fn parse_sql_query(sql: &str) -> Result<Query, ParserError> {
+        let mut tokenizer = Tokenizer::new(sql);
         let tokens = tokenizer.tokenize()?;
-        let mut parser = Parser::new(tokens, dialect);
+        let mut parser = Parser::new(tokens);
         debug!("Parsing sql '{}'...", sql);
         let query = parser.parse_query()?;
 
         if parser.peek_token() == Token::EOF {
             Ok(query)
         } else {
-            Err(ParserError::ParserError(format!("Expected end of query, found: {}", parser.peek_token())))
+            Err(ParserError::ParserError(format!(
+                "Expected end of query, found: {}",
+                parser.peek_token()
+            )))
         }
     }
 
@@ -288,28 +285,7 @@ impl<'a> Parser<'a> {
                     expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
                 })
             }
-            tok @ Token::DoubleExclamationMark
-            | tok @ Token::PGSquareRoot
-            | tok @ Token::PGCubeRoot
-            | tok @ Token::AtSign
-            | tok @ Token::Tilde
-                if dialect_of!(self is PostgreSqlDialect) =>
-            {
-                let op = match tok {
-                    Token::DoubleExclamationMark => UnaryOperator::PGPrefixFactorial,
-                    Token::PGSquareRoot => UnaryOperator::PGSquareRoot,
-                    Token::PGCubeRoot => UnaryOperator::PGCubeRoot,
-                    Token::AtSign => UnaryOperator::PGAbs,
-                    Token::Tilde => UnaryOperator::PGBitwiseNot,
-                    _ => unreachable!(),
-                };
-                Ok(Expr::UnaryOp {
-                    op,
-                    expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
-                })
-            }
-            Token::EscapedStringLiteral(_) if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
-            {
+            Token::EscapedStringLiteral(_) => {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
@@ -476,27 +452,22 @@ impl<'a> Parser<'a> {
     /// parse a group by expr. a group by expr can be one of group sets, roll up, cube, or simple
     /// expr.
     fn parse_group_by_expr(&mut self) -> Result<Expr, ParserError> {
-        if dialect_of!(self is PostgreSqlDialect) {
-            if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
-                self.expect_token(&Token::LParen)?;
-                let result = self.parse_comma_separated(|p| p.parse_tuple(false, true))?;
-                self.expect_token(&Token::RParen)?;
-                Ok(Expr::GroupingSets(result))
-            } else if self.parse_keyword(Keyword::CUBE) {
-                self.expect_token(&Token::LParen)?;
-                let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
-                self.expect_token(&Token::RParen)?;
-                Ok(Expr::Cube(result))
-            } else if self.parse_keyword(Keyword::ROLLUP) {
-                self.expect_token(&Token::LParen)?;
-                let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
-                self.expect_token(&Token::RParen)?;
-                Ok(Expr::Rollup(result))
-            } else {
-                self.parse_expr()
-            }
+        if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
+            self.expect_token(&Token::LParen)?;
+            let result = self.parse_comma_separated(|p| p.parse_tuple(false, true))?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Expr::GroupingSets(result))
+        } else if self.parse_keyword(Keyword::CUBE) {
+            self.expect_token(&Token::LParen)?;
+            let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Expr::Cube(result))
+        } else if self.parse_keyword(Keyword::ROLLUP) {
+            self.expect_token(&Token::LParen)?;
+            let result = self.parse_comma_separated(|p| p.parse_tuple(true, true))?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Expr::Rollup(result))
         } else {
-            // TODO parse rollup for other dialects
             self.parse_expr()
         }
     }
@@ -942,15 +913,6 @@ impl<'a> Parser<'a> {
             Token::Caret => Some(BinaryOperator::BitwiseXor),
             Token::Ampersand => Some(BinaryOperator::BitwiseAnd),
             Token::Div => Some(BinaryOperator::Divide),
-            Token::ShiftLeft if dialect_of!(self is PostgreSqlDialect) => {
-                Some(BinaryOperator::PGBitwiseShiftLeft)
-            }
-            Token::ShiftRight if dialect_of!(self is PostgreSqlDialect) => {
-                Some(BinaryOperator::PGBitwiseShiftRight)
-            }
-            Token::Sharp if dialect_of!(self is PostgreSqlDialect) => {
-                Some(BinaryOperator::PGBitwiseXor)
-            }
             Token::Tilde => Some(BinaryOperator::PGRegexMatch),
             Token::TildeAsterisk => Some(BinaryOperator::PGRegexIMatch),
             Token::ExclamationMarkTilde => Some(BinaryOperator::PGRegexNotMatch),
@@ -1069,11 +1031,7 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
             })
         } else if Token::LBracket == tok {
-            if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
-                // parse index
-                return self.parse_array_index(expr);
-            }
-            self.parse_map_access(expr)
+            self.parse_array_index(expr)
         } else if Token::Arrow == tok
             || Token::LongArrow == tok
             || Token::HashArrow == tok
@@ -1421,7 +1379,7 @@ impl<'a> Parser<'a> {
     /// Parse a comma-separated list of 1+ items accepted by `F`
     pub fn parse_comma_separated<T, F>(&mut self, mut f: F) -> Result<Vec<T>, ParserError>
     where
-        F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
+        F: FnMut(&mut Parser) -> Result<T, ParserError>,
     {
         let mut values = vec![];
         loop {
@@ -1590,9 +1548,7 @@ impl<'a> Parser<'a> {
             Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => Ok(value),
             Token::SingleQuotedString(s) => Ok(s),
             Token::DoubleQuotedString(s) => Ok(s),
-            Token::EscapedStringLiteral(s) if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
-                Ok(s)
-            }
+            Token::EscapedStringLiteral(s) => Ok(s),
             unexpected => self.expected("literal string", unexpected),
         }
     }
@@ -2331,7 +2287,7 @@ impl<'a> Parser<'a> {
                 // is a nested join `(foo JOIN bar)`, not followed by other joins.
                 self.expect_token(&Token::RParen)?;
                 Ok(TableFactor::NestedJoin(Box::new(table_and_joins)))
-            } else if dialect_of!(self is SnowflakeDialect | GenericDialect) {
+            } else {
                 // Dialect-specific behavior: Snowflake diverges from the
                 // standard and from most of the other implementations by
                 // allowing extra parentheses not only around a join (B), but
@@ -2367,14 +2323,8 @@ impl<'a> Parser<'a> {
                 }
                 // Do not store the extra set of parens in the AST
                 Ok(table_and_joins.relation)
-            } else {
-                // The SQL spec prohibits derived tables and bare tables from
-                // appearing alone in parentheses (e.g. `FROM (mytable)`)
-                self.expected("joined table", self.peek_token())
             }
-        } else if dialect_of!(self is BigQueryDialect | GenericDialect)
-            && self.parse_keyword(Keyword::UNNEST)
-        {
+        } else if self.parse_keyword(Keyword::UNNEST) {
             self.expect_token(&Token::LParen)?;
             let expr = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;

@@ -23,27 +23,24 @@ mod test_utils;
 
 use matches::assert_matches;
 use sqlparser::ast::*;
-use sqlparser::dialect::{
-    AnsiDialect, BigQueryDialect, GenericDialect, HiveDialect, MsSqlDialect, PostgreSqlDialect,
-    SQLiteDialect, SnowflakeDialect,
-};
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
-
-use test_utils::{
-    all_dialects, expr_from_projection, join, number, only, table, table_alias, TestedDialects,
+use sqlparser::test_utils::{
+    parse_sql_query, query_parses_to, run_parser_method, verified_expr, verified_only_select,
+    verified_query,
 };
+
+use test_utils::{expr_from_projection, join, number, only, table, table_alias};
 
 #[test]
 fn parse_invalid_table_name() {
-    let ast = all_dialects()
-        .run_parser_method("db.public..customer", |parser| parser.parse_object_name());
+    let ast = run_parser_method("db.public..customer", |parser| parser.parse_object_name());
     assert!(ast.is_err());
 }
 
 #[test]
 fn parse_no_table_name() {
-    let ast = all_dialects().run_parser_method("", |parser| parser.parse_object_name());
+    let ast = run_parser_method("", |parser| parser.parse_object_name());
     assert!(ast.is_err());
 }
 
@@ -246,7 +243,7 @@ fn test_eof_after_as() {
 
 #[test]
 fn test_no_infix_error() {
-    let res = Parser::parse_sql_query(&GenericDialect {}, "SELECT-URA<<");
+    let res = Parser::parse_sql_query("SELECT-URA<<");
     assert_eq!(
         ParserError::ParserError("No infix parser for token ShiftLeft".to_string()),
         res.unwrap_err()
@@ -318,7 +315,7 @@ fn parse_invalid_infix_not() {
 fn parse_collate() {
     let sql = "SELECT name COLLATE \"de_DE\" FROM customer";
     assert_matches!(
-        only(&all_dialects().verified_only_select(sql).projection),
+        only(&verified_only_select(sql).projection),
         SelectItem::UnnamedExpr(Expr::Collate { .. })
     );
 }
@@ -327,7 +324,7 @@ fn parse_collate() {
 fn parse_collate_after_parens() {
     let sql = "SELECT (name) COLLATE \"de_DE\" FROM customer";
     assert_matches!(
-        only(&all_dialects().verified_only_select(sql).projection),
+        only(&verified_only_select(sql).projection),
         SelectItem::UnnamedExpr(Expr::Collate { .. })
     );
 }
@@ -1038,12 +1035,9 @@ fn parse_select_group_by() {
 
 #[test]
 fn parse_select_group_by_grouping_sets() {
-    let dialects = TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {})],
-    };
     let sql =
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, GROUPING SETS ((brand), (size), ())";
-    let select = dialects.verified_only_select(sql);
+    let select = verified_only_select(sql);
     assert_eq!(
         vec![
             Expr::Identifier(Ident::new("size")),
@@ -1059,11 +1053,8 @@ fn parse_select_group_by_grouping_sets() {
 
 #[test]
 fn parse_select_group_by_rollup() {
-    let dialects = TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {})],
-    };
     let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, ROLLUP (brand, size)";
-    let select = dialects.verified_only_select(sql);
+    let select = verified_only_select(sql);
     assert_eq!(
         vec![
             Expr::Identifier(Ident::new("size")),
@@ -1078,11 +1069,8 @@ fn parse_select_group_by_rollup() {
 
 #[test]
 fn parse_select_group_by_cube() {
-    let dialects = TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {})],
-    };
     let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, CUBE (brand, size)";
-    let select = dialects.verified_only_select(sql);
+    let select = verified_only_select(sql);
     assert_eq!(
         vec![
             Expr::Identifier(Ident::new("size")),
@@ -1781,13 +1769,7 @@ fn parse_table_function() {
 
 #[test]
 fn parse_unnest() {
-    fn chk(
-        alias: bool,
-        with_offset: bool,
-        with_offset_alias: bool,
-        dialects: &TestedDialects,
-        want: Vec<TableWithJoins>,
-    ) {
+    fn chk(alias: bool, with_offset: bool, with_offset_alias: bool, want: Vec<TableWithJoins>) {
         let sql = &format!(
             "SELECT * FROM UNNEST(expr){}{}{}",
             if alias { " AS numbers" } else { "" },
@@ -1798,18 +1780,15 @@ fn parse_unnest() {
                 ""
             },
         );
-        let select = dialects.verified_only_select(sql);
+        let select = verified_only_select(sql);
         assert_eq!(select.from, want);
     }
-    let dialects = TestedDialects {
-        dialects: vec![Box::new(BigQueryDialect {}), Box::new(GenericDialect {})],
-    };
+
     // 1. both Alias and WITH OFFSET clauses.
     chk(
         true,
         true,
         false,
-        &dialects,
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: Some(TableAlias {
@@ -1828,7 +1807,6 @@ fn parse_unnest() {
         false,
         false,
         false,
-        &dialects,
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: None,
@@ -1844,7 +1822,6 @@ fn parse_unnest() {
         false,
         true,
         false,
-        &dialects,
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: None,
@@ -1860,7 +1837,6 @@ fn parse_unnest() {
         true,
         false,
         false,
-        &dialects,
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: Some(TableAlias {
@@ -1879,7 +1855,6 @@ fn parse_unnest() {
         true,
         false,
         true,
-        &dialects,
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: Some(TableAlias {
@@ -2380,7 +2355,7 @@ fn parse_ctes() {
 #[test]
 fn parse_cte_renamed_columns() {
     let sql = "WITH cte (col1, col2) AS (SELECT foo, bar FROM baz) SELECT * FROM cte";
-    let query = all_dialects().verified_query(sql);
+    let query = verified_query(sql);
     assert_eq!(
         vec![Ident::new("col1"), Ident::new("col2")],
         query
@@ -2853,20 +2828,8 @@ fn test_placeholder() {
         })
     );
 
-    let dialects = TestedDialects {
-        dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(MsSqlDialect {}),
-            Box::new(AnsiDialect {}),
-            Box::new(BigQueryDialect {}),
-            Box::new(SnowflakeDialect {}),
-            // Note: `$` is the starting word for the HiveDialect identifier
-            // Box::new(sqlparser::dialect::HiveDialect {}),
-        ],
-    };
     let sql = "SELECT * FROM student WHERE id = $Id1";
-    let ast = dialects.verified_only_select(sql);
+    let ast = verified_only_select(sql);
     assert_eq!(
         ast.selection,
         Some(Expr::BinaryOp {
@@ -2883,26 +2846,6 @@ fn all_keywords_sorted() {
     let mut copy = Vec::from(ALL_KEYWORDS);
     copy.sort_unstable();
     assert_eq!(copy, ALL_KEYWORDS)
-}
-
-fn parse_sql_query(sql: &str) -> Result<Query, ParserError> {
-    all_dialects().parse_sql_query(sql)
-}
-
-fn query_parses_to(sql: &str, canonical: &str) -> Query {
-    all_dialects().query_parses_to(sql, canonical)
-}
-
-fn verified_query(query: &str) -> Query {
-    all_dialects().verified_query(query)
-}
-
-fn verified_only_select(query: &str) -> Select {
-    all_dialects().verified_only_select(query)
-}
-
-fn verified_expr(query: &str) -> Expr {
-    all_dialects().verified_expr(query)
 }
 
 #[test]

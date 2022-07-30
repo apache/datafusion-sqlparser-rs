@@ -358,6 +358,7 @@ define_keywords!(
     ON,
     ONLY,
     OPEN,
+    OPERATOR,
     OPTION,
     OR,
     ORC,

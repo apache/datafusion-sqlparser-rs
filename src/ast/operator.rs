@@ -86,41 +86,59 @@ pub enum BinaryOperator {
     PGRegexIMatch,
     PGRegexNotMatch,
     PGRegexNotIMatch,
+    PGCustomBinaryOperator(PGCustomOperator),
+}
+
+/// PostgreSQL-specific custom operator.
+///
+/// See [CREATE OPERATOR](https://www.postgresql.org/docs/current/sql-createoperator.html) for more information.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct PGCustomOperator {
+    pub schema: Option<String>,
+    pub name: String,
 }
 
 impl fmt::Display for BinaryOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match self {
-            BinaryOperator::Plus => "+",
-            BinaryOperator::Minus => "-",
-            BinaryOperator::Multiply => "*",
-            BinaryOperator::Divide => "/",
-            BinaryOperator::Modulo => "%",
-            BinaryOperator::StringConcat => "||",
-            BinaryOperator::Gt => ">",
-            BinaryOperator::Lt => "<",
-            BinaryOperator::GtEq => ">=",
-            BinaryOperator::LtEq => "<=",
-            BinaryOperator::Spaceship => "<=>",
-            BinaryOperator::Eq => "=",
-            BinaryOperator::NotEq => "<>",
-            BinaryOperator::And => "AND",
-            BinaryOperator::Or => "OR",
-            BinaryOperator::Xor => "XOR",
-            BinaryOperator::Like => "LIKE",
-            BinaryOperator::NotLike => "NOT LIKE",
-            BinaryOperator::ILike => "ILIKE",
-            BinaryOperator::NotILike => "NOT ILIKE",
-            BinaryOperator::BitwiseOr => "|",
-            BinaryOperator::BitwiseAnd => "&",
-            BinaryOperator::BitwiseXor => "^",
-            BinaryOperator::PGBitwiseXor => "#",
-            BinaryOperator::PGBitwiseShiftLeft => "<<",
-            BinaryOperator::PGBitwiseShiftRight => ">>",
-            BinaryOperator::PGRegexMatch => "~",
-            BinaryOperator::PGRegexIMatch => "~*",
-            BinaryOperator::PGRegexNotMatch => "!~",
-            BinaryOperator::PGRegexNotIMatch => "!~*",
-        })
+        match self {
+            BinaryOperator::Plus => f.write_str("+"),
+            BinaryOperator::Minus => f.write_str("-"),
+            BinaryOperator::Multiply => f.write_str("*"),
+            BinaryOperator::Divide => f.write_str("/"),
+            BinaryOperator::Modulo => f.write_str("%"),
+            BinaryOperator::StringConcat => f.write_str("||"),
+            BinaryOperator::Gt => f.write_str(">"),
+            BinaryOperator::Lt => f.write_str("<"),
+            BinaryOperator::GtEq => f.write_str(">="),
+            BinaryOperator::LtEq => f.write_str("<="),
+            BinaryOperator::Spaceship => f.write_str("<=>"),
+            BinaryOperator::Eq => f.write_str("="),
+            BinaryOperator::NotEq => f.write_str("<>"),
+            BinaryOperator::And => f.write_str("AND"),
+            BinaryOperator::Or => f.write_str("OR"),
+            BinaryOperator::Xor => f.write_str("XOR"),
+            BinaryOperator::Like => f.write_str("LIKE"),
+            BinaryOperator::NotLike => f.write_str("NOT LIKE"),
+            BinaryOperator::ILike => f.write_str("ILIKE"),
+            BinaryOperator::NotILike => f.write_str("NOT ILIKE"),
+            BinaryOperator::BitwiseOr => f.write_str("|"),
+            BinaryOperator::BitwiseAnd => f.write_str("&"),
+            BinaryOperator::BitwiseXor => f.write_str("^"),
+            BinaryOperator::PGBitwiseXor => f.write_str("#"),
+            BinaryOperator::PGBitwiseShiftLeft => f.write_str("<<"),
+            BinaryOperator::PGBitwiseShiftRight => f.write_str(">>"),
+            BinaryOperator::PGRegexMatch => f.write_str("~"),
+            BinaryOperator::PGRegexIMatch => f.write_str("~*"),
+            BinaryOperator::PGRegexNotMatch => f.write_str("!~"),
+            BinaryOperator::PGRegexNotIMatch => f.write_str("!~*"),
+            BinaryOperator::PGCustomBinaryOperator(ref custom_operator) => {
+                write!(f, "OPERATOR(")?;
+                if let Some(ref schema) = custom_operator.schema {
+                    write!(f, "{}.", schema)?;
+                }
+                write!(f, "{})", custom_operator.name)
+            }
+        }
     }
 }

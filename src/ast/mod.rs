@@ -33,7 +33,7 @@ pub use self::ddl::{
     AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
     ReferentialAction, TableConstraint,
 };
-pub use self::operator::{BinaryOperator, UnaryOperator};
+pub use self::operator::{BinaryOperator, PGCustomOperator, UnaryOperator};
 pub use self::query::{
     Cte, Fetch, Join, JoinConstraint, JoinOperator, LateralView, LockType, Offset, OffsetRows,
     OrderByExpr, Query, Select, SelectInto, SelectItem, SetExpr, SetOperator, TableAlias,

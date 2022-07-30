@@ -1159,6 +1159,33 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::XOR => Some(BinaryOperator::Xor),
+                Keyword::OPERATOR if dialect_of!(self is PostgreSqlDialect) => {
+                    debug!("parsing custom operator");
+                    self.expect_token(&Token::LParen)?;
+                    let token_1 = self.peek_nth_token(1);
+
+                    let custom_operator = match token_1 {
+                        Token::Period => {
+                            let schema = self.parse_identifier()?;
+                            self.expect_token(&Token::Period)?;
+                            let operator = self.next_token();
+                            PGCustomOperator {
+                                schema: Some(schema.value),
+                                name: operator.to_string(),
+                            }
+                        }
+                        _ => {
+                            let operator = self.next_token();
+                            PGCustomOperator {
+                                schema: None,
+                                name: operator.to_string(),
+                            }
+                        }
+                    };
+
+                    self.expect_token(&Token::RParen)?;
+                    Some(BinaryOperator::PGCustomBinaryOperator(custom_operator))
+                }
                 _ => None,
             },
             _ => None,
@@ -1423,6 +1450,7 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::BETWEEN_PREC),
+            Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(Self::BETWEEN_PREC),
             Token::Eq
             | Token::Lt
             | Token::LtEq

@@ -3676,25 +3676,28 @@ fn parse_derived_tables() {
     let from = only(select.from);
     assert_eq!(
         from.relation,
-        TableFactor::NestedJoin {table_with_joins: Box::new(TableWithJoins {
-            relation: TableFactor::Derived {
-                lateral: false,
-                subquery: Box::new(verified_query("(SELECT 1) UNION (SELECT 2)")),
-                alias: Some(TableAlias {
-                    name: "t1".into(),
-                    columns: vec![],
-                })
-            },
-            joins: vec![Join {
-                relation: TableFactor::Table {
-                    name: ObjectName(vec!["t2".into()]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
+        TableFactor::NestedJoin {
+            table_with_joins: Box::new(TableWithJoins {
+                relation: TableFactor::Derived {
+                    lateral: false,
+                    subquery: Box::new(verified_query("(SELECT 1) UNION (SELECT 2)")),
+                    alias: Some(TableAlias {
+                        name: "t1".into(),
+                        columns: vec![],
+                    })
                 },
-                join_operator: JoinOperator::Inner(JoinConstraint::Natural),
-            }],
-        }), alias: None}
+                joins: vec![Join {
+                    relation: TableFactor::Table {
+                        name: ObjectName(vec!["t2".into()]),
+                        alias: None,
+                        args: None,
+                        with_hints: vec![],
+                    },
+                    join_operator: JoinOperator::Inner(JoinConstraint::Natural),
+                }],
+            }),
+            alias: None
+        }
     );
 }
 

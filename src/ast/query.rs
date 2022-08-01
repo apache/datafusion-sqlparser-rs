@@ -375,7 +375,10 @@ pub enum TableFactor {
     ///
     /// The parser may also accept non-standard nesting of bare tables for some
     /// dialects, but the information about such nesting is stripped from AST.
-    NestedJoin(Box<TableWithJoins>),
+    NestedJoin {
+        table_with_joins: Box<TableWithJoins>,
+        alias: Option<TableAlias>,
+    },
 }
 
 impl fmt::Display for TableFactor {
@@ -438,7 +441,16 @@ impl fmt::Display for TableFactor {
                 }
                 Ok(())
             }
-            TableFactor::NestedJoin(table_reference) => write!(f, "({})", table_reference),
+            TableFactor::NestedJoin {
+                table_with_joins,
+                alias,
+            } => {
+                write!(f, "({})", table_with_joins)?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {}", alias)?;
+                }
+                Ok(())
+            }
         }
     }
 }

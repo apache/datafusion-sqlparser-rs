@@ -3855,12 +3855,24 @@ impl<'a> Parser<'a> {
             #[allow(clippy::if_same_then_else)]
             if !table_and_joins.joins.is_empty() {
                 self.expect_token(&Token::RParen)?;
-                Ok(TableFactor::NestedJoin(Box::new(table_and_joins))) // (A)
-            } else if let TableFactor::NestedJoin(_) = &table_and_joins.relation {
+                let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+                Ok(TableFactor::NestedJoin {
+                    table_with_joins: Box::new(table_and_joins),
+                    alias,
+                }) // (A)
+            } else if let TableFactor::NestedJoin {
+                table_with_joins: _,
+                alias: _,
+            } = &table_and_joins.relation
+            {
                 // (B): `table_and_joins` (what we found inside the parentheses)
                 // is a nested join `(foo JOIN bar)`, not followed by other joins.
                 self.expect_token(&Token::RParen)?;
-                Ok(TableFactor::NestedJoin(Box::new(table_and_joins)))
+                let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+                Ok(TableFactor::NestedJoin {
+                    table_with_joins: Box::new(table_and_joins),
+                    alias,
+                })
             } else if dialect_of!(self is SnowflakeDialect | GenericDialect) {
                 // Dialect-specific behavior: Snowflake diverges from the
                 // standard and from most of the other implementations by
@@ -3879,7 +3891,8 @@ impl<'a> Parser<'a> {
                         TableFactor::Derived { alias, .. }
                         | TableFactor::Table { alias, .. }
                         | TableFactor::UNNEST { alias, .. }
-                        | TableFactor::TableFunction { alias, .. } => {
+                        | TableFactor::TableFunction { alias, .. }
+                        | TableFactor::NestedJoin { alias, .. } => {
                             // but not `FROM (mytable AS alias1) AS alias2`.
                             if let Some(inner_alias) = alias {
                                 return Err(ParserError::ParserError(format!(
@@ -3892,7 +3905,6 @@ impl<'a> Parser<'a> {
                             // `(mytable AS alias)`
                             alias.replace(outer_alias);
                         }
-                        TableFactor::NestedJoin(_) => unreachable!(),
                     };
                 }
                 // Do not store the extra set of parens in the AST

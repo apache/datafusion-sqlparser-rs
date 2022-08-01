@@ -3676,7 +3676,7 @@ fn parse_derived_tables() {
     let from = only(select.from);
     assert_eq!(
         from.relation,
-        TableFactor::NestedJoin(Box::new(TableWithJoins {
+        TableFactor::NestedJoin {table_with_joins: Box::new(TableWithJoins {
             relation: TableFactor::Derived {
                 lateral: false,
                 subquery: Box::new(verified_query("(SELECT 1) UNION (SELECT 2)")),
@@ -3694,7 +3694,7 @@ fn parse_derived_tables() {
                 },
                 join_operator: JoinOperator::Inner(JoinConstraint::Natural),
             }],
-        }))
+        }), alias: None}
     );
 }
 

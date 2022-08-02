@@ -439,6 +439,7 @@ define_keywords!(
     ROWID,
     ROWS,
     ROW_NUMBER,
+    SAFE_CAST,
     SAVEPOINT,
     SCHEMA,
     SCOPE,

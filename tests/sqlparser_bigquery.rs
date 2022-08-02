@@ -94,6 +94,12 @@ fn parse_table_identifiers() {
     test_table_ident("abc5.GROUP", vec![Ident::new("abc5"), Ident::new("GROUP")]);
 }
 
+#[test]
+fn parse_cast_type() {
+    let sql = r#"SELECT SAFE_CAST(1 AS INT64)"#;
+    bigquery().verified_only_select(sql);
+}
+
 fn bigquery() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(BigQueryDialect {})],

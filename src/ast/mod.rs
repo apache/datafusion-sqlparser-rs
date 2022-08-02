@@ -285,6 +285,13 @@ pub enum Expr {
         expr: Box<Expr>,
         data_type: DataType,
     },
+    /// SAFE_CAST an expression to a different data type e.g. `SAFE_CAST(foo AS FLOAT64)`
+    //  only available for BigQuery: https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-and-operators#safe_casting
+    //  this works the same as `TRY_CAST`
+    SafeCast {
+        expr: Box<Expr>,
+        data_type: DataType,
+    },
     /// AT a timestamp to a different timezone e.g. `FROM_UNIXTIME(0) AT TIME ZONE 'UTC-06:00'`
     AtTimeZone {
         timestamp: Box<Expr>,
@@ -442,6 +449,7 @@ impl fmt::Display for Expr {
             }
             Expr::Cast { expr, data_type } => write!(f, "CAST({} AS {})", expr, data_type),
             Expr::TryCast { expr, data_type } => write!(f, "TRY_CAST({} AS {})", expr, data_type),
+            Expr::SafeCast { expr, data_type } => write!(f, "SAFE_CAST({} AS {})", expr, data_type),
             Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
             Expr::Position { expr, r#in } => write!(f, "POSITION({} IN {})", expr, r#in),
             Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),

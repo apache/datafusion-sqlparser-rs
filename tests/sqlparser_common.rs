@@ -3481,7 +3481,7 @@ fn parse_natural_join() {
         vec![natural_join(JoinOperator::FullOuter, None)]
     );
 
-    // natural join with alias
+    // natural join another table with alias
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL JOIN t2 AS t3").from).joins,
         vec![natural_join(JoinOperator::Inner, table_alias("t3"))]
@@ -3538,7 +3538,13 @@ fn parse_join_nesting() {
     let from = only(select.from);
     assert_eq!(
         from.relation,
-        nest_with_alias!(table_alias("c"), table("a"), table("b"))
+        TableFactor::NestedJoin {
+            table_with_joins: Box::new(TableWithJoins {
+                relation: table("a"),
+                joins: vec![join(table("b"))],
+            }),
+            alias: table_alias("c")
+        }
     );
     assert_eq!(from.joins, vec![]);
 }

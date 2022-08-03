@@ -32,3 +32,13 @@ macro_rules! nest {
         }), alias: None}
     };
 }
+
+#[macro_export]
+macro_rules! nest_with_alias {
+    ($alias:expr, $base:expr $(, $join:expr)* ) => {
+        TableFactor::NestedJoin { table_with_joins: Box::new(TableWithJoins {
+            relation: $base,
+            joins: vec![$(join($join)),*]
+        }), alias: $alias}
+    };
+}

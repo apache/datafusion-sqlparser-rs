@@ -3446,32 +3446,45 @@ fn parse_joins_using() {
 
 #[test]
 fn parse_natural_join() {
-    fn natural_join(f: impl Fn(JoinConstraint) -> JoinOperator) -> Join {
+    fn natural_join(f: impl Fn(JoinConstraint) -> JoinOperator, alias: Option<TableAlias>) -> Join {
         Join {
             relation: TableFactor::Table {
                 name: ObjectName(vec![Ident::new("t2")]),
-                alias: None,
+                alias,
                 args: None,
                 with_hints: vec![],
             },
             join_operator: f(JoinConstraint::Natural),
         }
     }
+
+    // if not specified, inner join as default
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL JOIN t2").from).joins,
-        vec![natural_join(JoinOperator::Inner)]
+        vec![natural_join(JoinOperator::Inner, None)]
     );
+    // left join explicitly
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL LEFT JOIN t2").from).joins,
-        vec![natural_join(JoinOperator::LeftOuter)]
+        vec![natural_join(JoinOperator::LeftOuter, None)]
     );
+
+    // right join explicitly
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL RIGHT JOIN t2").from).joins,
-        vec![natural_join(JoinOperator::RightOuter)]
+        vec![natural_join(JoinOperator::RightOuter, None)]
     );
+
+    // full join explicitly
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 NATURAL FULL JOIN t2").from).joins,
-        vec![natural_join(JoinOperator::FullOuter)]
+        vec![natural_join(JoinOperator::FullOuter, None)]
+    );
+
+    // natural join with alias
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 NATURAL JOIN t2 AS t3").from).joins,
+        vec![natural_join(JoinOperator::Inner, table_alias("t3"))]
     );
 
     let sql = "SELECT * FROM t1 natural";
@@ -3519,6 +3532,15 @@ fn parse_join_nesting() {
         from.joins,
         vec![join(nest!(nest!(nest!(table("b"), table("c")))))]
     );
+
+    let sql = "SELECT * FROM (a NATURAL JOIN b) AS c";
+    let select = verified_only_select(sql);
+    let from = only(select.from);
+    assert_eq!(
+        from.relation,
+        nest_with_alias!(table_alias("c"), table("a"), table("b"))
+    );
+    assert_eq!(from.joins, vec![]);
 }
 
 #[test]

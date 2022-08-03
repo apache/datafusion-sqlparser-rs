@@ -426,6 +426,7 @@ impl<'a> Parser<'a> {
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CAST => self.parse_cast_expr(),
                 Keyword::TRY_CAST => self.parse_try_cast_expr(),
+                Keyword::SAFE_CAST => self.parse_safe_cast_expr(),
                 Keyword::EXISTS => self.parse_exists_expr(false),
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::POSITION => self.parse_position_expr(),
@@ -775,6 +776,19 @@ impl<'a> Parser<'a> {
         let data_type = self.parse_data_type()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::TryCast {
+            expr: Box::new(expr),
+            data_type,
+        })
+    }
+
+    /// Parse a BigQuery SAFE_CAST function e.g. `SAFE_CAST(expr AS FLOAT64)`
+    pub fn parse_safe_cast_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let expr = self.parse_expr()?;
+        self.expect_keyword(Keyword::AS)?;
+        let data_type = self.parse_data_type()?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::SafeCast {
             expr: Box::new(expr),
             data_type,
         })

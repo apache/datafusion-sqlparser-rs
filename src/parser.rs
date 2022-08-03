@@ -1160,7 +1160,6 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::XOR => Some(BinaryOperator::Xor),
                 Keyword::OPERATOR if dialect_of!(self is PostgreSqlDialect) => {
-                    debug!("parsing custom operator");
                     self.expect_token(&Token::LParen)?;
                     let token_1 = self.peek_nth_token(1);
 

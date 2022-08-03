@@ -12,6 +12,8 @@
 
 use core::fmt;
 
+#[cfg(not(feature = "std"))]
+use alloc::string::String;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 

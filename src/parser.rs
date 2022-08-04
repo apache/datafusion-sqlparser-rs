@@ -1145,10 +1145,10 @@ impl<'a> Parser<'a> {
             Token::Caret => Some(BinaryOperator::BitwiseXor),
             Token::Ampersand => Some(BinaryOperator::BitwiseAnd),
             Token::Div => Some(BinaryOperator::Divide),
-            Token::ShiftLeft if dialect_of!(self is PostgreSqlDialect) => {
+            Token::ShiftLeft if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
                 Some(BinaryOperator::PGBitwiseShiftLeft)
             }
-            Token::ShiftRight if dialect_of!(self is PostgreSqlDialect) => {
+            Token::ShiftRight if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
                 Some(BinaryOperator::PGBitwiseShiftRight)
             }
             Token::Sharp if dialect_of!(self is PostgreSqlDialect) => {

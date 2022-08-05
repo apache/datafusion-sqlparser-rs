@@ -1173,6 +1173,22 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::XOR => Some(BinaryOperator::Xor),
+                Keyword::OPERATOR if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
+                    self.expect_token(&Token::LParen)?;
+                    // there are special rules for operator names in
+                    // postgres so we can not use 'parse_object'
+                    // or similar.
+                    // See https://www.postgresql.org/docs/current/sql-createoperator.html
+                    let mut idents = vec![];
+                    loop {
+                        idents.push(self.next_token().to_string());
+                        if !self.consume_token(&Token::Period) {
+                            break;
+                        }
+                    }
+                    self.expect_token(&Token::RParen)?;
+                    Some(BinaryOperator::PGCustomBinaryOperator(idents))
+                }
                 _ => None,
             },
             _ => None,
@@ -1437,6 +1453,7 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::BETWEEN_PREC),
+            Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(Self::BETWEEN_PREC),
             Token::Eq
             | Token::Lt
             | Token::LtEq

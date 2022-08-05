@@ -1565,3 +1565,55 @@ fn parse_fetch() {
     pg_and_generic()
         .verified_stmt("FETCH BACKWARD ALL IN \"SQL_CUR0x7fa44801bc00\" INTO \"new_table\"");
 }
+
+#[test]
+fn parse_custom_operator() {
+    // operator with a database and schema
+    let sql = r#"SELECT * FROM events WHERE relname OPERATOR(database.pg_catalog.~) '^(table)$'"#;
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        select.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident {
+                value: "relname".into(),
+                quote_style: None,
+            })),
+            op: BinaryOperator::PGCustomBinaryOperator(vec![
+                "database".into(),
+                "pg_catalog".into(),
+                "~".into()
+            ]),
+            right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
+        })
+    );
+
+    // operator with a schema
+    let sql = r#"SELECT * FROM events WHERE relname OPERATOR(pg_catalog.~) '^(table)$'"#;
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        select.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident {
+                value: "relname".into(),
+                quote_style: None,
+            })),
+            op: BinaryOperator::PGCustomBinaryOperator(vec!["pg_catalog".into(), "~".into()]),
+            right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
+        })
+    );
+
+    // custom operator without a schema
+    let sql = r#"SELECT * FROM events WHERE relname OPERATOR(~) '^(table)$'"#;
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        select.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident {
+                value: "relname".into(),
+                quote_style: None,
+            })),
+            op: BinaryOperator::PGCustomBinaryOperator(vec!["~".into()]),
+            right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
+        })
+    );
+}

@@ -1567,6 +1567,25 @@ fn parse_fetch() {
 
 #[test]
 fn parse_custom_operator() {
+    // operator with a database and schema
+    let sql = r#"SELECT * FROM events WHERE relname OPERATOR(database.pg_catalog.~) '^(table)$'"#;
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        select.selection,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident {
+                value: "relname".into(),
+                quote_style: None,
+            })),
+            op: BinaryOperator::PGCustomBinaryOperator(vec![
+                "database".into(),
+                "pg_catalog".into(),
+                "~".into()
+            ]),
+            right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
+        })
+    );
+
     // operator with a schema
     let sql = r#"SELECT * FROM events WHERE relname OPERATOR(pg_catalog.~) '^(table)$'"#;
     let select = pg().verified_only_select(sql);
@@ -1577,10 +1596,7 @@ fn parse_custom_operator() {
                 value: "relname".into(),
                 quote_style: None,
             })),
-            op: BinaryOperator::PGCustomBinaryOperator(PGCustomOperator {
-                schema: Some("pg_catalog".into()),
-                name: "~".into(),
-            }),
+            op: BinaryOperator::PGCustomBinaryOperator(vec!["pg_catalog".into(), "~".into()]),
             right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
         })
     );
@@ -1595,10 +1611,7 @@ fn parse_custom_operator() {
                 value: "relname".into(),
                 quote_style: None,
             })),
-            op: BinaryOperator::PGCustomBinaryOperator(PGCustomOperator {
-                schema: None,
-                name: "~".into(),
-            }),
+            op: BinaryOperator::PGCustomBinaryOperator(vec!["~".into()]),
             right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
         })
     );

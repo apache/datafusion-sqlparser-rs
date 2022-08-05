@@ -17,6 +17,8 @@ use alloc::string::String;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use super::display_separated;
+
 /// Unary operators
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -88,17 +90,11 @@ pub enum BinaryOperator {
     PGRegexIMatch,
     PGRegexNotMatch,
     PGRegexNotIMatch,
-    PGCustomBinaryOperator(PGCustomOperator),
-}
-
-/// PostgreSQL-specific custom operator.
-///
-/// See [CREATE OPERATOR](https://www.postgresql.org/docs/current/sql-createoperator.html) for more information.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct PGCustomOperator {
-    pub schema: Option<String>,
-    pub name: String,
+    /// PostgreSQL-specific custom operator.
+    ///
+    /// See [CREATE OPERATOR](https://www.postgresql.org/docs/current/sql-createoperator.html)
+    /// for more information.
+    PGCustomBinaryOperator(Vec<String>),
 }
 
 impl fmt::Display for BinaryOperator {
@@ -134,12 +130,8 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::PGRegexIMatch => f.write_str("~*"),
             BinaryOperator::PGRegexNotMatch => f.write_str("!~"),
             BinaryOperator::PGRegexNotIMatch => f.write_str("!~*"),
-            BinaryOperator::PGCustomBinaryOperator(ref custom_operator) => {
-                write!(f, "OPERATOR(")?;
-                if let Some(ref schema) = custom_operator.schema {
-                    write!(f, "{}.", schema)?;
-                }
-                write!(f, "{})", custom_operator.name)
+            BinaryOperator::PGCustomBinaryOperator(idents) => {
+                write!(f, "OPERATOR({})", display_separated(idents, "."))
             }
         }
     }

@@ -1161,29 +1161,19 @@ impl<'a> Parser<'a> {
                 Keyword::XOR => Some(BinaryOperator::Xor),
                 Keyword::OPERATOR if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
                     self.expect_token(&Token::LParen)?;
-                    let token_1 = self.peek_nth_token(1);
-
-                    let custom_operator = match token_1 {
-                        Token::Period => {
-                            let schema = self.parse_identifier()?;
-                            self.expect_token(&Token::Period)?;
-                            let operator = self.next_token();
-                            PGCustomOperator {
-                                schema: Some(schema.value),
-                                name: operator.to_string(),
-                            }
+                    // there are special rules for operator names in
+                    // postgres so we can not use 'parse_object'
+                    // or similar.
+                    // See https://www.postgresql.org/docs/current/sql-createoperator.html
+                    let mut idents = vec![];
+                    loop {
+                        idents.push(self.next_token().to_string());
+                        if !self.consume_token(&Token::Period) {
+                            break;
                         }
-                        _ => {
-                            let operator = self.next_token();
-                            PGCustomOperator {
-                                schema: None,
-                                name: operator.to_string(),
-                            }
-                        }
-                    };
-
+                    }
                     self.expect_token(&Token::RParen)?;
-                    Some(BinaryOperator::PGCustomBinaryOperator(custom_operator))
+                    Some(BinaryOperator::PGCustomBinaryOperator(idents))
                 }
                 _ => None,
             },

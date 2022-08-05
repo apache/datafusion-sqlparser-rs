@@ -1077,13 +1077,14 @@ fn parse_prepare() {
 #[test]
 fn parse_pg_bitwise_binary_ops() {
     let bitwise_ops = &[
-        ("#", BinaryOperator::PGBitwiseXor),
-        (">>", BinaryOperator::PGBitwiseShiftRight),
-        ("<<", BinaryOperator::PGBitwiseShiftLeft),
+        // Sharp char cannot be used with Generic Dialect, it conflicts with identifiers
+        ("#", BinaryOperator::PGBitwiseXor, pg()),
+        (">>", BinaryOperator::PGBitwiseShiftRight, pg_and_generic()),
+        ("<<", BinaryOperator::PGBitwiseShiftLeft, pg_and_generic()),
     ];
 
-    for (str_op, op) in bitwise_ops {
-        let select = pg().verified_only_select(&format!("SELECT a {} b", &str_op));
+    for (str_op, op, dialects) in bitwise_ops {
+        let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("a"))),

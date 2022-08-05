@@ -9,6 +9,17 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
 
+## [0.20.0] 2022-08-05
+
+### Added
+* Support custom `OPERATOR` postgres syntax (#548) - Thanks @iskakaushik
+* Support `SAFE_CAST` for BigQuery (#552) - Thanks @togami2864
+
+### Changed
+* Added SECURITY.md (#546) - Thanks @JamieSlome
+* Allow `>>` and `<<` binary operators in Generic dialect (#553) - Thanks @ovr
+* Allow `NestedJoin` with an alias (#551) - Thanks @waitingkuo
+
 ## [0.19.0] 2022-07-28
 
 ### Added

@@ -782,7 +782,7 @@ pub enum Statement {
         repair: bool,
         partition_action: Option<AddDropSync>,
     },
-    /// SELECT
+    /// SELECT, VALUES
     Query(Query),
     /// INSERT
     Insert {

@@ -1068,9 +1068,9 @@ fn parse_prepare() {
     };
     assert_eq!(
         sub_stmt,
-        Box::new(Statement::Query(Box::new(pg_and_generic().verified_query(
+        Box::new(Statement::Query(pg_and_generic().verified_query(
             "SELECT * FROM customers WHERE customers.id = a1"
-        ))))
+        )))
     );
 }
 

@@ -107,7 +107,7 @@ impl TestedDialects {
     /// after a serialization round-trip.
     pub fn verified_query(&self, sql: &str) -> Query {
         match self.verified_stmt(sql) {
-            Statement::Query(query) => *query,
+            Statement::Query(query) => query,
             _ => panic!("Expected Query"),
         }
     }

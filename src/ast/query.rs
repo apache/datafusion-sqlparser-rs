@@ -74,7 +74,7 @@ pub enum SetExpr {
     Select(Box<Select>),
     /// Parenthesized SELECT subquery, which may include more set operations
     /// in its body and an optional ORDER BY / LIMIT.
-    Query(Box<Query>),
+    Query(Query),
     /// UNION/EXCEPT/INTERSECT of two queries
     SetOperation {
         op: SetOperator,

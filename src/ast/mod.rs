@@ -783,7 +783,7 @@ pub enum Statement {
         partition_action: Option<AddDropSync>,
     },
     /// SELECT
-    Query(Box<Query>),
+    Query(Query),
     /// INSERT
     Insert {
         /// Only for Sqlite

@@ -312,7 +312,7 @@ fn parse_quote_identifiers_2() {
     let sql = "SELECT `quoted `` identifier`";
     assert_eq!(
         mysql().verified_stmt(sql),
-        Statement::Query(Box::new(Query {
+        Statement::Query(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: false,
@@ -337,7 +337,7 @@ fn parse_quote_identifiers_2() {
             offset: None,
             fetch: None,
             lock: None,
-        }))
+        })
     );
 }
 
@@ -346,7 +346,7 @@ fn parse_quote_identifiers_3() {
     let sql = "SELECT ```quoted identifier```";
     assert_eq!(
         mysql().verified_stmt(sql),
-        Statement::Query(Box::new(Query {
+        Statement::Query(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: false,
@@ -371,7 +371,7 @@ fn parse_quote_identifiers_3() {
             offset: None,
             fetch: None,
             lock: None,
-        }))
+        })
     );
 }
 
@@ -766,7 +766,7 @@ fn parse_substring_in_select() {
     ) {
         Statement::Query(query) => {
             assert_eq!(
-                Box::new(Query {
+                Query {
                     with: None,
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         distinct: true,
@@ -812,7 +812,7 @@ fn parse_substring_in_select() {
                     offset: None,
                     fetch: None,
                     lock: None,
-                }),
+                },
                 query
             );
         }

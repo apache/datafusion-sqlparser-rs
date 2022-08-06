@@ -160,7 +160,7 @@ impl<'a> Parser<'a> {
                 Keyword::ANALYZE => Ok(self.parse_analyze()?),
                 Keyword::SELECT | Keyword::WITH | Keyword::VALUES => {
                     self.prev_token();
-                    Ok(Statement::Query(Box::new(self.parse_query()?)))
+                    Ok(Statement::Query(self.parse_query()?))
                 }
                 Keyword::TRUNCATE => Ok(self.parse_truncate()?),
                 Keyword::MSCK => Ok(self.parse_msck()?),
@@ -205,7 +205,7 @@ impl<'a> Parser<'a> {
             },
             Token::LParen => {
                 self.prev_token();
-                Ok(Statement::Query(Box::new(self.parse_query()?)))
+                Ok(Statement::Query(self.parse_query()?))
             }
             unexpected => self.expected("an SQL statement", unexpected),
         }
@@ -3429,7 +3429,7 @@ impl<'a> Parser<'a> {
             // CTEs are not allowed here, but the parser currently accepts them
             let subquery = self.parse_query()?;
             self.expect_token(&Token::RParen)?;
-            SetExpr::Query(Box::new(subquery))
+            SetExpr::Query(subquery)
         } else if self.parse_keyword(Keyword::VALUES) {
             SetExpr::Values(self.parse_values()?)
         } else {

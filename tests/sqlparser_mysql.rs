@@ -905,6 +905,9 @@ fn parse_set_names() {
             collation_name: Some("bogus".to_string()),
         }]
     );
+
+    let stmt = mysql_and_generic().verified_stmt("SET NAMES DEFAULT");
+    assert_eq!(stmt, Statement::SetNamesDefault {});
 }
 
 fn mysql() -> TestedDialects {

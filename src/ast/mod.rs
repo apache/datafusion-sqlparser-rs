@@ -999,6 +999,10 @@ pub enum Statement {
         charset_name: String,
         collation_name: Option<String>,
     },
+    /// SET NAMES DEFAULT
+    ///
+    /// Note: this is a MySQL-specific statement.
+    SetNamesDefault {},
     /// SHOW <variable>
     ///
     /// Note: this is a PostgreSQL-specific statement.
@@ -1798,6 +1802,11 @@ impl fmt::Display for Statement {
                     f.write_str(" COLLATE ")?;
                     f.write_str(collation)?;
                 };
+
+                Ok(())
+            }
+            Statement::SetNamesDefault {} => {
+                f.write_str("SET NAMES DEFAULT")?;
 
                 Ok(())
             }

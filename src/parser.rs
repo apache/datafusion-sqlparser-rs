@@ -3627,6 +3627,10 @@ impl<'a> Parser<'a> {
         if variable.to_string().eq_ignore_ascii_case("NAMES")
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {
+            if self.parse_keyword(Keyword::DEFAULT) {
+                return Ok(Statement::SetNamesDefault {});
+            }
+
             let charset_name = self.parse_literal_string()?;
             let collation_name = if self.parse_one_of_keywords(&[Keyword::COLLATE]).is_some() {
                 Some(self.parse_literal_string()?)

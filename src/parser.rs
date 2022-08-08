@@ -3638,10 +3638,10 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            return Ok(Statement::SetNames {
+            Ok(Statement::SetNames {
                 charset_name,
                 collation_name,
-            });
+            })
         } else if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
             let mut values = vec![];
             loop {

@@ -110,12 +110,10 @@ fn parse_show_columns() {
         .one_statement_parses_to("SHOW COLUMNS IN mytable", "SHOW COLUMNS FROM mytable");
     mysql_and_generic()
         .one_statement_parses_to("SHOW FIELDS IN mytable", "SHOW COLUMNS FROM mytable");
-
-    // unhandled things are truly unhandled
-    match mysql_and_generic().parse_sql_statements("SHOW COLUMNS FROM mytable FROM mydb") {
-        Err(_) => {}
-        Ok(val) => panic!("unexpected successful parse: {:?}", val),
-    }
+    mysql_and_generic().one_statement_parses_to(
+        "SHOW COLUMNS FROM mytable FROM mydb",
+        "SHOW COLUMNS FROM mydb.mytable",
+    );
 }
 
 #[test]

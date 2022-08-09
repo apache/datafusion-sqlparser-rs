@@ -1036,6 +1036,10 @@ pub enum Statement {
         db_name: Option<Ident>,
         filter: Option<ShowStatementFilter>,
     },
+    /// SHOW COLLATION
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowCollation { filter: Option<ShowStatementFilter> },
     /// USE
     ///
     /// Note: This is a MySQL-specific statement.
@@ -1890,6 +1894,13 @@ impl fmt::Display for Statement {
             }
             Statement::Use { db_name } => {
                 write!(f, "USE {}", db_name)?;
+                Ok(())
+            }
+            Statement::ShowCollation { filter } => {
+                write!(f, "SHOW COLLATION")?;
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
+                }
                 Ok(())
             }
             Statement::StartTransaction { modes } => {

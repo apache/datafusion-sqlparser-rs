@@ -3758,6 +3758,8 @@ impl<'a> Parser<'a> {
             ))
         } else if self.parse_one_of_keywords(&[Keyword::CREATE]).is_some() {
             Ok(self.parse_show_create()?)
+        } else if self.parse_keyword(Keyword::COLLATION) {
+            Ok(self.parse_show_collation()?)
         } else if self.parse_keyword(Keyword::VARIABLES)
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {
@@ -3839,6 +3841,11 @@ impl<'a> Parser<'a> {
             db_name,
             filter,
         })
+    }
+
+    pub fn parse_show_collation(&mut self) -> Result<Statement, ParserError> {
+        let filter = self.parse_show_statement_filter()?;
+        Ok(Statement::ShowCollation { filter })
     }
 
     pub fn parse_show_statement_filter(

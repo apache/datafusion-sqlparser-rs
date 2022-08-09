@@ -117,6 +117,81 @@ fn parse_show_columns() {
 }
 
 #[test]
+fn parse_show_tables() {
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW TABLES"),
+        Statement::ShowTables {
+            extended: false,
+            full: false,
+            db_name: None,
+            filter: None,
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW TABLES FROM mydb"),
+        Statement::ShowTables {
+            extended: false,
+            full: false,
+            db_name: Some(Ident::new("mydb")),
+            filter: None,
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW EXTENDED TABLES"),
+        Statement::ShowTables {
+            extended: true,
+            full: false,
+            db_name: None,
+            filter: None,
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW FULL TABLES"),
+        Statement::ShowTables {
+            extended: false,
+            full: true,
+            db_name: None,
+            filter: None,
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW TABLES LIKE 'pattern'"),
+        Statement::ShowTables {
+            extended: false,
+            full: false,
+            db_name: None,
+            filter: Some(ShowStatementFilter::Like("pattern".into())),
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW TABLES WHERE 1 = 2"),
+        Statement::ShowTables {
+            extended: false,
+            full: false,
+            db_name: None,
+            filter: Some(ShowStatementFilter::Where(
+                mysql_and_generic().verified_expr("1 = 2")
+            )),
+        }
+    );
+    mysql_and_generic().one_statement_parses_to("SHOW TABLES IN mydb", "SHOW TABLES FROM mydb");
+}
+
+#[test]
+fn parse_show_extended_full() {
+    assert!(mysql_and_generic()
+        .parse_sql_statements("SHOW EXTENDED FULL TABLES")
+        .is_ok());
+    assert!(mysql_and_generic()
+        .parse_sql_statements("SHOW EXTENDED FULL COLUMNS FROM mytable")
+        .is_ok());
+    // SHOW EXTENDED/FULL can only be used with COLUMNS and TABLES
+    assert!(mysql_and_generic()
+        .parse_sql_statements("SHOW EXTENDED FULL CREATE TABLE mytable")
+        .is_err());
+}
+
+#[test]
 fn parse_show_create() {
     let obj_name = ObjectName(vec![Ident::new("myident")]);
 

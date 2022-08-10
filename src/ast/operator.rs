@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright (c) 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -76,10 +78,6 @@ pub enum BinaryOperator {
     And,
     Or,
     Xor,
-    Like,
-    NotLike,
-    ILike,
-    NotILike,
     BitwiseOr,
     BitwiseAnd,
     BitwiseXor,
@@ -116,10 +114,6 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::And => f.write_str("AND"),
             BinaryOperator::Or => f.write_str("OR"),
             BinaryOperator::Xor => f.write_str("XOR"),
-            BinaryOperator::Like => f.write_str("LIKE"),
-            BinaryOperator::NotLike => f.write_str("NOT LIKE"),
-            BinaryOperator::ILike => f.write_str("ILIKE"),
-            BinaryOperator::NotILike => f.write_str("NOT ILIKE"),
             BinaryOperator::BitwiseOr => f.write_str("|"),
             BinaryOperator::BitwiseAnd => f.write_str("&"),
             BinaryOperator::BitwiseXor => f.write_str("^"),

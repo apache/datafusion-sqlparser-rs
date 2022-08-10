@@ -894,7 +894,7 @@ fn parse_like() {
         assert_eq!(
             Expr::Like {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated: negated,
+                negated,
                 pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
                 escape_char: None
             },
@@ -911,7 +911,7 @@ fn parse_like() {
         assert_eq!(
             Expr::IsNull(Box::new(Expr::Like {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated: negated,
+                negated,
                 pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
                 escape_char: None
             })),
@@ -933,7 +933,7 @@ fn parse_ilike() {
         assert_eq!(
             Expr::ILike {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated: negated,
+                negated,
                 pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
                 escape_char: None
             },
@@ -950,7 +950,7 @@ fn parse_ilike() {
         assert_eq!(
             Expr::IsNull(Box::new(Expr::ILike {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated: negated,
+                negated,
                 pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
                 escape_char: None
             })),
@@ -972,7 +972,7 @@ fn parse_similar_to() {
         assert_eq!(
             Expr::SimilarTo {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated: negated,
+                negated,
                 pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
                 escape_char: Some('\\')
             },
@@ -989,7 +989,7 @@ fn parse_similar_to() {
         assert_eq!(
             Expr::IsNull(Box::new(Expr::SimilarTo {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated: negated,
+                negated,
                 pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
                 escape_char: Some('\\')
             })),

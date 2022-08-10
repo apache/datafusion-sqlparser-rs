@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright (c) 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -857,10 +859,11 @@ fn parse_not_precedence() {
         verified_expr(sql),
         Expr::UnaryOp {
             op: UnaryOperator::Not,
-            expr: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Value(Value::SingleQuotedString("a".into()))),
-                op: BinaryOperator::NotLike,
-                right: Box::new(Expr::Value(Value::SingleQuotedString("b".into()))),
+            expr: Box::new(Expr::Like {
+                expr: Box::new(Expr::Value(Value::SingleQuotedString("a".into()))),
+                negated: true,
+                pattern: Box::new(Value::SingleQuotedString("b".into())),
+                escape_char: None
             }),
         },
     );
@@ -889,14 +892,11 @@ fn parse_like() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("name"))),
-                op: if negated {
-                    BinaryOperator::NotLike
-                } else {
-                    BinaryOperator::Like
-                },
-                right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+            Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated: negated,
+                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                escape_char: None
             },
             select.selection.unwrap()
         );
@@ -909,14 +909,11 @@ fn parse_like() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::IsNull(Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("name"))),
-                op: if negated {
-                    BinaryOperator::NotLike
-                } else {
-                    BinaryOperator::Like
-                },
-                right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+            Expr::IsNull(Box::new(Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated: negated,
+                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                escape_char: None
             })),
             select.selection.unwrap()
         );
@@ -934,14 +931,11 @@ fn parse_ilike() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("name"))),
-                op: if negated {
-                    BinaryOperator::NotILike
-                } else {
-                    BinaryOperator::ILike
-                },
-                right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+            Expr::ILike {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated: negated,
+                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                escape_char: None
             },
             select.selection.unwrap()
         );
@@ -954,14 +948,50 @@ fn parse_ilike() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::IsNull(Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("name"))),
-                op: if negated {
-                    BinaryOperator::NotILike
-                } else {
-                    BinaryOperator::ILike
-                },
-                right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+            Expr::IsNull(Box::new(Expr::ILike {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated: negated,
+                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                escape_char: None
+            })),
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
+}
+
+#[test]
+fn parse_similar_to() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated: negated,
+                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                escape_char: Some('\\')
+            },
+            select.selection.unwrap()
+        );
+
+        // This statement tests that LIKE and NOT LIKE have the same precedence.
+        // This was previously mishandled (#81).
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::IsNull(Box::new(Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated: negated,
+                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                escape_char: Some('\\')
             })),
             select.selection.unwrap()
         );

@@ -1242,6 +1242,69 @@ fn parse_array_index_expr() {
 }
 
 #[test]
+fn parse_array_subquery_expr() {
+    let sql = "SELECT ARRAY(SELECT 1 UNION SELECT 2)";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        &Expr::ArraySubquery(Box::new(Query {
+            with: None,
+            body: Box::new(SetExpr::SetOperation {
+                op: SetOperator::Union,
+                all: false,
+                left: Box::new(SetExpr::Select(Box::new(Select {
+                    distinct: false,
+                    top: None,
+                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(Value::Number(
+                        #[cfg(not(feature = "bigdecimal"))]
+                        "1".to_string(),
+                        #[cfg(feature = "bigdecimal")]
+                        bigdecimal::BigDecimal::from(1),
+                        false,
+                    )))],
+                    into: None,
+                    from: vec![],
+                    lateral_views: vec![],
+                    selection: None,
+                    group_by: vec![],
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    qualify: None,
+                }))),
+                right: Box::new(SetExpr::Select(Box::new(Select {
+                    distinct: false,
+                    top: None,
+                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(Value::Number(
+                        #[cfg(not(feature = "bigdecimal"))]
+                        "2".to_string(),
+                        #[cfg(feature = "bigdecimal")]
+                        bigdecimal::BigDecimal::from(2),
+                        false,
+                    )))],
+                    into: None,
+                    from: vec![],
+                    lateral_views: vec![],
+                    selection: None,
+                    group_by: vec![],
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    qualify: None,
+                }))),
+            }),
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            fetch: None,
+            lock: None,
+        })),
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn test_transaction_statement() {
     let statement = pg().verified_stmt("SET TRANSACTION SNAPSHOT '000003A1-1'");
     assert_eq!(

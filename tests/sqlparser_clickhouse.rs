@@ -122,6 +122,25 @@ fn parse_array_expr() {
 }
 
 #[test]
+fn parse_array_fn() {
+    let sql = "SELECT array(x1, x2) FROM foo";
+    let select = clickhouse().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("array")]),
+            args: vec![
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new("x1")))),
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new("x2")))),
+            ],
+            over: None,
+            distinct: false,
+            special: false,
+        }),
+        expr_from_projection(only(&select.projection))
+    );
+}
+
+#[test]
 fn parse_kill() {
     let stmt = clickhouse().verified_stmt("KILL MUTATION 5");
     assert_eq!(

@@ -4402,13 +4402,13 @@ impl<'a> Parser<'a> {
         if self.parse_keyword(Keyword::ALL) {
             Ok(None)
         } else {
-            Ok(Some(Expr::Value(self.parse_number_value()?)))
+            Ok(Some(self.parse_expr()?))
         }
     }
 
     /// Parse an OFFSET clause
     pub fn parse_offset(&mut self) -> Result<Offset, ParserError> {
-        let value = Expr::Value(self.parse_number_value()?);
+        let value = self.parse_expr()?;
         let rows = if self.parse_keyword(Keyword::ROW) {
             OffsetRows::Row
         } else if self.parse_keyword(Keyword::ROWS) {

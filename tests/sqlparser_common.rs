@@ -5010,6 +5010,20 @@ fn test_placeholder() {
             right: Box::new(Expr::Value(Value::Placeholder("$Id1".into())))
         })
     );
+
+    let sql = "SELECT * FROM student LIMIT $1 OFFSET $2";
+    let ast = dialects.verified_query(sql);
+    assert_eq!(
+        ast.limit,
+        Some(Expr::Value(Value::Placeholder("$1".into())))
+    );
+    assert_eq!(
+        ast.offset,
+        Some(Offset {
+            value: Expr::Value(Value::Placeholder("$2".into())),
+            rows: OffsetRows::None,
+        }),
+    );
 }
 
 #[test]
@@ -5057,6 +5071,29 @@ fn parse_offset_and_limit() {
 
     // different order is OK
     one_statement_parses_to("SELECT foo FROM bar OFFSET 2 LIMIT 2", sql);
+
+    // expressions are allowed
+    let sql = "SELECT foo FROM bar LIMIT 1 + 2 OFFSET 3 * 4";
+    let ast = verified_query(sql);
+    assert_eq!(
+        ast.limit,
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Value(number("1"))),
+            op: BinaryOperator::Plus,
+            right: Box::new(Expr::Value(number("2"))),
+        }),
+    );
+    assert_eq!(
+        ast.offset,
+        Some(Offset {
+            value: Expr::BinaryOp {
+                left: Box::new(Expr::Value(number("3"))),
+                op: BinaryOperator::Multiply,
+                right: Box::new(Expr::Value(number("4"))),
+            },
+            rows: OffsetRows::None,
+        }),
+    );
 
     // Can't repeat OFFSET / LIMIT
     let res = parse_sql_statements("SELECT foo FROM bar OFFSET 2 OFFSET 2");

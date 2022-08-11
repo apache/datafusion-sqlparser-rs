@@ -3694,6 +3694,13 @@ impl<'a> Parser<'a> {
             Ok(self.parse_show_columns()?)
         } else if self.parse_one_of_keywords(&[Keyword::CREATE]).is_some() {
             Ok(self.parse_show_create()?)
+        } else if self.parse_keyword(Keyword::VARIABLES)
+            && dialect_of!(self is MySqlDialect | GenericDialect)
+        {
+            // TODO: Support GLOBAL|SESSION
+            Ok(Statement::ShowVariables {
+                filter: self.parse_show_statement_filter()?,
+            })
         } else {
             Ok(Statement::ShowVariable {
                 variable: self.parse_identifiers()?,

@@ -3652,7 +3652,25 @@ impl<'a> Parser<'a> {
         }
 
         let variable = self.parse_object_name()?;
-        if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
+        if variable.to_string().eq_ignore_ascii_case("NAMES")
+            && dialect_of!(self is MySqlDialect | GenericDialect)
+        {
+            if self.parse_keyword(Keyword::DEFAULT) {
+                return Ok(Statement::SetNamesDefault {});
+            }
+
+            let charset_name = self.parse_literal_string()?;
+            let collation_name = if self.parse_one_of_keywords(&[Keyword::COLLATE]).is_some() {
+                Some(self.parse_literal_string()?)
+            } else {
+                None
+            };
+
+            Ok(Statement::SetNames {
+                charset_name,
+                collation_name,
+            })
+        } else if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
             let mut values = vec![];
             loop {
                 let token = self.peek_token();

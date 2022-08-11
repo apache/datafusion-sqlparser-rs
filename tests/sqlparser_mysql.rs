@@ -890,6 +890,41 @@ fn parse_table_colum_option_on_update() {
     }
 }
 
+#[test]
+fn parse_set_names() {
+    let stmt = mysql_and_generic().verified_stmt("SET NAMES utf8mb4");
+    assert_eq!(
+        stmt,
+        Statement::SetNames {
+            charset_name: "utf8mb4".to_string(),
+            collation_name: None,
+        }
+    );
+
+    let stmt = mysql_and_generic().verified_stmt("SET NAMES utf8mb4 COLLATE bogus");
+    assert_eq!(
+        stmt,
+        Statement::SetNames {
+            charset_name: "utf8mb4".to_string(),
+            collation_name: Some("bogus".to_string()),
+        }
+    );
+
+    let stmt = mysql_and_generic()
+        .parse_sql_statements("set names utf8mb4 collate bogus")
+        .unwrap();
+    assert_eq!(
+        stmt,
+        vec![Statement::SetNames {
+            charset_name: "utf8mb4".to_string(),
+            collation_name: Some("bogus".to_string()),
+        }]
+    );
+
+    let stmt = mysql_and_generic().verified_stmt("SET NAMES DEFAULT");
+    assert_eq!(stmt, Statement::SetNamesDefault {});
+}
+
 fn mysql() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],

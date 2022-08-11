@@ -2292,6 +2292,8 @@ pub struct Function {
     pub over: Option<WindowSpec>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
+    // Some functions must be called without trailing parentheses, for example Postgres
+    // do it for current_catalog, current_schema, etc. This flags is used for formatting.
     pub special: bool,
 }
 

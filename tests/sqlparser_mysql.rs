@@ -189,6 +189,12 @@ fn parse_show_extended_full() {
     assert!(mysql_and_generic()
         .parse_sql_statements("SHOW EXTENDED FULL CREATE TABLE mytable")
         .is_err());
+    assert!(mysql_and_generic()
+        .parse_sql_statements("SHOW EXTENDED FULL COLLATION")
+        .is_err());
+    assert!(mysql_and_generic()
+        .parse_sql_statements("SHOW EXTENDED FULL VARIABLES")
+        .is_err());
 }
 
 #[test]
@@ -211,6 +217,28 @@ fn parse_show_create() {
             }
         );
     }
+}
+
+#[test]
+fn parse_show_collation() {
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW COLLATION"),
+        Statement::ShowCollation { filter: None }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW COLLATION LIKE 'pattern'"),
+        Statement::ShowCollation {
+            filter: Some(ShowStatementFilter::Like("pattern".into())),
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW COLLATION WHERE 1 = 2"),
+        Statement::ShowCollation {
+            filter: Some(ShowStatementFilter::Where(
+                mysql_and_generic().verified_expr("1 = 2")
+            )),
+        }
+    );
 }
 
 #[test]

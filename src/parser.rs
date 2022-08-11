@@ -421,6 +421,20 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     Ok(Expr::Value(self.parse_value()?))
                 }
+                Keyword::CURRENT_CATALOG
+                | Keyword::CURRENT_USER
+                | Keyword::SESSION_USER
+                | Keyword::USER
+                    if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
+                {
+                    Ok(Expr::Function(Function {
+                        name: ObjectName(vec![w.to_ident()]),
+                        args: vec![],
+                        over: None,
+                        distinct: false,
+                        special: true,
+                    }))
+                }
                 Keyword::CURRENT_TIMESTAMP | Keyword::CURRENT_TIME | Keyword::CURRENT_DATE => {
                     self.parse_time_functions(ObjectName(vec![w.to_ident()]))
                 }
@@ -598,6 +612,7 @@ impl<'a> Parser<'a> {
             args,
             over,
             distinct,
+            special: false,
         }))
     }
 
@@ -612,6 +627,7 @@ impl<'a> Parser<'a> {
             args,
             over: None,
             distinct: false,
+            special: false,
         }))
     }
 

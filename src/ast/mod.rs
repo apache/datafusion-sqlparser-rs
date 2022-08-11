@@ -2321,20 +2321,29 @@ pub struct Function {
     pub over: Option<WindowSpec>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
+    // Some functions must be called without trailing parentheses, for example Postgres
+    // do it for current_catalog, current_schema, etc. This flags is used for formatting.
+    pub special: bool,
 }
 
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}({}{})",
-            self.name,
-            if self.distinct { "DISTINCT " } else { "" },
-            display_comma_separated(&self.args),
-        )?;
-        if let Some(o) = &self.over {
-            write!(f, " OVER ({})", o)?;
+        if self.special {
+            write!(f, "{}", self.name)?;
+        } else {
+            write!(
+                f,
+                "{}({}{})",
+                self.name,
+                if self.distinct { "DISTINCT " } else { "" },
+                display_comma_separated(&self.args),
+            )?;
+
+            if let Some(o) = &self.over {
+                write!(f, " OVER ({})", o)?;
+            }
         }
+
         Ok(())
     }
 }

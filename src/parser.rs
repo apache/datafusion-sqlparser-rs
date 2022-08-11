@@ -29,7 +29,7 @@ use crate::dialect::*;
 use crate::keywords::{self, Keyword};
 use crate::tokenizer::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParserError {
     TokenizerError(String),
     ParserError(String),
@@ -51,7 +51,7 @@ macro_rules! return_ok_if_some {
     }};
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum IsOptional {
     Optional,
     Mandatory,
@@ -848,7 +848,7 @@ impl<'a> Parser<'a> {
                 r#in: Box::new(from),
             })
         } else {
-            return parser_err!("Position function must include IN keyword".to_string());
+            parser_err!("Position function must include IN keyword".to_string())
         }
     }
 
@@ -1719,7 +1719,7 @@ impl<'a> Parser<'a> {
         let all = self.parse_keyword(Keyword::ALL);
         let distinct = self.parse_keyword(Keyword::DISTINCT);
         if all && distinct {
-            return parser_err!("Cannot specify both ALL and DISTINCT".to_string());
+            parser_err!("Cannot specify both ALL and DISTINCT".to_string())
         } else {
             Ok(distinct)
         }

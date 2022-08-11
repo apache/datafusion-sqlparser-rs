@@ -95,6 +95,21 @@ fn parse_table_identifiers() {
 }
 
 #[test]
+fn parse_trailing_comma() {
+    for (sql, canonical) in [
+        ("SELECT a,", "SELECT a"),
+        ("SELECT a, b,", "SELECT a, b"),
+        ("SELECT a, b AS c,", "SELECT a, b AS c"),
+        ("SELECT a, b AS c, FROM t", "SELECT a, b AS c FROM t"),
+        ("SELECT a, b, FROM t", "SELECT a, b FROM t"),
+        ("SELECT a, b, LIMIT 1", "SELECT a, b LIMIT 1"),
+        ("SELECT a, (SELECT 1, )", "SELECT a, (SELECT 1)"),
+    ] {
+        bigquery().one_statement_parses_to(sql, canonical);
+    }
+}
+
+#[test]
 fn parse_cast_type() {
     let sql = r#"SELECT SAFE_CAST(1 AS INT64)"#;
     bigquery().verified_only_select(sql);

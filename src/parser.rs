@@ -1639,6 +1639,33 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a comma-separated list of 1+ SelectItem
+    pub fn parse_projection(&mut self) -> Result<Vec<SelectItem>, ParserError> {
+        let mut values = vec![];
+        loop {
+            values.push(self.parse_select_item()?);
+            if !self.consume_token(&Token::Comma) {
+                break;
+            } else if dialect_of!(self is BigQueryDialect) {
+                // BigQuery allows trailing commas.
+                // e.g. `SELECT 1, 2, FROM t`
+                // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#trailing_commas
+                match self.peek_token() {
+                    Token::Word(kw)
+                        if keywords::RESERVED_FOR_COLUMN_ALIAS
+                            .iter()
+                            .any(|d| kw.keyword == *d) =>
+                    {
+                        break
+                    }
+                    Token::RParen | Token::EOF => break,
+                    _ => continue,
+                }
+            }
+        }
+        Ok(values)
+    }
+
     /// Parse a comma-separated list of 1+ items accepted by `F`
     pub fn parse_comma_separated<T, F>(&mut self, mut f: F) -> Result<Vec<T>, ParserError>
     where
@@ -3486,7 +3513,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let projection = self.parse_comma_separated(Parser::parse_select_item)?;
+        let projection = self.parse_projection()?;
 
         let into = if self.parse_keyword(Keyword::INTO) {
             let temporary = self

@@ -177,6 +177,7 @@ impl<'a> Parser<'a> {
                 Keyword::CLOSE => Ok(self.parse_close()?),
                 Keyword::SET => Ok(self.parse_set()?),
                 Keyword::SHOW => Ok(self.parse_show()?),
+                Keyword::USE => Ok(self.parse_use()?),
                 Keyword::GRANT => Ok(self.parse_grant()?),
                 Keyword::REVOKE => Ok(self.parse_revoke()?),
                 Keyword::START => Ok(self.parse_start_transaction()?),
@@ -3774,6 +3775,11 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn parse_use(&mut self) -> Result<Statement, ParserError> {
+        let db_name = self.parse_identifier()?;
+        Ok(Statement::Use { db_name })
     }
 
     pub fn parse_table_and_joins(&mut self) -> Result<TableWithJoins, ParserError> {

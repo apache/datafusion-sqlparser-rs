@@ -139,6 +139,16 @@ fn parse_show_create() {
 }
 
 #[test]
+fn parse_use() {
+    assert_eq!(
+        mysql_and_generic().verified_stmt("USE mydb"),
+        Statement::Use {
+            db_name: Ident::new("mydb")
+        }
+    );
+}
+
+#[test]
 fn parse_create_table_auto_increment() {
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTO_INCREMENT)";
     match mysql().verified_stmt(sql) {

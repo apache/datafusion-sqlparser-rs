@@ -1178,17 +1178,6 @@ impl<'a> Parser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
-                Keyword::LIKE => Some(BinaryOperator::Like),
-                Keyword::ILIKE => Some(BinaryOperator::ILike),
-                Keyword::NOT => {
-                    if self.parse_keyword(Keyword::LIKE) {
-                        Some(BinaryOperator::NotLike)
-                    } else if self.parse_keyword(Keyword::ILIKE) {
-                        Some(BinaryOperator::NotILike)
-                    } else {
-                        None
-                    }
-                }
                 Keyword::XOR => Some(BinaryOperator::Xor),
                 Keyword::OPERATOR if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
                     self.expect_token(&Token::LParen)?;
@@ -1282,13 +1271,39 @@ impl<'a> Parser<'a> {
                         self.expected("Expected Token::Word after AT", tok)
                     }
                 }
-                Keyword::NOT | Keyword::IN | Keyword::BETWEEN => {
+                Keyword::NOT
+                | Keyword::IN
+                | Keyword::BETWEEN
+                | Keyword::LIKE
+                | Keyword::ILIKE
+                | Keyword::SIMILAR => {
                     self.prev_token();
                     let negated = self.parse_keyword(Keyword::NOT);
                     if self.parse_keyword(Keyword::IN) {
                         self.parse_in(expr, negated)
                     } else if self.parse_keyword(Keyword::BETWEEN) {
                         self.parse_between(expr, negated)
+                    } else if self.parse_keyword(Keyword::LIKE) {
+                        Ok(Expr::Like {
+                            negated,
+                            expr: Box::new(expr),
+                            pattern: Box::new(self.parse_value()?),
+                            escape_char: self.parse_escape_char()?,
+                        })
+                    } else if self.parse_keyword(Keyword::ILIKE) {
+                        Ok(Expr::ILike {
+                            negated,
+                            expr: Box::new(expr),
+                            pattern: Box::new(self.parse_value()?),
+                            escape_char: self.parse_escape_char()?,
+                        })
+                    } else if self.parse_keywords(&[Keyword::SIMILAR, Keyword::TO]) {
+                        Ok(Expr::SimilarTo {
+                            negated,
+                            expr: Box::new(expr),
+                            pattern: Box::new(self.parse_value()?),
+                            escape_char: self.parse_escape_char()?,
+                        })
                     } else {
                         self.expected("IN or BETWEEN after NOT", self.peek_token())
                     }
@@ -1330,6 +1345,15 @@ impl<'a> Parser<'a> {
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             parser_err!(format!("No infix parser for token {:?}", tok))
+        }
+    }
+
+    /// parse the ESCAPE CHAR portion of LIKE, ILIKE, and SIMILAR TO
+    pub fn parse_escape_char(&mut self) -> Result<Option<char>, ParserError> {
+        if self.parse_keyword(Keyword::ESCAPE) {
+            Ok(Some(self.parse_literal_char()?))
+        } else {
+            Ok(None)
         }
     }
 
@@ -1463,6 +1487,7 @@ impl<'a> Parser<'a> {
                 Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
                 Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
                 Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::BETWEEN_PREC),
+                Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::BETWEEN_PREC),
                 _ => Ok(0),
             },
             Token::Word(w) if w.keyword == Keyword::IS => Ok(17),
@@ -1471,6 +1496,7 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(Self::BETWEEN_PREC),
+            Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::BETWEEN_PREC),
             Token::Eq
             | Token::Lt
             | Token::LtEq

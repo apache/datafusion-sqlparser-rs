@@ -859,10 +859,11 @@ fn parse_not_precedence() {
         verified_expr(sql),
         Expr::UnaryOp {
             op: UnaryOperator::Not,
-            expr: Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Value(Value::SingleQuotedString("a".into()))),
-                op: BinaryOperator::NotLike,
-                right: Box::new(Expr::Value(Value::SingleQuotedString("b".into()))),
+            expr: Box::new(Expr::Like {
+                expr: Box::new(Expr::Value(Value::SingleQuotedString("a".into()))),
+                negated: true,
+                pattern: Box::new(Value::SingleQuotedString("b".into())),
+                escape_char: None
             }),
         },
     );
@@ -891,14 +892,27 @@ fn parse_like() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("name"))),
-                op: if negated {
-                    BinaryOperator::NotLike
-                } else {
-                    BinaryOperator::Like
-                },
-                right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+            Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                escape_char: None
+            },
+            select.selection.unwrap()
+        );
+
+        // Test with escape char
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '\\'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                escape_char: Some('\\')
             },
             select.selection.unwrap()
         );
@@ -911,14 +925,11 @@ fn parse_like() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::IsNull(Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("name"))),
-                op: if negated {
-                    BinaryOperator::NotLike
-                } else {
-                    BinaryOperator::Like
-                },
-                right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+            Expr::IsNull(Box::new(Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                escape_char: None
             })),
             select.selection.unwrap()
         );
@@ -936,19 +947,32 @@ fn parse_ilike() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("name"))),
-                op: if negated {
-                    BinaryOperator::NotILike
-                } else {
-                    BinaryOperator::ILike
-                },
-                right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+            Expr::ILike {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                escape_char: None
             },
             select.selection.unwrap()
         );
 
-        // This statement tests that LIKE and NOT LIKE have the same precedence.
+        // Test with escape char
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}ILIKE '%a' ESCAPE '^'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::ILike {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                escape_char: Some('^')
+            },
+            select.selection.unwrap()
+        );
+
+        // This statement tests that ILIKE and NOT ILIKE have the same precedence.
         // This was previously mishandled (#81).
         let sql = &format!(
             "SELECT * FROM customers WHERE name {}ILIKE '%a' IS NULL",
@@ -956,14 +980,65 @@ fn parse_ilike() {
         );
         let select = verified_only_select(sql);
         assert_eq!(
-            Expr::IsNull(Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("name"))),
-                op: if negated {
-                    BinaryOperator::NotILike
-                } else {
-                    BinaryOperator::ILike
-                },
-                right: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+            Expr::IsNull(Box::new(Expr::ILike {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                escape_char: None
+            })),
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
+}
+
+#[test]
+fn parse_similar_to() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                escape_char: None
+            },
+            select.selection.unwrap()
+        );
+
+        // Test with escape char
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                escape_char: Some('\\')
+            },
+            select.selection.unwrap()
+        );
+
+        // This statement tests that SIMILAR TO and NOT SIMILAR TO have the same precedence.
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL",
+            if negated { "NOT " } else { "" }
+        );
+        let select = verified_only_select(sql);
+        assert_eq!(
+            Expr::IsNull(Box::new(Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                escape_char: Some('\\')
             })),
             select.selection.unwrap()
         );

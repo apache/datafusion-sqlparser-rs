@@ -3928,6 +3928,10 @@ fn parse_trim() {
         "SELECT TRIM(TRAILING 'xyz' FROM 'xyzfooxyz')",
     );
 
+    one_statement_parses_to(
+        "SELECT TRIM('xyz' FROM 'xyzfooxyz')",
+        "SELECT TRIM('xyz' FROM 'xyzfooxyz')",
+    );
     one_statement_parses_to("SELECT TRIM('   foo   ')", "SELECT TRIM('   foo   ')");
 
     assert_eq!(

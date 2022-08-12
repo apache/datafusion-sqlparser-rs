@@ -337,7 +337,8 @@ pub enum Expr {
     Trim {
         expr: Box<Expr>,
         // ([BOTH | LEADING | TRAILING], <expr>)
-        trim_where: Option<(TrimWhereField, Box<Expr>)>,
+        trim_where: Option<TrimWhereField>,
+        trim_what: Option<Box<Expr>>,
     },
     /// `expr COLLATE collation`
     Collate {
@@ -629,10 +630,16 @@ impl fmt::Display for Expr {
             }
             Expr::IsDistinctFrom(a, b) => write!(f, "{} IS DISTINCT FROM {}", a, b),
             Expr::IsNotDistinctFrom(a, b) => write!(f, "{} IS NOT DISTINCT FROM {}", a, b),
-            Expr::Trim { expr, trim_where } => {
+            Expr::Trim {
+                expr,
+                trim_where,
+                trim_what,
+            } => {
                 write!(f, "TRIM(")?;
-                if let Some((ident, trim_char)) = trim_where {
+                if let (Some(ident), Some(trim_char)) = (trim_where, trim_what) {
                     write!(f, "{} {} FROM {}", ident, trim_char, expr)?;
+                } else if let Some(trim_char) = trim_what {
+                    write!(f, "{} FROM {}", trim_char, expr)?;
                 } else {
                     write!(f, "{}", expr)?;
                 }

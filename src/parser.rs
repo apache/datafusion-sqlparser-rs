@@ -449,10 +449,17 @@ impl<'a> Parser<'a> {
                 Keyword::TRIM => self.parse_trim_expr(),
                 Keyword::INTERVAL => self.parse_literal_interval(),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
-                // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as function call
+                // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as subquery or a function call
                 Keyword::ARRAY if self.peek_token() == Token::LBracket => {
                     self.expect_token(&Token::LBracket)?;
                     self.parse_array_expr(true)
+                }
+                Keyword::ARRAY
+                    if self.peek_token() == Token::LParen
+                        && !dialect_of!(self is ClickHouseDialect) =>
+                {
+                    self.expect_token(&Token::LParen)?;
+                    self.parse_array_subquery()
                 }
                 Keyword::NOT => self.parse_not(),
                 // Here `w` is a word, check if it's a part of a multi-part
@@ -925,6 +932,13 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RBracket)?;
             Ok(Expr::Array(Array { elem: exprs, named }))
         }
+    }
+
+    // Parses an array constructed from a subquery
+    pub fn parse_array_subquery(&mut self) -> Result<Expr, ParserError> {
+        let query = self.parse_query()?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::ArraySubquery(Box::new(query)))
     }
 
     /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.

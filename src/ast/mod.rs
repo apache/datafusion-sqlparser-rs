@@ -376,6 +376,8 @@ pub enum Expr {
     /// A parenthesized subquery `(SELECT ...)`, used in expression like
     /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
     Subquery(Box<Query>),
+    /// An array subquery constructor, e.g. `SELECT ARRAY(SELECT 1 UNION SELECT 2)`
+    ArraySubquery(Box<Query>),
     /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
     ListAgg(ListAgg),
     /// The `GROUPING SETS` expr.
@@ -573,6 +575,7 @@ impl fmt::Display for Expr {
                 subquery
             ),
             Expr::Subquery(s) => write!(f, "({})", s),
+            Expr::ArraySubquery(s) => write!(f, "ARRAY({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
             Expr::GroupingSets(sets) => {
                 write!(f, "GROUPING SETS (")?;

@@ -11,12 +11,6 @@
 // limitations under the License.
 
 //! SQL Abstract Syntax Tree (AST) types
-mod data_type;
-mod ddl;
-mod operator;
-mod query;
-mod value;
-
 #[cfg(not(feature = "std"))]
 use alloc::{
     boxed::Box,
@@ -30,8 +24,8 @@ use serde::{Deserialize, Serialize};
 
 pub use self::data_type::DataType;
 pub use self::ddl::{
-    AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
-    ReferentialAction, TableConstraint,
+    AlterColumnOperation, AlterTableOperation, AlwaysOrByDefaultOrAlwaysAs, AsIdentityOrStored,
+    ColumnDef, ColumnOption, ColumnOptionDef, ReferentialAction, TableConstraint,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
@@ -41,9 +35,15 @@ pub use self::query::{
 };
 pub use self::value::{DateTimeField, TrimWhereField, Value};
 
+mod data_type;
+mod ddl;
+mod operator;
+mod query;
+mod value;
+
 struct DisplaySeparated<'a, T>
-where
-    T: fmt::Display,
+    where
+        T: fmt::Display,
 {
     slice: &'a [T],
     sep: &'static str,

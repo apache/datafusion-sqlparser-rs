@@ -24,6 +24,9 @@ use core::fmt;
 
 use log::debug;
 
+use IsLateral::*;
+use IsOptional::*;
+
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{self, Keyword};
@@ -57,14 +60,10 @@ pub enum IsOptional {
     Mandatory,
 }
 
-use IsOptional::*;
-
 pub enum IsLateral {
     Lateral,
     NotLateral,
 }
-
-use IsLateral::*;
 
 pub enum WildcardExpr {
     Expr(Expr),
@@ -2383,6 +2382,26 @@ impl<'a> Parser<'a> {
             Ok(Some(ColumnOption::DialectSpecific(vec![
                 Token::make_keyword("ON UPDATE"),
             ])))
+        } else if self.parse_keywords(&[Keyword::GENERATED]) {
+            if self.parse_keywords(&[Keyword::ALWAYS]) {
+                if self.parse_keywords(&[Keyword::AS, Keyword::IDENTITY]) {
+                    Ok(Some(ColumnOption::Generated {
+                        always_or_by_default_or_always_as: AlwaysOrByDefaultOrAlwaysAs::Always,
+                    }))
+                } else {
+                    Ok(None)
+                }
+            } else if self.parse_keywords(&[Keyword::BY, Keyword::DEFAULT]) {
+                if self.parse_keywords(&[Keyword::AS, Keyword::IDENTITY]) {
+                    Ok(Some(ColumnOption::Generated {
+                        always_or_by_default_or_always_as: AlwaysOrByDefaultOrAlwaysAs::ByDefault,
+                    }))
+                } else {
+                    Ok(None)
+                }
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(None)
         }
@@ -4668,12 +4687,12 @@ impl<'a> Parser<'a> {
                     Some(_) => {
                         return Err(ParserError::ParserError(
                             "expected UPDATE, DELETE or INSERT in merge clause".to_string(),
-                        ))
+                        ));
                     }
                     None => {
                         return Err(ParserError::ParserError(
                             "expected UPDATE, DELETE or INSERT in merge clause".to_string(),
-                        ))
+                        ));
                     }
                 },
             );
@@ -4713,8 +4732,9 @@ impl Word {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::test_utils::{all_dialects, TestedDialects};
+
+    use super::*;
 
     #[test]
     fn test_prev_index() {

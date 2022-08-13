@@ -268,6 +268,27 @@ pub enum Expr {
         op: BinaryOperator,
         right: Box<Expr>,
     },
+    /// LIKE
+    Like {
+        negated: bool,
+        expr: Box<Expr>,
+        pattern: Box<Value>,
+        escape_char: Option<char>,
+    },
+    /// ILIKE (case-insensitive LIKE)
+    ILike {
+        negated: bool,
+        expr: Box<Expr>,
+        pattern: Box<Value>,
+        escape_char: Option<char>,
+    },
+    /// SIMILAR TO regex
+    SimilarTo {
+        negated: bool,
+        expr: Box<Expr>,
+        pattern: Box<Value>,
+        escape_char: Option<char>,
+    },
     /// Any operation e.g. `1 ANY (1)` or `foo > ANY(bar)`, It will be wrapped in the right side of BinaryExpr
     AnyOp(Box<Expr>),
     /// ALL operation e.g. `1 ALL (1)` or `foo > ALL(bar)`, It will be wrapped in the right side of BinaryExpr
@@ -355,6 +376,8 @@ pub enum Expr {
     /// A parenthesized subquery `(SELECT ...)`, used in expression like
     /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
     Subquery(Box<Query>),
+    /// An array subquery constructor, e.g. `SELECT ARRAY(SELECT 1 UNION SELECT 2)`
+    ArraySubquery(Box<Query>),
     /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
     ListAgg(ListAgg),
     /// The `GROUPING SETS` expr.
@@ -438,6 +461,72 @@ impl fmt::Display for Expr {
                 high
             ),
             Expr::BinaryOp { left, op, right } => write!(f, "{} {} {}", left, op, right),
+            Expr::Like {
+                negated,
+                expr,
+                pattern,
+                escape_char,
+            } => match escape_char {
+                Some(ch) => write!(
+                    f,
+                    "{} {}LIKE {} ESCAPE '{}'",
+                    expr,
+                    if *negated { "NOT " } else { "" },
+                    pattern,
+                    ch
+                ),
+                _ => write!(
+                    f,
+                    "{} {}LIKE {}",
+                    expr,
+                    if *negated { "NOT " } else { "" },
+                    pattern
+                ),
+            },
+            Expr::ILike {
+                negated,
+                expr,
+                pattern,
+                escape_char,
+            } => match escape_char {
+                Some(ch) => write!(
+                    f,
+                    "{} {}ILIKE {} ESCAPE '{}'",
+                    expr,
+                    if *negated { "NOT " } else { "" },
+                    pattern,
+                    ch
+                ),
+                _ => write!(
+                    f,
+                    "{} {}ILIKE {}",
+                    expr,
+                    if *negated { "NOT " } else { "" },
+                    pattern
+                ),
+            },
+            Expr::SimilarTo {
+                negated,
+                expr,
+                pattern,
+                escape_char,
+            } => match escape_char {
+                Some(ch) => write!(
+                    f,
+                    "{} {}SIMILAR TO {} ESCAPE '{}'",
+                    expr,
+                    if *negated { "NOT " } else { "" },
+                    pattern,
+                    ch
+                ),
+                _ => write!(
+                    f,
+                    "{} {}SIMILAR TO {}",
+                    expr,
+                    if *negated { "NOT " } else { "" },
+                    pattern
+                ),
+            },
             Expr::AnyOp(expr) => write!(f, "ANY({})", expr),
             Expr::AllOp(expr) => write!(f, "ALL({})", expr),
             Expr::UnaryOp { op, expr } => {
@@ -486,6 +575,7 @@ impl fmt::Display for Expr {
                 subquery
             ),
             Expr::Subquery(s) => write!(f, "({})", s),
+            Expr::ArraySubquery(s) => write!(f, "ARRAY({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
             Expr::GroupingSets(sets) => {
                 write!(f, "GROUPING SETS (")?;
@@ -992,10 +1082,25 @@ pub enum Statement {
         variable: ObjectName,
         value: Vec<SetVariableValue>,
     },
+    /// SET NAMES 'charset_name' [COLLATE 'collation_name']
+    ///
+    /// Note: this is a MySQL-specific statement.
+    SetNames {
+        charset_name: String,
+        collation_name: Option<String>,
+    },
+    /// SET NAMES DEFAULT
+    ///
+    /// Note: this is a MySQL-specific statement.
+    SetNamesDefault {},
     /// SHOW <variable>
     ///
     /// Note: this is a PostgreSQL-specific statement.
     ShowVariable { variable: Vec<Ident> },
+    /// SHOW VARIABLES
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowVariables { filter: Option<ShowStatementFilter> },
     /// SHOW CREATE TABLE
     ///
     /// Note: this is a MySQL-specific statement.
@@ -1012,6 +1117,23 @@ pub enum Statement {
         table_name: ObjectName,
         filter: Option<ShowStatementFilter>,
     },
+    /// SHOW TABLES
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowTables {
+        extended: bool,
+        full: bool,
+        db_name: Option<Ident>,
+        filter: Option<ShowStatementFilter>,
+    },
+    /// SHOW COLLATION
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowCollation { filter: Option<ShowStatementFilter> },
+    /// USE
+    ///
+    /// Note: This is a MySQL-specific statement.
+    Use { db_name: Ident },
     /// `{ BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...`
     StartTransaction { modes: Vec<TransactionMode> },
     /// `SET TRANSACTION ...`
@@ -1780,10 +1902,36 @@ impl fmt::Display for Statement {
                     value = display_comma_separated(value)
                 )
             }
+            Statement::SetNames {
+                charset_name,
+                collation_name,
+            } => {
+                f.write_str("SET NAMES ")?;
+                f.write_str(charset_name)?;
+
+                if let Some(collation) = collation_name {
+                    f.write_str(" COLLATE ")?;
+                    f.write_str(collation)?;
+                };
+
+                Ok(())
+            }
+            Statement::SetNamesDefault {} => {
+                f.write_str("SET NAMES DEFAULT")?;
+
+                Ok(())
+            }
             Statement::ShowVariable { variable } => {
                 write!(f, "SHOW")?;
                 if !variable.is_empty() {
                     write!(f, " {}", display_separated(variable, " "))?;
+                }
+                Ok(())
+            }
+            Statement::ShowVariables { filter } => {
+                write!(f, "SHOW VARIABLES")?;
+                if filter.is_some() {
+                    write!(f, " {}", filter.as_ref().unwrap())?;
                 }
                 Ok(())
             }
@@ -1809,6 +1957,37 @@ impl fmt::Display for Statement {
                     full = if *full { "FULL " } else { "" },
                     table_name = table_name,
                 )?;
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
+                }
+                Ok(())
+            }
+            Statement::ShowTables {
+                extended,
+                full,
+                db_name,
+                filter,
+            } => {
+                write!(
+                    f,
+                    "SHOW {extended}{full}TABLES",
+                    extended = if *extended { "EXTENDED " } else { "" },
+                    full = if *full { "FULL " } else { "" },
+                )?;
+                if let Some(db_name) = db_name {
+                    write!(f, " FROM {}", db_name)?;
+                }
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
+                }
+                Ok(())
+            }
+            Statement::Use { db_name } => {
+                write!(f, "USE {}", db_name)?;
+                Ok(())
+            }
+            Statement::ShowCollation { filter } => {
+                write!(f, "SHOW COLLATION")?;
                 if let Some(filter) = filter {
                     write!(f, " {}", filter)?;
                 }
@@ -2243,20 +2422,29 @@ pub struct Function {
     pub over: Option<WindowSpec>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
+    // Some functions must be called without trailing parentheses, for example Postgres
+    // do it for current_catalog, current_schema, etc. This flags is used for formatting.
+    pub special: bool,
 }
 
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}({}{})",
-            self.name,
-            if self.distinct { "DISTINCT " } else { "" },
-            display_comma_separated(&self.args),
-        )?;
-        if let Some(o) = &self.over {
-            write!(f, " OVER ({})", o)?;
+        if self.special {
+            write!(f, "{}", self.name)?;
+        } else {
+            write!(
+                f,
+                "{}({}{})",
+                self.name,
+                if self.distinct { "DISTINCT " } else { "" },
+                display_comma_separated(&self.args),
+            )?;
+
+            if let Some(o) = &self.over {
+                write!(f, " OVER ({})", o)?;
+            }
         }
+
         Ok(())
     }
 }

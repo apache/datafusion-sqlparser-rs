@@ -110,12 +110,91 @@ fn parse_show_columns() {
         .one_statement_parses_to("SHOW COLUMNS IN mytable", "SHOW COLUMNS FROM mytable");
     mysql_and_generic()
         .one_statement_parses_to("SHOW FIELDS IN mytable", "SHOW COLUMNS FROM mytable");
+    mysql_and_generic().one_statement_parses_to(
+        "SHOW COLUMNS FROM mytable FROM mydb",
+        "SHOW COLUMNS FROM mydb.mytable",
+    );
+}
 
-    // unhandled things are truly unhandled
-    match mysql_and_generic().parse_sql_statements("SHOW COLUMNS FROM mytable FROM mydb") {
-        Err(_) => {}
-        Ok(val) => panic!("unexpected successful parse: {:?}", val),
-    }
+#[test]
+fn parse_show_tables() {
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW TABLES"),
+        Statement::ShowTables {
+            extended: false,
+            full: false,
+            db_name: None,
+            filter: None,
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW TABLES FROM mydb"),
+        Statement::ShowTables {
+            extended: false,
+            full: false,
+            db_name: Some(Ident::new("mydb")),
+            filter: None,
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW EXTENDED TABLES"),
+        Statement::ShowTables {
+            extended: true,
+            full: false,
+            db_name: None,
+            filter: None,
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW FULL TABLES"),
+        Statement::ShowTables {
+            extended: false,
+            full: true,
+            db_name: None,
+            filter: None,
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW TABLES LIKE 'pattern'"),
+        Statement::ShowTables {
+            extended: false,
+            full: false,
+            db_name: None,
+            filter: Some(ShowStatementFilter::Like("pattern".into())),
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW TABLES WHERE 1 = 2"),
+        Statement::ShowTables {
+            extended: false,
+            full: false,
+            db_name: None,
+            filter: Some(ShowStatementFilter::Where(
+                mysql_and_generic().verified_expr("1 = 2")
+            )),
+        }
+    );
+    mysql_and_generic().one_statement_parses_to("SHOW TABLES IN mydb", "SHOW TABLES FROM mydb");
+}
+
+#[test]
+fn parse_show_extended_full() {
+    assert!(mysql_and_generic()
+        .parse_sql_statements("SHOW EXTENDED FULL TABLES")
+        .is_ok());
+    assert!(mysql_and_generic()
+        .parse_sql_statements("SHOW EXTENDED FULL COLUMNS FROM mytable")
+        .is_ok());
+    // SHOW EXTENDED/FULL can only be used with COLUMNS and TABLES
+    assert!(mysql_and_generic()
+        .parse_sql_statements("SHOW EXTENDED FULL CREATE TABLE mytable")
+        .is_err());
+    assert!(mysql_and_generic()
+        .parse_sql_statements("SHOW EXTENDED FULL COLLATION")
+        .is_err());
+    assert!(mysql_and_generic()
+        .parse_sql_statements("SHOW EXTENDED FULL VARIABLES")
+        .is_err());
 }
 
 #[test]
@@ -138,6 +217,38 @@ fn parse_show_create() {
             }
         );
     }
+}
+
+#[test]
+fn parse_show_collation() {
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW COLLATION"),
+        Statement::ShowCollation { filter: None }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW COLLATION LIKE 'pattern'"),
+        Statement::ShowCollation {
+            filter: Some(ShowStatementFilter::Like("pattern".into())),
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("SHOW COLLATION WHERE 1 = 2"),
+        Statement::ShowCollation {
+            filter: Some(ShowStatementFilter::Where(
+                mysql_and_generic().verified_expr("1 = 2")
+            )),
+        }
+    );
+}
+
+#[test]
+fn parse_use() {
+    assert_eq!(
+        mysql_and_generic().verified_stmt("USE mydb"),
+        Statement::Use {
+            db_name: Ident::new("mydb")
+        }
+    );
 }
 
 #[test]
@@ -603,7 +714,8 @@ fn parse_insert_with_on_duplicate_update() {
                                 Expr::Identifier(Ident::new("description"))
                             ))],
                             over: None,
-                            distinct: false
+                            distinct: false,
+                            special: false,
                         })
                     },
                     Assignment {
@@ -614,7 +726,8 @@ fn parse_insert_with_on_duplicate_update() {
                                 Expr::Identifier(Ident::new("perm_create"))
                             ))],
                             over: None,
-                            distinct: false
+                            distinct: false,
+                            special: false,
                         })
                     },
                     Assignment {
@@ -625,7 +738,8 @@ fn parse_insert_with_on_duplicate_update() {
                                 Expr::Identifier(Ident::new("perm_read"))
                             ))],
                             over: None,
-                            distinct: false
+                            distinct: false,
+                            special: false,
                         })
                     },
                     Assignment {
@@ -636,7 +750,8 @@ fn parse_insert_with_on_duplicate_update() {
                                 Expr::Identifier(Ident::new("perm_update"))
                             ))],
                             over: None,
-                            distinct: false
+                            distinct: false,
+                            special: false,
                         })
                     },
                     Assignment {
@@ -647,7 +762,8 @@ fn parse_insert_with_on_duplicate_update() {
                                 Expr::Identifier(Ident::new("perm_delete"))
                             ))],
                             over: None,
-                            distinct: false
+                            distinct: false,
+                            special: false,
                         })
                     },
                 ])),
@@ -821,6 +937,13 @@ fn parse_substring_in_select() {
 }
 
 #[test]
+fn parse_show_variables() {
+    mysql_and_generic().verified_stmt("SHOW VARIABLES");
+    mysql_and_generic().verified_stmt("SHOW VARIABLES LIKE 'admin%'");
+    mysql_and_generic().verified_stmt("SHOW VARIABLES WHERE value = '3306'");
+}
+
+#[test]
 fn parse_kill() {
     let stmt = mysql_and_generic().verified_stmt("KILL CONNECTION 5");
     assert_eq!(
@@ -873,6 +996,41 @@ fn parse_table_colum_option_on_update() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_set_names() {
+    let stmt = mysql_and_generic().verified_stmt("SET NAMES utf8mb4");
+    assert_eq!(
+        stmt,
+        Statement::SetNames {
+            charset_name: "utf8mb4".to_string(),
+            collation_name: None,
+        }
+    );
+
+    let stmt = mysql_and_generic().verified_stmt("SET NAMES utf8mb4 COLLATE bogus");
+    assert_eq!(
+        stmt,
+        Statement::SetNames {
+            charset_name: "utf8mb4".to_string(),
+            collation_name: Some("bogus".to_string()),
+        }
+    );
+
+    let stmt = mysql_and_generic()
+        .parse_sql_statements("set names utf8mb4 collate bogus")
+        .unwrap();
+    assert_eq!(
+        stmt,
+        vec![Statement::SetNames {
+            charset_name: "utf8mb4".to_string(),
+            collation_name: Some("bogus".to_string()),
+        }]
+    );
+
+    let stmt = mysql_and_generic().verified_stmt("SET NAMES DEFAULT");
+    assert_eq!(stmt, Statement::SetNamesDefault {});
 }
 
 fn mysql() -> TestedDialects {

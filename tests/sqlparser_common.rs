@@ -3933,6 +3933,10 @@ fn parse_trim() {
         "SELECT TRIM('xyz' FROM 'xyzfooxyz')",
     );
     one_statement_parses_to("SELECT TRIM('   foo   ')", "SELECT TRIM('   foo   ')");
+    one_statement_parses_to(
+        "SELECT TRIM(LEADING '   foo   ')",
+        "SELECT TRIM(LEADING '   foo   ')",
+    );
 
     assert_eq!(
         ParserError::ParserError("Expected ), found: 'xyz'".to_owned()),

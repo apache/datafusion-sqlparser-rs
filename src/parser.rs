@@ -881,29 +881,37 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// TRIM (WHERE 'text' FROM 'text')\
+    /// TRIM ([WHERE] ['text' FROM] 'text')\
     /// TRIM ('text')
     pub fn parse_trim_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let mut where_expr = None;
+        let mut trim_where = None;
         if let Token::Word(word) = self.peek_token() {
             if [Keyword::BOTH, Keyword::LEADING, Keyword::TRAILING]
                 .iter()
                 .any(|d| word.keyword == *d)
             {
-                let trim_where = self.parse_trim_where()?;
-                let sub_expr = self.parse_expr()?;
-                self.expect_keyword(Keyword::FROM)?;
-                where_expr = Some((trim_where, Box::new(sub_expr)));
+                trim_where = Some(self.parse_trim_where()?);
             }
         }
         let expr = self.parse_expr()?;
-        self.expect_token(&Token::RParen)?;
-
-        Ok(Expr::Trim {
-            expr: Box::new(expr),
-            trim_where: where_expr,
-        })
+        if self.parse_keyword(Keyword::FROM) {
+            let trim_what = Box::new(expr);
+            let expr = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Expr::Trim {
+                expr: Box::new(expr),
+                trim_where,
+                trim_what: Some(trim_what),
+            })
+        } else {
+            self.expect_token(&Token::RParen)?;
+            Ok(Expr::Trim {
+                expr: Box::new(expr),
+                trim_where,
+                trim_what: None,
+            })
+        }
     }
 
     pub fn parse_trim_where(&mut self) -> Result<TrimWhereField, ParserError> {

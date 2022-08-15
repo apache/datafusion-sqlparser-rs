@@ -331,12 +331,12 @@ pub enum Expr {
         substring_from: Option<Box<Expr>>,
         substring_for: Option<Box<Expr>>,
     },
-    /// TRIM([BOTH | LEADING | TRAILING] <expr> [FROM <expr>])\
+    /// TRIM([BOTH | LEADING | TRAILING] [<expr> FROM] <expr>)\
     /// Or\
     /// TRIM(<expr>)
     Trim {
         expr: Box<Expr>,
-        // ([BOTH | LEADING | TRAILING], <expr>)
+        // ([BOTH | LEADING | TRAILING]
         trim_where: Option<TrimWhereField>,
         trim_what: Option<Box<Expr>>,
     },
@@ -636,9 +636,10 @@ impl fmt::Display for Expr {
                 trim_what,
             } => {
                 write!(f, "TRIM(")?;
-                if let (Some(ident), Some(trim_char)) = (trim_where, trim_what) {
-                    write!(f, "{} {} FROM {}", ident, trim_char, expr)?;
-                } else if let Some(trim_char) = trim_what {
+                if let Some(ident) = trim_where {
+                    write!(f, "{} ", ident)?;
+                }
+                if let Some(trim_char) = trim_what {
                     write!(f, "{} FROM {}", trim_char, expr)?;
                 } else {
                     write!(f, "{}", expr)?;

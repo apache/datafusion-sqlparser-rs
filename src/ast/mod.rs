@@ -18,6 +18,7 @@ use alloc::{
     vec::Vec,
 };
 use core::fmt;
+use core::fmt::Formatter;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -1255,6 +1256,14 @@ pub enum Statement {
         // Specifies the actions to perform when values match or do not match.
         clauses: Vec<MergeClause>,
     },
+    CreateSequence {
+        temporary: bool,
+        if_not_exists: bool,
+        name: ObjectName,
+        data_type: DataType,
+        sequenceOptions: SequenceOptions,
+        owned_by: Option<ObjectName>,
+    }
 }
 
 impl fmt::Display for Statement {
@@ -2129,7 +2138,33 @@ impl fmt::Display for Statement {
                 write!(f, "ON {} ", on)?;
                 write!(f, "{}", display_separated(clauses, " "))
             }
+            Statement::CreateSequence { .. } => {
+                write!(f, "{}", "TODO CreateSequence")
+            }
         }
+    }
+}
+
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+// #[non_exhaustive]
+pub enum SequenceOptions {
+    IncrementBy(Option<u64>),
+    MinValue(Option<u64>),
+    //NoMinValue is only when minvalue = None
+    NoMinValue(bool),
+    MaxValue(Option<u64>),
+    //NoMaxValue is only when maxvalue = None
+    NoMaxValue(bool),
+    StartWith(Option<u64>),
+    Cache(Option<i64>),
+    Cycle(bool),
+}
+
+impl fmt::Display for SequenceOptions {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        todo!()
     }
 }
 
@@ -2557,6 +2592,7 @@ pub enum ObjectType {
     View,
     Index,
     Schema,
+    Sequence,
 }
 
 impl fmt::Display for ObjectType {
@@ -2566,6 +2602,7 @@ impl fmt::Display for ObjectType {
             ObjectType::View => "VIEW",
             ObjectType::Index => "INDEX",
             ObjectType::Schema => "SCHEMA",
+            ObjectType::Sequence => "SEQUENCE",
         })
     }
 }

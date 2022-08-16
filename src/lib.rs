@@ -38,7 +38,7 @@
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
-
+extern crate core;
 #[macro_use]
 #[cfg(test)]
 extern crate pretty_assertions;

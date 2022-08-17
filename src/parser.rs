@@ -153,8 +153,7 @@ impl<'a> Parser<'a> {
     /// stopping before the statement separator, if any.
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
         // allow the dialect to override statement parsing
-        let remaining_tokens = &self.tokens[self.index..];
-        if let Some(statement_parser) = self.dialect.statement_parser(remaining_tokens) {
+        if let Some(statement_parser) = self.dialect.statement_parser(self) {
             return statement_parser(self);
         }
 
@@ -385,8 +384,7 @@ impl<'a> Parser<'a> {
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
         // allow the dialect to override prefix parsing
-        let remaining_tokens = &self.tokens[self.index..];
-        if let Some(prefix_parser) = self.dialect.prefix_parser(remaining_tokens) {
+        if let Some(prefix_parser) = self.dialect.prefix_parser(self) {
             return prefix_parser(self);
         }
 
@@ -1174,10 +1172,7 @@ impl<'a> Parser<'a> {
     /// Parse an operator following an expression
     pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
         // allow the dialect to override infix parsing
-        if let Some(infix_parser) =
-            self.dialect
-                .infix_parser(&self.tokens[self.index..], &expr, precedence)
-        {
+        if let Some(infix_parser) = self.dialect.infix_parser(self, &expr, precedence) {
             return infix_parser(self, &expr, precedence);
         }
 

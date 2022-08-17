@@ -38,16 +38,16 @@ impl Dialect for PostgreSqlDialect {
             || ch == '_'
     }
 
-    fn statement_parser(&self, tokens: &[Token]) -> Option<StatementParser> {
-        match &tokens[0] {
-            Token::Word(word) if word.keyword == Keyword::COMMENT => Some(Box::new(parse_comment)),
-            _ => None,
+    fn statement_parser(&self, parser: &mut Parser) -> Option<StatementParser> {
+        if parser.parse_keyword(Keyword::COMMENT) {
+            Some(Box::new(parse_comment))
+        } else {
+            None
         }
     }
 }
 
 pub fn parse_comment(parser: &mut Parser) -> Result<Statement, ParserError> {
-    parser.expect_keyword(Keyword::COMMENT)?;
     parser.expect_keyword(Keyword::ON)?;
     let token = parser.next_token();
 

@@ -44,7 +44,6 @@ pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
 pub use crate::keywords;
 use crate::parser::{Parser, ParserError};
-use crate::tokenizer::Token;
 
 /// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
 /// to `true` if `parser.dialect` is one of the `Dialect`s specified.
@@ -78,20 +77,20 @@ pub trait Dialect: Debug + Any {
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
     /// Custom prefix parser
-    fn prefix_parser(&self, _tokens: &[Token]) -> Option<PrefixParser> {
+    fn prefix_parser(&self, _parser: &mut Parser) -> Option<PrefixParser> {
         None
     }
     /// Custom infix parser
     fn infix_parser(
         &self,
-        _tokens: &[Token],
+        _parser: &mut Parser,
         _expr: &Expr,
         _precendence: u8,
     ) -> Option<InfixParser> {
         None
     }
     /// Custom statement parser
-    fn statement_parser(&self, _tokens: &[Token]) -> Option<StatementParser> {
+    fn statement_parser(&self, _parser: &mut Parser) -> Option<StatementParser> {
         None
     }
 }

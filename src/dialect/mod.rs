@@ -40,7 +40,7 @@ pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
 pub use crate::keywords;
-use crate::parser::ParserError;
+use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 
 /// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
@@ -50,6 +50,10 @@ macro_rules! dialect_of {
         ($($parsed_dialect.dialect.is::<$dialect_type>())||+)
     };
 }
+
+type PrefixParser = Box<dyn Fn(&mut Parser) -> Result<(Expr, usize), ParserError>>;
+
+type InfixParser = Box<dyn Fn(&mut Parser, &Expr, u8) -> Result<(Expr, usize), ParserError>>;
 
 pub trait Dialect: Debug + Any {
     /// Determine if a character starts a quoted identifier. The default
@@ -69,17 +73,12 @@ pub trait Dialect: Debug + Any {
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
     /// Custom prefix parser
-    fn parse_prefix(&self, _tokens: &[Token]) -> Result<Option<(Expr, usize)>, ParserError> {
-        Ok(None)
+    fn prefix_parser(&self, _tokens: &[Token]) -> Option<PrefixParser> {
+        None
     }
     /// Custom infix parser
-    fn parse_infix(
-        &self,
-        _expr: Expr,
-        _precedence: u8,
-        _tokens: &[Token],
-    ) -> Result<Option<(Expr, usize)>, ParserError> {
-        Ok(None)
+    fn infix_parser(&self, _tokens: &[Token], expr: &Expr, precendence: u8) -> Option<InfixParser> {
+        None
     }
 }
 

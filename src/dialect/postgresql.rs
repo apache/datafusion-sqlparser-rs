@@ -10,6 +10,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+
 use crate::ast::{CommentObject, Statement};
 use crate::dialect::{Dialect, StatementParser};
 use crate::keywords::Keyword;

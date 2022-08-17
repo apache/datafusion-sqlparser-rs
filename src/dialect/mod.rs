@@ -67,21 +67,29 @@ pub trait Dialect: Debug + Any {
     fn is_identifier_start(&self, ch: char) -> bool;
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
-    /// Custom prefix parser
+    /// Dialect-specific prefix parser override
     fn parse_prefix(&self, _parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
+        // return None to fall back to the default behavior
         None
     }
-    /// Custom infix parser
+    /// Dialect-specific infix parser override
     fn parse_infix(
         &self,
         _parser: &mut Parser,
         _expr: &Expr,
         _precendence: u8,
     ) -> Option<Result<Expr, ParserError>> {
+        // return None to fall back to the default behavior
         None
     }
-    /// Custom statement parser
+    /// Dialect-specific precedence override
+    fn get_next_precedence(&self, _parser: &Parser) -> Option<Result<u8, ParserError>> {
+        // return None to fall back to the default behavior
+        None
+    }
+    /// Dialect-specific statement parser override
     fn parse_statement(&self, _parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+        // return None to fall back to the default behavior
         None
     }
 }

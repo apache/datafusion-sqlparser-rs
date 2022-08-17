@@ -272,21 +272,21 @@ pub enum Expr {
     Like {
         negated: bool,
         expr: Box<Expr>,
-        pattern: Box<Value>,
+        pattern: Box<Expr>,
         escape_char: Option<char>,
     },
     /// ILIKE (case-insensitive LIKE)
     ILike {
         negated: bool,
         expr: Box<Expr>,
-        pattern: Box<Value>,
+        pattern: Box<Expr>,
         escape_char: Option<char>,
     },
     /// SIMILAR TO regex
     SimilarTo {
         negated: bool,
         expr: Box<Expr>,
-        pattern: Box<Value>,
+        pattern: Box<Expr>,
         escape_char: Option<char>,
     },
     /// Any operation e.g. `1 ANY (1)` or `foo > ANY(bar)`, It will be wrapped in the right side of BinaryExpr

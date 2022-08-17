@@ -37,9 +37,7 @@ impl Dialect for PostgreSqlDialect {
 
     fn statement_parser(&self, tokens: &[Token]) -> Option<StatementParser> {
         match &tokens[0] {
-            Token::Word(word) if word.keyword == Keyword::COMMENT => {
-                Some(Box::new(|parser| parse_comment(parser)))
-            }
+            Token::Word(word) if word.keyword == Keyword::COMMENT => Some(Box::new(parse_comment)),
             _ => None,
         }
     }

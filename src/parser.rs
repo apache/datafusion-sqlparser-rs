@@ -381,6 +381,14 @@ impl<'a> Parser<'a> {
 
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
+        // allow the dialect to override prefix parsing
+        if let Some((prefix_expr, num_tokens_parsed)) =
+            self.dialect.parse_prefix(&self.tokens[self.index..])?
+        {
+            self.index += num_tokens_parsed;
+            return Ok(prefix_expr);
+        }
+
         // PostgreSQL allows any string literal to be preceded by a type name, indicating that the
         // string literal represents a literal of that type. Some examples:
         //
@@ -1164,6 +1172,15 @@ impl<'a> Parser<'a> {
 
     /// Parse an operator following an expression
     pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
+        // allow the dialect to override infix parsing
+        if let Some((infix_expr, num_tokens_parsed)) =
+            self.dialect
+                .parse_infix(expr.clone(), precedence, &self.tokens[self.index..])?
+        {
+            self.index += num_tokens_parsed;
+            return Ok(infix_expr);
+        }
+
         let tok = self.next_token();
 
         let regular_binary_operator = match &tok {

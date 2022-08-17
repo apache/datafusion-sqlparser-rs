@@ -22,6 +22,7 @@ mod redshift;
 mod snowflake;
 mod sqlite;
 
+use crate::ast::Expr;
 use core::any::{Any, TypeId};
 use core::fmt::Debug;
 use core::iter::Peekable;
@@ -39,6 +40,8 @@ pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
 pub use crate::keywords;
+use crate::parser::ParserError;
+use crate::tokenizer::Token;
 
 /// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
 /// to `true` if `parser.dialect` is one of the `Dialect`s specified.
@@ -65,6 +68,19 @@ pub trait Dialect: Debug + Any {
     fn is_identifier_start(&self, ch: char) -> bool;
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
+    /// Custom prefix parser
+    fn parse_prefix(&self, _tokens: &[Token]) -> Result<Option<(Expr, usize)>, ParserError> {
+        Ok(None)
+    }
+    /// Custom infix parser
+    fn parse_infix(
+        &self,
+        _expr: Expr,
+        _precedence: u8,
+        _tokens: &[Token],
+    ) -> Result<Option<(Expr, usize)>, ParserError> {
+        Ok(None)
+    }
 }
 
 impl dyn Dialect {

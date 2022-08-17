@@ -147,7 +147,7 @@ licensed as above, without any additional terms or conditions.
 [current issues]: https://github.com/sqlparser-rs/sqlparser-rs/issues
 [DataFusion]: https://github.com/apache/arrow-datafusion
 [LocustDB]: https://github.com/cswinter/LocustDB
-[Ballista]: https://github.com/apache/arrow-datafusion/tree/master/ballista
+[Ballista]: https://github.com/apache/arrow-ballista
 [GlueSQL]: https://github.com/gluesql/gluesql
 [Pratt Parser]: https://tdop.github.io/
 [sql-2016-grammar]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html

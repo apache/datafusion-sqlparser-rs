@@ -57,8 +57,6 @@ type PrefixParser = Box<dyn Fn(&mut Parser) -> Result<Expr, ParserError>>;
 
 type InfixParser = Box<dyn Fn(&mut Parser, &Expr, u8) -> Result<Expr, ParserError>>;
 
-type StatementParser = Box<dyn Fn(&mut Parser) -> Result<Statement, ParserError>>;
-
 pub trait Dialect: Debug + Any {
     /// Determine if a character starts a quoted identifier. The default
     /// implementation, accepting "double quoted" ids is both ANSI-compliant
@@ -90,7 +88,7 @@ pub trait Dialect: Debug + Any {
         None
     }
     /// Custom statement parser
-    fn statement_parser(&self, _parser: &mut Parser) -> Option<StatementParser> {
+    fn parse_statement(&self, _parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         None
     }
 }

@@ -14,7 +14,7 @@
 use alloc::boxed::Box;
 
 use crate::ast::{CommentObject, Statement};
-use crate::dialect::{Dialect, StatementParser};
+use crate::dialect::Dialect;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
@@ -38,9 +38,9 @@ impl Dialect for PostgreSqlDialect {
             || ch == '_'
     }
 
-    fn statement_parser(&self, parser: &mut Parser) -> Option<StatementParser> {
+    fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::COMMENT) {
-            Some(Box::new(parse_comment))
+            Some(parse_comment(parser))
         } else {
             None
         }

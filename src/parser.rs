@@ -153,8 +153,8 @@ impl<'a> Parser<'a> {
     /// stopping before the statement separator, if any.
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
         // allow the dialect to override statement parsing
-        if let Some(statement_parser) = self.dialect.statement_parser(self) {
-            return statement_parser(self);
+        if let Some(statement) = self.dialect.parse_statement(self) {
+            return statement;
         }
 
         match self.next_token() {

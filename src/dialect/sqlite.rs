@@ -10,9 +10,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::{Dialect, StatementParser};
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+
+use crate::ast::Statement;
+use crate::dialect::Dialect;
 use crate::keywords::Keyword;
-use crate::parser::Parser;
+use crate::parser::{Parser, ParserError};
 
 #[derive(Debug)]
 pub struct SQLiteDialect {}
@@ -38,12 +42,10 @@ impl Dialect for SQLiteDialect {
         self.is_identifier_start(ch) || ('0'..='9').contains(&ch)
     }
 
-    fn statement_parser(&self, parser: &mut Parser) -> Option<StatementParser> {
+    fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
         if parser.parse_keyword(Keyword::REPLACE) {
-            Some(Box::new(|parser| {
-                parser.prev_token();
-                parser.parse_insert()
-            }))
+            parser.prev_token();
+            Some(parser.parse_insert())
         } else {
             None
         }

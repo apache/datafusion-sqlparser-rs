@@ -1255,8 +1255,16 @@ impl<'a> Parser<'a> {
                         Ok(Expr::IsNotNull(Box::new(expr)))
                     } else if self.parse_keywords(&[Keyword::TRUE]) {
                         Ok(Expr::IsTrue(Box::new(expr)))
+                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::TRUE]) {
+                        Ok(Expr::IsNotTrue(Box::new(expr)))
                     } else if self.parse_keywords(&[Keyword::FALSE]) {
                         Ok(Expr::IsFalse(Box::new(expr)))
+                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::FALSE]) {
+                        Ok(Expr::IsNotFalse(Box::new(expr)))
+                    } else if self.parse_keywords(&[Keyword::UNKNOWN]) {
+                        Ok(Expr::IsUnknown(Box::new(expr)))
+                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::UNKNOWN]) {
+                        Ok(Expr::IsNotUnknown(Box::new(expr)))
                     } else if self.parse_keywords(&[Keyword::DISTINCT, Keyword::FROM]) {
                         let expr2 = self.parse_expr()?;
                         Ok(Expr::IsDistinctFrom(Box::new(expr), Box::new(expr2)))

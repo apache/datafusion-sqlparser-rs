@@ -152,6 +152,14 @@ impl<'a> Parser<'a> {
     /// Parse a single top-level statement (such as SELECT, INSERT, CREATE, etc.),
     /// stopping before the statement separator, if any.
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
+        // allow the dialect to override statement parsing
+        let remaining_tokens = &self.tokens[self.index..];
+        if let Some(statement_parser) = self.dialect.statement_parser(remaining_tokens) {
+            let (statement, num_tokens_parsed) = statement_parser(self)?;
+            self.index += num_tokens_parsed;
+            return Ok(statement);
+        }
+
         match self.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::KILL => Ok(self.parse_kill()?),
@@ -384,7 +392,7 @@ impl<'a> Parser<'a> {
         // allow the dialect to override prefix parsing
         let remaining_tokens = &self.tokens[self.index..];
         if let Some(prefix_parser) = self.dialect.prefix_parser(remaining_tokens) {
-            let (prefix_expr, num_tokens_parsed) = prefix_parser(&mut self)?;
+            let (prefix_expr, num_tokens_parsed) = prefix_parser(self)?;
             self.index += num_tokens_parsed;
             return Ok(prefix_expr);
         }
@@ -1173,9 +1181,11 @@ impl<'a> Parser<'a> {
     /// Parse an operator following an expression
     pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
         // allow the dialect to override infix parsing
-        if let Some(infix_parser) = self.dialect
-            .infix_parser(&self.tokens[self.index..], &expr, precedence) {
-            let (infix_expr, num_tokens_parsed) = infix_parser(&mut self, &expr, precedence)?;
+        if let Some(infix_parser) =
+            self.dialect
+                .infix_parser(&self.tokens[self.index..], &expr, precedence)
+        {
+            let (infix_expr, num_tokens_parsed) = infix_parser(self, &expr, precedence)?;
             self.index += num_tokens_parsed;
             return Ok(infix_expr);
         }

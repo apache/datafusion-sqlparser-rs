@@ -22,7 +22,7 @@ mod redshift;
 mod snowflake;
 mod sqlite;
 
-use crate::ast::Expr;
+use crate::ast::{Expr, Statement};
 use core::any::{Any, TypeId};
 use core::fmt::Debug;
 use core::iter::Peekable;
@@ -55,6 +55,8 @@ type PrefixParser = Box<dyn Fn(&mut Parser) -> Result<(Expr, usize), ParserError
 
 type InfixParser = Box<dyn Fn(&mut Parser, &Expr, u8) -> Result<(Expr, usize), ParserError>>;
 
+type StatementParser = Box<dyn Fn(&mut Parser) -> Result<(Statement, usize), ParserError>>;
+
 pub trait Dialect: Debug + Any {
     /// Determine if a character starts a quoted identifier. The default
     /// implementation, accepting "double quoted" ids is both ANSI-compliant
@@ -77,7 +79,16 @@ pub trait Dialect: Debug + Any {
         None
     }
     /// Custom infix parser
-    fn infix_parser(&self, _tokens: &[Token], expr: &Expr, precendence: u8) -> Option<InfixParser> {
+    fn infix_parser(
+        &self,
+        _tokens: &[Token],
+        _expr: &Expr,
+        _precendence: u8,
+    ) -> Option<InfixParser> {
+        None
+    }
+    /// Custom statement parser
+    fn statement_parser(&self, _tokens: &[Token]) -> Option<StatementParser> {
         None
     }
 }

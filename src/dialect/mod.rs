@@ -53,10 +53,6 @@ macro_rules! dialect_of {
     };
 }
 
-type PrefixParser = Box<dyn Fn(&mut Parser) -> Result<Expr, ParserError>>;
-
-type InfixParser = Box<dyn Fn(&mut Parser, &Expr, u8) -> Result<Expr, ParserError>>;
-
 pub trait Dialect: Debug + Any {
     /// Determine if a character starts a quoted identifier. The default
     /// implementation, accepting "double quoted" ids is both ANSI-compliant
@@ -75,16 +71,16 @@ pub trait Dialect: Debug + Any {
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
     /// Custom prefix parser
-    fn prefix_parser(&self, _parser: &mut Parser) -> Option<PrefixParser> {
+    fn parse_prefix(&self, _parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
         None
     }
     /// Custom infix parser
-    fn infix_parser(
+    fn parse_infix(
         &self,
         _parser: &mut Parser,
         _expr: &Expr,
         _precendence: u8,
-    ) -> Option<InfixParser> {
+    ) -> Option<Result<Expr, ParserError>> {
         None
     }
     /// Custom statement parser

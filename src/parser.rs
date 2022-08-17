@@ -380,8 +380,8 @@ impl<'a> Parser<'a> {
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
         // allow the dialect to override prefix parsing
-        if let Some(prefix_parser) = self.dialect.prefix_parser(self) {
-            return prefix_parser(self);
+        if let Some(prefix) = self.dialect.parse_prefix(self) {
+            return prefix;
         }
 
         // PostgreSQL allows any string literal to be preceded by a type name, indicating that the
@@ -1168,8 +1168,8 @@ impl<'a> Parser<'a> {
     /// Parse an operator following an expression
     pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
         // allow the dialect to override infix parsing
-        if let Some(infix_parser) = self.dialect.infix_parser(self, &expr, precedence) {
-            return infix_parser(self, &expr, precedence);
+        if let Some(infix) = self.dialect.parse_infix(self, &expr, precedence) {
+            return infix;
         }
 
         let tok = self.next_token();

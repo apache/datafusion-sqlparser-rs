@@ -51,11 +51,11 @@ macro_rules! dialect_of {
     };
 }
 
-type PrefixParser = Box<dyn Fn(&mut Parser) -> Result<(Expr, usize), ParserError>>;
+type PrefixParser = Box<dyn Fn(&mut Parser) -> Result<Expr, ParserError>>;
 
-type InfixParser = Box<dyn Fn(&mut Parser, &Expr, u8) -> Result<(Expr, usize), ParserError>>;
+type InfixParser = Box<dyn Fn(&mut Parser, &Expr, u8) -> Result<Expr, ParserError>>;
 
-type StatementParser = Box<dyn Fn(&mut Parser) -> Result<(Statement, usize), ParserError>>;
+type StatementParser = Box<dyn Fn(&mut Parser) -> Result<Statement, ParserError>>;
 
 pub trait Dialect: Debug + Any {
     /// Determine if a character starts a quoted identifier. The default

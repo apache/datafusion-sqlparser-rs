@@ -155,9 +155,7 @@ impl<'a> Parser<'a> {
         // allow the dialect to override statement parsing
         let remaining_tokens = &self.tokens[self.index..];
         if let Some(statement_parser) = self.dialect.statement_parser(remaining_tokens) {
-            let (statement, num_tokens_parsed) = statement_parser(self)?;
-            self.index += num_tokens_parsed;
-            return Ok(statement);
+            return statement_parser(self);
         }
 
         match self.next_token() {
@@ -206,9 +204,6 @@ impl<'a> Parser<'a> {
                 Keyword::REPLACE if dialect_of!(self is SQLiteDialect ) => {
                     self.prev_token();
                     Ok(self.parse_insert()?)
-                }
-                Keyword::COMMENT if dialect_of!(self is PostgreSqlDialect) => {
-                    Ok(self.parse_comment()?)
                 }
                 _ => self.expected("an SQL statement", Token::Word(w)),
             },
@@ -392,9 +387,7 @@ impl<'a> Parser<'a> {
         // allow the dialect to override prefix parsing
         let remaining_tokens = &self.tokens[self.index..];
         if let Some(prefix_parser) = self.dialect.prefix_parser(remaining_tokens) {
-            let (prefix_expr, num_tokens_parsed) = prefix_parser(self)?;
-            self.index += num_tokens_parsed;
-            return Ok(prefix_expr);
+            return prefix_parser(self);
         }
 
         // PostgreSQL allows any string literal to be preceded by a type name, indicating that the
@@ -1185,9 +1178,7 @@ impl<'a> Parser<'a> {
             self.dialect
                 .infix_parser(&self.tokens[self.index..], &expr, precedence)
         {
-            let (infix_expr, num_tokens_parsed) = infix_parser(self, &expr, precedence)?;
-            self.index += num_tokens_parsed;
-            return Ok(infix_expr);
+            return infix_parser(self, &expr, precedence);
         }
 
         let tok = self.next_token();
@@ -1630,7 +1621,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Report unexpected token
-    fn expected<T>(&self, expected: &str, found: Token) -> Result<T, ParserError> {
+    pub fn expected<T>(&self, expected: &str, found: Token) -> Result<T, ParserError> {
         parser_err!(format!("Expected {}, found: {}", expected, found))
     }
 
@@ -4754,35 +4745,6 @@ impl<'a> Parser<'a> {
             name,
             data_types,
             statement,
-        })
-    }
-
-    pub fn parse_comment(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::ON)?;
-        let token = self.next_token();
-
-        let (object_type, object_name) = match token {
-            Token::Word(w) if w.keyword == Keyword::COLUMN => {
-                let object_name = self.parse_object_name()?;
-                (CommentObject::Column, object_name)
-            }
-            Token::Word(w) if w.keyword == Keyword::TABLE => {
-                let object_name = self.parse_object_name()?;
-                (CommentObject::Table, object_name)
-            }
-            _ => self.expected("comment object_type", token)?,
-        };
-
-        self.expect_keyword(Keyword::IS)?;
-        let comment = if self.parse_keyword(Keyword::NULL) {
-            None
-        } else {
-            Some(self.parse_literal_string()?)
-        };
-        Ok(Statement::Comment {
-            object_type,
-            object_name,
-            comment,
         })
     }
 

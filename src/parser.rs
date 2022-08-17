@@ -200,10 +200,6 @@ impl<'a> Parser<'a> {
                 Keyword::EXECUTE => Ok(self.parse_execute()?),
                 Keyword::PREPARE => Ok(self.parse_prepare()?),
                 Keyword::MERGE => Ok(self.parse_merge()?),
-                Keyword::REPLACE if dialect_of!(self is SQLiteDialect ) => {
-                    self.prev_token();
-                    Ok(self.parse_insert()?)
-                }
                 _ => self.expected("an SQL statement", Token::Word(w)),
             },
             Token::LParen => {

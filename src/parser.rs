@@ -1317,21 +1317,21 @@ impl<'a> Parser<'a> {
                         Ok(Expr::Like {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_value()?),
+                            pattern: Box::new(self.parse_subexpr(Self::LIKE_PREC)?),
                             escape_char: self.parse_escape_char()?,
                         })
                     } else if self.parse_keyword(Keyword::ILIKE) {
                         Ok(Expr::ILike {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_value()?),
+                            pattern: Box::new(self.parse_subexpr(Self::LIKE_PREC)?),
                             escape_char: self.parse_escape_char()?,
                         })
                     } else if self.parse_keywords(&[Keyword::SIMILAR, Keyword::TO]) {
                         Ok(Expr::SimilarTo {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_value()?),
+                            pattern: Box::new(self.parse_subexpr(Self::LIKE_PREC)?),
                             escape_char: self.parse_escape_char()?,
                         })
                     } else {
@@ -1478,10 +1478,16 @@ impl<'a> Parser<'a> {
         })
     }
 
-    const UNARY_NOT_PREC: u8 = 15;
-    const BETWEEN_PREC: u8 = 20;
+    // use https://www.postgresql.org/docs/7.0/operators.htm#AEN2026 as a reference
     const PLUS_MINUS_PREC: u8 = 30;
+    const XOR_PREC: u8 = 24;
     const TIME_ZONE_PREC: u8 = 20;
+    const BETWEEN_PREC: u8 = 20;
+    const LIKE_PREC: u8 = 19;
+    const IS_PREC: u8 = 17;
+    const UNARY_NOT_PREC: u8 = 15;
+    const AND_PREC: u8 = 10;
+    const OR_PREC: u8 = 5;
 
     /// Get the precedence of the next token
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
@@ -1492,9 +1498,9 @@ impl<'a> Parser<'a> {
         let token_2 = self.peek_nth_token(2);
         debug!("0: {token_0} 1: {token_1} 2: {token_2}");
         match token {
-            Token::Word(w) if w.keyword == Keyword::OR => Ok(5),
-            Token::Word(w) if w.keyword == Keyword::AND => Ok(10),
-            Token::Word(w) if w.keyword == Keyword::XOR => Ok(24),
+            Token::Word(w) if w.keyword == Keyword::OR => Ok(Self::OR_PREC),
+            Token::Word(w) if w.keyword == Keyword::AND => Ok(Self::AND_PREC),
+            Token::Word(w) if w.keyword == Keyword::XOR => Ok(Self::XOR_PREC),
 
             Token::Word(w) if w.keyword == Keyword::AT => {
                 match (self.peek_nth_token(1), self.peek_nth_token(2)) {
@@ -1515,18 +1521,18 @@ impl<'a> Parser<'a> {
                 // precedence.
                 Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
                 Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
-                Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
-                Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::BETWEEN_PREC),
-                Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::BETWEEN_PREC),
+                Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::LIKE_PREC),
+                Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
+                Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
                 _ => Ok(0),
             },
-            Token::Word(w) if w.keyword == Keyword::IS => Ok(17),
+            Token::Word(w) if w.keyword == Keyword::IS => Ok(Self::IS_PREC),
             Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::BETWEEN_PREC),
+            Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::LIKE_PREC),
+            Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
+            Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(Self::BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::BETWEEN_PREC),
             Token::Eq
             | Token::Lt
             | Token::LtEq

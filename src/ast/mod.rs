@@ -227,12 +227,20 @@ pub enum Expr {
     CompositeAccess { expr: Box<Expr>, key: Ident },
     /// `IS FALSE` operator
     IsFalse(Box<Expr>),
+    /// `IS NOT FALSE` operator
+    IsNotFalse(Box<Expr>),
     /// `IS TRUE` operator
     IsTrue(Box<Expr>),
+    /// `IS NOT TRUE` operator
+    IsNotTrue(Box<Expr>),
     /// `IS NULL` operator
     IsNull(Box<Expr>),
     /// `IS NOT NULL` operator
     IsNotNull(Box<Expr>),
+    /// `IS UNKNOWN` operator
+    IsUnknown(Box<Expr>),
+    /// `IS NOT UNKNOWN` operator
+    IsNotUnknown(Box<Expr>),
     /// `IS DISTINCT FROM` operator
     IsDistinctFrom(Box<Expr>, Box<Expr>),
     /// `IS NOT DISTINCT FROM` operator
@@ -412,9 +420,13 @@ impl fmt::Display for Expr {
             }
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
             Expr::IsTrue(ast) => write!(f, "{} IS TRUE", ast),
+            Expr::IsNotTrue(ast) => write!(f, "{} IS NOT TRUE", ast),
             Expr::IsFalse(ast) => write!(f, "{} IS FALSE", ast),
+            Expr::IsNotFalse(ast) => write!(f, "{} IS NOT FALSE", ast),
             Expr::IsNull(ast) => write!(f, "{} IS NULL", ast),
             Expr::IsNotNull(ast) => write!(f, "{} IS NOT NULL", ast),
+            Expr::IsUnknown(ast) => write!(f, "{} IS UNKNOWN", ast),
+            Expr::IsNotUnknown(ast) => write!(f, "{} IS NOT UNKNOWN", ast),
             Expr::InList {
                 expr,
                 list,

@@ -51,8 +51,8 @@ struct DisplaySeparated<'a, T>
 }
 
 impl<'a, T> fmt::Display for DisplaySeparated<'a, T>
-where
-    T: fmt::Display,
+    where
+        T: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut delim = "";
@@ -66,15 +66,15 @@ where
 }
 
 fn display_separated<'a, T>(slice: &'a [T], sep: &'static str) -> DisplaySeparated<'a, T>
-where
-    T: fmt::Display,
+    where
+        T: fmt::Display,
 {
     DisplaySeparated { slice, sep }
 }
 
 fn display_comma_separated<T>(slice: &[T]) -> DisplaySeparated<'_, T>
-where
-    T: fmt::Display,
+    where
+        T: fmt::Display,
 {
     DisplaySeparated { slice, sep: ", " }
 }
@@ -93,8 +93,8 @@ pub struct Ident {
 impl Ident {
     /// Create a new identifier with the given value and no quotes.
     pub fn new<S>(value: S) -> Self
-    where
-        S: Into<String>,
+        where
+            S: Into<String>,
     {
         Ident {
             value: value.into(),
@@ -105,8 +105,8 @@ impl Ident {
     /// Create a new quoted identifier with the given quote and value. This function
     /// panics if the given quote is not a valid quote character.
     pub fn with_quote<S>(quote: char, value: S) -> Self
-    where
-        S: Into<String>,
+        where
+            S: Into<String>,
     {
         assert!(quote == '\'' || quote == '"' || quote == '`' || quote == '[');
         Ident {
@@ -816,6 +816,7 @@ pub enum ShowCreateObject {
     Table,
     Trigger,
     View,
+    Sequence,
 }
 
 impl fmt::Display for ShowCreateObject {
@@ -827,6 +828,7 @@ impl fmt::Display for ShowCreateObject {
             ShowCreateObject::Table => f.write_str("TABLE"),
             ShowCreateObject::Trigger => f.write_str("TRIGGER"),
             ShowCreateObject::View => f.write_str("VIEW"),
+            ShowCreateObject::Sequence => f.write_str("SEQUENCE"),
         }
     }
 }
@@ -1256,14 +1258,15 @@ pub enum Statement {
         // Specifies the actions to perform when values match or do not match.
         clauses: Vec<MergeClause>,
     },
+    ///CreateSequence -- define a new sequence
     CreateSequence {
         temporary: bool,
         if_not_exists: bool,
         name: ObjectName,
-        data_type: DataType,
-        sequenceOptions: SequenceOptions,
+        data_type: Option<DataType>,
+        sequenceOptions: Vec<SequenceOptions>,
         owned_by: Option<ObjectName>,
-    }
+    },
 }
 
 impl fmt::Display for Statement {
@@ -1745,10 +1748,10 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(HiveFormat {
-                    row_format,
-                    storage,
-                    location,
-                }) = hive_formats
+                                row_format,
+                                storage,
+                                location,
+                            }) = hive_formats
                 {
                     match row_format {
                         Some(HiveRowFormat::SERDE { class }) => {
@@ -1759,9 +1762,9 @@ impl fmt::Display for Statement {
                     }
                     match storage {
                         Some(HiveIOFormat::IOF {
-                            input_format,
-                            output_format,
-                        }) => write!(
+                                 input_format,
+                                 output_format,
+                             }) => write!(
                             f,
                             " STORED AS INPUTFORMAT {} OUTPUTFORMAT {}",
                             input_format, output_format
@@ -2028,10 +2031,10 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Commit { chain } => {
-                write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" },)
+                write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" }, )
             }
             Statement::Rollback { chain } => {
-                write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" },)
+                write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" }, )
             }
             Statement::CreateSchema {
                 schema_name,
@@ -2138,33 +2141,82 @@ impl fmt::Display for Statement {
                 write!(f, "ON {} ", on)?;
                 write!(f, "{}", display_separated(clauses, " "))
             }
-            Statement::CreateSequence { .. } => {
-                write!(f, "{}", "TODO CreateSequence")
+            Statement::CreateSequence { temporary, if_not_exists, name, data_type, sequenceOptions, owned_by } => {
+                write!(
+                    f,
+                    "CREATE {temporary}SEQUENCE {if_not_exists}{name}",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    temporary = if *temporary { "TEMPORARY " } else { "" },
+                    name = name,
+                )
             }
         }
     }
 }
 
-
+/// Will not add to vec when there are no value since all blocks are optional
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 // #[non_exhaustive]
 pub enum SequenceOptions {
-    IncrementBy(Option<u64>),
-    MinValue(Option<u64>),
-    //NoMinValue is only when minvalue = None
-    NoMinValue(bool),
-    MaxValue(Option<u64>),
-    //NoMaxValue is only when maxvalue = None
-    NoMaxValue(bool),
-    StartWith(Option<u64>),
-    Cache(Option<i64>),
+    ///IncrementBy(increment, by) 'BY' is optional in PostgreSQL
+    IncrementBy(Expr, bool),
+    ///MinValue(minvalue, 'NO MINVALUE')
+    MinValue(Option<Expr>, Option<bool>),
+    ///MaxValue(maxvalue, 'NO MAXVALUE')
+    MaxValue(Option<Expr>, Option<bool>),
+    ///StartWith(start, with) 'WITH' is optional in PostgreSQL
+    StartWith(Expr, bool),
+    Cache(Expr),
     Cycle(bool),
 }
 
+///     CREATE [ TEMPORARY | TEMP ] SEQUENCE    [ IF NOT EXISTS ] name
+///     [ AS data_type ]
+///     [ INCREMENT [ BY ] increment ]
+///     [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
+///     [ START [ WITH ] start ] [ CACHE cache ] [ [ NO ] CYCLE ]
+///     [ OWNED BY { table_name.column_name | NONE } ]
+/// https://www.postgresql.org/docs/current/sql-createsequence.html
+/// Will not add to vec when there are no value since all blocks are optional
 impl fmt::Display for SequenceOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        todo!()
+        match self {
+            SequenceOptions::IncrementBy(increment, by) => {
+                write!(
+                    f,
+                    " INCREMENT{by} {increment}",
+                    by = if *by { " BY" } else { "" }, increment = increment.to_string()
+                )
+            }
+            SequenceOptions::MinValue(minvalue, no) => {
+                if let minvalue = minvalue.as_ref().unwrap() {
+                    write!(f, " MINVALUE {minvalue}", minvalue = minvalue.to_string())
+                } else if no.is_some() {
+                    write!(f, " NO MINVALUE")
+                } else {
+                    write!(f, "")
+                }
+            }
+            SequenceOptions::MaxValue(maxvalue, no) => {
+                if let maxvalue = maxvalue.as_ref().unwrap() {
+                    write!(f, " MAXVALUE {maxvalue}", maxvalue = maxvalue.to_string())
+                } else if no.is_some() {
+                    write!(f, " NO MAXVALUE")
+                } else {
+                    write!(f, "")
+                }
+            }
+            SequenceOptions::StartWith(start, with) => {
+                write!(f, " START{with} {start}", with = if *with { " WITH" } else { "" }, start = start.to_string())
+            }
+            SequenceOptions::Cache(cache) => {
+                write!(f, " CACHE {}", *cache)
+            }
+            SequenceOptions::Cycle(no) => {
+                write!(f, " {}CYCLE", if *no { "NO " } else { "" })
+            }
+        }
     }
 }
 

@@ -8,6 +8,30 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.21.0] 2022-08-18
+
+### Added
+* Support `IS [NOT] TRUE`, `IS [NOT] FALSE`, and `IS [NOT] UNKNOWN` - Thanks (#583) @sarahyurick
+* Support `SIMILAR TO` syntax (#569) - Thanks @ayushdg
+* Support `SHOW COLLATION` (#564) - Thanks @MazterQyou
+* Support `SHOW TABLES` (#563) - Thanks @MazterQyou
+* Support `SET NAMES literal [COLLATE literal]` (#558) - Thanks @ovr
+* Support trailing commas (#557) in `BigQuery` dialect - Thanks @komukomo
+* Support `USE <DB>` (#565) - Thanks @MazterQyou
+* Support `SHOW COLUMNS FROM tbl FROM db` (#562) - Thanks @MazterQyou
+* Support `SHOW VARIABLES` for `MySQL` dialect  (#559) - Thanks @ovr and @vasilev-alex
+
+### Changed
+* Support arbitrary expression in `SET` statement (#574) - Thanks @ovr and @vasilev-alex
+* Parse LIKE patterns as Expr not Value (#579) - Thanks @andygrove
+* Update Ballista link in README (#576) - Thanks @sanxiyn
+* Parse  `TRIM` from with optional expr and `FROM` expr  (#573) - Thanks @ayushdg
+* Support PostgreSQL array subquery constructor (#566) - Thanks @MazterQyou
+* Clarify contribution licensing (#570) - Thanks @alamb
+* Update for new clippy ints (#571) - Thanks @alamb
+* Change `Like` and `ILike` to `Expr` variants, allow escape char (#569) - Thanks @ayushdg
+* Parse special keywords as functions (`current_user`, `user`, etc) (#561) - Thanks @ovr
+* Support expressions in `LIMIT`/`OFFSET` (#567) - Thanks @MazterQyou
 
 ## [0.20.0] 2022-08-05
 

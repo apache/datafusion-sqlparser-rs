@@ -276,6 +276,12 @@ fn parse_create_function() {
     );
 }
 
+#[test]
+fn filtering_during_aggregation() {
+    let rename = "SELECT array_agg(name) FILTER (WHERE name IS NOT NULL) FROM region";
+    println!("{}", hive().verified_stmt(rename));
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

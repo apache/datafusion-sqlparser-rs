@@ -3623,6 +3623,19 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // filtering during aggregation
+        // FILTER (WHERE expr)
+        // https://trino.io/docs/current/functions/aggregate.html#filtering-during-aggregation
+        let filter_during_agg = if self.parse_keyword(Keyword::FILTER) {
+            self.expect_token(&Token::LParen)?;
+            self.expect_keyword(Keyword::WHERE)?;
+            let expr = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            Some(expr)
+        } else {
+            None
+        };
+
         // Note that for keywords to be properly handled here, they need to be
         // added to `RESERVED_FOR_COLUMN_ALIAS` / `RESERVED_FOR_TABLE_ALIAS`,
         // otherwise they may be parsed as an alias as part of the `projection`
@@ -3712,6 +3725,7 @@ impl<'a> Parser<'a> {
             top,
             projection,
             into,
+            filter_during_agg,
             from,
             lateral_views,
             selection,

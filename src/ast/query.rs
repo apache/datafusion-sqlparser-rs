@@ -142,6 +142,8 @@ pub struct Select {
     pub from: Vec<TableWithJoins>,
     /// LATERAL VIEWs
     pub lateral_views: Vec<LateralView>,
+    /// FILTER (WHERE ..)
+    pub filter_during_agg: Option<Expr>,
     /// WHERE
     pub selection: Option<Expr>,
     /// GROUP BY
@@ -168,6 +170,10 @@ impl fmt::Display for Select {
 
         if let Some(ref into) = self.into {
             write!(f, " {}", into)?;
+        }
+
+        if let Some(ref filter) = self.filter_during_agg {
+            write!(f, " FILTER (WHERE {})", filter)?;
         }
 
         if !self.from.is_empty() {

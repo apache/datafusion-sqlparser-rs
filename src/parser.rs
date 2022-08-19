@@ -152,6 +152,11 @@ impl<'a> Parser<'a> {
     /// Parse a single top-level statement (such as SELECT, INSERT, CREATE, etc.),
     /// stopping before the statement separator, if any.
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
+        // allow the dialect to override statement parsing
+        if let Some(statement) = self.dialect.parse_statement(self) {
+            return statement;
+        }
+
         match self.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::KILL => Ok(self.parse_kill()?),
@@ -195,13 +200,6 @@ impl<'a> Parser<'a> {
                 Keyword::EXECUTE => Ok(self.parse_execute()?),
                 Keyword::PREPARE => Ok(self.parse_prepare()?),
                 Keyword::MERGE => Ok(self.parse_merge()?),
-                Keyword::REPLACE if dialect_of!(self is SQLiteDialect ) => {
-                    self.prev_token();
-                    Ok(self.parse_insert()?)
-                }
-                Keyword::COMMENT if dialect_of!(self is PostgreSqlDialect) => {
-                    Ok(self.parse_comment()?)
-                }
                 _ => self.expected("an SQL statement", Token::Word(w)),
             },
             Token::LParen => {
@@ -381,6 +379,11 @@ impl<'a> Parser<'a> {
 
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
+        // allow the dialect to override prefix parsing
+        if let Some(prefix) = self.dialect.parse_prefix(self) {
+            return prefix;
+        }
+
         // PostgreSQL allows any string literal to be preceded by a type name, indicating that the
         // string literal represents a literal of that type. Some examples:
         //
@@ -1164,6 +1167,11 @@ impl<'a> Parser<'a> {
 
     /// Parse an operator following an expression
     pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
+        // allow the dialect to override infix parsing
+        if let Some(infix) = self.dialect.parse_infix(self, &expr, precedence) {
+            return infix;
+        }
+
         let tok = self.next_token();
 
         let regular_binary_operator = match &tok {
@@ -1491,6 +1499,11 @@ impl<'a> Parser<'a> {
 
     /// Get the precedence of the next token
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
+        // allow the dialect to override precedence logic
+        if let Some(precedence) = self.dialect.get_next_precedence(self) {
+            return precedence;
+        }
+
         let token = self.peek_token();
         debug!("get_next_precedence() {:?}", token);
         let token_0 = self.peek_nth_token(0);
@@ -1618,7 +1631,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Report unexpected token
-    fn expected<T>(&self, expected: &str, found: Token) -> Result<T, ParserError> {
+    pub fn expected<T>(&self, expected: &str, found: Token) -> Result<T, ParserError> {
         parser_err!(format!("Expected {}, found: {}", expected, found))
     }
 
@@ -4732,35 +4745,6 @@ impl<'a> Parser<'a> {
             name,
             data_types,
             statement,
-        })
-    }
-
-    pub fn parse_comment(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::ON)?;
-        let token = self.next_token();
-
-        let (object_type, object_name) = match token {
-            Token::Word(w) if w.keyword == Keyword::COLUMN => {
-                let object_name = self.parse_object_name()?;
-                (CommentObject::Column, object_name)
-            }
-            Token::Word(w) if w.keyword == Keyword::TABLE => {
-                let object_name = self.parse_object_name()?;
-                (CommentObject::Table, object_name)
-            }
-            _ => self.expected("comment object_type", token)?,
-        };
-
-        self.expect_keyword(Keyword::IS)?;
-        let comment = if self.parse_keyword(Keyword::NULL) {
-            None
-        } else {
-            Some(self.parse_literal_string()?)
-        };
-        Ok(Statement::Comment {
-            object_type,
-            object_name,
-            comment,
         })
     }
 

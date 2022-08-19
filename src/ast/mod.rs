@@ -43,8 +43,8 @@ mod query;
 mod value;
 
 struct DisplaySeparated<'a, T>
-    where
-        T: fmt::Display,
+where
+    T: fmt::Display,
 {
     slice: &'a [T],
     sep: &'static str,
@@ -1264,7 +1264,7 @@ pub enum Statement {
         if_not_exists: bool,
         name: ObjectName,
         data_type: Option<DataType>,
-        sequenceOptions: Vec<SequenceOptions>,
+        sequence_options: Vec<SequenceOptions>,
         owned_by: Option<ObjectName>,
     },
 }
@@ -2141,9 +2141,18 @@ impl fmt::Display for Statement {
                 write!(f, "ON {} ", on)?;
                 write!(f, "{}", display_separated(clauses, " "))
             }
-            Statement::CreateSequence { temporary, if_not_exists, name, data_type, sequenceOptions, owned_by } => {
+            Statement::CreateSequence {
+                temporary,
+                if_not_exists,
+                name,
+                data_type,
+                sequence_options,
+                owned_by,
+            } => {
                 let mut as_type: String = String::from("");
-                if let Some(dt) = data_type.as_ref() { as_type = format!(" AS {}", dt.to_string()); }
+                if let Some(dt) = data_type.as_ref() {
+                    as_type = format!(" AS {}", dt);
+                }
                 write!(
                     f,
                     "CREATE {temporary}SEQUENCE {if_not_exists}{name}{as_type}",
@@ -2152,8 +2161,11 @@ impl fmt::Display for Statement {
                     name = name,
                     as_type = as_type
                 )?;
-                for sequenceOption in sequenceOptions {
-                    write!(f, "{}", sequenceOption)?;
+                for sequence_option in sequence_options {
+                    write!(f, "{}", sequence_option)?;
+                }
+                if let Some(ob) = owned_by.as_ref() {
+                    write!(f, " OWNED BY {}", ob)?;
                 }
                 write!(f, "")
             }
@@ -2193,12 +2205,13 @@ impl fmt::Display for SequenceOptions {
                 write!(
                     f,
                     " INCREMENT{by} {increment}",
-                    by = if *by { " BY" } else { "" }, increment = increment.to_string()
+                    by = if *by { " BY" } else { "" },
+                    increment = increment
                 )
             }
             SequenceOptions::MinValue(minvalue, no) => {
                 if let Some(minvalue) = minvalue.as_ref() {
-                    write!(f, " MINVALUE {minvalue}", minvalue = minvalue.to_string())
+                    write!(f, " MINVALUE {minvalue}", minvalue = minvalue)
                 } else if no.is_some() {
                     write!(f, " NO MINVALUE")
                 } else {
@@ -2207,7 +2220,7 @@ impl fmt::Display for SequenceOptions {
             }
             SequenceOptions::MaxValue(maxvalue, no) => {
                 if let Some(maxvalue) = maxvalue.as_ref() {
-                    write!(f, " MAXVALUE {maxvalue}", maxvalue = maxvalue.to_string())
+                    write!(f, " MAXVALUE {maxvalue}", maxvalue = maxvalue)
                 } else if no.is_some() {
                     write!(f, " NO MAXVALUE")
                 } else {
@@ -2215,7 +2228,12 @@ impl fmt::Display for SequenceOptions {
                 }
             }
             SequenceOptions::StartWith(start, with) => {
-                write!(f, " START{with} {start}", with = if *with { " WITH" } else { "" }, start = start.to_string())
+                write!(
+                    f,
+                    " START{with} {start}",
+                    with = if *with { " WITH" } else { "" },
+                    start = start
+                )
             }
             SequenceOptions::Cache(cache) => {
                 write!(f, " CACHE {}", *cache)

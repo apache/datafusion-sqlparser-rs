@@ -4879,65 +4879,94 @@ impl<'a> Parser<'a> {
     /// https://www.postgresql.org/docs/current/sql-createsequence.html
     /// Will not add to vec when there are no value since all blocks are optional
     pub fn parse_create_sequence(&mut self, temporary: bool) -> Result<Statement, ParserError> {
-        ///[ IF NOT EXISTS ]
+        //[ IF NOT EXISTS ]
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        ///name
+        //name
         let name = self.parse_object_name()?;
-        ///[ AS data_type ]
+        //[ AS data_type ]
         let mut data_type: Option<DataType> = None;
         if self.parse_keywords(&[Keyword::AS]) {
             data_type = Some(self.parse_data_type()?)
         }
-        let mut sequenceOptions = vec![];
+        let mut sequence_options = vec![];
 
-        ///[ INCREMENT [ BY ] increment ]
+        //[ INCREMENT [ BY ] increment ]
         if self.parse_keywords(&[Keyword::INCREMENT]) {
             if self.parse_keywords(&[Keyword::BY]) {
-                sequenceOptions.push(SequenceOptions::IncrementBy(Expr::Value(self.parse_number_value()?), true));
+                sequence_options.push(SequenceOptions::IncrementBy(
+                    Expr::Value(self.parse_number_value()?),
+                    true,
+                ));
             } else {
-                sequenceOptions.push(SequenceOptions::IncrementBy(Expr::Value(self.parse_number_value()?), false));
+                sequence_options.push(SequenceOptions::IncrementBy(
+                    Expr::Value(self.parse_number_value()?),
+                    false,
+                ));
             }
         }
-        ///[ MINVALUE minvalue | NO MINVALUE ]
-        if self.parse_keywords(&[Keyword::MINVALUE]) {
-            sequenceOptions.push(SequenceOptions::MinValue(Some(Expr::Value(self.parse_number_value()?)), None));
+        //[ MINVALUE minvalue | NO MINVALUE ]
+        if self.parse_keyword(Keyword::MINVALUE) {
+            sequence_options.push(SequenceOptions::MinValue(
+                Some(Expr::Value(self.parse_number_value()?)),
+                None,
+            ));
         } else if self.parse_keywords(&[Keyword::NO, Keyword::MINVALUE]) {
-            sequenceOptions.push(SequenceOptions::MinValue(None, Some(true)));
+            sequence_options.push(SequenceOptions::MinValue(None, Some(true)));
         }
-        ///[ MAXVALUE maxvalue | NO MAXVALUE ]
+        //[ MAXVALUE maxvalue | NO MAXVALUE ]
         if self.parse_keywords(&[Keyword::MAXVALUE]) {
-            sequenceOptions.push(SequenceOptions::MaxValue(Some(Expr::Value(self.parse_number_value()?)), None));
+            sequence_options.push(SequenceOptions::MaxValue(
+                Some(Expr::Value(self.parse_number_value()?)),
+                None,
+            ));
         } else if self.parse_keywords(&[Keyword::NO, Keyword::MAXVALUE]) {
-            sequenceOptions.push(SequenceOptions::MaxValue(None, Some(true)));
+            sequence_options.push(SequenceOptions::MaxValue(None, Some(true)));
         }
-        ///[ START [ WITH ] start ]
+        //[ START [ WITH ] start ]
         if self.parse_keywords(&[Keyword::START]) {
             if self.parse_keywords(&[Keyword::WITH]) {
-                sequenceOptions.push(SequenceOptions::StartWith(Expr::Value(self.parse_number_value()?), true));
+                sequence_options.push(SequenceOptions::StartWith(
+                    Expr::Value(self.parse_number_value()?),
+                    true,
+                ));
             } else {
-                sequenceOptions.push(SequenceOptions::StartWith(Expr::Value(self.parse_number_value()?), false));
+                sequence_options.push(SequenceOptions::StartWith(
+                    Expr::Value(self.parse_number_value()?),
+                    false,
+                ));
             }
         }
-        ///[ CACHE cache ]
+        //[ CACHE cache ]
         if self.parse_keywords(&[Keyword::CACHE]) {
-            sequenceOptions.push(SequenceOptions::Cache(Expr::Value(self.parse_number_value()?)));
+            sequence_options.push(SequenceOptions::Cache(Expr::Value(
+                self.parse_number_value()?,
+            )));
         }
-        /// [ [ NO ] CYCLE ]
+        // [ [ NO ] CYCLE ]
         if self.parse_keywords(&[Keyword::NO]) {
             if self.parse_keywords(&[Keyword::CYCLE]) {
-                sequenceOptions.push(SequenceOptions::Cycle(false));
+                sequence_options.push(SequenceOptions::Cycle(false));
             }
         } else if self.parse_keywords(&[Keyword::CYCLE]) {
-            sequenceOptions.push(SequenceOptions::Cycle(true));
+            sequence_options.push(SequenceOptions::Cycle(true));
         }
-
+        // [ OWNED BY { table_name.column_name | NONE } ]
+        let owned_by = if self.parse_keywords(&[Keyword::OWNED, Keyword::BY]) {
+            if self.parse_keywords(&[Keyword::NONE]) {
+                Some(ObjectName(vec![Ident::new("NONE")]))
+            } else {
+                Some(self.parse_object_name()?)
+            }
+        } else {
+            None
+        };
         Ok(Statement::CreateSequence {
             temporary,
             if_not_exists,
             name,
             data_type,
-            sequenceOptions,
-            owned_by: None,
+            sequence_options,
+            owned_by,
         })
     }
 }

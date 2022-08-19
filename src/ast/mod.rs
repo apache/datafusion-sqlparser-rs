@@ -2142,13 +2142,20 @@ impl fmt::Display for Statement {
                 write!(f, "{}", display_separated(clauses, " "))
             }
             Statement::CreateSequence { temporary, if_not_exists, name, data_type, sequenceOptions, owned_by } => {
+                let mut as_type: String = String::from("");
+                if let Some(dt) = data_type.as_ref() { as_type = format!(" AS {}", dt.to_string()); }
                 write!(
                     f,
-                    "CREATE {temporary}SEQUENCE {if_not_exists}{name}",
+                    "CREATE {temporary}SEQUENCE {if_not_exists}{name}{as_type}",
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     temporary = if *temporary { "TEMPORARY " } else { "" },
                     name = name,
-                )
+                    as_type = as_type
+                )?;
+                for sequenceOption in sequenceOptions {
+                    write!(f, "{}", sequenceOption)?;
+                }
+                write!(f, "")
             }
         }
     }
@@ -2190,7 +2197,7 @@ impl fmt::Display for SequenceOptions {
                 )
             }
             SequenceOptions::MinValue(minvalue, no) => {
-                if let minvalue = minvalue.as_ref().unwrap() {
+                if let Some(minvalue) = minvalue.as_ref() {
                     write!(f, " MINVALUE {minvalue}", minvalue = minvalue.to_string())
                 } else if no.is_some() {
                     write!(f, " NO MINVALUE")
@@ -2199,7 +2206,7 @@ impl fmt::Display for SequenceOptions {
                 }
             }
             SequenceOptions::MaxValue(maxvalue, no) => {
-                if let maxvalue = maxvalue.as_ref().unwrap() {
+                if let Some(maxvalue) = maxvalue.as_ref() {
                     write!(f, " MAXVALUE {maxvalue}", maxvalue = maxvalue.to_string())
                 } else if no.is_some() {
                     write!(f, " NO MAXVALUE")

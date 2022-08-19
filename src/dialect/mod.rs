@@ -67,6 +67,10 @@ pub trait Dialect: Debug + Any {
     fn is_identifier_start(&self, ch: char) -> bool;
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
+    /// Does the dialect support `FILTER (WHERE expr)` for aggregate queries?
+    fn supports_filter_during_aggregation(&self) -> bool {
+        false
+    }
     /// Dialect-specific prefix parser override
     fn parse_prefix(&self, _parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
         // return None to fall back to the default behavior

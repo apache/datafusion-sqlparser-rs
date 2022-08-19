@@ -36,4 +36,8 @@ impl Dialect for HiveDialect {
             || ch == '{'
             || ch == '}'
     }
+
+    fn supports_filter_during_aggregation(&self) -> bool {
+        true
+    }
 }

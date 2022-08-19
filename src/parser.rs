@@ -3626,7 +3626,9 @@ impl<'a> Parser<'a> {
         // filtering during aggregation
         // FILTER (WHERE expr)
         // https://trino.io/docs/current/functions/aggregate.html#filtering-during-aggregation
-        let filter_during_agg = if self.parse_keyword(Keyword::FILTER) {
+        let filter_during_agg = if self.dialect.supports_filter_during_aggregation()
+            && self.parse_keyword(Keyword::FILTER)
+        {
             self.expect_token(&Token::LParen)?;
             self.expect_keyword(Keyword::WHERE)?;
             let expr = self.parse_expr()?;

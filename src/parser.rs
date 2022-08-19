@@ -3626,14 +3626,21 @@ impl<'a> Parser<'a> {
         // filtering during aggregation
         // FILTER (WHERE expr)
         // https://trino.io/docs/current/functions/aggregate.html#filtering-during-aggregation
-        let filter_during_agg = if self.dialect.supports_filter_during_aggregation()
-            && self.parse_keyword(Keyword::FILTER)
-        {
-            self.expect_token(&Token::LParen)?;
-            self.expect_keyword(Keyword::WHERE)?;
-            let expr = self.parse_expr()?;
-            self.expect_token(&Token::RParen)?;
-            Some(expr)
+        let filter_during_agg = if self.dialect.supports_filter_during_aggregation() {
+            match self.peek_token() {
+                Token::Word(word) if word.value.as_str().to_lowercase() == "filter" => {
+                    let i = self.index;
+                    if self.consume_token(&Token::LParen) && self.parse_keyword(Keyword::WHERE) {
+                        let expr = self.parse_expr()?;
+                        self.expect_token(&Token::RParen)?;
+                        Some(expr)
+                    } else {
+                        self.index = i;
+                        None
+                    }
+                }
+                _ => None,
+            }
         } else {
             None
         };
@@ -4526,12 +4533,31 @@ impl<'a> Parser<'a> {
     /// Parse a comma-delimited list of projections after SELECT
     pub fn parse_select_item(&mut self) -> Result<SelectItem, ParserError> {
         match self.parse_wildcard_expr()? {
-            WildcardExpr::Expr(expr) => self
-                .parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
-                .map(|alias| match alias {
-                    Some(alias) => SelectItem::ExprWithAlias { expr, alias },
-                    None => SelectItem::UnnamedExpr(expr),
-                }),
+            WildcardExpr::Expr(expr) => {
+                let x = self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)?;
+
+                if self.dialect.supports_filter_during_aggregation() {
+                    match x {
+                        Some(ident) if ident.value.to_lowercase() == "filter" => {
+                            let i = self.index;
+                            if self.consume_token(&Token::LParen)
+                                && self.parse_keyword(Keyword::WHERE)
+                            {
+                                Ok(SelectItem::UnnamedExpr(expr))
+                            } else {
+                                self.index = i;
+                                Ok(SelectItem::ExprWithAlias { expr, alias: ident })
+                            }
+                        }
+                        _ => Ok(SelectItem::UnnamedExpr(expr)),
+                    }
+                } else {
+                    match x {
+                        Some(alias) => Ok(SelectItem::ExprWithAlias { expr, alias }),
+                        None => Ok(SelectItem::UnnamedExpr(expr)),
+                    }
+                }
+            }
             WildcardExpr::QualifiedWildcard(prefix) => Ok(SelectItem::QualifiedWildcard(prefix)),
             WildcardExpr::Wildcard => Ok(SelectItem::Wildcard),
         }

@@ -282,6 +282,12 @@ fn filtering_during_aggregation() {
     println!("{}", hive().verified_stmt(rename));
 }
 
+#[test]
+fn filter_as_alias() {
+    let rename = "SELECT name filter FROM region";
+    println!("{}", hive().verified_stmt(rename));
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

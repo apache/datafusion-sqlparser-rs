@@ -20,7 +20,9 @@ use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::ast::{DataType, display_comma_separated, display_separated, Expr, Ident, ObjectName, SequenceOptions};
+use crate::ast::{
+    DataType, display_comma_separated, display_separated, Expr, Ident, ObjectName, SequenceOptions,
+};
 use crate::ast::value::escape_single_quote_string;
 use crate::tokenizer::Token;
 
@@ -436,7 +438,8 @@ impl fmt::Display for ColumnOption {
             CharacterSet(n) => write!(f, "CHARACTER SET {}", n),
             Comment(v) => write!(f, "COMMENT '{}'", escape_single_quote_string(v)),
             Generated {
-                always_or_by_default_or_always_as: always_or_by_default_or_stored, sequence_options,
+                always_or_by_default_or_always_as: always_or_by_default_or_stored,
+                sequence_options,
             } => {
                 match always_or_by_default_or_stored {
                     AlwaysOrByDefaultOrAlwaysAs::Always => {
@@ -447,7 +450,7 @@ impl fmt::Display for ColumnOption {
                     }
                     AlwaysOrByDefaultOrAlwaysAs::AlwaysAs => {}
                 }
-                if sequence_options.len() > 0 {
+                if !sequence_options.is_empty() {
                     write!(f, "(")?;
                     for sequence_option in sequence_options {
                         write!(f, "{}", sequence_option)?;

@@ -51,8 +51,8 @@ where
 }
 
 impl<'a, T> fmt::Display for DisplaySeparated<'a, T>
-    where
-        T: fmt::Display,
+where
+    T: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut delim = "";

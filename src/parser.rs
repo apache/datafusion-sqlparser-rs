@@ -2475,7 +2475,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_optional_column_option_generated(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+    fn parse_optional_column_option_generated(
+        &mut self,
+    ) -> Result<Option<ColumnOption>, ParserError> {
         if self.parse_keywords(&[Keyword::ALWAYS]) {
             if self.parse_keywords(&[Keyword::AS, Keyword::IDENTITY]) {
                 let mut sequence_options = vec![];
@@ -4904,7 +4906,7 @@ impl<'a> Parser<'a> {
         if self.parse_keywords(&[Keyword::AS]) {
             data_type = Some(self.parse_data_type()?)
         }
-        let mut sequence_options = self.parse_create_sequence_options()?;
+        let sequence_options = self.parse_create_sequence_options()?;
         // [ OWNED BY { table_name.column_name | NONE } ]
         let owned_by = if self.parse_keywords(&[Keyword::OWNED, Keyword::BY]) {
             if self.parse_keywords(&[Keyword::NONE]) {
@@ -4927,7 +4929,7 @@ impl<'a> Parser<'a> {
 
     fn parse_create_sequence_options(&mut self) -> Result<Vec<SequenceOptions>, ParserError> {
         let mut sequence_options = vec![];
-//[ INCREMENT [ BY ] increment ]
+        //[ INCREMENT [ BY ] increment ]
         if self.parse_keywords(&[Keyword::INCREMENT]) {
             if self.parse_keywords(&[Keyword::BY]) {
                 sequence_options.push(SequenceOptions::IncrementBy(
@@ -4987,7 +4989,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::CYCLE]) {
             sequence_options.push(SequenceOptions::Cycle(false));
         }
-        return Ok(sequence_options);
+        Ok(sequence_options)
     }
 }
 

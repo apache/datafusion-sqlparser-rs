@@ -151,6 +151,11 @@ impl<'a> Parser<'a> {
     /// Parse a single top-level statement (such as SELECT, INSERT, CREATE, etc.),
     /// stopping before the statement separator, if any.
     pub fn parse_statement(&mut self) -> Result<Statement, ParserError> {
+        // allow the dialect to override statement parsing
+        if let Some(statement) = self.dialect.parse_statement(self) {
+            return statement;
+        }
+
         match self.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::KILL => Ok(self.parse_kill()?),
@@ -194,13 +199,6 @@ impl<'a> Parser<'a> {
                 Keyword::EXECUTE => Ok(self.parse_execute()?),
                 Keyword::PREPARE => Ok(self.parse_prepare()?),
                 Keyword::MERGE => Ok(self.parse_merge()?),
-                Keyword::REPLACE if dialect_of!(self is SQLiteDialect ) => {
-                    self.prev_token();
-                    Ok(self.parse_insert()?)
-                }
-                Keyword::COMMENT if dialect_of!(self is PostgreSqlDialect) => {
-                    Ok(self.parse_comment()?)
-                }
                 _ => self.expected("an SQL statement", Token::Word(w)),
             },
             Token::LParen => {
@@ -380,6 +378,11 @@ impl<'a> Parser<'a> {
 
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
+        // allow the dialect to override prefix parsing
+        if let Some(prefix) = self.dialect.parse_prefix(self) {
+            return prefix;
+        }
+
         // PostgreSQL allows any string literal to be preceded by a type name, indicating that the
         // string literal represents a literal of that type. Some examples:
         //
@@ -880,29 +883,37 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// TRIM (WHERE 'text' FROM 'text')\
+    /// TRIM ([WHERE] ['text' FROM] 'text')\
     /// TRIM ('text')
     pub fn parse_trim_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let mut where_expr = None;
+        let mut trim_where = None;
         if let Token::Word(word) = self.peek_token() {
             if [Keyword::BOTH, Keyword::LEADING, Keyword::TRAILING]
                 .iter()
                 .any(|d| word.keyword == *d)
             {
-                let trim_where = self.parse_trim_where()?;
-                let sub_expr = self.parse_expr()?;
-                self.expect_keyword(Keyword::FROM)?;
-                where_expr = Some((trim_where, Box::new(sub_expr)));
+                trim_where = Some(self.parse_trim_where()?);
             }
         }
         let expr = self.parse_expr()?;
-        self.expect_token(&Token::RParen)?;
-
-        Ok(Expr::Trim {
-            expr: Box::new(expr),
-            trim_where: where_expr,
-        })
+        if self.parse_keyword(Keyword::FROM) {
+            let trim_what = Box::new(expr);
+            let expr = self.parse_expr()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Expr::Trim {
+                expr: Box::new(expr),
+                trim_where,
+                trim_what: Some(trim_what),
+            })
+        } else {
+            self.expect_token(&Token::RParen)?;
+            Ok(Expr::Trim {
+                expr: Box::new(expr),
+                trim_where,
+                trim_what: None,
+            })
+        }
     }
 
     pub fn parse_trim_where(&mut self) -> Result<TrimWhereField, ParserError> {
@@ -1155,6 +1166,11 @@ impl<'a> Parser<'a> {
 
     /// Parse an operator following an expression
     pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {
+        // allow the dialect to override infix parsing
+        if let Some(infix) = self.dialect.parse_infix(self, &expr, precedence) {
+            return infix;
+        }
+
         let tok = self.next_token();
 
         let regular_binary_operator = match &tok {
@@ -1246,8 +1262,16 @@ impl<'a> Parser<'a> {
                         Ok(Expr::IsNotNull(Box::new(expr)))
                     } else if self.parse_keywords(&[Keyword::TRUE]) {
                         Ok(Expr::IsTrue(Box::new(expr)))
+                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::TRUE]) {
+                        Ok(Expr::IsNotTrue(Box::new(expr)))
                     } else if self.parse_keywords(&[Keyword::FALSE]) {
                         Ok(Expr::IsFalse(Box::new(expr)))
+                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::FALSE]) {
+                        Ok(Expr::IsNotFalse(Box::new(expr)))
+                    } else if self.parse_keywords(&[Keyword::UNKNOWN]) {
+                        Ok(Expr::IsUnknown(Box::new(expr)))
+                    } else if self.parse_keywords(&[Keyword::NOT, Keyword::UNKNOWN]) {
+                        Ok(Expr::IsNotUnknown(Box::new(expr)))
                     } else if self.parse_keywords(&[Keyword::DISTINCT, Keyword::FROM]) {
                         let expr2 = self.parse_expr()?;
                         Ok(Expr::IsDistinctFrom(Box::new(expr), Box::new(expr2)))
@@ -1300,21 +1324,21 @@ impl<'a> Parser<'a> {
                         Ok(Expr::Like {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_value()?),
+                            pattern: Box::new(self.parse_subexpr(Self::LIKE_PREC)?),
                             escape_char: self.parse_escape_char()?,
                         })
                     } else if self.parse_keyword(Keyword::ILIKE) {
                         Ok(Expr::ILike {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_value()?),
+                            pattern: Box::new(self.parse_subexpr(Self::LIKE_PREC)?),
                             escape_char: self.parse_escape_char()?,
                         })
                     } else if self.parse_keywords(&[Keyword::SIMILAR, Keyword::TO]) {
                         Ok(Expr::SimilarTo {
                             negated,
                             expr: Box::new(expr),
-                            pattern: Box::new(self.parse_value()?),
+                            pattern: Box::new(self.parse_subexpr(Self::LIKE_PREC)?),
                             escape_char: self.parse_escape_char()?,
                         })
                     } else {
@@ -1461,13 +1485,24 @@ impl<'a> Parser<'a> {
         })
     }
 
-    const UNARY_NOT_PREC: u8 = 15;
-    const BETWEEN_PREC: u8 = 20;
+    // use https://www.postgresql.org/docs/7.0/operators.htm#AEN2026 as a reference
     const PLUS_MINUS_PREC: u8 = 30;
+    const XOR_PREC: u8 = 24;
     const TIME_ZONE_PREC: u8 = 20;
+    const BETWEEN_PREC: u8 = 20;
+    const LIKE_PREC: u8 = 19;
+    const IS_PREC: u8 = 17;
+    const UNARY_NOT_PREC: u8 = 15;
+    const AND_PREC: u8 = 10;
+    const OR_PREC: u8 = 5;
 
     /// Get the precedence of the next token
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
+        // allow the dialect to override precedence logic
+        if let Some(precedence) = self.dialect.get_next_precedence(self) {
+            return precedence;
+        }
+
         let token = self.peek_token();
         debug!("get_next_precedence() {:?}", token);
         let token_0 = self.peek_nth_token(0);
@@ -1475,9 +1510,9 @@ impl<'a> Parser<'a> {
         let token_2 = self.peek_nth_token(2);
         debug!("0: {token_0} 1: {token_1} 2: {token_2}");
         match token {
-            Token::Word(w) if w.keyword == Keyword::OR => Ok(5),
-            Token::Word(w) if w.keyword == Keyword::AND => Ok(10),
-            Token::Word(w) if w.keyword == Keyword::XOR => Ok(24),
+            Token::Word(w) if w.keyword == Keyword::OR => Ok(Self::OR_PREC),
+            Token::Word(w) if w.keyword == Keyword::AND => Ok(Self::AND_PREC),
+            Token::Word(w) if w.keyword == Keyword::XOR => Ok(Self::XOR_PREC),
 
             Token::Word(w) if w.keyword == Keyword::AT => {
                 match (self.peek_nth_token(1), self.peek_nth_token(2)) {
@@ -1498,18 +1533,18 @@ impl<'a> Parser<'a> {
                 // precedence.
                 Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
                 Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
-                Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
-                Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::BETWEEN_PREC),
-                Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::BETWEEN_PREC),
+                Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::LIKE_PREC),
+                Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
+                Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
                 _ => Ok(0),
             },
-            Token::Word(w) if w.keyword == Keyword::IS => Ok(17),
+            Token::Word(w) if w.keyword == Keyword::IS => Ok(Self::IS_PREC),
             Token::Word(w) if w.keyword == Keyword::IN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::BETWEEN_PREC),
+            Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::LIKE_PREC),
+            Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
+            Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(Self::BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::BETWEEN_PREC),
             Token::Eq
             | Token::Lt
             | Token::LtEq
@@ -1595,7 +1630,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Report unexpected token
-    fn expected<T>(&self, expected: &str, found: Token) -> Result<T, ParserError> {
+    pub fn expected<T>(&self, expected: &str, found: Token) -> Result<T, ParserError> {
         parser_err!(format!("Expected {}, found: {}", expected, found))
     }
 
@@ -3768,22 +3803,12 @@ impl<'a> Parser<'a> {
         } else if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
             let mut values = vec![];
             loop {
-                let token = self.peek_token();
-                let value = match (self.parse_value(), token) {
-                    (Ok(value), _) => SetVariableValue::Literal(value),
-                    (Err(_), Token::Word(ident)) => SetVariableValue::Ident(ident.to_ident()),
-                    (Err(_), Token::Minus) => {
-                        let next_token = self.next_token();
-                        match next_token {
-                            Token::Word(ident) => SetVariableValue::Ident(Ident {
-                                quote_style: ident.quote_style,
-                                value: format!("-{}", ident.value),
-                            }),
-                            _ => self.expected("word", next_token)?,
-                        }
-                    }
-                    (Err(_), unexpected) => self.expected("variable value", unexpected)?,
+                let value = if let Ok(expr) = self.parse_expr() {
+                    expr
+                } else {
+                    self.expected("variable value", self.peek_token())?
                 };
+
                 values.push(value);
                 if self.consume_token(&Token::Comma) {
                     continue;
@@ -4759,35 +4784,6 @@ impl<'a> Parser<'a> {
             name,
             data_types,
             statement,
-        })
-    }
-
-    pub fn parse_comment(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::ON)?;
-        let token = self.next_token();
-
-        let (object_type, object_name) = match token {
-            Token::Word(w) if w.keyword == Keyword::COLUMN => {
-                let object_name = self.parse_object_name()?;
-                (CommentObject::Column, object_name)
-            }
-            Token::Word(w) if w.keyword == Keyword::TABLE => {
-                let object_name = self.parse_object_name()?;
-                (CommentObject::Table, object_name)
-            }
-            _ => self.expected("comment object_type", token)?,
-        };
-
-        self.expect_keyword(Keyword::IS)?;
-        let comment = if self.parse_keyword(Keyword::NULL) {
-            None
-        } else {
-            Some(self.parse_literal_string()?)
-        };
-        Ok(Statement::Comment {
-            object_type,
-            object_name,
-            comment,
         })
     }
 

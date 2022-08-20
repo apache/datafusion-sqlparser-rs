@@ -10,7 +10,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::ast::{CommentObject, Statement};
 use crate::dialect::Dialect;
+use crate::keywords::Keyword;
+use crate::parser::{Parser, ParserError};
+use crate::tokenizer::Token;
 
 #[derive(Debug)]
 pub struct PostgreSqlDialect {}
@@ -30,4 +34,41 @@ impl Dialect for PostgreSqlDialect {
             || ch == '$'
             || ch == '_'
     }
+
+    fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+        if parser.parse_keyword(Keyword::COMMENT) {
+            Some(parse_comment(parser))
+        } else {
+            None
+        }
+    }
+}
+
+pub fn parse_comment(parser: &mut Parser) -> Result<Statement, ParserError> {
+    parser.expect_keyword(Keyword::ON)?;
+    let token = parser.next_token();
+
+    let (object_type, object_name) = match token {
+        Token::Word(w) if w.keyword == Keyword::COLUMN => {
+            let object_name = parser.parse_object_name()?;
+            (CommentObject::Column, object_name)
+        }
+        Token::Word(w) if w.keyword == Keyword::TABLE => {
+            let object_name = parser.parse_object_name()?;
+            (CommentObject::Table, object_name)
+        }
+        _ => parser.expected("comment object_type", token)?,
+    };
+
+    parser.expect_keyword(Keyword::IS)?;
+    let comment = if parser.parse_keyword(Keyword::NULL) {
+        None
+    } else {
+        Some(parser.parse_literal_string()?)
+    };
+    Ok(Statement::Comment {
+        object_type,
+        object_name,
+        comment,
+    })
 }

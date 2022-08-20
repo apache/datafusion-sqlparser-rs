@@ -228,12 +228,20 @@ pub enum Expr {
     CompositeAccess { expr: Box<Expr>, key: Ident },
     /// `IS FALSE` operator
     IsFalse(Box<Expr>),
+    /// `IS NOT FALSE` operator
+    IsNotFalse(Box<Expr>),
     /// `IS TRUE` operator
     IsTrue(Box<Expr>),
+    /// `IS NOT TRUE` operator
+    IsNotTrue(Box<Expr>),
     /// `IS NULL` operator
     IsNull(Box<Expr>),
     /// `IS NOT NULL` operator
     IsNotNull(Box<Expr>),
+    /// `IS UNKNOWN` operator
+    IsUnknown(Box<Expr>),
+    /// `IS NOT UNKNOWN` operator
+    IsNotUnknown(Box<Expr>),
     /// `IS DISTINCT FROM` operator
     IsDistinctFrom(Box<Expr>, Box<Expr>),
     /// `IS NOT DISTINCT FROM` operator
@@ -273,21 +281,21 @@ pub enum Expr {
     Like {
         negated: bool,
         expr: Box<Expr>,
-        pattern: Box<Value>,
+        pattern: Box<Expr>,
         escape_char: Option<char>,
     },
     /// ILIKE (case-insensitive LIKE)
     ILike {
         negated: bool,
         expr: Box<Expr>,
-        pattern: Box<Value>,
+        pattern: Box<Expr>,
         escape_char: Option<char>,
     },
     /// SIMILAR TO regex
     SimilarTo {
         negated: bool,
         expr: Box<Expr>,
-        pattern: Box<Value>,
+        pattern: Box<Expr>,
         escape_char: Option<char>,
     },
     /// Any operation e.g. `1 ANY (1)` or `foo > ANY(bar)`, It will be wrapped in the right side of BinaryExpr
@@ -332,13 +340,14 @@ pub enum Expr {
         substring_from: Option<Box<Expr>>,
         substring_for: Option<Box<Expr>>,
     },
-    /// TRIM([BOTH | LEADING | TRAILING] <expr> [FROM <expr>])\
+    /// TRIM([BOTH | LEADING | TRAILING] [<expr> FROM] <expr>)\
     /// Or\
     /// TRIM(<expr>)
     Trim {
         expr: Box<Expr>,
-        // ([BOTH | LEADING | TRAILING], <expr>)
-        trim_where: Option<(TrimWhereField, Box<Expr>)>,
+        // ([BOTH | LEADING | TRAILING]
+        trim_where: Option<TrimWhereField>,
+        trim_what: Option<Box<Expr>>,
     },
     /// `expr COLLATE collation`
     Collate {
@@ -412,9 +421,13 @@ impl fmt::Display for Expr {
             }
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
             Expr::IsTrue(ast) => write!(f, "{} IS TRUE", ast),
+            Expr::IsNotTrue(ast) => write!(f, "{} IS NOT TRUE", ast),
             Expr::IsFalse(ast) => write!(f, "{} IS FALSE", ast),
+            Expr::IsNotFalse(ast) => write!(f, "{} IS NOT FALSE", ast),
             Expr::IsNull(ast) => write!(f, "{} IS NULL", ast),
             Expr::IsNotNull(ast) => write!(f, "{} IS NOT NULL", ast),
+            Expr::IsUnknown(ast) => write!(f, "{} IS UNKNOWN", ast),
+            Expr::IsNotUnknown(ast) => write!(f, "{} IS NOT UNKNOWN", ast),
             Expr::InList {
                 expr,
                 list,
@@ -533,8 +546,10 @@ impl fmt::Display for Expr {
             Expr::UnaryOp { op, expr } => {
                 if op == &UnaryOperator::PGPostfixFactorial {
                     write!(f, "{}{}", expr, op)
-                } else {
+                } else if op == &UnaryOperator::Not {
                     write!(f, "{} {}", op, expr)
+                } else {
+                    write!(f, "{}{}", op, expr)
                 }
             }
             Expr::Cast { expr, data_type } => write!(f, "CAST({} AS {})", expr, data_type),
@@ -633,10 +648,17 @@ impl fmt::Display for Expr {
             }
             Expr::IsDistinctFrom(a, b) => write!(f, "{} IS DISTINCT FROM {}", a, b),
             Expr::IsNotDistinctFrom(a, b) => write!(f, "{} IS NOT DISTINCT FROM {}", a, b),
-            Expr::Trim { expr, trim_where } => {
+            Expr::Trim {
+                expr,
+                trim_where,
+                trim_what,
+            } => {
                 write!(f, "TRIM(")?;
-                if let Some((ident, trim_char)) = trim_where {
-                    write!(f, "{} {} FROM {}", ident, trim_char, expr)?;
+                if let Some(ident) = trim_where {
+                    write!(f, "{} ", ident)?;
+                }
+                if let Some(trim_char) = trim_what {
+                    write!(f, "{} FROM {}", trim_char, expr)?;
                 } else {
                     write!(f, "{}", expr)?;
                 }
@@ -1083,7 +1105,7 @@ pub enum Statement {
         local: bool,
         hivevar: bool,
         variable: ObjectName,
-        value: Vec<SetVariableValue>,
+        value: Vec<Expr>,
     },
     /// SET NAMES 'charset_name' [COLLATE 'collation_name']
     ///
@@ -2835,23 +2857,6 @@ impl fmt::Display for ShowStatementFilter {
             Like(pattern) => write!(f, "LIKE '{}'", value::escape_single_quote_string(pattern)),
             ILike(pattern) => write!(f, "ILIKE {}", value::escape_single_quote_string(pattern)),
             Where(expr) => write!(f, "WHERE {}", expr),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum SetVariableValue {
-    Ident(Ident),
-    Literal(Value),
-}
-
-impl fmt::Display for SetVariableValue {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use SetVariableValue::*;
-        match self {
-            Ident(ident) => write!(f, "{}", ident),
-            Literal(literal) => write!(f, "{}", literal),
         }
     }
 }

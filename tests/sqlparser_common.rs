@@ -580,7 +580,7 @@ fn parse_select_count_wildcard() {
 
 #[test]
 fn parse_select_count_distinct() {
-    let sql = "SELECT COUNT(DISTINCT + x) FROM customer";
+    let sql = "SELECT COUNT(DISTINCT +x) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
@@ -597,8 +597,8 @@ fn parse_select_count_distinct() {
     );
 
     one_statement_parses_to(
-        "SELECT COUNT(ALL + x) FROM customer",
-        "SELECT COUNT(+ x) FROM customer",
+        "SELECT COUNT(ALL +x) FROM customer",
+        "SELECT COUNT(+x) FROM customer",
     );
 
     let sql = "SELECT COUNT(ALL DISTINCT + x) FROM customer";
@@ -754,7 +754,7 @@ fn parse_compound_expr_2() {
 #[test]
 fn parse_unary_math() {
     use self::Expr::*;
-    let sql = "- a + - b";
+    let sql = "-a + -b";
     assert_eq!(
         BinaryOp {
             left: Box::new(UnaryOp {
@@ -862,7 +862,7 @@ fn parse_not_precedence() {
             expr: Box::new(Expr::Like {
                 expr: Box::new(Expr::Value(Value::SingleQuotedString("a".into()))),
                 negated: true,
-                pattern: Box::new(Value::SingleQuotedString("b".into())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("b".into()))),
                 escape_char: None
             }),
         },
@@ -895,7 +895,7 @@ fn parse_like() {
             Expr::Like {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None
             },
             select.selection.unwrap()
@@ -911,7 +911,7 @@ fn parse_like() {
             Expr::Like {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\')
             },
             select.selection.unwrap()
@@ -928,7 +928,7 @@ fn parse_like() {
             Expr::IsNull(Box::new(Expr::Like {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None
             })),
             select.selection.unwrap()
@@ -936,6 +936,45 @@ fn parse_like() {
     }
     chk(false);
     chk(true);
+}
+
+#[test]
+fn parse_null_like() {
+    let sql = "SELECT \
+            column1 LIKE NULL AS col_null, \
+            NULL LIKE column1 AS null_col \
+        FROM customers";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        SelectItem::ExprWithAlias {
+            expr: Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("column1"))),
+                negated: false,
+                pattern: Box::new(Expr::Value(Value::Null)),
+                escape_char: None
+            },
+            alias: Ident {
+                value: "col_null".to_owned(),
+                quote_style: None
+            }
+        },
+        select.projection[0]
+    );
+    assert_eq!(
+        SelectItem::ExprWithAlias {
+            expr: Expr::Like {
+                expr: Box::new(Expr::Value(Value::Null)),
+                negated: false,
+                pattern: Box::new(Expr::Identifier(Ident::new("column1"))),
+                escape_char: None
+            },
+            alias: Ident {
+                value: "null_col".to_owned(),
+                quote_style: None
+            }
+        },
+        select.projection[1]
+    );
 }
 
 #[test]
@@ -950,7 +989,7 @@ fn parse_ilike() {
             Expr::ILike {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None
             },
             select.selection.unwrap()
@@ -966,7 +1005,7 @@ fn parse_ilike() {
             Expr::ILike {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('^')
             },
             select.selection.unwrap()
@@ -983,7 +1022,7 @@ fn parse_ilike() {
             Expr::IsNull(Box::new(Expr::ILike {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None
             })),
             select.selection.unwrap()
@@ -1005,7 +1044,7 @@ fn parse_similar_to() {
             Expr::SimilarTo {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None
             },
             select.selection.unwrap()
@@ -1021,7 +1060,7 @@ fn parse_similar_to() {
             Expr::SimilarTo {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\')
             },
             select.selection.unwrap()
@@ -1037,7 +1076,7 @@ fn parse_similar_to() {
             Expr::IsNull(Box::new(Expr::SimilarTo {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\')
             })),
             select.selection.unwrap()
@@ -3928,7 +3967,15 @@ fn parse_trim() {
         "SELECT TRIM(TRAILING 'xyz' FROM 'xyzfooxyz')",
     );
 
+    one_statement_parses_to(
+        "SELECT TRIM('xyz' FROM 'xyzfooxyz')",
+        "SELECT TRIM('xyz' FROM 'xyzfooxyz')",
+    );
     one_statement_parses_to("SELECT TRIM('   foo   ')", "SELECT TRIM('   foo   ')");
+    one_statement_parses_to(
+        "SELECT TRIM(LEADING '   foo   ')",
+        "SELECT TRIM(LEADING '   foo   ')",
+    );
 
     assert_eq!(
         ParserError::ParserError("Expected ), found: 'xyz'".to_owned()),

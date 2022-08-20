@@ -2027,6 +2027,8 @@ impl<'a> Parser<'a> {
             ObjectType::Index
         } else if self.parse_keyword(Keyword::SCHEMA) {
             ObjectType::Schema
+        } else if self.parse_keyword(Keyword::SEQUENCE) {
+            ObjectType::Sequence
         } else {
             return self.expected("TABLE, VIEW, INDEX or SCHEMA after DROP", self.peek_token());
         };
@@ -2046,6 +2048,7 @@ impl<'a> Parser<'a> {
             names,
             cascade,
             purge,
+            restrict
         })
     }
 
@@ -4884,12 +4887,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    ///     CREATE [ TEMPORARY | TEMP ] SEQUENCE    [ IF NOT EXISTS ] name
-    ///     [ AS data_type ]
-    ///     [ INCREMENT [ BY ] increment ]
-    ///     [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
-    ///     [ START [ WITH ] start ] [ CACHE cache ] [ [ NO ] CYCLE ]
-    ///     [ OWNED BY { table_name.column_name | NONE } ]
     /// https://www.postgresql.org/docs/current/sql-createsequence.html
     /// Will not add to vec when there are no value since all blocks are optional
     pub fn parse_create_sequence(&mut self, temporary: bool) -> Result<Statement, ParserError> {

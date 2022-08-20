@@ -18,21 +18,21 @@
 //! sqlparser regardless of the chosen dialect (i.e. it doesn't conflict with
 //! dialect-specific parsing rules).
 
-#[macro_use]
-mod test_utils;
-
 use matches::assert_matches;
+
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, GenericDialect, HiveDialect, MsSqlDialect,
-    PostgreSqlDialect, SQLiteDialect, SnowflakeDialect,
+    PostgreSqlDialect, SnowflakeDialect, SQLiteDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
-
 use test_utils::{
     all_dialects, expr_from_projection, join, number, only, table, table_alias, TestedDialects,
 };
+
+#[macro_use]
+mod test_utils;
 
 #[test]
 fn parse_insert_values() {
@@ -4214,7 +4214,7 @@ fn parse_drop_table() {
             if_exists,
             names,
             cascade,
-            purge: _,
+            purge: _, ..
         } => {
             assert!(!if_exists);
             assert_eq!(ObjectType::Table, object_type);
@@ -4234,7 +4234,7 @@ fn parse_drop_table() {
             if_exists,
             names,
             cascade,
-            purge: _,
+            purge: _, ..
         } => {
             assert!(if_exists);
             assert_eq!(ObjectType::Table, object_type);

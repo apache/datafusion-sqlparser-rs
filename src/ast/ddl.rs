@@ -379,11 +379,7 @@ pub enum ColumnOption {
     DialectSpecific(Vec<Token>),
     CharacterSet(ObjectName),
     Comment(String),
-    ///     ALWAYS AS ( generation_expr ) STORED |
-    /// GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY [ ( sequence_options ) ]
-    /// <identity column specification> ::=
-    ///   GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY
-    ///       [ <left paren>  <common sequence generator options>  <right paren>  ]
+    /// https://www.postgresql.org/docs/current/sql-createtable.html
     Generated {
         always_or_by_default_or_always_as: AlwaysOrByDefaultOrAlwaysAs,
         sequence_options: Vec<SequenceOptions>,

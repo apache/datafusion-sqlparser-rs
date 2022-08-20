@@ -1046,6 +1046,8 @@ pub enum Statement {
         /// Hive allows you specify whether the table's stored data will be
         /// deleted along with the dropped table
         purge: bool,
+        /// DROP SEQUENCE [ IF EXISTS ] name [, ...] [ CASCADE | RESTRICT ]
+        restrict: bool,
     },
     /// DECLARE - Declaring Cursor Variables
     ///
@@ -1886,15 +1888,16 @@ impl fmt::Display for Statement {
                 if_exists,
                 names,
                 cascade,
-                purge,
+                purge, restrict,
             } => write!(
                 f,
-                "DROP {}{} {}{}{}",
+                "DROP {}{} {}{}{}{}",
                 object_type,
                 if *if_exists { " IF EXISTS" } else { "" },
                 display_comma_separated(names),
                 if *cascade { " CASCADE" } else { "" },
-                if *purge { " PURGE" } else { "" }
+                if *purge { " PURGE" } else { "" },
+                if *restrict { " RESTRICT" } else { "" }
             ),
             Statement::Discard { object_type } => {
                 write!(f, "DISCARD {object_type}", object_type = object_type)?;
@@ -2212,12 +2215,6 @@ pub enum SequenceOptions {
     Cycle(bool),
 }
 
-///     CREATE [ TEMPORARY | TEMP ] SEQUENCE    [ IF NOT EXISTS ] name
-///     [ AS data_type ]
-///     [ INCREMENT [ BY ] increment ]
-///     [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
-///     [ START [ WITH ] start ] [ CACHE cache ] [ [ NO ] CYCLE ]
-///     [ OWNED BY { table_name.column_name | NONE } ]
 /// https://www.postgresql.org/docs/current/sql-createsequence.html
 /// Will not add to vec when there are no value since all blocks are optional
 impl fmt::Display for SequenceOptions {

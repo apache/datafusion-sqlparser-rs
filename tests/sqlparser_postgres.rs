@@ -89,6 +89,16 @@ fn parse_create_sequence() {
     );
 }
 
+#[test]
+fn parse_drop_sequence() {
+    // SimpleLogger::new().init().unwrap();
+    let sql1 = "DROP SEQUENCE IF EXISTS  name0 CASCADE";
+    pg().one_statement_parses_to(sql1, "DROP SEQUENCE IF EXISTS name0 CASCADE");
+    let sql2 = "DROP SEQUENCE IF EXISTS  name1 RESTRICT";
+    pg().one_statement_parses_to(sql2, "DROP SEQUENCE IF EXISTS name1 RESTRICT");
+    let sql3 = "DROP SEQUENCE  name2 CASCADE";
+    pg().one_statement_parses_to(sql3, "DROP SEQUENCE name2 CASCADE");
+}
 
 #[test]
 fn parse_create_table_with_defaults() {

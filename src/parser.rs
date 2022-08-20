@@ -2469,22 +2469,38 @@ impl<'a> Parser<'a> {
                 Token::make_keyword("ON UPDATE"),
             ])))
         } else if self.parse_keywords(&[Keyword::GENERATED]) {
-            if self.parse_keywords(&[Keyword::ALWAYS]) {
-                if self.parse_keywords(&[Keyword::AS, Keyword::IDENTITY]) {
-                    Ok(Some(ColumnOption::Generated {
-                        always_or_by_default_or_always_as: AlwaysOrByDefaultOrAlwaysAs::Always,
-                    }))
-                } else {
-                    Ok(None)
+            self.parse_optional_column_option_generated()
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn parse_optional_column_option_generated(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+        if self.parse_keywords(&[Keyword::ALWAYS]) {
+            if self.parse_keywords(&[Keyword::AS, Keyword::IDENTITY]) {
+                let mut sequence_options = vec![];
+                if self.expect_token(&Token::LParen).is_ok() {
+                    sequence_options = self.parse_create_sequence_options()?;
+                    self.expect_token(&Token::RParen)?;
                 }
-            } else if self.parse_keywords(&[Keyword::BY, Keyword::DEFAULT]) {
-                if self.parse_keywords(&[Keyword::AS, Keyword::IDENTITY]) {
-                    Ok(Some(ColumnOption::Generated {
-                        always_or_by_default_or_always_as: AlwaysOrByDefaultOrAlwaysAs::ByDefault,
-                    }))
-                } else {
-                    Ok(None)
+                Ok(Some(ColumnOption::Generated {
+                    always_or_by_default_or_always_as: AlwaysOrByDefaultOrAlwaysAs::Always,
+                    sequence_options,
+                }))
+            } else {
+                Ok(None)
+            }
+        } else if self.parse_keywords(&[Keyword::BY, Keyword::DEFAULT]) {
+            if self.parse_keywords(&[Keyword::AS, Keyword::IDENTITY]) {
+                let mut sequence_options = vec![];
+                if self.expect_token(&Token::LParen).is_ok() {
+                    sequence_options = self.parse_create_sequence_options()?;
+                    self.expect_token(&Token::RParen)?;
                 }
+                Ok(Some(ColumnOption::Generated {
+                    always_or_by_default_or_always_as: AlwaysOrByDefaultOrAlwaysAs::ByDefault,
+                    sequence_options,
+                }))
             } else {
                 Ok(None)
             }
@@ -4888,9 +4904,30 @@ impl<'a> Parser<'a> {
         if self.parse_keywords(&[Keyword::AS]) {
             data_type = Some(self.parse_data_type()?)
         }
-        let mut sequence_options = vec![];
+        let mut sequence_options = self.parse_create_sequence_options()?;
+        // [ OWNED BY { table_name.column_name | NONE } ]
+        let owned_by = if self.parse_keywords(&[Keyword::OWNED, Keyword::BY]) {
+            if self.parse_keywords(&[Keyword::NONE]) {
+                Some(ObjectName(vec![Ident::new("NONE")]))
+            } else {
+                Some(self.parse_object_name()?)
+            }
+        } else {
+            None
+        };
+        Ok(Statement::CreateSequence {
+            temporary,
+            if_not_exists,
+            name,
+            data_type,
+            sequence_options,
+            owned_by,
+        })
+    }
 
-        //[ INCREMENT [ BY ] increment ]
+    fn parse_create_sequence_options(&mut self) -> Result<Vec<SequenceOptions>, ParserError> {
+        let mut sequence_options = vec![];
+//[ INCREMENT [ BY ] increment ]
         if self.parse_keywords(&[Keyword::INCREMENT]) {
             if self.parse_keywords(&[Keyword::BY]) {
                 sequence_options.push(SequenceOptions::IncrementBy(
@@ -4945,29 +4982,12 @@ impl<'a> Parser<'a> {
         // [ [ NO ] CYCLE ]
         if self.parse_keywords(&[Keyword::NO]) {
             if self.parse_keywords(&[Keyword::CYCLE]) {
-                sequence_options.push(SequenceOptions::Cycle(false));
+                sequence_options.push(SequenceOptions::Cycle(true));
             }
         } else if self.parse_keywords(&[Keyword::CYCLE]) {
-            sequence_options.push(SequenceOptions::Cycle(true));
+            sequence_options.push(SequenceOptions::Cycle(false));
         }
-        // [ OWNED BY { table_name.column_name | NONE } ]
-        let owned_by = if self.parse_keywords(&[Keyword::OWNED, Keyword::BY]) {
-            if self.parse_keywords(&[Keyword::NONE]) {
-                Some(ObjectName(vec![Ident::new("NONE")]))
-            } else {
-                Some(self.parse_object_name()?)
-            }
-        } else {
-            None
-        };
-        Ok(Statement::CreateSequence {
-            temporary,
-            if_not_exists,
-            name,
-            data_type,
-            sequence_options,
-            owned_by,
-        })
+        return Ok(sequence_options);
     }
 }
 

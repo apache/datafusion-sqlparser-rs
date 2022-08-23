@@ -2865,10 +2865,11 @@ fn parse_literal_timestamp_without_time_zone() {
         expr_from_projection(only(&select.projection)),
     );
 
-    one_statement_parses_to("SELECT TIMESTAMP WITHOUT TIME ZONE '1999-01-01 01:23:34'", sql);
+    one_statement_parses_to(
+        "SELECT TIMESTAMP WITHOUT TIME ZONE '1999-01-01 01:23:34'",
+        sql,
+    );
 }
-
-
 
 #[test]
 fn parse_literal_timestamp_with_time_zone() {
@@ -2882,9 +2883,11 @@ fn parse_literal_timestamp_with_time_zone() {
         expr_from_projection(only(&select.projection)),
     );
 
-    one_statement_parses_to("SELECT TIMESTAMP WITH TIME ZONE '1999-01-01 01:23:34Z'", sql);
+    one_statement_parses_to(
+        "SELECT TIMESTAMP WITH TIME ZONE '1999-01-01 01:23:34Z'",
+        sql,
+    );
 }
-
 
 #[test]
 fn parse_literal_interval() {

@@ -2854,7 +2854,7 @@ fn parse_literal_datetime() {
 }
 
 #[test]
-fn parse_literal_timestamp() {
+fn parse_literal_timestamp_without_time_zone() {
     let sql = "SELECT TIMESTAMP '1999-01-01 01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
@@ -2864,7 +2864,27 @@ fn parse_literal_timestamp() {
         },
         expr_from_projection(only(&select.projection)),
     );
+
+    one_statement_parses_to("SELECT TIMESTAMP WITHOUT TIME ZONE '1999-01-01 01:23:34'", sql);
 }
+
+
+
+#[test]
+fn parse_literal_timestamp_with_time_zone() {
+    let sql = "SELECT TIMESTAMPTZ '1999-01-01 01:23:34Z'";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::TypedString {
+            data_type: DataType::TimestampTz,
+            value: "1999-01-01 01:23:34Z".into()
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
+    one_statement_parses_to("SELECT TIMESTAMP WITH TIME ZONE '1999-01-01 01:23:34Z'", sql);
+}
+
 
 #[test]
 fn parse_literal_interval() {

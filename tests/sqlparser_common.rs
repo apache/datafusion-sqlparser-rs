@@ -5298,6 +5298,38 @@ fn parse_time_functions() {
 
     // Validating Parenthesis
     one_statement_parses_to("SELECT CURRENT_DATE", sql);
+
+    let sql = "SELECT LOCALTIME()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("LOCALTIME")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+            special: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT LOCALTIME", sql);
+
+    let sql = "SELECT LOCALTIMESTAMP()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("LOCALTIMESTAMP")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+            special: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT LOCALTIMESTAMP", sql);
 }
 
 #[test]

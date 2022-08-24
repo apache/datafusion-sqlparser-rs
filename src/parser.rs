@@ -438,7 +438,11 @@ impl<'a> Parser<'a> {
                         special: true,
                     }))
                 }
-                Keyword::CURRENT_TIMESTAMP | Keyword::CURRENT_TIME | Keyword::CURRENT_DATE => {
+                Keyword::CURRENT_TIMESTAMP
+                | Keyword::CURRENT_TIME
+                | Keyword::CURRENT_DATE
+                | Keyword::LOCALTIME
+                | Keyword::LOCALTIMESTAMP => {
                     self.parse_time_functions(ObjectName(vec![w.to_ident()]))
                 }
                 Keyword::CASE => self.parse_case_expr(),

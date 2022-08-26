@@ -3974,6 +3974,38 @@ fn parse_substring() {
 }
 
 #[test]
+fn parse_overlay() {
+    one_statement_parses_to(
+        "SELECT OVERLAY('abccccde' PLACING 'abc' FROM 3)",
+        "SELECT OVERLAY('abccccde' PLACING 'abc' FROM 3)",
+    );
+    one_statement_parses_to(
+        "SELECT OVERLAY('abccccde' PLACING 'abc' FROM 3 FOR 12)",
+        "SELECT OVERLAY('abccccde' PLACING 'abc' FROM 3 FOR 12)",
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected PLACING, found: FROM".to_owned()),
+        parse_sql_statements("SELECT OVERLAY('abccccde' FROM 3)").unwrap_err(),
+    );
+
+    let sql = "SELECT OVERLAY('abcdef' PLACING name FROM 3 FOR id + 1) FROM CUSTOMERS";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Overlay {
+            expr: Box::new(Expr::Value(Value::SingleQuotedString("abcdef".to_string()))),
+            overlay_what: Box::new(Expr::Identifier(Ident::new("name"))),
+            overlay_from: Box::new(Expr::Value(number("3"))),
+            overlay_for: Some(Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("id"))),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Value(number("1"))),
+            }))
+        },
+        expr_from_projection(only(&select.projection))
+    );
+}
+
+#[test]
 fn parse_trim() {
     one_statement_parses_to(
         "SELECT TRIM(BOTH 'xyz' FROM 'xyzfooxyz')",
@@ -5357,21 +5389,50 @@ fn parse_position_negative() {
 fn parse_is_boolean() {
     use self::Expr::*;
 
-    let sql = "a IS FALSE";
-    assert_eq!(
-        IsFalse(Box::new(Identifier(Ident::new("a")))),
-        verified_expr(sql)
-    );
-
     let sql = "a IS TRUE";
     assert_eq!(
         IsTrue(Box::new(Identifier(Ident::new("a")))),
         verified_expr(sql)
     );
 
+    let sql = "a IS NOT TRUE";
+    assert_eq!(
+        IsNotTrue(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+
+    let sql = "a IS FALSE";
+    assert_eq!(
+        IsFalse(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+
+    let sql = "a IS NOT FALSE";
+    assert_eq!(
+        IsNotFalse(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+
+    let sql = "a IS UNKNOWN";
+    assert_eq!(
+        IsUnknown(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+
+    let sql = "a IS NOT UNKNOWN";
+    assert_eq!(
+        IsNotUnknown(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+
     verified_stmt("SELECT f FROM foo WHERE field IS TRUE");
+    verified_stmt("SELECT f FROM foo WHERE field IS NOT TRUE");
 
     verified_stmt("SELECT f FROM foo WHERE field IS FALSE");
+    verified_stmt("SELECT f FROM foo WHERE field IS NOT FALSE");
+
+    verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
+    verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
 
     let sql = "SELECT f from foo where field is 0";
     let res = parse_sql_statements(sql);

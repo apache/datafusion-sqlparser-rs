@@ -505,6 +505,7 @@ define_keywords!(
     TIES,
     TIME,
     TIMESTAMP,
+    TIMESTAMPTZ,
     TIMEZONE,
     TIMEZONE_HOUR,
     TIMEZONE_MINUTE,

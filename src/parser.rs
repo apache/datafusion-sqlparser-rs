@@ -449,6 +449,7 @@ impl<'a> Parser<'a> {
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::POSITION => self.parse_position_expr(),
                 Keyword::SUBSTRING => self.parse_substring_expr(),
+                Keyword::OVERLAY => self.parse_overlay_expr(),
                 Keyword::TRIM => self.parse_trim_expr(),
                 Keyword::INTERVAL => self.parse_literal_interval(),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
@@ -881,6 +882,28 @@ impl<'a> Parser<'a> {
             expr: Box::new(expr),
             substring_from: from_expr.map(Box::new),
             substring_for: to_expr.map(Box::new),
+        })
+    }
+
+    pub fn parse_overlay_expr(&mut self) -> Result<Expr, ParserError> {
+        // PARSE OVERLAY (EXPR PLACING EXPR FROM 1 [FOR 3])
+        self.expect_token(&Token::LParen)?;
+        let expr = self.parse_expr()?;
+        self.expect_keyword(Keyword::PLACING)?;
+        let what_expr = self.parse_expr()?;
+        self.expect_keyword(Keyword::FROM)?;
+        let from_expr = self.parse_expr()?;
+        let mut for_expr = None;
+        if self.parse_keyword(Keyword::FOR) {
+            for_expr = Some(self.parse_expr()?);
+        }
+        self.expect_token(&Token::RParen)?;
+
+        Ok(Expr::Overlay {
+            expr: Box::new(expr),
+            overlay_what: Box::new(what_expr),
+            overlay_from: Box::new(from_expr),
+            overlay_for: for_expr.map(Box::new),
         })
     }
 

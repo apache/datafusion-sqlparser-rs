@@ -382,6 +382,7 @@ define_keywords!(
     PERCENTILE_DISC,
     PERCENT_RANK,
     PERIOD,
+    PLACING,
     PLANS,
     PORTION,
     POSITION,

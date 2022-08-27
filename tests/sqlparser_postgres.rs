@@ -14,10 +14,10 @@
 //! Test SQL syntax specific to PostgreSQL. The parser based on the
 //! generic dialect is also tested (on the inputs it can handle).
 
-use simple_logger::SimpleLogger;
+// use simple_logger::SimpleLogger;
 
 use sqlparser::ast::*;
-use sqlparser::ast::Value::Boolean;
+// use sqlparser::ast::Value::Boolean;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
 use test_utils::*;
@@ -1249,12 +1249,12 @@ fn parse_pg_regex_match_ops() {
 #[test]
 fn parse_array_index_expr() {
     #[cfg(feature = "bigdecimal")]
-        let num: Vec<Expr> = (0..=10)
+    let num: Vec<Expr> = (0..=10)
         .into_iter()
         .map(|s| Expr::Value(Value::Number(bigdecimal::BigDecimal::from(s), false)))
         .collect();
     #[cfg(not(feature = "bigdecimal"))]
-        let num: Vec<Expr> = (0..=10)
+    let num: Vec<Expr> = (0..=10)
         .into_iter()
         .map(|s| Expr::Value(Value::Number(s.to_string(), false)))
         .collect();
@@ -1451,9 +1451,9 @@ fn test_composite_value() {
     );
 
     #[cfg(feature = "bigdecimal")]
-        let num: Expr = Expr::Value(Value::Number(bigdecimal::BigDecimal::from(9), false));
+    let num: Expr = Expr::Value(Value::Number(bigdecimal::BigDecimal::from(9), false));
     #[cfg(not(feature = "bigdecimal"))]
-        let num: Expr = Expr::Value(Value::Number("9".to_string(), false));
+    let num: Expr = Expr::Value(Value::Number("9".to_string(), false));
     assert_eq!(
         select.selection,
         Some(Expr::BinaryOp {

@@ -427,16 +427,16 @@ impl<'a> Parser<'a> {
                 | Keyword::CURRENT_USER
                 | Keyword::SESSION_USER
                 | Keyword::USER
-                if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
-                    {
-                        Ok(Expr::Function(Function {
-                            name: ObjectName(vec![w.to_ident()]),
-                            args: vec![],
-                            over: None,
-                            distinct: false,
-                            special: true,
-                        }))
-                    }
+                    if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
+                {
+                    Ok(Expr::Function(Function {
+                        name: ObjectName(vec![w.to_ident()]),
+                        args: vec![],
+                        over: None,
+                        distinct: false,
+                        special: true,
+                    }))
+                }
                 Keyword::CURRENT_TIMESTAMP | Keyword::CURRENT_TIME | Keyword::CURRENT_DATE => {
                     self.parse_time_functions(ObjectName(vec![w.to_ident()]))
                 }
@@ -458,12 +458,12 @@ impl<'a> Parser<'a> {
                     self.parse_array_expr(true)
                 }
                 Keyword::ARRAY
-                if self.peek_token() == Token::LParen
-                    && !dialect_of!(self is ClickHouseDialect) =>
-                    {
-                        self.expect_token(&Token::LParen)?;
-                        self.parse_array_subquery()
-                    }
+                    if self.peek_token() == Token::LParen
+                        && !dialect_of!(self is ClickHouseDialect) =>
+                {
+                    self.expect_token(&Token::LParen)?;
+                    self.parse_array_subquery()
+                }
                 Keyword::NOT => self.parse_not(),
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
@@ -508,26 +508,26 @@ impl<'a> Parser<'a> {
             | tok @ Token::PGCubeRoot
             | tok @ Token::AtSign
             | tok @ Token::Tilde
-            if dialect_of!(self is PostgreSqlDialect) =>
-                {
-                    let op = match tok {
-                        Token::DoubleExclamationMark => UnaryOperator::PGPrefixFactorial,
-                        Token::PGSquareRoot => UnaryOperator::PGSquareRoot,
-                        Token::PGCubeRoot => UnaryOperator::PGCubeRoot,
-                        Token::AtSign => UnaryOperator::PGAbs,
-                        Token::Tilde => UnaryOperator::PGBitwiseNot,
-                        _ => unreachable!(),
-                    };
-                    Ok(Expr::UnaryOp {
-                        op,
-                        expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
-                    })
-                }
+                if dialect_of!(self is PostgreSqlDialect) =>
+            {
+                let op = match tok {
+                    Token::DoubleExclamationMark => UnaryOperator::PGPrefixFactorial,
+                    Token::PGSquareRoot => UnaryOperator::PGSquareRoot,
+                    Token::PGCubeRoot => UnaryOperator::PGCubeRoot,
+                    Token::AtSign => UnaryOperator::PGAbs,
+                    Token::Tilde => UnaryOperator::PGBitwiseNot,
+                    _ => unreachable!(),
+                };
+                Ok(Expr::UnaryOp {
+                    op,
+                    expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
+                })
+            }
             Token::EscapedStringLiteral(_) if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
-                {
-                    self.prev_token();
-                    Ok(Expr::Value(self.parse_value()?))
-                }
+            {
+                self.prev_token();
+                Ok(Expr::Value(self.parse_value()?))
+            }
             Token::Number(_, _)
             | Token::SingleQuotedString(_)
             | Token::DoubleQuotedString(_)
@@ -993,10 +993,10 @@ impl<'a> Parser<'a> {
                 self.expect_keyword(Keyword::TRUNCATE)?;
                 let filler = match self.peek_token() {
                     Token::Word(w)
-                    if w.keyword == Keyword::WITH || w.keyword == Keyword::WITHOUT =>
-                        {
-                            None
-                        }
+                        if w.keyword == Keyword::WITH || w.keyword == Keyword::WITHOUT =>
+                    {
+                        None
+                    }
                     Token::SingleQuotedString(_)
                     | Token::EscapedStringLiteral(_)
                     | Token::NationalStringLiteral(_)
@@ -1121,35 +1121,35 @@ impl<'a> Parser<'a> {
         // this more general implementation.
         let leading_field = match self.peek_token() {
             Token::Word(kw)
-            if [
-                Keyword::YEAR,
-                Keyword::MONTH,
-                Keyword::WEEK,
-                Keyword::DAY,
-                Keyword::HOUR,
-                Keyword::MINUTE,
-                Keyword::SECOND,
-                Keyword::CENTURY,
-                Keyword::DECADE,
-                Keyword::DOW,
-                Keyword::DOY,
-                Keyword::EPOCH,
-                Keyword::ISODOW,
-                Keyword::ISOYEAR,
-                Keyword::JULIAN,
-                Keyword::MICROSECONDS,
-                Keyword::MILLENIUM,
-                Keyword::MILLISECONDS,
-                Keyword::QUARTER,
-                Keyword::TIMEZONE,
-                Keyword::TIMEZONE_HOUR,
-                Keyword::TIMEZONE_MINUTE,
-            ]
+                if [
+                    Keyword::YEAR,
+                    Keyword::MONTH,
+                    Keyword::WEEK,
+                    Keyword::DAY,
+                    Keyword::HOUR,
+                    Keyword::MINUTE,
+                    Keyword::SECOND,
+                    Keyword::CENTURY,
+                    Keyword::DECADE,
+                    Keyword::DOW,
+                    Keyword::DOY,
+                    Keyword::EPOCH,
+                    Keyword::ISODOW,
+                    Keyword::ISOYEAR,
+                    Keyword::JULIAN,
+                    Keyword::MICROSECONDS,
+                    Keyword::MILLENIUM,
+                    Keyword::MILLISECONDS,
+                    Keyword::QUARTER,
+                    Keyword::TIMEZONE,
+                    Keyword::TIMEZONE_HOUR,
+                    Keyword::TIMEZONE_MINUTE,
+                ]
                 .iter()
                 .any(|d| kw.keyword == *d) =>
-                {
-                    Some(self.parse_date_time_field()?)
-                }
+            {
+                Some(self.parse_date_time_field()?)
+            }
             _ => None,
         };
 
@@ -1540,10 +1540,10 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::AT => {
                 match (self.peek_nth_token(1), self.peek_nth_token(2)) {
                     (Token::Word(w), Token::Word(w2))
-                    if w.keyword == Keyword::TIME && w2.keyword == Keyword::ZONE =>
-                        {
-                            Ok(Self::TIME_ZONE_PREC)
-                        }
+                        if w.keyword == Keyword::TIME && w2.keyword == Keyword::ZONE =>
+                    {
+                        Ok(Self::TIME_ZONE_PREC)
+                    }
                     _ => Ok(0),
                 }
             }
@@ -1765,12 +1765,12 @@ impl<'a> Parser<'a> {
                 // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#trailing_commas
                 match self.peek_token() {
                     Token::Word(kw)
-                    if keywords::RESERVED_FOR_COLUMN_ALIAS
-                        .iter()
-                        .any(|d| kw.keyword == *d) =>
-                        {
-                            break;
-                        }
+                        if keywords::RESERVED_FOR_COLUMN_ALIAS
+                            .iter()
+                            .any(|d| kw.keyword == *d) =>
+                    {
+                        break;
+                    }
                     Token::RParen | Token::EOF => break,
                     _ => continue,
                 }
@@ -1781,8 +1781,8 @@ impl<'a> Parser<'a> {
 
     /// Parse a comma-separated list of 1+ items accepted by `F`
     pub fn parse_comma_separated<T, F>(&mut self, mut f: F) -> Result<Vec<T>, ParserError>
-        where
-            F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
+    where
+        F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
     {
         let mut values = vec![];
         loop {
@@ -1798,8 +1798,8 @@ impl<'a> Parser<'a> {
     /// if unsuccessful.
     #[must_use]
     fn maybe_parse<T, F>(&mut self, mut f: F) -> Option<T>
-        where
-            F: FnMut(&mut Parser) -> Result<T, ParserError>,
+    where
+        F: FnMut(&mut Parser) -> Result<T, ParserError>,
     {
         let index = self.index;
         if let Ok(t) = f(self) {
@@ -2071,7 +2071,7 @@ impl<'a> Parser<'a> {
             names,
             cascade,
             purge,
-            restrict
+            restrict,
         })
     }
 
@@ -2950,7 +2950,7 @@ impl<'a> Parser<'a> {
             Some(Keyword::CSV) => CopyLegacyOption::Csv({
                 let mut opts = vec![];
                 while let Some(opt) =
-                self.maybe_parse(|parser| parser.parse_copy_legacy_csv_option())
+                    self.maybe_parse(|parser| parser.parse_copy_legacy_csv_option())
                 {
                     opts.push(opt);
                 }
@@ -4157,7 +4157,7 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::RParen)?;
 
                 if let Some(outer_alias) =
-                self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?
+                    self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?
                 {
                     // Snowflake also allows specifying an alias *after* parens
                     // e.g. `FROM (mytable) AS alias`

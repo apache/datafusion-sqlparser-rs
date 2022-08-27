@@ -20,10 +20,10 @@ use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::ast::{
-    DataType, display_comma_separated, display_separated, Expr, Ident, ObjectName, SequenceOptions,
-};
 use crate::ast::value::escape_single_quote_string;
+use crate::ast::{
+    display_comma_separated, display_separated, DataType, Expr, Ident, ObjectName, SequenceOptions,
+};
 use crate::tokenizer::Token;
 
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation

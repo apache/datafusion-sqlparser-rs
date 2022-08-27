@@ -66,15 +66,15 @@ where
 }
 
 fn display_separated<'a, T>(slice: &'a [T], sep: &'static str) -> DisplaySeparated<'a, T>
-    where
-        T: fmt::Display,
+where
+    T: fmt::Display,
 {
     DisplaySeparated { slice, sep }
 }
 
 fn display_comma_separated<T>(slice: &[T]) -> DisplaySeparated<'_, T>
-    where
-        T: fmt::Display,
+where
+    T: fmt::Display,
 {
     DisplaySeparated { slice, sep: ", " }
 }
@@ -93,8 +93,8 @@ pub struct Ident {
 impl Ident {
     /// Create a new identifier with the given value and no quotes.
     pub fn new<S>(value: S) -> Self
-        where
-            S: Into<String>,
+    where
+        S: Into<String>,
     {
         Ident {
             value: value.into(),
@@ -105,8 +105,8 @@ impl Ident {
     /// Create a new quoted identifier with the given quote and value. This function
     /// panics if the given quote is not a valid quote character.
     pub fn with_quote<S>(quote: char, value: S) -> Self
-        where
-            S: Into<String>,
+    where
+        S: Into<String>,
     {
         assert!(quote == '\'' || quote == '"' || quote == '`' || quote == '[');
         Ident {
@@ -1796,10 +1796,10 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(HiveFormat {
-                                row_format,
-                                storage,
-                                location,
-                            }) = hive_formats
+                    row_format,
+                    storage,
+                    location,
+                }) = hive_formats
                 {
                     match row_format {
                         Some(HiveRowFormat::SERDE { class }) => {
@@ -1810,9 +1810,9 @@ impl fmt::Display for Statement {
                     }
                     match storage {
                         Some(HiveIOFormat::IOF {
-                                 input_format,
-                                 output_format,
-                             }) => write!(
+                            input_format,
+                            output_format,
+                        }) => write!(
                             f,
                             " STORED AS INPUTFORMAT {} OUTPUTFORMAT {}",
                             input_format, output_format
@@ -1912,7 +1912,8 @@ impl fmt::Display for Statement {
                 if_exists,
                 names,
                 cascade,
-                purge, restrict,
+                purge,
+                restrict,
             } => write!(
                 f,
                 "DROP {}{} {}{}{}{}",
@@ -2080,10 +2081,10 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Commit { chain } => {
-                write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" }, )
+                write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" },)
             }
             Statement::Rollback { chain } => {
-                write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" }, )
+                write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" },)
             }
             Statement::CreateSchema {
                 schema_name,
@@ -2200,7 +2201,7 @@ impl fmt::Display for Statement {
             } => {
                 let mut as_type: String = String::from("");
                 if let Some(dt) = data_type.as_ref() {
-                    as_type = format!(" AS {}", dt);
+                    as_type = " AS ".to_string() + &dt.to_string();
                 }
                 write!(
                     f,

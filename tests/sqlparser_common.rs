@@ -23,7 +23,7 @@ use matches::assert_matches;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, GenericDialect, HiveDialect, MsSqlDialect,
-    PostgreSqlDialect, SnowflakeDialect, SQLiteDialect,
+    PostgreSqlDialect, SQLiteDialect, SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
@@ -4269,7 +4269,8 @@ fn parse_drop_table() {
             if_exists,
             names,
             cascade,
-            purge: _, ..
+            purge: _,
+            ..
         } => {
             assert!(!if_exists);
             assert_eq!(ObjectType::Table, object_type);
@@ -4289,7 +4290,8 @@ fn parse_drop_table() {
             if_exists,
             names,
             cascade,
-            purge: _, ..
+            purge: _,
+            ..
         } => {
             assert!(if_exists);
             assert_eq!(ObjectType::Table, object_type);

@@ -349,6 +349,13 @@ pub enum Expr {
         trim_where: Option<TrimWhereField>,
         trim_what: Option<Box<Expr>>,
     },
+    /// OVERLAY(<expr> PLACING <expr> FROM <expr>[ FOR <expr> ]
+    Overlay {
+        expr: Box<Expr>,
+        overlay_what: Box<Expr>,
+        overlay_from: Box<Expr>,
+        overlay_for: Option<Box<Expr>>,
+    },
     /// `expr COLLATE collation`
     Collate {
         expr: Box<Expr>,
@@ -640,8 +647,25 @@ impl fmt::Display for Expr {
                 if let Some(from_part) = substring_from {
                     write!(f, " FROM {}", from_part)?;
                 }
-                if let Some(from_part) = substring_for {
-                    write!(f, " FOR {}", from_part)?;
+                if let Some(for_part) = substring_for {
+                    write!(f, " FOR {}", for_part)?;
+                }
+
+                write!(f, ")")
+            }
+            Expr::Overlay {
+                expr,
+                overlay_what,
+                overlay_from,
+                overlay_for,
+            } => {
+                write!(
+                    f,
+                    "OVERLAY({} PLACING {} FROM {}",
+                    expr, overlay_what, overlay_from
+                )?;
+                if let Some(for_part) = overlay_for {
+                    write!(f, " FOR {}", for_part)?;
                 }
 
                 write!(f, ")")

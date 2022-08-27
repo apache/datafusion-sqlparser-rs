@@ -8,6 +8,13 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.22.0] 2022-08-26
+
+### Added
+* Support `OVERLAY` expressions - Thanks (#594) @ayushg
+* Support `WITH TIMEZONE` and `WITHOUT TIMEZONE` when parsing `TIMESTAMP` expressions - Thanks (#589) @waitingkuo
+* Add ability for dialects to override prefix, infix, and statement parsing - Thanks (#581) @andygrove
+
 ## [0.21.0] 2022-08-18
 
 ### Added

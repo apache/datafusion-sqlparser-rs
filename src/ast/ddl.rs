@@ -451,7 +451,7 @@ impl fmt::Display for ColumnOption {
                     for sequence_option in sequence_options {
                         write!(f, "{}", sequence_option)?;
                     }
-                    write!(f, " )")?;
+                    write!(f, " ) ")?;
                 }
                 Ok(())
             }

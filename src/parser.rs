@@ -1866,6 +1866,8 @@ impl<'a> Parser<'a> {
             self.parse_create_database()
         } else if dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::FUNCTION) {
             self.parse_create_function(temporary)
+        } else if self.parse_keyword(Keyword::ROLE) {
+            self.parse_create_role()
         } else {
             self.expected("an object type after CREATE", self.peek_token())
         }
@@ -2044,6 +2046,197 @@ impl<'a> Parser<'a> {
         })
     }
 
+    pub fn parse_create_role(&mut self) -> Result<Statement, ParserError> {
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let names = self.parse_comma_separated(Parser::parse_object_name)?;
+
+        let _ = self.parse_keyword(Keyword::WITH);
+
+        let optional_keywords = [
+            // MSSQL
+            Keyword::AUTHORIZATION,
+            // Postgres
+            Keyword::LOGIN, Keyword::NOLOGIN,
+            Keyword::INHERIT, Keyword::NOINHERIT,
+            Keyword::BYPASSRLS, Keyword::NOBYPASSRLS,
+            Keyword::PASSWORD,
+            Keyword::CREATEDB, Keyword::NOCREATEDB,
+            Keyword::CREATEROLE, Keyword::NOCREATEROLE,
+            Keyword::SUPERUSER, Keyword::NOSUPERUSER,
+            Keyword::REPLICATION, Keyword::NOREPLICATION,
+            Keyword::CONNECTION,
+            Keyword::VALID,
+            Keyword::IN,
+            Keyword::ROLE,
+            Keyword::ADMIN,
+            Keyword::USER,
+        ];
+
+        // MSSQL
+        let mut authorization_owner = None;
+        // Postgres
+        let mut login = None;
+        let mut inherit = None;
+        let mut bypassrls = None;
+        let mut password = None;
+        let mut create_db = None;
+        let mut create_role = None;
+        let mut superuser = None;
+        let mut replication = None;
+        let mut connection_limit = None;
+        let mut valid_until = None;
+        let mut in_role = vec![];
+        let mut roles = vec![];
+        let mut admin = vec![];
+
+        while let Some(keyword) = self.parse_one_of_keywords(&optional_keywords) {
+            match keyword {
+                Keyword::AUTHORIZATION => {
+                    if authorization_owner.is_some() {
+                        parser_err!("Found multiple AUTHORIZATION")
+                    } else {
+                        authorization_owner = Some(self.parse_object_name()?);
+                        Ok(())
+                    }
+                }
+                Keyword::LOGIN | Keyword::NOLOGIN => {
+                    if login.is_some() {
+                        parser_err!("Found multiple LOGIN or NOLOGIN")
+                    } else {
+                        login = Some(keyword == Keyword::LOGIN);
+                        Ok(())
+                    }
+                }
+                Keyword::INHERIT | Keyword::NOINHERIT => {
+                    if inherit.is_some() {
+                        parser_err!("Found multiple INHERIT or NOINHERIT")
+                    } else {
+                        inherit = Some(keyword == Keyword::INHERIT);
+                        Ok(())
+                    }
+                }
+                Keyword::BYPASSRLS | Keyword::NOBYPASSRLS => {
+                    if bypassrls.is_some() {
+                        parser_err!("Found multiple BYPASSRLS or NOBYPASSRLS")
+                    } else {
+                        bypassrls = Some(keyword == Keyword::BYPASSRLS);
+                        Ok(())
+                    }
+                }
+                Keyword::CREATEDB | Keyword::NOCREATEDB => {
+                    if create_db.is_some() {
+                        parser_err!("Found multiple CREATEDB or NOCREATEDB")
+                    } else {
+                        create_db = Some(keyword == Keyword::CREATEDB);
+                        Ok(())
+                    }
+                }
+                Keyword::CREATEROLE | Keyword::NOCREATEROLE => {
+                    if create_role.is_some() {
+                        parser_err!("Found multiple CREATEROLE or NOCREATEROLE")
+                    } else {
+                        create_role = Some(keyword == Keyword::CREATEROLE);
+                        Ok(())
+                    }
+                }
+                Keyword::SUPERUSER | Keyword::NOSUPERUSER => {
+                    if superuser.is_some() {
+                        parser_err!("Found multiple SUPERUSER or NOSUPERUSER")
+                    } else {
+                        superuser = Some(keyword == Keyword::SUPERUSER);
+                        Ok(())
+                    }
+                }
+                Keyword::REPLICATION | Keyword::NOREPLICATION => {
+                    if replication.is_some() {
+                        parser_err!("Found multiple REPLICATION or NOREPLICATION")
+                    } else {
+                        replication = Some(keyword == Keyword::REPLICATION);
+                        Ok(())
+                    }
+                }
+                Keyword::PASSWORD => {
+                    if password.is_some() {
+                        parser_err!("Found multiple PASSWORD")
+                    } else {
+                        password = if self.parse_keyword(Keyword::NULL) {
+                            Some(Password::NullPassword)
+                        } else {
+                            Some(Password::Password(Expr::Value(self.parse_value()?)))
+                        };
+                        Ok(())
+                    }
+                }
+                Keyword::CONNECTION => {
+                    self.expect_keyword(Keyword::LIMIT)?;
+                    if connection_limit.is_some() {
+                        parser_err!("Found multiple CONNECTION LIMIT")
+                    } else {
+                        connection_limit = Some(Expr::Value(self.parse_number_value()?));
+                        Ok(())
+                    }
+                }
+                Keyword::VALID => {
+                    self.expect_keyword(Keyword::UNTIL)?;
+                    if valid_until.is_some() {
+                        parser_err!("Found multiple VALID UNTIL")
+                    } else {
+                        valid_until = Some(Expr::Value(self.parse_value()?));
+                        Ok(())
+                    }
+                }
+                Keyword::IN => {
+                    if self.parse_keyword(Keyword::ROLE) || self.parse_keyword(Keyword::GROUP) {
+                        if !in_role.is_empty() {
+                            parser_err!("Found multiple IN ROLE or IN GROUP")
+                        } else {
+                            in_role = self.parse_comma_separated(Parser::parse_identifier)?;
+                            Ok(())
+                        }
+                    } else {
+                        self.expected("ROLE or GROUP after IN", self.peek_token())
+                    }
+                }
+                Keyword::ROLE | Keyword::USER => {
+                    if !roles.is_empty() {
+                        parser_err!("Found multiple ROLE or USER")
+                    } else {
+                        roles = self.parse_comma_separated(Parser::parse_identifier)?;
+                        Ok(())
+                    }
+                }
+                Keyword::ADMIN => {
+                    if !admin.is_empty() {
+                        parser_err!("Found multiple ADMIN")
+                    } else {
+                        admin = self.parse_comma_separated(Parser::parse_identifier)?;
+                        Ok(())
+                    }
+                }
+                _ => break
+            }?
+        }
+
+        Ok(Statement::CreateRole {
+            names,
+            if_not_exists,
+            login,
+            inherit,
+            bypassrls,
+            password,
+            create_db,
+            create_role,
+            replication,
+            superuser,
+            connection_limit,
+            valid_until,
+            in_role,
+            role: roles,
+            admin,
+            authorization_owner,
+        })
+    }
+
     pub fn parse_drop(&mut self) -> Result<Statement, ParserError> {
         let object_type = if self.parse_keyword(Keyword::TABLE) {
             ObjectType::Table
@@ -2051,10 +2244,12 @@ impl<'a> Parser<'a> {
             ObjectType::View
         } else if self.parse_keyword(Keyword::INDEX) {
             ObjectType::Index
+        } else if self.parse_keyword(Keyword::ROLE) {
+            ObjectType::Role
         } else if self.parse_keyword(Keyword::SCHEMA) {
             ObjectType::Schema
         } else {
-            return self.expected("TABLE, VIEW, INDEX or SCHEMA after DROP", self.peek_token());
+            return self.expected("TABLE, VIEW, INDEX, ROLE, or SCHEMA after DROP", self.peek_token());
         };
         // Many dialects support the non standard `IF EXISTS` clause and allow
         // specifying multiple objects to delete in a single statement
@@ -2065,6 +2260,9 @@ impl<'a> Parser<'a> {
         let purge = self.parse_keyword(Keyword::PURGE);
         if cascade && restrict {
             return parser_err!("Cannot specify both CASCADE and RESTRICT in DROP");
+        }
+        if object_type == ObjectType::Role && (cascade || restrict || purge) {
+            return parser_err!("Cannot specify CASCADE, RESTRICT, or PURGE in DROP ROLE");
         }
         Ok(Statement::Drop {
             object_type,

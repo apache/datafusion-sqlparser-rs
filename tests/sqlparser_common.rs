@@ -31,7 +31,7 @@ use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
 
 use test_utils::{
-    all_dialects, expr_from_projection, join, number, only, table, table_alias, TestedDialects,
+    all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias, TestedDialects,
 };
 
 #[test]
@@ -4764,6 +4764,136 @@ fn parse_drop_index() {
 }
 
 #[test]
+fn parse_create_role() {
+    let sql = "CREATE ROLE consultant";
+    match verified_stmt(sql) {
+        Statement::CreateRole {
+            names,
+            ..
+        } => {
+            assert_eq_vec(&["consultant"], &names);
+        },
+        _ => unreachable!()
+    }
+
+    let sql = "CREATE ROLE mssql AUTHORIZATION helena";
+    match verified_stmt(sql) {
+        Statement::CreateRole {
+            names,
+            authorization_owner,
+            ..
+        } => {
+            assert_eq_vec(&["mssql"], &names);
+            assert_eq!(authorization_owner, Some(ObjectName(vec![Ident { value: "helena".into(), quote_style: None }])));
+        },
+        _ => unreachable!()
+    }
+
+    let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
+    match verified_stmt(sql) {
+        Statement::CreateRole {
+            names,
+            if_not_exists,
+            ..
+        } => {
+            assert_eq_vec(&["mysql_a", "mysql_b"], &names);
+            assert_eq!(if_not_exists, true);
+        },
+        _ => unreachable!()
+    }
+
+    let sql = "CREATE ROLE abc LOGIN PASSWORD NULL";
+    match parse_sql_statements(sql).as_deref() {
+        Ok([Statement::CreateRole {
+            names,
+            login,
+            password,
+            ..
+        }]) => {
+            assert_eq_vec(&["abc"], names);
+            assert_eq!(*login, Some(true));
+            assert_eq!(*password, Some(Password::NullPassword));
+        },
+        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err)
+    }
+
+    let sql = "CREATE ROLE magician WITH SUPERUSER CREATEROLE NOCREATEDB BYPASSRLS INHERIT PASSWORD 'abcdef' LOGIN VALID UNTIL '2025-01-01' IN ROLE role1, role2 ROLE role3 ADMIN role4, role5 REPLICATION";
+    // Roundtrip order of optional parameters is not preserved
+    match parse_sql_statements(sql).as_deref() {
+        Ok([Statement::CreateRole {
+            names,
+            if_not_exists,
+            bypassrls,
+            login,
+            inherit,
+            password,
+            superuser,
+            create_db,
+            create_role,
+            replication,
+            connection_limit,
+            valid_until,
+            in_role,
+            role,
+            admin,
+            authorization_owner,
+        }]) => {
+            assert_eq_vec(&["magician"], names);
+            assert_eq!(*if_not_exists, false);
+            assert_eq!(*login, Some(true));
+            assert_eq!(*inherit, Some(true));
+            assert_eq!(*bypassrls, Some(true));
+            assert_eq!(*password, Some(Password::Password(Expr::Value(Value::SingleQuotedString("abcdef".into())))));
+            assert_eq!(*superuser, Some(true));
+            assert_eq!(*create_db, Some(false));
+            assert_eq!(*create_role, Some(true));
+            assert_eq!(*replication, Some(true));
+            assert_eq!(*connection_limit, None);
+            assert_eq!(*valid_until, Some(Expr::Value(Value::SingleQuotedString("2025-01-01".into()))));
+            assert_eq_vec(&["role1", "role2"], in_role);
+            assert_eq_vec(&["role3"], role);
+            assert_eq_vec(&["role4", "role5"], admin);
+            assert_eq!(*authorization_owner, None);
+        },
+        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err)
+    }
+
+    let negatables = vec!["BYPASSRLS", "CREATEDB", "CREATEROLE", "INHERIT", "LOGIN", "REPLICATION", "SUPERUSER"];
+
+    for negatable_kw in negatables.iter() {
+        let sql = format!("CREATE ROLE abc {kw} NO{kw}", kw = negatable_kw);
+        match parse_sql_statements(&sql) {
+            Ok(_) => panic!("Should not be able to parse CREATE ROLE containing both negated and non-negated versions of the same keyword: {}", negatable_kw),
+            _ => ()
+        }
+    }
+}
+
+#[test]
+fn parse_drop_role() {
+    let sql = "DROP ROLE abc";
+    match verified_stmt(sql) {
+        Statement::Drop { names, object_type, if_exists, .. } => {
+            assert_eq_vec(&["abc"], &names);
+            assert_eq!(ObjectType::Role, object_type);
+            assert_eq!(if_exists, false);
+        }
+        _ => unreachable!()
+    };
+
+    let sql = "DROP ROLE IF EXISTS def, magician, quaternion";
+    match verified_stmt(sql) {
+        Statement::Drop { names, object_type, if_exists, .. } => {
+            assert_eq_vec(&["def", "magician", "quaternion"], &names);
+            assert_eq!(ObjectType::Role, object_type);
+            assert_eq!(if_exists, true);
+        }
+        _ => unreachable!()
+    }
+}
+
+
+#[test]
 fn parse_grant() {
     let sql = "GRANT SELECT, INSERT, UPDATE (shape, size), USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER, CONNECT, CREATE, EXECUTE, TEMPORARY ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
     match verified_stmt(sql) {
@@ -4804,14 +4934,8 @@ fn parse_grant() {
                     ],
                     actions
                 );
-                assert_eq!(
-                    vec!["abc", "def"],
-                    objects.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
-                assert_eq!(
-                    vec!["xyz", "m"],
-                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["abc", "def"], &objects);
+                assert_eq_vec(&["xyz", "m"], &grantees);
                 assert!(with_grant_option);
                 assert_eq!("jj", granted_by.unwrap().to_string());
             }
@@ -4831,14 +4955,8 @@ fn parse_grant() {
         } => match (privileges, objects) {
             (Privileges::Actions(actions), GrantObjects::AllTablesInSchema { schemas }) => {
                 assert_eq!(vec![Action::Insert { columns: None }], actions);
-                assert_eq!(
-                    vec!["public"],
-                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
-                assert_eq!(
-                    vec!["browser"],
-                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["public"], &schemas);
+                assert_eq_vec(&["browser"], &grantees);
                 assert!(!with_grant_option);
             }
             _ => unreachable!(),
@@ -4860,14 +4978,8 @@ fn parse_grant() {
                     vec![Action::Usage, Action::Select { columns: None }],
                     actions
                 );
-                assert_eq!(
-                    vec!["p"],
-                    objects.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
-                assert_eq!(
-                    vec!["u"],
-                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["p"], &objects);
+                assert_eq_vec(&["u"], &grantees);
             }
             _ => unreachable!(),
         },
@@ -4901,10 +5013,7 @@ fn parse_grant() {
                 GrantObjects::Schemas(schemas),
             ) => {
                 assert!(!with_privileges_keyword);
-                assert_eq!(
-                    vec!["aa", "b"],
-                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["aa", "b"], &schemas);
             }
             _ => unreachable!(),
         },
@@ -4920,10 +5029,7 @@ fn parse_grant() {
         } => match (privileges, objects) {
             (Privileges::Actions(actions), GrantObjects::AllSequencesInSchema { schemas }) => {
                 assert_eq!(vec![Action::Usage], actions);
-                assert_eq!(
-                    vec!["bus"],
-                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["bus"], &schemas);
             }
             _ => unreachable!(),
         },
@@ -4948,14 +5054,8 @@ fn test_revoke() {
                 },
                 privileges
             );
-            assert_eq!(
-                vec!["users", "auth"],
-                tables.iter().map(ToString::to_string).collect::<Vec<_>>()
-            );
-            assert_eq!(
-                vec!["analyst"],
-                grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-            );
+            assert_eq_vec(&["users", "auth"], &tables);
+            assert_eq_vec(&["analyst"], &grantees);
             assert!(cascade);
             assert_eq!(None, granted_by);
         }

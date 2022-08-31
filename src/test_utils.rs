@@ -146,6 +146,13 @@ pub fn all_dialects() -> TestedDialects {
     }
 }
 
+pub fn assert_eq_vec<T: ToString>(expected: &[&str], actual: &Vec<T>) {
+    assert_eq!(
+        expected,
+        actual.iter().map(ToString::to_string).collect::<Vec<_>>()
+    );
+}
+
 pub fn only<T>(v: impl IntoIterator<Item = T>) -> T {
     let mut iter = v.into_iter();
     if let (Some(item), None) = (iter.next(), iter.next()) {

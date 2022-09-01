@@ -128,9 +128,15 @@ fn parse_mssql_create_role() {
             ..
         } => {
             assert_eq_vec(&["mssql"], &names);
-            assert_eq!(authorization_owner, Some(ObjectName(vec![Ident { value: "helena".into(), quote_style: None }])));
-        },
-        _ => unreachable!()
+            assert_eq!(
+                authorization_owner,
+                Some(ObjectName(vec![Ident {
+                    value: "helena".into(),
+                    quote_style: None
+                }]))
+            );
+        }
+        _ => unreachable!(),
     }
 }
 

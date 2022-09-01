@@ -1751,67 +1751,87 @@ fn parse_create_role() {
         } => {
             assert_eq_vec(&["mysql_a", "mysql_b"], &names);
             assert_eq!(if_not_exists, true);
-        },
-        _ => unreachable!()
+        }
+        _ => unreachable!(),
     }
 
     let sql = "CREATE ROLE abc LOGIN PASSWORD NULL";
     match pg().parse_sql_statements(sql).as_deref() {
-        Ok([Statement::CreateRole {
-            names,
-            login,
-            password,
-            ..
-        }]) => {
+        Ok(
+            [Statement::CreateRole {
+                names,
+                login,
+                password,
+                ..
+            }],
+        ) => {
             assert_eq_vec(&["abc"], names);
             assert_eq!(*login, Some(true));
             assert_eq!(*password, Some(Password::NullPassword));
-        },
-        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err)
+        }
+        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err),
     }
 
     let sql = "CREATE ROLE magician WITH SUPERUSER CREATEROLE NOCREATEDB BYPASSRLS INHERIT PASSWORD 'abcdef' LOGIN VALID UNTIL '2025-01-01' IN ROLE role1, role2 ROLE role3 ADMIN role4, role5 REPLICATION";
     // Roundtrip order of optional parameters is not preserved
     match pg().parse_sql_statements(sql).as_deref() {
-        Ok([Statement::CreateRole {
-            names,
-            if_not_exists,
-            bypassrls,
-            login,
-            inherit,
-            password,
-            superuser,
-            create_db,
-            create_role,
-            replication,
-            connection_limit,
-            valid_until,
-            in_role,
-            role,
-            admin,
-            authorization_owner,
-        }]) => {
+        Ok(
+            [Statement::CreateRole {
+                names,
+                if_not_exists,
+                bypassrls,
+                login,
+                inherit,
+                password,
+                superuser,
+                create_db,
+                create_role,
+                replication,
+                connection_limit,
+                valid_until,
+                in_role,
+                role,
+                admin,
+                authorization_owner,
+            }],
+        ) => {
             assert_eq_vec(&["magician"], names);
             assert_eq!(*if_not_exists, false);
             assert_eq!(*login, Some(true));
             assert_eq!(*inherit, Some(true));
             assert_eq!(*bypassrls, Some(true));
-            assert_eq!(*password, Some(Password::Password(Expr::Value(Value::SingleQuotedString("abcdef".into())))));
+            assert_eq!(
+                *password,
+                Some(Password::Password(Expr::Value(Value::SingleQuotedString(
+                    "abcdef".into()
+                ))))
+            );
             assert_eq!(*superuser, Some(true));
             assert_eq!(*create_db, Some(false));
             assert_eq!(*create_role, Some(true));
             assert_eq!(*replication, Some(true));
             assert_eq!(*connection_limit, None);
-            assert_eq!(*valid_until, Some(Expr::Value(Value::SingleQuotedString("2025-01-01".into()))));
+            assert_eq!(
+                *valid_until,
+                Some(Expr::Value(Value::SingleQuotedString("2025-01-01".into())))
+            );
             assert_eq_vec(&["role1", "role2"], in_role);
             assert_eq_vec(&["role3"], role);
             assert_eq_vec(&["role4", "role5"], admin);
             assert_eq!(*authorization_owner, None);
-        },
-        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err)
+        }
+        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err),
     }
 
-    let negatables = vec!["BYPASSRLS", "CREATEDB", "CREATEROLE", "INHERIT", "LOGIN", "REPLICATION", "SUPERUSER"];
+    let negatables = vec![
+        "BYPASSRLS",
+        "CREATEDB",
+        "CREATEROLE",
+        "INHERIT",
+        "LOGIN",
+        "REPLICATION",
+        "SUPERUSER",
+    ];
 
     for negatable_kw in negatables.iter() {
         let sql = format!("CREATE ROLE abc {kw} NO{kw}", kw = negatable_kw);

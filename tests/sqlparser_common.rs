@@ -31,7 +31,8 @@ use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
 
 use test_utils::{
-    all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias, TestedDialects,
+    all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
+    TestedDialects,
 };
 
 #[test]
@@ -4767,13 +4768,10 @@ fn parse_drop_index() {
 fn parse_create_role() {
     let sql = "CREATE ROLE consultant";
     match verified_stmt(sql) {
-        Statement::CreateRole {
-            names,
-            ..
-        } => {
+        Statement::CreateRole { names, .. } => {
             assert_eq_vec(&["consultant"], &names);
-        },
-        _ => unreachable!()
+        }
+        _ => unreachable!(),
     }
 
     let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
@@ -4785,8 +4783,8 @@ fn parse_create_role() {
         } => {
             assert_eq_vec(&["mysql_a", "mysql_b"], &names);
             assert_eq!(if_not_exists, true);
-        },
-        _ => unreachable!()
+        }
+        _ => unreachable!(),
     }
 }
 
@@ -4794,25 +4792,34 @@ fn parse_create_role() {
 fn parse_drop_role() {
     let sql = "DROP ROLE abc";
     match verified_stmt(sql) {
-        Statement::Drop { names, object_type, if_exists, .. } => {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            ..
+        } => {
             assert_eq_vec(&["abc"], &names);
             assert_eq!(ObjectType::Role, object_type);
             assert_eq!(if_exists, false);
         }
-        _ => unreachable!()
+        _ => unreachable!(),
     };
 
     let sql = "DROP ROLE IF EXISTS def, magician, quaternion";
     match verified_stmt(sql) {
-        Statement::Drop { names, object_type, if_exists, .. } => {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            ..
+        } => {
             assert_eq_vec(&["def", "magician", "quaternion"], &names);
             assert_eq!(ObjectType::Role, object_type);
             assert_eq!(if_exists, true);
         }
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 }
-
 
 #[test]
 fn parse_grant() {

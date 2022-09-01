@@ -2056,14 +2056,21 @@ impl<'a> Parser<'a> {
             vec![Keyword::AUTHORIZATION]
         } else if dialect_of!(self is PostgreSqlDialect) {
             vec![
-                Keyword::LOGIN, Keyword::NOLOGIN,
-                Keyword::INHERIT, Keyword::NOINHERIT,
-                Keyword::BYPASSRLS, Keyword::NOBYPASSRLS,
+                Keyword::LOGIN,
+                Keyword::NOLOGIN,
+                Keyword::INHERIT,
+                Keyword::NOINHERIT,
+                Keyword::BYPASSRLS,
+                Keyword::NOBYPASSRLS,
                 Keyword::PASSWORD,
-                Keyword::CREATEDB, Keyword::NOCREATEDB,
-                Keyword::CREATEROLE, Keyword::NOCREATEROLE,
-                Keyword::SUPERUSER, Keyword::NOSUPERUSER,
-                Keyword::REPLICATION, Keyword::NOREPLICATION,
+                Keyword::CREATEDB,
+                Keyword::NOCREATEDB,
+                Keyword::CREATEROLE,
+                Keyword::NOCREATEROLE,
+                Keyword::SUPERUSER,
+                Keyword::NOSUPERUSER,
+                Keyword::REPLICATION,
+                Keyword::NOREPLICATION,
                 Keyword::CONNECTION,
                 Keyword::VALID,
                 Keyword::IN,
@@ -2071,7 +2078,9 @@ impl<'a> Parser<'a> {
                 Keyword::ADMIN,
                 Keyword::USER,
             ]
-        } else { vec![] };
+        } else {
+            vec![]
+        };
 
         // MSSQL
         let mut authorization_owner = None;
@@ -2214,7 +2223,7 @@ impl<'a> Parser<'a> {
                         Ok(())
                     }
                 }
-                _ => break
+                _ => break,
             }?
         }
 
@@ -2250,7 +2259,10 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::SCHEMA) {
             ObjectType::Schema
         } else {
-            return self.expected("TABLE, VIEW, INDEX, ROLE, or SCHEMA after DROP", self.peek_token());
+            return self.expected(
+                "TABLE, VIEW, INDEX, ROLE, or SCHEMA after DROP",
+                self.peek_token(),
+            );
         };
         // Many dialects support the non standard `IF EXISTS` clause and allow
         // specifying multiple objects to delete in a single statement

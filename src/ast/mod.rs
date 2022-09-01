@@ -1977,10 +1977,10 @@ impl fmt::Display for Statement {
                         None => ""
                     }
                 )?;
-                if let Some(limit) = &*connection_limit {
+                if let Some(limit) = connection_limit {
                     write!(f, " CONNECTION LIMIT {}", limit)?;
                 }
-                match &*password {
+                match password {
                     Some(Password::Password(pass)) => write!(f, " PASSWORD {}", pass),
                     Some(Password::NullPassword) => write!(f, " PASSWORD NULL"),
                     None => Ok(()),

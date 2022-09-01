@@ -2052,25 +2052,26 @@ impl<'a> Parser<'a> {
 
         let _ = self.parse_keyword(Keyword::WITH);
 
-        let optional_keywords = [
-            // MSSQL
-            Keyword::AUTHORIZATION,
-            // Postgres
-            Keyword::LOGIN, Keyword::NOLOGIN,
-            Keyword::INHERIT, Keyword::NOINHERIT,
-            Keyword::BYPASSRLS, Keyword::NOBYPASSRLS,
-            Keyword::PASSWORD,
-            Keyword::CREATEDB, Keyword::NOCREATEDB,
-            Keyword::CREATEROLE, Keyword::NOCREATEROLE,
-            Keyword::SUPERUSER, Keyword::NOSUPERUSER,
-            Keyword::REPLICATION, Keyword::NOREPLICATION,
-            Keyword::CONNECTION,
-            Keyword::VALID,
-            Keyword::IN,
-            Keyword::ROLE,
-            Keyword::ADMIN,
-            Keyword::USER,
-        ];
+        let optional_keywords = if dialect_of!(self is MsSqlDialect) {
+            vec![Keyword::AUTHORIZATION]
+        } else if dialect_of!(self is PostgreSqlDialect) {
+            vec![
+                Keyword::LOGIN, Keyword::NOLOGIN,
+                Keyword::INHERIT, Keyword::NOINHERIT,
+                Keyword::BYPASSRLS, Keyword::NOBYPASSRLS,
+                Keyword::PASSWORD,
+                Keyword::CREATEDB, Keyword::NOCREATEDB,
+                Keyword::CREATEROLE, Keyword::NOCREATEROLE,
+                Keyword::SUPERUSER, Keyword::NOSUPERUSER,
+                Keyword::REPLICATION, Keyword::NOREPLICATION,
+                Keyword::CONNECTION,
+                Keyword::VALID,
+                Keyword::IN,
+                Keyword::ROLE,
+                Keyword::ADMIN,
+                Keyword::USER,
+            ]
+        } else { vec![] };
 
         // MSSQL
         let mut authorization_owner = None;

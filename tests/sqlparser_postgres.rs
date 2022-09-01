@@ -1750,7 +1750,7 @@ fn parse_create_role() {
             ..
         } => {
             assert_eq_vec(&["mysql_a", "mysql_b"], &names);
-            assert_eq!(if_not_exists, true);
+            assert!(if_not_exists);
         }
         _ => unreachable!(),
     }
@@ -1796,7 +1796,7 @@ fn parse_create_role() {
             }],
         ) => {
             assert_eq_vec(&["magician"], names);
-            assert_eq!(*if_not_exists, false);
+            assert!(!*if_not_exists);
             assert_eq!(*login, Some(true));
             assert_eq!(*inherit, Some(true));
             assert_eq!(*bypassrls, Some(true));
@@ -1835,9 +1835,8 @@ fn parse_create_role() {
 
     for negatable_kw in negatables.iter() {
         let sql = format!("CREATE ROLE abc {kw} NO{kw}", kw = negatable_kw);
-        match pg().parse_sql_statements(&sql) {
-            Ok(_) => panic!("Should not be able to parse CREATE ROLE containing both negated and non-negated versions of the same keyword: {}", negatable_kw),
-            _ => ()
+        if pg().parse_sql_statements(&sql).is_ok() {
+            panic!("Should not be able to parse CREATE ROLE containing both negated and non-negated versions of the same keyword: {}", negatable_kw)
         }
     }
 }

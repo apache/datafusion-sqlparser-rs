@@ -4782,7 +4782,7 @@ fn parse_create_role() {
             ..
         } => {
             assert_eq_vec(&["mysql_a", "mysql_b"], &names);
-            assert_eq!(if_not_exists, true);
+            assert!(if_not_exists);
         }
         _ => unreachable!(),
     }
@@ -4800,7 +4800,7 @@ fn parse_drop_role() {
         } => {
             assert_eq_vec(&["abc"], &names);
             assert_eq!(ObjectType::Role, object_type);
-            assert_eq!(if_exists, false);
+            assert!(!if_exists);
         }
         _ => unreachable!(),
     };
@@ -4815,7 +4815,7 @@ fn parse_drop_role() {
         } => {
             assert_eq_vec(&["def", "magician", "quaternion"], &names);
             assert_eq!(ObjectType::Role, object_type);
-            assert_eq!(if_exists, true);
+            assert!(if_exists);
         }
         _ => unreachable!(),
     }

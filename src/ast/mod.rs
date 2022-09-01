@@ -1935,79 +1935,73 @@ impl fmt::Display for Statement {
                 role,
                 admin,
                 authorization_owner,
-            } => write!(
-                f,
-                "CREATE ROLE {if_not_exists}{names}{superuser}{create_db}{create_role}{inherit}{login}{replication}{bypassrls}{connection_limit}{password}{valid_until}{in_role}{role}{admin}{authorization_owner}",
-                if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                names = display_separated(names, ", "),
-                superuser = match *superuser {
-                    Some(true) => " SUPERUSER",
-                    Some(false) => " NOSUPERUSER",
-                    None => ""
-                },
-                create_db = match *create_db {
-                    Some(true) => " CREATEDB",
-                    Some(false) => " NOCREATEDB",
-                    None => ""
-                },
-                create_role = match *create_role {
-                    Some(true) => " CREATEROLE",
-                    Some(false) => " NOCREATEROLE",
-                    None => ""
-                },
-                inherit = match *inherit {
-                    Some(true) => " INHERIT",
-                    Some(false) => " NOINHERIT",
-                    None => ""
-                },
-                login = match *login {
-                    Some(true) => " LOGIN",
-                    Some(false) => " NOLOGIN",
-                    None => ""
-                },
-                replication = match *replication {
-                    Some(true) => " REPLICATION",
-                    Some(false) => " NOREPLICATION",
-                    None => ""
-                },
-                bypassrls = match *bypassrls {
-                    Some(true) => " BYPASSRLS",
-                    Some(false) => " NOBYPASSRLS",
-                    None => ""
-                },
-                connection_limit = match &*connection_limit {
-                    Some(limit) => format!(" CONNECTION LIMIT {}", limit),
-                    None => "".to_string(),
-                },
-                password = match &*password {
-                    Some(Password::Password(pass)) => format!(" PASSWORD {}", pass),
-                    Some(Password::NullPassword) => " PASSWORD NULL".to_string(),
-                    None => "".to_string(),
-                },
-                valid_until = match &*valid_until {
-                    Some(until) => format!(" VALID UNTIL {}", until),
-                    None => "".to_string(),
-                },
-                in_role = if in_role.is_empty() {
-                    "".into()
-                } else {
-                    format!(" IN ROLE {}", display_comma_separated(in_role))
-                },
-                role = if role.is_empty() {
-                    "".into()
-                } else {
-                    format!(" ROLE {}", display_comma_separated(role))
-                },
-                admin = if admin.is_empty() {
-                    "".into()
-                } else {
-                    format!(" ADMIN {}", display_comma_separated(admin))
-                },
-                authorization_owner = match &*authorization_owner {
-                    Some(owner) => format!(" AUTHORIZATION {}", owner),
-                    None => "".to_string()
-                },
-            ),
+            } => {
+                write!(
+                    f,
+                    "CREATE ROLE {if_not_exists}{names}{superuser}{create_db}{create_role}{inherit}{login}{replication}{bypassrls}",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    names = display_separated(names, ", "),
+                    superuser = match *superuser {
+                        Some(true) => " SUPERUSER",
+                        Some(false) => " NOSUPERUSER",
+                        None => ""
+                    },
+                    create_db = match *create_db {
+                        Some(true) => " CREATEDB",
+                        Some(false) => " NOCREATEDB",
+                        None => ""
+                    },
+                    create_role = match *create_role {
+                        Some(true) => " CREATEROLE",
+                        Some(false) => " NOCREATEROLE",
+                        None => ""
+                    },
+                    inherit = match *inherit {
+                        Some(true) => " INHERIT",
+                        Some(false) => " NOINHERIT",
+                        None => ""
+                    },
+                    login = match *login {
+                        Some(true) => " LOGIN",
+                        Some(false) => " NOLOGIN",
+                        None => ""
+                    },
+                    replication = match *replication {
+                        Some(true) => " REPLICATION",
+                        Some(false) => " NOREPLICATION",
+                        None => ""
+                    },
+                    bypassrls = match *bypassrls {
+                        Some(true) => " BYPASSRLS",
+                        Some(false) => " NOBYPASSRLS",
+                        None => ""
+                    }
+                )?;
+                if let Some(limit) = &*connection_limit {
+                    write!(f, " CONNECTION LIMIT {}", limit)?;
+                }
+                match &*password {
+                    Some(Password::Password(pass)) => write!(f, " PASSWORD {}", pass),
+                    Some(Password::NullPassword) => write!(f, " PASSWORD NULL"),
+                    None => Ok(()),
+                }?;
+                if let Some(until) = valid_until {
+                    write!(f, " VALID UNTIL {}", until)?;
+                }
+                if !in_role.is_empty() {
+                    write!(f, " IN ROLE {}", display_comma_separated(in_role))?;
+                }
+                if !role.is_empty() {
+                    write!(f, " ROLE {}", display_comma_separated(role))?;
+                }
+                if !admin.is_empty() {
+                    write!(f, " ADMIN {}", display_comma_separated(admin))?;
+                }
+                if let Some(owner) = authorization_owner {
+                    write!(f, " AUTHORIZATION {}", owner)?;
+                }
+                Ok(())
+            }
             Statement::AlterTable { name, operation } => {
                 write!(f, "ALTER TABLE {} {}", name, operation)
             }

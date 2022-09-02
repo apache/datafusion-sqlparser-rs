@@ -4957,7 +4957,6 @@ fn parse_merge() {
                             top: None,
                             projection: vec![SelectItem::Wildcard],
                             into: None,
-                            filter_during_agg: None,
                             from: vec![TableWithJoins {
                                 relation: TableFactor::Table {
                                     name: ObjectName(vec![Ident::new("s"), Ident::new("foo")]),

@@ -434,7 +434,6 @@ fn parse_update_set_from() {
                                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
                             ],
                             into: None,
-                            filter_during_agg: None,
                             from: vec![TableWithJoins {
                                 relation: TableFactor::Table {
                                     name: ObjectName(vec![Ident::new("t1")]),
@@ -1275,7 +1274,6 @@ fn parse_array_subquery_expr() {
                         false,
                     )))],
                     into: None,
-                    filter_during_agg: None,
                     from: vec![],
                     lateral_views: vec![],
                     selection: None,
@@ -1297,7 +1295,6 @@ fn parse_array_subquery_expr() {
                         false,
                     )))],
                     into: None,
-                    filter_during_agg: None,
                     from: vec![],
                     lateral_views: vec![],
                     selection: None,

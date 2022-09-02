@@ -3623,28 +3623,6 @@ impl<'a> Parser<'a> {
             None
         };
 
-        // filtering during aggregation
-        // FILTER (WHERE expr)
-        // https://trino.io/docs/current/functions/aggregate.html#filtering-during-aggregation
-        let filter_during_agg = if self.dialect.supports_filter_during_aggregation() {
-            match self.peek_token() {
-                Token::Word(word) if word.value.as_str().to_lowercase() == "filter" => {
-                    let i = self.index;
-                    if self.consume_token(&Token::LParen) && self.parse_keyword(Keyword::WHERE) {
-                        let expr = self.parse_expr()?;
-                        self.expect_token(&Token::RParen)?;
-                        Some(expr)
-                    } else {
-                        self.index = i;
-                        None
-                    }
-                }
-                _ => None,
-            }
-        } else {
-            None
-        };
-
         // Note that for keywords to be properly handled here, they need to be
         // added to `RESERVED_FOR_COLUMN_ALIAS` / `RESERVED_FOR_TABLE_ALIAS`,
         // otherwise they may be parsed as an alias as part of the `projection`
@@ -3734,7 +3712,6 @@ impl<'a> Parser<'a> {
             top,
             projection,
             into,
-            filter_during_agg,
             from,
             lateral_views,
             selection,
@@ -4543,7 +4520,9 @@ impl<'a> Parser<'a> {
                             if self.consume_token(&Token::LParen)
                                 && self.parse_keyword(Keyword::WHERE)
                             {
-                                Ok(SelectItem::UnnamedExpr(expr))
+                                let filter = self.parse_expr()?;
+                                self.expect_token(&Token::RParen)?;
+                                Ok(SelectItem::AggregateWithFilter { expr, filter })
                             } else {
                                 self.index = i;
                                 Ok(SelectItem::ExprWithAlias { expr, alias: ident })

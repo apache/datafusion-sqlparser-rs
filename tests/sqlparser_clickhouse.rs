@@ -55,7 +55,6 @@ fn parse_map_access_expr() {
                 })],
             })],
             into: None,
-            filter_during_agg: None,
             from: vec![TableWithJoins {
                 relation: Table {
                     name: ObjectName(vec![Ident::new("foos")]),

@@ -142,8 +142,6 @@ pub struct Select {
     pub from: Vec<TableWithJoins>,
     /// LATERAL VIEWs
     pub lateral_views: Vec<LateralView>,
-    /// FILTER (WHERE ..)
-    pub filter_during_agg: Option<Expr>,
     /// WHERE
     pub selection: Option<Expr>,
     /// GROUP BY
@@ -170,10 +168,6 @@ impl fmt::Display for Select {
 
         if let Some(ref into) = self.into {
             write!(f, " {}", into)?;
-        }
-
-        if let Some(ref filter) = self.filter_during_agg {
-            write!(f, " FILTER (WHERE {})", filter)?;
         }
 
         if !self.from.is_empty() {
@@ -303,6 +297,8 @@ pub enum SelectItem {
     QualifiedWildcard(ObjectName),
     /// An unqualified `*`
     Wildcard,
+    /// Aggregate expression with filter such as `array_agg(name) FILTER (WHERE name IS NOT NULL)`
+    AggregateWithFilter { expr: Expr, filter: Expr },
 }
 
 impl fmt::Display for SelectItem {
@@ -310,6 +306,9 @@ impl fmt::Display for SelectItem {
         match &self {
             SelectItem::UnnamedExpr(expr) => write!(f, "{}", expr),
             SelectItem::ExprWithAlias { expr, alias } => write!(f, "{} AS {}", expr, alias),
+            SelectItem::AggregateWithFilter { expr, filter } => {
+                write!(f, "{} FILTER (WHERE {})", expr, filter)
+            }
             SelectItem::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
             SelectItem::Wildcard => write!(f, "*"),
         }

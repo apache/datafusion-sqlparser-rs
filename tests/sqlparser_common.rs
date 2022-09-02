@@ -2854,7 +2854,7 @@ fn parse_literal_datetime() {
 }
 
 #[test]
-fn parse_literal_timestamp() {
+fn parse_literal_timestamp_without_time_zone() {
     let sql = "SELECT TIMESTAMP '1999-01-01 01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
@@ -2863,6 +2863,29 @@ fn parse_literal_timestamp() {
             value: "1999-01-01 01:23:34".into()
         },
         expr_from_projection(only(&select.projection)),
+    );
+
+    one_statement_parses_to(
+        "SELECT TIMESTAMP WITHOUT TIME ZONE '1999-01-01 01:23:34'",
+        sql,
+    );
+}
+
+#[test]
+fn parse_literal_timestamp_with_time_zone() {
+    let sql = "SELECT TIMESTAMPTZ '1999-01-01 01:23:34Z'";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::TypedString {
+            data_type: DataType::TimestampTz,
+            value: "1999-01-01 01:23:34Z".into()
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
+    one_statement_parses_to(
+        "SELECT TIMESTAMP WITH TIME ZONE '1999-01-01 01:23:34Z'",
+        sql,
     );
 }
 
@@ -3948,6 +3971,38 @@ fn parse_substring() {
     );
 
     one_statement_parses_to("SELECT SUBSTRING('1' FOR 3)", "SELECT SUBSTRING('1' FOR 3)");
+}
+
+#[test]
+fn parse_overlay() {
+    one_statement_parses_to(
+        "SELECT OVERLAY('abccccde' PLACING 'abc' FROM 3)",
+        "SELECT OVERLAY('abccccde' PLACING 'abc' FROM 3)",
+    );
+    one_statement_parses_to(
+        "SELECT OVERLAY('abccccde' PLACING 'abc' FROM 3 FOR 12)",
+        "SELECT OVERLAY('abccccde' PLACING 'abc' FROM 3 FOR 12)",
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected PLACING, found: FROM".to_owned()),
+        parse_sql_statements("SELECT OVERLAY('abccccde' FROM 3)").unwrap_err(),
+    );
+
+    let sql = "SELECT OVERLAY('abcdef' PLACING name FROM 3 FOR id + 1) FROM CUSTOMERS";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Overlay {
+            expr: Box::new(Expr::Value(Value::SingleQuotedString("abcdef".to_string()))),
+            overlay_what: Box::new(Expr::Identifier(Ident::new("name"))),
+            overlay_from: Box::new(Expr::Value(number("3"))),
+            overlay_for: Some(Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("id"))),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Value(number("1"))),
+            }))
+        },
+        expr_from_projection(only(&select.projection))
+    );
 }
 
 #[test]
@@ -5298,6 +5353,38 @@ fn parse_time_functions() {
 
     // Validating Parenthesis
     one_statement_parses_to("SELECT CURRENT_DATE", sql);
+
+    let sql = "SELECT LOCALTIME()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("LOCALTIME")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+            special: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT LOCALTIME", sql);
+
+    let sql = "SELECT LOCALTIMESTAMP()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("LOCALTIMESTAMP")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+            special: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT LOCALTIMESTAMP", sql);
 }
 
 #[test]
@@ -5334,21 +5421,50 @@ fn parse_position_negative() {
 fn parse_is_boolean() {
     use self::Expr::*;
 
-    let sql = "a IS FALSE";
-    assert_eq!(
-        IsFalse(Box::new(Identifier(Ident::new("a")))),
-        verified_expr(sql)
-    );
-
     let sql = "a IS TRUE";
     assert_eq!(
         IsTrue(Box::new(Identifier(Ident::new("a")))),
         verified_expr(sql)
     );
 
+    let sql = "a IS NOT TRUE";
+    assert_eq!(
+        IsNotTrue(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+
+    let sql = "a IS FALSE";
+    assert_eq!(
+        IsFalse(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+
+    let sql = "a IS NOT FALSE";
+    assert_eq!(
+        IsNotFalse(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+
+    let sql = "a IS UNKNOWN";
+    assert_eq!(
+        IsUnknown(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+
+    let sql = "a IS NOT UNKNOWN";
+    assert_eq!(
+        IsNotUnknown(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+
     verified_stmt("SELECT f FROM foo WHERE field IS TRUE");
+    verified_stmt("SELECT f FROM foo WHERE field IS NOT TRUE");
 
     verified_stmt("SELECT f FROM foo WHERE field IS FALSE");
+    verified_stmt("SELECT f FROM foo WHERE field IS NOT FALSE");
+
+    verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
+    verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
 
     let sql = "SELECT f from foo where field is 0";
     let res = parse_sql_statements(sql);

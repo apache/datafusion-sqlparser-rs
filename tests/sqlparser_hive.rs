@@ -294,6 +294,12 @@ fn filtering_during_aggregation_aliased() {
     println!("{}", hive().verified_stmt(rename));
 }
 
+/*
+projection: [ExprWithAlias { expr: Identifier(Ident { value: "name", quote_style: None }), alias: Ident { value: "filter", quote_style: None } }], into: None,
+projection: [UnnamedExpr(Identifier(Ident { value: "name", quote_style: None }))], into: None,
+
+ */
+
 #[test]
 fn filter_as_alias() {
     let sql = "SELECT name filter FROM region";

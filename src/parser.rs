@@ -4546,7 +4546,7 @@ impl<'a> Parser<'a> {
                 let expr: Expr = if self.dialect.supports_filter_during_aggregation()
                     && self.parse_keyword(Keyword::FILTER)
                 {
-                    let i = self.index;
+                    let i = self.index - 1;
                     if self.consume_token(&Token::LParen) && self.parse_keyword(Keyword::WHERE) {
                         let filter = self.parse_expr()?;
                         self.expect_token(&Token::RParen)?;

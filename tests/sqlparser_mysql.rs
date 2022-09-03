@@ -1016,6 +1016,28 @@ fn parse_table_colum_option_on_update() {
         }
         _ => unreachable!(),
     }
+
+    let sql2 = "CREATE TABLE foo (`modification_time` DATETIME ON UPDATE CURRENT_TIMESTAMP)";
+    match mysql().verified_stmt(sql2) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::with_quote('`', "modification_time"),
+                    data_type: DataType::Datetime,
+                    collation: None,
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
+                            "ON UPDATE CURRENT_TIMESTAMP"
+                        )]),
+                    },],
+                }],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

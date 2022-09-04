@@ -29,7 +29,10 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "derive-visitor")]
-use derive_visitor::{Drive, DriveMut};
+pub use derive_visitor::{
+    visitor_fn, visitor_enter_fn, visitor_enter_fn_mut, visitor_fn_mut,
+    Visitor, VisitorMut, Drive, DriveMut,
+};
 
 pub use self::data_type::DataType;
 pub use self::ddl::{

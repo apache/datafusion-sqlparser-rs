@@ -1739,3 +1739,25 @@ fn parse_custom_operator() {
         })
     );
 }
+
+#[test]
+fn parse_abort() {
+    match pg().verified_stmt("ROLLBACK") {
+        Statement::Rollback { chain: false } => (),
+        _ => unreachable!(),
+    }
+    pg().one_statement_parses_to("ABORT", "ROLLBACK");
+    pg().one_statement_parses_to("ABORT WORK", "ROLLBACK");
+    pg().one_statement_parses_to("ABORT TRANSACTION", "ROLLBACK");
+}
+
+#[test]
+fn parse_end() {
+    match pg().verified_stmt("COMMIT") {
+        Statement::Commit { chain: false } => (),
+        _ => unreachable!(),
+    }
+    pg().one_statement_parses_to("END", "COMMIT");
+    pg().one_statement_parses_to("END WORK", "COMMIT");
+    pg().one_statement_parses_to("END TRANSACTION", "COMMIT");
+}

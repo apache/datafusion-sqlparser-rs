@@ -192,7 +192,11 @@ impl<'a> Parser<'a> {
                 Keyword::BEGIN => Ok(self.parse_begin()?),
                 Keyword::SAVEPOINT => Ok(self.parse_savepoint()?),
                 Keyword::COMMIT => Ok(self.parse_commit()?),
+                Keyword::END if dialect_of!(self is PostgreSqlDialect) => Ok(self.parse_commit()?),
                 Keyword::ROLLBACK => Ok(self.parse_rollback()?),
+                Keyword::ABORT if dialect_of!(self is PostgreSqlDialect) => {
+                    Ok(self.parse_rollback()?)
+                }
                 Keyword::ASSERT => Ok(self.parse_assert()?),
                 // `PREPARE`, `EXECUTE` and `DEALLOCATE` are Postgres-specific
                 // syntaxes. They are used for Postgres prepared statement.

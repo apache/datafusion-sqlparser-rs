@@ -17,6 +17,9 @@ use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "derive-visitor")]
+use derive_visitor::{Drive, DriveMut};
+
 use crate::ast::ObjectName;
 
 use super::value::escape_single_quote_string;
@@ -24,47 +27,48 @@ use super::value::escape_single_quote_string;
 /// SQL data types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum DataType {
     /// Fixed-length character type e.g. CHAR(10)
-    Char(Option<u64>),
+    Char(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Variable-length character type e.g. VARCHAR(10)
-    Varchar(Option<u64>),
+    Varchar(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Variable-length character type e.g. NVARCHAR(10)
-    Nvarchar(Option<u64>),
+    Nvarchar(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Uuid type
     Uuid,
     /// Large character object e.g. CLOB(1000)
-    Clob(u64),
+    Clob(#[cfg_attr(feature = "derive-visitor", drive(skip))] u64),
     /// Fixed-length binary type e.g. BINARY(10)
-    Binary(u64),
+    Binary(#[cfg_attr(feature = "derive-visitor", drive(skip))] u64),
     /// Variable-length binary type e.g. VARBINARY(10)
-    Varbinary(u64),
+    Varbinary(#[cfg_attr(feature = "derive-visitor", drive(skip))] u64),
     /// Large binary object e.g. BLOB(1000)
-    Blob(u64),
+    Blob(#[cfg_attr(feature = "derive-visitor", drive(skip))] u64),
     /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
-    Decimal(Option<u64>, Option<u64>),
+    Decimal(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>, #[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Floating point with optional precision e.g. FLOAT(8)
-    Float(Option<u64>),
+    Float(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Tiny integer with optional display width e.g. TINYINT or TINYINT(3)
-    TinyInt(Option<u64>),
+    TinyInt(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Unsigned tiny integer with optional display width e.g. TINYINT UNSIGNED or TINYINT(3) UNSIGNED
-    UnsignedTinyInt(Option<u64>),
+    UnsignedTinyInt(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Small integer with optional display width e.g. SMALLINT or SMALLINT(5)
-    SmallInt(Option<u64>),
+    SmallInt(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Unsigned small integer with optional display width e.g. SMALLINT UNSIGNED or SMALLINT(5) UNSIGNED
-    UnsignedSmallInt(Option<u64>),
+    UnsignedSmallInt(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Integer with optional display width e.g. INT or INT(11)
-    Int(Option<u64>),
+    Int(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Integer with optional display width e.g. INTEGER or INTEGER(11)
-    Integer(Option<u64>),
+    Integer(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Unsigned integer with optional display width e.g. INT UNSIGNED or INT(11) UNSIGNED
-    UnsignedInt(Option<u64>),
+    UnsignedInt(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Unsigned integer with optional display width e.g. INTGER UNSIGNED or INTEGER(11) UNSIGNED
-    UnsignedInteger(Option<u64>),
+    UnsignedInteger(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Big integer with optional display width e.g. BIGINT or BIGINT(20)
-    BigInt(Option<u64>),
+    BigInt(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Unsigned big integer with optional display width e.g. BIGINT UNSIGNED or BIGINT(20) UNSIGNED
-    UnsignedBigInt(Option<u64>),
+    UnsignedBigInt(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Floating point e.g. REAL
     Real,
     /// Double e.g. DOUBLE PRECISION
@@ -96,9 +100,9 @@ pub enum DataType {
     /// Arrays
     Array(Box<DataType>),
     /// Enums
-    Enum(Vec<String>),
+    Enum(#[cfg_attr(feature = "derive-visitor", drive(skip))] Vec<String>),
     /// Set
-    Set(Vec<String>),
+    Set(#[cfg_attr(feature = "derive-visitor", drive(skip))] Vec<String>),
 }
 
 impl fmt::Display for DataType {

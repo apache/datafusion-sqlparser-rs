@@ -27,6 +27,10 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+
+#[cfg(feature = "derive-visitor")]
+use derive_visitor::{Drive, DriveMut};
+
 /// Defines a string constant for a single keyword: `kw_def!(SELECT);`
 /// expands to `pub const SELECT = "SELECT";`
 macro_rules! kw_def {
@@ -46,6 +50,7 @@ macro_rules! define_keywords {
     ),*) => {
         #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
         #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+        #[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
         #[allow(non_camel_case_types)]
         pub enum Keyword {
             NoKeyword,

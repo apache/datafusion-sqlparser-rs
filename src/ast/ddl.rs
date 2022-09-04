@@ -20,6 +20,9 @@ use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "derive-visitor")]
+use derive_visitor::{Drive, DriveMut};
+
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{display_comma_separated, display_separated, DataType, Expr, Ident, ObjectName};
 use crate::tokenizer::Token;
@@ -27,6 +30,7 @@ use crate::tokenizer::Token;
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum AlterTableOperation {
     /// `ADD <table_constraint>`
     AddConstraint(TableConstraint),
@@ -34,15 +38,15 @@ pub enum AlterTableOperation {
     AddColumn { column_def: ColumnDef },
     /// `DROP CONSTRAINT [ IF EXISTS ] <name>`
     DropConstraint {
-        if_exists: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] if_exists: bool,
         name: Ident,
-        cascade: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] cascade: bool,
     },
     /// `DROP [ COLUMN ] [ IF EXISTS ] <column_name> [ CASCADE ]`
     DropColumn {
         column_name: Ident,
-        if_exists: bool,
-        cascade: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] if_exists: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] cascade: bool,
     },
     /// `RENAME TO PARTITION (partition=val)`
     RenamePartitions {
@@ -51,12 +55,12 @@ pub enum AlterTableOperation {
     },
     /// Add Partitions
     AddPartitions {
-        if_not_exists: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] if_not_exists: bool,
         new_partitions: Vec<Expr>,
     },
     DropPartitions {
         partitions: Vec<Expr>,
-        if_exists: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] if_exists: bool,
     },
     /// `RENAME [ COLUMN ] <old_column_name> TO <new_column_name>`
     RenameColumn {
@@ -178,6 +182,7 @@ impl fmt::Display for AlterTableOperation {
 /// An `ALTER COLUMN` (`Statement::AlterTable`) operation
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum AlterColumnOperation {
     /// `SET NOT NULL`
     SetNotNull,
@@ -221,13 +226,14 @@ impl fmt::Display for AlterColumnOperation {
 /// `ALTER TABLE ADD <constraint>` statement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum TableConstraint {
     /// `[ CONSTRAINT <name> ] { PRIMARY KEY | UNIQUE } (<columns>)`
     Unique {
         name: Option<Ident>,
         columns: Vec<Ident>,
         /// Whether this is a `PRIMARY KEY` or just a `UNIQUE` constraint
-        is_primary: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] is_primary: bool,
     },
     /// A referential integrity constraint (`[ CONSTRAINT <name> ] FOREIGN KEY (<columns>)
     /// REFERENCES <foreign_table> (<referred_columns>)
@@ -297,6 +303,7 @@ impl fmt::Display for TableConstraint {
 /// SQL column definition
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct ColumnDef {
     pub name: Ident,
     pub data_type: DataType,
@@ -332,6 +339,7 @@ impl fmt::Display for ColumnDef {
 /// "column options," and we allow any column option to be named.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct ColumnOptionDef {
     pub name: Option<Ident>,
     pub option: ColumnOption,
@@ -347,6 +355,7 @@ impl fmt::Display for ColumnOptionDef {
 /// TABLE` statement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum ColumnOption {
     /// `NULL`
     Null,
@@ -356,7 +365,7 @@ pub enum ColumnOption {
     Default(Expr),
     /// `{ PRIMARY KEY | UNIQUE }`
     Unique {
-        is_primary: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] is_primary: bool,
     },
     /// A referential integrity constraint (`[FOREIGN KEY REFERENCES
     /// <foreign_table> (<referred_columns>)
@@ -376,7 +385,7 @@ pub enum ColumnOption {
     /// - ...
     DialectSpecific(Vec<Token>),
     CharacterSet(ObjectName),
-    Comment(String),
+    Comment(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
 }
 
 impl fmt::Display for ColumnOption {
@@ -433,7 +442,7 @@ fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
 ///
 /// Used in foreign key constraints in `ON UPDATE` and `ON DELETE` options.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum ReferentialAction {
     Restrict,
     Cascade,

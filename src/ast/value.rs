@@ -21,30 +21,34 @@ use bigdecimal::BigDecimal;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "derive-visitor")]
+use derive_visitor::{Drive, DriveMut};
+
 use super::Expr;
 
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum Value {
     /// Numeric literal
     #[cfg(not(feature = "bigdecimal"))]
-    Number(String, bool),
+    Number(#[cfg_attr(feature = "derive-visitor", drive(skip))] String, #[cfg_attr(feature = "derive-visitor", drive(skip))] bool),
     #[cfg(feature = "bigdecimal")]
-    Number(BigDecimal, bool),
+    Number(#[cfg_attr(feature = "derive-visitor", drive(skip))] BigDecimal, #[cfg_attr(feature = "derive-visitor", drive(skip))] bool),
     /// 'string value'
-    SingleQuotedString(String),
+    SingleQuotedString(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
     /// e'string value' (postgres extension)
     /// <https://www.postgresql.org/docs/8.3/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS
-    EscapedStringLiteral(String),
+    EscapedStringLiteral(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
     /// N'string value'
-    NationalStringLiteral(String),
+    NationalStringLiteral(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
     /// X'hex value'
-    HexStringLiteral(String),
+    HexStringLiteral(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
 
-    DoubleQuotedString(String),
+    DoubleQuotedString(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
     /// Boolean value true or false
-    Boolean(bool),
+    Boolean(#[cfg_attr(feature = "derive-visitor", drive(skip))] bool),
     /// INTERVAL literals, roughly in the following format:
     /// `INTERVAL '<value>' [ <leading_field> [ (<leading_precision>) ] ]
     /// [ TO <last_field> [ (<fractional_seconds_precision>) ] ]`,
@@ -56,18 +60,18 @@ pub enum Value {
     Interval {
         value: Box<Expr>,
         leading_field: Option<DateTimeField>,
-        leading_precision: Option<u64>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] leading_precision: Option<u64>,
         last_field: Option<DateTimeField>,
         /// The seconds precision can be specified in SQL source as
         /// `INTERVAL '__' SECOND(_, x)` (in which case the `leading_field`
         /// will be `Second` and the `last_field` will be `None`),
         /// or as `__ TO SECOND(x)`.
-        fractional_seconds_precision: Option<u64>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] fractional_seconds_precision: Option<u64>,
     },
     /// `NULL` value
     Null,
     /// `?` or `$` Prepared statement arg placeholder
-    Placeholder(String),
+    Placeholder(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
 }
 
 impl fmt::Display for Value {
@@ -126,6 +130,7 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum DateTimeField {
     Year,
     Month,
@@ -242,6 +247,7 @@ pub fn escape_escaped_string(s: &str) -> EscapeEscapedStringLiteral<'_> {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum TrimWhereField {
     Both,
     Leading,

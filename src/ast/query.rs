@@ -16,12 +16,16 @@ use alloc::{boxed::Box, vec::Vec};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "derive-visitor")]
+use derive_visitor::{Drive, DriveMut};
+
 use crate::ast::*;
 
 /// The most complete variant of a `SELECT` query expression, optionally
 /// including `WITH`, `UNION` / other set operations, and `ORDER BY`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Query {
     /// WITH (common table expressions, or CTEs)
     pub with: Option<With>,
@@ -69,6 +73,7 @@ impl fmt::Display for Query {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum SetExpr {
     /// Restricted SELECT .. FROM .. HAVING (no ORDER BY or set operations)
     Select(Box<Select>),
@@ -78,7 +83,7 @@ pub enum SetExpr {
     /// UNION/EXCEPT/INTERSECT of two queries
     SetOperation {
         op: SetOperator,
-        all: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] all: bool,
         left: Box<SetExpr>,
         right: Box<SetExpr>,
     },
@@ -109,6 +114,7 @@ impl fmt::Display for SetExpr {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum SetOperator {
     Union,
     Except,
@@ -130,8 +136,9 @@ impl fmt::Display for SetOperator {
 /// to a set operation like `UNION`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Select {
-    pub distinct: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub distinct: bool,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
     /// projection expressions
@@ -214,6 +221,7 @@ impl fmt::Display for Select {
 /// A hive LATERAL VIEW with potential column aliases
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct LateralView {
     /// LATERAL VIEW
     pub lateral_view: Expr,
@@ -222,7 +230,7 @@ pub struct LateralView {
     /// LATERAL VIEW optional column aliases
     pub lateral_col_alias: Vec<Ident>,
     /// LATERAL VIEW OUTER
-    pub outer: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub outer: bool,
 }
 
 impl fmt::Display for LateralView {
@@ -247,8 +255,9 @@ impl fmt::Display for LateralView {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct With {
-    pub recursive: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub recursive: bool,
     pub cte_tables: Vec<Cte>,
 }
 
@@ -269,6 +278,7 @@ impl fmt::Display for With {
 /// number of columns in the query matches the number of columns in the query.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Cte {
     pub alias: TableAlias,
     pub query: Query,
@@ -288,6 +298,7 @@ impl fmt::Display for Cte {
 /// One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum SelectItem {
     /// Any expression, not followed by `[ AS ] alias`
     UnnamedExpr(Expr),
@@ -312,6 +323,7 @@ impl fmt::Display for SelectItem {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct TableWithJoins {
     pub relation: TableFactor,
     pub joins: Vec<Join>,
@@ -330,6 +342,7 @@ impl fmt::Display for TableWithJoins {
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum TableFactor {
     Table {
         name: ObjectName,
@@ -346,7 +359,7 @@ pub enum TableFactor {
         with_hints: Vec<Expr>,
     },
     Derived {
-        lateral: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] lateral: bool,
         subquery: Box<Query>,
         alias: Option<TableAlias>,
     },
@@ -366,7 +379,7 @@ pub enum TableFactor {
     UNNEST {
         alias: Option<TableAlias>,
         array_expr: Box<Expr>,
-        with_offset: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] with_offset: bool,
         with_offset_alias: Option<Ident>,
     },
     /// Represents a parenthesized table factor. The SQL spec only allows a
@@ -457,6 +470,7 @@ impl fmt::Display for TableFactor {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct TableAlias {
     pub name: Ident,
     pub columns: Vec<Ident>,
@@ -474,6 +488,7 @@ impl fmt::Display for TableAlias {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Join {
     pub relation: TableFactor,
     pub join_operator: JoinOperator,
@@ -540,6 +555,7 @@ impl fmt::Display for Join {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum JoinOperator {
     Inner(JoinConstraint),
     LeftOuter(JoinConstraint),
@@ -554,6 +570,7 @@ pub enum JoinOperator {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum JoinConstraint {
     On(Expr),
     Using(Vec<Ident>),
@@ -564,12 +581,13 @@ pub enum JoinConstraint {
 /// An `ORDER BY` expression
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct OrderByExpr {
     pub expr: Expr,
     /// Optional `ASC` or `DESC`
-    pub asc: Option<bool>,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub asc: Option<bool>,
     /// Optional `NULLS FIRST` or `NULLS LAST`
-    pub nulls_first: Option<bool>,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub nulls_first: Option<bool>,
 }
 
 impl fmt::Display for OrderByExpr {
@@ -591,6 +609,7 @@ impl fmt::Display for OrderByExpr {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Offset {
     pub value: Expr,
     pub rows: OffsetRows,
@@ -605,6 +624,7 @@ impl fmt::Display for Offset {
 /// Stores the keyword after `OFFSET <number>`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum OffsetRows {
     /// Omitting ROW/ROWS is non-standard MySQL quirk.
     None,
@@ -624,9 +644,10 @@ impl fmt::Display for OffsetRows {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Fetch {
-    pub with_ties: bool,
-    pub percent: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub with_ties: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub percent: bool,
     pub quantity: Option<Expr>,
 }
 
@@ -644,6 +665,7 @@ impl fmt::Display for Fetch {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum LockType {
     Share,
     Update,
@@ -661,10 +683,11 @@ impl fmt::Display for LockType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Top {
     /// SQL semantic equivalent of LIMIT but with same structure as FETCH.
-    pub with_ties: bool,
-    pub percent: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub with_ties: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub percent: bool,
     pub quantity: Option<Expr>,
 }
 
@@ -682,6 +705,7 @@ impl fmt::Display for Top {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Values(pub Vec<Vec<Expr>>);
 
 impl fmt::Display for Values {
@@ -699,10 +723,11 @@ impl fmt::Display for Values {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct SelectInto {
-    pub temporary: bool,
-    pub unlogged: bool,
-    pub table: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub temporary: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub unlogged: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub table: bool,
     pub name: ObjectName,
 }
 

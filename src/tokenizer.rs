@@ -31,6 +31,9 @@ use core::str::Chars;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "derive-visitor")]
+use derive_visitor::{Drive, DriveMut};
+
 use crate::dialect::SnowflakeDialect;
 use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
@@ -38,25 +41,26 @@ use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum Token {
     /// An end-of-file marker, not a real token
     EOF,
     /// A keyword (like SELECT) or an optionally quoted SQL identifier
     Word(Word),
     /// An unsigned numeric literal
-    Number(String, bool),
+    Number(#[cfg_attr(feature = "derive-visitor", drive(skip))] String, #[cfg_attr(feature = "derive-visitor", drive(skip))] bool),
     /// A character that could not be tokenized
-    Char(char),
+    Char(#[cfg_attr(feature = "derive-visitor", drive(skip))] char),
     /// Single quoted string: i.e: 'string'
-    SingleQuotedString(String),
+    SingleQuotedString(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
     /// Double quoted string: i.e: "string"
-    DoubleQuotedString(String),
+    DoubleQuotedString(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
     /// "National" string literal: i.e: N'string'
-    NationalStringLiteral(String),
+    NationalStringLiteral(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
     /// "escaped" string literal, which are an extension to the SQL standard: i.e: e'first \n second' or E 'first \n second'
-    EscapedStringLiteral(String),
+    EscapedStringLiteral(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
     /// Hexadecimal string literal: i.e.: X'deadbeef'
-    HexStringLiteral(String),
+    HexStringLiteral(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
     /// Comma
     Comma,
     /// Whitespace (space, tab, etc)
@@ -144,7 +148,7 @@ pub enum Token {
     /// `||/` , a cube root math operator in PostgreSQL
     PGCubeRoot,
     /// `?` or `$` , a prepared statement arg placeholder
-    Placeholder(String),
+    Placeholder(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
     /// ->, used as a operator to extract json field in PostgreSQL
     Arrow,
     /// ->>, used as a operator to extract json field as text in PostgreSQL
@@ -242,14 +246,15 @@ impl Token {
 /// A keyword (like SELECT) or an optionally quoted SQL identifier
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Word {
     /// The value of the token, without the enclosing quotes, and with the
     /// escape sequences (if any) processed (TODO: escapes are not handled)
-    pub value: String,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub value: String,
     /// An identifier can be "quoted" (&lt;delimited identifier> in ANSI parlance).
     /// The standard and most implementations allow using double quotes for this,
     /// but some implementations support other quoting styles as well (e.g. \[MS SQL])
-    pub quote_style: Option<char>,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub quote_style: Option<char>,
     /// If the word was not quoted and it matched one of the known keywords,
     /// this will have one of the values from dialect::keywords, otherwise empty
     pub keyword: Keyword,
@@ -280,12 +285,13 @@ impl Word {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum Whitespace {
     Space,
     Newline,
     Tab,
-    SingleLineComment { comment: String, prefix: String },
-    MultiLineComment(String),
+    SingleLineComment { #[cfg_attr(feature = "derive-visitor", drive(skip))] comment: String, #[cfg_attr(feature = "derive-visitor", drive(skip))] prefix: String },
+    MultiLineComment(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
 }
 
 impl fmt::Display for Whitespace {
@@ -458,31 +464,31 @@ impl<'a> Tokenizer<'a> {
                 // double quoted string
                 '\"' if !self.dialect.is_delimited_identifier_start(ch)
                     && !self.dialect.is_identifier_start(ch) =>
-                {
-                    let s = self.tokenize_quoted_string(chars, '"')?;
+                    {
+                        let s = self.tokenize_quoted_string(chars, '"')?;
 
-                    Ok(Some(Token::DoubleQuotedString(s)))
-                }
+                        Ok(Some(Token::DoubleQuotedString(s)))
+                    }
                 // delimited (quoted) identifier
                 quote_start
-                    if self.dialect.is_delimited_identifier_start(ch)
-                        && self
-                            .dialect
-                            .is_proper_identifier_inside_quotes(chars.clone()) =>
-                {
-                    chars.next(); // consume the opening quote
-                    let quote_end = Word::matching_end_quote(quote_start);
-                    let (s, last_char) = parse_quoted_ident(chars, quote_end);
+                if self.dialect.is_delimited_identifier_start(ch)
+                    && self
+                    .dialect
+                    .is_proper_identifier_inside_quotes(chars.clone()) =>
+                    {
+                        chars.next(); // consume the opening quote
+                        let quote_end = Word::matching_end_quote(quote_start);
+                        let (s, last_char) = parse_quoted_ident(chars, quote_end);
 
-                    if last_char == Some(quote_end) {
-                        Ok(Some(Token::make_word(&s, Some(quote_start))))
-                    } else {
-                        self.tokenizer_error(format!(
-                            "Expected close delimiter '{}' before EOF.",
-                            quote_end
-                        ))
+                        if last_char == Some(quote_end) {
+                            Ok(Some(Token::make_word(&s, Some(quote_start))))
+                        } else {
+                            self.tokenizer_error(format!(
+                                "Expected close delimiter '{}' before EOF.",
+                                quote_end
+                            ))
+                        }
                     }
-                }
                 // numbers and period
                 '0'..='9' | '.' => {
                     let mut s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
@@ -991,6 +997,7 @@ mod tests {
 
         compare(expected, tokens);
     }
+
     #[test]
     fn tokenize_bitwise_op() {
         let sql = String::from("SELECT one | two ^ three");
@@ -1219,7 +1226,7 @@ mod tests {
             Err(TokenizerError {
                 message: "Unterminated string literal".to_string(),
                 line: 1,
-                col: 8
+                col: 8,
             })
         );
     }
@@ -1235,7 +1242,7 @@ mod tests {
             Err(TokenizerError {
                 message: "Unterminated string literal".to_string(),
                 line: 1,
-                col: 35
+                col: 35,
             })
         );
     }
@@ -1394,7 +1401,7 @@ mod tests {
             Err(TokenizerError {
                 message: "Expected close delimiter '\"' before EOF.".to_string(),
                 line: 1,
-                col: 1
+                col: 1,
             })
         );
     }

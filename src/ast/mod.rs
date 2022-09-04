@@ -28,6 +28,9 @@ use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "derive-visitor")]
+use derive_visitor::{Drive, DriveMut};
+
 pub use self::data_type::DataType;
 pub use self::ddl::{
     AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
@@ -42,16 +45,16 @@ pub use self::query::{
 pub use self::value::{DateTimeField, TrimWhereField, Value};
 
 struct DisplaySeparated<'a, T>
-where
-    T: fmt::Display,
+    where
+        T: fmt::Display,
 {
     slice: &'a [T],
     sep: &'static str,
 }
 
 impl<'a, T> fmt::Display for DisplaySeparated<'a, T>
-where
-    T: fmt::Display,
+    where
+        T: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut delim = "";
@@ -65,35 +68,35 @@ where
 }
 
 fn display_separated<'a, T>(slice: &'a [T], sep: &'static str) -> DisplaySeparated<'a, T>
-where
-    T: fmt::Display,
+    where
+        T: fmt::Display,
 {
     DisplaySeparated { slice, sep }
 }
 
 fn display_comma_separated<T>(slice: &[T]) -> DisplaySeparated<'_, T>
-where
-    T: fmt::Display,
+    where
+        T: fmt::Display,
 {
     DisplaySeparated { slice, sep: ", " }
 }
 
 /// An identifier, decomposed into its value or character data and the quote style.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Ident {
     /// The value of the identifier without quotes.
-    pub value: String,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub value: String,
     /// The starting quote if any. Valid quote characters are the single quote,
     /// double quote, backtick, and opening square bracket.
-    pub quote_style: Option<char>,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub quote_style: Option<char>,
 }
 
 impl Ident {
     /// Create a new identifier with the given value and no quotes.
     pub fn new<S>(value: S) -> Self
-    where
-        S: Into<String>,
+        where
+            S: Into<String>,
     {
         Ident {
             value: value.into(),
@@ -104,8 +107,8 @@ impl Ident {
     /// Create a new quoted identifier with the given quote and value. This function
     /// panics if the given quote is not a valid quote character.
     pub fn with_quote<S>(quote: char, value: S) -> Self
-    where
-        S: Into<String>,
+        where
+            S: Into<String>,
     {
         assert!(quote == '\'' || quote == '"' || quote == '`' || quote == '[');
         Ident {
@@ -141,6 +144,7 @@ impl fmt::Display for Ident {
 /// A name of a table, view, custom type, etc., possibly multi-part, i.e. db.schema.obj
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct ObjectName(pub Vec<Ident>);
 
 impl fmt::Display for ObjectName {
@@ -151,6 +155,7 @@ impl fmt::Display for ObjectName {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 /// Represents an Array Expression, either
 /// `ARRAY[..]`, or `[..]`
 pub struct Array {
@@ -158,7 +163,7 @@ pub struct Array {
     pub elem: Vec<Expr>,
 
     /// `true` for  `ARRAY[..]`, `false` for `[..]`
-    pub named: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub named: bool,
 }
 
 impl fmt::Display for Array {
@@ -175,6 +180,7 @@ impl fmt::Display for Array {
 /// JsonOperator
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum JsonOperator {
     /// -> keeps the value as json
     Arrow,
@@ -212,6 +218,7 @@ impl fmt::Display for JsonOperator {
 /// inappropriate type, like `WHERE 1` or `SELECT 1=1`, as necessary.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum Expr {
     /// Identifier e.g. table name or column name
     Identifier(Ident),
@@ -249,24 +256,24 @@ pub enum Expr {
     InList {
         expr: Box<Expr>,
         list: Vec<Expr>,
-        negated: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] negated: bool,
     },
     /// `[ NOT ] IN (SELECT ...)`
     InSubquery {
         expr: Box<Expr>,
         subquery: Box<Query>,
-        negated: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] negated: bool,
     },
     /// `[ NOT ] IN UNNEST(array_expression)`
     InUnnest {
         expr: Box<Expr>,
         array_expr: Box<Expr>,
-        negated: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] negated: bool,
     },
     /// `<expr> [ NOT ] BETWEEN <low> AND <high>`
     Between {
         expr: Box<Expr>,
-        negated: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] negated: bool,
         low: Box<Expr>,
         high: Box<Expr>,
     },
@@ -278,24 +285,24 @@ pub enum Expr {
     },
     /// LIKE
     Like {
-        negated: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] negated: bool,
         expr: Box<Expr>,
         pattern: Box<Expr>,
-        escape_char: Option<char>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] escape_char: Option<char>,
     },
     /// ILIKE (case-insensitive LIKE)
     ILike {
-        negated: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] negated: bool,
         expr: Box<Expr>,
         pattern: Box<Expr>,
-        escape_char: Option<char>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] escape_char: Option<char>,
     },
     /// SIMILAR TO regex
     SimilarTo {
-        negated: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] negated: bool,
         expr: Box<Expr>,
         pattern: Box<Expr>,
-        escape_char: Option<char>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] escape_char: Option<char>,
     },
     /// Any operation e.g. `1 ANY (1)` or `foo > ANY(bar)`, It will be wrapped in the right side of BinaryExpr
     AnyOp(Box<Expr>),
@@ -324,7 +331,7 @@ pub enum Expr {
     /// AT a timestamp to a different timezone e.g. `FROM_UNIXTIME(0) AT TIME ZONE 'UTC-06:00'`
     AtTimeZone {
         timestamp: Box<Expr>,
-        time_zone: String,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] time_zone: String,
     },
     /// EXTRACT(DateTimeField FROM <expr>)
     Extract {
@@ -367,7 +374,7 @@ pub enum Expr {
     /// A constant of form `<data_type> 'value'`.
     /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
     /// as well as constants of other types (a non-standard PostgreSQL extension).
-    TypedString { data_type: DataType, value: String },
+    TypedString { data_type: DataType, #[cfg_attr(feature = "derive-visitor", drive(skip))] value: String },
     /// Access a map-like object by field (e.g. `column['field']` or `column[4]`
     /// Note that depending on the dialect, struct like accesses may be
     /// parsed as [`ArrayIndex`] or [`MapAccess`]
@@ -388,7 +395,7 @@ pub enum Expr {
     },
     /// An exists expression `[ NOT ] EXISTS(SELECT ...)`, used in expressions like
     /// `WHERE [ NOT ] EXISTS (SELECT ...)`.
-    Exists { subquery: Box<Query>, negated: bool },
+    Exists { subquery: Box<Query>, #[cfg_attr(feature = "derive-visitor", drive(skip))] negated: bool },
     /// A parenthesized subquery `(SELECT ...)`, used in expression like
     /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
     Subquery(Box<Query>),
@@ -724,6 +731,7 @@ impl fmt::Display for Expr {
 /// A window specification (i.e. `OVER (PARTITION BY .. ORDER BY .. etc.)`)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct WindowSpec {
     pub partition_by: Vec<Expr>,
     pub order_by: Vec<OrderByExpr>,
@@ -769,6 +777,7 @@ impl fmt::Display for WindowSpec {
 /// reject invalid bounds like `ROWS UNBOUNDED FOLLOWING` before execution.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct WindowFrame {
     pub units: WindowFrameUnits,
     pub start_bound: WindowFrameBound,
@@ -794,6 +803,7 @@ impl Default for WindowFrame {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum WindowFrameUnits {
     Rows,
     Range,
@@ -813,13 +823,14 @@ impl fmt::Display for WindowFrameUnits {
 /// Specifies [WindowFrame]'s `start_bound` and `end_bound`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum WindowFrameBound {
     /// `CURRENT ROW`
     CurrentRow,
     /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
-    Preceding(Option<u64>),
+    Preceding(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
-    Following(Option<u64>),
+    Following(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
 }
 
 impl fmt::Display for WindowFrameBound {
@@ -836,6 +847,7 @@ impl fmt::Display for WindowFrameBound {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum AddDropSync {
     ADD,
     DROP,
@@ -854,6 +866,7 @@ impl fmt::Display for AddDropSync {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum ShowCreateObject {
     Event,
     Function,
@@ -878,6 +891,7 @@ impl fmt::Display for ShowCreateObject {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum CommentObject {
     Column,
     Table,
@@ -896,16 +910,17 @@ impl fmt::Display for CommentObject {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum Statement {
     /// Analyze (Hive)
     Analyze {
         table_name: ObjectName,
         partitions: Option<Vec<Expr>>,
-        for_columns: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] for_columns: bool,
         columns: Vec<Ident>,
-        cache_metadata: bool,
-        noscan: bool,
-        compute_statistics: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] cache_metadata: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] noscan: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] compute_statistics: bool,
     },
     /// Truncate (Hive)
     Truncate {
@@ -915,7 +930,7 @@ pub enum Statement {
     /// Msck (Hive)
     Msck {
         table_name: ObjectName,
-        repair: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] repair: bool,
         partition_action: Option<AddDropSync>,
     },
     /// SELECT
@@ -925,13 +940,13 @@ pub enum Statement {
         /// Only for Sqlite
         or: Option<SqliteOnConflict>,
         /// INTO - optional keyword
-        into: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] into: bool,
         /// TABLE
         table_name: ObjectName,
         /// COLUMNS
         columns: Vec<Ident>,
         /// Overwrite (Hive)
-        overwrite: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] overwrite: bool,
         /// A SQL query that specifies what to insert
         source: Box<Query>,
         /// partitioned insert (Hive)
@@ -939,14 +954,14 @@ pub enum Statement {
         /// Columns defined after PARTITION
         after_columns: Vec<Ident>,
         /// whether the insert has the table keyword (Hive)
-        table: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] table: bool,
         on: Option<OnInsert>,
     },
     // TODO: Support ROW FORMAT
     Directory {
-        overwrite: bool,
-        local: bool,
-        path: String,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] overwrite: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] local: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] path: String,
         file_format: Option<FileFormat>,
         source: Box<Query>,
     },
@@ -956,7 +971,7 @@ pub enum Statement {
         /// COLUMNS
         columns: Vec<Ident>,
         /// If true, is a 'COPY TO' statement. If false is a 'COPY FROM'
-        to: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] to: bool,
         /// The source of 'COPY FROM', or the target of 'COPY TO'
         target: CopyTarget,
         /// WITH options (from PostgreSQL version 9.0)
@@ -964,7 +979,7 @@ pub enum Statement {
         /// WITH options (before PostgreSQL version 9.0)
         legacy_options: Vec<CopyLegacyOption>,
         /// VALUES a vector of values to be copied
-        values: Vec<Option<String>>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] values: Vec<Option<String>>,
     },
     /// Close - closes the portal underlying an open cursor.
     Close {
@@ -993,8 +1008,8 @@ pub enum Statement {
     },
     /// CREATE VIEW
     CreateView {
-        or_replace: bool,
-        materialized: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] or_replace: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] materialized: bool,
         /// View name
         name: ObjectName,
         columns: Vec<Ident>,
@@ -1003,11 +1018,11 @@ pub enum Statement {
     },
     /// CREATE TABLE
     CreateTable {
-        or_replace: bool,
-        temporary: bool,
-        external: bool,
-        global: Option<bool>,
-        if_not_exists: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] or_replace: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] temporary: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] external: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] global: Option<bool>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] if_not_exists: bool,
         /// Table name
         name: ObjectName,
         /// Optional schema
@@ -1018,23 +1033,23 @@ pub enum Statement {
         table_properties: Vec<SqlOption>,
         with_options: Vec<SqlOption>,
         file_format: Option<FileFormat>,
-        location: Option<String>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] location: Option<String>,
         query: Option<Box<Query>>,
-        without_rowid: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] without_rowid: bool,
         like: Option<ObjectName>,
         clone: Option<ObjectName>,
-        engine: Option<String>,
-        default_charset: Option<String>,
-        collation: Option<String>,
-        on_commit: Option<OnCommit>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] engine: Option<String>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] default_charset: Option<String>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] collation: Option<String>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] on_commit: Option<OnCommit>,
         /// Click house "ON CLUSTER" clause:
         /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
-        on_cluster: Option<String>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] on_cluster: Option<String>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
         name: ObjectName,
-        if_not_exists: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] if_not_exists: bool,
         module_name: Ident,
         module_args: Vec<Ident>,
     },
@@ -1044,8 +1059,8 @@ pub enum Statement {
         name: ObjectName,
         table_name: ObjectName,
         columns: Vec<OrderByExpr>,
-        unique: bool,
-        if_not_exists: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] unique: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] if_not_exists: bool,
     },
     /// ALTER TABLE
     AlterTable {
@@ -1058,15 +1073,15 @@ pub enum Statement {
         /// The type of the object to drop: TABLE, VIEW, etc.
         object_type: ObjectType,
         /// An optional `IF EXISTS` clause. (Non-standard.)
-        if_exists: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] if_exists: bool,
         /// One or more objects to drop. (ANSI SQL requires exactly one.)
         names: Vec<ObjectName>,
         /// Whether `CASCADE` was specified. This will be `false` when
         /// `RESTRICT` or no drop behavior at all was specified.
-        cascade: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] cascade: bool,
         /// Hive allows you specify whether the table's stored data will be
         /// deleted along with the dropped table
-        purge: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] purge: bool,
     },
     /// DECLARE - Declaring Cursor Variables
     ///
@@ -1076,19 +1091,19 @@ pub enum Statement {
         /// Cursor name
         name: Ident,
         /// Causes the cursor to return data in binary rather than in text format.
-        binary: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] binary: bool,
         /// None = Not specified
         /// Some(true) = INSENSITIVE
         /// Some(false) = ASENSITIVE
-        sensitive: Option<bool>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] sensitive: Option<bool>,
         /// None = Not specified
         /// Some(true) = SCROLL
         /// Some(false) = NO SCROLL
-        scroll: Option<bool>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] scroll: Option<bool>,
         /// None = Not specified
         /// Some(true) = WITH HOLD, specifies that the cursor can continue to be used after the transaction that created it successfully commits
         /// Some(false) = WITHOUT HOLD, specifies that the cursor cannot be used outside of the transaction that created it
-        hold: Option<bool>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] hold: Option<bool>,
         query: Box<Query>,
     },
     /// FETCH - retrieve rows from a query using a cursor
@@ -1112,9 +1127,9 @@ pub enum Statement {
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
     SetRole {
-        local: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] local: bool,
         // SESSION is the default if neither SESSION nor LOCAL appears.
-        session: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] session: bool,
         role_name: Option<Ident>,
     },
     /// SET <variable>
@@ -1123,8 +1138,8 @@ pub enum Statement {
     /// least MySQL and PostgreSQL. Not all MySQL-specific syntatic forms are
     /// supported yet.
     SetVariable {
-        local: bool,
-        hivevar: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] local: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] hivevar: bool,
         variable: ObjectName,
         value: Vec<Expr>,
     },
@@ -1132,8 +1147,8 @@ pub enum Statement {
     ///
     /// Note: this is a MySQL-specific statement.
     SetNames {
-        charset_name: String,
-        collation_name: Option<String>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] charset_name: String,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] collation_name: Option<String>,
     },
     /// SET NAMES DEFAULT
     ///
@@ -1158,8 +1173,8 @@ pub enum Statement {
     ///
     /// Note: this is a MySQL-specific statement.
     ShowColumns {
-        extended: bool,
-        full: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] extended: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] full: bool,
         table_name: ObjectName,
         filter: Option<ShowStatementFilter>,
     },
@@ -1167,8 +1182,8 @@ pub enum Statement {
     ///
     /// Note: this is a MySQL-specific statement.
     ShowTables {
-        extended: bool,
-        full: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] extended: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] full: bool,
         db_name: Option<Ident>,
         filter: Option<ShowStatementFilter>,
     },
@@ -1186,7 +1201,7 @@ pub enum Statement {
     SetTransaction {
         modes: Vec<TransactionMode>,
         snapshot: Option<Value>,
-        session: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] session: bool,
     },
     /// `COMMENT ON ...`
     ///
@@ -1194,31 +1209,31 @@ pub enum Statement {
     Comment {
         object_type: CommentObject,
         object_name: ObjectName,
-        comment: Option<String>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] comment: Option<String>,
     },
     /// `COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
-    Commit { chain: bool },
+    Commit { #[cfg_attr(feature = "derive-visitor", drive(skip))] chain: bool },
     /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
-    Rollback { chain: bool },
+    Rollback { #[cfg_attr(feature = "derive-visitor", drive(skip))] chain: bool },
     /// CREATE SCHEMA
     CreateSchema {
         schema_name: ObjectName,
-        if_not_exists: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] if_not_exists: bool,
     },
     /// CREATE DATABASE
     CreateDatabase {
         db_name: ObjectName,
-        if_not_exists: bool,
-        location: Option<String>,
-        managed_location: Option<String>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] if_not_exists: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] location: Option<String>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] managed_location: Option<String>,
     },
     /// CREATE FUNCTION
     ///
     /// Hive: https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction
     CreateFunction {
-        temporary: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] temporary: bool,
         name: ObjectName,
-        class_name: String,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] class_name: String,
         using: Option<CreateFunctionUsing>,
     },
     /// `ASSERT <condition> [AS <message>]`
@@ -1231,7 +1246,7 @@ pub enum Statement {
         privileges: Privileges,
         objects: GrantObjects,
         grantees: Vec<Ident>,
-        with_grant_option: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] with_grant_option: bool,
         granted_by: Option<Ident>,
     },
     /// REVOKE privileges ON objects FROM grantees
@@ -1240,12 +1255,12 @@ pub enum Statement {
         objects: GrantObjects,
         grantees: Vec<Ident>,
         granted_by: Option<Ident>,
-        cascade: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] cascade: bool,
     },
     /// `DEALLOCATE [ PREPARE ] { name | ALL }`
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Deallocate { name: Ident, prepare: bool },
+    Deallocate { name: Ident, #[cfg_attr(feature = "derive-visitor", drive(skip))] prepare: bool },
     /// `EXECUTE name [ ( parameter [, ...] ) ]`
     ///
     /// Note: this is a PostgreSQL-specific statement.
@@ -1265,24 +1280,24 @@ pub enum Statement {
     Kill {
         modifier: Option<KillType>,
         // processlist_id
-        id: u64,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] id: u64,
     },
     /// EXPLAIN TABLE
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/explain.html>
     ExplainTable {
         // If true, query used the MySQL `DESCRIBE` alias for explain
-        describe_alias: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] describe_alias: bool,
         // Table name
         table_name: ObjectName,
     },
     /// EXPLAIN / DESCRIBE for select_statement
     Explain {
         // If true, query used the MySQL `DESCRIBE` alias for explain
-        describe_alias: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] describe_alias: bool,
         /// Carry out the command and show actual run times and other statistics.
-        analyze: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] analyze: bool,
         // Display additional information regarding the plan.
-        verbose: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] verbose: bool,
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
     },
@@ -1291,7 +1306,7 @@ pub enum Statement {
     // MERGE INTO statement, based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
     Merge {
         // optional INTO keyword
-        into: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] into: bool,
         // Specifies the table to merge
         table: TableFactor,
         // Specifies the table or subquery to join with the target table
@@ -1782,10 +1797,10 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(HiveFormat {
-                    row_format,
-                    storage,
-                    location,
-                }) = hive_formats
+                                row_format,
+                                storage,
+                                location,
+                            }) = hive_formats
                 {
                     match row_format {
                         Some(HiveRowFormat::SERDE { class }) => {
@@ -1796,9 +1811,9 @@ impl fmt::Display for Statement {
                     }
                     match storage {
                         Some(HiveIOFormat::IOF {
-                            input_format,
-                            output_format,
-                        }) => write!(
+                                 input_format,
+                                 output_format,
+                             }) => write!(
                             f,
                             " STORED AS INPUTFORMAT {} OUTPUTFORMAT {}",
                             input_format, output_format
@@ -2065,10 +2080,10 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Commit { chain } => {
-                write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" },)
+                write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" }, )
             }
             Statement::Rollback { chain } => {
-                write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" },)
+                write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" }, )
             }
             Statement::CreateSchema {
                 schema_name,
@@ -2181,6 +2196,7 @@ impl fmt::Display for Statement {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 #[non_exhaustive]
 pub enum OnInsert {
     /// ON DUPLICATE KEY UPDATE (MySQL when the key already exists, then execute an update instead)
@@ -2202,11 +2218,12 @@ impl fmt::Display for OnInsert {
 /// Privileges granted in a GRANT statement or revoked in a REVOKE statement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum Privileges {
     /// All privileges applicable to the object type
     All {
         /// Optional keyword from the spec, ignored in practice
-        with_privileges_keyword: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] with_privileges_keyword: bool,
     },
     /// Specific privileges (e.g. `SELECT`, `INSERT`)
     Actions(Vec<Action>),
@@ -2238,6 +2255,7 @@ impl fmt::Display for Privileges {
 /// Specific direction for FETCH statement
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum FetchDirection {
     Count { limit: Value },
     Next,
@@ -2301,6 +2319,7 @@ impl fmt::Display for FetchDirection {
 /// A privilege on a database object (table, sequence, etc.).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum Action {
     Connect,
     Create,
@@ -2350,6 +2369,7 @@ impl fmt::Display for Action {
 /// Objects on which privileges are granted in a GRANT statement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum GrantObjects {
     /// Grant privileges on `ALL SEQUENCES IN SCHEMA <schema_name> [, ...]`
     AllSequencesInSchema { schemas: Vec<ObjectName> },
@@ -2396,6 +2416,7 @@ impl fmt::Display for GrantObjects {
 /// SQL assignment `foo = expr` as used in SQLUpdate
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Assignment {
     pub id: Vec<Ident>,
     pub value: Expr,
@@ -2409,6 +2430,7 @@ impl fmt::Display for Assignment {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum FunctionArgExpr {
     Expr(Expr),
     /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
@@ -2429,6 +2451,7 @@ impl fmt::Display for FunctionArgExpr {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum FunctionArg {
     Named { name: Ident, arg: FunctionArgExpr },
     Unnamed(FunctionArgExpr),
@@ -2445,6 +2468,7 @@ impl fmt::Display for FunctionArg {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum CloseCursor {
     All,
     Specific { name: Ident },
@@ -2462,15 +2486,16 @@ impl fmt::Display for CloseCursor {
 /// A function call
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Function {
     pub name: ObjectName,
     pub args: Vec<FunctionArg>,
     pub over: Option<WindowSpec>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
-    pub distinct: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub distinct: bool,
     // Some functions must be called without trailing parentheses, for example Postgres
     // do it for current_catalog, current_schema, etc. This flags is used for formatting.
-    pub special: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub special: bool,
 }
 
 impl fmt::Display for Function {
@@ -2498,6 +2523,7 @@ impl fmt::Display for Function {
 /// External table's available file format
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum FileFormat {
     TEXTFILE,
     SEQUENCEFILE,
@@ -2527,8 +2553,9 @@ impl fmt::Display for FileFormat {
 /// [ WITHIN GROUP (ORDER BY <within_group1>[, ...] ) ]`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct ListAgg {
-    pub distinct: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub distinct: bool,
     pub expr: Box<Expr>,
     pub separator: Option<Box<Expr>>,
     pub on_overflow: Option<ListAggOnOverflow>,
@@ -2564,6 +2591,7 @@ impl fmt::Display for ListAgg {
 /// The `ON OVERFLOW` clause of a LISTAGG invocation
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum ListAggOnOverflow {
     /// `ON OVERFLOW ERROR`
     Error,
@@ -2571,7 +2599,7 @@ pub enum ListAggOnOverflow {
     /// `ON OVERFLOW TRUNCATE [ <filler> ] WITH[OUT] COUNT`
     Truncate {
         filler: Option<Box<Expr>>,
-        with_count: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] with_count: bool,
     },
 }
 
@@ -2598,6 +2626,7 @@ impl fmt::Display for ListAggOnOverflow {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum ObjectType {
     Table,
     View,
@@ -2618,6 +2647,7 @@ impl fmt::Display for ObjectType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum KillType {
     Connection,
     Query,
@@ -2638,6 +2668,7 @@ impl fmt::Display for KillType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum HiveDistributionStyle {
     PARTITIONED {
         columns: Vec<ColumnDef>,
@@ -2645,26 +2676,28 @@ pub enum HiveDistributionStyle {
     CLUSTERED {
         columns: Vec<Ident>,
         sorted_by: Vec<ColumnDef>,
-        num_buckets: i32,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] num_buckets: i32,
     },
     SKEWED {
         columns: Vec<ColumnDef>,
         on: Vec<ColumnDef>,
-        stored_as_directories: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] stored_as_directories: bool,
     },
     NONE,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum HiveRowFormat {
-    SERDE { class: String },
+    SERDE { #[cfg_attr(feature = "derive-visitor", drive(skip))] class: String },
     DELIMITED,
 }
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 #[allow(clippy::large_enum_variant)]
 pub enum HiveIOFormat {
     IOF {
@@ -2678,14 +2711,16 @@ pub enum HiveIOFormat {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct HiveFormat {
     pub row_format: Option<HiveRowFormat>,
     pub storage: Option<HiveIOFormat>,
-    pub location: Option<String>,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub location: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct SqlOption {
     pub name: Ident,
     pub value: Value,
@@ -2699,6 +2734,7 @@ impl fmt::Display for SqlOption {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum TransactionMode {
     AccessMode(TransactionAccessMode),
     IsolationLevel(TransactionIsolationLevel),
@@ -2716,6 +2752,7 @@ impl fmt::Display for TransactionMode {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum TransactionAccessMode {
     ReadOnly,
     ReadWrite,
@@ -2733,6 +2770,7 @@ impl fmt::Display for TransactionAccessMode {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum TransactionIsolationLevel {
     ReadUncommitted,
     ReadCommitted,
@@ -2754,9 +2792,10 @@ impl fmt::Display for TransactionIsolationLevel {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum ShowStatementFilter {
-    Like(String),
-    ILike(String),
+    Like(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
+    ILike(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
     Where(Expr),
 }
 
@@ -2776,6 +2815,7 @@ impl fmt::Display for ShowStatementFilter {
 /// https://sqlite.org/lang_conflict.html
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum SqliteOnConflict {
     Rollback,
     Abort,
@@ -2799,16 +2839,17 @@ impl fmt::Display for SqliteOnConflict {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum CopyTarget {
     Stdin,
     Stdout,
     File {
         /// The path name of the input or output file.
-        filename: String,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] filename: String,
     },
     Program {
         /// A command to execute
-        command: String,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] command: String,
     },
 }
 
@@ -2830,6 +2871,7 @@ impl fmt::Display for CopyTarget {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum OnCommit {
     DeleteRows,
     PreserveRows,
@@ -2841,21 +2883,22 @@ pub enum OnCommit {
 /// <https://www.postgresql.org/docs/14/sql-copy.html>
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum CopyOption {
     /// FORMAT format_name
     Format(Ident),
     /// FREEZE \[ boolean \]
-    Freeze(bool),
+    Freeze(#[cfg_attr(feature = "derive-visitor", drive(skip))] bool),
     /// DELIMITER 'delimiter_character'
-    Delimiter(char),
+    Delimiter(#[cfg_attr(feature = "derive-visitor", drive(skip))] char),
     /// NULL 'null_string'
-    Null(String),
+    Null(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
     /// HEADER \[ boolean \]
-    Header(bool),
+    Header(#[cfg_attr(feature = "derive-visitor", drive(skip))] bool),
     /// QUOTE 'quote_character'
-    Quote(char),
+    Quote(#[cfg_attr(feature = "derive-visitor", drive(skip))] char),
     /// ESCAPE 'escape_character'
-    Escape(char),
+    Escape(#[cfg_attr(feature = "derive-visitor", drive(skip))] char),
     /// FORCE_QUOTE { ( column_name [, ...] ) | * }
     ForceQuote(Vec<Ident>),
     /// FORCE_NOT_NULL ( column_name [, ...] )
@@ -2863,7 +2906,7 @@ pub enum CopyOption {
     /// FORCE_NULL ( column_name [, ...] )
     ForceNull(Vec<Ident>),
     /// ENCODING 'encoding_name'
-    Encoding(String),
+    Encoding(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
 }
 
 impl fmt::Display for CopyOption {
@@ -2894,13 +2937,14 @@ impl fmt::Display for CopyOption {
 /// <https://www.postgresql.org/docs/8.4/sql-copy.html>
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum CopyLegacyOption {
     /// BINARY
     Binary,
     /// DELIMITER \[ AS \] 'delimiter_character'
-    Delimiter(char),
+    Delimiter(#[cfg_attr(feature = "derive-visitor", drive(skip))] char),
     /// NULL \[ AS \] 'null_string'
-    Null(String),
+    Null(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
     /// CSV ...
     Csv(Vec<CopyLegacyCsvOption>),
 }
@@ -2922,13 +2966,14 @@ impl fmt::Display for CopyLegacyOption {
 /// <https://www.postgresql.org/docs/8.4/sql-copy.html>
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum CopyLegacyCsvOption {
     /// HEADER
     Header,
     /// QUOTE \[ AS \] 'quote_character'
-    Quote(char),
+    Quote(#[cfg_attr(feature = "derive-visitor", drive(skip))] char),
     /// ESCAPE \[ AS \] 'escape_character'
-    Escape(char),
+    Escape(#[cfg_attr(feature = "derive-visitor", drive(skip))] char),
     /// FORCE QUOTE { column_name [, ...] | * }
     ForceQuote(Vec<Ident>),
     /// FORCE NOT NULL column_name [, ...]
@@ -2953,6 +2998,7 @@ impl fmt::Display for CopyLegacyCsvOption {
 ///
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum MergeClause {
     MatchedUpdate {
         predicate: Option<Expr>,
@@ -3014,6 +3060,7 @@ impl fmt::Display for MergeClause {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum DiscardObject {
     ALL,
     PLANS,
@@ -3034,10 +3081,11 @@ impl fmt::Display for DiscardObject {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum CreateFunctionUsing {
-    Jar(String),
-    File(String),
-    Archive(String),
+    Jar(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
+    File(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
+    Archive(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
 }
 
 impl fmt::Display for CreateFunctionUsing {

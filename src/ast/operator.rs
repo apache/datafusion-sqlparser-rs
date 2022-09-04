@@ -17,11 +17,15 @@ use alloc::{string::String, vec::Vec};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "derive-visitor")]
+use derive_visitor::{Drive, DriveMut};
+
 use super::display_separated;
 
 /// Unary operators
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum UnaryOperator {
     Plus,
     Minus,
@@ -59,6 +63,7 @@ impl fmt::Display for UnaryOperator {
 /// Binary operators
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum BinaryOperator {
     Plus,
     Minus,
@@ -90,7 +95,7 @@ pub enum BinaryOperator {
     ///
     /// See [CREATE OPERATOR](https://www.postgresql.org/docs/current/sql-createoperator.html)
     /// for more information.
-    PGCustomBinaryOperator(Vec<String>),
+    PGCustomBinaryOperator(#[cfg_attr(feature = "derive-visitor", drive(skip))] Vec<String>),
 }
 
 impl fmt::Display for BinaryOperator {

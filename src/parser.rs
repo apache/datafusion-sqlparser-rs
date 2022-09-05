@@ -2568,7 +2568,10 @@ impl<'a> Parser<'a> {
             None
         };
         match self.next_token() {
-            Token::Word(w) if w.keyword == Keyword::KEY || w.keyword == Keyword::INDEX => {
+            Token::Word(w)
+                if (w.keyword == Keyword::KEY || w.keyword == Keyword::INDEX)
+                    && dialect_of!(self is MySqlDialect) =>
+            {
                 let name = Some(self.parse_identifier()?);
                 let columns = self.parse_parenthesized_column_list(Mandatory)?;
                 Ok(Some(TableConstraint::Key {

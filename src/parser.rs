@@ -2562,7 +2562,7 @@ impl<'a> Parser<'a> {
     pub fn parse_optional_table_constraint(
         &mut self,
     ) -> Result<Option<TableConstraint>, ParserError> {
-        let name = if self.parse_keyword(Keyword::CONSTRAINT) {
+        let mut name = if self.parse_keyword(Keyword::CONSTRAINT) {
             Some(self.parse_identifier()?)
         } else {
             None
@@ -2582,14 +2582,20 @@ impl<'a> Parser<'a> {
             }
             Token::Word(w) if w.keyword == Keyword::PRIMARY || w.keyword == Keyword::UNIQUE => {
                 let is_primary = w.keyword == Keyword::PRIMARY;
+                let mut is_mysql_unique_key = false;
                 if is_primary {
                     self.expect_keyword(Keyword::KEY)?;
+                } else if dialect_of!(self is MySqlDialect) {
+                    self.expect_keyword(Keyword::KEY)?;
+                    name = Some(self.parse_identifier()?);
+                    is_mysql_unique_key = true;
                 }
                 let columns = self.parse_parenthesized_column_list(Mandatory)?;
                 Ok(Some(TableConstraint::Unique {
                     name,
                     columns,
                     is_primary,
+                    is_mysql_unique_key,
                 }))
             }
             Token::Word(w) if w.keyword == Keyword::FOREIGN => {

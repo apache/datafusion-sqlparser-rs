@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "derive-visitor")]
 pub use derive_visitor::{
     visitor_fn, visitor_enter_fn, visitor_enter_fn_mut, visitor_fn_mut,
-    Visitor, VisitorMut, Drive, DriveMut,
+    Visitor, VisitorMut, Drive, DriveMut, Event as VisitorEvent
 };
 
 pub use self::data_type::DataType;

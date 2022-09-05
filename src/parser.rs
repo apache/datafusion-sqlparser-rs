@@ -2568,6 +2568,15 @@ impl<'a> Parser<'a> {
             None
         };
         match self.next_token() {
+            Token::Word(w) if w.keyword == Keyword::KEY || w.keyword == Keyword::INDEX => {
+                let name = Some(self.parse_identifier()?);
+                let columns = self.parse_parenthesized_column_list(Mandatory)?;
+                Ok(Some(TableConstraint::Key {
+                    name,
+                    columns,
+                    keyword: w.keyword,
+                }))
+            }
             Token::Word(w) if w.keyword == Keyword::PRIMARY || w.keyword == Keyword::UNIQUE => {
                 let is_primary = w.keyword == Keyword::PRIMARY;
                 if is_primary {

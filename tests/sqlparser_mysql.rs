@@ -17,6 +17,7 @@
 #[macro_use]
 mod test_utils;
 
+use sqlparser::keywords::Keyword;
 use test_utils::*;
 
 use sqlparser::ast::Expr;
@@ -1034,6 +1035,78 @@ fn parse_table_colum_option_on_update() {
                     },],
                 }],
                 columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_table_colum_option_key() {
+    let sql1 = "CREATE TABLE foo (`modification_time` DATETIME ON UPDATE, KEY `k_m_t` (modification_time))";
+    match mysql().verified_stmt(sql1) {
+        Statement::CreateTable {
+            name,
+            columns,
+            constraints,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::with_quote('`', "modification_time"),
+                    data_type: DataType::Datetime,
+                    collation: None,
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
+                            "ON UPDATE"
+                        )]),
+                    },],
+                }],
+                columns
+            );
+            assert_eq!(
+                vec![TableConstraint::Key {
+                    name: Some(Ident::with_quote('`', "k_m_t")),
+                    columns: vec![Ident::new("modification_time")],
+                    keyword: Keyword::KEY
+                }],
+                constraints
+            );
+        }
+        _ => unreachable!(),
+    }
+    let sql2 = "CREATE TABLE foo (`modification_time` DATETIME ON UPDATE, INDEX `k_m_t` (modification_time))";
+    match mysql().verified_stmt(sql2) {
+        Statement::CreateTable {
+            name,
+            columns,
+            constraints,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::with_quote('`', "modification_time"),
+                    data_type: DataType::Datetime,
+                    collation: None,
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
+                            "ON UPDATE"
+                        )]),
+                    },],
+                }],
+                columns
+            );
+            assert_eq!(
+                vec![TableConstraint::Key {
+                    name: Some(Ident::with_quote('`', "k_m_t")),
+                    columns: vec![Ident::new("modification_time")],
+                    keyword: Keyword::INDEX
+                }],
+                constraints
             );
         }
         _ => unreachable!(),

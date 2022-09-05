@@ -1111,6 +1111,41 @@ fn parse_table_colum_option_key() {
         }
         _ => unreachable!(),
     }
+    let sql2 = "CREATE TABLE foo (`modification_time` DATETIME ON UPDATE, UNIQUE KEY `u_m_t` (modification_time))";
+    match mysql().verified_stmt(sql2) {
+        Statement::CreateTable {
+            name,
+            columns,
+            constraints,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::with_quote('`', "modification_time"),
+                    data_type: DataType::Datetime,
+                    collation: None,
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
+                            "ON UPDATE"
+                        )]),
+                    },],
+                }],
+                columns
+            );
+            assert_eq!(
+                vec![TableConstraint::Unique {
+                    name: Some(Ident::with_quote('`', "u_m_t")),
+                    columns: vec![Ident::new("modification_time")],
+                    is_primary: false,
+                    is_mysql_unique_key: true,
+                }],
+                constraints
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

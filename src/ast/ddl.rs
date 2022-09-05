@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{display_comma_separated, display_separated, DataType, Expr, Ident, ObjectName};
+use crate::keywords::Keyword;
 use crate::tokenizer::Token;
 
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation
@@ -247,6 +248,11 @@ pub enum TableConstraint {
         name: Option<Ident>,
         expr: Box<Expr>,
     },
+    Key {
+        name: Option<Ident>,
+        columns: Vec<Ident>,
+        keyword: Keyword,
+    },
 }
 
 impl fmt::Display for TableConstraint {
@@ -261,6 +267,16 @@ impl fmt::Display for TableConstraint {
                 "{}{} ({})",
                 display_constraint_name(name),
                 if *is_primary { "PRIMARY KEY" } else { "UNIQUE" },
+                display_comma_separated(columns)
+            ),
+            TableConstraint::Key {
+                name,
+                columns,
+                keyword,
+            } => write!(
+                f,
+                "{}({})",
+                display_key_name(name, *keyword),
                 display_comma_separated(columns)
             ),
             TableConstraint::ForeignKey {
@@ -426,6 +442,27 @@ fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
         }
     }
     ConstraintName(name)
+}
+
+fn display_key_name(name: &'_ Option<Ident>, keyword: Keyword) -> impl fmt::Display + '_ {
+    struct KeyName<'a>(&'a Option<Ident>, Keyword);
+    impl<'a> fmt::Display for KeyName<'a> {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            if let Some(name) = self.0 {
+                match self.1 {
+                    Keyword::KEY => {
+                        write!(f, "KEY {} ", name)?;
+                    }
+                    Keyword::INDEX => {
+                        write!(f, "INDEX {} ", name)?;
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            Ok(())
+        }
+    }
+    KeyName(name, keyword)
 }
 
 /// `<referential_action> =

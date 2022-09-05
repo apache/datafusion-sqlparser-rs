@@ -229,6 +229,7 @@ pub enum TableConstraint {
         columns: Vec<Ident>,
         /// Whether this is a `PRIMARY KEY` or just a `UNIQUE` constraint
         is_primary: bool,
+        is_mysql_unique_key: bool,
     },
     /// A referential integrity constraint (`[ CONSTRAINT <name> ] FOREIGN KEY (<columns>)
     /// REFERENCES <foreign_table> (<referred_columns>)
@@ -262,13 +263,30 @@ impl fmt::Display for TableConstraint {
                 name,
                 columns,
                 is_primary,
-            } => write!(
-                f,
-                "{}{} ({})",
-                display_constraint_name(name),
-                if *is_primary { "PRIMARY KEY" } else { "UNIQUE" },
-                display_comma_separated(columns)
-            ),
+                is_mysql_unique_key,
+            } => {
+                if *is_mysql_unique_key {
+                    write!(
+                        f,
+                        "{}{}({})",
+                        if *is_primary {
+                            "PRIMARY KEY"
+                        } else {
+                            "UNIQUE "
+                        },
+                        display_key_name(name, Keyword::KEY),
+                        display_comma_separated(columns)
+                    )
+                } else {
+                    write!(
+                        f,
+                        "{}{} ({})",
+                        display_constraint_name(name),
+                        if *is_primary { "PRIMARY KEY" } else { "UNIQUE" },
+                        display_comma_separated(columns)
+                    )
+                }
+            }
             TableConstraint::Key {
                 name,
                 columns,

@@ -4542,12 +4542,31 @@ impl<'a> Parser<'a> {
     /// Parse a comma-delimited list of projections after SELECT
     pub fn parse_select_item(&mut self) -> Result<SelectItem, ParserError> {
         match self.parse_wildcard_expr()? {
-            WildcardExpr::Expr(expr) => self
-                .parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
-                .map(|alias| match alias {
-                    Some(alias) => SelectItem::ExprWithAlias { expr, alias },
-                    None => SelectItem::UnnamedExpr(expr),
-                }),
+            WildcardExpr::Expr(expr) => {
+                let expr: Expr = if self.dialect.supports_filter_during_aggregation()
+                    && self.parse_keyword(Keyword::FILTER)
+                {
+                    let i = self.index - 1;
+                    if self.consume_token(&Token::LParen) && self.parse_keyword(Keyword::WHERE) {
+                        let filter = self.parse_expr()?;
+                        self.expect_token(&Token::RParen)?;
+                        Expr::AggregateExpressionWithFilter {
+                            expr: Box::new(expr),
+                            filter: Box::new(filter),
+                        }
+                    } else {
+                        self.index = i;
+                        expr
+                    }
+                } else {
+                    expr
+                };
+                self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
+                    .map(|alias| match alias {
+                        Some(alias) => SelectItem::ExprWithAlias { expr, alias },
+                        None => SelectItem::UnnamedExpr(expr),
+                    })
+            }
             WildcardExpr::QualifiedWildcard(prefix) => Ok(SelectItem::QualifiedWildcard(prefix)),
             WildcardExpr::Wildcard => Ok(SelectItem::Wildcard),
         }

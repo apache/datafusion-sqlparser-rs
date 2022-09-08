@@ -42,6 +42,10 @@ impl Dialect for PostgreSqlDialect {
             None
         }
     }
+
+    fn supports_filter_during_aggregation(&self) -> bool {
+        true
+    }
 }
 
 pub fn parse_comment(parser: &mut Parser) -> Result<Statement, ParserError> {

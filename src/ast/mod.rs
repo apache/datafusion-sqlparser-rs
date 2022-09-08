@@ -375,6 +375,8 @@ pub enum Expr {
     MapAccess { column: Box<Expr>, keys: Vec<Expr> },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
+    /// Aggregate function with filter
+    AggregateExpressionWithFilter { expr: Box<Expr>, filter: Box<Expr> },
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
     ///
     /// Note we only recognize a complete single expression as `<condition>`,
@@ -571,6 +573,9 @@ impl fmt::Display for Expr {
                 write!(f, " '{}'", &value::escape_single_quote_string(value))
             }
             Expr::Function(fun) => write!(f, "{}", fun),
+            Expr::AggregateExpressionWithFilter { expr, filter } => {
+                write!(f, "{} FILTER (WHERE {})", expr, filter)
+            }
             Expr::Case {
                 operand,
                 conditions,

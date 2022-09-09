@@ -61,6 +61,7 @@ fn parse_map_access_expr() {
                     alias: None,
                     args: None,
                     with_hints: vec![],
+                    tablesample: None,
                 },
                 joins: vec![]
             }],

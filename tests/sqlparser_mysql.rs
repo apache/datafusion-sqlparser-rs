@@ -810,10 +810,11 @@ fn parse_update_with_joins() {
                         name: ObjectName(vec![Ident::new("orders")]),
                         alias: Some(TableAlias {
                             name: Ident::new("o"),
-                            columns: vec![]
+                            columns: vec![],
                         }),
                         args: None,
                         with_hints: vec![],
+                        tablesample: None,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -824,6 +825,7 @@ fn parse_update_with_joins() {
                             }),
                             args: None,
                             with_hints: vec![],
+                            tablesample: None,
                         },
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
                             left: Box::new(Expr::CompoundIdentifier(vec![
@@ -930,7 +932,8 @@ fn parse_substring_in_select() {
                                 }]),
                                 alias: None,
                                 args: None,
-                                with_hints: vec![]
+                                with_hints: vec![],
+                                tablesample: None,
                             },
                             joins: vec![]
                         }],

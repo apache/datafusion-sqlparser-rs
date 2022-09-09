@@ -98,6 +98,7 @@ define_keywords!(
     BEGIN,
     BEGIN_FRAME,
     BEGIN_PARTITION,
+    BERNOULLI,
     BETWEEN,
     BIGINT,
     BINARY,

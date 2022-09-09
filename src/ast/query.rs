@@ -344,6 +344,7 @@ pub enum TableFactor {
         args: Option<Vec<FunctionArg>>,
         /// MSSQL-specific `WITH (...)` hints such as NOLOCK.
         with_hints: Vec<Expr>,
+        tablesample: Option<TableSample>,
     },
     Derived {
         lateral: bool,
@@ -389,6 +390,7 @@ impl fmt::Display for TableFactor {
                 alias,
                 args,
                 with_hints,
+                tablesample,
             } => {
                 write!(f, "{}", name)?;
                 if let Some(args) = args {
@@ -399,6 +401,9 @@ impl fmt::Display for TableFactor {
                 }
                 if !with_hints.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_hints))?;
+                }
+                if let Some(tablesample) = tablesample {
+                    write!(f, " {}", tablesample)?;
                 }
                 Ok(())
             }
@@ -451,6 +456,44 @@ impl fmt::Display for TableFactor {
                 }
                 Ok(())
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct TableSample {
+    pub sampling_method: SamplingMethod,
+    pub sampling_fraction: Box<Expr>,
+    pub repeatable_seed: Option<Box<Expr>>,
+}
+
+impl fmt::Display for TableSample {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "TABLESAMPLE {} ({})",
+            self.sampling_method, self.sampling_fraction
+        )?;
+        if let Some(ref repeatable_seed) = self.repeatable_seed {
+            write!(f, " REPEATABLE ({})", repeatable_seed)?;
+        }
+        Ok(())
+    }
+}
+/// Stores the different Sampling Methods
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum SamplingMethod {
+    BERNOULLI,
+    SYSTEM,
+}
+
+impl fmt::Display for SamplingMethod {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SamplingMethod::BERNOULLI => write!(f, " BERNOULLI"),
+            SamplingMethod::SYSTEM => write!(f, "SYSTEM"),
         }
     }
 }

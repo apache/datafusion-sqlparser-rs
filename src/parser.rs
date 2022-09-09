@@ -4201,11 +4201,14 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                 }
             };
+            let tablesample = self.parse_tablesample_args()?;
+
             Ok(TableFactor::Table {
                 name,
                 alias,
                 args,
                 with_hints,
+                tablesample,
             })
         }
     }
@@ -4225,6 +4228,33 @@ impl<'a> Parser<'a> {
             subquery,
             alias,
         })
+    }
+
+    pub fn parse_tablesample_args(&mut self) -> Result<Option<TableSample>, ParserError> {
+        if self.parse_keyword(Keyword::TABLESAMPLE) {
+            let sampling_method =
+                match self.expect_one_of_keywords(&[Keyword::BERNOULLI, Keyword::SYSTEM])? {
+                    Keyword::BERNOULLI => SamplingMethod::BERNOULLI,
+                    Keyword::SYSTEM => SamplingMethod::SYSTEM,
+                    _ => unreachable!(),
+                };
+            self.expect_token(&Token::LParen)?;
+            let sampling_fraction = Box::new(self.parse_expr()?);
+            self.expect_token(&Token::RParen)?;
+            let mut repeatable_seed = None;
+            if self.parse_keyword(Keyword::REPEATABLE) {
+                self.expect_token(&Token::LParen)?;
+                repeatable_seed = Some(Box::new(self.parse_expr()?));
+                self.expect_token(&Token::RParen)?;
+            }
+            Ok(Some(TableSample {
+                sampling_method,
+                sampling_fraction,
+                repeatable_seed,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn parse_join_constraint(&mut self, natural: bool) -> Result<JoinConstraint, ParserError> {

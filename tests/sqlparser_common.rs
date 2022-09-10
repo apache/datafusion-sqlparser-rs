@@ -2894,20 +2894,20 @@ fn parse_literal_interval() {
     let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1-1")))),
             leading_field: Some(DateTimeField::Year),
             leading_precision: None,
             last_field: Some(DateTimeField::Month),
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '01:01.01' MINUTE (5) TO SECOND (5)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "01:01.01"
             )))),
@@ -2915,53 +2915,53 @@ fn parse_literal_interval() {
             leading_precision: Some(5),
             last_field: Some(DateTimeField::Second),
             fractional_seconds_precision: Some(5),
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '1' SECOND (5, 4)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1")))),
             leading_field: Some(DateTimeField::Second),
             leading_precision: Some(5),
             last_field: None,
             fractional_seconds_precision: Some(4),
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '10' HOUR";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL 5 DAY";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(number("5"))),
             leading_field: Some(DateTimeField::Day),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL 1 + 1 DAY";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Value(number("1"))),
                 op: BinaryOperator::Plus,
@@ -2971,27 +2971,27 @@ fn parse_literal_interval() {
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '10' HOUR (1)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: Some(1),
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '1 DAY'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "1 DAY"
             )))),
@@ -2999,7 +2999,7 @@ fn parse_literal_interval() {
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 

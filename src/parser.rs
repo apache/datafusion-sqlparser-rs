@@ -1183,13 +1183,13 @@ impl<'a> Parser<'a> {
                 }
             };
 
-        Ok(Expr::Value(Value::Interval {
+        Ok(Expr::Interval {
             value: Box::new(value),
             leading_field,
             leading_precision,
             last_field,
             fractional_seconds_precision: fsec_precision,
-        }))
+        })
     }
 
     /// Parse an operator following an expression

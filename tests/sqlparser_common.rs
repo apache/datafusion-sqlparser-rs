@@ -5543,3 +5543,87 @@ fn parse_cursor() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_tablesample() {
+    fn str_to_sampling_method(str_val: &str) -> SamplingMethod {
+        match str_val {
+            "BERNOULLI" => SamplingMethod::BERNOULLI,
+            "SYSTEM" => SamplingMethod::SYSTEM,
+            _ => panic!("Unexpected sampling method type"),
+        }
+    }
+    let sampling_methods = vec!["BERNOULLI", "SYSTEM"];
+    for sampling_method in sampling_methods {
+        let sql = format!(
+            "SELECT * FROM customer TABLESAMPLE {} (0.2) REPEATABLE (10)",
+            sampling_method
+        );
+        let select = verified_only_select(&sql);
+        assert_eq!(
+            TableFactor::Table {
+                name: ObjectName(vec![Ident::new("customer")]),
+                alias: None,
+                args: None,
+                with_hints: vec![],
+                tablesample: Some(TableSample {
+                    sampling_method: str_to_sampling_method(sampling_method),
+                    sampling_fraction: Box::new(Expr::Value(number("0.2"))),
+                    repeatable_seed: Some(Box::new(Expr::Value(number("10"))))
+                }),
+            },
+            only(select.from).relation
+        );
+
+        let sql = format!(
+            "SELECT * FROM customer TABLESAMPLE {} (10 * 5)",
+            sampling_method
+        );
+        let select = verified_only_select(&sql);
+        assert_eq!(
+            TableFactor::Table {
+                name: ObjectName(vec![Ident::new("customer")]),
+                alias: None,
+                args: None,
+                with_hints: vec![],
+                tablesample: Some(TableSample {
+                    sampling_method: str_to_sampling_method(sampling_method),
+                    sampling_fraction: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::Value(number("10"))),
+                        op: BinaryOperator::Multiply,
+                        right: Box::new(Expr::Value(number("5"))),
+                    }),
+                    repeatable_seed: None,
+                }),
+            },
+            only(select.from).relation
+        );
+
+        let sql = format!(
+            "SELECT * FROM customer AS c TABLESAMPLE {} (40) REPEATABLE (1 + 4)",
+            sampling_method
+        );
+        let select = verified_only_select(&sql);
+        assert_eq!(
+            TableFactor::Table {
+                name: ObjectName(vec![Ident::new("customer")]),
+                alias: Some(TableAlias {
+                    name: Ident::new("c"),
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                tablesample: Some(TableSample {
+                    sampling_method: str_to_sampling_method(sampling_method),
+                    sampling_fraction: Box::new(Expr::Value(number("40"))),
+                    repeatable_seed: Some(Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::Value(number("1"))),
+                        op: BinaryOperator::Plus,
+                        right: Box::new(Expr::Value(number("4"))),
+                    })),
+                }),
+            },
+            only(select.from).relation
+        );
+    }
+}

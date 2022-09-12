@@ -492,7 +492,7 @@ pub enum SamplingMethod {
 impl fmt::Display for SamplingMethod {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            SamplingMethod::BERNOULLI => write!(f, " BERNOULLI"),
+            SamplingMethod::BERNOULLI => write!(f, "BERNOULLI"),
             SamplingMethod::SYSTEM => write!(f, "SYSTEM"),
         }
     }

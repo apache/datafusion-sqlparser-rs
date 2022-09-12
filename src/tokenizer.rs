@@ -387,7 +387,8 @@ impl<'a> Tokenizer<'a> {
                     }
                     Ok(Some(Token::Whitespace(Whitespace::Newline)))
                 }
-                'N' => {
+                // Snowflake uses lower case n for national string literal
+                n @ 'N' | n @ 'n' => {
                     chars.next(); // consume, to check the next char
                     match chars.peek() {
                         Some('\'') => {
@@ -397,7 +398,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "N"
-                            let s = self.tokenize_word('N', chars);
+                            let s = self.tokenize_word(n, chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }

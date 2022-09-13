@@ -387,7 +387,7 @@ impl<'a> Tokenizer<'a> {
                     }
                     Ok(Some(Token::Whitespace(Whitespace::Newline)))
                 }
-                // Snowflake uses lower case n for national string literal
+                // Redshift uses lower case n for national string literal
                 n @ 'N' | n @ 'n' => {
                     chars.next(); // consume, to check the next char
                     match chars.peek() {

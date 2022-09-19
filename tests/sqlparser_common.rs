@@ -4665,7 +4665,7 @@ fn parse_set_transaction() {
 
 #[test]
 fn parse_set_variable() {
-    match verified_stmt("SET SOMETHING = 1") {
+    match verified_stmt("SET SOMETHING = '1'") {
         Statement::SetVariable {
             local,
             hivevar,
@@ -4675,12 +4675,15 @@ fn parse_set_variable() {
             assert!(!local);
             assert!(!hivevar);
             assert_eq!(variable, ObjectName(vec!["SOMETHING".into()]));
-            assert_eq!(value, vec![Expr::Value(Value::Number("1".into(), false))]);
+            assert_eq!(
+                value,
+                vec![Expr::Value(Value::SingleQuotedString("1".into()))]
+            );
         }
         _ => unreachable!(),
     }
 
-    one_statement_parses_to("SET SOMETHING TO 1", "SET SOMETHING = 1");
+    one_statement_parses_to("SET SOMETHING TO '1'", "SET SOMETHING = '1'");
 }
 
 #[test]

@@ -3774,7 +3774,7 @@ impl<'a> Parser<'a> {
             });
         }
 
-        let variable = if self.parse_keywords(&vec![Keyword::TIME, Keyword::ZONE]) {
+        let variable = if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {
             ObjectName(vec!["TIMEZONE".into()])
         } else {
             self.parse_object_name()?

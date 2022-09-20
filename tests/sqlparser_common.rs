@@ -4664,6 +4664,52 @@ fn parse_set_transaction() {
 }
 
 #[test]
+fn parse_set_variable() {
+    match verified_stmt("SET SOMETHING = '1'") {
+        Statement::SetVariable {
+            local,
+            hivevar,
+            variable,
+            value,
+        } => {
+            assert!(!local);
+            assert!(!hivevar);
+            assert_eq!(variable, ObjectName(vec!["SOMETHING".into()]));
+            assert_eq!(
+                value,
+                vec![Expr::Value(Value::SingleQuotedString("1".into()))]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    one_statement_parses_to("SET SOMETHING TO '1'", "SET SOMETHING = '1'");
+}
+
+#[test]
+fn parse_set_time_zone() {
+    match verified_stmt("SET TIMEZONE = 'UTC'") {
+        Statement::SetVariable {
+            local,
+            hivevar,
+            variable,
+            value,
+        } => {
+            assert!(!local);
+            assert!(!hivevar);
+            assert_eq!(variable, ObjectName(vec!["TIMEZONE".into()]));
+            assert_eq!(
+                value,
+                vec![Expr::Value(Value::SingleQuotedString("UTC".into()))]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    one_statement_parses_to("SET TIME ZONE TO 'UTC'", "SET TIMEZONE = 'UTC'");
+}
+
+#[test]
 fn parse_commit() {
     match verified_stmt("COMMIT") {
         Statement::Commit { chain: false } => (),

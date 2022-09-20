@@ -3774,7 +3774,12 @@ impl<'a> Parser<'a> {
             });
         }
 
-        let variable = self.parse_object_name()?;
+        let variable = if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {
+            ObjectName(vec!["TIMEZONE".into()])
+        } else {
+            self.parse_object_name()?
+        };
+
         if variable.to_string().eq_ignore_ascii_case("NAMES")
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {

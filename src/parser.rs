@@ -3142,6 +3142,10 @@ impl<'a> Parser<'a> {
                         Ok(DataType::Char(self.parse_optional_precision()?))
                     }
                 }
+                Keyword::CLOB => Ok(DataType::Clob(self.parse_precision()?)),
+                Keyword::BINARY => Ok(DataType::Binary(self.parse_precision()?)),
+                Keyword::VARBINARY => Ok(DataType::Varbinary(self.parse_precision()?)),
+                Keyword::BLOB => Ok(DataType::Blob(self.parse_precision()?)),
                 Keyword::UUID => Ok(DataType::Uuid),
                 Keyword::DATE => Ok(DataType::Date),
                 Keyword::DATETIME => Ok(DataType::Datetime),
@@ -3353,6 +3357,13 @@ impl<'a> Parser<'a> {
         } else {
             self.expected("a list of columns in parentheses", self.peek_token())
         }
+    }
+
+    pub fn parse_precision(&mut self) -> Result<u64, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let n = self.parse_literal_uint()?;
+        self.expect_token(&Token::RParen)?;
+        Ok(n)
     }
 
     pub fn parse_optional_precision(&mut self) -> Result<Option<u64>, ParserError> {

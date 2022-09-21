@@ -3166,7 +3166,7 @@ impl<'a> Parser<'a> {
                 }
                 // Interval types can be followed by a complicated interval
                 // qualifier that we don't currently support. See
-                // parse_interval_literal for a taste.
+                // parse_interval for a taste.
                 Keyword::INTERVAL => Ok(DataType::Interval),
                 Keyword::REGCLASS => Ok(DataType::Regclass),
                 Keyword::STRING => Ok(DataType::String),

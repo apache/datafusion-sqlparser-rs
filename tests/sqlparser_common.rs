@@ -2890,7 +2890,7 @@ fn parse_literal_timestamp_with_time_zone() {
 }
 
 #[test]
-fn parse_literal_interval() {
+fn parse_interval() {
     let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";
     let select = verified_only_select(sql);
     assert_eq!(

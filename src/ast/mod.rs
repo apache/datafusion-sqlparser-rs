@@ -1144,6 +1144,12 @@ pub enum Statement {
     ///
     /// Note: this is a MySQL-specific statement.
     SetNamesDefault {},
+    /// SHOW FUNCTIONS 
+    ///
+    /// Note: this is a Presto-specific statement.
+    ShowFunctions {
+        filter: Option<ShowStatementFilter>,
+    },
     /// SHOW <variable>
     ///
     /// Note: this is a PostgreSQL-specific statement.
@@ -2028,6 +2034,18 @@ impl fmt::Display for Statement {
                 if let Some(db_name) = db_name {
                     write!(f, " FROM {}", db_name)?;
                 }
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
+                }
+                Ok(())
+            }
+            Statement::ShowFunctions {
+                filter,
+            } => {
+                write!(
+                    f,
+                    "SHOW FUNCTIONS",
+                )?;
                 if let Some(filter) = filter {
                     write!(f, " {}", filter)?;
                 }

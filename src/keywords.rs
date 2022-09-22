@@ -250,6 +250,7 @@ define_keywords!(
     FROM,
     FULL,
     FUNCTION,
+    FUNCTIONS,
     FUSION,
     GET,
     GLOBAL,

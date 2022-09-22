@@ -3854,6 +3854,8 @@ impl<'a> Parser<'a> {
             Ok(self.parse_show_columns(extended, full)?)
         } else if self.parse_keyword(Keyword::TABLES) {
             Ok(self.parse_show_tables(extended, full)?)
+        } else if self.parse_keyword(Keyword::FUNCTIONS) {
+            Ok(self.parse_show_functions()?)
         } else if extended || full {
             Err(ParserError::ParserError(
                 "EXTENDED/FULL are not supported with this type of SHOW query".to_string(),
@@ -3941,6 +3943,15 @@ impl<'a> Parser<'a> {
             extended,
             full,
             db_name,
+            filter,
+        })
+    }
+
+    pub fn parse_show_functions(
+        &mut self,
+    ) -> Result<Statement, ParserError> {
+        let filter = self.parse_show_statement_filter()?;
+        Ok(Statement::ShowFunctions {
             filter,
         })
     }

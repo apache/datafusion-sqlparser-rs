@@ -3947,13 +3947,9 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_show_functions(
-        &mut self,
-    ) -> Result<Statement, ParserError> {
+    pub fn parse_show_functions(&mut self) -> Result<Statement, ParserError> {
         let filter = self.parse_show_statement_filter()?;
-        Ok(Statement::ShowFunctions {
-            filter,
-        })
+        Ok(Statement::ShowFunctions { filter })
     }
 
     pub fn parse_show_collation(&mut self) -> Result<Statement, ParserError> {

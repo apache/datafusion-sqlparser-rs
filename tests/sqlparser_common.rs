@@ -5573,7 +5573,7 @@ fn parse_cursor() {
 #[test]
 fn parse_show_functions() {
     assert_eq!(
-        mysql_and_generic().verified_stmt("SHOW FUNCTIONS LIKE 'pattern'"),
+        verified_stmt("SHOW FUNCTIONS LIKE 'pattern'"),
         Statement::ShowFunctions {
             filter: Some(ShowStatementFilter::Like("pattern".into())),
         }

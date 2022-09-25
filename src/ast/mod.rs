@@ -1147,9 +1147,7 @@ pub enum Statement {
     /// SHOW FUNCTIONS 
     ///
     /// Note: this is a Presto-specific statement.
-    ShowFunctions {
-        filter: Option<ShowStatementFilter>,
-    },
+    ShowFunctions { filter: Option<ShowStatementFilter> },
     /// SHOW <variable>
     ///
     /// Note: this is a PostgreSQL-specific statement.
@@ -2039,13 +2037,8 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::ShowFunctions {
-                filter,
-            } => {
-                write!(
-                    f,
-                    "SHOW FUNCTIONS",
-                )?;
+            Statement::ShowFunctions { filter } => {
+                write!(f, "SHOW FUNCTIONS")?;
                 if let Some(filter) = filter {
                     write!(f, " {}", filter)?;
                 }

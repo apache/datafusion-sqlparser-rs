@@ -1290,7 +1290,7 @@ pub enum Statement {
         verbose: bool,
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
-        ///
+        /// Optional output format of explain
         format: Option<AnalyzeFormat>,
     },
     /// SAVEPOINT -- define a new savepoint within the current transaction

@@ -1294,6 +1294,8 @@ pub enum Statement {
         verbose: bool,
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
+        /// Optional output format of explain
+        format: Option<AnalyzeFormat>,
     },
     /// SAVEPOINT -- define a new savepoint within the current transaction
     Savepoint { name: Ident },
@@ -1344,6 +1346,7 @@ impl fmt::Display for Statement {
                 verbose,
                 analyze,
                 statement,
+                format,
             } => {
                 if *describe_alias {
                     write!(f, "DESCRIBE ")?;
@@ -1357,6 +1360,10 @@ impl fmt::Display for Statement {
 
                 if *verbose {
                     write!(f, "VERBOSE ")?;
+                }
+
+                if let Some(format) = format {
+                    write!(f, "FORMAT {} ", format)?;
                 }
 
                 write!(f, "{}", statement)
@@ -2487,6 +2494,24 @@ pub struct Function {
     // Some functions must be called without trailing parentheses, for example Postgres
     // do it for current_catalog, current_schema, etc. This flags is used for formatting.
     pub special: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum AnalyzeFormat {
+    TEXT,
+    GRAPHVIZ,
+    JSON,
+}
+
+impl fmt::Display for AnalyzeFormat {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            AnalyzeFormat::TEXT => "TEXT",
+            AnalyzeFormat::GRAPHVIZ => "GRAPHVIZ",
+            AnalyzeFormat::JSON => "JSON",
+        })
+    }
 }
 
 impl fmt::Display for Function {

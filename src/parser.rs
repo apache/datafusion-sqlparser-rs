@@ -2023,6 +2023,18 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_analyze_format(&mut self) -> Result<AnalyzeFormat, ParserError> {
+        match self.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TEXT => Ok(AnalyzeFormat::TEXT),
+                Keyword::GRAPHVIZ => Ok(AnalyzeFormat::GRAPHVIZ),
+                Keyword::JSON => Ok(AnalyzeFormat::JSON),
+                _ => self.expected("fileformat", Token::Word(w)),
+            },
+            unexpected => self.expected("fileformat", unexpected),
+        }
+    }
+
     pub fn parse_create_view(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         self.expect_keyword(Keyword::VIEW)?;
@@ -3432,6 +3444,10 @@ impl<'a> Parser<'a> {
     pub fn parse_explain(&mut self, describe_alias: bool) -> Result<Statement, ParserError> {
         let analyze = self.parse_keyword(Keyword::ANALYZE);
         let verbose = self.parse_keyword(Keyword::VERBOSE);
+        let mut format = None;
+        if self.parse_keyword(Keyword::FORMAT) {
+            format = Some(self.parse_analyze_format()?);
+        }
 
         if let Some(statement) = self.maybe_parse(|parser| parser.parse_statement()) {
             Ok(Statement::Explain {
@@ -3439,6 +3455,7 @@ impl<'a> Parser<'a> {
                 analyze,
                 verbose,
                 statement: Box::new(statement),
+                format,
             })
         } else {
             let table_name = self.parse_object_name()?;

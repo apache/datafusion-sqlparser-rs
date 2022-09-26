@@ -5569,3 +5569,13 @@ fn parse_cursor() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_show_functions() {
+    assert_eq!(
+        verified_stmt("SHOW FUNCTIONS LIKE 'pattern'"),
+        Statement::ShowFunctions {
+            filter: Some(ShowStatementFilter::Like("pattern".into())),
+        }
+    );
+}

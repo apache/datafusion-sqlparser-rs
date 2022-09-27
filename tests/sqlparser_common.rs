@@ -32,7 +32,8 @@ use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
 
 use test_utils::{
-    all_dialects, expr_from_projection, join, number, only, table, table_alias, TestedDialects,
+    all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
+    TestedDialects,
 };
 
 #[test]
@@ -4851,6 +4852,63 @@ fn parse_drop_index() {
 }
 
 #[test]
+fn parse_create_role() {
+    let sql = "CREATE ROLE consultant";
+    match verified_stmt(sql) {
+        Statement::CreateRole { names, .. } => {
+            assert_eq_vec(&["consultant"], &names);
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
+    match verified_stmt(sql) {
+        Statement::CreateRole {
+            names,
+            if_not_exists,
+            ..
+        } => {
+            assert_eq_vec(&["mysql_a", "mysql_b"], &names);
+            assert!(if_not_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_drop_role() {
+    let sql = "DROP ROLE abc";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            ..
+        } => {
+            assert_eq_vec(&["abc"], &names);
+            assert_eq!(ObjectType::Role, object_type);
+            assert!(!if_exists);
+        }
+        _ => unreachable!(),
+    };
+
+    let sql = "DROP ROLE IF EXISTS def, magician, quaternion";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            ..
+        } => {
+            assert_eq_vec(&["def", "magician", "quaternion"], &names);
+            assert_eq!(ObjectType::Role, object_type);
+            assert!(if_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_grant() {
     let sql = "GRANT SELECT, INSERT, UPDATE (shape, size), USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER, CONNECT, CREATE, EXECUTE, TEMPORARY ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
     match verified_stmt(sql) {
@@ -4891,14 +4949,8 @@ fn parse_grant() {
                     ],
                     actions
                 );
-                assert_eq!(
-                    vec!["abc", "def"],
-                    objects.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
-                assert_eq!(
-                    vec!["xyz", "m"],
-                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["abc", "def"], &objects);
+                assert_eq_vec(&["xyz", "m"], &grantees);
                 assert!(with_grant_option);
                 assert_eq!("jj", granted_by.unwrap().to_string());
             }
@@ -4918,14 +4970,8 @@ fn parse_grant() {
         } => match (privileges, objects) {
             (Privileges::Actions(actions), GrantObjects::AllTablesInSchema { schemas }) => {
                 assert_eq!(vec![Action::Insert { columns: None }], actions);
-                assert_eq!(
-                    vec!["public"],
-                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
-                assert_eq!(
-                    vec!["browser"],
-                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["public"], &schemas);
+                assert_eq_vec(&["browser"], &grantees);
                 assert!(!with_grant_option);
             }
             _ => unreachable!(),
@@ -4947,14 +4993,8 @@ fn parse_grant() {
                     vec![Action::Usage, Action::Select { columns: None }],
                     actions
                 );
-                assert_eq!(
-                    vec!["p"],
-                    objects.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
-                assert_eq!(
-                    vec!["u"],
-                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["p"], &objects);
+                assert_eq_vec(&["u"], &grantees);
             }
             _ => unreachable!(),
         },
@@ -4988,10 +5028,7 @@ fn parse_grant() {
                 GrantObjects::Schemas(schemas),
             ) => {
                 assert!(!with_privileges_keyword);
-                assert_eq!(
-                    vec!["aa", "b"],
-                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["aa", "b"], &schemas);
             }
             _ => unreachable!(),
         },
@@ -5007,10 +5044,7 @@ fn parse_grant() {
         } => match (privileges, objects) {
             (Privileges::Actions(actions), GrantObjects::AllSequencesInSchema { schemas }) => {
                 assert_eq!(vec![Action::Usage], actions);
-                assert_eq!(
-                    vec!["bus"],
-                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["bus"], &schemas);
             }
             _ => unreachable!(),
         },
@@ -5035,14 +5069,8 @@ fn test_revoke() {
                 },
                 privileges
             );
-            assert_eq!(
-                vec!["users", "auth"],
-                tables.iter().map(ToString::to_string).collect::<Vec<_>>()
-            );
-            assert_eq!(
-                vec!["analyst"],
-                grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-            );
+            assert_eq_vec(&["users", "auth"], &tables);
+            assert_eq_vec(&["analyst"], &grantees);
             assert!(cascade);
             assert_eq!(None, granted_by);
         }

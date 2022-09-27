@@ -118,6 +118,28 @@ fn parse_mssql_bin_literal() {
     let _ = ms_and_generic().one_statement_parses_to("SELECT 0xdeadBEEF", "SELECT X'deadBEEF'");
 }
 
+#[test]
+fn parse_mssql_create_role() {
+    let sql = "CREATE ROLE mssql AUTHORIZATION helena";
+    match ms().verified_stmt(sql) {
+        Statement::CreateRole {
+            names,
+            authorization_owner,
+            ..
+        } => {
+            assert_eq_vec(&["mssql"], &names);
+            assert_eq!(
+                authorization_owner,
+                Some(ObjectName(vec![Ident {
+                    value: "helena".into(),
+                    quote_style: None
+                }]))
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
 fn ms() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MsSqlDialect {})],

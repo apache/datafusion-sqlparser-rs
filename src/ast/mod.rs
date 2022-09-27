@@ -954,6 +954,13 @@ impl fmt::Display for CommentObject {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Password {
+    Password(Expr),
+    NullPassword,
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1108,6 +1115,27 @@ pub enum Statement {
         columns: Vec<OrderByExpr>,
         unique: bool,
         if_not_exists: bool,
+    },
+    /// CREATE ROLE
+    CreateRole {
+        names: Vec<ObjectName>,
+        if_not_exists: bool,
+        // Postgres
+        login: Option<bool>,
+        inherit: Option<bool>,
+        bypassrls: Option<bool>,
+        password: Option<Password>,
+        superuser: Option<bool>,
+        create_db: Option<bool>,
+        create_role: Option<bool>,
+        replication: Option<bool>,
+        connection_limit: Option<Expr>,
+        valid_until: Option<Expr>,
+        in_role: Vec<Ident>,
+        role: Vec<Ident>,
+        admin: Vec<Ident>,
+        // MSSQL
+        authorization_owner: Option<ObjectName>,
     },
     /// ALTER TABLE
     AlterTable {
@@ -1963,6 +1991,90 @@ impl fmt::Display for Statement {
                 table_name = table_name,
                 columns = display_separated(columns, ",")
             ),
+            Statement::CreateRole {
+                names,
+                if_not_exists,
+                inherit,
+                login,
+                bypassrls,
+                password,
+                create_db,
+                create_role,
+                superuser,
+                replication,
+                connection_limit,
+                valid_until,
+                in_role,
+                role,
+                admin,
+                authorization_owner,
+            } => {
+                write!(
+                    f,
+                    "CREATE ROLE {if_not_exists}{names}{superuser}{create_db}{create_role}{inherit}{login}{replication}{bypassrls}",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    names = display_separated(names, ", "),
+                    superuser = match *superuser {
+                        Some(true) => " SUPERUSER",
+                        Some(false) => " NOSUPERUSER",
+                        None => ""
+                    },
+                    create_db = match *create_db {
+                        Some(true) => " CREATEDB",
+                        Some(false) => " NOCREATEDB",
+                        None => ""
+                    },
+                    create_role = match *create_role {
+                        Some(true) => " CREATEROLE",
+                        Some(false) => " NOCREATEROLE",
+                        None => ""
+                    },
+                    inherit = match *inherit {
+                        Some(true) => " INHERIT",
+                        Some(false) => " NOINHERIT",
+                        None => ""
+                    },
+                    login = match *login {
+                        Some(true) => " LOGIN",
+                        Some(false) => " NOLOGIN",
+                        None => ""
+                    },
+                    replication = match *replication {
+                        Some(true) => " REPLICATION",
+                        Some(false) => " NOREPLICATION",
+                        None => ""
+                    },
+                    bypassrls = match *bypassrls {
+                        Some(true) => " BYPASSRLS",
+                        Some(false) => " NOBYPASSRLS",
+                        None => ""
+                    }
+                )?;
+                if let Some(limit) = connection_limit {
+                    write!(f, " CONNECTION LIMIT {}", limit)?;
+                }
+                match password {
+                    Some(Password::Password(pass)) => write!(f, " PASSWORD {}", pass),
+                    Some(Password::NullPassword) => write!(f, " PASSWORD NULL"),
+                    None => Ok(()),
+                }?;
+                if let Some(until) = valid_until {
+                    write!(f, " VALID UNTIL {}", until)?;
+                }
+                if !in_role.is_empty() {
+                    write!(f, " IN ROLE {}", display_comma_separated(in_role))?;
+                }
+                if !role.is_empty() {
+                    write!(f, " ROLE {}", display_comma_separated(role))?;
+                }
+                if !admin.is_empty() {
+                    write!(f, " ADMIN {}", display_comma_separated(admin))?;
+                }
+                if let Some(owner) = authorization_owner {
+                    write!(f, " AUTHORIZATION {}", owner)?;
+                }
+                Ok(())
+            }
             Statement::AlterTable { name, operation } => {
                 write!(f, "ALTER TABLE {} {}", name, operation)
             }
@@ -2701,6 +2813,7 @@ pub enum ObjectType {
     View,
     Index,
     Schema,
+    Role,
 }
 
 impl fmt::Display for ObjectType {
@@ -2710,6 +2823,7 @@ impl fmt::Display for ObjectType {
             ObjectType::View => "VIEW",
             ObjectType::Index => "INDEX",
             ObjectType::Schema => "SCHEMA",
+            ObjectType::Role => "ROLE",
         })
     }
 }

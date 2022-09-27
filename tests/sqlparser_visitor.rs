@@ -1,9 +1,11 @@
 #[cfg(feature = "derive-visitor")]
 mod test {
-    use derive_visitor::{visitor_enter_fn_mut, DriveMut, Drive, Visitor};
+    use derive_visitor::{visitor_enter_fn_mut, Drive, DriveMut, Visitor};
     use sqlparser::ast;
     use sqlparser::ast::TableFactor::Table;
-    use sqlparser::ast::{Ident, Join, JoinConstraint, JoinOperator, ObjectName, TableFactor, Value};
+    use sqlparser::ast::{
+        Ident, Join, JoinConstraint, JoinOperator, ObjectName, TableFactor, Value,
+    };
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
 
@@ -78,5 +80,14 @@ mod test {
         let mut counter = PlaceholderCounter(0);
         ast[0].drive(&mut counter);
         assert_eq!(counter.0, 2, "There are 2 placeholders in the query");
+    }
+
+    #[test]
+    fn test_readme_example() {
+        let mut statements = Parser::parse_sql(&GenericDialect, "select x").unwrap();
+        statements[0].drive_mut(&mut visitor_enter_fn_mut(|ident: &mut Ident| {
+            ident.value = ident.value.replace("x", "y");
+        }));
+        assert_eq!(statements[0].to_string(), "SELECT y");
     }
 }

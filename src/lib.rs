@@ -25,12 +25,31 @@
 //!
 //! let sql = "SELECT a, b, 123, myfunc(b) \
 //!            FROM table_1 \
-//!            WHERE a > b AND b < 100 \
+//!            WHERE a > b AND b < $x \
 //!            ORDER BY a DESC, b";
 //!
-//! let ast = Parser::parse_sql(&dialect, sql).unwrap();
+//! let mut ast = Parser::parse_sql(&dialect, sql).unwrap();
 //!
 //! println!("AST: {:?}", ast);
+//!
+//! # #[cfg(feature = "derive-visitor")] {
+//! // You can activate the derive-visitor feature
+//! // to apply transforms to all AST nodes of a given type
+//!
+//! use derive_visitor::{visitor_enter_fn_mut, DriveMut};
+//! use sqlparser::ast;
+//!
+//! ast[0].drive_mut(&mut visitor_enter_fn_mut(|value: &mut ast::Value| {
+//!     if let ast::Value::Placeholder(ref mut placeholder) = value {
+//!         *placeholder += "_transformed";
+//!     }
+//! }));
+//!
+//! assert_eq!(
+//!     ast[0].to_string(),
+//!     "SELECT a, b, 123, myfunc(b) FROM table_1 WHERE a > b AND b < $x_transformed ORDER BY a DESC, b"
+//! );
+//! # }
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]

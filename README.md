@@ -40,6 +40,25 @@ This outputs
 AST: [Query(Query { ctes: [], body: Select(Select { distinct: false, projection: [UnnamedExpr(Identifier("a")), UnnamedExpr(Identifier("b")), UnnamedExpr(Value(Long(123))), UnnamedExpr(Function(Function { name: ObjectName(["myfunc"]), args: [Identifier("b")], over: None, distinct: false }))], from: [TableWithJoins { relation: Table { name: ObjectName(["table_1"]), alias: None, args: [], with_hints: [] }, joins: [] }], selection: Some(BinaryOp { left: BinaryOp { left: Identifier("a"), op: Gt, right: Identifier("b") }, op: And, right: BinaryOp { left: Identifier("b"), op: Lt, right: Value(Long(100)) } }), group_by: [], having: None }), order_by: [OrderByExpr { expr: Identifier("a"), asc: Some(false) }, OrderByExpr { expr: Identifier("b"), asc: None }], limit: None, offset: None, fetch: None })]
 ```
 
+### Analyzing and transforming the AST
+
+Once you have an abstract syntax tree, you can analyze and transform it 
+using the optional [`derive-visitor`](https://github.com/nikis05/derive-visitor) feature.
+
+For instance, if you want to rename all identifiers in a query:
+
+```rust
+use sqlparser::{dialect::GenericDialect, parser::Parser, ast::Ident};
+ use derive_visitor::{visitor_enter_fn_mut, DriveMut};
+
+let mut statements = Parser::parse_sql(&GenericDialect, "select x").unwrap();
+statements[0].drive_mut(&mut visitor_enter_fn_mut(|ident: &mut Ident| {
+    ident.value = ident.value.replace("x", "y");
+}));
+assert_eq!(statements[0].to_string(), "SELECT y");
+```
+
+
 ## Command line
 To parse a file and dump the results as JSON:
 ```

@@ -678,13 +678,14 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 '@' => self.consume_and_return(chars, Token::AtSign),
-                '?' => self.consume_and_return(chars, Token::Placeholder(String::from("?"))),
+                '?' => {
+                    chars.next();
+                    let s = peeking_take_while(chars, |ch| ch.is_numeric());
+                    Ok(Some(Token::Placeholder(String::from("?") + &s)))
+                }
                 '$' => {
                     chars.next();
-                    let s = peeking_take_while(
-                        chars,
-                        |ch| matches!(ch, '0'..='9' | 'A'..='Z' | 'a'..='z'),
-                    );
+                    let s = peeking_take_while(chars, |ch| ch.is_alphanumeric() || ch == '_');
                     Ok(Some(Token::Placeholder(String::from("$") + &s)))
                 }
                 //whitespace check (including unicode chars) should be last as it covers some of the chars above

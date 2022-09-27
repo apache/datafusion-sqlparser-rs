@@ -570,7 +570,7 @@ impl<'a> Parser<'a> {
                     })
                 }
             }
-            Token::Placeholder(_) => {
+            Token::Placeholder(_) | Token::Colon | Token::AtSign => {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
@@ -1774,7 +1774,7 @@ impl<'a> Parser<'a> {
                             .iter()
                             .any(|d| kw.keyword == *d) =>
                     {
-                        break
+                        break;
                     }
                     Token::RParen | Token::EOF => break,
                     _ => continue,
@@ -3038,6 +3038,11 @@ impl<'a> Parser<'a> {
             Token::EscapedStringLiteral(ref s) => Ok(Value::EscapedStringLiteral(s.to_string())),
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
             Token::Placeholder(ref s) => Ok(Value::Placeholder(s.to_string())),
+            tok @ Token::Colon | tok @ Token::AtSign => {
+                let ident = self.parse_identifier()?;
+                let placeholder = tok.to_string() + &ident.value;
+                Ok(Value::Placeholder(placeholder))
+            }
             unexpected => self.expected("a value", unexpected),
         }
     }
@@ -4892,12 +4897,12 @@ impl<'a> Parser<'a> {
                     Some(_) => {
                         return Err(ParserError::ParserError(
                             "expected UPDATE, DELETE or INSERT in merge clause".to_string(),
-                        ))
+                        ));
                     }
                     None => {
                         return Err(ParserError::ParserError(
                             "expected UPDATE, DELETE or INSERT in merge clause".to_string(),
-                        ))
+                        ));
                     }
                 },
             );

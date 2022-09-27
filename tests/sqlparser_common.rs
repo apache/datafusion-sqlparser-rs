@@ -22,6 +22,7 @@
 mod test_utils;
 
 use matches::assert_matches;
+use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, GenericDialect, HiveDialect, MsSqlDialect,
@@ -5298,6 +5299,17 @@ fn test_placeholder() {
             value: Expr::Value(Value::Placeholder("$2".into())),
             rows: OffsetRows::None,
         }),
+    );
+
+    let sql = "SELECT $fromage_français, :x, ?123";
+    let ast = dialects.verified_only_select(sql);
+    assert_eq!(
+        ast.projection,
+        vec![
+            UnnamedExpr(Expr::Value(Value::Placeholder("$fromage_français".into()))),
+            UnnamedExpr(Expr::Value(Value::Placeholder(":x".into()))),
+            UnnamedExpr(Expr::Value(Value::Placeholder("?123".into()))),
+        ]
     );
 }
 

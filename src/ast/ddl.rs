@@ -450,6 +450,7 @@ fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
 ///
 /// Used in foreign key constraints in `ON UPDATE` and `ON DELETE` options.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum ReferentialAction {
     Restrict,

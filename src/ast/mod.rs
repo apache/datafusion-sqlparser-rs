@@ -86,6 +86,7 @@ where
 
 /// An identifier, decomposed into its value or character data and the quote style.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Ident {
     /// The value of the identifier without quotes.

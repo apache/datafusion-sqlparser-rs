@@ -1117,6 +1117,7 @@ pub enum Statement {
         if_not_exists: bool,
     },
     /// CREATE ROLE
+    /// See [postgres](https://www.postgresql.org/docs/current/sql-createrole.html)
     CreateRole {
         names: Vec<ObjectName>,
         if_not_exists: bool,
@@ -1132,7 +1133,9 @@ pub enum Statement {
         connection_limit: Option<Expr>,
         valid_until: Option<Expr>,
         in_role: Vec<Ident>,
+        in_group: Vec<Ident>,
         role: Vec<Ident>,
+        user: Vec<Ident>,
         admin: Vec<Ident>,
         // MSSQL
         authorization_owner: Option<ObjectName>,
@@ -2005,7 +2008,9 @@ impl fmt::Display for Statement {
                 connection_limit,
                 valid_until,
                 in_role,
+                in_group,
                 role,
+                user,
                 admin,
                 authorization_owner,
             } => {
@@ -2064,8 +2069,14 @@ impl fmt::Display for Statement {
                 if !in_role.is_empty() {
                     write!(f, " IN ROLE {}", display_comma_separated(in_role))?;
                 }
+                if !in_group.is_empty() {
+                    write!(f, " IN GROUP {}", display_comma_separated(in_group))?;
+                }
                 if !role.is_empty() {
                     write!(f, " ROLE {}", display_comma_separated(role))?;
+                }
+                if !user.is_empty() {
+                    write!(f, " USER {}", display_comma_separated(user))?;
                 }
                 if !admin.is_empty() {
                     write!(f, " ADMIN {}", display_comma_separated(admin))?;

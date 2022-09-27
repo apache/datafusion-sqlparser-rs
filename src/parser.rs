@@ -2109,7 +2109,9 @@ impl<'a> Parser<'a> {
         let mut connection_limit = None;
         let mut valid_until = None;
         let mut in_role = vec![];
-        let mut roles = vec![];
+        let mut in_group = vec![];
+        let mut role = vec![];
+        let mut user = vec![];
         let mut admin = vec![];
 
         while let Some(keyword) = self.parse_one_of_keywords(&optional_keywords) {
@@ -2209,22 +2211,37 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::IN => {
-                    if self.parse_keyword(Keyword::ROLE) || self.parse_keyword(Keyword::GROUP) {
+                    if self.parse_keyword(Keyword::ROLE) {
                         if !in_role.is_empty() {
-                            parser_err!("Found multiple IN ROLE or IN GROUP")
+                            parser_err!("Found multiple IN ROLE")
                         } else {
                             in_role = self.parse_comma_separated(Parser::parse_identifier)?;
+                            Ok(())
+                        }
+                    } else if self.parse_keyword(Keyword::GROUP) {
+                        if !in_group.is_empty() {
+                            parser_err!("Found multiple IN GROUP")
+                        } else {
+                            in_group = self.parse_comma_separated(Parser::parse_identifier)?;
                             Ok(())
                         }
                     } else {
                         self.expected("ROLE or GROUP after IN", self.peek_token())
                     }
                 }
-                Keyword::ROLE | Keyword::USER => {
-                    if !roles.is_empty() {
-                        parser_err!("Found multiple ROLE or USER")
+                Keyword::ROLE => {
+                    if !role.is_empty() {
+                        parser_err!("Found multiple ROLE")
                     } else {
-                        roles = self.parse_comma_separated(Parser::parse_identifier)?;
+                        role = self.parse_comma_separated(Parser::parse_identifier)?;
+                        Ok(())
+                    }
+                }
+                Keyword::USER => {
+                    if !user.is_empty() {
+                        parser_err!("Found multiple USER")
+                    } else {
+                        user = self.parse_comma_separated(Parser::parse_identifier)?;
                         Ok(())
                     }
                 }
@@ -2254,7 +2271,9 @@ impl<'a> Parser<'a> {
             connection_limit,
             valid_until,
             in_role,
-            role: roles,
+            in_group,
+            role,
+            user,
             admin,
             authorization_owner,
         })

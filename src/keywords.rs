@@ -27,7 +27,6 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-
 #[cfg(feature = "derive-visitor")]
 use derive_visitor::{Drive, DriveMut};
 

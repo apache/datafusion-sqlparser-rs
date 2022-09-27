@@ -38,15 +38,19 @@ pub enum AlterTableOperation {
     AddColumn { column_def: ColumnDef },
     /// `DROP CONSTRAINT [ IF EXISTS ] <name>`
     DropConstraint {
-        #[cfg_attr(feature = "derive-visitor", drive(skip))] if_exists: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
+        if_exists: bool,
         name: Ident,
-        #[cfg_attr(feature = "derive-visitor", drive(skip))] cascade: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
+        cascade: bool,
     },
     /// `DROP [ COLUMN ] [ IF EXISTS ] <column_name> [ CASCADE ]`
     DropColumn {
         column_name: Ident,
-        #[cfg_attr(feature = "derive-visitor", drive(skip))] if_exists: bool,
-        #[cfg_attr(feature = "derive-visitor", drive(skip))] cascade: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
+        if_exists: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
+        cascade: bool,
     },
     /// `RENAME TO PARTITION (partition=val)`
     RenamePartitions {
@@ -55,12 +59,14 @@ pub enum AlterTableOperation {
     },
     /// Add Partitions
     AddPartitions {
-        #[cfg_attr(feature = "derive-visitor", drive(skip))] if_not_exists: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
+        if_not_exists: bool,
         new_partitions: Vec<Expr>,
     },
     DropPartitions {
         partitions: Vec<Expr>,
-        #[cfg_attr(feature = "derive-visitor", drive(skip))] if_exists: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
+        if_exists: bool,
     },
     /// `RENAME [ COLUMN ] <old_column_name> TO <new_column_name>`
     RenameColumn {
@@ -233,7 +239,8 @@ pub enum TableConstraint {
         name: Option<Ident>,
         columns: Vec<Ident>,
         /// Whether this is a `PRIMARY KEY` or just a `UNIQUE` constraint
-        #[cfg_attr(feature = "derive-visitor", drive(skip))] is_primary: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
+        is_primary: bool,
     },
     /// A referential integrity constraint (`[ CONSTRAINT <name> ] FOREIGN KEY (<columns>)
     /// REFERENCES <foreign_table> (<referred_columns>)
@@ -365,7 +372,8 @@ pub enum ColumnOption {
     Default(Expr),
     /// `{ PRIMARY KEY | UNIQUE }`
     Unique {
-        #[cfg_attr(feature = "derive-visitor", drive(skip))] is_primary: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
+        is_primary: bool,
     },
     /// A referential integrity constraint (`[FOREIGN KEY REFERENCES
     /// <foreign_table> (<referred_columns>)

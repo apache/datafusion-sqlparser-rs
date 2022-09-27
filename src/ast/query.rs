@@ -83,7 +83,8 @@ pub enum SetExpr {
     /// UNION/EXCEPT/INTERSECT of two queries
     SetOperation {
         op: SetOperator,
-        #[cfg_attr(feature = "derive-visitor", drive(skip))] all: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
+        all: bool,
         left: Box<SetExpr>,
         right: Box<SetExpr>,
     },
@@ -138,7 +139,8 @@ impl fmt::Display for SetOperator {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Select {
-    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub distinct: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
+    pub distinct: bool,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
     /// projection expressions
@@ -230,7 +232,8 @@ pub struct LateralView {
     /// LATERAL VIEW optional column aliases
     pub lateral_col_alias: Vec<Ident>,
     /// LATERAL VIEW OUTER
-    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub outer: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
+    pub outer: bool,
 }
 
 impl fmt::Display for LateralView {
@@ -257,7 +260,8 @@ impl fmt::Display for LateralView {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct With {
-    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub recursive: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
+    pub recursive: bool,
     pub cte_tables: Vec<Cte>,
 }
 
@@ -359,7 +363,8 @@ pub enum TableFactor {
         with_hints: Vec<Expr>,
     },
     Derived {
-        #[cfg_attr(feature = "derive-visitor", drive(skip))] lateral: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
+        lateral: bool,
         subquery: Box<Query>,
         alias: Option<TableAlias>,
     },
@@ -379,7 +384,8 @@ pub enum TableFactor {
     UNNEST {
         alias: Option<TableAlias>,
         array_expr: Box<Expr>,
-        #[cfg_attr(feature = "derive-visitor", drive(skip))] with_offset: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
+        with_offset: bool,
         with_offset_alias: Option<Ident>,
     },
     /// Represents a parenthesized table factor. The SQL spec only allows a
@@ -585,9 +591,11 @@ pub enum JoinConstraint {
 pub struct OrderByExpr {
     pub expr: Expr,
     /// Optional `ASC` or `DESC`
-    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub asc: Option<bool>,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
+    pub asc: Option<bool>,
     /// Optional `NULLS FIRST` or `NULLS LAST`
-    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub nulls_first: Option<bool>,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
+    pub nulls_first: Option<bool>,
 }
 
 impl fmt::Display for OrderByExpr {
@@ -646,8 +654,10 @@ impl fmt::Display for OffsetRows {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Fetch {
-    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub with_ties: bool,
-    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub percent: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
+    pub with_ties: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
+    pub percent: bool,
     pub quantity: Option<Expr>,
 }
 
@@ -686,8 +696,10 @@ impl fmt::Display for LockType {
 #[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Top {
     /// SQL semantic equivalent of LIMIT but with same structure as FETCH.
-    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub with_ties: bool,
-    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub percent: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
+    pub with_ties: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
+    pub percent: bool,
     pub quantity: Option<Expr>,
 }
 
@@ -725,9 +737,12 @@ impl fmt::Display for Values {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct SelectInto {
-    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub temporary: bool,
-    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub unlogged: bool,
-    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub table: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
+    pub temporary: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
+    pub unlogged: bool,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
+    pub table: bool,
     pub name: ObjectName,
 }
 

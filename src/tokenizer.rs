@@ -48,7 +48,10 @@ pub enum Token {
     /// A keyword (like SELECT) or an optionally quoted SQL identifier
     Word(Word),
     /// An unsigned numeric literal
-    Number(#[cfg_attr(feature = "derive-visitor", drive(skip))] String, #[cfg_attr(feature = "derive-visitor", drive(skip))] bool),
+    Number(
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] String,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] bool,
+    ),
     /// A character that could not be tokenized
     Char(#[cfg_attr(feature = "derive-visitor", drive(skip))] char),
     /// Single quoted string: i.e: 'string'
@@ -250,11 +253,13 @@ impl Token {
 pub struct Word {
     /// The value of the token, without the enclosing quotes, and with the
     /// escape sequences (if any) processed (TODO: escapes are not handled)
-    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub value: String,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
+    pub value: String,
     /// An identifier can be "quoted" (&lt;delimited identifier> in ANSI parlance).
     /// The standard and most implementations allow using double quotes for this,
     /// but some implementations support other quoting styles as well (e.g. \[MS SQL])
-    #[cfg_attr(feature = "derive-visitor", drive(skip))] pub quote_style: Option<char>,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
+    pub quote_style: Option<char>,
     /// If the word was not quoted and it matched one of the known keywords,
     /// this will have one of the values from dialect::keywords, otherwise empty
     pub keyword: Keyword,
@@ -290,7 +295,12 @@ pub enum Whitespace {
     Space,
     Newline,
     Tab,
-    SingleLineComment { #[cfg_attr(feature = "derive-visitor", drive(skip))] comment: String, #[cfg_attr(feature = "derive-visitor", drive(skip))] prefix: String },
+    SingleLineComment {
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
+        comment: String,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
+        prefix: String,
+    },
     MultiLineComment(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
 }
 
@@ -465,31 +475,31 @@ impl<'a> Tokenizer<'a> {
                 // double quoted string
                 '\"' if !self.dialect.is_delimited_identifier_start(ch)
                     && !self.dialect.is_identifier_start(ch) =>
-                    {
-                        let s = self.tokenize_quoted_string(chars, '"')?;
+                {
+                    let s = self.tokenize_quoted_string(chars, '"')?;
 
-                        Ok(Some(Token::DoubleQuotedString(s)))
-                    }
+                    Ok(Some(Token::DoubleQuotedString(s)))
+                }
                 // delimited (quoted) identifier
                 quote_start
-                if self.dialect.is_delimited_identifier_start(ch)
-                    && self
-                    .dialect
-                    .is_proper_identifier_inside_quotes(chars.clone()) =>
-                    {
-                        chars.next(); // consume the opening quote
-                        let quote_end = Word::matching_end_quote(quote_start);
-                        let (s, last_char) = parse_quoted_ident(chars, quote_end);
+                    if self.dialect.is_delimited_identifier_start(ch)
+                        && self
+                            .dialect
+                            .is_proper_identifier_inside_quotes(chars.clone()) =>
+                {
+                    chars.next(); // consume the opening quote
+                    let quote_end = Word::matching_end_quote(quote_start);
+                    let (s, last_char) = parse_quoted_ident(chars, quote_end);
 
-                        if last_char == Some(quote_end) {
-                            Ok(Some(Token::make_word(&s, Some(quote_start))))
-                        } else {
-                            self.tokenizer_error(format!(
-                                "Expected close delimiter '{}' before EOF.",
-                                quote_end
-                            ))
-                        }
+                    if last_char == Some(quote_end) {
+                        Ok(Some(Token::make_word(&s, Some(quote_start))))
+                    } else {
+                        self.tokenizer_error(format!(
+                            "Expected close delimiter '{}' before EOF.",
+                            quote_end
+                        ))
                     }
+                }
                 // numbers and period
                 '0'..='9' | '.' => {
                     let mut s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));

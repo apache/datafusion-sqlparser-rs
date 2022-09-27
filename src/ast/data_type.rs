@@ -46,7 +46,10 @@ pub enum DataType {
     /// Large binary object e.g. BLOB(1000)
     Blob(#[cfg_attr(feature = "derive-visitor", drive(skip))] u64),
     /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
-    Decimal(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>, #[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    Decimal(
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>,
+    ),
     /// Floating point with optional precision e.g. FLOAT(8)
     Float(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Tiny integer with optional display width e.g. TINYINT or TINYINT(3)

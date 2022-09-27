@@ -31,9 +31,15 @@ use derive_visitor::{Drive, DriveMut};
 pub enum Value {
     /// Numeric literal
     #[cfg(not(feature = "bigdecimal"))]
-    Number(#[cfg_attr(feature = "derive-visitor", drive(skip))] String, #[cfg_attr(feature = "derive-visitor", drive(skip))] bool),
+    Number(
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] String,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] bool,
+    ),
     #[cfg(feature = "bigdecimal")]
-    Number(#[cfg_attr(feature = "derive-visitor", drive(skip))] BigDecimal, #[cfg_attr(feature = "derive-visitor", drive(skip))] bool),
+    Number(
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] BigDecimal,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] bool,
+    ),
     /// 'string value'
     SingleQuotedString(#[cfg_attr(feature = "derive-visitor", drive(skip))] String),
     /// e'string value' (postgres extension)

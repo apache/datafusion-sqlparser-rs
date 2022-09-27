@@ -2062,6 +2062,7 @@ impl<'a> Parser<'a> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let names = self.parse_comma_separated(Parser::parse_object_name)?;
 
+        // Parse optional WITH
         let _ = self.parse_keyword(Keyword::WITH);
 
         let optional_keywords = if dialect_of!(self is MsSqlDialect) {

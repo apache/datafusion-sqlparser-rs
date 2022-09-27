@@ -1772,6 +1772,23 @@ fn parse_create_role() {
         err => panic!("Failed to parse CREATE ROLE test case: {:?}", err),
     }
 
+    let sql = "CREATE ROLE abc WITH LOGIN PASSWORD NULL";
+    match pg().parse_sql_statements(sql).as_deref() {
+        Ok(
+            [Statement::CreateRole {
+                names,
+                login,
+                password,
+                ..
+            }],
+        ) => {
+            assert_eq_vec(&["abc"], names);
+            assert_eq!(*login, Some(true));
+            assert_eq!(*password, Some(Password::NullPassword));
+        }
+        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err),
+    }
+
     let sql = "CREATE ROLE magician WITH SUPERUSER CREATEROLE NOCREATEDB BYPASSRLS INHERIT PASSWORD 'abcdef' LOGIN VALID UNTIL '2025-01-01' IN ROLE role1, role2 ROLE role3 ADMIN role4, role5 REPLICATION";
     // Roundtrip order of optional parameters is not preserved
     match pg().parse_sql_statements(sql).as_deref() {

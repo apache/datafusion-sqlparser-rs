@@ -84,10 +84,10 @@ mod test {
 
     #[test]
     fn test_readme_example() {
-        let mut statements = Parser::parse_sql(&GenericDialect, "select x").unwrap();
+        let mut statements = Parser::parse_sql(&GenericDialect, "select xxx").unwrap();
         statements[0].drive_mut(&mut visitor_enter_fn_mut(|ident: &mut Ident| {
-            ident.value = ident.value.replace("x", "y");
+            ident.value = ident.value.replace("xxx", "yyy");
         }));
-        assert_eq!(statements[0].to_string(), "SELECT y");
+        assert_eq!(statements[0].to_string(), "SELECT yyy");
     }
 }

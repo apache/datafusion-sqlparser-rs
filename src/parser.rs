@@ -3319,8 +3319,11 @@ impl<'a> Parser<'a> {
                 Keyword::FLOAT => Ok(DataType::Float(self.parse_optional_precision()?)),
                 Keyword::REAL => Ok(DataType::Real),
                 Keyword::DOUBLE => {
-                    let _ = self.parse_keyword(Keyword::PRECISION);
-                    Ok(DataType::Double)
+                    if self.parse_keyword(Keyword::PRECISION) {
+                        Ok(DataType::DoublePrecision)
+                    } else {
+                        Ok(DataType::Double)
+                    }
                 }
                 Keyword::TINYINT => {
                     let optional_precision = self.parse_optional_precision();
@@ -5210,5 +5213,19 @@ mod tests {
             let ast = parser.parse_query().unwrap();
             assert_eq!(ast.to_string(), sql.to_string());
         });
+    }
+
+    // TODO add tests for all data types? https://github.com/sqlparser-rs/sqlparser-rs/issues/2
+    #[test]
+    fn test_parse_data_type() {
+        test_parse_data_type("DOUBLE PRECISION", "DOUBLE PRECISION");
+        test_parse_data_type("DOUBLE", "DOUBLE");
+
+        fn test_parse_data_type(input: &str, expected: &str) {
+            all_dialects().run_parser_method(input, |parser| {
+                let data_type = parser.parse_data_type().unwrap().to_string();
+                assert_eq!(data_type, expected);
+            });
+        }
     }
 }

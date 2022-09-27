@@ -281,7 +281,7 @@ impl fmt::Display for With {
 #[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct Cte {
     pub alias: TableAlias,
-    pub query: Query,
+    pub query: Box<Query>,
     pub from: Option<Ident>,
 }
 

@@ -22,6 +22,7 @@
 mod test_utils;
 
 use matches::assert_matches;
+use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, GenericDialect, HiveDialect, MsSqlDialect,
@@ -31,7 +32,8 @@ use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
 
 use test_utils::{
-    all_dialects, expr_from_projection, join, number, only, table, table_alias, TestedDialects,
+    all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
+    TestedDialects,
 };
 
 #[test]
@@ -2657,16 +2659,23 @@ fn parse_scalar_function_in_projection() {
     }
 }
 
-fn run_explain_analyze(query: &str, expected_verbose: bool, expected_analyze: bool) {
+fn run_explain_analyze(
+    query: &str,
+    expected_verbose: bool,
+    expected_analyze: bool,
+    expected_format: Option<AnalyzeFormat>,
+) {
     match verified_stmt(query) {
         Statement::Explain {
             describe_alias: _,
             analyze,
             verbose,
             statement,
+            format,
         } => {
             assert_eq!(verbose, expected_verbose);
             assert_eq!(analyze, expected_analyze);
+            assert_eq!(format, expected_format);
             assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
         }
         _ => panic!("Unexpected Statement, must be Explain"),
@@ -2693,15 +2702,47 @@ fn parse_explain_table() {
 #[test]
 fn parse_explain_analyze_with_simple_select() {
     // Describe is an alias for EXPLAIN
-    run_explain_analyze("DESCRIBE SELECT sqrt(id) FROM foo", false, false);
+    run_explain_analyze("DESCRIBE SELECT sqrt(id) FROM foo", false, false, None);
 
-    run_explain_analyze("EXPLAIN SELECT sqrt(id) FROM foo", false, false);
-    run_explain_analyze("EXPLAIN VERBOSE SELECT sqrt(id) FROM foo", true, false);
-    run_explain_analyze("EXPLAIN ANALYZE SELECT sqrt(id) FROM foo", false, true);
+    run_explain_analyze("EXPLAIN SELECT sqrt(id) FROM foo", false, false, None);
+    run_explain_analyze(
+        "EXPLAIN VERBOSE SELECT sqrt(id) FROM foo",
+        true,
+        false,
+        None,
+    );
+    run_explain_analyze(
+        "EXPLAIN ANALYZE SELECT sqrt(id) FROM foo",
+        false,
+        true,
+        None,
+    );
     run_explain_analyze(
         "EXPLAIN ANALYZE VERBOSE SELECT sqrt(id) FROM foo",
         true,
         true,
+        None,
+    );
+
+    run_explain_analyze(
+        "EXPLAIN ANALYZE FORMAT GRAPHVIZ SELECT sqrt(id) FROM foo",
+        false,
+        true,
+        Some(AnalyzeFormat::GRAPHVIZ),
+    );
+
+    run_explain_analyze(
+        "EXPLAIN ANALYZE VERBOSE FORMAT JSON SELECT sqrt(id) FROM foo",
+        true,
+        true,
+        Some(AnalyzeFormat::JSON),
+    );
+
+    run_explain_analyze(
+        "EXPLAIN VERBOSE FORMAT TEXT SELECT sqrt(id) FROM foo",
+        true,
+        false,
+        Some(AnalyzeFormat::TEXT),
     );
 }
 
@@ -2812,6 +2853,7 @@ fn parse_literal_string() {
     );
 
     one_statement_parses_to("SELECT x'deadBEEF'", "SELECT X'deadBEEF'");
+    one_statement_parses_to("SELECT n'national string'", "SELECT N'national string'");
 }
 
 #[test]
@@ -2890,24 +2932,24 @@ fn parse_literal_timestamp_with_time_zone() {
 }
 
 #[test]
-fn parse_literal_interval() {
+fn parse_interval() {
     let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1-1")))),
             leading_field: Some(DateTimeField::Year),
             leading_precision: None,
             last_field: Some(DateTimeField::Month),
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '01:01.01' MINUTE (5) TO SECOND (5)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "01:01.01"
             )))),
@@ -2915,53 +2957,53 @@ fn parse_literal_interval() {
             leading_precision: Some(5),
             last_field: Some(DateTimeField::Second),
             fractional_seconds_precision: Some(5),
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '1' SECOND (5, 4)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1")))),
             leading_field: Some(DateTimeField::Second),
             leading_precision: Some(5),
             last_field: None,
             fractional_seconds_precision: Some(4),
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '10' HOUR";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL 5 DAY";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(number("5"))),
             leading_field: Some(DateTimeField::Day),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL 1 + 1 DAY";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Value(number("1"))),
                 op: BinaryOperator::Plus,
@@ -2971,27 +3013,27 @@ fn parse_literal_interval() {
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '10' HOUR (1)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: Some(1),
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '1 DAY'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "1 DAY"
             )))),
@@ -2999,7 +3041,7 @@ fn parse_literal_interval() {
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
@@ -3822,7 +3864,7 @@ fn parse_recursive_cte() {
                 quote_style: None,
             }],
         },
-        query: cte_query,
+        query: Box::new(cte_query),
         from: None,
     };
     assert_eq!(with.cte_tables.first().unwrap(), &expected);
@@ -4664,6 +4706,52 @@ fn parse_set_transaction() {
 }
 
 #[test]
+fn parse_set_variable() {
+    match verified_stmt("SET SOMETHING = '1'") {
+        Statement::SetVariable {
+            local,
+            hivevar,
+            variable,
+            value,
+        } => {
+            assert!(!local);
+            assert!(!hivevar);
+            assert_eq!(variable, ObjectName(vec!["SOMETHING".into()]));
+            assert_eq!(
+                value,
+                vec![Expr::Value(Value::SingleQuotedString("1".into()))]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    one_statement_parses_to("SET SOMETHING TO '1'", "SET SOMETHING = '1'");
+}
+
+#[test]
+fn parse_set_time_zone() {
+    match verified_stmt("SET TIMEZONE = 'UTC'") {
+        Statement::SetVariable {
+            local,
+            hivevar,
+            variable,
+            value,
+        } => {
+            assert!(!local);
+            assert!(!hivevar);
+            assert_eq!(variable, ObjectName(vec!["TIMEZONE".into()]));
+            assert_eq!(
+                value,
+                vec![Expr::Value(Value::SingleQuotedString("UTC".into()))]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    one_statement_parses_to("SET TIME ZONE TO 'UTC'", "SET TIMEZONE = 'UTC'");
+}
+
+#[test]
 fn parse_commit() {
     match verified_stmt("COMMIT") {
         Statement::Commit { chain: false } => (),
@@ -4764,6 +4852,63 @@ fn parse_drop_index() {
 }
 
 #[test]
+fn parse_create_role() {
+    let sql = "CREATE ROLE consultant";
+    match verified_stmt(sql) {
+        Statement::CreateRole { names, .. } => {
+            assert_eq_vec(&["consultant"], &names);
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
+    match verified_stmt(sql) {
+        Statement::CreateRole {
+            names,
+            if_not_exists,
+            ..
+        } => {
+            assert_eq_vec(&["mysql_a", "mysql_b"], &names);
+            assert!(if_not_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_drop_role() {
+    let sql = "DROP ROLE abc";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            ..
+        } => {
+            assert_eq_vec(&["abc"], &names);
+            assert_eq!(ObjectType::Role, object_type);
+            assert!(!if_exists);
+        }
+        _ => unreachable!(),
+    };
+
+    let sql = "DROP ROLE IF EXISTS def, magician, quaternion";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            ..
+        } => {
+            assert_eq_vec(&["def", "magician", "quaternion"], &names);
+            assert_eq!(ObjectType::Role, object_type);
+            assert!(if_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_grant() {
     let sql = "GRANT SELECT, INSERT, UPDATE (shape, size), USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER, CONNECT, CREATE, EXECUTE, TEMPORARY ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
     match verified_stmt(sql) {
@@ -4804,14 +4949,8 @@ fn parse_grant() {
                     ],
                     actions
                 );
-                assert_eq!(
-                    vec!["abc", "def"],
-                    objects.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
-                assert_eq!(
-                    vec!["xyz", "m"],
-                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["abc", "def"], &objects);
+                assert_eq_vec(&["xyz", "m"], &grantees);
                 assert!(with_grant_option);
                 assert_eq!("jj", granted_by.unwrap().to_string());
             }
@@ -4831,14 +4970,8 @@ fn parse_grant() {
         } => match (privileges, objects) {
             (Privileges::Actions(actions), GrantObjects::AllTablesInSchema { schemas }) => {
                 assert_eq!(vec![Action::Insert { columns: None }], actions);
-                assert_eq!(
-                    vec!["public"],
-                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
-                assert_eq!(
-                    vec!["browser"],
-                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["public"], &schemas);
+                assert_eq_vec(&["browser"], &grantees);
                 assert!(!with_grant_option);
             }
             _ => unreachable!(),
@@ -4860,14 +4993,8 @@ fn parse_grant() {
                     vec![Action::Usage, Action::Select { columns: None }],
                     actions
                 );
-                assert_eq!(
-                    vec!["p"],
-                    objects.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
-                assert_eq!(
-                    vec!["u"],
-                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["p"], &objects);
+                assert_eq_vec(&["u"], &grantees);
             }
             _ => unreachable!(),
         },
@@ -4901,10 +5028,7 @@ fn parse_grant() {
                 GrantObjects::Schemas(schemas),
             ) => {
                 assert!(!with_privileges_keyword);
-                assert_eq!(
-                    vec!["aa", "b"],
-                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["aa", "b"], &schemas);
             }
             _ => unreachable!(),
         },
@@ -4920,10 +5044,7 @@ fn parse_grant() {
         } => match (privileges, objects) {
             (Privileges::Actions(actions), GrantObjects::AllSequencesInSchema { schemas }) => {
                 assert_eq!(vec![Action::Usage], actions);
-                assert_eq!(
-                    vec!["bus"],
-                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["bus"], &schemas);
             }
             _ => unreachable!(),
         },
@@ -4948,14 +5069,8 @@ fn test_revoke() {
                 },
                 privileges
             );
-            assert_eq!(
-                vec!["users", "auth"],
-                tables.iter().map(ToString::to_string).collect::<Vec<_>>()
-            );
-            assert_eq!(
-                vec!["analyst"],
-                grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-            );
+            assert_eq_vec(&["users", "auth"], &tables);
+            assert_eq_vec(&["analyst"], &grantees);
             assert!(cascade);
             assert_eq!(None, granted_by);
         }
@@ -5212,6 +5327,17 @@ fn test_placeholder() {
             value: Expr::Value(Value::Placeholder("$2".into())),
             rows: OffsetRows::None,
         }),
+    );
+
+    let sql = "SELECT $fromage_français, :x, ?123";
+    let ast = dialects.verified_only_select(sql);
+    assert_eq!(
+        ast.projection,
+        vec![
+            UnnamedExpr(Expr::Value(Value::Placeholder("$fromage_français".into()))),
+            UnnamedExpr(Expr::Value(Value::Placeholder(":x".into()))),
+            UnnamedExpr(Expr::Value(Value::Placeholder("?123".into()))),
+        ]
     );
 }
 
@@ -5522,4 +5648,14 @@ fn parse_cursor() {
         Statement::Close { cursor } => assert_eq!(cursor, CloseCursor::All),
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_show_functions() {
+    assert_eq!(
+        verified_stmt("SHOW FUNCTIONS LIKE 'pattern'"),
+        Statement::ShowFunctions {
+            filter: Some(ShowStatementFilter::Like("pattern".into())),
+        }
+    );
 }

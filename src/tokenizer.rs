@@ -393,7 +393,8 @@ impl<'a> Tokenizer<'a> {
                     }
                     Ok(Some(Token::Whitespace(Whitespace::Newline)))
                 }
-                'N' => {
+                // Redshift uses lower case n for national string literal
+                n @ 'N' | n @ 'n' => {
                     chars.next(); // consume, to check the next char
                     match chars.peek() {
                         Some('\'') => {
@@ -403,7 +404,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "N"
-                            let s = self.tokenize_word('N', chars);
+                            let s = self.tokenize_word(n, chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -683,13 +684,14 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 '@' => self.consume_and_return(chars, Token::AtSign),
-                '?' => self.consume_and_return(chars, Token::Placeholder(String::from("?"))),
+                '?' => {
+                    chars.next();
+                    let s = peeking_take_while(chars, |ch| ch.is_numeric());
+                    Ok(Some(Token::Placeholder(String::from("?") + &s)))
+                }
                 '$' => {
                     chars.next();
-                    let s = peeking_take_while(
-                        chars,
-                        |ch| matches!(ch, '0'..='9' | 'A'..='Z' | 'a'..='z'),
-                    );
+                    let s = peeking_take_while(chars, |ch| ch.is_alphanumeric() || ch == '_');
                     Ok(Some(Token::Placeholder(String::from("$") + &s)))
                 }
                 //whitespace check (including unicode chars) should be last as it covers some of the chars above

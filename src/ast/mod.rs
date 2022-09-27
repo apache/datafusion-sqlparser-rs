@@ -385,6 +385,8 @@ pub enum Expr {
     MapAccess { column: Box<Expr>, keys: Vec<Expr> },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
+    /// Aggregate function with filter
+    AggregateExpressionWithFilter { expr: Box<Expr>, filter: Box<Expr> },
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
     ///
     /// Note we only recognize a complete single expression as `<condition>`,
@@ -418,6 +420,25 @@ pub enum Expr {
     ArrayIndex { obj: Box<Expr>, indexes: Vec<Expr> },
     /// An array expression e.g. `ARRAY[1, 2]`
     Array(Array),
+    /// INTERVAL literals, roughly in the following format:
+    /// `INTERVAL '<value>' [ <leading_field> [ (<leading_precision>) ] ]
+    /// [ TO <last_field> [ (<fractional_seconds_precision>) ] ]`,
+    /// e.g. `INTERVAL '123:45.67' MINUTE(3) TO SECOND(2)`.
+    ///
+    /// The parser does not validate the `<value>`, nor does it ensure
+    /// that the `<leading_field>` units >= the units in `<last_field>`,
+    /// so the user will have to reject intervals like `HOUR TO YEAR`.
+    Interval {
+        value: Box<Expr>,
+        leading_field: Option<DateTimeField>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] leading_precision: Option<u64>,
+        last_field: Option<DateTimeField>,
+        /// The seconds precision can be specified in SQL source as
+        /// `INTERVAL '__' SECOND(_, x)` (in which case the `leading_field`
+        /// will be `Second` and the `last_field` will be `None`),
+        /// or as `__ TO SECOND(x)`.
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] fractional_seconds_precision: Option<u64>,
+    },
 }
 
 impl fmt::Display for Expr {
@@ -581,6 +602,9 @@ impl fmt::Display for Expr {
                 write!(f, " '{}'", &value::escape_single_quote_string(value))
             }
             Expr::Function(fun) => write!(f, "{}", fun),
+            Expr::AggregateExpressionWithFilter { expr, filter } => {
+                write!(f, "{} FILTER (WHERE {})", expr, filter)
+            }
             Expr::Case {
                 operand,
                 conditions,
@@ -726,6 +750,44 @@ impl fmt::Display for Expr {
                 time_zone,
             } => {
                 write!(f, "{} AT TIME ZONE '{}'", timestamp, time_zone)
+            }
+            Expr::Interval {
+                value,
+                leading_field: Some(DateTimeField::Second),
+                leading_precision: Some(leading_precision),
+                last_field,
+                fractional_seconds_precision: Some(fractional_seconds_precision),
+            } => {
+                // When the leading field is SECOND, the parser guarantees that
+                // the last field is None.
+                assert!(last_field.is_none());
+                write!(
+                    f,
+                    "INTERVAL {} SECOND ({}, {})",
+                    value, leading_precision, fractional_seconds_precision
+                )
+            }
+            Expr::Interval {
+                value,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision,
+            } => {
+                write!(f, "INTERVAL {}", value)?;
+                if let Some(leading_field) = leading_field {
+                    write!(f, " {}", leading_field)?;
+                }
+                if let Some(leading_precision) = leading_precision {
+                    write!(f, " ({})", leading_precision)?;
+                }
+                if let Some(last_field) = last_field {
+                    write!(f, " TO {}", last_field)?;
+                }
+                if let Some(fractional_seconds_precision) = fractional_seconds_precision {
+                    write!(f, " ({})", fractional_seconds_precision)?;
+                }
+                Ok(())
             }
         }
     }
@@ -909,6 +971,14 @@ impl fmt::Display for CommentObject {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
+pub enum Password {
+    Password(Expr),
+    NullPassword,
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1065,6 +1135,27 @@ pub enum Statement {
         #[cfg_attr(feature = "derive-visitor", drive(skip))] unique: bool,
         #[cfg_attr(feature = "derive-visitor", drive(skip))] if_not_exists: bool,
     },
+    /// CREATE ROLE
+    CreateRole {
+        names: Vec<ObjectName>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] if_not_exists: bool,
+        // Postgres
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] login: Option<bool>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] inherit: Option<bool>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] bypassrls: Option<bool>,
+        password: Option<Password>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] superuser: Option<bool>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] create_db: Option<bool>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] create_role: Option<bool>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] replication: Option<bool>,
+        connection_limit: Option<Expr>,
+        valid_until: Option<Expr>,
+        in_role: Vec<Ident>,
+        role: Vec<Ident>,
+        admin: Vec<Ident>,
+        // MSSQL
+        authorization_owner: Option<ObjectName>,
+    },
     /// ALTER TABLE
     AlterTable {
         /// Table name
@@ -1157,6 +1248,10 @@ pub enum Statement {
     ///
     /// Note: this is a MySQL-specific statement.
     SetNamesDefault {},
+    /// SHOW FUNCTIONS
+    ///
+    /// Note: this is a Presto-specific statement.
+    ShowFunctions { filter: Option<ShowStatementFilter> },
     /// SHOW <variable>
     ///
     /// Note: this is a PostgreSQL-specific statement.
@@ -1303,6 +1398,8 @@ pub enum Statement {
         #[cfg_attr(feature = "derive-visitor", drive(skip))] verbose: bool,
         /// A SQL query that specifies what to explain
         statement: Box<Statement>,
+        /// Optional output format of explain
+        format: Option<AnalyzeFormat>,
     },
     /// SAVEPOINT -- define a new savepoint within the current transaction
     Savepoint { name: Ident },
@@ -1353,6 +1450,7 @@ impl fmt::Display for Statement {
                 verbose,
                 analyze,
                 statement,
+                format,
             } => {
                 if *describe_alias {
                     write!(f, "DESCRIBE ")?;
@@ -1366,6 +1464,10 @@ impl fmt::Display for Statement {
 
                 if *verbose {
                     write!(f, "VERBOSE ")?;
+                }
+
+                if let Some(format) = format {
+                    write!(f, "FORMAT {} ", format)?;
                 }
 
                 write!(f, "{}", statement)
@@ -1908,6 +2010,90 @@ impl fmt::Display for Statement {
                 table_name = table_name,
                 columns = display_separated(columns, ",")
             ),
+            Statement::CreateRole {
+                names,
+                if_not_exists,
+                inherit,
+                login,
+                bypassrls,
+                password,
+                create_db,
+                create_role,
+                superuser,
+                replication,
+                connection_limit,
+                valid_until,
+                in_role,
+                role,
+                admin,
+                authorization_owner,
+            } => {
+                write!(
+                    f,
+                    "CREATE ROLE {if_not_exists}{names}{superuser}{create_db}{create_role}{inherit}{login}{replication}{bypassrls}",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    names = display_separated(names, ", "),
+                    superuser = match *superuser {
+                        Some(true) => " SUPERUSER",
+                        Some(false) => " NOSUPERUSER",
+                        None => ""
+                    },
+                    create_db = match *create_db {
+                        Some(true) => " CREATEDB",
+                        Some(false) => " NOCREATEDB",
+                        None => ""
+                    },
+                    create_role = match *create_role {
+                        Some(true) => " CREATEROLE",
+                        Some(false) => " NOCREATEROLE",
+                        None => ""
+                    },
+                    inherit = match *inherit {
+                        Some(true) => " INHERIT",
+                        Some(false) => " NOINHERIT",
+                        None => ""
+                    },
+                    login = match *login {
+                        Some(true) => " LOGIN",
+                        Some(false) => " NOLOGIN",
+                        None => ""
+                    },
+                    replication = match *replication {
+                        Some(true) => " REPLICATION",
+                        Some(false) => " NOREPLICATION",
+                        None => ""
+                    },
+                    bypassrls = match *bypassrls {
+                        Some(true) => " BYPASSRLS",
+                        Some(false) => " NOBYPASSRLS",
+                        None => ""
+                    }
+                )?;
+                if let Some(limit) = connection_limit {
+                    write!(f, " CONNECTION LIMIT {}", limit)?;
+                }
+                match password {
+                    Some(Password::Password(pass)) => write!(f, " PASSWORD {}", pass),
+                    Some(Password::NullPassword) => write!(f, " PASSWORD NULL"),
+                    None => Ok(()),
+                }?;
+                if let Some(until) = valid_until {
+                    write!(f, " VALID UNTIL {}", until)?;
+                }
+                if !in_role.is_empty() {
+                    write!(f, " IN ROLE {}", display_comma_separated(in_role))?;
+                }
+                if !role.is_empty() {
+                    write!(f, " ROLE {}", display_comma_separated(role))?;
+                }
+                if !admin.is_empty() {
+                    write!(f, " ADMIN {}", display_comma_separated(admin))?;
+                }
+                if let Some(owner) = authorization_owner {
+                    write!(f, " AUTHORIZATION {}", owner)?;
+                }
+                Ok(())
+            }
             Statement::AlterTable { name, operation } => {
                 write!(f, "ALTER TABLE {} {}", name, operation)
             }
@@ -2041,6 +2227,13 @@ impl fmt::Display for Statement {
                 if let Some(db_name) = db_name {
                     write!(f, " FROM {}", db_name)?;
                 }
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
+                }
+                Ok(())
+            }
+            Statement::ShowFunctions { filter } => {
+                write!(f, "SHOW FUNCTIONS")?;
                 if let Some(filter) = filter {
                     write!(f, " {}", filter)?;
                 }
@@ -2501,6 +2694,25 @@ pub struct Function {
     #[cfg_attr(feature = "derive-visitor", drive(skip))] pub special: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
+pub enum AnalyzeFormat {
+    TEXT,
+    GRAPHVIZ,
+    JSON,
+}
+
+impl fmt::Display for AnalyzeFormat {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            AnalyzeFormat::TEXT => "TEXT",
+            AnalyzeFormat::GRAPHVIZ => "GRAPHVIZ",
+            AnalyzeFormat::JSON => "JSON",
+        })
+    }
+}
+
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.special {
@@ -2635,6 +2847,7 @@ pub enum ObjectType {
     View,
     Index,
     Schema,
+    Role,
 }
 
 impl fmt::Display for ObjectType {
@@ -2644,6 +2857,7 @@ impl fmt::Display for ObjectType {
             ObjectType::View => "VIEW",
             ObjectType::Index => "INDEX",
             ObjectType::Schema => "SCHEMA",
+            ObjectType::Role => "ROLE",
         })
     }
 }

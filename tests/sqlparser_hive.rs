@@ -276,6 +276,31 @@ fn parse_create_function() {
     );
 }
 
+#[test]
+fn filtering_during_aggregation() {
+    let rename = "SELECT \
+        array_agg(name) FILTER (WHERE name IS NOT NULL), \
+        array_agg(name) FILTER (WHERE name LIKE 'a%') \
+        FROM region";
+    println!("{}", hive().verified_stmt(rename));
+}
+
+#[test]
+fn filtering_during_aggregation_aliased() {
+    let rename = "SELECT \
+        array_agg(name) FILTER (WHERE name IS NOT NULL) AS agg1, \
+        array_agg(name) FILTER (WHERE name LIKE 'a%') AS agg2 \
+        FROM region";
+    println!("{}", hive().verified_stmt(rename));
+}
+
+#[test]
+fn filter_as_alias() {
+    let sql = "SELECT name filter FROM region";
+    let expected = "SELECT name AS filter FROM region";
+    println!("{}", hive().one_statement_parses_to(sql, expected));
+}
+
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],

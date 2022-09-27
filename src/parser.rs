@@ -3550,7 +3550,7 @@ impl<'a> Parser<'a> {
 
         let mut cte = if self.parse_keyword(Keyword::AS) {
             self.expect_token(&Token::LParen)?;
-            let query = self.parse_query()?;
+            let query = Box::new(self.parse_query()?);
             self.expect_token(&Token::RParen)?;
             let alias = TableAlias {
                 name,
@@ -3565,7 +3565,7 @@ impl<'a> Parser<'a> {
             let columns = self.parse_parenthesized_column_list(Optional)?;
             self.expect_keyword(Keyword::AS)?;
             self.expect_token(&Token::LParen)?;
-            let query = self.parse_query()?;
+            let query = Box::new(self.parse_query()?);
             self.expect_token(&Token::RParen)?;
             let alias = TableAlias { name, columns };
             Cte {

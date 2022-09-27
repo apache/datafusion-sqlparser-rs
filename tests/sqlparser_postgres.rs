@@ -1807,7 +1807,9 @@ fn parse_create_role() {
                 connection_limit,
                 valid_until,
                 in_role,
+                in_group,
                 role,
+                user,
                 admin,
                 authorization_owner,
             }],
@@ -1833,9 +1835,25 @@ fn parse_create_role() {
                 Some(Expr::Value(Value::SingleQuotedString("2025-01-01".into())))
             );
             assert_eq_vec(&["role1", "role2"], in_role);
+            assert!(in_group.is_empty());
             assert_eq_vec(&["role3"], role);
+            assert!(user.is_empty());
             assert_eq_vec(&["role4", "role5"], admin);
             assert_eq!(*authorization_owner, None);
+        }
+        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err),
+    }
+
+    let sql = "CREATE ROLE abc WITH USER foo, bar ROLE baz ";
+    match pg().parse_sql_statements(sql).as_deref() {
+        Ok(
+            [Statement::CreateRole {
+                names, user, role, ..
+            }],
+        ) => {
+            assert_eq_vec(&["abc"], names);
+            assert_eq_vec(&["foo", "bar"], user);
+            assert_eq_vec(&["baz"], role);
         }
         err => panic!("Failed to parse CREATE ROLE test case: {:?}", err),
     }

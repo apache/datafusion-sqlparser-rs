@@ -325,6 +325,7 @@ define_keywords!(
     MATCHED,
     MATERIALIZED,
     MAX,
+    MEDIUMINT,
     MEMBER,
     MERGE,
     METADATA,

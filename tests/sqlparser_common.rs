@@ -1624,6 +1624,11 @@ fn parse_cast() {
     );
 
     one_statement_parses_to(
+        "SELECT CAST(id AS MEDIUMINT) FROM customer",
+        "SELECT CAST(id AS MEDIUMINT) FROM customer",
+    );
+
+    one_statement_parses_to(
         "SELECT CAST(id AS BIGINT) FROM customer",
         "SELECT CAST(id AS BIGINT) FROM customer",
     );

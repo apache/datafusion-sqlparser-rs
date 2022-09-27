@@ -552,7 +552,7 @@ fn parse_escaped_string() {
 
 #[test]
 fn parse_create_table_with_minimum_display_width() {
-    let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3), bar_smallint SMALLINT(5), bar_int INT(11), bar_bigint BIGINT(20))";
+    let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3), bar_smallint SMALLINT(5), bar_mediumint MEDIUMINT(6), bar_int INT(11), bar_bigint BIGINT(20))";
     match mysql().verified_stmt(sql) {
         Statement::CreateTable { name, columns, .. } => {
             assert_eq!(name.to_string(), "foo");
@@ -567,6 +567,12 @@ fn parse_create_table_with_minimum_display_width() {
                     ColumnDef {
                         name: Ident::new("bar_smallint"),
                         data_type: DataType::SmallInt(Some(5)),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_mediumint"),
+                        data_type: DataType::MediumInt(Some(6)),
                         collation: None,
                         options: vec![],
                     },
@@ -592,7 +598,7 @@ fn parse_create_table_with_minimum_display_width() {
 
 #[test]
 fn parse_create_table_unsigned() {
-    let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3) UNSIGNED, bar_smallint SMALLINT(5) UNSIGNED, bar_int INT(11) UNSIGNED, bar_bigint BIGINT(20) UNSIGNED)";
+    let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3) UNSIGNED, bar_smallint SMALLINT(5) UNSIGNED, bar_mediumint MEDIUMINT(13) UNSIGNED, bar_int INT(11) UNSIGNED, bar_bigint BIGINT(20) UNSIGNED)";
     match mysql().verified_stmt(sql) {
         Statement::CreateTable { name, columns, .. } => {
             assert_eq!(name.to_string(), "foo");
@@ -607,6 +613,12 @@ fn parse_create_table_unsigned() {
                     ColumnDef {
                         name: Ident::new("bar_smallint"),
                         data_type: DataType::UnsignedSmallInt(Some(5)),
+                        collation: None,
+                        options: vec![],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar_mediumint"),
+                        data_type: DataType::UnsignedMediumInt(Some(13)),
                         collation: None,
                         options: vec![],
                     },

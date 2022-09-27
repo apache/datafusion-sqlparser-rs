@@ -1229,7 +1229,7 @@ pub enum Statement {
     ///
     /// Note: this is a MySQL-specific statement.
     SetNamesDefault {},
-    /// SHOW FUNCTIONS 
+    /// SHOW FUNCTIONS
     ///
     /// Note: this is a Presto-specific statement.
     ShowFunctions { filter: Option<ShowStatementFilter> },

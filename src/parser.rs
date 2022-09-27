@@ -402,7 +402,7 @@ impl<'a> Parser<'a> {
         // expression that should parse as the column name "date".
         return_ok_if_some!(self.maybe_parse(|parser| {
             match parser.parse_data_type()? {
-                DataType::Interval => parser.parse_literal_interval(),
+                DataType::Interval => parser.parse_interval(),
                 // PostgreSQL allows almost any identifier to be used as custom data type name,
                 // and we support that in `parse_data_type()`. But unlike Postgres we don't
                 // have a list of globally reserved keywords (since they vary across dialects),
@@ -455,7 +455,7 @@ impl<'a> Parser<'a> {
                 Keyword::SUBSTRING => self.parse_substring_expr(),
                 Keyword::OVERLAY => self.parse_overlay_expr(),
                 Keyword::TRIM => self.parse_trim_expr(),
-                Keyword::INTERVAL => self.parse_literal_interval(),
+                Keyword::INTERVAL => self.parse_interval(),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
                 // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as subquery or a function call
                 Keyword::ARRAY if self.peek_token() == Token::LBracket => {
@@ -1096,7 +1096,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse an INTERVAL literal.
+    /// Parse an INTERVAL expression.
     ///
     /// Some syntactically valid intervals:
     ///
@@ -1109,7 +1109,7 @@ impl<'a> Parser<'a> {
     ///   7. (MySql and BigQuey only):`INTERVAL 1 DAY`
     ///
     /// Note that we do not currently attempt to parse the quoted value.
-    pub fn parse_literal_interval(&mut self) -> Result<Expr, ParserError> {
+    pub fn parse_interval(&mut self) -> Result<Expr, ParserError> {
         // The SQL standard allows an optional sign before the value string, but
         // it is not clear if any implementations support that syntax, so we
         // don't currently try to parse it. (The sign can instead be included
@@ -1183,13 +1183,13 @@ impl<'a> Parser<'a> {
                 }
             };
 
-        Ok(Expr::Value(Value::Interval {
+        Ok(Expr::Interval {
             value: Box::new(value),
             leading_field,
             leading_precision,
             last_field,
             fractional_seconds_precision: fsec_precision,
-        }))
+        })
     }
 
     /// Parse an operator following an expression
@@ -3178,7 +3178,7 @@ impl<'a> Parser<'a> {
                 }
                 // Interval types can be followed by a complicated interval
                 // qualifier that we don't currently support. See
-                // parse_interval_literal for a taste.
+                // parse_interval for a taste.
                 Keyword::INTERVAL => Ok(DataType::Interval),
                 Keyword::REGCLASS => Ok(DataType::Regclass),
                 Keyword::STRING => Ok(DataType::String),

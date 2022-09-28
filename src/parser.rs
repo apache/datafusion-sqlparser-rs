@@ -451,6 +451,8 @@ impl<'a> Parser<'a> {
                 Keyword::SAFE_CAST => self.parse_safe_cast_expr(),
                 Keyword::EXISTS => self.parse_exists_expr(false),
                 Keyword::EXTRACT => self.parse_extract_expr(),
+                Keyword::CEIL => self.parse_ceil_expr(),
+                Keyword::FLOOR => self.parse_floor_expr(),
                 Keyword::POSITION => self.parse_position_expr(),
                 Keyword::SUBSTRING => self.parse_substring_expr(),
                 Keyword::OVERLAY => self.parse_overlay_expr(),
@@ -849,6 +851,30 @@ impl<'a> Parser<'a> {
         })
     }
 
+    pub fn parse_ceil_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let expr = self.parse_expr()?;
+        self.expect_keyword(Keyword::TO)?;
+        let field = self.parse_date_time_field()?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::Ceil {
+            expr: Box::new(expr),
+            field,
+        })
+    }
+
+    pub fn parse_floor_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let expr = self.parse_expr()?;
+        self.expect_keyword(Keyword::TO)?;
+        let field = self.parse_date_time_field()?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::Ceil {
+            expr: Box::new(expr),
+            field,
+        })
+    }
+
     pub fn parse_position_expr(&mut self) -> Result<Expr, ParserError> {
         // PARSE SELECT POSITION('@' in field)
         self.expect_token(&Token::LParen)?;
@@ -1041,10 +1067,10 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    // This function parses date/time fields for both the EXTRACT function-like
-    // operator and interval qualifiers. EXTRACT supports a wider set of
-    // date/time fields than interval qualifiers, so this function may need to
-    // be split in two.
+    // This function parses date/time fields for the EXTRACT function-like
+    // operator, interval qualifiers, and the ceil/floor operations.
+    // EXTRACT supports a wider set of date/time fields than interval qualifiers,
+    // so this function may need to be split in two.
     pub fn parse_date_time_field(&mut self) -> Result<DateTimeField, ParserError> {
         match self.next_token() {
             Token::Word(w) => match w.keyword {
@@ -1063,9 +1089,11 @@ impl<'a> Parser<'a> {
                 Keyword::ISODOW => Ok(DateTimeField::Isodow),
                 Keyword::ISOYEAR => Ok(DateTimeField::Isoyear),
                 Keyword::JULIAN => Ok(DateTimeField::Julian),
+                Keyword::MICROSECOND => Ok(DateTimeField::Microseconds),
                 Keyword::MICROSECONDS => Ok(DateTimeField::Microseconds),
                 Keyword::MILLENIUM => Ok(DateTimeField::Millenium),
                 Keyword::MILLENNIUM => Ok(DateTimeField::Millennium),
+                Keyword::MILLISECOND => Ok(DateTimeField::Milliseconds),
                 Keyword::MILLISECONDS => Ok(DateTimeField::Milliseconds),
                 Keyword::QUARTER => Ok(DateTimeField::Quarter),
                 Keyword::TIMEZONE => Ok(DateTimeField::Timezone),
@@ -1143,9 +1171,11 @@ impl<'a> Parser<'a> {
                     Keyword::ISODOW,
                     Keyword::ISOYEAR,
                     Keyword::JULIAN,
+                    Keyword::MICROSECOND,
                     Keyword::MICROSECONDS,
                     Keyword::MILLENIUM,
                     Keyword::MILLENNIUM,
+                    Keyword::MILLISECOND,
                     Keyword::MILLISECONDS,
                     Keyword::QUARTER,
                     Keyword::TIMEZONE,

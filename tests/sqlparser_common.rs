@@ -22,6 +22,7 @@
 mod test_utils;
 
 use matches::assert_matches;
+use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, GenericDialect, HiveDialect, MsSqlDialect,
@@ -31,7 +32,8 @@ use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
 
 use test_utils::{
-    all_dialects, expr_from_projection, join, number, only, table, table_alias, TestedDialects,
+    all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
+    TestedDialects,
 };
 
 #[test]
@@ -580,7 +582,7 @@ fn parse_select_count_wildcard() {
 
 #[test]
 fn parse_select_count_distinct() {
-    let sql = "SELECT COUNT(DISTINCT + x) FROM customer";
+    let sql = "SELECT COUNT(DISTINCT +x) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
@@ -597,8 +599,8 @@ fn parse_select_count_distinct() {
     );
 
     one_statement_parses_to(
-        "SELECT COUNT(ALL + x) FROM customer",
-        "SELECT COUNT(+ x) FROM customer",
+        "SELECT COUNT(ALL +x) FROM customer",
+        "SELECT COUNT(+x) FROM customer",
     );
 
     let sql = "SELECT COUNT(ALL DISTINCT + x) FROM customer";
@@ -754,7 +756,7 @@ fn parse_compound_expr_2() {
 #[test]
 fn parse_unary_math() {
     use self::Expr::*;
-    let sql = "- a + - b";
+    let sql = "-a + -b";
     assert_eq!(
         BinaryOp {
             left: Box::new(UnaryOp {
@@ -862,7 +864,7 @@ fn parse_not_precedence() {
             expr: Box::new(Expr::Like {
                 expr: Box::new(Expr::Value(Value::SingleQuotedString("a".into()))),
                 negated: true,
-                pattern: Box::new(Value::SingleQuotedString("b".into())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("b".into()))),
                 escape_char: None
             }),
         },
@@ -895,7 +897,7 @@ fn parse_like() {
             Expr::Like {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None
             },
             select.selection.unwrap()
@@ -911,7 +913,7 @@ fn parse_like() {
             Expr::Like {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\')
             },
             select.selection.unwrap()
@@ -928,7 +930,7 @@ fn parse_like() {
             Expr::IsNull(Box::new(Expr::Like {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None
             })),
             select.selection.unwrap()
@@ -936,6 +938,45 @@ fn parse_like() {
     }
     chk(false);
     chk(true);
+}
+
+#[test]
+fn parse_null_like() {
+    let sql = "SELECT \
+            column1 LIKE NULL AS col_null, \
+            NULL LIKE column1 AS null_col \
+        FROM customers";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        SelectItem::ExprWithAlias {
+            expr: Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("column1"))),
+                negated: false,
+                pattern: Box::new(Expr::Value(Value::Null)),
+                escape_char: None
+            },
+            alias: Ident {
+                value: "col_null".to_owned(),
+                quote_style: None
+            }
+        },
+        select.projection[0]
+    );
+    assert_eq!(
+        SelectItem::ExprWithAlias {
+            expr: Expr::Like {
+                expr: Box::new(Expr::Value(Value::Null)),
+                negated: false,
+                pattern: Box::new(Expr::Identifier(Ident::new("column1"))),
+                escape_char: None
+            },
+            alias: Ident {
+                value: "null_col".to_owned(),
+                quote_style: None
+            }
+        },
+        select.projection[1]
+    );
 }
 
 #[test]
@@ -950,7 +991,7 @@ fn parse_ilike() {
             Expr::ILike {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None
             },
             select.selection.unwrap()
@@ -966,7 +1007,7 @@ fn parse_ilike() {
             Expr::ILike {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('^')
             },
             select.selection.unwrap()
@@ -983,7 +1024,7 @@ fn parse_ilike() {
             Expr::IsNull(Box::new(Expr::ILike {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None
             })),
             select.selection.unwrap()
@@ -1005,7 +1046,7 @@ fn parse_similar_to() {
             Expr::SimilarTo {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None
             },
             select.selection.unwrap()
@@ -1021,7 +1062,7 @@ fn parse_similar_to() {
             Expr::SimilarTo {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\')
             },
             select.selection.unwrap()
@@ -1037,7 +1078,7 @@ fn parse_similar_to() {
             Expr::IsNull(Box::new(Expr::SimilarTo {
                 expr: Box::new(Expr::Identifier(Ident::new("name"))),
                 negated,
-                pattern: Box::new(Value::SingleQuotedString("%a".to_string())),
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\')
             })),
             select.selection.unwrap()
@@ -1605,6 +1646,46 @@ fn parse_cast() {
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Nvarchar(Some(50))
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT CAST(id AS CLOB(50)) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Clob(50)
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT CAST(id AS BINARY(50)) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Binary(50)
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT CAST(id AS VARBINARY(50)) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Varbinary(50)
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT CAST(id AS BLOB(50)) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Blob(50)
         },
         expr_from_projection(only(&select.projection))
     );
@@ -2618,16 +2699,23 @@ fn parse_scalar_function_in_projection() {
     }
 }
 
-fn run_explain_analyze(query: &str, expected_verbose: bool, expected_analyze: bool) {
+fn run_explain_analyze(
+    query: &str,
+    expected_verbose: bool,
+    expected_analyze: bool,
+    expected_format: Option<AnalyzeFormat>,
+) {
     match verified_stmt(query) {
         Statement::Explain {
             describe_alias: _,
             analyze,
             verbose,
             statement,
+            format,
         } => {
             assert_eq!(verbose, expected_verbose);
             assert_eq!(analyze, expected_analyze);
+            assert_eq!(format, expected_format);
             assert_eq!("SELECT sqrt(id) FROM foo", statement.to_string());
         }
         _ => panic!("Unexpected Statement, must be Explain"),
@@ -2654,15 +2742,47 @@ fn parse_explain_table() {
 #[test]
 fn parse_explain_analyze_with_simple_select() {
     // Describe is an alias for EXPLAIN
-    run_explain_analyze("DESCRIBE SELECT sqrt(id) FROM foo", false, false);
+    run_explain_analyze("DESCRIBE SELECT sqrt(id) FROM foo", false, false, None);
 
-    run_explain_analyze("EXPLAIN SELECT sqrt(id) FROM foo", false, false);
-    run_explain_analyze("EXPLAIN VERBOSE SELECT sqrt(id) FROM foo", true, false);
-    run_explain_analyze("EXPLAIN ANALYZE SELECT sqrt(id) FROM foo", false, true);
+    run_explain_analyze("EXPLAIN SELECT sqrt(id) FROM foo", false, false, None);
+    run_explain_analyze(
+        "EXPLAIN VERBOSE SELECT sqrt(id) FROM foo",
+        true,
+        false,
+        None,
+    );
+    run_explain_analyze(
+        "EXPLAIN ANALYZE SELECT sqrt(id) FROM foo",
+        false,
+        true,
+        None,
+    );
     run_explain_analyze(
         "EXPLAIN ANALYZE VERBOSE SELECT sqrt(id) FROM foo",
         true,
         true,
+        None,
+    );
+
+    run_explain_analyze(
+        "EXPLAIN ANALYZE FORMAT GRAPHVIZ SELECT sqrt(id) FROM foo",
+        false,
+        true,
+        Some(AnalyzeFormat::GRAPHVIZ),
+    );
+
+    run_explain_analyze(
+        "EXPLAIN ANALYZE VERBOSE FORMAT JSON SELECT sqrt(id) FROM foo",
+        true,
+        true,
+        Some(AnalyzeFormat::JSON),
+    );
+
+    run_explain_analyze(
+        "EXPLAIN VERBOSE FORMAT TEXT SELECT sqrt(id) FROM foo",
+        true,
+        false,
+        Some(AnalyzeFormat::TEXT),
     );
 }
 
@@ -2773,6 +2893,7 @@ fn parse_literal_string() {
     );
 
     one_statement_parses_to("SELECT x'deadBEEF'", "SELECT X'deadBEEF'");
+    one_statement_parses_to("SELECT n'national string'", "SELECT N'national string'");
 }
 
 #[test]
@@ -2815,7 +2936,7 @@ fn parse_literal_datetime() {
 }
 
 #[test]
-fn parse_literal_timestamp() {
+fn parse_literal_timestamp_without_time_zone() {
     let sql = "SELECT TIMESTAMP '1999-01-01 01:23:34'";
     let select = verified_only_select(sql);
     assert_eq!(
@@ -2825,27 +2946,50 @@ fn parse_literal_timestamp() {
         },
         expr_from_projection(only(&select.projection)),
     );
+
+    one_statement_parses_to(
+        "SELECT TIMESTAMP WITHOUT TIME ZONE '1999-01-01 01:23:34'",
+        sql,
+    );
 }
 
 #[test]
-fn parse_literal_interval() {
+fn parse_literal_timestamp_with_time_zone() {
+    let sql = "SELECT TIMESTAMPTZ '1999-01-01 01:23:34Z'";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::TypedString {
+            data_type: DataType::TimestampTz,
+            value: "1999-01-01 01:23:34Z".into()
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
+    one_statement_parses_to(
+        "SELECT TIMESTAMP WITH TIME ZONE '1999-01-01 01:23:34Z'",
+        sql,
+    );
+}
+
+#[test]
+fn parse_interval() {
     let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1-1")))),
             leading_field: Some(DateTimeField::Year),
             leading_precision: None,
             last_field: Some(DateTimeField::Month),
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '01:01.01' MINUTE (5) TO SECOND (5)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "01:01.01"
             )))),
@@ -2853,53 +2997,53 @@ fn parse_literal_interval() {
             leading_precision: Some(5),
             last_field: Some(DateTimeField::Second),
             fractional_seconds_precision: Some(5),
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '1' SECOND (5, 4)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1")))),
             leading_field: Some(DateTimeField::Second),
             leading_precision: Some(5),
             last_field: None,
             fractional_seconds_precision: Some(4),
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '10' HOUR";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL 5 DAY";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(number("5"))),
             leading_field: Some(DateTimeField::Day),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL 1 + 1 DAY";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Value(number("1"))),
                 op: BinaryOperator::Plus,
@@ -2909,27 +3053,27 @@ fn parse_literal_interval() {
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '10' HOUR (1)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: Some(1),
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '1 DAY'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Interval {
+        &Expr::Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "1 DAY"
             )))),
@@ -2937,7 +3081,7 @@ fn parse_literal_interval() {
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        }),
+        },
         expr_from_projection(only(&select.projection)),
     );
 
@@ -3760,7 +3904,7 @@ fn parse_recursive_cte() {
                 quote_style: None,
             }],
         },
-        query: cte_query,
+        query: Box::new(cte_query),
         from: None,
     };
     assert_eq!(with.cte_tables.first().unwrap(), &expected);
@@ -3909,6 +4053,38 @@ fn parse_substring() {
     );
 
     one_statement_parses_to("SELECT SUBSTRING('1' FOR 3)", "SELECT SUBSTRING('1' FOR 3)");
+}
+
+#[test]
+fn parse_overlay() {
+    one_statement_parses_to(
+        "SELECT OVERLAY('abccccde' PLACING 'abc' FROM 3)",
+        "SELECT OVERLAY('abccccde' PLACING 'abc' FROM 3)",
+    );
+    one_statement_parses_to(
+        "SELECT OVERLAY('abccccde' PLACING 'abc' FROM 3 FOR 12)",
+        "SELECT OVERLAY('abccccde' PLACING 'abc' FROM 3 FOR 12)",
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected PLACING, found: FROM".to_owned()),
+        parse_sql_statements("SELECT OVERLAY('abccccde' FROM 3)").unwrap_err(),
+    );
+
+    let sql = "SELECT OVERLAY('abcdef' PLACING name FROM 3 FOR id + 1) FROM CUSTOMERS";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Overlay {
+            expr: Box::new(Expr::Value(Value::SingleQuotedString("abcdef".to_string()))),
+            overlay_what: Box::new(Expr::Identifier(Ident::new("name"))),
+            overlay_from: Box::new(Expr::Value(number("3"))),
+            overlay_for: Some(Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("id"))),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Value(number("1"))),
+            }))
+        },
+        expr_from_projection(only(&select.projection))
+    );
 }
 
 #[test]
@@ -4570,6 +4746,52 @@ fn parse_set_transaction() {
 }
 
 #[test]
+fn parse_set_variable() {
+    match verified_stmt("SET SOMETHING = '1'") {
+        Statement::SetVariable {
+            local,
+            hivevar,
+            variable,
+            value,
+        } => {
+            assert!(!local);
+            assert!(!hivevar);
+            assert_eq!(variable, ObjectName(vec!["SOMETHING".into()]));
+            assert_eq!(
+                value,
+                vec![Expr::Value(Value::SingleQuotedString("1".into()))]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    one_statement_parses_to("SET SOMETHING TO '1'", "SET SOMETHING = '1'");
+}
+
+#[test]
+fn parse_set_time_zone() {
+    match verified_stmt("SET TIMEZONE = 'UTC'") {
+        Statement::SetVariable {
+            local,
+            hivevar,
+            variable,
+            value,
+        } => {
+            assert!(!local);
+            assert!(!hivevar);
+            assert_eq!(variable, ObjectName(vec!["TIMEZONE".into()]));
+            assert_eq!(
+                value,
+                vec![Expr::Value(Value::SingleQuotedString("UTC".into()))]
+            );
+        }
+        _ => unreachable!(),
+    }
+
+    one_statement_parses_to("SET TIME ZONE TO 'UTC'", "SET TIMEZONE = 'UTC'");
+}
+
+#[test]
 fn parse_commit() {
     match verified_stmt("COMMIT") {
         Statement::Commit { chain: false } => (),
@@ -4670,6 +4892,63 @@ fn parse_drop_index() {
 }
 
 #[test]
+fn parse_create_role() {
+    let sql = "CREATE ROLE consultant";
+    match verified_stmt(sql) {
+        Statement::CreateRole { names, .. } => {
+            assert_eq_vec(&["consultant"], &names);
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
+    match verified_stmt(sql) {
+        Statement::CreateRole {
+            names,
+            if_not_exists,
+            ..
+        } => {
+            assert_eq_vec(&["mysql_a", "mysql_b"], &names);
+            assert!(if_not_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_drop_role() {
+    let sql = "DROP ROLE abc";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            ..
+        } => {
+            assert_eq_vec(&["abc"], &names);
+            assert_eq!(ObjectType::Role, object_type);
+            assert!(!if_exists);
+        }
+        _ => unreachable!(),
+    };
+
+    let sql = "DROP ROLE IF EXISTS def, magician, quaternion";
+    match verified_stmt(sql) {
+        Statement::Drop {
+            names,
+            object_type,
+            if_exists,
+            ..
+        } => {
+            assert_eq_vec(&["def", "magician", "quaternion"], &names);
+            assert_eq!(ObjectType::Role, object_type);
+            assert!(if_exists);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_grant() {
     let sql = "GRANT SELECT, INSERT, UPDATE (shape, size), USAGE, DELETE, TRUNCATE, REFERENCES, TRIGGER, CONNECT, CREATE, EXECUTE, TEMPORARY ON abc, def TO xyz, m WITH GRANT OPTION GRANTED BY jj";
     match verified_stmt(sql) {
@@ -4710,14 +4989,8 @@ fn parse_grant() {
                     ],
                     actions
                 );
-                assert_eq!(
-                    vec!["abc", "def"],
-                    objects.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
-                assert_eq!(
-                    vec!["xyz", "m"],
-                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["abc", "def"], &objects);
+                assert_eq_vec(&["xyz", "m"], &grantees);
                 assert!(with_grant_option);
                 assert_eq!("jj", granted_by.unwrap().to_string());
             }
@@ -4737,14 +5010,8 @@ fn parse_grant() {
         } => match (privileges, objects) {
             (Privileges::Actions(actions), GrantObjects::AllTablesInSchema { schemas }) => {
                 assert_eq!(vec![Action::Insert { columns: None }], actions);
-                assert_eq!(
-                    vec!["public"],
-                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
-                assert_eq!(
-                    vec!["browser"],
-                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["public"], &schemas);
+                assert_eq_vec(&["browser"], &grantees);
                 assert!(!with_grant_option);
             }
             _ => unreachable!(),
@@ -4766,14 +5033,8 @@ fn parse_grant() {
                     vec![Action::Usage, Action::Select { columns: None }],
                     actions
                 );
-                assert_eq!(
-                    vec!["p"],
-                    objects.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
-                assert_eq!(
-                    vec!["u"],
-                    grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["p"], &objects);
+                assert_eq_vec(&["u"], &grantees);
             }
             _ => unreachable!(),
         },
@@ -4807,10 +5068,7 @@ fn parse_grant() {
                 GrantObjects::Schemas(schemas),
             ) => {
                 assert!(!with_privileges_keyword);
-                assert_eq!(
-                    vec!["aa", "b"],
-                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["aa", "b"], &schemas);
             }
             _ => unreachable!(),
         },
@@ -4826,10 +5084,7 @@ fn parse_grant() {
         } => match (privileges, objects) {
             (Privileges::Actions(actions), GrantObjects::AllSequencesInSchema { schemas }) => {
                 assert_eq!(vec![Action::Usage], actions);
-                assert_eq!(
-                    vec!["bus"],
-                    schemas.iter().map(ToString::to_string).collect::<Vec<_>>()
-                );
+                assert_eq_vec(&["bus"], &schemas);
             }
             _ => unreachable!(),
         },
@@ -4854,14 +5109,8 @@ fn test_revoke() {
                 },
                 privileges
             );
-            assert_eq!(
-                vec!["users", "auth"],
-                tables.iter().map(ToString::to_string).collect::<Vec<_>>()
-            );
-            assert_eq!(
-                vec!["analyst"],
-                grantees.iter().map(ToString::to_string).collect::<Vec<_>>()
-            );
+            assert_eq_vec(&["users", "auth"], &tables);
+            assert_eq_vec(&["analyst"], &grantees);
             assert!(cascade);
             assert_eq!(None, granted_by);
         }
@@ -5119,6 +5368,17 @@ fn test_placeholder() {
             rows: OffsetRows::None,
         }),
     );
+
+    let sql = "SELECT $fromage_français, :x, ?123";
+    let ast = dialects.verified_only_select(sql);
+    assert_eq!(
+        ast.projection,
+        vec![
+            UnnamedExpr(Expr::Value(Value::Placeholder("$fromage_français".into()))),
+            UnnamedExpr(Expr::Value(Value::Placeholder(":x".into()))),
+            UnnamedExpr(Expr::Value(Value::Placeholder("?123".into()))),
+        ]
+    );
 }
 
 #[test]
@@ -5259,6 +5519,38 @@ fn parse_time_functions() {
 
     // Validating Parenthesis
     one_statement_parses_to("SELECT CURRENT_DATE", sql);
+
+    let sql = "SELECT LOCALTIME()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("LOCALTIME")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+            special: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT LOCALTIME", sql);
+
+    let sql = "SELECT LOCALTIMESTAMP()";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("LOCALTIMESTAMP")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+            special: false,
+        }),
+        expr_from_projection(&select.projection[0])
+    );
+
+    // Validating Parenthesis
+    one_statement_parses_to("SELECT LOCALTIMESTAMP", sql);
 }
 
 #[test]
@@ -5295,21 +5587,50 @@ fn parse_position_negative() {
 fn parse_is_boolean() {
     use self::Expr::*;
 
-    let sql = "a IS FALSE";
-    assert_eq!(
-        IsFalse(Box::new(Identifier(Ident::new("a")))),
-        verified_expr(sql)
-    );
-
     let sql = "a IS TRUE";
     assert_eq!(
         IsTrue(Box::new(Identifier(Ident::new("a")))),
         verified_expr(sql)
     );
 
+    let sql = "a IS NOT TRUE";
+    assert_eq!(
+        IsNotTrue(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+
+    let sql = "a IS FALSE";
+    assert_eq!(
+        IsFalse(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+
+    let sql = "a IS NOT FALSE";
+    assert_eq!(
+        IsNotFalse(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+
+    let sql = "a IS UNKNOWN";
+    assert_eq!(
+        IsUnknown(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+
+    let sql = "a IS NOT UNKNOWN";
+    assert_eq!(
+        IsNotUnknown(Box::new(Identifier(Ident::new("a")))),
+        verified_expr(sql)
+    );
+
     verified_stmt("SELECT f FROM foo WHERE field IS TRUE");
+    verified_stmt("SELECT f FROM foo WHERE field IS NOT TRUE");
 
     verified_stmt("SELECT f FROM foo WHERE field IS FALSE");
+    verified_stmt("SELECT f FROM foo WHERE field IS NOT FALSE");
+
+    verified_stmt("SELECT f FROM foo WHERE field IS UNKNOWN");
+    verified_stmt("SELECT f FROM foo WHERE field IS NOT UNKNOWN");
 
     let sql = "SELECT f from foo where field is 0";
     let res = parse_sql_statements(sql);
@@ -5367,4 +5688,14 @@ fn parse_cursor() {
         Statement::Close { cursor } => assert_eq!(cursor, CloseCursor::All),
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_show_functions() {
+    assert_eq!(
+        verified_stmt("SHOW FUNCTIONS LIKE 'pattern'"),
+        Statement::ShowFunctions {
+            filter: Some(ShowStatementFilter::Like("pattern".into())),
+        }
+    );
 }

@@ -22,6 +22,7 @@ mod redshift;
 mod snowflake;
 mod sqlite;
 
+use crate::ast::{Expr, Statement};
 use core::any::{Any, TypeId};
 use core::fmt::Debug;
 use core::iter::Peekable;
@@ -39,6 +40,7 @@ pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;
 pub use self::sqlite::SQLiteDialect;
 pub use crate::keywords;
+use crate::parser::{Parser, ParserError};
 
 /// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
 /// to `true` if `parser.dialect` is one of the `Dialect`s specified.
@@ -65,6 +67,35 @@ pub trait Dialect: Debug + Any {
     fn is_identifier_start(&self, ch: char) -> bool;
     /// Determine if a character is a valid unquoted identifier character
     fn is_identifier_part(&self, ch: char) -> bool;
+    /// Does the dialect support `FILTER (WHERE expr)` for aggregate queries?
+    fn supports_filter_during_aggregation(&self) -> bool {
+        false
+    }
+    /// Dialect-specific prefix parser override
+    fn parse_prefix(&self, _parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
+        // return None to fall back to the default behavior
+        None
+    }
+    /// Dialect-specific infix parser override
+    fn parse_infix(
+        &self,
+        _parser: &mut Parser,
+        _expr: &Expr,
+        _precendence: u8,
+    ) -> Option<Result<Expr, ParserError>> {
+        // return None to fall back to the default behavior
+        None
+    }
+    /// Dialect-specific precedence override
+    fn get_next_precedence(&self, _parser: &Parser) -> Option<Result<u8, ParserError>> {
+        // return None to fall back to the default behavior
+        None
+    }
+    /// Dialect-specific statement parser override
+    fn parse_statement(&self, _parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+        // return None to fall back to the default behavior
+        None
+    }
 }
 
 impl dyn Dialect {

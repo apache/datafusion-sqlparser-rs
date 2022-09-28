@@ -18,7 +18,6 @@
 mod test_utils;
 use test_utils::*;
 
-use sqlparser::ast::Value::Boolean;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
@@ -782,7 +781,10 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a")]),
-            value: vec![SetVariableValue::Ident("b".into())],
+            value: vec![Expr::Identifier(Ident {
+                value: "b".into(),
+                quote_style: None
+            })],
         }
     );
 
@@ -793,9 +795,7 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a")]),
-            value: vec![SetVariableValue::Literal(Value::SingleQuotedString(
-                "b".into()
-            ))],
+            value: vec![Expr::Value(Value::SingleQuotedString("b".into()))],
         }
     );
 
@@ -806,7 +806,13 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a")]),
-            value: vec![SetVariableValue::Literal(number("0"))],
+            value: vec![Expr::Value(Value::Number(
+                #[cfg(not(feature = "bigdecimal"))]
+                "0".to_string(),
+                #[cfg(feature = "bigdecimal")]
+                bigdecimal::BigDecimal::from(0),
+                false,
+            ))],
         }
     );
 
@@ -817,7 +823,10 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a")]),
-            value: vec![SetVariableValue::Ident("DEFAULT".into())],
+            value: vec![Expr::Identifier(Ident {
+                value: "DEFAULT".into(),
+                quote_style: None
+            })],
         }
     );
 
@@ -828,7 +837,7 @@ fn parse_set() {
             local: true,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a")]),
-            value: vec![SetVariableValue::Ident("b".into())],
+            value: vec![Expr::Identifier("b".into())],
         }
     );
 
@@ -839,7 +848,10 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a"), Ident::new("b"), Ident::new("c")]),
-            value: vec![SetVariableValue::Ident("b".into())],
+            value: vec![Expr::Identifier(Ident {
+                value: "b".into(),
+                quote_style: None
+            })],
         }
     );
 
@@ -859,7 +871,7 @@ fn parse_set() {
                 Ident::new("reducer"),
                 Ident::new("parallelism")
             ]),
-            value: vec![SetVariableValue::Literal(Boolean(false))],
+            value: vec![Expr::Value(Value::Boolean(false))],
         }
     );
 
@@ -1107,7 +1119,7 @@ fn parse_pg_unary_ops() {
     ];
 
     for (str_op, op) in pg_unary_ops {
-        let select = pg().verified_only_select(&format!("SELECT {} a", &str_op));
+        let select = pg().verified_only_select(&format!("SELECT {}a", &str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: op.clone(),
@@ -1726,4 +1738,140 @@ fn parse_custom_operator() {
             right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
         })
     );
+}
+
+#[test]
+fn parse_create_role() {
+    let sql = "CREATE ROLE IF NOT EXISTS mysql_a, mysql_b";
+    match pg().verified_stmt(sql) {
+        Statement::CreateRole {
+            names,
+            if_not_exists,
+            ..
+        } => {
+            assert_eq_vec(&["mysql_a", "mysql_b"], &names);
+            assert!(if_not_exists);
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "CREATE ROLE abc LOGIN PASSWORD NULL";
+    match pg().parse_sql_statements(sql).as_deref() {
+        Ok(
+            [Statement::CreateRole {
+                names,
+                login,
+                password,
+                ..
+            }],
+        ) => {
+            assert_eq_vec(&["abc"], names);
+            assert_eq!(*login, Some(true));
+            assert_eq!(*password, Some(Password::NullPassword));
+        }
+        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err),
+    }
+
+    let sql = "CREATE ROLE abc WITH LOGIN PASSWORD NULL";
+    match pg().parse_sql_statements(sql).as_deref() {
+        Ok(
+            [Statement::CreateRole {
+                names,
+                login,
+                password,
+                ..
+            }],
+        ) => {
+            assert_eq_vec(&["abc"], names);
+            assert_eq!(*login, Some(true));
+            assert_eq!(*password, Some(Password::NullPassword));
+        }
+        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err),
+    }
+
+    let sql = "CREATE ROLE magician WITH SUPERUSER CREATEROLE NOCREATEDB BYPASSRLS INHERIT PASSWORD 'abcdef' LOGIN VALID UNTIL '2025-01-01' IN ROLE role1, role2 ROLE role3 ADMIN role4, role5 REPLICATION";
+    // Roundtrip order of optional parameters is not preserved
+    match pg().parse_sql_statements(sql).as_deref() {
+        Ok(
+            [Statement::CreateRole {
+                names,
+                if_not_exists,
+                bypassrls,
+                login,
+                inherit,
+                password,
+                superuser,
+                create_db,
+                create_role,
+                replication,
+                connection_limit,
+                valid_until,
+                in_role,
+                in_group,
+                role,
+                user,
+                admin,
+                authorization_owner,
+            }],
+        ) => {
+            assert_eq_vec(&["magician"], names);
+            assert!(!*if_not_exists);
+            assert_eq!(*login, Some(true));
+            assert_eq!(*inherit, Some(true));
+            assert_eq!(*bypassrls, Some(true));
+            assert_eq!(
+                *password,
+                Some(Password::Password(Expr::Value(Value::SingleQuotedString(
+                    "abcdef".into()
+                ))))
+            );
+            assert_eq!(*superuser, Some(true));
+            assert_eq!(*create_db, Some(false));
+            assert_eq!(*create_role, Some(true));
+            assert_eq!(*replication, Some(true));
+            assert_eq!(*connection_limit, None);
+            assert_eq!(
+                *valid_until,
+                Some(Expr::Value(Value::SingleQuotedString("2025-01-01".into())))
+            );
+            assert_eq_vec(&["role1", "role2"], in_role);
+            assert!(in_group.is_empty());
+            assert_eq_vec(&["role3"], role);
+            assert!(user.is_empty());
+            assert_eq_vec(&["role4", "role5"], admin);
+            assert_eq!(*authorization_owner, None);
+        }
+        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err),
+    }
+
+    let sql = "CREATE ROLE abc WITH USER foo, bar ROLE baz ";
+    match pg().parse_sql_statements(sql).as_deref() {
+        Ok(
+            [Statement::CreateRole {
+                names, user, role, ..
+            }],
+        ) => {
+            assert_eq_vec(&["abc"], names);
+            assert_eq_vec(&["foo", "bar"], user);
+            assert_eq_vec(&["baz"], role);
+        }
+        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err),
+    }
+
+    let negatables = vec![
+        "BYPASSRLS",
+        "CREATEDB",
+        "CREATEROLE",
+        "INHERIT",
+        "LOGIN",
+        "REPLICATION",
+        "SUPERUSER",
+    ];
+
+    for negatable_kw in negatables.iter() {
+        let sql = format!("CREATE ROLE abc {kw} NO{kw}", kw = negatable_kw);
+        if pg().parse_sql_statements(&sql).is_ok() {
+            panic!("Should not be able to parse CREATE ROLE containing both negated and non-negated versions of the same keyword: {}", negatable_kw)
+        }
+    }
 }

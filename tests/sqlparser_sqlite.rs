@@ -16,8 +16,10 @@
 
 #[macro_use]
 mod test_utils;
+
 use test_utils::*;
 
+use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SQLiteDialect};
 use sqlparser::tokenizer::Token;
@@ -73,14 +75,14 @@ fn parse_create_table_auto_increment() {
                     options: vec![
                         ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Unique { is_primary: true }
+                            option: ColumnOption::Unique { is_primary: true },
                         },
                         ColumnOptionDef {
                             name: None,
                             option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
                                 "AUTOINCREMENT"
-                            )])
-                        }
+                            )]),
+                        },
                     ],
                 }],
                 columns
@@ -116,6 +118,19 @@ fn parse_create_sqlite_quote() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_placeholder() {
+    // In postgres, this would be the absolute value operator '@' applied to the column 'xxx'
+    // But in sqlite, this is a named parameter.
+    // see https://www.sqlite.org/lang_expr.html#varparam
+    let sql = "SELECT @xxx";
+    let ast = sqlite().verified_only_select(sql);
+    assert_eq!(
+        ast.projection[0],
+        UnnamedExpr(Expr::Value(Value::Placeholder("@xxx".into()))),
+    );
 }
 
 fn sqlite() -> TestedDialects {

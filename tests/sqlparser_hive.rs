@@ -15,7 +15,7 @@
 //! Test SQL syntax specific to Hive. The parser based on the generic dialect
 //! is also tested (on the inputs it can handle).
 
-use sqlparser::ast::{CreateFunctionUsing, Ident, ObjectName, SetVariableValue, Statement};
+use sqlparser::ast::{CreateFunctionUsing, Expr, Ident, ObjectName, Statement, UnaryOperator};
 use sqlparser::dialect::{GenericDialect, HiveDialect};
 use sqlparser::parser::ParserError;
 use sqlparser::test_utils::*;
@@ -220,14 +220,17 @@ fn set_statement_with_minus() {
                 Ident::new("java"),
                 Ident::new("opts")
             ]),
-            value: vec![SetVariableValue::Ident("-Xmx4g".into())],
+            value: vec![Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                expr: Box::new(Expr::Identifier(Ident::new("Xmx4g")))
+            }],
         }
     );
 
     assert_eq!(
         hive().parse_sql_statements("SET hive.tez.java.opts = -"),
         Err(ParserError::ParserError(
-            "Expected word, found: EOF".to_string()
+            "Expected variable value, found: EOF".to_string()
         ))
     )
 }
@@ -271,6 +274,31 @@ fn parse_create_function() {
         hive().parse_sql_statements(sql).unwrap_err(),
         ParserError::ParserError("Expected literal string, found: EOF".to_string()),
     );
+}
+
+#[test]
+fn filtering_during_aggregation() {
+    let rename = "SELECT \
+        array_agg(name) FILTER (WHERE name IS NOT NULL), \
+        array_agg(name) FILTER (WHERE name LIKE 'a%') \
+        FROM region";
+    println!("{}", hive().verified_stmt(rename));
+}
+
+#[test]
+fn filtering_during_aggregation_aliased() {
+    let rename = "SELECT \
+        array_agg(name) FILTER (WHERE name IS NOT NULL) AS agg1, \
+        array_agg(name) FILTER (WHERE name LIKE 'a%') AS agg2 \
+        FROM region";
+    println!("{}", hive().verified_stmt(rename));
+}
+
+#[test]
+fn filter_as_alias() {
+    let sql = "SELECT name filter FROM region";
+    let expected = "SELECT name AS filter FROM region";
+    println!("{}", hive().one_statement_parses_to(sql, expected));
 }
 
 fn hive() -> TestedDialects {

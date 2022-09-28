@@ -869,7 +869,7 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::TO)?;
         let field = self.parse_date_time_field()?;
         self.expect_token(&Token::RParen)?;
-        Ok(Expr::Ceil {
+        Ok(Expr::Floor {
             expr: Box::new(expr),
             field,
         })

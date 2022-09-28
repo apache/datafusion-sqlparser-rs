@@ -131,6 +131,12 @@ fn test_add_partition() {
 }
 
 #[test]
+fn test_add_multiple_partitions() {
+    let add = "ALTER TABLE db.table ADD IF NOT EXISTS PARTITION (`a` = 'asdf', `b` = 2) PARTITION (`a` = 'asdh', `b` = 3)";
+    hive().verified_stmt(add);
+}
+
+#[test]
 fn test_drop_partition() {
     let drop = "ALTER TABLE db.table DROP PARTITION (a = 1)";
     hive().verified_stmt(drop);

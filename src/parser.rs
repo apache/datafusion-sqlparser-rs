@@ -1662,6 +1662,11 @@ impl<'a> Parser<'a> {
         parser_err!(format!("Expected {}, found: {}", expected, found))
     }
 
+    /// Peek at the next token to see if it's the expected keyword
+    pub fn peek_keyword(&mut self, expected: Keyword) -> bool {
+        matches!(self.peek_token(), Token::Word(w) if expected == w.keyword)
+    }
+
     /// Look for an expected keyword and consume it if it exists
     #[must_use]
     pub fn parse_keyword(&mut self, expected: Keyword) -> bool {
@@ -2880,6 +2885,13 @@ impl<'a> Parser<'a> {
         Ok(SqlOption { name, value })
     }
 
+    pub fn parse_partition(&mut self) -> Result<Partition, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let partitions = self.parse_comma_separated(Parser::parse_expr)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Partition { partitions })
+    }
+
     pub fn parse_alter(&mut self) -> Result<Statement, ParserError> {
         self.expect_keyword(Keyword::TABLE)?;
         let _ = self.parse_keyword(Keyword::ONLY);
@@ -2890,10 +2902,16 @@ impl<'a> Parser<'a> {
             } else {
                 let if_not_exists =
                     self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-                if self.parse_keyword(Keyword::PARTITION) {
-                    self.expect_token(&Token::LParen)?;
-                    let partitions = self.parse_comma_separated(Parser::parse_expr)?;
-                    self.expect_token(&Token::RParen)?;
+                if self.peek_keyword(Keyword::PARTITION) {
+                    let mut partitions = vec![];
+                    loop {
+                        if self.parse_keyword(Keyword::PARTITION) {
+                            let new_partitions = self.parse_partition()?;
+                            partitions.push(new_partitions);
+                        } else {
+                            break;
+                        }
+                    }
                     AlterTableOperation::AddPartitions {
                         if_not_exists,
                         new_partitions: partitions,

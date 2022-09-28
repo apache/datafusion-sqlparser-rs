@@ -335,12 +335,12 @@ pub enum Expr {
     Ceil {
         expr: Box<Expr>,
         field: DateTimeField,
-    }
+    },
     /// FLOOR(<expr> TO DateTimeField)
     Floor {
         expr: Box<Expr>,
         field: DateTimeField,
-    }
+    },
     /// POSITION(<expr> in <expr>)
     Position { expr: Box<Expr>, r#in: Box<Expr> },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])

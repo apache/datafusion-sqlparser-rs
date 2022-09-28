@@ -92,7 +92,7 @@ pub trait Dialect: Debug + Any {
     /// MySQL, MS SQL, and sqlite). You can accept one of characters listed
     /// in `Word::matching_end_quote` here
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
-        ch == '"'
+        ch == '"' || ch == '`'
     }
     /// Determine if quoted characters are proper for identifier
     fn is_proper_identifier_inside_quotes(&self, mut _chars: Peekable<Chars<'_>>) -> bool {

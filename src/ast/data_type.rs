@@ -67,8 +67,13 @@ pub enum DataType {
     UnsignedBigInt(Option<u64>),
     /// Floating point e.g. REAL
     Real,
-    /// Double e.g. DOUBLE PRECISION
+    /// Double
     Double,
+    /// Double PRECISION e.g. [standard], [postgresql]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#approximate-numeric-type
+    /// [postgresql]: https://www.postgresql.org/docs/current/datatype-numeric.html
+    DoublePrecision,
     /// Boolean
     Boolean,
     /// Date
@@ -154,6 +159,7 @@ impl fmt::Display for DataType {
             }
             DataType::Real => write!(f, "REAL"),
             DataType::Double => write!(f, "DOUBLE"),
+            DataType::DoublePrecision => write!(f, "DOUBLE PRECISION"),
             DataType::Boolean => write!(f, "BOOLEAN"),
             DataType::Date => write!(f, "DATE"),
             DataType::Time => write!(f, "TIME"),

@@ -29,6 +29,19 @@ fn parse_table_create() {
     hive().verified_stmt(iof);
 }
 
+fn generic() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(GenericDialect {})]
+    }
+}
+
+#[test]
+fn parse_describe() {
+    let describe = r#"DESCRIBE namespace.`table`"#;
+    hive().verified_stmt(describe);
+    generic().verified_stmt(describe);
+}
+
 #[test]
 fn parse_insert_overwrite() {
     let insert_partitions = r#"INSERT OVERWRITE TABLE db.new_table PARTITION (a = '1', b) SELECT a, b, c FROM db.table"#;
@@ -258,12 +271,8 @@ fn parse_create_function() {
         _ => unreachable!(),
     }
 
-    let generic = TestedDialects {
-        dialects: vec![Box::new(GenericDialect {})],
-    };
-
     assert_eq!(
-        generic.parse_sql_statements(sql).unwrap_err(),
+        generic().parse_sql_statements(sql).unwrap_err(),
         ParserError::ParserError(
             "Expected an object type after CREATE, found: FUNCTION".to_string()
         )

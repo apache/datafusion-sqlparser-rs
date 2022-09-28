@@ -1647,6 +1647,46 @@ fn parse_cast() {
         },
         expr_from_projection(only(&select.projection))
     );
+
+    let sql = "SELECT CAST(id AS CLOB(50)) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Clob(50)
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT CAST(id AS BINARY(50)) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Binary(50)
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT CAST(id AS VARBINARY(50)) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Varbinary(50)
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT CAST(id AS BLOB(50)) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Blob(50)
+        },
+        expr_from_projection(only(&select.projection))
+    );
 }
 
 #[test]

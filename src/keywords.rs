@@ -331,6 +331,7 @@ define_keywords!(
     METHOD,
     MICROSECONDS,
     MILLENIUM,
+    MILLENNIUM,
     MILLISECONDS,
     MIN,
     MINUTE,

@@ -1750,6 +1750,7 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(JULIAN FROM d)");
     verified_stmt("SELECT EXTRACT(MICROSECONDS FROM d)");
     verified_stmt("SELECT EXTRACT(MILLENIUM FROM d)");
+    verified_stmt("SELECT EXTRACT(MILLENNIUM FROM d)");
     verified_stmt("SELECT EXTRACT(MILLISECONDS FROM d)");
     verified_stmt("SELECT EXTRACT(QUARTER FROM d)");
     verified_stmt("SELECT EXTRACT(TIMEZONE FROM d)");

@@ -53,6 +53,14 @@ pub enum DataType {
     SmallInt(Option<u64>),
     /// Unsigned small integer with optional display width e.g. SMALLINT UNSIGNED or SMALLINT(5) UNSIGNED
     UnsignedSmallInt(Option<u64>),
+    /// MySQL medium integer ([1]) with optional display width e.g. MEDIUMINT or MEDIUMINT(5)
+    ///
+    /// [1]: https://dev.mysql.com/doc/refman/8.0/en/integer-types.html
+    MediumInt(Option<u64>),
+    /// Unsigned medium integer ([1]) with optional display width e.g. MEDIUMINT UNSIGNED or MEDIUMINT(5) UNSIGNED
+    ///
+    /// [1]: https://dev.mysql.com/doc/refman/8.0/en/integer-types.html
+    UnsignedMediumInt(Option<u64>),
     /// Integer with optional display width e.g. INT or INT(11)
     Int(Option<u64>),
     /// Integer with optional display width e.g. INTEGER or INTEGER(11)
@@ -140,6 +148,12 @@ impl fmt::Display for DataType {
             }
             DataType::UnsignedSmallInt(zerofill) => {
                 format_type_with_optional_length(f, "SMALLINT", zerofill, true)
+            }
+            DataType::MediumInt(zerofill) => {
+                format_type_with_optional_length(f, "MEDIUMINT", zerofill, false)
+            }
+            DataType::UnsignedMediumInt(zerofill) => {
+                format_type_with_optional_length(f, "MEDIUMINT", zerofill, true)
             }
             DataType::Int(zerofill) => format_type_with_optional_length(f, "INT", zerofill, false),
             DataType::UnsignedInt(zerofill) => {

@@ -3360,6 +3360,14 @@ impl<'a> Parser<'a> {
                         Ok(DataType::SmallInt(optional_precision?))
                     }
                 }
+                Keyword::MEDIUMINT => {
+                    let optional_precision = self.parse_optional_precision();
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::UnsignedMediumInt(optional_precision?))
+                    } else {
+                        Ok(DataType::MediumInt(optional_precision?))
+                    }
+                }
                 Keyword::INT => {
                     let optional_precision = self.parse_optional_precision();
                     if self.parse_keyword(Keyword::UNSIGNED) {

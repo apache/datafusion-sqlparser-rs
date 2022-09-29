@@ -1624,6 +1624,11 @@ fn parse_cast() {
     );
 
     one_statement_parses_to(
+        "SELECT CAST(id AS MEDIUMINT) FROM customer",
+        "SELECT CAST(id AS MEDIUMINT) FROM customer",
+    );
+
+    one_statement_parses_to(
         "SELECT CAST(id AS BIGINT) FROM customer",
         "SELECT CAST(id AS BIGINT) FROM customer",
     );
@@ -1646,6 +1651,46 @@ fn parse_cast() {
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Nvarchar(Some(50))
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT CAST(id AS CLOB(50)) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Clob(50)
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT CAST(id AS BINARY(50)) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Binary(50)
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT CAST(id AS VARBINARY(50)) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Varbinary(50)
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT CAST(id AS BLOB(50)) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Blob(50)
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1710,6 +1755,7 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(JULIAN FROM d)");
     verified_stmt("SELECT EXTRACT(MICROSECONDS FROM d)");
     verified_stmt("SELECT EXTRACT(MILLENIUM FROM d)");
+    verified_stmt("SELECT EXTRACT(MILLENNIUM FROM d)");
     verified_stmt("SELECT EXTRACT(MILLISECONDS FROM d)");
     verified_stmt("SELECT EXTRACT(QUARTER FROM d)");
     verified_stmt("SELECT EXTRACT(TIMEZONE FROM d)");

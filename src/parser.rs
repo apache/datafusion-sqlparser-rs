@@ -1065,6 +1065,7 @@ impl<'a> Parser<'a> {
                 Keyword::JULIAN => Ok(DateTimeField::Julian),
                 Keyword::MICROSECONDS => Ok(DateTimeField::Microseconds),
                 Keyword::MILLENIUM => Ok(DateTimeField::Millenium),
+                Keyword::MILLENNIUM => Ok(DateTimeField::Millennium),
                 Keyword::MILLISECONDS => Ok(DateTimeField::Milliseconds),
                 Keyword::QUARTER => Ok(DateTimeField::Quarter),
                 Keyword::TIMEZONE => Ok(DateTimeField::Timezone),
@@ -1144,6 +1145,7 @@ impl<'a> Parser<'a> {
                     Keyword::JULIAN,
                     Keyword::MICROSECONDS,
                     Keyword::MILLENIUM,
+                    Keyword::MILLENNIUM,
                     Keyword::MILLISECONDS,
                     Keyword::QUARTER,
                     Keyword::TIMEZONE,
@@ -2109,7 +2111,9 @@ impl<'a> Parser<'a> {
         let mut connection_limit = None;
         let mut valid_until = None;
         let mut in_role = vec![];
-        let mut roles = vec![];
+        let mut in_group = vec![];
+        let mut role = vec![];
+        let mut user = vec![];
         let mut admin = vec![];
 
         while let Some(keyword) = self.parse_one_of_keywords(&optional_keywords) {
@@ -2209,22 +2213,37 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::IN => {
-                    if self.parse_keyword(Keyword::ROLE) || self.parse_keyword(Keyword::GROUP) {
+                    if self.parse_keyword(Keyword::ROLE) {
                         if !in_role.is_empty() {
-                            parser_err!("Found multiple IN ROLE or IN GROUP")
+                            parser_err!("Found multiple IN ROLE")
                         } else {
                             in_role = self.parse_comma_separated(Parser::parse_identifier)?;
+                            Ok(())
+                        }
+                    } else if self.parse_keyword(Keyword::GROUP) {
+                        if !in_group.is_empty() {
+                            parser_err!("Found multiple IN GROUP")
+                        } else {
+                            in_group = self.parse_comma_separated(Parser::parse_identifier)?;
                             Ok(())
                         }
                     } else {
                         self.expected("ROLE or GROUP after IN", self.peek_token())
                     }
                 }
-                Keyword::ROLE | Keyword::USER => {
-                    if !roles.is_empty() {
-                        parser_err!("Found multiple ROLE or USER")
+                Keyword::ROLE => {
+                    if !role.is_empty() {
+                        parser_err!("Found multiple ROLE")
                     } else {
-                        roles = self.parse_comma_separated(Parser::parse_identifier)?;
+                        role = self.parse_comma_separated(Parser::parse_identifier)?;
+                        Ok(())
+                    }
+                }
+                Keyword::USER => {
+                    if !user.is_empty() {
+                        parser_err!("Found multiple USER")
+                    } else {
+                        user = self.parse_comma_separated(Parser::parse_identifier)?;
                         Ok(())
                     }
                 }
@@ -2254,7 +2273,9 @@ impl<'a> Parser<'a> {
             connection_limit,
             valid_until,
             in_role,
-            role: roles,
+            in_group,
+            role,
+            user,
             admin,
             authorization_owner,
         })
@@ -3319,8 +3340,11 @@ impl<'a> Parser<'a> {
                 Keyword::FLOAT => Ok(DataType::Float(self.parse_optional_precision()?)),
                 Keyword::REAL => Ok(DataType::Real),
                 Keyword::DOUBLE => {
-                    let _ = self.parse_keyword(Keyword::PRECISION);
-                    Ok(DataType::Double)
+                    if self.parse_keyword(Keyword::PRECISION) {
+                        Ok(DataType::DoublePrecision)
+                    } else {
+                        Ok(DataType::Double)
+                    }
                 }
                 Keyword::TINYINT => {
                     let optional_precision = self.parse_optional_precision();
@@ -3336,6 +3360,14 @@ impl<'a> Parser<'a> {
                         Ok(DataType::UnsignedSmallInt(optional_precision?))
                     } else {
                         Ok(DataType::SmallInt(optional_precision?))
+                    }
+                }
+                Keyword::MEDIUMINT => {
+                    let optional_precision = self.parse_optional_precision();
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::UnsignedMediumInt(optional_precision?))
+                    } else {
+                        Ok(DataType::MediumInt(optional_precision?))
                     }
                 }
                 Keyword::INT => {
@@ -3371,6 +3403,10 @@ impl<'a> Parser<'a> {
                         Ok(DataType::Char(self.parse_optional_precision()?))
                     }
                 }
+                Keyword::CLOB => Ok(DataType::Clob(self.parse_precision()?)),
+                Keyword::BINARY => Ok(DataType::Binary(self.parse_precision()?)),
+                Keyword::VARBINARY => Ok(DataType::Varbinary(self.parse_precision()?)),
+                Keyword::BLOB => Ok(DataType::Blob(self.parse_precision()?)),
                 Keyword::UUID => Ok(DataType::Uuid),
                 Keyword::DATE => Ok(DataType::Date),
                 Keyword::DATETIME => Ok(DataType::Datetime),
@@ -3582,6 +3618,13 @@ impl<'a> Parser<'a> {
         } else {
             self.expected("a list of columns in parentheses", self.peek_token())
         }
+    }
+
+    pub fn parse_precision(&mut self) -> Result<u64, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let n = self.parse_literal_uint()?;
+        self.expect_token(&Token::RParen)?;
+        Ok(n)
     }
 
     pub fn parse_optional_precision(&mut self) -> Result<Option<u64>, ParserError> {
@@ -5210,5 +5253,19 @@ mod tests {
             let ast = parser.parse_query().unwrap();
             assert_eq!(ast.to_string(), sql.to_string());
         });
+    }
+
+    // TODO add tests for all data types? https://github.com/sqlparser-rs/sqlparser-rs/issues/2
+    #[test]
+    fn test_parse_data_type() {
+        test_parse_data_type("DOUBLE PRECISION", "DOUBLE PRECISION");
+        test_parse_data_type("DOUBLE", "DOUBLE");
+
+        fn test_parse_data_type(input: &str, expected: &str) {
+            all_dialects().run_parser_method(input, |parser| {
+                let data_type = parser.parse_data_type().unwrap().to_string();
+                assert_eq!(data_type, expected);
+            });
+        }
     }
 }

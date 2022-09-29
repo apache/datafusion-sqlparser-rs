@@ -8,6 +8,29 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.24.0] 2022-09-29
+
+### Added
+
+* Support `MILLENNIUM` (2 Ns) (#633) - Thanks @sarahyurick
+* Support `MEDIUMINT`  (#630) - Thanks @AugustoFKL
+* Support `DOUBLE PRECISION` (#629) - Thanks @AugustoFKL
+* Support precision in `CLOB`, `BINARY`, `VARBINARY`, `BLOB` data type (#618) - Thanks @ding-young
+* Support `CREATE ROLE` and `DROP ROLE` (#598) - Thanks @blx
+* Support full range of sqlite prepared statement placeholders (#604) - Thanks @lovasoa
+* Support National string literal with lower case `n` (#612) - Thanks @mskrzypkows
+* Support SHOW FUNCTIONS (#620) - Thanks @joocer
+* Support `set time zone to 'some-timezone'` (#617) - Thanks @waitingkuo
+
+### Changed
+* Move `Value::Interval` to `Expr::Interval` (#609) - Thanks @ding-young
+* Update `criterion` dev-requirement from 0.3 to 0.4 in /sqlparser_bench (#611) - Thanks @dependabot
+* Box `Query` in `Cte` (#572) - Thanks @MazterQyou
+
+### Other
+* Disambiguate CREATE ROLE ... USER and GROUP (#628) - Thanks @alamb
+* Add test for optional WITH in CREATE ROLE (#627) - Thanks @alamb
+
 ## [0.23.0] 2022-09-08
 
 ### Added

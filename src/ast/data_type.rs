@@ -60,6 +60,14 @@ pub enum DataType {
     SmallInt(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Unsigned small integer with optional display width e.g. SMALLINT UNSIGNED or SMALLINT(5) UNSIGNED
     UnsignedSmallInt(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    /// MySQL medium integer ([1]) with optional display width e.g. MEDIUMINT or MEDIUMINT(5)
+    ///
+    /// [1]: https://dev.mysql.com/doc/refman/8.0/en/integer-types.html
+    MediumInt(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    /// Unsigned medium integer ([1]) with optional display width e.g. MEDIUMINT UNSIGNED or MEDIUMINT(5) UNSIGNED
+    ///
+    /// [1]: https://dev.mysql.com/doc/refman/8.0/en/integer-types.html
+    UnsignedMediumInt(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Integer with optional display width e.g. INT or INT(11)
     Int(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Integer with optional display width e.g. INTEGER or INTEGER(11)
@@ -74,8 +82,13 @@ pub enum DataType {
     UnsignedBigInt(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Floating point e.g. REAL
     Real,
-    /// Double e.g. DOUBLE PRECISION
+    /// Double
     Double,
+    /// Double PRECISION e.g. [standard], [postgresql]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#approximate-numeric-type
+    /// [postgresql]: https://www.postgresql.org/docs/current/datatype-numeric.html
+    DoublePrecision,
     /// Boolean
     Boolean,
     /// Date
@@ -143,6 +156,12 @@ impl fmt::Display for DataType {
             DataType::UnsignedSmallInt(zerofill) => {
                 format_type_with_optional_length(f, "SMALLINT", zerofill, true)
             }
+            DataType::MediumInt(zerofill) => {
+                format_type_with_optional_length(f, "MEDIUMINT", zerofill, false)
+            }
+            DataType::UnsignedMediumInt(zerofill) => {
+                format_type_with_optional_length(f, "MEDIUMINT", zerofill, true)
+            }
             DataType::Int(zerofill) => format_type_with_optional_length(f, "INT", zerofill, false),
             DataType::UnsignedInt(zerofill) => {
                 format_type_with_optional_length(f, "INT", zerofill, true)
@@ -161,6 +180,7 @@ impl fmt::Display for DataType {
             }
             DataType::Real => write!(f, "REAL"),
             DataType::Double => write!(f, "DOUBLE"),
+            DataType::DoublePrecision => write!(f, "DOUBLE PRECISION"),
             DataType::Boolean => write!(f, "BOOLEAN"),
             DataType::Date => write!(f, "DATE"),
             DataType::Time => write!(f, "TIME"),

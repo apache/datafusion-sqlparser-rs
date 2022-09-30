@@ -2941,7 +2941,7 @@ fn parse_literal_time() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::Time,
+            data_type: DataType::Time(TimezoneInfo::None),
             value: "01:23:34".into()
         },
         expr_from_projection(only(&select.projection)),
@@ -2967,16 +2967,13 @@ fn parse_literal_timestamp_without_time_zone() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::Timestamp,
+            data_type: DataType::Timestamp(TimezoneInfo::None),
             value: "1999-01-01 01:23:34".into()
         },
         expr_from_projection(only(&select.projection)),
     );
 
-    one_statement_parses_to(
-        "SELECT TIMESTAMP WITHOUT TIME ZONE '1999-01-01 01:23:34'",
-        sql,
-    );
+    one_statement_parses_to("SELECT TIMESTAMP '1999-01-01 01:23:34'", sql);
 }
 
 #[test]
@@ -2985,16 +2982,13 @@ fn parse_literal_timestamp_with_time_zone() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::TimestampTz,
+            data_type: DataType::Timestamp(TimezoneInfo::Tz),
             value: "1999-01-01 01:23:34Z".into()
         },
         expr_from_projection(only(&select.projection)),
     );
 
-    one_statement_parses_to(
-        "SELECT TIMESTAMP WITH TIME ZONE '1999-01-01 01:23:34Z'",
-        sql,
-    );
+    one_statement_parses_to("SELECT TIMESTAMPTZ '1999-01-01 01:23:34Z'", sql);
 }
 
 #[test]

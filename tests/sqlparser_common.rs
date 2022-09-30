@@ -1670,7 +1670,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::Binary(50)
+            data_type: DataType::Binary(Some(50))
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1680,7 +1680,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::Varbinary(50)
+            data_type: DataType::Varbinary(Some(50))
         },
         expr_from_projection(only(&select.projection))
     );

@@ -35,10 +35,16 @@ pub enum DataType {
     Uuid,
     /// Large character object e.g. CLOB(1000)
     Clob(u64),
-    /// Fixed-length binary type e.g. BINARY(10)
-    Binary(u64),
-    /// Variable-length binary type e.g. VARBINARY(10)
-    Varbinary(u64),
+    /// Fixed-length binary type with optional length e.g.  [standard], [MS SQL Server]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-string-type
+    /// [MS SQL Server]: https://learn.microsoft.com/pt-br/sql/t-sql/data-types/binary-and-varbinary-transact-sql?view=sql-server-ver16
+    Binary(Option<u64>),
+    /// Variable-length binary with optional length type e.g. [standard], [MS SQL Server]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-string-type
+    /// [MS SQL Server]: https://learn.microsoft.com/pt-br/sql/t-sql/data-types/binary-and-varbinary-transact-sql?view=sql-server-ver16
+    Varbinary(Option<u64>),
     /// Large binary object e.g. BLOB(1000)
     Blob(u64),
     /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
@@ -126,8 +132,10 @@ impl fmt::Display for DataType {
             }
             DataType::Uuid => write!(f, "UUID"),
             DataType::Clob(size) => write!(f, "CLOB({})", size),
-            DataType::Binary(size) => write!(f, "BINARY({})", size),
-            DataType::Varbinary(size) => write!(f, "VARBINARY({})", size),
+            DataType::Binary(size) => format_type_with_optional_length(f, "BINARY", size, false),
+            DataType::Varbinary(size) => {
+                format_type_with_optional_length(f, "VARBINARY", size, false)
+            }
             DataType::Blob(size) => write!(f, "BLOB({})", size),
             DataType::Decimal(precision, scale) => {
                 if let Some(scale) = scale {

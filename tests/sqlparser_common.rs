@@ -1660,7 +1660,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::Clob(50)
+            data_type: DataType::Clob(Some(50))
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1690,7 +1690,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::Blob(50)
+            data_type: DataType::Blob(Some(50))
         },
         expr_from_projection(only(&select.projection))
     );

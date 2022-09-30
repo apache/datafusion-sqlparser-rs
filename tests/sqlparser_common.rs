@@ -1695,7 +1695,7 @@ fn parse_cast() {
         expr_from_projection(only(&select.projection))
     );
 
-    let sql = "SELECT CAST(id AS BLOB)) FROM customer";
+    let sql = "SELECT CAST(id AS BLOB) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {

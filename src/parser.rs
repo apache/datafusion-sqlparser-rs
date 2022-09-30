@@ -401,7 +401,7 @@ impl<'a> Parser<'a> {
         // expression that should parse as the column name "date".
         return_ok_if_some!(self.maybe_parse(|parser| {
             match parser.parse_data_type()? {
-                DataType::Interval => parser.parse_interval(),
+                DataType::Interval => Ok(Expr::Interval(parser.parse_interval()?)),
                 // PostgreSQL allows almost any identifier to be used as custom data type name,
                 // and we support that in `parse_data_type()`. But unlike Postgres we don't
                 // have a list of globally reserved keywords (since they vary across dialects),
@@ -454,7 +454,7 @@ impl<'a> Parser<'a> {
                 Keyword::SUBSTRING => self.parse_substring_expr(),
                 Keyword::OVERLAY => self.parse_overlay_expr(),
                 Keyword::TRIM => self.parse_trim_expr(),
-                Keyword::INTERVAL => self.parse_interval(),
+                Keyword::INTERVAL => Ok(Expr::Interval(self.parse_interval()?)),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
                 // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as subquery or a function call
                 Keyword::ARRAY if self.peek_token() == Token::LBracket => {
@@ -620,7 +620,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-
+        let over = over.map(Box::new);
         Ok(Expr::Function(Function {
             name,
             args,
@@ -682,7 +682,7 @@ impl<'a> Parser<'a> {
             let rows = if self.parse_keyword(Keyword::UNBOUNDED) {
                 None
             } else {
-                Some(self.parse_literal_uint()?)
+                Some(self.parse_range_values()?)
             };
             if self.parse_keyword(Keyword::PRECEDING) {
                 Ok(WindowFrameBound::Preceding(rows))
@@ -1109,7 +1109,7 @@ impl<'a> Parser<'a> {
     ///   7. (MySql and BigQuey only):`INTERVAL 1 DAY`
     ///
     /// Note that we do not currently attempt to parse the quoted value.
-    pub fn parse_interval(&mut self) -> Result<Expr, ParserError> {
+    pub fn parse_interval(&mut self) -> Result<Interval, ParserError> {
         // The SQL standard allows an optional sign before the value string, but
         // it is not clear if any implementations support that syntax, so we
         // don't currently try to parse it. (The sign can instead be included
@@ -1184,7 +1184,7 @@ impl<'a> Parser<'a> {
                 }
             };
 
-        Ok(Expr::Interval {
+        Ok(Interval {
             value: Box::new(value),
             leading_field,
             leading_precision,
@@ -3316,6 +3316,42 @@ impl<'a> Parser<'a> {
                 ParserError::ParserError(format!("Could not parse '{}' as u64: {}", s, e))
             }),
             unexpected => self.expected("literal int", unexpected),
+        }
+    }
+
+    /// Parse a literal inside window frames such as 1 PRECEDING or '1 DAY' PRECEDING
+    pub fn parse_range_values(&mut self) -> Result<RangeBounds, ParserError> {
+        match self.peek_token() {
+            Token::Number(s, _) => {
+                // consume token Token::Number
+                self.next_token();
+                Ok(RangeBounds::Number(s))
+            }
+            Token::Word(w) => match w.keyword {
+                Keyword::INTERVAL => {
+                    // consume token Keyword::INTERVAL
+                    self.next_token();
+                    match self.parse_interval() {
+                        Ok(interval) => Ok(RangeBounds::Interval(interval)),
+                        e => Err(ParserError::ParserError(format!(
+                            "Interval is not valid {:?}",
+                            e
+                        ))),
+                    }
+                }
+                e => Err(ParserError::ParserError(format!(
+                    "Interval is not valid {:?}",
+                    e
+                ))),
+            },
+            Token::SingleQuotedString(_) => match self.parse_interval() {
+                Ok(interval) => Ok(RangeBounds::Interval(interval)),
+                e => Err(ParserError::ParserError(format!(
+                    "Interval is not valid {:?}",
+                    e
+                ))),
+            },
+            unexpected => self.expected("literal Expression", unexpected),
         }
     }
 

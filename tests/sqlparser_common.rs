@@ -1555,7 +1555,7 @@ fn parse_select_qualify() {
             left: Box::new(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("ROW_NUMBER")]),
                 args: vec![],
-                over: Some(WindowSpec {
+                over: Some(Box::new(WindowSpec {
                     partition_by: vec![Expr::Identifier(Ident::new("p"))],
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("o")),
@@ -1563,7 +1563,7 @@ fn parse_select_qualify() {
                         nulls_first: None
                     }],
                     window_frame: None
-                }),
+                })),
                 distinct: false,
                 special: false
             })),
@@ -2865,18 +2865,22 @@ fn parse_window_functions() {
                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), \
                avg(bar) OVER (ORDER BY a \
                RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING), \
+               sum(bar) OVER (ORDER BY a \
+               RANGE BETWEEN INTERVAL '1' DAY PRECEDING AND INTERVAL '1 MONTH' FOLLOWING), \
+               COUNT(*) OVER (ORDER BY a \
+               RANGE BETWEEN INTERVAL '1 DAYS' PRECEDING AND INTERVAL '1 DAY' FOLLOWING), \
                max(baz) OVER (ORDER BY a \
                ROWS UNBOUNDED PRECEDING), \
                sum(qux) OVER (ORDER BY a \
                GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING) \
                FROM foo";
     let select = verified_only_select(sql);
-    assert_eq!(5, select.projection.len());
+    assert_eq!(7, select.projection.len());
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("row_number")]),
             args: vec![],
-            over: Some(WindowSpec {
+            over: Some(Box::new(WindowSpec {
                 partition_by: vec![],
                 order_by: vec![OrderByExpr {
                     expr: Expr::Identifier(Ident::new("dt")),
@@ -2884,7 +2888,7 @@ fn parse_window_functions() {
                     nulls_first: None,
                 }],
                 window_frame: None,
-            }),
+            })),
             distinct: false,
             special: false,
         }),
@@ -3012,20 +3016,20 @@ fn parse_interval() {
     let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1-1")))),
             leading_field: Some(DateTimeField::Year),
             leading_precision: None,
             last_field: Some(DateTimeField::Month),
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '01:01.01' MINUTE (5) TO SECOND (5)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "01:01.01"
             )))),
@@ -3033,53 +3037,53 @@ fn parse_interval() {
             leading_precision: Some(5),
             last_field: Some(DateTimeField::Second),
             fractional_seconds_precision: Some(5),
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '1' SECOND (5, 4)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1")))),
             leading_field: Some(DateTimeField::Second),
             leading_precision: Some(5),
             last_field: None,
             fractional_seconds_precision: Some(4),
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '10' HOUR";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL 5 DAY";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(number("5"))),
             leading_field: Some(DateTimeField::Day),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL 1 + 1 DAY";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Value(number("1"))),
                 op: BinaryOperator::Plus,
@@ -3089,27 +3093,27 @@ fn parse_interval() {
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '10' HOUR (1)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: Some(1),
             last_field: None,
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '1 DAY'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "1 DAY"
             )))),
@@ -3117,7 +3121,7 @@ fn parse_interval() {
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 

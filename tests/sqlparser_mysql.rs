@@ -1067,7 +1067,7 @@ fn parse_set_names() {
 
 #[test]
 fn parse_limit_my_sql_syntax() {
-    mysql().one_statement_parses_to(
+    mysql_and_generic().one_statement_parses_to(
         "SELECT id, fname, lname FROM customer LIMIT 5, 10",
         "SELECT id, fname, lname FROM customer LIMIT 10 OFFSET 5",
     );

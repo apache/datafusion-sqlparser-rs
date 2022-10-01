@@ -1065,6 +1065,14 @@ fn parse_set_names() {
     assert_eq!(stmt, Statement::SetNamesDefault {});
 }
 
+#[test]
+fn parse_limit_my_sql_syntax() {
+    mysql().one_statement_parses_to(
+        "SELECT id, fname, lname FROM customer LIMIT 5, 10",
+        "SELECT id, fname, lname FROM customer LIMIT 10 OFFSET 5",
+    );
+}
+
 fn mysql() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],

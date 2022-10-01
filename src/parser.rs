@@ -3762,9 +3762,25 @@ impl<'a> Parser<'a> {
                     offset = Some(self.parse_offset()?)
                 }
 
-                if offset.is_none() && self.consume_token(&Token::Comma) {
-                    // mysql style LIMIT 10, offset 5
-                    offset = Some(self.parse_offset()?)
+                if dialect_of!(self is MySqlDialect)
+                    && offset.is_none()
+                    && self.consume_token(&Token::Comma)
+                {
+                    // MySQL style LIMIT x,y => LIMIT y OFFSET x.
+                    // Check <https://dev.mysql.com/doc/refman/8.0/en/select.html> for more details.
+                    match limit {
+                        None => {
+                            offset = None;
+                        }
+                        Some(expr) => {
+                            offset = Some(Offset {
+                                value: expr.clone(),
+                                rows: OffsetRows::None,
+                            })
+                        }
+                    }
+                    // MySQL doesn't support the ALL clause, so I must parse only the expression.
+                    limit = Some(self.parse_expr()?)
                 }
             }
 

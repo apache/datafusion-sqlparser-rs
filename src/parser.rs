@@ -24,6 +24,9 @@ use core::fmt;
 
 use log::debug;
 
+use IsLateral::*;
+use IsOptional::*;
+
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{self, Keyword};
@@ -57,14 +60,10 @@ pub enum IsOptional {
     Mandatory,
 }
 
-use IsOptional::*;
-
 pub enum IsLateral {
     Lateral,
     NotLateral,
 }
-
-use IsLateral::*;
 
 pub enum WildcardExpr {
     Expr(Expr),
@@ -3763,24 +3762,17 @@ impl<'a> Parser<'a> {
                 }
 
                 if dialect_of!(self is MySqlDialect)
+                    && limit.is_some()
                     && offset.is_none()
                     && self.consume_token(&Token::Comma)
                 {
                     // MySQL style LIMIT x,y => LIMIT y OFFSET x.
                     // Check <https://dev.mysql.com/doc/refman/8.0/en/select.html> for more details.
-                    match limit {
-                        None => {
-                            offset = None;
-                        }
-                        Some(expr) => {
-                            offset = Some(Offset {
-                                value: expr.clone(),
-                                rows: OffsetRows::None,
-                            })
-                        }
-                    }
-                    // MySQL doesn't support the ALL clause, so I must parse only the expression.
-                    limit = Some(self.parse_expr()?)
+                    offset = Some(Offset {
+                        value: limit.unwrap(),
+                        rows: OffsetRows::None,
+                    });
+                    limit = Some(self.parse_expr()?);
                 }
             }
 
@@ -5213,8 +5205,9 @@ impl Word {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::test_utils::{all_dialects, TestedDialects};
+
+    use super::*;
 
     #[test]
     fn test_prev_index() {

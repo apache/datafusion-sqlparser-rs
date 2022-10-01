@@ -3404,8 +3404,8 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Keyword::CLOB => Ok(DataType::Clob(self.parse_precision()?)),
-                Keyword::BINARY => Ok(DataType::Binary(self.parse_precision()?)),
-                Keyword::VARBINARY => Ok(DataType::Varbinary(self.parse_precision()?)),
+                Keyword::BINARY => Ok(DataType::Binary(self.parse_optional_precision()?)),
+                Keyword::VARBINARY => Ok(DataType::Varbinary(self.parse_optional_precision()?)),
                 Keyword::BLOB => Ok(DataType::Blob(self.parse_precision()?)),
                 Keyword::UUID => Ok(DataType::Uuid),
                 Keyword::DATE => Ok(DataType::Date),
@@ -5260,6 +5260,10 @@ mod tests {
     fn test_parse_data_type() {
         test_parse_data_type("DOUBLE PRECISION", "DOUBLE PRECISION");
         test_parse_data_type("DOUBLE", "DOUBLE");
+        test_parse_data_type("VARBINARY", "VARBINARY");
+        test_parse_data_type("VARBINARY(20)", "VARBINARY(20)");
+        test_parse_data_type("BINARY", "BINARY");
+        test_parse_data_type("BINARY(20)", "BINARY(20)");
 
         fn test_parse_data_type(input: &str, expected: &str) {
             all_dialects().run_parser_method(input, |parser| {

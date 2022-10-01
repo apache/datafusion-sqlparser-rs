@@ -3403,10 +3403,10 @@ impl<'a> Parser<'a> {
                         Ok(DataType::Char(self.parse_optional_precision()?))
                     }
                 }
-                Keyword::CLOB => Ok(DataType::Clob(self.parse_precision()?)),
+                Keyword::CLOB => Ok(DataType::Clob(self.parse_optional_precision()?)),
                 Keyword::BINARY => Ok(DataType::Binary(self.parse_optional_precision()?)),
                 Keyword::VARBINARY => Ok(DataType::Varbinary(self.parse_optional_precision()?)),
-                Keyword::BLOB => Ok(DataType::Blob(self.parse_precision()?)),
+                Keyword::BLOB => Ok(DataType::Blob(self.parse_optional_precision()?)),
                 Keyword::UUID => Ok(DataType::Uuid),
                 Keyword::DATE => Ok(DataType::Date),
                 Keyword::DATETIME => Ok(DataType::Datetime),
@@ -5258,6 +5258,10 @@ mod tests {
     // TODO add tests for all data types? https://github.com/sqlparser-rs/sqlparser-rs/issues/2
     #[test]
     fn test_parse_data_type() {
+        test_parse_data_type("BLOB", "BLOB");
+        test_parse_data_type("BLOB(50)", "BLOB(50)");
+        test_parse_data_type("CLOB", "CLOB");
+        test_parse_data_type("CLOB(50)", "CLOB(50)");
         test_parse_data_type("DOUBLE PRECISION", "DOUBLE PRECISION");
         test_parse_data_type("DOUBLE", "DOUBLE");
         test_parse_data_type("VARBINARY", "VARBINARY");

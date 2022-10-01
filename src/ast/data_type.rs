@@ -33,8 +33,11 @@ pub enum DataType {
     Nvarchar(Option<u64>),
     /// Uuid type
     Uuid,
-    /// Large character object e.g. CLOB(1000)
-    Clob(u64),
+    /// Large character object with optional length e.g. CLOB, CLOB(1000), [standard], [Oracle]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
+    /// [Oracle]: https://docs.oracle.com/javadb/10.10.1.2/ref/rrefclob.html
+    Clob(Option<u64>),
     /// Fixed-length binary type with optional length e.g.  [standard], [MS SQL Server]
     ///
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-string-type
@@ -45,8 +48,11 @@ pub enum DataType {
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-string-type
     /// [MS SQL Server]: https://learn.microsoft.com/pt-br/sql/t-sql/data-types/binary-and-varbinary-transact-sql?view=sql-server-ver16
     Varbinary(Option<u64>),
-    /// Large binary object e.g. BLOB(1000)
-    Blob(u64),
+    /// Large binary object with optional length e.g. BLOB, BLOB(1000), [standard], [Oracle]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-large-object-string-type
+    /// [Oracle]: https://docs.oracle.com/javadb/10.8.3.0/ref/rrefblob.html
+    Blob(Option<u64>),
     /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
     Decimal(Option<u64>, Option<u64>),
     /// Floating point with optional precision e.g. FLOAT(8)
@@ -131,12 +137,12 @@ impl fmt::Display for DataType {
                 format_type_with_optional_length(f, "NVARCHAR", size, false)
             }
             DataType::Uuid => write!(f, "UUID"),
-            DataType::Clob(size) => write!(f, "CLOB({})", size),
+            DataType::Clob(size) => format_type_with_optional_length(f, "CLOB", size, false),
             DataType::Binary(size) => format_type_with_optional_length(f, "BINARY", size, false),
             DataType::Varbinary(size) => {
                 format_type_with_optional_length(f, "VARBINARY", size, false)
             }
-            DataType::Blob(size) => write!(f, "BLOB({})", size),
+            DataType::Blob(size) => format_type_with_optional_length(f, "BLOB", size, false),
             DataType::Decimal(precision, scale) => {
                 if let Some(scale) = scale {
                     write!(f, "NUMERIC({},{})", precision.unwrap(), scale)

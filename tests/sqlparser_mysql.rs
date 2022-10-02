@@ -1121,6 +1121,85 @@ fn parse_table_create_constraint_option() {
         }
         _ => unreachable!(),
     }
+
+    let sql2 = "CREATE TABLE `foo` (`id` INT(11) NOT NULL, `node_id` INT(11) NOT NULL, `weight` INT(11) NOT NULL, `score` INT(11) NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `node_id` UNIQUE (`node_id`), KEY `weight` (`weight`), INDEX `score` (`score`)) ENGINE=InnoDB";
+    match mysql().verified_stmt(sql2) {
+        Statement::CreateTable {
+            name,
+            columns,
+            constraints,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "`foo`");
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::with_quote('`', "id"),
+                        data_type: DataType::Int(Some(11)),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull
+                        },]
+                    },
+                    ColumnDef {
+                        name: Ident::with_quote('`', "node_id"),
+                        data_type: DataType::Int(Some(11)),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull
+                        }]
+                    },
+                    ColumnDef {
+                        name: Ident::with_quote('`', "weight"),
+                        data_type: DataType::Int(Some(11)),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull
+                        }]
+                    },
+                    ColumnDef {
+                        name: Ident::with_quote('`', "score"),
+                        data_type: DataType::Int(Some(11)),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull
+                        }]
+                    }
+                ],
+                columns
+            );
+            assert_eq!(
+                vec![
+                    TableConstraint::Unique {
+                        name: None,
+                        columns: vec![Ident::with_quote('`', "id")],
+                        is_primary: true
+                    },
+                    TableConstraint::Unique {
+                        name: Some(Ident::with_quote('`', "node_id")),
+                        columns: vec![Ident::with_quote('`', "node_id")],
+                        is_primary: false,
+                    },
+                    TableConstraint::Key {
+                        name: Some(Ident::with_quote('`', "weight")),
+                        columns: vec![Ident::with_quote('`', "weight")],
+                        format: KeyFormat::Key
+                    },
+                    TableConstraint::Key {
+                        name: Some(Ident::with_quote('`', "score")),
+                        columns: vec![Ident::with_quote('`', "score")],
+                        format: KeyFormat::Index
+                    },
+                ],
+                constraints
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

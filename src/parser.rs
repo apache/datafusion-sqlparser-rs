@@ -2592,7 +2592,8 @@ impl<'a> Parser<'a> {
                 let is_primary = w.keyword == Keyword::PRIMARY;
                 if is_primary {
                     self.expect_keyword(Keyword::KEY)?;
-                } else if dialect_of!(self is MySqlDialect) {
+                } else if dialect_of!(self is MySqlDialect) && name == None {
+                    //For mysql case: UNIQUE KEY (column_name), there is a little difference from CONSTRAINT constraint_name UNIQUE (column_name)
                     let name = Some(self.parse_identifier()?);
                     let columns = self.parse_parenthesized_column_list(Mandatory)?;
                     return Ok(Some(TableConstraint::Key {

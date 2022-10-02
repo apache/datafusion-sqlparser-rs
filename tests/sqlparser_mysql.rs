@@ -17,7 +17,6 @@
 #[macro_use]
 mod test_utils;
 
-use sqlparser::keywords::Keyword;
 use test_utils::*;
 
 use sqlparser::ast::Expr;
@@ -1042,105 +1041,81 @@ fn parse_table_colum_option_on_update() {
 }
 
 #[test]
-fn parse_table_colum_option_key() {
-    let sql1 = "CREATE TABLE foo (`modification_time` DATETIME ON UPDATE, KEY `k_m_t` (modification_time))";
-    match mysql().verified_stmt(sql1) {
+fn parse_table_create_constraint_option() {
+    let sql = "CREATE TABLE `foo` (`id` INT(11) NOT NULL, `node_id` INT(11) NOT NULL, `weight` INT(11) NOT NULL, `score` INT(11) NOT NULL, PRIMARY KEY (`id`), UNIQUE `node_id` (`node_id`), KEY `weight` (`weight`), INDEX `score` (`score`)) ENGINE=InnoDB";
+
+    match mysql().verified_stmt(sql) {
         Statement::CreateTable {
             name,
             columns,
             constraints,
             ..
         } => {
-            assert_eq!(name.to_string(), "foo");
+            assert_eq!(name.to_string(), "`foo`");
             assert_eq!(
-                vec![ColumnDef {
-                    name: Ident::with_quote('`', "modification_time"),
-                    data_type: DataType::Datetime,
-                    collation: None,
-                    options: vec![ColumnOptionDef {
-                        name: None,
-                        option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
-                            "ON UPDATE"
-                        )]),
-                    },],
-                }],
+                vec![
+                    ColumnDef {
+                        name: Ident::with_quote('`', "id"),
+                        data_type: DataType::Int(Some(11)),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull
+                        },]
+                    },
+                    ColumnDef {
+                        name: Ident::with_quote('`', "node_id"),
+                        data_type: DataType::Int(Some(11)),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull
+                        }]
+                    },
+                    ColumnDef {
+                        name: Ident::with_quote('`', "weight"),
+                        data_type: DataType::Int(Some(11)),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull
+                        }]
+                    },
+                    ColumnDef {
+                        name: Ident::with_quote('`', "score"),
+                        data_type: DataType::Int(Some(11)),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull
+                        }]
+                    }
+                ],
                 columns
             );
             assert_eq!(
-                vec![TableConstraint::Key {
-                    name: Some(Ident::with_quote('`', "k_m_t")),
-                    columns: vec![Ident::new("modification_time")],
-                    keyword: Keyword::KEY
-                }],
-                constraints
-            );
-        }
-        _ => unreachable!(),
-    }
-    let sql2 = "CREATE TABLE foo (`modification_time` DATETIME ON UPDATE, INDEX `k_m_t` (modification_time))";
-    match mysql().verified_stmt(sql2) {
-        Statement::CreateTable {
-            name,
-            columns,
-            constraints,
-            ..
-        } => {
-            assert_eq!(name.to_string(), "foo");
-            assert_eq!(
-                vec![ColumnDef {
-                    name: Ident::with_quote('`', "modification_time"),
-                    data_type: DataType::Datetime,
-                    collation: None,
-                    options: vec![ColumnOptionDef {
+                vec![
+                    TableConstraint::Unique {
                         name: None,
-                        option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
-                            "ON UPDATE"
-                        )]),
-                    },],
-                }],
-                columns
-            );
-            assert_eq!(
-                vec![TableConstraint::Key {
-                    name: Some(Ident::with_quote('`', "k_m_t")),
-                    columns: vec![Ident::new("modification_time")],
-                    keyword: Keyword::INDEX
-                }],
-                constraints
-            );
-        }
-        _ => unreachable!(),
-    }
-    let sql2 = "CREATE TABLE foo (`modification_time` DATETIME ON UPDATE, UNIQUE KEY `u_m_t` (modification_time))";
-    match mysql().verified_stmt(sql2) {
-        Statement::CreateTable {
-            name,
-            columns,
-            constraints,
-            ..
-        } => {
-            assert_eq!(name.to_string(), "foo");
-            assert_eq!(
-                vec![ColumnDef {
-                    name: Ident::with_quote('`', "modification_time"),
-                    data_type: DataType::Datetime,
-                    collation: None,
-                    options: vec![ColumnOptionDef {
-                        name: None,
-                        option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
-                            "ON UPDATE"
-                        )]),
-                    },],
-                }],
-                columns
-            );
-            assert_eq!(
-                vec![TableConstraint::Unique {
-                    name: Some(Ident::with_quote('`', "u_m_t")),
-                    columns: vec![Ident::new("modification_time")],
-                    is_primary: false,
-                    is_mysql_unique_key: true,
-                }],
+                        columns: vec![Ident::with_quote('`', "id")],
+                        is_primary: true
+                    },
+                    TableConstraint::Key {
+                        name: Some(Ident::with_quote('`', "node_id")),
+                        columns: vec![Ident::with_quote('`', "node_id")],
+                        format: KeyFormat::Unique
+                    },
+                    TableConstraint::Key {
+                        name: Some(Ident::with_quote('`', "weight")),
+                        columns: vec![Ident::with_quote('`', "weight")],
+                        format: KeyFormat::Key
+                    },
+                    TableConstraint::Key {
+                        name: Some(Ident::with_quote('`', "score")),
+                        columns: vec![Ident::with_quote('`', "score")],
+                        format: KeyFormat::Index
+                    },
+                ],
                 constraints
             );
         }

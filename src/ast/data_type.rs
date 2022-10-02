@@ -25,8 +25,14 @@ use super::value::escape_single_quote_string;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DataType {
-    /// Fixed-length character type e.g. CHAR(10)
+    /// Fixed-length character type e.g. CHARACTER(10)
+    Character(Option<u64>),
+    /// Fixed-length char type e.g. CHAR(10)
     Char(Option<u64>),
+    /// Character varying type e.g. CHARACTER VARYING(10)
+    CharacterVarying(Option<u64>),
+    /// Char varying type e.g. CHAR VARYING(10)
+    CharVarying(Option<u64>),
     /// Variable-length character type e.g. VARCHAR(10)
     Varchar(Option<u64>),
     /// Variable-length character type e.g. NVARCHAR(10)
@@ -127,10 +133,17 @@ pub enum DataType {
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            DataType::Character(size) => {
+                format_type_with_optional_length(f, "CHARACTER", size, false)
+            }
             DataType::Char(size) => format_type_with_optional_length(f, "CHAR", size, false),
-            DataType::Varchar(size) => {
+            DataType::CharacterVarying(size) => {
                 format_type_with_optional_length(f, "CHARACTER VARYING", size, false)
             }
+            DataType::CharVarying(size) => {
+                format_type_with_optional_length(f, "CHAR VARYING", size, false)
+            }
+            DataType::Varchar(size) => format_type_with_optional_length(f, "VARCHAR", size, false),
             DataType::Nvarchar(size) => {
                 format_type_with_optional_length(f, "NVARCHAR", size, false)
             }

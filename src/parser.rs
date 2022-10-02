@@ -469,7 +469,7 @@ impl<'a> Parser<'a> {
                     self.parse_array_subquery()
                 }
                 Keyword::NOT => self.parse_not(),
-                Keyword::SOUNDEX => self.parse_soundex(),
+                Keyword::SOUNDEX => self.parse_soundex_expr(),
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {
@@ -1097,7 +1097,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_soundex(&mut self) -> Result<Expr, ParserError> {
+    pub fn parse_soundex_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
         self.expect_token(&Token::RParen)?;

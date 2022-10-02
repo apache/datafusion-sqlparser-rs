@@ -1896,11 +1896,30 @@ impl<'a> Parser<'a> {
 
     pub fn parse_create_schema(&mut self) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let schema_name = self.parse_object_name()?;
+
+        let schema_name = self.parse_schema_name()?;
+
         Ok(Statement::CreateSchema {
             schema_name,
             if_not_exists,
         })
+    }
+
+    fn parse_schema_name(&mut self) -> Result<SchemaName, ParserError> {
+        if self.parse_keyword(Keyword::AUTHORIZATION) {
+            Ok(SchemaName::UnnamedAuthorization(self.parse_identifier()?))
+        } else {
+            let name = self.parse_object_name()?;
+
+            if self.parse_keyword(Keyword::AUTHORIZATION) {
+                Ok(SchemaName::NamedAuthorization(
+                    name,
+                    self.parse_identifier()?,
+                ))
+            } else {
+                Ok(SchemaName::Simple(name))
+            }
+        }
     }
 
     pub fn parse_create_database(&mut self) -> Result<Statement, ParserError> {
@@ -5284,5 +5303,38 @@ mod tests {
                 assert_eq!(data_type, expected);
             });
         }
+    }
+
+    #[test]
+    fn test_parse_schema_name() {
+        // The expected name should be identical as the input name, that's why I don't receive both
+        macro_rules! test_parse_schema_name {
+            ($input:expr, $expected_name:expr $(,)?) => {{
+                all_dialects().run_parser_method(&*$input, |parser| {
+                    let schema_name = parser.parse_schema_name().unwrap();
+                    // Validate that the structure is the same as expected
+                    assert_eq!(schema_name, $expected_name);
+                    // Validate that the input and the expected structure serialization are the same
+                    assert_eq!(schema_name.to_string(), $input.to_string());
+                });
+            }};
+        }
+
+        let dummy_name = ObjectName(vec![Ident::new("dummy_name")]);
+        let dummy_authorization = Ident::new("dummy_authorization");
+
+        test_parse_schema_name!(
+            format!("{dummy_name}"),
+            SchemaName::Simple(dummy_name.clone())
+        );
+
+        test_parse_schema_name!(
+            format!("AUTHORIZATION {dummy_authorization}"),
+            SchemaName::UnnamedAuthorization(dummy_authorization.clone()),
+        );
+        test_parse_schema_name!(
+            format!("{dummy_name} AUTHORIZATION {dummy_authorization}"),
+            SchemaName::NamedAuthorization(dummy_name.clone(), dummy_authorization.clone()),
+        );
     }
 }

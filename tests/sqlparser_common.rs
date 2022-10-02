@@ -2134,6 +2134,30 @@ fn parse_create_schema() {
 }
 
 #[test]
+fn parse_create_schema_with_authorization() {
+    let sql = "CREATE SCHEMA AUTHORIZATION Y";
+
+    match verified_stmt(sql) {
+        Statement::CreateSchema { schema_name, .. } => {
+            assert_eq!(schema_name.to_string(), "AUTHORIZATION Y".to_owned())
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_schema_with_name_and_authorization() {
+    let sql = "CREATE SCHEMA X AUTHORIZATION Y";
+
+    match verified_stmt(sql) {
+        Statement::CreateSchema { schema_name, .. } => {
+            assert_eq!(schema_name.to_string(), "X AUTHORIZATION Y".to_owned())
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_drop_schema() {
     let sql = "DROP SCHEMA X";
 

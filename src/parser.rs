@@ -469,6 +469,7 @@ impl<'a> Parser<'a> {
                     self.parse_array_subquery()
                 }
                 Keyword::NOT => self.parse_not(),
+                Keyword::SOUNDEX => self.parse_soundex(),
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {
@@ -1094,6 +1095,14 @@ impl<'a> Parser<'a> {
                 expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
             }),
         }
+    }
+
+    pub fn parse_soundex(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let expr = self.parse_expr()?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(Expr::Soundex(Box::new(expr)))
     }
 
     /// Parse an INTERVAL expression.
@@ -5284,5 +5293,20 @@ mod tests {
                 assert_eq!(data_type, expected);
             });
         }
+    }
+
+    #[test]
+    fn test_parse_soundex_expression() {
+        let input = "SOUNDEX('Potato')";
+        all_dialects().run_parser_method(input, |parser| {
+            let expr = parser.parse_expr().unwrap();
+            assert_eq!(
+                expr,
+                Expr::Soundex(Box::new(Expr::Value(Value::SingleQuotedString(
+                    "Potato".to_string()
+                ))))
+            );
+            assert_eq!(format!("{}", expr), input);
+        });
     }
 }

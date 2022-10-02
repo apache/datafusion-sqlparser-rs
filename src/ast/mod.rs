@@ -429,6 +429,11 @@ pub enum Expr {
         /// or as `__ TO SECOND(x)`.
         fractional_seconds_precision: Option<u64>,
     },
+    /// Soundex expression e.g. SOUNDEX('Hello'). Check [MySQL], [MS SQL Server].
+    ///
+    /// [MySQL]: https://dev.mysql.com/doc/refman/8.0/en/string-functions.html#function_soundex
+    /// [MS SQL Server]: https://learn.microsoft.com/pt-br/sql/t-sql/functions/soundex-transact-sql?view=sql-server-ver16
+    Soundex(Box<Expr>),
 }
 
 impl fmt::Display for Expr {
@@ -778,6 +783,9 @@ impl fmt::Display for Expr {
                     write!(f, " ({})", fractional_seconds_precision)?;
                 }
                 Ok(())
+            }
+            Expr::Soundex(value) => {
+                write!(f, "SOUNDEX({})", value)
             }
         }
     }
@@ -3371,5 +3379,14 @@ mod tests {
             vec![Expr::Identifier(Ident::new("d"))],
         ]);
         assert_eq!("CUBE (a, (b, c), d)", format!("{}", cube));
+    }
+
+    #[test]
+    fn test_soundex_display() {
+        let soundex = Expr::Soundex(Box::new(Expr::Value(Value::SingleQuotedString(
+            "Potato".to_string(),
+        ))));
+
+        assert_eq!("SOUNDEX('Potato')", format!("{}", soundex))
     }
 }

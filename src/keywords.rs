@@ -487,6 +487,7 @@ define_keywords!(
     SNAPSHOT,
     SOME,
     SORT,
+    SOUNDEX,
     SPECIFIC,
     SPECIFICTYPE,
     SQL,

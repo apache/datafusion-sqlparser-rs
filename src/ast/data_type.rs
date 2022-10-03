@@ -99,13 +99,11 @@ pub enum DataType {
     /// Date
     Date,
     /// Time
-    Time,
+    Time(TimezoneInfo),
     /// Datetime
     Datetime,
-    /// Timestamp [Without Time Zone]
-    Timestamp,
-    /// Timestamp With Time Zone
-    TimestampTz,
+    /// Timestamp
+    Timestamp(TimezoneInfo),
     /// Interval
     Interval,
     /// Regclass used in postgresql serial
@@ -190,10 +188,9 @@ impl fmt::Display for DataType {
             DataType::DoublePrecision => write!(f, "DOUBLE PRECISION"),
             DataType::Boolean => write!(f, "BOOLEAN"),
             DataType::Date => write!(f, "DATE"),
-            DataType::Time => write!(f, "TIME"),
+            DataType::Time(timezone_info) => write!(f, "TIME{}", timezone_info),
             DataType::Datetime => write!(f, "DATETIME"),
-            DataType::Timestamp => write!(f, "TIMESTAMP"),
-            DataType::TimestampTz => write!(f, "TIMESTAMPTZ"),
+            DataType::Timestamp(timezone_info) => write!(f, "TIMESTAMP{}", timezone_info),
             DataType::Interval => write!(f, "INTERVAL"),
             DataType::Regclass => write!(f, "REGCLASS"),
             DataType::Text => write!(f, "TEXT"),
@@ -239,4 +236,51 @@ fn format_type_with_optional_length(
         write!(f, " UNSIGNED")?;
     }
     Ok(())
+}
+
+/// Timestamp and Time data types information about TimeZone formatting.
+///
+/// This is more related to a display information than real differences between each variant. To
+/// guarantee compatibility with the input query we must maintain its exact information.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum TimezoneInfo {
+    /// No information about time zone. E.g., TIMESTAMP
+    None,
+    /// Temporal type 'WITH TIME ZONE'. E.g., TIMESTAMP WITH TIME ZONE, [standard], [Oracle]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
+    /// [Oracle]: https://docs.oracle.com/en/database/oracle/oracle-database/12.2/nlspg/datetime-data-types-and-time-zone-support.html#GUID-3F1C388E-C651-43D5-ADBC-1A49E5C2CA05
+    WithTimeZone,
+    /// Temporal type 'WITHOUT TIME ZONE'. E.g., TIME WITHOUT TIME ZONE, [standard], [Postgresql]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
+    /// [Postgresql]: https://www.postgresql.org/docs/current/datatype-datetime.html
+    WithoutTimeZone,
+    /// Postgresql specific `WITH TIME ZONE` formatting, for both TIME and TIMESTAMP. E.g., TIMETZ, [Postgresql]
+    ///
+    /// [Postgresql]: https://www.postgresql.org/docs/current/datatype-datetime.html
+    Tz,
+}
+
+impl fmt::Display for TimezoneInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TimezoneInfo::None => {
+                write!(f, "")
+            }
+            TimezoneInfo::WithTimeZone => {
+                write!(f, " WITH TIME ZONE")
+            }
+            TimezoneInfo::WithoutTimeZone => {
+                write!(f, " WITHOUT TIME ZONE")
+            }
+            TimezoneInfo::Tz => {
+                // TZ is the only one that is displayed BEFORE the precision, so the datatype display
+                // must be aware of that. Check <https://www.postgresql.org/docs/14/datatype-datetime.html>
+                // for more information
+                write!(f, "TZ")
+            }
+        }
+    }
 }

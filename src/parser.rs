@@ -3412,22 +3412,27 @@ impl<'a> Parser<'a> {
                 Keyword::TIMESTAMP => {
                     if self.parse_keyword(Keyword::WITH) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
-                        Ok(DataType::TimestampTz)
+                        Ok(DataType::Timestamp(TimezoneInfo::WithTimeZone))
                     } else if self.parse_keyword(Keyword::WITHOUT) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
-                        Ok(DataType::Timestamp)
+                        Ok(DataType::Timestamp(TimezoneInfo::WithoutTimeZone))
                     } else {
-                        Ok(DataType::Timestamp)
+                        Ok(DataType::Timestamp(TimezoneInfo::None))
                     }
                 }
-                Keyword::TIMESTAMPTZ => Ok(DataType::TimestampTz),
+                Keyword::TIMESTAMPTZ => Ok(DataType::Timestamp(TimezoneInfo::Tz)),
                 Keyword::TIME => {
-                    // TBD: we throw away "with/without timezone" information
-                    if self.parse_keyword(Keyword::WITH) || self.parse_keyword(Keyword::WITHOUT) {
+                    if self.parse_keyword(Keyword::WITH) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
+                        Ok(DataType::Time(TimezoneInfo::WithTimeZone))
+                    } else if self.parse_keyword(Keyword::WITHOUT) {
+                        self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
+                        Ok(DataType::Time(TimezoneInfo::WithoutTimeZone))
+                    } else {
+                        Ok(DataType::Time(TimezoneInfo::None))
                     }
-                    Ok(DataType::Time)
                 }
+                Keyword::TIMETZ => Ok(DataType::Time(TimezoneInfo::Tz)),
                 // Interval types can be followed by a complicated interval
                 // qualifier that we don't currently support. See
                 // parse_interval for a taste.
@@ -5265,23 +5270,78 @@ mod tests {
     }
 
     // TODO add tests for all data types? https://github.com/sqlparser-rs/sqlparser-rs/issues/2
+    // TODO when we have dialect validation by data type parsing, split test
     #[test]
     fn test_parse_data_type() {
-        test_parse_data_type("BLOB", "BLOB");
-        test_parse_data_type("BLOB(50)", "BLOB(50)");
-        test_parse_data_type("CLOB", "CLOB");
-        test_parse_data_type("CLOB(50)", "CLOB(50)");
-        test_parse_data_type("DOUBLE PRECISION", "DOUBLE PRECISION");
-        test_parse_data_type("DOUBLE", "DOUBLE");
-        test_parse_data_type("VARBINARY", "VARBINARY");
-        test_parse_data_type("VARBINARY(20)", "VARBINARY(20)");
-        test_parse_data_type("BINARY", "BINARY");
-        test_parse_data_type("BINARY(20)", "BINARY(20)");
+        // BINARY data type
+        test_parse_data_type("BINARY", DataType::Binary(None), "BINARY");
+        test_parse_data_type("BINARY(20)", DataType::Binary(Some(20)), "BINARY(20)");
 
-        fn test_parse_data_type(input: &str, expected: &str) {
+        // BLOB data type
+        test_parse_data_type("BLOB", DataType::Blob(None), "BLOB");
+        test_parse_data_type("BLOB(50)", DataType::Blob(Some(50)), "BLOB(50)");
+
+        // CLOB data type
+        test_parse_data_type("CLOB", DataType::Clob(None), "CLOB");
+        test_parse_data_type("CLOB(50)", DataType::Clob(Some(50)), "CLOB(50)");
+
+        // Double data type
+        test_parse_data_type(
+            "DOUBLE PRECISION",
+            DataType::DoublePrecision,
+            "DOUBLE PRECISION",
+        );
+        test_parse_data_type("DOUBLE", DataType::Double, "DOUBLE");
+
+        // Time data type
+        test_parse_data_type("TIME", DataType::Time(TimezoneInfo::None), "TIME");
+        test_parse_data_type(
+            "TIME WITH TIME ZONE",
+            DataType::Time(TimezoneInfo::WithTimeZone),
+            "TIME WITH TIME ZONE",
+        );
+        test_parse_data_type(
+            "TIME WITHOUT TIME ZONE",
+            DataType::Time(TimezoneInfo::WithoutTimeZone),
+            "TIME WITHOUT TIME ZONE",
+        );
+        test_parse_data_type("TIMETZ", DataType::Time(TimezoneInfo::Tz), "TIMETZ");
+
+        // Timestamp data type
+        test_parse_data_type(
+            "TIMESTAMP",
+            DataType::Timestamp(TimezoneInfo::None),
+            "TIMESTAMP",
+        );
+        test_parse_data_type(
+            "TIMESTAMP WITH TIME ZONE",
+            DataType::Timestamp(TimezoneInfo::WithTimeZone),
+            "TIMESTAMP WITH TIME ZONE",
+        );
+        test_parse_data_type(
+            "TIMESTAMP WITHOUT TIME ZONE",
+            DataType::Timestamp(TimezoneInfo::WithoutTimeZone),
+            "TIMESTAMP WITHOUT TIME ZONE",
+        );
+        test_parse_data_type(
+            "TIMESTAMPTZ",
+            DataType::Timestamp(TimezoneInfo::Tz),
+            "TIMESTAMPTZ",
+        );
+
+        // VARBINARY data type
+        test_parse_data_type("VARBINARY", DataType::Varbinary(None), "VARBINARY");
+        test_parse_data_type(
+            "VARBINARY(20)",
+            DataType::Varbinary(Some(20)),
+            "VARBINARY(20)",
+        );
+
+        fn test_parse_data_type(input: &str, expected_type: DataType, expected_str: &str) {
             all_dialects().run_parser_method(input, |parser| {
-                let data_type = parser.parse_data_type().unwrap().to_string();
-                assert_eq!(data_type, expected);
+                let data_type = parser.parse_data_type().unwrap();
+                assert_eq!(data_type, expected_type);
+                assert_eq!(expected_type.to_string(), expected_str.to_string());
             });
         }
     }

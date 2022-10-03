@@ -139,7 +139,7 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "last_update".into(),
-                        data_type: DataType::Timestamp,
+                        data_type: DataType::Timestamp(TimezoneInfo::WithoutTimeZone),
                         collation: None,
                         options: vec![
                             ColumnOptionDef {
@@ -212,7 +212,7 @@ fn parse_create_table_from_pg_dump() {
             activebool BOOLEAN DEFAULT true NOT NULL, \
             create_date DATE DEFAULT CAST(now() AS DATE) NOT NULL, \
             create_date1 DATE DEFAULT CAST(CAST('now' AS TEXT) AS DATE) NOT NULL, \
-            last_update TIMESTAMP DEFAULT now(), \
+            last_update TIMESTAMP WITHOUT TIME ZONE DEFAULT now(), \
             release_year public.year, \
             active INT\
         )");

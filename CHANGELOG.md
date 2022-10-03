@@ -22,7 +22,7 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 
 ### Fixed
 
-Correct order of arguments in  `LIMIT x,y` , restrict to `MySql` and `Generic` dialects - Thanks @AugustoFKL
+* Correct order of arguments when parsing  `LIMIT x,y` , restrict to `MySql` and `Generic` dialects - Thanks @AugustoFKL
 
 
 ## [0.24.0] 2022-09-29

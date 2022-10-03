@@ -8,6 +8,23 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.25.0] 2022-10-03
+
+### Added
+
+* Support `AUTHORIZATION` clause in `CREATE SCHEMA` statements (#646) - Thanks @AugustoFKL
+* Support optional precision for `CLOB` and `BLOB` (#639) - Thanks @AugustoFKL
+* Support optional precision in `VARBINARY` and `BINARY` (#637) - Thanks @AugustoFKL
+
+
+### Changed
+* `TIMESTAMP` and `TIME` parsing preserve zone information (#646) - Thanks @AugustoFKL
+
+### Fixed
+
+* Correct order of arguments when parsing  `LIMIT x,y` , restrict to `MySql` and `Generic` dialects - Thanks @AugustoFKL
+
+
 ## [0.24.0] 2022-09-29
 
 ### Added

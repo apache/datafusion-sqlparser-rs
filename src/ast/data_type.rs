@@ -276,7 +276,7 @@ impl fmt::Display for TimezoneInfo {
                 write!(f, " WITHOUT TIME ZONE")
             }
             TimezoneInfo::Tz => {
-                // TZ is the only on that is displayed BEFORE the precision, so the datatype display
+                // TZ is the only one that is displayed BEFORE the precision, so the datatype display
                 // must be aware of that. Check <https://www.postgresql.org/docs/14/datatype-datetime.html>
                 // for more information
                 write!(f, "TZ")

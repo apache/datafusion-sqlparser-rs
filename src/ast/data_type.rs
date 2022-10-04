@@ -60,7 +60,7 @@ pub enum DataType {
     /// [Oracle]: https://docs.oracle.com/javadb/10.8.3.0/ref/rrefblob.html
     Blob(Option<u64>),
     /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
-    Decimal(Option<u64>, Option<u64>),
+    Decimal(ExactNumberInfo),
     /// Floating point with optional precision e.g. FLOAT(8)
     Float(Option<u64>),
     /// Tiny integer with optional display width e.g. TINYINT or TINYINT(3)
@@ -154,12 +154,8 @@ impl fmt::Display for DataType {
                 format_type_with_optional_length(f, "VARBINARY", size, false)
             }
             DataType::Blob(size) => format_type_with_optional_length(f, "BLOB", size, false),
-            DataType::Decimal(precision, scale) => {
-                if let Some(scale) = scale {
-                    write!(f, "NUMERIC({},{})", precision.unwrap(), scale)
-                } else {
-                    format_type_with_optional_length(f, "NUMERIC", precision, false)
-                }
+            DataType::Decimal(info) => {
+                write!(f, "NUMERIC{}", info)
             }
             DataType::Float(size) => format_type_with_optional_length(f, "FLOAT", size, false),
             DataType::TinyInt(zerofill) => {
@@ -293,6 +289,37 @@ impl fmt::Display for TimezoneInfo {
                 // must be aware of that. Check <https://www.postgresql.org/docs/14/datatype-datetime.html>
                 // for more information
                 write!(f, "TZ")
+            }
+        }
+    }
+}
+
+/// Additional information for `NUMERIC`, `DECIMAL`, and `DEC` data types
+/// following the 2016 [standard].
+///
+/// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ExactNumberInfo {
+    /// No additional information e.g. `DECIMAL`
+    None,
+    /// Only precision information e.g. `DECIMAL(10)`
+    Precision(u64),
+    /// Precision and scale information e.g. `DECIMAL(10,2)`
+    PrecisionAndScale(u64, u64),
+}
+
+impl fmt::Display for ExactNumberInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ExactNumberInfo::None => {
+                write!(f, "")
+            }
+            ExactNumberInfo::Precision(p) => {
+                write!(f, "({p})")
+            }
+            ExactNumberInfo::PrecisionAndScale(p, s) => {
+                write!(f, "({p},{s})")
             }
         }
     }

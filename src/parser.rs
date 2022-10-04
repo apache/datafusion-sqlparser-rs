@@ -3414,9 +3414,16 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::VARCHAR => Ok(DataType::Varchar(self.parse_optional_precision()?)),
                 Keyword::NVARCHAR => Ok(DataType::Nvarchar(self.parse_optional_precision()?)),
-                Keyword::CHAR | Keyword::CHARACTER => {
+                Keyword::CHARACTER => {
                     if self.parse_keyword(Keyword::VARYING) {
-                        Ok(DataType::Varchar(self.parse_optional_precision()?))
+                        Ok(DataType::CharacterVarying(self.parse_optional_precision()?))
+                    } else {
+                        Ok(DataType::Character(self.parse_optional_precision()?))
+                    }
+                }
+                Keyword::CHAR => {
+                    if self.parse_keyword(Keyword::VARYING) {
+                        Ok(DataType::CharVarying(self.parse_optional_precision()?))
                     } else {
                         Ok(DataType::Char(self.parse_optional_precision()?))
                     }
@@ -5288,80 +5295,88 @@ mod tests {
         });
     }
 
-    // TODO add tests for all data types? https://github.com/sqlparser-rs/sqlparser-rs/issues/2
-    // TODO when we have dialect validation by data type parsing, split test
-    #[test]
-    fn test_parse_data_type() {
-        // BINARY data type
-        test_parse_data_type("BINARY", DataType::Binary(None), "BINARY");
-        test_parse_data_type("BINARY(20)", DataType::Binary(Some(20)), "BINARY(20)");
+    #[cfg(test)]
+    mod test_parse_data_type {
+        use crate::ast::{DataType, TimezoneInfo};
+        use crate::dialect::{AnsiDialect, GenericDialect};
+        use crate::test_utils::TestedDialects;
 
-        // BLOB data type
-        test_parse_data_type("BLOB", DataType::Blob(None), "BLOB");
-        test_parse_data_type("BLOB(50)", DataType::Blob(Some(50)), "BLOB(50)");
+        macro_rules! test_parse_data_type {
+            ($dialect:expr, $input:expr, $expected_type:expr $(,)?) => {{
+                $dialect.run_parser_method(&*$input, |parser| {
+                    let data_type = parser.parse_data_type().unwrap();
+                    assert_eq!(data_type, $expected_type);
+                    assert_eq!(data_type.to_string(), $input.to_string());
+                });
+            }};
+        }
 
-        // CLOB data type
-        test_parse_data_type("CLOB", DataType::Clob(None), "CLOB");
-        test_parse_data_type("CLOB(50)", DataType::Clob(Some(50)), "CLOB(50)");
+        #[test]
+        fn test_ansii_character_string_types() {
+            // Character string types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-string-type>
+            let dialect = TestedDialects {
+                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+            };
 
-        // Double data type
-        test_parse_data_type(
-            "DOUBLE PRECISION",
-            DataType::DoublePrecision,
-            "DOUBLE PRECISION",
-        );
-        test_parse_data_type("DOUBLE", DataType::Double, "DOUBLE");
+            test_parse_data_type!(dialect, "CHARACTER", DataType::Character(None));
 
-        // Time data type
-        test_parse_data_type("TIME", DataType::Time(TimezoneInfo::None), "TIME");
-        test_parse_data_type(
-            "TIME WITH TIME ZONE",
-            DataType::Time(TimezoneInfo::WithTimeZone),
-            "TIME WITH TIME ZONE",
-        );
-        test_parse_data_type(
-            "TIME WITHOUT TIME ZONE",
-            DataType::Time(TimezoneInfo::WithoutTimeZone),
-            "TIME WITHOUT TIME ZONE",
-        );
-        test_parse_data_type("TIMETZ", DataType::Time(TimezoneInfo::Tz), "TIMETZ");
+            test_parse_data_type!(dialect, "CHARACTER(20)", DataType::Character(Some(20)));
 
-        // Timestamp data type
-        test_parse_data_type(
-            "TIMESTAMP",
-            DataType::Timestamp(TimezoneInfo::None),
-            "TIMESTAMP",
-        );
-        test_parse_data_type(
-            "TIMESTAMP WITH TIME ZONE",
-            DataType::Timestamp(TimezoneInfo::WithTimeZone),
-            "TIMESTAMP WITH TIME ZONE",
-        );
-        test_parse_data_type(
-            "TIMESTAMP WITHOUT TIME ZONE",
-            DataType::Timestamp(TimezoneInfo::WithoutTimeZone),
-            "TIMESTAMP WITHOUT TIME ZONE",
-        );
-        test_parse_data_type(
-            "TIMESTAMPTZ",
-            DataType::Timestamp(TimezoneInfo::Tz),
-            "TIMESTAMPTZ",
-        );
+            test_parse_data_type!(dialect, "CHAR", DataType::Char(None));
 
-        // VARBINARY data type
-        test_parse_data_type("VARBINARY", DataType::Varbinary(None), "VARBINARY");
-        test_parse_data_type(
-            "VARBINARY(20)",
-            DataType::Varbinary(Some(20)),
-            "VARBINARY(20)",
-        );
+            test_parse_data_type!(dialect, "CHAR(20)", DataType::Char(Some(20)));
 
-        fn test_parse_data_type(input: &str, expected_type: DataType, expected_str: &str) {
-            all_dialects().run_parser_method(input, |parser| {
-                let data_type = parser.parse_data_type().unwrap();
-                assert_eq!(data_type, expected_type);
-                assert_eq!(expected_type.to_string(), expected_str.to_string());
-            });
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER VARYING(20)",
+                DataType::CharacterVarying(Some(20))
+            );
+
+            test_parse_data_type!(dialect, "CHAR VARYING(20)", DataType::CharVarying(Some(20)));
+
+            test_parse_data_type!(dialect, "VARCHAR(20)", DataType::Varchar(Some(20)));
+        }
+
+        #[test]
+        fn test_ansii_datetime_types() {
+            // Datetime types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type>
+            let dialect = TestedDialects {
+                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+            };
+
+            test_parse_data_type!(dialect, "DATE", DataType::Date);
+
+            test_parse_data_type!(dialect, "TIME", DataType::Time(TimezoneInfo::None));
+
+            test_parse_data_type!(
+                dialect,
+                "TIME WITH TIME ZONE",
+                DataType::Time(TimezoneInfo::WithTimeZone)
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "TIME WITHOUT TIME ZONE",
+                DataType::Time(TimezoneInfo::WithoutTimeZone)
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "TIMESTAMP",
+                DataType::Timestamp(TimezoneInfo::None)
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "TIMESTAMP WITH TIME ZONE",
+                DataType::Timestamp(TimezoneInfo::WithTimeZone)
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "TIMESTAMP WITHOUT TIME ZONE",
+                DataType::Timestamp(TimezoneInfo::WithoutTimeZone)
+            );
         }
     }
 

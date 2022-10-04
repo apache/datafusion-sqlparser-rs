@@ -1850,7 +1850,7 @@ fn parse_create_table() {
     let ast = one_statement_parses_to(
         sql,
         "CREATE TABLE uk_cities (\
-         name CHARACTER VARYING(100) NOT NULL, \
+         name VARCHAR(100) NOT NULL, \
          lat DOUBLE NULL, \
          lng DOUBLE, \
          constrained INT NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0), \
@@ -2312,7 +2312,7 @@ fn parse_create_external_table() {
     let ast = one_statement_parses_to(
         sql,
         "CREATE EXTERNAL TABLE uk_cities (\
-         name CHARACTER VARYING(100) NOT NULL, \
+         name VARCHAR(100) NOT NULL, \
          lat DOUBLE NULL, \
          lng DOUBLE) \
          STORED AS TEXTFILE LOCATION '/tmp/example.csv'",
@@ -2382,7 +2382,7 @@ fn parse_create_or_replace_external_table() {
     let ast = one_statement_parses_to(
         sql,
         "CREATE OR REPLACE EXTERNAL TABLE uk_cities (\
-         name CHARACTER VARYING(100) NOT NULL) \
+         name VARCHAR(100) NOT NULL) \
          STORED AS TEXTFILE LOCATION '/tmp/example.csv'",
     );
     match ast {
@@ -2435,7 +2435,7 @@ fn parse_create_external_table_lowercase() {
     let ast = one_statement_parses_to(
         sql,
         "CREATE EXTERNAL TABLE uk_cities (\
-         name CHARACTER VARYING(100) NOT NULL, \
+         name VARCHAR(100) NOT NULL, \
          lat DOUBLE NULL, \
          lng DOUBLE) \
          STORED AS PARQUET LOCATION '/tmp/example.csv'",

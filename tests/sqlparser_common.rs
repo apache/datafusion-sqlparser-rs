@@ -1594,14 +1594,6 @@ fn parse_limit_accepts_all() {
 }
 
 #[test]
-fn parse_limit_my_sql_syntax() {
-    one_statement_parses_to(
-        "SELECT id, fname, lname FROM customer LIMIT 5, 10",
-        "SELECT id, fname, lname FROM customer LIMIT 5 OFFSET 10",
-    );
-}
-
-#[test]
 fn parse_cast() {
     let sql = "SELECT CAST(id AS BIGINT) FROM customer";
     let select = verified_only_select(sql);
@@ -1655,12 +1647,22 @@ fn parse_cast() {
         expr_from_projection(only(&select.projection))
     );
 
+    let sql = "SELECT CAST(id AS CLOB) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Clob(None)
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
     let sql = "SELECT CAST(id AS CLOB(50)) FROM customer";
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::Clob(50)
+            data_type: DataType::Clob(Some(50))
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1670,7 +1672,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::Binary(50)
+            data_type: DataType::Binary(Some(50))
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1680,7 +1682,17 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::Varbinary(50)
+            data_type: DataType::Varbinary(Some(50))
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT CAST(id AS BLOB) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            data_type: DataType::Blob(None)
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1690,7 +1702,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
-            data_type: DataType::Blob(50)
+            data_type: DataType::Blob(Some(50))
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1838,7 +1850,7 @@ fn parse_create_table() {
     let ast = one_statement_parses_to(
         sql,
         "CREATE TABLE uk_cities (\
-         name CHARACTER VARYING(100) NOT NULL, \
+         name VARCHAR(100) NOT NULL, \
          lat DOUBLE NULL, \
          lng DOUBLE, \
          constrained INT NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0), \
@@ -2122,6 +2134,30 @@ fn parse_create_schema() {
 }
 
 #[test]
+fn parse_create_schema_with_authorization() {
+    let sql = "CREATE SCHEMA AUTHORIZATION Y";
+
+    match verified_stmt(sql) {
+        Statement::CreateSchema { schema_name, .. } => {
+            assert_eq!(schema_name.to_string(), "AUTHORIZATION Y".to_owned())
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_schema_with_name_and_authorization() {
+    let sql = "CREATE SCHEMA X AUTHORIZATION Y";
+
+    match verified_stmt(sql) {
+        Statement::CreateSchema { schema_name, .. } => {
+            assert_eq!(schema_name.to_string(), "X AUTHORIZATION Y".to_owned())
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_drop_schema() {
     let sql = "DROP SCHEMA X";
 
@@ -2276,7 +2312,7 @@ fn parse_create_external_table() {
     let ast = one_statement_parses_to(
         sql,
         "CREATE EXTERNAL TABLE uk_cities (\
-         name CHARACTER VARYING(100) NOT NULL, \
+         name VARCHAR(100) NOT NULL, \
          lat DOUBLE NULL, \
          lng DOUBLE) \
          STORED AS TEXTFILE LOCATION '/tmp/example.csv'",
@@ -2346,7 +2382,7 @@ fn parse_create_or_replace_external_table() {
     let ast = one_statement_parses_to(
         sql,
         "CREATE OR REPLACE EXTERNAL TABLE uk_cities (\
-         name CHARACTER VARYING(100) NOT NULL) \
+         name VARCHAR(100) NOT NULL) \
          STORED AS TEXTFILE LOCATION '/tmp/example.csv'",
     );
     match ast {
@@ -2399,7 +2435,7 @@ fn parse_create_external_table_lowercase() {
     let ast = one_statement_parses_to(
         sql,
         "CREATE EXTERNAL TABLE uk_cities (\
-         name CHARACTER VARYING(100) NOT NULL, \
+         name VARCHAR(100) NOT NULL, \
          lat DOUBLE NULL, \
          lng DOUBLE) \
          STORED AS PARQUET LOCATION '/tmp/example.csv'",
@@ -2921,7 +2957,7 @@ fn parse_literal_time() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::Time,
+            data_type: DataType::Time(TimezoneInfo::None),
             value: "01:23:34".into()
         },
         expr_from_projection(only(&select.projection)),
@@ -2947,16 +2983,13 @@ fn parse_literal_timestamp_without_time_zone() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::Timestamp,
+            data_type: DataType::Timestamp(TimezoneInfo::None),
             value: "1999-01-01 01:23:34".into()
         },
         expr_from_projection(only(&select.projection)),
     );
 
-    one_statement_parses_to(
-        "SELECT TIMESTAMP WITHOUT TIME ZONE '1999-01-01 01:23:34'",
-        sql,
-    );
+    one_statement_parses_to("SELECT TIMESTAMP '1999-01-01 01:23:34'", sql);
 }
 
 #[test]
@@ -2965,16 +2998,13 @@ fn parse_literal_timestamp_with_time_zone() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::TimestampTz,
+            data_type: DataType::Timestamp(TimezoneInfo::Tz),
             value: "1999-01-01 01:23:34Z".into()
         },
         expr_from_projection(only(&select.projection)),
     );
 
-    one_statement_parses_to(
-        "SELECT TIMESTAMP WITH TIME ZONE '1999-01-01 01:23:34Z'",
-        sql,
-    );
+    one_statement_parses_to("SELECT TIMESTAMPTZ '1999-01-01 01:23:34Z'", sql);
 }
 
 #[test]

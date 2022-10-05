@@ -29,22 +29,40 @@ use super::value::escape_single_quote_string;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum DataType {
-    /// Fixed-length character type e.g. CHAR(10)
+    /// Fixed-length character type e.g. CHARACTER(10)
+    Character(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    /// Fixed-length char type e.g. CHAR(10)
     Char(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    /// Character varying type e.g. CHARACTER VARYING(10)
+    CharacterVarying(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    /// Char varying type e.g. CHAR VARYING(10)
+    CharVarying(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Variable-length character type e.g. VARCHAR(10)
     Varchar(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Variable-length character type e.g. NVARCHAR(10)
     Nvarchar(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Uuid type
     Uuid,
-    /// Large character object e.g. CLOB(1000)
-    Clob(#[cfg_attr(feature = "derive-visitor", drive(skip))] u64),
-    /// Fixed-length binary type e.g. BINARY(10)
-    Binary(#[cfg_attr(feature = "derive-visitor", drive(skip))] u64),
-    /// Variable-length binary type e.g. VARBINARY(10)
-    Varbinary(#[cfg_attr(feature = "derive-visitor", drive(skip))] u64),
-    /// Large binary object e.g. BLOB(1000)
-    Blob(#[cfg_attr(feature = "derive-visitor", drive(skip))] u64),
+    /// Large character object with optional length e.g. CLOB, CLOB(1000), [standard], [Oracle]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
+    /// [Oracle]: https://docs.oracle.com/javadb/10.10.1.2/ref/rrefclob.html
+    Clob(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    /// Fixed-length binary type with optional length e.g.  [standard], [MS SQL Server]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-string-type
+    /// [MS SQL Server]: https://learn.microsoft.com/pt-br/sql/t-sql/data-types/binary-and-varbinary-transact-sql?view=sql-server-ver16
+    Binary(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    /// Variable-length binary with optional length type e.g. [standard], [MS SQL Server]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-string-type
+    /// [MS SQL Server]: https://learn.microsoft.com/pt-br/sql/t-sql/data-types/binary-and-varbinary-transact-sql?view=sql-server-ver16
+    Varbinary(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    /// Large binary object with optional length e.g. BLOB, BLOB(1000), [standard], [Oracle]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-large-object-string-type
+    /// [Oracle]: https://docs.oracle.com/javadb/10.8.3.0/ref/rrefblob.html
+    Blob(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
     Decimal(
         #[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>,
@@ -94,13 +112,11 @@ pub enum DataType {
     /// Date
     Date,
     /// Time
-    Time,
+    Time(#[cfg_attr(feature = "derive-visitor", drive(skip))] TimezoneInfo),
     /// Datetime
     Datetime,
-    /// Timestamp [Without Time Zone]
-    Timestamp,
-    /// Timestamp With Time Zone
-    TimestampTz,
+    /// Timestamp
+    Timestamp(#[cfg_attr(feature = "derive-visitor", drive(skip))] TimezoneInfo),
     /// Interval
     Interval,
     /// Regclass used in postgresql serial
@@ -124,18 +140,27 @@ pub enum DataType {
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            DataType::Character(size) => {
+                format_type_with_optional_length(f, "CHARACTER", size, false)
+            }
             DataType::Char(size) => format_type_with_optional_length(f, "CHAR", size, false),
-            DataType::Varchar(size) => {
+            DataType::CharacterVarying(size) => {
                 format_type_with_optional_length(f, "CHARACTER VARYING", size, false)
             }
+            DataType::CharVarying(size) => {
+                format_type_with_optional_length(f, "CHAR VARYING", size, false)
+            }
+            DataType::Varchar(size) => format_type_with_optional_length(f, "VARCHAR", size, false),
             DataType::Nvarchar(size) => {
                 format_type_with_optional_length(f, "NVARCHAR", size, false)
             }
             DataType::Uuid => write!(f, "UUID"),
-            DataType::Clob(size) => write!(f, "CLOB({})", size),
-            DataType::Binary(size) => write!(f, "BINARY({})", size),
-            DataType::Varbinary(size) => write!(f, "VARBINARY({})", size),
-            DataType::Blob(size) => write!(f, "BLOB({})", size),
+            DataType::Clob(size) => format_type_with_optional_length(f, "CLOB", size, false),
+            DataType::Binary(size) => format_type_with_optional_length(f, "BINARY", size, false),
+            DataType::Varbinary(size) => {
+                format_type_with_optional_length(f, "VARBINARY", size, false)
+            }
+            DataType::Blob(size) => format_type_with_optional_length(f, "BLOB", size, false),
             DataType::Decimal(precision, scale) => {
                 if let Some(scale) = scale {
                     write!(f, "NUMERIC({},{})", precision.unwrap(), scale)
@@ -183,10 +208,9 @@ impl fmt::Display for DataType {
             DataType::DoublePrecision => write!(f, "DOUBLE PRECISION"),
             DataType::Boolean => write!(f, "BOOLEAN"),
             DataType::Date => write!(f, "DATE"),
-            DataType::Time => write!(f, "TIME"),
+            DataType::Time(timezone_info) => write!(f, "TIME{}", timezone_info),
             DataType::Datetime => write!(f, "DATETIME"),
-            DataType::Timestamp => write!(f, "TIMESTAMP"),
-            DataType::TimestampTz => write!(f, "TIMESTAMPTZ"),
+            DataType::Timestamp(timezone_info) => write!(f, "TIMESTAMP{}", timezone_info),
             DataType::Interval => write!(f, "INTERVAL"),
             DataType::Regclass => write!(f, "REGCLASS"),
             DataType::Text => write!(f, "TEXT"),
@@ -232,4 +256,51 @@ fn format_type_with_optional_length(
         write!(f, " UNSIGNED")?;
     }
     Ok(())
+}
+
+/// Timestamp and Time data types information about TimeZone formatting.
+///
+/// This is more related to a display information than real differences between each variant. To
+/// guarantee compatibility with the input query we must maintain its exact information.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum TimezoneInfo {
+    /// No information about time zone. E.g., TIMESTAMP
+    None,
+    /// Temporal type 'WITH TIME ZONE'. E.g., TIMESTAMP WITH TIME ZONE, [standard], [Oracle]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
+    /// [Oracle]: https://docs.oracle.com/en/database/oracle/oracle-database/12.2/nlspg/datetime-data-types-and-time-zone-support.html#GUID-3F1C388E-C651-43D5-ADBC-1A49E5C2CA05
+    WithTimeZone,
+    /// Temporal type 'WITHOUT TIME ZONE'. E.g., TIME WITHOUT TIME ZONE, [standard], [Postgresql]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
+    /// [Postgresql]: https://www.postgresql.org/docs/current/datatype-datetime.html
+    WithoutTimeZone,
+    /// Postgresql specific `WITH TIME ZONE` formatting, for both TIME and TIMESTAMP. E.g., TIMETZ, [Postgresql]
+    ///
+    /// [Postgresql]: https://www.postgresql.org/docs/current/datatype-datetime.html
+    Tz,
+}
+
+impl fmt::Display for TimezoneInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TimezoneInfo::None => {
+                write!(f, "")
+            }
+            TimezoneInfo::WithTimeZone => {
+                write!(f, " WITH TIME ZONE")
+            }
+            TimezoneInfo::WithoutTimeZone => {
+                write!(f, " WITHOUT TIME ZONE")
+            }
+            TimezoneInfo::Tz => {
+                // TZ is the only one that is displayed BEFORE the precision, so the datatype display
+                // must be aware of that. Check <https://www.postgresql.org/docs/14/datatype-datetime.html>
+                // for more information
+                write!(f, "TZ")
+            }
+        }
+    }
 }

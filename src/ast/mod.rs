@@ -35,6 +35,7 @@ pub use derive_visitor::{
 };
 
 pub use self::data_type::DataType;
+pub use self::data_type::TimezoneInfo;
 pub use self::ddl::{
     AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
     ReferentialAction, TableConstraint,
@@ -1406,7 +1407,8 @@ pub enum Statement {
     },
     /// CREATE SCHEMA
     CreateSchema {
-        schema_name: ObjectName,
+        /// `<schema name> | AUTHORIZATION <schema authorization identifier>  | <schema name>  AUTHORIZATION <schema authorization identifier>`
+        schema_name: SchemaName,
         #[cfg_attr(feature = "derive-visitor", drive(skip))]
         if_not_exists: bool,
     },
@@ -3442,6 +3444,37 @@ impl fmt::Display for CreateFunctionUsing {
             CreateFunctionUsing::Jar(uri) => write!(f, "JAR '{uri}'"),
             CreateFunctionUsing::File(uri) => write!(f, "FILE '{uri}'"),
             CreateFunctionUsing::Archive(uri) => write!(f, "ARCHIVE '{uri}'"),
+        }
+    }
+}
+
+/// Schema possible naming variants ([1]).
+///
+/// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#schema-definition
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
+pub enum SchemaName {
+    /// Only schema name specified: `<schema name>`.
+    Simple(ObjectName),
+    /// Only authorization identifier specified: `AUTHORIZATION <schema authorization identifier>`.
+    UnnamedAuthorization(Ident),
+    /// Both schema name and authorization identifier specified: `<schema name>  AUTHORIZATION <schema authorization identifier>`.
+    NamedAuthorization(ObjectName, Ident),
+}
+
+impl fmt::Display for SchemaName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SchemaName::Simple(name) => {
+                write!(f, "{name}")
+            }
+            SchemaName::UnnamedAuthorization(authorization) => {
+                write!(f, "AUTHORIZATION {authorization}")
+            }
+            SchemaName::NamedAuthorization(name, authorization) => {
+                write!(f, "{name} AUTHORIZATION {authorization}")
+            }
         }
     }
 }

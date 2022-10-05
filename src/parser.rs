@@ -24,6 +24,9 @@ use core::fmt;
 
 use log::debug;
 
+use IsLateral::*;
+use IsOptional::*;
+
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{self, Keyword};
@@ -57,14 +60,10 @@ pub enum IsOptional {
     Mandatory,
 }
 
-use IsOptional::*;
-
 pub enum IsLateral {
     Lateral,
     NotLateral,
 }
-
-use IsLateral::*;
 
 pub enum WildcardExpr {
     Expr(Expr),
@@ -1897,11 +1896,30 @@ impl<'a> Parser<'a> {
 
     pub fn parse_create_schema(&mut self) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let schema_name = self.parse_object_name()?;
+
+        let schema_name = self.parse_schema_name()?;
+
         Ok(Statement::CreateSchema {
             schema_name,
             if_not_exists,
         })
+    }
+
+    fn parse_schema_name(&mut self) -> Result<SchemaName, ParserError> {
+        if self.parse_keyword(Keyword::AUTHORIZATION) {
+            Ok(SchemaName::UnnamedAuthorization(self.parse_identifier()?))
+        } else {
+            let name = self.parse_object_name()?;
+
+            if self.parse_keyword(Keyword::AUTHORIZATION) {
+                Ok(SchemaName::NamedAuthorization(
+                    name,
+                    self.parse_identifier()?,
+                ))
+            } else {
+                Ok(SchemaName::Simple(name))
+            }
+        }
     }
 
     pub fn parse_create_database(&mut self) -> Result<Statement, ParserError> {
@@ -3396,39 +3414,51 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::VARCHAR => Ok(DataType::Varchar(self.parse_optional_precision()?)),
                 Keyword::NVARCHAR => Ok(DataType::Nvarchar(self.parse_optional_precision()?)),
-                Keyword::CHAR | Keyword::CHARACTER => {
+                Keyword::CHARACTER => {
                     if self.parse_keyword(Keyword::VARYING) {
-                        Ok(DataType::Varchar(self.parse_optional_precision()?))
+                        Ok(DataType::CharacterVarying(self.parse_optional_precision()?))
+                    } else {
+                        Ok(DataType::Character(self.parse_optional_precision()?))
+                    }
+                }
+                Keyword::CHAR => {
+                    if self.parse_keyword(Keyword::VARYING) {
+                        Ok(DataType::CharVarying(self.parse_optional_precision()?))
                     } else {
                         Ok(DataType::Char(self.parse_optional_precision()?))
                     }
                 }
-                Keyword::CLOB => Ok(DataType::Clob(self.parse_precision()?)),
-                Keyword::BINARY => Ok(DataType::Binary(self.parse_precision()?)),
-                Keyword::VARBINARY => Ok(DataType::Varbinary(self.parse_precision()?)),
-                Keyword::BLOB => Ok(DataType::Blob(self.parse_precision()?)),
+                Keyword::CLOB => Ok(DataType::Clob(self.parse_optional_precision()?)),
+                Keyword::BINARY => Ok(DataType::Binary(self.parse_optional_precision()?)),
+                Keyword::VARBINARY => Ok(DataType::Varbinary(self.parse_optional_precision()?)),
+                Keyword::BLOB => Ok(DataType::Blob(self.parse_optional_precision()?)),
                 Keyword::UUID => Ok(DataType::Uuid),
                 Keyword::DATE => Ok(DataType::Date),
                 Keyword::DATETIME => Ok(DataType::Datetime),
                 Keyword::TIMESTAMP => {
                     if self.parse_keyword(Keyword::WITH) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
-                        Ok(DataType::TimestampTz)
+                        Ok(DataType::Timestamp(TimezoneInfo::WithTimeZone))
                     } else if self.parse_keyword(Keyword::WITHOUT) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
-                        Ok(DataType::Timestamp)
+                        Ok(DataType::Timestamp(TimezoneInfo::WithoutTimeZone))
                     } else {
-                        Ok(DataType::Timestamp)
+                        Ok(DataType::Timestamp(TimezoneInfo::None))
                     }
                 }
-                Keyword::TIMESTAMPTZ => Ok(DataType::TimestampTz),
+                Keyword::TIMESTAMPTZ => Ok(DataType::Timestamp(TimezoneInfo::Tz)),
                 Keyword::TIME => {
-                    // TBD: we throw away "with/without timezone" information
-                    if self.parse_keyword(Keyword::WITH) || self.parse_keyword(Keyword::WITHOUT) {
+                    if self.parse_keyword(Keyword::WITH) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
+                        Ok(DataType::Time(TimezoneInfo::WithTimeZone))
+                    } else if self.parse_keyword(Keyword::WITHOUT) {
+                        self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
+                        Ok(DataType::Time(TimezoneInfo::WithoutTimeZone))
+                    } else {
+                        Ok(DataType::Time(TimezoneInfo::None))
                     }
-                    Ok(DataType::Time)
                 }
+                Keyword::TIMETZ => Ok(DataType::Time(TimezoneInfo::Tz)),
                 // Interval types can be followed by a complicated interval
                 // qualifier that we don't currently support. See
                 // parse_interval for a taste.
@@ -3762,9 +3792,18 @@ impl<'a> Parser<'a> {
                     offset = Some(self.parse_offset()?)
                 }
 
-                if offset.is_none() && self.consume_token(&Token::Comma) {
-                    // mysql style LIMIT 10, offset 5
-                    offset = Some(self.parse_offset()?)
+                if dialect_of!(self is GenericDialect | MySqlDialect)
+                    && limit.is_some()
+                    && offset.is_none()
+                    && self.consume_token(&Token::Comma)
+                {
+                    // MySQL style LIMIT x,y => LIMIT y OFFSET x.
+                    // Check <https://dev.mysql.com/doc/refman/8.0/en/select.html> for more details.
+                    offset = Some(Offset {
+                        value: limit.unwrap(),
+                        rows: OffsetRows::None,
+                    });
+                    limit = Some(self.parse_expr()?);
                 }
             }
 
@@ -5197,8 +5236,9 @@ impl Word {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::test_utils::{all_dialects, TestedDialects};
+
+    use super::*;
 
     #[test]
     fn test_prev_index() {
@@ -5255,17 +5295,121 @@ mod tests {
         });
     }
 
-    // TODO add tests for all data types? https://github.com/sqlparser-rs/sqlparser-rs/issues/2
-    #[test]
-    fn test_parse_data_type() {
-        test_parse_data_type("DOUBLE PRECISION", "DOUBLE PRECISION");
-        test_parse_data_type("DOUBLE", "DOUBLE");
+    #[cfg(test)]
+    mod test_parse_data_type {
+        use crate::ast::{DataType, TimezoneInfo};
+        use crate::dialect::{AnsiDialect, GenericDialect};
+        use crate::test_utils::TestedDialects;
 
-        fn test_parse_data_type(input: &str, expected: &str) {
-            all_dialects().run_parser_method(input, |parser| {
-                let data_type = parser.parse_data_type().unwrap().to_string();
-                assert_eq!(data_type, expected);
-            });
+        macro_rules! test_parse_data_type {
+            ($dialect:expr, $input:expr, $expected_type:expr $(,)?) => {{
+                $dialect.run_parser_method(&*$input, |parser| {
+                    let data_type = parser.parse_data_type().unwrap();
+                    assert_eq!(data_type, $expected_type);
+                    assert_eq!(data_type.to_string(), $input.to_string());
+                });
+            }};
         }
+
+        #[test]
+        fn test_ansii_character_string_types() {
+            // Character string types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-string-type>
+            let dialect = TestedDialects {
+                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+            };
+
+            test_parse_data_type!(dialect, "CHARACTER", DataType::Character(None));
+
+            test_parse_data_type!(dialect, "CHARACTER(20)", DataType::Character(Some(20)));
+
+            test_parse_data_type!(dialect, "CHAR", DataType::Char(None));
+
+            test_parse_data_type!(dialect, "CHAR(20)", DataType::Char(Some(20)));
+
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER VARYING(20)",
+                DataType::CharacterVarying(Some(20))
+            );
+
+            test_parse_data_type!(dialect, "CHAR VARYING(20)", DataType::CharVarying(Some(20)));
+
+            test_parse_data_type!(dialect, "VARCHAR(20)", DataType::Varchar(Some(20)));
+        }
+
+        #[test]
+        fn test_ansii_datetime_types() {
+            // Datetime types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type>
+            let dialect = TestedDialects {
+                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+            };
+
+            test_parse_data_type!(dialect, "DATE", DataType::Date);
+
+            test_parse_data_type!(dialect, "TIME", DataType::Time(TimezoneInfo::None));
+
+            test_parse_data_type!(
+                dialect,
+                "TIME WITH TIME ZONE",
+                DataType::Time(TimezoneInfo::WithTimeZone)
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "TIME WITHOUT TIME ZONE",
+                DataType::Time(TimezoneInfo::WithoutTimeZone)
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "TIMESTAMP",
+                DataType::Timestamp(TimezoneInfo::None)
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "TIMESTAMP WITH TIME ZONE",
+                DataType::Timestamp(TimezoneInfo::WithTimeZone)
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "TIMESTAMP WITHOUT TIME ZONE",
+                DataType::Timestamp(TimezoneInfo::WithoutTimeZone)
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_schema_name() {
+        // The expected name should be identical as the input name, that's why I don't receive both
+        macro_rules! test_parse_schema_name {
+            ($input:expr, $expected_name:expr $(,)?) => {{
+                all_dialects().run_parser_method(&*$input, |parser| {
+                    let schema_name = parser.parse_schema_name().unwrap();
+                    // Validate that the structure is the same as expected
+                    assert_eq!(schema_name, $expected_name);
+                    // Validate that the input and the expected structure serialization are the same
+                    assert_eq!(schema_name.to_string(), $input.to_string());
+                });
+            }};
+        }
+
+        let dummy_name = ObjectName(vec![Ident::new("dummy_name")]);
+        let dummy_authorization = Ident::new("dummy_authorization");
+
+        test_parse_schema_name!(
+            format!("{dummy_name}"),
+            SchemaName::Simple(dummy_name.clone())
+        );
+
+        test_parse_schema_name!(
+            format!("AUTHORIZATION {dummy_authorization}"),
+            SchemaName::UnnamedAuthorization(dummy_authorization.clone()),
+        );
+        test_parse_schema_name!(
+            format!("{dummy_name} AUTHORIZATION {dummy_authorization}"),
+            SchemaName::NamedAuthorization(dummy_name.clone(), dummy_authorization.clone()),
+        );
     }
 }

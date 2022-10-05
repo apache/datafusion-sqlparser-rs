@@ -74,7 +74,7 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "first_name".into(),
-                        data_type: DataType::Varchar(Some(45)),
+                        data_type: DataType::CharacterVarying(Some(45)),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -83,7 +83,7 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "last_name".into(),
-                        data_type: DataType::Varchar(Some(45)),
+                        data_type: DataType::CharacterVarying(Some(45)),
                         collation: Some(ObjectName(vec![Ident::with_quote('"', "es_ES")])),
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -92,7 +92,7 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "email".into(),
-                        data_type: DataType::Varchar(Some(50)),
+                        data_type: DataType::CharacterVarying(Some(50)),
                         collation: None,
                         options: vec![],
                     },
@@ -139,7 +139,7 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "last_update".into(),
-                        data_type: DataType::Timestamp,
+                        data_type: DataType::Timestamp(TimezoneInfo::WithoutTimeZone),
                         collation: None,
                         options: vec![
                             ColumnOptionDef {
@@ -212,7 +212,7 @@ fn parse_create_table_from_pg_dump() {
             activebool BOOLEAN DEFAULT true NOT NULL, \
             create_date DATE DEFAULT CAST(now() AS DATE) NOT NULL, \
             create_date1 DATE DEFAULT CAST(CAST('now' AS TEXT) AS DATE) NOT NULL, \
-            last_update TIMESTAMP DEFAULT now(), \
+            last_update TIMESTAMP WITHOUT TIME ZONE DEFAULT now(), \
             release_year public.year, \
             active INT\
         )");

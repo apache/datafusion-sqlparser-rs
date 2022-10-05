@@ -879,7 +879,7 @@ impl<'a> Parser<'a> {
     pub fn parse_floor_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
-        let keyword_to = self.expect_keyword(Keyword::TO)?;
+        let keyword_to = self.expect_keyword(Keyword::TO);
         match keyword_to {
             Err(_) => {
                 // Parse `FLOOR(x)`

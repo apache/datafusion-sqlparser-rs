@@ -1772,6 +1772,18 @@ fn parse_extract() {
 }
 
 #[test]
+fn parse_ceil_number() {
+    verified_stmt("SELECT CEIL(1.5)");
+    verified_stmt("SELECT CEIL(float_column) FROM my_table");
+}
+
+#[test]
+fn parse_floor_number() {
+    verified_stmt("SELECT FLOOR(1.5)");
+    verified_stmt("SELECT FLOOR(float_column) FROM my_table");
+}
+
+#[test]
 fn parse_ceil_datetime() {
     let sql = "SELECT CEIL(d TO DAY)";
     let select = verified_only_select(sql);
@@ -1785,12 +1797,12 @@ fn parse_ceil_datetime() {
 
     one_statement_parses_to("SELECT CEIL(d to day)", "SELECT CEIL(d TO DAY)");
 
-    verified_stmt("SELECT CEIL(d TO HOUR)");
-    verified_stmt("SELECT CEIL(d TO MINUTE)");
-    verified_stmt("SELECT CEIL(d TO SECOND)");
-    verified_stmt("SELECT CEIL(d TO MILLISECOND)");
+    verified_stmt("SELECT CEIL(d TO HOUR) FROM df");
+    verified_stmt("SELECT CEIL(d TO MINUTE) FROM df");
+    verified_stmt("SELECT CEIL(d TO SECOND) FROM df");
+    verified_stmt("SELECT CEIL(d TO MILLISECOND) FROM df");
 
-    let res = parse_sql_statements("SELECT CEIL(d TO JIFFY)");
+    let res = parse_sql_statements("SELECT CEIL(d TO JIFFY) FROM df");
     assert_eq!(
         ParserError::ParserError("Expected date/time field, found: JIFFY".to_string()),
         res.unwrap_err()
@@ -1811,12 +1823,12 @@ fn parse_floor_datetime() {
 
     one_statement_parses_to("SELECT FLOOR(d to day)", "SELECT FLOOR(d TO DAY)");
 
-    verified_stmt("SELECT FLOOR(d TO HOUR)");
-    verified_stmt("SELECT FLOOR(d TO MINUTE)");
-    verified_stmt("SELECT FLOOR(d TO SECOND)");
-    verified_stmt("SELECT FLOOR(d TO MILLISECOND)");
+    verified_stmt("SELECT FLOOR(d TO HOUR) FROM df");
+    verified_stmt("SELECT FLOOR(d TO MINUTE) FROM df");
+    verified_stmt("SELECT FLOOR(d TO SECOND) FROM df");
+    verified_stmt("SELECT FLOOR(d TO MILLISECOND) FROM df");
 
-    let res = parse_sql_statements("SELECT FLOOR(d TO JIFFY)");
+    let res = parse_sql_statements("SELECT FLOOR(d TO JIFFY) FROM df");
     assert_eq!(
         ParserError::ParserError("Expected date/time field, found: JIFFY".to_string()),
         res.unwrap_err()

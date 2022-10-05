@@ -401,7 +401,7 @@ impl<'a> Parser<'a> {
         // expression that should parse as the column name "date".
         return_ok_if_some!(self.maybe_parse(|parser| {
             match parser.parse_data_type()? {
-                DataType::Interval => Ok(Expr::Interval(parser.parse_interval()?)),
+                DataType::Interval => parser.parse_interval(),
                 // PostgreSQL allows almost any identifier to be used as custom data type name,
                 // and we support that in `parse_data_type()`. But unlike Postgres we don't
                 // have a list of globally reserved keywords (since they vary across dialects),
@@ -454,7 +454,7 @@ impl<'a> Parser<'a> {
                 Keyword::SUBSTRING => self.parse_substring_expr(),
                 Keyword::OVERLAY => self.parse_overlay_expr(),
                 Keyword::TRIM => self.parse_trim_expr(),
-                Keyword::INTERVAL => Ok(Expr::Interval(self.parse_interval()?)),
+                Keyword::INTERVAL => self.parse_interval(),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
                 // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as subquery or a function call
                 Keyword::ARRAY if self.peek_token() == Token::LBracket => {
@@ -1109,7 +1109,7 @@ impl<'a> Parser<'a> {
     ///   7. (MySql and BigQuey only):`INTERVAL 1 DAY`
     ///
     /// Note that we do not currently attempt to parse the quoted value.
-    pub fn parse_interval(&mut self) -> Result<Interval, ParserError> {
+    pub fn parse_interval(&mut self) -> Result<Expr, ParserError> {
         // The SQL standard allows an optional sign before the value string, but
         // it is not clear if any implementations support that syntax, so we
         // don't currently try to parse it. (The sign can instead be included
@@ -1184,7 +1184,7 @@ impl<'a> Parser<'a> {
                 }
             };
 
-        Ok(Interval {
+        Ok(Expr::Interval {
             value: Box::new(value),
             leading_field,
             leading_precision,

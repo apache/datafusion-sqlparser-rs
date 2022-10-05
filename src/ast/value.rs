@@ -93,6 +93,7 @@ pub enum DateTimeField {
     Timezone,
     TimezoneHour,
     TimezoneMinute,
+    NoDateTime,
 }
 
 impl fmt::Display for DateTimeField {
@@ -123,6 +124,7 @@ impl fmt::Display for DateTimeField {
             DateTimeField::Timezone => "TIMEZONE",
             DateTimeField::TimezoneHour => "TIMEZONE_HOUR",
             DateTimeField::TimezoneMinute => "TIMEZONE_MINUTE",
+            DateTimeField::NoDateTime => "NODATETIME",
         })
     }
 }

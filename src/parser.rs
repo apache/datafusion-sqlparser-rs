@@ -854,25 +854,51 @@ impl<'a> Parser<'a> {
     pub fn parse_ceil_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
-        self.expect_keyword(Keyword::TO)?;
-        let field = self.parse_date_time_field()?;
-        self.expect_token(&Token::RParen)?;
-        Ok(Expr::Ceil {
-            expr: Box::new(expr),
-            field,
-        })
+        let keyword_to = self.expect_keyword(Keyword::TO);
+        match keyword_to {
+            Err(_) => {
+                // Parse `CEIL(x)`
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::Ceil {
+                    expr: Box::new(expr),
+                    field: DateTimeField::NoDateTime,
+                })
+            }
+            _ => {
+                // Parse `CEIL(expr TO DateTimeField)`
+                let field = self.parse_date_time_field()?;
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::Ceil {
+                    expr: Box::new(expr),
+                    field,
+                })
+            }
+        }
     }
 
     pub fn parse_floor_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
-        self.expect_keyword(Keyword::TO)?;
-        let field = self.parse_date_time_field()?;
-        self.expect_token(&Token::RParen)?;
-        Ok(Expr::Floor {
-            expr: Box::new(expr),
-            field,
-        })
+        let keyword_to = self.expect_keyword(Keyword::TO)?;
+        match keyword_to {
+            Err(_) => {
+                // Parse `FLOOR(x)`
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::Floor {
+                    expr: Box::new(expr),
+                    field: DateTimeField::NoDateTime,
+                })
+            }
+            _ => {
+                // Parse `FLOOR(expr TO DateTimeField)`
+                let field = self.parse_date_time_field()?;
+                self.expect_token(&Token::RParen)?;
+                Ok(Expr::Ceil {
+                    expr: Box::new(expr),
+                    field,
+                })
+            }
+        }
     }
 
     pub fn parse_position_expr(&mut self) -> Result<Expr, ParserError> {

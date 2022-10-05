@@ -593,8 +593,20 @@ impl fmt::Display for Expr {
             Expr::TryCast { expr, data_type } => write!(f, "TRY_CAST({} AS {})", expr, data_type),
             Expr::SafeCast { expr, data_type } => write!(f, "SAFE_CAST({} AS {})", expr, data_type),
             Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
-            Expr::Ceil { expr, field } => write!(f, "CEIL({} TO {})", expr, field),
-            Expr::Floor { expr, field } => write!(f, "FLOOR({} TO {})", expr, field),
+            Expr::Ceil { expr, field } => {
+                if field == &DateTimeField::NoDateTime {
+                    write!(f, "CEIL({})", expr)
+                } else {
+                    write!(f, "CEIL({} TO {})", expr, field)
+                }
+            }
+            Expr::Floor { expr, field } => {
+                if field == &DateTimeField::NoDateTime {
+                    write!(f, "FLOOR({})", expr)
+                } else {
+                    write!(f, "FLOOR({} TO {})", expr, field)
+                }
+            }
             Expr::Position { expr, r#in } => write!(f, "POSITION({} IN {})", expr, r#in),
             Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),
             Expr::Nested(ast) => write!(f, "({})", ast),

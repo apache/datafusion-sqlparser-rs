@@ -1765,18 +1765,84 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(ISODOW FROM d)");
     verified_stmt("SELECT EXTRACT(ISOYEAR FROM d)");
     verified_stmt("SELECT EXTRACT(JULIAN FROM d)");
+    verified_stmt("SELECT EXTRACT(MICROSECOND FROM d)");
     verified_stmt("SELECT EXTRACT(MICROSECONDS FROM d)");
     verified_stmt("SELECT EXTRACT(MILLENIUM FROM d)");
     verified_stmt("SELECT EXTRACT(MILLENNIUM FROM d)");
+    verified_stmt("SELECT EXTRACT(MILLISECOND FROM d)");
     verified_stmt("SELECT EXTRACT(MILLISECONDS FROM d)");
     verified_stmt("SELECT EXTRACT(QUARTER FROM d)");
     verified_stmt("SELECT EXTRACT(TIMEZONE FROM d)");
     verified_stmt("SELECT EXTRACT(TIMEZONE_HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(TIMEZONE_MINUTE FROM d)");
 
-    let res = parse_sql_statements("SELECT EXTRACT(MILLISECOND FROM d)");
+    let res = parse_sql_statements("SELECT EXTRACT(JIFFY FROM d)");
     assert_eq!(
-        ParserError::ParserError("Expected date/time field, found: MILLISECOND".to_string()),
+        ParserError::ParserError("Expected date/time field, found: JIFFY".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
+fn parse_ceil_number() {
+    verified_stmt("SELECT CEIL(1.5)");
+    verified_stmt("SELECT CEIL(float_column) FROM my_table");
+}
+
+#[test]
+fn parse_floor_number() {
+    verified_stmt("SELECT FLOOR(1.5)");
+    verified_stmt("SELECT FLOOR(float_column) FROM my_table");
+}
+
+#[test]
+fn parse_ceil_datetime() {
+    let sql = "SELECT CEIL(d TO DAY)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Ceil {
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            field: DateTimeField::Day,
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
+    one_statement_parses_to("SELECT CEIL(d to day)", "SELECT CEIL(d TO DAY)");
+
+    verified_stmt("SELECT CEIL(d TO HOUR) FROM df");
+    verified_stmt("SELECT CEIL(d TO MINUTE) FROM df");
+    verified_stmt("SELECT CEIL(d TO SECOND) FROM df");
+    verified_stmt("SELECT CEIL(d TO MILLISECOND) FROM df");
+
+    let res = parse_sql_statements("SELECT CEIL(d TO JIFFY) FROM df");
+    assert_eq!(
+        ParserError::ParserError("Expected date/time field, found: JIFFY".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
+fn parse_floor_datetime() {
+    let sql = "SELECT FLOOR(d TO DAY)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Floor {
+            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            field: DateTimeField::Day,
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+
+    one_statement_parses_to("SELECT FLOOR(d to day)", "SELECT FLOOR(d TO DAY)");
+
+    verified_stmt("SELECT FLOOR(d TO HOUR) FROM df");
+    verified_stmt("SELECT FLOOR(d TO MINUTE) FROM df");
+    verified_stmt("SELECT FLOOR(d TO SECOND) FROM df");
+    verified_stmt("SELECT FLOOR(d TO MILLISECOND) FROM df");
+
+    let res = parse_sql_statements("SELECT FLOOR(d TO JIFFY) FROM df");
+    assert_eq!(
+        ParserError::ParserError("Expected date/time field, found: JIFFY".to_string()),
         res.unwrap_err()
     );
 }

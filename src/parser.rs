@@ -27,6 +27,7 @@ use log::debug;
 use IsLateral::*;
 use IsOptional::*;
 
+use crate::ast::helpers::CreateTableBuilder;
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{self, Keyword};
@@ -2032,31 +2033,18 @@ impl<'a> Parser<'a> {
         };
         let location = hive_formats.location.clone();
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
-        Ok(Statement::CreateTable {
-            name: table_name,
-            columns,
-            constraints,
-            hive_distribution,
-            hive_formats: Some(hive_formats),
-            with_options: vec![],
-            table_properties,
-            or_replace,
-            if_not_exists,
-            external: true,
-            global: None,
-            temporary: false,
-            file_format,
-            location,
-            query: None,
-            without_rowid: false,
-            like: None,
-            clone: None,
-            default_charset: None,
-            engine: None,
-            collation: None,
-            on_commit: None,
-            on_cluster: None,
-        })
+        Ok(CreateTableBuilder::new(table_name)
+            .columns(columns)
+            .constraints(constraints)
+            .hive_distribution(hive_distribution)
+            .hive_formats(Some(hive_formats))
+            .table_properties(table_properties)
+            .or_replace(or_replace)
+            .if_not_exists(if_not_exists)
+            .external(true)
+            .file_format(file_format)
+            .location(location)
+            .build())
     }
 
     pub fn parse_file_format(&mut self) -> Result<FileFormat, ParserError> {
@@ -2667,31 +2655,27 @@ impl<'a> Parser<'a> {
                 None
             };
 
-        Ok(Statement::CreateTable {
-            name: table_name,
-            temporary,
-            columns,
-            constraints,
-            with_options,
-            table_properties,
-            or_replace,
-            if_not_exists,
-            hive_distribution,
-            hive_formats: Some(hive_formats),
-            external: false,
-            global,
-            file_format: None,
-            location: None,
-            query,
-            without_rowid,
-            like,
-            clone,
-            engine,
-            default_charset,
-            collation,
-            on_commit,
-            on_cluster,
-        })
+        Ok(CreateTableBuilder::new(table_name)
+            .temporary(temporary)
+            .columns(columns)
+            .constraints(constraints)
+            .with_options(with_options)
+            .table_properties(table_properties)
+            .or_replace(or_replace)
+            .if_not_exists(if_not_exists)
+            .hive_distribution(hive_distribution)
+            .hive_formats(Some(hive_formats))
+            .global(global)
+            .query(query)
+            .without_rowid(without_rowid)
+            .like(like)
+            .clone(clone)
+            .engine(engine)
+            .default_charset(default_charset)
+            .collation(collation)
+            .on_commit(on_commit)
+            .on_cluster(on_cluster)
+            .build())
     }
 
     pub fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {

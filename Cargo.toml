@@ -42,4 +42,4 @@ pretty_assertions = "1"
 # Instruct `cargo release` to not run `cargo publish` locally:
 # https://github.com/sunng87/cargo-release/blob/master/docs/reference.md#config-fields
 # See docs/releasing.md for details.
-disable-publish = true
+publish = false

@@ -331,12 +331,12 @@ pub enum Expr {
         field: DateTimeField,
         expr: Box<Expr>,
     },
-    /// CEIL(<expr> TO DateTimeField)
+    /// CEIL(<expr> [TO DateTimeField])
     Ceil {
         expr: Box<Expr>,
         field: DateTimeField,
     },
-    /// FLOOR(<expr> TO DateTimeField)
+    /// FLOOR(<expr> [TO DateTimeField])
     Floor {
         expr: Box<Expr>,
         field: DateTimeField,

@@ -451,8 +451,8 @@ impl<'a> Parser<'a> {
                 Keyword::SAFE_CAST => self.parse_safe_cast_expr(),
                 Keyword::EXISTS => self.parse_exists_expr(false),
                 Keyword::EXTRACT => self.parse_extract_expr(),
-                Keyword::CEIL => self.parse_ceil_expr(),
-                Keyword::FLOOR => self.parse_floor_expr(),
+                Keyword::CEIL => self.parse_ceil_floor_expr(true),
+                Keyword::FLOOR => self.parse_ceil_floor_expr(false),
                 Keyword::POSITION => self.parse_position_expr(),
                 Keyword::SUBSTRING => self.parse_substring_expr(),
                 Keyword::OVERLAY => self.parse_overlay_expr(),
@@ -851,53 +851,27 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_ceil_expr(&mut self) -> Result<Expr, ParserError> {
+    pub fn parse_ceil_floor_expr(&mut self, is_ceil: bool) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
-        let keyword_to = self.expect_keyword(Keyword::TO);
-        match keyword_to {
-            Err(_) => {
-                // Parse `CEIL(x)`
-                self.expect_token(&Token::RParen)?;
-                Ok(Expr::Ceil {
-                    expr: Box::new(expr),
-                    field: DateTimeField::NoDateTime,
-                })
-            }
-            _ => {
-                // Parse `CEIL(expr TO DateTimeField)`
-                let field = self.parse_date_time_field()?;
-                self.expect_token(&Token::RParen)?;
-                Ok(Expr::Ceil {
-                    expr: Box::new(expr),
-                    field,
-                })
-            }
+        // Parse `CEIL/FLOOR(expr)`
+        let mut field = DateTimeField::NoDateTime;
+        let keyword_to = self.parse_keyword(Keyword::TO);
+        if keyword_to {
+            // Parse `CEIL/FLOOR(expr TO DateTimeField)`
+            field = self.parse_date_time_field()?;
         }
-    }
-
-    pub fn parse_floor_expr(&mut self) -> Result<Expr, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let expr = self.parse_expr()?;
-        let keyword_to = self.expect_keyword(Keyword::TO);
-        match keyword_to {
-            Err(_) => {
-                // Parse `FLOOR(x)`
-                self.expect_token(&Token::RParen)?;
-                Ok(Expr::Floor {
-                    expr: Box::new(expr),
-                    field: DateTimeField::NoDateTime,
-                })
-            }
-            _ => {
-                // Parse `FLOOR(expr TO DateTimeField)`
-                let field = self.parse_date_time_field()?;
-                self.expect_token(&Token::RParen)?;
-                Ok(Expr::Floor {
-                    expr: Box::new(expr),
-                    field,
-                })
-            }
+        self.expect_token(&Token::RParen)?;
+        if is_ceil {
+            Ok(Expr::Ceil {
+                expr: Box::new(expr),
+                field,
+            })
+        } else {
+            Ok(Expr::Floor {
+                expr: Box::new(expr),
+                field,
+            })
         }
     }
 

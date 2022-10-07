@@ -27,7 +27,7 @@ use log::debug;
 use IsLateral::*;
 use IsOptional::*;
 
-use crate::ast::helpers::CreateTableBuilder;
+use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{self, Keyword};
@@ -2669,7 +2669,7 @@ impl<'a> Parser<'a> {
             .query(query)
             .without_rowid(without_rowid)
             .like(like)
-            .clone(clone)
+            .clone_clause(clone)
             .engine(engine)
             .default_charset(default_charset)
             .collation(collation)

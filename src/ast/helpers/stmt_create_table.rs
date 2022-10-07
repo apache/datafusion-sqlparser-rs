@@ -1,11 +1,45 @@
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, string::String, vec, vec::Vec};
+use alloc::{boxed::Box, format, string::String, vec, vec::Vec};
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 use crate::ast::{
     ColumnDef, FileFormat, HiveDistributionStyle, HiveFormat, ObjectName, OnCommit, Query,
     SqlOption, Statement, TableConstraint,
 };
+use crate::parser::ParserError;
 
+/// Builder for create table statement variant ([1]).
+///
+/// This structure helps building and accessing a create table with more ease, without needing to:
+/// - Match the enum itself a lot of times; or
+/// - Moving a lot of variables around the code.
+///
+/// # Example
+/// ```rust
+/// use sqlparser::ast::helpers::stmt_create_table::CreateTableBuilder;
+/// use sqlparser::ast::{ColumnDef, DataType, Ident, ObjectName};
+/// let builder = CreateTableBuilder::new(ObjectName(vec![Ident::new("table_name")]))
+///    .if_not_exists(true)
+///    .columns(vec![ColumnDef {
+///        name: Ident::new("c1"),
+///        data_type: DataType::Int(None),
+///        collation: None,
+///        options: vec![],
+/// }]);
+/// // You can access internal elements with ease
+/// assert!(builder.if_not_exists);
+/// // Convert to a statement
+/// assert_eq!(
+///    builder.build().to_string(),
+///    "CREATE TABLE IF NOT EXISTS table_name (c1 INT)"
+/// )
+/// ```
+///
+/// [1]: crate::ast::Statement::CreateTable
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CreateTableBuilder {
     pub or_replace: bool,
     pub temporary: bool,
@@ -34,7 +68,7 @@ pub struct CreateTableBuilder {
 
 impl CreateTableBuilder {
     pub fn new(name: ObjectName) -> Self {
-        CreateTableBuilder {
+        Self {
             or_replace: false,
             temporary: false,
             external: false,
@@ -137,7 +171,8 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn clone(mut self, clone: Option<ObjectName>) -> Self {
+    // Different name to allow the object to be cloned
+    pub fn clone_clause(mut self, clone: Option<ObjectName>) -> Self {
         self.clone = clone;
         self
     }
@@ -193,5 +228,96 @@ impl CreateTableBuilder {
             on_commit: self.on_commit,
             on_cluster: self.on_cluster,
         }
+    }
+}
+
+impl TryFrom<Statement> for CreateTableBuilder {
+    type Error = ParserError;
+
+    // As the builder can be transformed back to a statement, it shouldn't be a problem to take the
+    // ownership.
+    fn try_from(stmt: Statement) -> Result<Self, Self::Error> {
+        match stmt {
+            Statement::CreateTable {
+                or_replace,
+                temporary,
+                external,
+                global,
+                if_not_exists,
+                name,
+                columns,
+                constraints,
+                hive_distribution,
+                hive_formats,
+                table_properties,
+                with_options,
+                file_format,
+                location,
+                query,
+                without_rowid,
+                like,
+                clone,
+                engine,
+                default_charset,
+                collation,
+                on_commit,
+                on_cluster,
+            } => Ok(Self {
+                or_replace,
+                temporary,
+                external,
+                global,
+                if_not_exists,
+                name,
+                columns,
+                constraints,
+                hive_distribution,
+                hive_formats,
+                table_properties,
+                with_options,
+                file_format,
+                location,
+                query,
+                without_rowid,
+                like,
+                clone,
+                engine,
+                default_charset,
+                collation,
+                on_commit,
+                on_cluster,
+            }),
+            _ => Err(ParserError::ParserError(format!(
+                "Expected create table statement, but received: {stmt}"
+            ))),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
+    use crate::ast::{Ident, ObjectName, Statement};
+    use crate::parser::ParserError;
+
+    #[test]
+    pub fn test_from_valid_statement() {
+        let builder = CreateTableBuilder::new(ObjectName(vec![Ident::new("table_name")]));
+
+        let stmt = builder.clone().build();
+
+        assert_eq!(builder, CreateTableBuilder::try_from(stmt).unwrap());
+    }
+
+    #[test]
+    pub fn test_from_invalid_statement() {
+        let stmt = Statement::Commit { chain: false };
+
+        assert_eq!(
+            CreateTableBuilder::try_from(stmt).unwrap_err(),
+            ParserError::ParserError(
+                "Expected create table statement, but received: COMMIT".to_owned()
+            )
+        );
     }
 }

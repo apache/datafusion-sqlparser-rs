@@ -13,6 +13,7 @@
 //! SQL Abstract Syntax Tree (AST) types
 mod data_type;
 mod ddl;
+pub mod helpers;
 mod operator;
 mod query;
 mod value;

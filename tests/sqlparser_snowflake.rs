@@ -334,6 +334,25 @@ fn parse_similar_to() {
     chk(true);
 }
 
+#[test]
+fn test_array_agg_func() {
+    for sql in [
+        "SELECT ARRAY_AGG(x) WITHIN GROUP (ORDER BY x) AS a FROM T",
+        "SELECT ARRAY_AGG(DISTINCT x) WITHIN GROUP (ORDER BY x ASC) FROM tbl",
+    ] {
+        snowflake().verified_stmt(sql);
+    }
+
+    let sql = "select array_agg(x order by x) as a from T";
+    let result = snowflake().parse_sql_statements(sql);
+    assert_eq!(
+        result,
+        Err(ParserError::ParserError(String::from(
+            "Expected ), found: order"
+        )))
+    )
+}
+
 fn snowflake() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SnowflakeDialect {})],

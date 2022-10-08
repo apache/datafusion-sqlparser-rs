@@ -30,6 +30,7 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 pub use self::data_type::DataType;
+pub use self::data_type::ExactNumberInfo;
 pub use self::data_type::TimezoneInfo;
 pub use self::ddl::{
     AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,

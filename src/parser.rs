@@ -3481,10 +3481,9 @@ impl<'a> Parser<'a> {
                 Keyword::STRING => Ok(DataType::String),
                 Keyword::TEXT => Ok(DataType::Text),
                 Keyword::BYTEA => Ok(DataType::Bytea),
-                Keyword::NUMERIC | Keyword::DECIMAL | Keyword::DEC => {
-                    let (precision, scale) = self.parse_optional_precision_scale()?;
-                    Ok(DataType::Decimal(precision, scale))
-                }
+                Keyword::NUMERIC | Keyword::DECIMAL | Keyword::DEC => Ok(DataType::Decimal(
+                    self.parse_exact_number_optional_precision_scale()?,
+                )),
                 Keyword::ENUM => Ok(DataType::Enum(self.parse_string_values()?)),
                 Keyword::SET => Ok(DataType::Set(self.parse_string_values()?)),
                 Keyword::ARRAY => {
@@ -3695,6 +3694,28 @@ impl<'a> Parser<'a> {
             Ok((Some(n), scale))
         } else {
             Ok((None, None))
+        }
+    }
+
+    pub fn parse_exact_number_optional_precision_scale(
+        &mut self,
+    ) -> Result<ExactNumberInfo, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let precision = self.parse_literal_uint()?;
+            let scale = if self.consume_token(&Token::Comma) {
+                Some(self.parse_literal_uint()?)
+            } else {
+                None
+            };
+
+            self.expect_token(&Token::RParen)?;
+
+            match scale {
+                None => Ok(ExactNumberInfo::Precision(precision)),
+                Some(scale) => Ok(ExactNumberInfo::PrecisionAndScale(precision, scale)),
+            }
+        } else {
+            Ok(ExactNumberInfo::None)
         }
     }
 
@@ -5311,7 +5332,7 @@ mod tests {
 
     #[cfg(test)]
     mod test_parse_data_type {
-        use crate::ast::{DataType, TimezoneInfo};
+        use crate::ast::{DataType, ExactNumberInfo, TimezoneInfo};
         use crate::dialect::{AnsiDialect, GenericDialect};
         use crate::test_utils::TestedDialects;
 
@@ -5349,6 +5370,28 @@ mod tests {
             test_parse_data_type!(dialect, "CHAR VARYING(20)", DataType::CharVarying(Some(20)));
 
             test_parse_data_type!(dialect, "VARCHAR(20)", DataType::Varchar(Some(20)));
+        }
+
+        #[test]
+        fn test_ansii_exact_numeric_types() {
+            // Exact numeric types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type>
+            let dialect = TestedDialects {
+                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+            };
+
+            test_parse_data_type!(dialect, "NUMERIC", DataType::Decimal(ExactNumberInfo::None));
+
+            test_parse_data_type!(
+                dialect,
+                "NUMERIC(2)",
+                DataType::Decimal(ExactNumberInfo::Precision(2))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "NUMERIC(2,10)",
+                DataType::Decimal(ExactNumberInfo::PrecisionAndScale(2, 10))
+            );
         }
 
         #[test]

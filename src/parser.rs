@@ -4113,14 +4113,19 @@ impl<'a> Parser<'a> {
         if let Some(Keyword::HIVEVAR) = modifier {
             self.expect_token(&Token::Colon)?;
         } else if self.parse_keyword(Keyword::ROLE) {
+            let context_modifier = match modifier {
+                Some(keyword) if keyword == Keyword::LOCAL => ContextModifier::Local,
+                Some(keyword) if keyword == Keyword::SESSION => ContextModifier::Session,
+                _ => ContextModifier::None,
+            };
+
             let role_name = if self.parse_keyword(Keyword::NONE) {
                 None
             } else {
                 Some(self.parse_identifier()?)
             };
             return Ok(Statement::SetRole {
-                local: modifier == Some(Keyword::LOCAL),
-                session: modifier == Some(Keyword::SESSION),
+                context_modifier,
                 role_name,
             });
         }

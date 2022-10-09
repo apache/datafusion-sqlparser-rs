@@ -26,15 +26,15 @@ use super::value::escape_single_quote_string;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DataType {
     /// Fixed-length character type e.g. CHARACTER(10)
-    Character(Option<u64>),
+    Character(Option<CharacterLength>),
     /// Fixed-length char type e.g. CHAR(10)
-    Char(Option<u64>),
+    Char(Option<CharacterLength>),
     /// Character varying type e.g. CHARACTER VARYING(10)
-    CharacterVarying(Option<u64>),
+    CharacterVarying(Option<CharacterLength>),
     /// Char varying type e.g. CHAR VARYING(10)
-    CharVarying(Option<u64>),
+    CharVarying(Option<CharacterLength>),
     /// Variable-length character type e.g. VARCHAR(10)
-    Varchar(Option<u64>),
+    Varchar(Option<CharacterLength>),
     /// Variable-length character type e.g. NVARCHAR(10)
     Nvarchar(Option<u64>),
     /// Uuid type
@@ -133,17 +133,14 @@ pub enum DataType {
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DataType::Character(size) => {
-                format_type_with_optional_length(f, "CHARACTER", size, false)
-            }
-            DataType::Char(size) => format_type_with_optional_length(f, "CHAR", size, false),
+            DataType::Character(size) => format_character_string_type(f, "CHARACTER", size),
+            DataType::Char(size) => format_character_string_type(f, "CHAR", size),
             DataType::CharacterVarying(size) => {
-                format_type_with_optional_length(f, "CHARACTER VARYING", size, false)
+                format_character_string_type(f, "CHARACTER VARYING", size)
             }
-            DataType::CharVarying(size) => {
-                format_type_with_optional_length(f, "CHAR VARYING", size, false)
-            }
-            DataType::Varchar(size) => format_type_with_optional_length(f, "VARCHAR", size, false),
+
+            DataType::CharVarying(size) => format_character_string_type(f, "CHAR VARYING", size),
+            DataType::Varchar(size) => format_character_string_type(f, "VARCHAR", size),
             DataType::Nvarchar(size) => {
                 format_type_with_optional_length(f, "NVARCHAR", size, false)
             }
@@ -247,6 +244,18 @@ fn format_type_with_optional_length(
     Ok(())
 }
 
+fn format_character_string_type(
+    f: &mut fmt::Formatter,
+    sql_type: &str,
+    size: &Option<CharacterLength>,
+) -> fmt::Result {
+    write!(f, "{}", sql_type)?;
+    if let Some(size) = size {
+        write!(f, "({})", size)?;
+    }
+    Ok(())
+}
+
 /// Timestamp and Time data types information about TimeZone formatting.
 ///
 /// This is more related to a display information than real differences between each variant. To
@@ -320,6 +329,53 @@ impl fmt::Display for ExactNumberInfo {
             }
             ExactNumberInfo::PrecisionAndScale(p, s) => {
                 write!(f, "({p},{s})")
+            }
+        }
+    }
+}
+
+/// Information about [character length][1], including length and possibly unit.
+///
+/// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-length
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct CharacterLength {
+    /// Default (if VARYING) or maximum (if not VARYING) length
+    pub length: u64,
+    /// Optional unit. If not informed, the ANSI handles it as CHARACTERS implicitly
+    pub unit: Option<CharLengthUnits>,
+}
+
+impl fmt::Display for CharacterLength {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.length)?;
+        if let Some(unit) = &self.unit {
+            write!(f, " {}", unit)?;
+        }
+        Ok(())
+    }
+}
+
+/// Possible units for characters, initially based on 2016 ANSI [standard][1].
+///
+/// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#char-length-units
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum CharLengthUnits {
+    /// CHARACTERS unit
+    Characters,
+    /// OCTETS unit
+    Octets,
+}
+
+impl fmt::Display for CharLengthUnits {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Characters => {
+                write!(f, "CHARACTERS")
+            }
+            Self::Octets => {
+                write!(f, "OCTETS")
             }
         }
     }

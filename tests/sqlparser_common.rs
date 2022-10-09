@@ -1945,7 +1945,10 @@ fn parse_create_table() {
                 vec![
                     ColumnDef {
                         name: "name".into(),
-                        data_type: DataType::Varchar(Some(100)),
+                        data_type: DataType::Varchar(Some(CharacterLength {
+                            length: 100,
+                            unit: None
+                        })),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -2401,7 +2404,10 @@ fn parse_create_external_table() {
                 vec![
                     ColumnDef {
                         name: "name".into(),
-                        data_type: DataType::Varchar(Some(100)),
+                        data_type: DataType::Varchar(Some(CharacterLength {
+                            length: 100,
+                            unit: None
+                        })),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -2469,7 +2475,10 @@ fn parse_create_or_replace_external_table() {
                 columns,
                 vec![ColumnDef {
                     name: "name".into(),
-                    data_type: DataType::Varchar(Some(100)),
+                    data_type: DataType::Varchar(Some(CharacterLength {
+                        length: 100,
+                        unit: None
+                    })),
                     collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,

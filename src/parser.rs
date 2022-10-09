@@ -3426,20 +3426,24 @@ impl<'a> Parser<'a> {
                         Ok(DataType::BigInt(optional_precision?))
                     }
                 }
-                Keyword::VARCHAR => Ok(DataType::Varchar(self.parse_optional_precision()?)),
+                Keyword::VARCHAR => Ok(DataType::Varchar(self.parse_optional_character_length()?)),
                 Keyword::NVARCHAR => Ok(DataType::Nvarchar(self.parse_optional_precision()?)),
                 Keyword::CHARACTER => {
                     if self.parse_keyword(Keyword::VARYING) {
-                        Ok(DataType::CharacterVarying(self.parse_optional_precision()?))
+                        Ok(DataType::CharacterVarying(
+                            self.parse_optional_character_length()?,
+                        ))
                     } else {
-                        Ok(DataType::Character(self.parse_optional_precision()?))
+                        Ok(DataType::Character(self.parse_optional_character_length()?))
                     }
                 }
                 Keyword::CHAR => {
                     if self.parse_keyword(Keyword::VARYING) {
-                        Ok(DataType::CharVarying(self.parse_optional_precision()?))
+                        Ok(DataType::CharVarying(
+                            self.parse_optional_character_length()?,
+                        ))
                     } else {
-                        Ok(DataType::Char(self.parse_optional_precision()?))
+                        Ok(DataType::Char(self.parse_optional_character_length()?))
                     }
                 }
                 Keyword::CLOB => Ok(DataType::Clob(self.parse_optional_precision()?)),
@@ -3678,6 +3682,31 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn parse_optional_character_length(
+        &mut self,
+    ) -> Result<Option<CharacterLength>, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let character_length = self.parse_character_length()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Some(character_length))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn parse_character_length(&mut self) -> Result<CharacterLength, ParserError> {
+        let length = self.parse_literal_uint()?;
+        let unit = if self.parse_keyword(Keyword::CHARACTERS) {
+            Some(CharLengthUnits::Characters)
+        } else if self.parse_keyword(Keyword::OCTETS) {
+            Some(CharLengthUnits::Octets)
+        } else {
+            None
+        };
+
+        Ok(CharacterLength { length, unit })
     }
 
     pub fn parse_optional_precision_scale(
@@ -5332,7 +5361,9 @@ mod tests {
 
     #[cfg(test)]
     mod test_parse_data_type {
-        use crate::ast::{DataType, ExactNumberInfo, TimezoneInfo};
+        use crate::ast::{
+            CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
+        };
         use crate::dialect::{AnsiDialect, GenericDialect};
         use crate::test_utils::TestedDialects;
 
@@ -5355,21 +5386,124 @@ mod tests {
 
             test_parse_data_type!(dialect, "CHARACTER", DataType::Character(None));
 
-            test_parse_data_type!(dialect, "CHARACTER(20)", DataType::Character(Some(20)));
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER(20)",
+                DataType::Character(Some(CharacterLength {
+                    length: 20,
+                    unit: None
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER(20 CHARACTERS)",
+                DataType::Character(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Characters)
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER(20 OCTETS)",
+                DataType::Character(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Octets)
+                }))
+            );
 
             test_parse_data_type!(dialect, "CHAR", DataType::Char(None));
 
-            test_parse_data_type!(dialect, "CHAR(20)", DataType::Char(Some(20)));
+            test_parse_data_type!(
+                dialect,
+                "CHAR(20)",
+                DataType::Char(Some(CharacterLength {
+                    length: 20,
+                    unit: None
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHAR(20 CHARACTERS)",
+                DataType::Char(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Characters)
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHAR(20 OCTETS)",
+                DataType::Char(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Octets)
+                }))
+            );
 
             test_parse_data_type!(
                 dialect,
                 "CHARACTER VARYING(20)",
-                DataType::CharacterVarying(Some(20))
+                DataType::CharacterVarying(Some(CharacterLength {
+                    length: 20,
+                    unit: None
+                }))
             );
 
-            test_parse_data_type!(dialect, "CHAR VARYING(20)", DataType::CharVarying(Some(20)));
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER VARYING(20 CHARACTERS)",
+                DataType::CharacterVarying(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Characters)
+                }))
+            );
 
-            test_parse_data_type!(dialect, "VARCHAR(20)", DataType::Varchar(Some(20)));
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER VARYING(20 OCTETS)",
+                DataType::CharacterVarying(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Octets)
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHAR VARYING(20)",
+                DataType::CharVarying(Some(CharacterLength {
+                    length: 20,
+                    unit: None
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHAR VARYING(20 CHARACTERS)",
+                DataType::CharVarying(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Characters)
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHAR VARYING(20 OCTETS)",
+                DataType::CharVarying(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Octets)
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "VARCHAR(20)",
+                DataType::Varchar(Some(CharacterLength {
+                    length: 20,
+                    unit: None
+                }))
+            );
         }
 
         #[test]

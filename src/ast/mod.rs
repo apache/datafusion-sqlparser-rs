@@ -29,9 +29,9 @@ use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-pub use self::data_type::DataType;
-pub use self::data_type::ExactNumberInfo;
-pub use self::data_type::TimezoneInfo;
+pub use self::data_type::{
+    CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
+};
 pub use self::ddl::{
     AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
     ReferentialAction, TableConstraint,

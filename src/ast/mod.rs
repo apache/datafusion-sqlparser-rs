@@ -11,13 +11,6 @@
 // limitations under the License.
 
 //! SQL Abstract Syntax Tree (AST) types
-mod data_type;
-mod ddl;
-pub mod helpers;
-mod operator;
-mod query;
-mod value;
-
 #[cfg(not(feature = "std"))]
 use alloc::{
     boxed::Box,
@@ -43,6 +36,13 @@ pub use self::query::{
     TableFactor, TableWithJoins, Top, Values, With,
 };
 pub use self::value::{DateTimeField, TrimWhereField, Value};
+
+mod data_type;
+mod ddl;
+pub mod helpers;
+mod operator;
+mod query;
+mod value;
 
 struct DisplaySeparated<'a, T>
 where
@@ -1227,14 +1227,16 @@ pub enum Statement {
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
     Discard { object_type: DiscardObject },
-    /// SET [ SESSION | LOCAL ] ROLE role_name
+    /// SET `[ SESSION | LOCAL ]` ROLE role_name. Examples: [ANSI][1], [Postgresql][2], [MySQL][3], and [Oracle][4].
     ///
-    /// Note: this is a PostgreSQL-specific statement,
-    /// but may also compatible with other SQL.
+    /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#set-role-statement
+    /// [2]: https://www.postgresql.org/docs/14/sql-set-role.html
+    /// [3]: https://dev.mysql.com/doc/refman/8.0/en/set-role.html
+    /// [4]: https://docs.oracle.com/cd/B19306_01/server.102/b14200/statements_10004.htm
     SetRole {
-        local: bool,
-        // SESSION is the default if neither SESSION nor LOCAL appears.
-        session: bool,
+        /// Non-ANSI optional identifier to inform if the role is defined inside the current session (`SESSION`) or transaction (`LOCAL`).
+        context_modifier: ContextModifier,
+        /// Role name. If NONE is specified, then the current role name is removed.
         role_name: Option<Ident>,
     },
     /// SET <variable>
@@ -2136,23 +2138,12 @@ impl fmt::Display for Statement {
                 write!(f, "DISCARD {object_type}", object_type = object_type)?;
                 Ok(())
             }
-            Statement::SetRole {
-                local,
-                session,
+            Self::SetRole {
+                context_modifier,
                 role_name,
             } => {
-                write!(
-                    f,
-                    "SET {local}{session}ROLE",
-                    local = if *local { "LOCAL " } else { "" },
-                    session = if *session { "SESSION " } else { "" },
-                )?;
-                if let Some(role_name) = role_name {
-                    write!(f, " {}", role_name)?;
-                } else {
-                    f.write_str(" NONE")?;
-                }
-                Ok(())
+                let role_name = role_name.clone().unwrap_or_else(|| Ident::new("NONE"));
+                write!(f, "SET{context_modifier} ROLE {role_name}")
             }
             Statement::SetVariable {
                 local,
@@ -3279,6 +3270,34 @@ impl fmt::Display for DiscardObject {
             DiscardObject::PLANS => f.write_str("PLANS"),
             DiscardObject::SEQUENCES => f.write_str("SEQUENCES"),
             DiscardObject::TEMP => f.write_str("TEMP"),
+        }
+    }
+}
+
+/// Optional context modifier for statements that can be or `LOCAL`, or `SESSION`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ContextModifier {
+    /// No context defined. Each dialect defines the default in this scenario.
+    None,
+    /// `LOCAL` identifier, usually related to transactional states.
+    Local,
+    /// `SESSION` identifier
+    Session,
+}
+
+impl fmt::Display for ContextModifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::None => {
+                write!(f, "")
+            }
+            Self::Local => {
+                write!(f, " LOCAL")
+            }
+            Self::Session => {
+                write!(f, " SESSION")
+            }
         }
     }
 }

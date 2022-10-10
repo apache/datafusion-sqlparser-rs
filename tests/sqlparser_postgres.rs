@@ -902,41 +902,44 @@ fn parse_set() {
 
 #[test]
 fn parse_set_role() {
-    let stmt = pg_and_generic().verified_stmt("SET SESSION ROLE NONE");
+    let query = "SET SESSION ROLE NONE";
+    let stmt = pg_and_generic().verified_stmt(query);
     assert_eq!(
         stmt,
         Statement::SetRole {
-            local: false,
-            session: true,
+            context_modifier: ContextModifier::Session,
             role_name: None,
         }
     );
+    assert_eq!(query, stmt.to_string());
 
-    let stmt = pg_and_generic().verified_stmt("SET LOCAL ROLE \"rolename\"");
+    let query = "SET LOCAL ROLE \"rolename\"";
+    let stmt = pg_and_generic().verified_stmt(query);
     assert_eq!(
         stmt,
         Statement::SetRole {
-            local: true,
-            session: false,
+            context_modifier: ContextModifier::Local,
             role_name: Some(Ident {
                 value: "rolename".to_string(),
                 quote_style: Some('\"'),
             }),
         }
     );
+    assert_eq!(query, stmt.to_string());
 
-    let stmt = pg_and_generic().verified_stmt("SET ROLE 'rolename'");
+    let query = "SET ROLE 'rolename'";
+    let stmt = pg_and_generic().verified_stmt(query);
     assert_eq!(
         stmt,
         Statement::SetRole {
-            local: false,
-            session: false,
+            context_modifier: ContextModifier::None,
             role_name: Some(Ident {
                 value: "rolename".to_string(),
                 quote_style: Some('\''),
             }),
         }
     );
+    assert_eq!(query, stmt.to_string());
 }
 
 #[test]

@@ -1037,6 +1037,8 @@ pub enum Statement {
         /// whether the insert has the table keyword (Hive)
         table: bool,
         on: Option<OnInsert>,
+        /// RETURNING
+        returning: Option<Vec<SelectItem>>,
     },
     // TODO: Support ROW FORMAT
     Directory {
@@ -1077,6 +1079,8 @@ pub enum Statement {
         from: Option<TableWithJoins>,
         /// WHERE
         selection: Option<Expr>,
+        /// RETURNING
+        returning: Option<Vec<SelectItem>>,
     },
     /// DELETE
     Delete {
@@ -1086,6 +1090,8 @@ pub enum Statement {
         using: Option<TableFactor>,
         /// WHERE
         selection: Option<Expr>,
+        /// RETURNING
+        returning: Option<Vec<SelectItem>>,
     },
     /// CREATE VIEW
     CreateView {
@@ -1633,6 +1639,7 @@ impl fmt::Display for Statement {
                 source,
                 table,
                 on,
+                returning,
             } => {
                 if let Some(action) = or {
                     write!(f, "INSERT OR {} INTO {} ", action, table_name)?;
@@ -1660,10 +1667,14 @@ impl fmt::Display for Statement {
                 write!(f, "{}", source)?;
 
                 if let Some(on) = on {
-                    write!(f, "{}", on)
-                } else {
-                    Ok(())
+                    write!(f, "{}", on)?;
                 }
+
+                if let Some(returning) = returning {
+                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
+                }
+
+                    Ok(())
             }
 
             Statement::Copy {
@@ -1707,6 +1718,7 @@ impl fmt::Display for Statement {
                 assignments,
                 from,
                 selection,
+                returning,
             } => {
                 write!(f, "UPDATE {}", table)?;
                 if !assignments.is_empty() {
@@ -1718,12 +1730,16 @@ impl fmt::Display for Statement {
                 if let Some(selection) = selection {
                     write!(f, " WHERE {}", selection)?;
                 }
+                if let Some(returning) = returning {
+                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
+                }
                 Ok(())
             }
             Statement::Delete {
                 table_name,
                 using,
                 selection,
+                returning,
             } => {
                 write!(f, "DELETE FROM {}", table_name)?;
                 if let Some(using) = using {
@@ -1731,6 +1747,9 @@ impl fmt::Display for Statement {
                 }
                 if let Some(selection) = selection {
                     write!(f, " WHERE {}", selection)?;
+                }
+                if let Some(returning) = returning {
+                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
                 }
                 Ok(())
             }

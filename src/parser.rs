@@ -3733,10 +3733,17 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let returning = if self.parse_keyword(Keyword::RETURNING) {
+            Some(self.parse_comma_separated(Parser::parse_select_item)?)
+        } else {
+            None
+        };
+
         Ok(Statement::Delete {
             table_name,
             using,
             selection,
+            returning,
         })
     }
 
@@ -4824,12 +4831,18 @@ impl<'a> Parser<'a> {
 
             let source = Box::new(self.parse_query()?);
             let on = if self.parse_keyword(Keyword::ON) {
-                self.expect_keyword(Keyword::DUPLICATE)?;
-                self.expect_keyword(Keyword::KEY)?;
-                self.expect_keyword(Keyword::UPDATE)?;
-                let l = self.parse_comma_separated(Parser::parse_assignment)?;
+                    self.expect_keyword(Keyword::DUPLICATE)?;
+                    self.expect_keyword(Keyword::KEY)?;
+                    self.expect_keyword(Keyword::UPDATE)?;
+                    let l = self.parse_comma_separated(Parser::parse_assignment)?;
 
-                Some(OnInsert::DuplicateKeyUpdate(l))
+                    Some(OnInsert::DuplicateKeyUpdate(l))
+            } else {
+                None
+            };
+
+            let returning = if self.parse_keyword(Keyword::RETURNING) {
+                Some(self.parse_comma_separated(Parser::parse_select_item)?)
             } else {
                 None
             };
@@ -4845,6 +4858,7 @@ impl<'a> Parser<'a> {
                 source,
                 table,
                 on,
+                returning,
             })
         }
     }
@@ -4863,11 +4877,17 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        let returning = if self.parse_keyword(Keyword::RETURNING) {
+            Some(self.parse_comma_separated(Parser::parse_select_item)?)
+        } else {
+            None
+        };
         Ok(Statement::Update {
             table,
             assignments,
             from,
             selection,
+            returning,
         })
     }
 

@@ -455,6 +455,7 @@ define_keywords!(
     RESULT,
     RETURN,
     RETURNS,
+    RETURNING,
     REVOKE,
     RIGHT,
     ROLE,

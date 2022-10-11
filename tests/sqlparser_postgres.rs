@@ -74,7 +74,10 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "first_name".into(),
-                        data_type: DataType::CharacterVarying(Some(45)),
+                        data_type: DataType::CharacterVarying(Some(CharacterLength {
+                            length: 45,
+                            unit: None
+                        })),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -83,7 +86,10 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "last_name".into(),
-                        data_type: DataType::CharacterVarying(Some(45)),
+                        data_type: DataType::CharacterVarying(Some(CharacterLength {
+                            length: 45,
+                            unit: None
+                        })),
                         collation: Some(ObjectName(vec![Ident::with_quote('"', "es_ES")])),
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -92,7 +98,10 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "email".into(),
-                        data_type: DataType::CharacterVarying(Some(50)),
+                        data_type: DataType::CharacterVarying(Some(CharacterLength {
+                            length: 50,
+                            unit: None
+                        })),
                         collation: None,
                         options: vec![],
                     },

@@ -3652,7 +3652,10 @@ impl<'a> Parser<'a> {
         &mut self,
         optional: IsOptional,
     ) -> Result<Vec<Ident>, ParserError> {
-        if self.consume_token(&Token::LParen) {
+        if self.peek_token() == Token::LParen
+            && self.peek_nth_token(1) != Token::make_keyword("SELECT")
+        {
+            self.expect_token(&Token::LParen)?;
             let cols = self.parse_comma_separated(Parser::parse_identifier)?;
             self.expect_token(&Token::RParen)?;
             Ok(cols)

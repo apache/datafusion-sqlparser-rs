@@ -100,6 +100,101 @@ fn parse_insert_values() {
 }
 
 #[test]
+fn parse_insert_select() {
+    let sql_no_parens = "INSERT INTO s.table_a SELECT col1, col2 FROM s_two.table_x WHERE condition IS TRUE AND condition_2 IS FALSE GROUP BY col2, col1";
+    let sql_parens = "INSERT INTO s.table_a (SELECT col1, col2 FROM s_two.table_x WHERE condition IS TRUE AND condition_2 IS FALSE GROUP BY col2, col1)";
+
+    verified_stmt(sql_no_parens);
+    match verified_stmt(sql_parens) {
+        Statement::Insert {
+            or,
+            into,
+            table_name,
+            columns,
+            overwrite,
+            source,
+            partitioned,
+            after_columns,
+            table,
+            on,
+        } => {
+            assert_eq!(or, None);
+            assert!(into);
+            assert_eq!(
+                table_name,
+                ObjectName(vec![Ident::new("s"), Ident::new("table_a")])
+            );
+            assert_eq!(columns, vec![]);
+            assert!(!overwrite);
+            assert_eq!(
+                source,
+                Box::new(Query {
+                    with: None,
+                    body: Box::new(SetExpr::Query(Box::new(Query {
+                        with: None,
+                        body: Box::new(SetExpr::Select(Box::new(Select {
+                            distinct: false,
+                            top: None,
+                            projection: vec![
+                                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("col1"))),
+                                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("col2")))
+                            ],
+                            into: None,
+                            from: vec![TableWithJoins {
+                                relation: TableFactor::Table {
+                                    name: ObjectName(vec![
+                                        Ident::new("s_two"),
+                                        Ident::new("table_x"),
+                                    ]),
+                                    alias: None,
+                                    args: None,
+                                    with_hints: vec![]
+                                },
+                                joins: vec![]
+                            }],
+                            lateral_views: vec![],
+                            selection: Some(Expr::BinaryOp {
+                                left: Box::new(Expr::IsTrue(Box::new(Expr::Identifier(
+                                    Ident::new("condition")
+                                )))),
+                                op: BinaryOperator::And,
+                                right: Box::new(Expr::IsFalse(Box::new(Expr::Identifier(
+                                    Ident::new("condition_2")
+                                ))))
+                            }),
+                            group_by: vec![
+                                Expr::Identifier(Ident::new("col2")),
+                                Expr::Identifier(Ident::new("col1"))
+                            ],
+                            cluster_by: vec![],
+                            distribute_by: vec![],
+                            sort_by: vec![],
+                            having: None,
+                            qualify: None
+                        }))),
+                        order_by: vec![],
+                        limit: None,
+                        offset: None,
+                        fetch: None,
+                        lock: None
+                    }))),
+                    order_by: vec![],
+                    limit: None,
+                    offset: None,
+                    fetch: None,
+                    lock: None
+                })
+            );
+            assert_eq!(partitioned, None);
+            assert_eq!(after_columns, vec![]);
+            assert!(!table);
+            assert_eq!(on, None);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_insert_sqlite() {
     let dialect = SQLiteDialect {};
 

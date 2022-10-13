@@ -1430,6 +1430,19 @@ pub enum Statement {
         // Specifies the actions to perform when values match or do not match.
         clauses: Vec<MergeClause>,
     },
+    /// CACHE TABLE <table_name> [[AS] [QUERY]]
+    Cache {
+        // Table name
+        table_name: ObjectName,
+        alias: bool,
+        // Cache table as a Query
+        query: Option<Query>,
+    },
+    /// UNCACHE TABLE <table_name>
+    UNCache {
+        // Table name
+        table_name: ObjectName,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -2396,6 +2409,34 @@ impl fmt::Display for Statement {
                 )?;
                 write!(f, "ON {} ", on)?;
                 write!(f, "{}", display_separated(clauses, " "))
+            }
+            Statement::Cache {
+                table_name,
+                alias,
+                query,
+            } => {
+                if query.is_some() {
+                    if *alias {
+                        write!(
+                            f,
+                            "CACHE TABLE {table_name} AS {query}",
+                            table_name = table_name,
+                            query = query.clone().unwrap()
+                        )
+                    } else {
+                        write!(
+                            f,
+                            "CACHE TABLE {table_name} {query}",
+                            table_name = table_name,
+                            query = query.clone().unwrap()
+                        )
+                    }
+                } else {
+                    write!(f, "CACHE TABLE {table_name}", table_name = table_name)
+                }
+            }
+            Statement::UNCache { table_name } => {
+                write!(f, "UNCACHE TABLE {table_name}", table_name = table_name)
             }
         }
     }

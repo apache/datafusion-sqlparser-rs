@@ -554,6 +554,7 @@ define_keywords!(
     TYPE,
     UESCAPE,
     UNBOUNDED,
+    UNCACHE,
     UNCOMMITTED,
     UNION,
     UNIQUE,

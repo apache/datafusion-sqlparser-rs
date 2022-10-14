@@ -2844,6 +2844,7 @@ pub enum ObjectType {
     Index,
     Schema,
     Role,
+    Sequence,
 }
 
 impl fmt::Display for ObjectType {
@@ -2854,6 +2855,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Index => "INDEX",
             ObjectType::Schema => "SCHEMA",
             ObjectType::Role => "ROLE",
+            ObjectType::Sequence => "SEQUENCE",
         })
     }
 }

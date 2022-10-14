@@ -2354,6 +2354,7 @@ impl<'a> Parser<'a> {
             if_exists,
             names,
             cascade,
+            restrict,
             purge,
         })
     }

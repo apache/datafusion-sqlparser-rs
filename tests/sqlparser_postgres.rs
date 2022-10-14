@@ -37,6 +37,8 @@ fn parse_drop_sequence() {
     pg().one_statement_parses_to(sql5, "DROP SEQUENCE name0 CASCADE");
     let sql6 = "DROP SEQUENCE  name1 RESTRICT";
     pg().one_statement_parses_to(sql6, "DROP SEQUENCE name1 RESTRICT");
+    let sql7 = "DROP SEQUENCE  name1, name2, name3";
+    pg().one_statement_parses_to(sql7, "DROP SEQUENCE name1, name2, name3");
 }
 
 #[test]

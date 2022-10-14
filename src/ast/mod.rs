@@ -2127,7 +2127,8 @@ impl fmt::Display for Statement {
                 if_exists,
                 names,
                 cascade,
-                restrict, purge,
+                restrict,
+                purge,
             } => write!(
                 f,
                 "DROP {}{} {}{}{}{}",

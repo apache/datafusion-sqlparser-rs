@@ -22,7 +22,6 @@ use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
 
-
 #[test]
 fn parse_drop_sequence() {
     // SimpleLogger::new().init().unwrap();
@@ -39,7 +38,6 @@ fn parse_drop_sequence() {
     let sql6 = "DROP SEQUENCE  name1 RESTRICT";
     pg().one_statement_parses_to(sql6, "DROP SEQUENCE name1 RESTRICT");
 }
-
 
 #[test]
 fn parse_create_table_with_defaults() {

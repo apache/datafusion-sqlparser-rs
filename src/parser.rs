@@ -620,6 +620,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        
         Ok(Expr::Function(Function {
             name,
             args,

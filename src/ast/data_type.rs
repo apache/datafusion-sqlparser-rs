@@ -39,7 +39,15 @@ pub enum DataType {
     Nvarchar(Option<u64>),
     /// Uuid type
     Uuid,
-    /// Large character object with optional length e.g. CLOB, CLOB(1000), [standard], [Oracle]
+    /// Large character object with optional length e.g. CHARACTER LARGE OBJECT, CHARACTER LARGE OBJECT(1000), [standard]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
+    CharacterLargeObject(Option<u64>),
+    /// Large character object with optional length e.g. CHAR LARGE OBJECT, CHAR LARGE OBJECT(1000), [standard]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
+    CharLargeObject(Option<u64>),
+    /// Large character object with optional length e.g. CLOB, CLOB(1000), [standard]
     ///
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
     /// [Oracle]: https://docs.oracle.com/javadb/10.10.1.2/ref/rrefclob.html
@@ -145,6 +153,12 @@ impl fmt::Display for DataType {
                 format_type_with_optional_length(f, "NVARCHAR", size, false)
             }
             DataType::Uuid => write!(f, "UUID"),
+            DataType::CharacterLargeObject(size) => {
+                format_type_with_optional_length(f, "CHARACTER LARGE OBJECT", size, false)
+            }
+            DataType::CharLargeObject(size) => {
+                format_type_with_optional_length(f, "CHAR LARGE OBJECT", size, false)
+            }
             DataType::Clob(size) => format_type_with_optional_length(f, "CLOB", size, false),
             DataType::Binary(size) => format_type_with_optional_length(f, "BINARY", size, false),
             DataType::Varbinary(size) => {

@@ -2328,9 +2328,11 @@ impl<'a> Parser<'a> {
             ObjectType::Role
         } else if self.parse_keyword(Keyword::SCHEMA) {
             ObjectType::Schema
+        } else if self.parse_keyword(Keyword::SEQUENCE) {
+            ObjectType::Sequence
         } else {
             return self.expected(
-                "TABLE, VIEW, INDEX, ROLE, or SCHEMA after DROP",
+                "TABLE, VIEW, INDEX, ROLE, SCHEMA, or SEQUENCE after DROP",
                 self.peek_token(),
             );
         };

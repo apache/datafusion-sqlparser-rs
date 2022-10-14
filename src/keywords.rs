@@ -383,6 +383,7 @@ define_keywords!(
     OPEN,
     OPERATOR,
     OPTION,
+    OPTIONS,
     OR,
     ORC,
     ORDER,

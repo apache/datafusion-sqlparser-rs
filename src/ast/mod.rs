@@ -1430,18 +1430,24 @@ pub enum Statement {
         // Specifies the actions to perform when values match or do not match.
         clauses: Vec<MergeClause>,
     },
-    /// CACHE TABLE <table_name> [[AS] [QUERY]]
+    /// CACHE [ FLAG ] TABLE <table_name> [ OPTIONS('K1' = 'V1', 'K2' = V2) ] [ AS ] [ <query> ]
+    /// Based on Spark SQL,see <https://docs.databricks.com/spark/latest/spark-sql/language-manual/sql-ref-syntax-aux-cache-cache-table.html>
     Cache {
+        // Table flag
+        table_flag: Option<ObjectName>,
         // Table name
         table_name: ObjectName,
-        alias: bool,
+        has_as: bool,
+        // Table confs
+        options: Vec<SqlOption>,
         // Cache table as a Query
         query: Option<Query>,
     },
-    /// UNCACHE TABLE <table_name>
+    /// UNCACHE TABLE [ IF EXISTS ]  <table_name>
     UNCache {
         // Table name
         table_name: ObjectName,
+        if_exists: bool,
     },
 }
 
@@ -2412,31 +2418,50 @@ impl fmt::Display for Statement {
             }
             Statement::Cache {
                 table_name,
-                alias,
+                table_flag,
+                has_as,
+                options,
                 query,
             } => {
-                if query.is_some() {
-                    if *alias {
-                        write!(
-                            f,
-                            "CACHE TABLE {table_name} AS {query}",
-                            table_name = table_name,
-                            query = query.clone().unwrap()
-                        )
-                    } else {
-                        write!(
-                            f,
-                            "CACHE TABLE {table_name} {query}",
-                            table_name = table_name,
-                            query = query.clone().unwrap()
-                        )
-                    }
+                if table_flag.is_some() {
+                    write!(
+                        f,
+                        "CACHE {table_flag} TABLE {table_name}",
+                        table_flag = table_flag.clone().unwrap(),
+                        table_name = table_name,
+                    )?;
                 } else {
-                    write!(f, "CACHE TABLE {table_name}", table_name = table_name)
+                    write!(f, "CACHE TABLE {table_name}", table_name = table_name,)?;
+                }
+
+                if !options.is_empty() {
+                    write!(f, " OPTIONS({})", display_comma_separated(options))?;
+                }
+
+                let has_query = query.is_some();
+                if *has_as && has_query {
+                    write!(f, " AS {query}", query = query.clone().unwrap())
+                } else if !has_as && has_query {
+                    write!(f, " {query}", query = query.clone().unwrap())
+                } else if *has_as && !has_query {
+                    write!(f, " AS")
+                } else {
+                    Ok(())
                 }
             }
-            Statement::UNCache { table_name } => {
-                write!(f, "UNCACHE TABLE {table_name}", table_name = table_name)
+            Statement::UNCache {
+                table_name,
+                if_exists,
+            } => {
+                if *if_exists {
+                    write!(
+                        f,
+                        "UNCACHE TABLE IF EXISTS {table_name}",
+                        table_name = table_name
+                    )
+                } else {
+                    write!(f, "UNCACHE TABLE {table_name}", table_name = table_name)
+                }
             }
         }
     }

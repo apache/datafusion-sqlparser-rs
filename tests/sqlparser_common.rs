@@ -5817,27 +5817,170 @@ fn parse_show_functions() {
 #[test]
 fn parse_cache_table() {
     let sql = "SELECT a, b, c FROM foo";
+    let cache_table_name = "cache_table_name";
+    let table_flag = "flag";
     let query = all_dialects().verified_query(sql);
 
     assert_eq!(
-        verified_stmt(format!("CACHE TABLE 'table_name' AS {sql}", sql = sql).as_str()),
+        verified_stmt(
+            format!("CACHE TABLE '{table_name}'", table_name = cache_table_name).as_str()
+        ),
         Statement::Cache {
-            table_name: ObjectName(vec![Ident::with_quote('\'', "table_name")]),
-            alias: true,
+            table_flag: None,
+            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            has_as: false,
+            options: vec![],
+            query: None,
+        }
+    );
+
+    assert_eq!(
+        verified_stmt(
+            format!(
+                "CACHE {flag} TABLE '{table_name}'",
+                flag = table_flag,
+                table_name = cache_table_name
+            )
+            .as_str()
+        ),
+        Statement::Cache {
+            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
+            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            has_as: false,
+            options: vec![],
+            query: None,
+        }
+    );
+
+    assert_eq!(
+        verified_stmt(
+            format!(
+                "CACHE {flag} TABLE '{table_name}' OPTIONS('K1' = 'V1', 'K2' = 0.88)",
+                flag = table_flag,
+                table_name = cache_table_name,
+            )
+            .as_str()
+        ),
+        Statement::Cache {
+            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
+            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            has_as: false,
+            options: vec![
+                SqlOption {
+                    name: Ident::with_quote('\'', "K1"),
+                    value: Value::SingleQuotedString("V1".into()),
+                },
+                SqlOption {
+                    name: Ident::with_quote('\'', "K2"),
+                    value: number("0.88"),
+                },
+            ],
+            query: None,
+        }
+    );
+
+    assert_eq!(
+        verified_stmt(
+            format!(
+                "CACHE {flag} TABLE '{table_name}' OPTIONS('K1' = 'V1', 'K2' = 0.88) {sql}",
+                flag = table_flag,
+                table_name = cache_table_name,
+                sql = sql,
+            )
+            .as_str()
+        ),
+        Statement::Cache {
+            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
+            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            has_as: false,
+            options: vec![
+                SqlOption {
+                    name: Ident::with_quote('\'', "K1"),
+                    value: Value::SingleQuotedString("V1".into()),
+                },
+                SqlOption {
+                    name: Ident::with_quote('\'', "K2"),
+                    value: number("0.88"),
+                },
+            ],
             query: Some(query.clone()),
         }
     );
 
     assert_eq!(
-        verified_stmt(format!("CACHE TABLE 'table_name' {sql}", sql = sql).as_str()),
+        verified_stmt(
+            format!(
+                "CACHE {flag} TABLE '{table_name}' OPTIONS('K1' = 'V1', 'K2' = 0.88) AS {sql}",
+                flag = table_flag,
+                table_name = cache_table_name,
+                sql = sql,
+            )
+            .as_str()
+        ),
         Statement::Cache {
-            table_name: ObjectName(vec![Ident::with_quote('\'', "table_name")]),
-            alias: false,
+            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
+            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            has_as: true,
+            options: vec![
+                SqlOption {
+                    name: Ident::with_quote('\'', "K1"),
+                    value: Value::SingleQuotedString("V1".into()),
+                },
+                SqlOption {
+                    name: Ident::with_quote('\'', "K2"),
+                    value: number("0.88"),
+                },
+            ],
+            query: Some(query.clone()),
+        }
+    );
+
+    assert_eq!(
+        verified_stmt(
+            format!(
+                "CACHE {flag} TABLE '{table_name}' {sql}",
+                flag = table_flag,
+                table_name = cache_table_name,
+                sql = sql
+            )
+            .as_str()
+        ),
+        Statement::Cache {
+            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
+            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            has_as: false,
+            options: vec![],
+            query: Some(query.clone()),
+        }
+    );
+
+    assert_eq!(
+        verified_stmt(
+            format!(
+                "CACHE {flag} TABLE '{table_name}' AS {sql}",
+                flag = table_flag,
+                table_name = cache_table_name
+            )
+            .as_str()
+        ),
+        Statement::Cache {
+            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
+            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            has_as: true,
+            options: vec![],
             query: Some(query),
         }
     );
 
     let res = parse_sql_statements("CACHE TABLE 'table_name' foo");
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected SELECT, VALUES, or a subquery in the query body, found: foo".to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("CACHE flag TABLE 'table_name' OPTIONS('K1'='V1') foo");
     assert_eq!(
         ParserError::ParserError(
             "Expected SELECT, VALUES, or a subquery in the query body, found: foo".to_string()
@@ -5853,7 +5996,27 @@ fn parse_cache_table() {
         res.unwrap_err()
     );
 
-    let res = parse_sql_statements("CACHE 'table_name' foo");
+    let res = parse_sql_statements("CACHE flag TABLE 'table_name' OPTIONS('K1'='V1') AS foo");
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected SELECT, VALUES, or a subquery in the query body, found: foo".to_string()
+        ),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("CACHE 'table_name'");
+    assert_eq!(
+        ParserError::ParserError("Expected a `TABLE` keyword, found: 'table_name'".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("CACHE 'table_name' OPTIONS('K1'='V1')");
+    assert_eq!(
+        ParserError::ParserError("Expected a `TABLE` keyword, found: OPTIONS".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = parse_sql_statements("CACHE flag 'table_name' OPTIONS('K1'='V1')");
     assert_eq!(
         ParserError::ParserError("Expected a `TABLE` keyword, found: 'table_name'".to_string()),
         res.unwrap_err()
@@ -5866,12 +6029,21 @@ fn parse_uncache_table() {
         verified_stmt("UNCACHE TABLE 'table_name'"),
         Statement::UNCache {
             table_name: ObjectName(vec![Ident::with_quote('\'', "table_name")]),
+            if_exists: false,
+        }
+    );
+
+    assert_eq!(
+        verified_stmt("UNCACHE TABLE IF EXISTS 'table_name'"),
+        Statement::UNCache {
+            table_name: ObjectName(vec![Ident::with_quote('\'', "table_name")]),
+            if_exists: true,
         }
     );
 
     let res = parse_sql_statements("UNCACHE TABLE 'table_name' foo");
     assert_eq!(
-        ParserError::ParserError("Expected an `EOF` keyword, found: foo".to_string()),
+        ParserError::ParserError("Expected an `EOF`, found: foo".to_string()),
         res.unwrap_err()
     );
 
@@ -5881,9 +6053,9 @@ fn parse_uncache_table() {
         res.unwrap_err()
     );
 
-    let res = parse_sql_statements("UNCACHE 'table_name' foo");
+    let res = parse_sql_statements("UNCACHE IF EXISTS 'table_name' foo");
     assert_eq!(
-        ParserError::ParserError("Expected a `TABLE` keyword, found: 'table_name'".to_string()),
+        ParserError::ParserError("Expected a `TABLE` keyword, found: IF".to_string()),
         res.unwrap_err()
     );
 }

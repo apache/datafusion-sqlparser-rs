@@ -620,7 +620,6 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let over = over.map(Box::new);
         Ok(Expr::Function(Function {
             name,
             args,
@@ -682,7 +681,10 @@ impl<'a> Parser<'a> {
             let rows = if self.parse_keyword(Keyword::UNBOUNDED) {
                 None
             } else {
-                Some(self.parse_range_values()?)
+                Some(Box::new(match self.peek_token() {
+                    Token::SingleQuotedString(_) => self.parse_interval()?,
+                    _ => self.parse_expr()?,
+                }))
             };
             if self.parse_keyword(Keyword::PRECEDING) {
                 Ok(WindowFrameBound::Preceding(rows))
@@ -3316,42 +3318,6 @@ impl<'a> Parser<'a> {
                 ParserError::ParserError(format!("Could not parse '{}' as u64: {}", s, e))
             }),
             unexpected => self.expected("literal int", unexpected),
-        }
-    }
-
-    /// Parse a literal inside window frames such as 1 PRECEDING or '1 DAY' PRECEDING
-    pub fn parse_range_values(&mut self) -> Result<RangeBounds, ParserError> {
-        match self.peek_token() {
-            Token::Number(s, _) => {
-                // consume token Token::Number
-                self.next_token();
-                Ok(RangeBounds::Number(s))
-            }
-            Token::Word(w) => match w.keyword {
-                Keyword::INTERVAL => {
-                    // consume token Keyword::INTERVAL
-                    self.next_token();
-                    match self.parse_interval() {
-                        Ok(interval) => Ok(RangeBounds::Interval(interval)),
-                        e => Err(ParserError::ParserError(format!(
-                            "Interval is not valid {:?}",
-                            e
-                        ))),
-                    }
-                }
-                e => Err(ParserError::ParserError(format!(
-                    "Interval is not valid {:?}",
-                    e
-                ))),
-            },
-            Token::SingleQuotedString(_) => match self.parse_interval() {
-                Ok(interval) => Ok(RangeBounds::Interval(interval)),
-                e => Err(ParserError::ParserError(format!(
-                    "Interval is not valid {:?}",
-                    e
-                ))),
-            },
-            unexpected => self.expected("literal Expression", unexpected),
         }
     }
 

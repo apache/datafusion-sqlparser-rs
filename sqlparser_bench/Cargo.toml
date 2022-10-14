@@ -11,5 +11,5 @@ sqlparser = { path = "../" }
 criterion = "0.4"
 
 [[bench]]
-name = "sqlparser_bench"
 harness = false
+name = "sqlparser_bench"

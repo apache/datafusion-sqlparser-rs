@@ -880,9 +880,9 @@ pub enum WindowFrameBound {
     /// `CURRENT ROW`
     CurrentRow,
     /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
-    Preceding(Option<RangeBounds>),
+    Preceding(Option<Box<Expr>>),
     /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
-    Following(Option<RangeBounds>),
+    Following(Option<Box<Expr>>),
 }
 
 impl fmt::Display for WindowFrameBound {
@@ -893,27 +893,6 @@ impl fmt::Display for WindowFrameBound {
             WindowFrameBound::Following(None) => f.write_str("UNBOUNDED FOLLOWING"),
             WindowFrameBound::Preceding(Some(n)) => write!(f, "{} PRECEDING", n),
             WindowFrameBound::Following(Some(n)) => write!(f, "{} FOLLOWING", n),
-        }
-    }
-}
-
-/// Specifies offset values in the [WindowFrameBound]'s `Preceding` and `Following`
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum RangeBounds {
-    /// Number literal, e.g `1`, `1.1`
-    Number(String),
-    /// Interval, such as `INTERVAL '1 DAY' `
-    Interval(Expr),
-}
-
-impl fmt::Display for RangeBounds {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            RangeBounds::Number(s) => write!(f, "{}", s),
-            RangeBounds::Interval(interval) => {
-                write!(f, "{}", interval)
-            }
         }
     }
 }
@@ -2691,7 +2670,7 @@ impl fmt::Display for CloseCursor {
 pub struct Function {
     pub name: ObjectName,
     pub args: Vec<FunctionArg>,
-    pub over: Option<Box<WindowSpec>>,
+    pub over: Option<WindowSpec>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
     // Some functions must be called without trailing parentheses, for example Postgres

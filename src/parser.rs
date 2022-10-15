@@ -170,12 +170,14 @@ impl<'a> Parser<'a> {
                 Keyword::TRUNCATE => Ok(self.parse_truncate()?),
                 Keyword::MSCK => Ok(self.parse_msck()?),
                 Keyword::CREATE => Ok(self.parse_create()?),
+                Keyword::CACHE => Ok(self.parse_cache_table()?),
                 Keyword::DROP => Ok(self.parse_drop()?),
                 Keyword::DISCARD => Ok(self.parse_discard()?),
                 Keyword::DECLARE => Ok(self.parse_declare()?),
                 Keyword::FETCH => Ok(self.parse_fetch_statement()?),
                 Keyword::DELETE => Ok(self.parse_delete()?),
                 Keyword::INSERT => Ok(self.parse_insert()?),
+                Keyword::UNCACHE => Ok(self.parse_uncache_table()?),
                 Keyword::UPDATE => Ok(self.parse_update()?),
                 Keyword::ALTER => Ok(self.parse_alter()?),
                 Keyword::COPY => Ok(self.parse_copy()?),
@@ -1904,6 +1906,115 @@ impl<'a> Parser<'a> {
             self.parse_create_role()
         } else {
             self.expected("an object type after CREATE", self.peek_token())
+        }
+    }
+
+    /// Parse a CACHE TABLE statement
+    pub fn parse_cache_table(&mut self) -> Result<Statement, ParserError> {
+        let (mut table_flag, mut options, mut has_as, mut query) = (None, vec![], false, None);
+        if self.parse_keyword(Keyword::TABLE) {
+            let table_name = self.parse_object_name()?;
+            if self.peek_token() != Token::EOF {
+                if let Token::Word(word) = self.peek_token() {
+                    if word.keyword == Keyword::OPTIONS {
+                        options = self.parse_options(Keyword::OPTIONS)?
+                    }
+                };
+
+                if self.peek_token() != Token::EOF {
+                    let (a, q) = self.parse_as_query()?;
+                    has_as = a;
+                    query = Some(q);
+                }
+
+                Ok(Statement::Cache {
+                    table_flag,
+                    table_name,
+                    has_as,
+                    options,
+                    query,
+                })
+            } else {
+                Ok(Statement::Cache {
+                    table_flag,
+                    table_name,
+                    has_as,
+                    options,
+                    query,
+                })
+            }
+        } else {
+            table_flag = Some(self.parse_object_name()?);
+            if self.parse_keyword(Keyword::TABLE) {
+                let table_name = self.parse_object_name()?;
+                if self.peek_token() != Token::EOF {
+                    if let Token::Word(word) = self.peek_token() {
+                        if word.keyword == Keyword::OPTIONS {
+                            options = self.parse_options(Keyword::OPTIONS)?
+                        }
+                    };
+
+                    if self.peek_token() != Token::EOF {
+                        let (a, q) = self.parse_as_query()?;
+                        has_as = a;
+                        query = Some(q);
+                    }
+
+                    Ok(Statement::Cache {
+                        table_flag,
+                        table_name,
+                        has_as,
+                        options,
+                        query,
+                    })
+                } else {
+                    Ok(Statement::Cache {
+                        table_flag,
+                        table_name,
+                        has_as,
+                        options,
+                        query,
+                    })
+                }
+            } else {
+                if self.peek_token() == Token::EOF {
+                    self.prev_token();
+                }
+                self.expected("a `TABLE` keyword", self.peek_token())
+            }
+        }
+    }
+
+    /// Parse 'AS' before as query,such as `WITH XXX AS SELECT XXX` oer `CACHE TABLE AS SELECT XXX`
+    pub fn parse_as_query(&mut self) -> Result<(bool, Query), ParserError> {
+        match self.peek_token() {
+            Token::Word(word) => match word.keyword {
+                Keyword::AS => {
+                    self.next_token();
+                    Ok((true, self.parse_query()?))
+                }
+                _ => Ok((false, self.parse_query()?)),
+            },
+            _ => self.expected("a QUERY statement", self.peek_token()),
+        }
+    }
+
+    /// Parse a UNCACHE TABLE statement
+    pub fn parse_uncache_table(&mut self) -> Result<Statement, ParserError> {
+        let has_table = self.parse_keyword(Keyword::TABLE);
+        if has_table {
+            let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+            let table_name = self.parse_object_name()?;
+            if self.peek_token() == Token::EOF {
+                Ok(Statement::UNCache {
+                    table_name,
+                    if_exists,
+                })
+            } else {
+                self.expected("an `EOF`", self.peek_token())
+            }
+        } else {
+            self.expected("a `TABLE` keyword", self.peek_token())
         }
     }
 

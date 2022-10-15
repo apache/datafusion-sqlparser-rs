@@ -3546,6 +3546,10 @@ impl<'a> Parser<'a> {
                         Ok(DataType::CharacterVarying(
                             self.parse_optional_character_length()?,
                         ))
+                    } else if self.parse_keywords(&[Keyword::LARGE, Keyword::OBJECT]) {
+                        Ok(DataType::CharacterLargeObject(
+                            self.parse_optional_precision()?,
+                        ))
                     } else {
                         Ok(DataType::Character(self.parse_optional_character_length()?))
                     }
@@ -3555,6 +3559,8 @@ impl<'a> Parser<'a> {
                         Ok(DataType::CharVarying(
                             self.parse_optional_character_length()?,
                         ))
+                    } else if self.parse_keywords(&[Keyword::LARGE, Keyword::OBJECT]) {
+                        Ok(DataType::CharLargeObject(self.parse_optional_precision()?))
                     } else {
                         Ok(DataType::Char(self.parse_optional_character_length()?))
                     }
@@ -5622,6 +5628,39 @@ mod tests {
                     unit: None
                 }))
             );
+        }
+
+        #[test]
+        fn test_ansii_character_large_object_types() {
+            // Character large object types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-length>
+            let dialect = TestedDialects {
+                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+            };
+
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER LARGE OBJECT",
+                DataType::CharacterLargeObject(None)
+            );
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER LARGE OBJECT(20)",
+                DataType::CharacterLargeObject(Some(20))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHAR LARGE OBJECT",
+                DataType::CharLargeObject(None)
+            );
+            test_parse_data_type!(
+                dialect,
+                "CHAR LARGE OBJECT(20)",
+                DataType::CharLargeObject(Some(20))
+            );
+
+            test_parse_data_type!(dialect, "CLOB", DataType::Clob(None));
+            test_parse_data_type!(dialect, "CLOB(20)", DataType::Clob(Some(20)));
         }
 
         #[test]

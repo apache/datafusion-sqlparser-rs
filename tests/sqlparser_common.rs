@@ -2940,13 +2940,17 @@ fn parse_window_functions() {
                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), \
                avg(bar) OVER (ORDER BY a \
                RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING), \
+               sum(bar) OVER (ORDER BY a \
+               RANGE BETWEEN INTERVAL '1' DAY PRECEDING AND INTERVAL '1 MONTH' FOLLOWING), \
+               COUNT(*) OVER (ORDER BY a \
+               RANGE BETWEEN INTERVAL '1 DAY' PRECEDING AND INTERVAL '1 DAY' FOLLOWING), \
                max(baz) OVER (ORDER BY a \
                ROWS UNBOUNDED PRECEDING), \
                sum(qux) OVER (ORDER BY a \
                GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING) \
                FROM foo";
     let select = verified_only_select(sql);
-    assert_eq!(5, select.projection.len());
+    assert_eq!(7, select.projection.len());
     assert_eq!(
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("row_number")]),

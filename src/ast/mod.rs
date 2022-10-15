@@ -906,9 +906,9 @@ pub enum WindowFrameBound {
     /// `CURRENT ROW`
     CurrentRow,
     /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
-    Preceding(Option<u64>),
+    Preceding(Option<Box<Expr>>),
     /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
-    Following(Option<u64>),
+    Following(Option<Box<Expr>>),
 }
 
 impl fmt::Display for WindowFrameBound {

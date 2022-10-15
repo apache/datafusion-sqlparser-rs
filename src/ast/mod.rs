@@ -1184,6 +1184,9 @@ pub enum Statement {
         /// Whether `CASCADE` was specified. This will be `false` when
         /// `RESTRICT` or no drop behavior at all was specified.
         cascade: bool,
+        /// Whether `RESTRICT` was specified. This will be `false` when
+        /// `CASCADE` or no drop behavior at all was specified.
+        restrict: bool,
         /// Hive allows you specify whether the table's stored data will be
         /// deleted along with the dropped table
         purge: bool,
@@ -2143,14 +2146,16 @@ impl fmt::Display for Statement {
                 if_exists,
                 names,
                 cascade,
+                restrict,
                 purge,
             } => write!(
                 f,
-                "DROP {}{} {}{}{}",
+                "DROP {}{} {}{}{}{}",
                 object_type,
                 if *if_exists { " IF EXISTS" } else { "" },
                 display_comma_separated(names),
                 if *cascade { " CASCADE" } else { "" },
+                if *restrict { " RESTRICT" } else { "" },
                 if *purge { " PURGE" } else { "" }
             ),
             Statement::Discard { object_type } => {
@@ -2910,6 +2915,7 @@ pub enum ObjectType {
     Index,
     Schema,
     Role,
+    Sequence,
 }
 
 impl fmt::Display for ObjectType {
@@ -2920,6 +2926,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Index => "INDEX",
             ObjectType::Schema => "SCHEMA",
             ObjectType::Role => "ROLE",
+            ObjectType::Sequence => "SEQUENCE",
         })
     }
 }

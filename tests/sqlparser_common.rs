@@ -4469,6 +4469,7 @@ fn parse_drop_table() {
             names,
             cascade,
             purge: _,
+            ..
         } => {
             assert!(!if_exists);
             assert_eq!(ObjectType::Table, object_type);
@@ -4489,6 +4490,7 @@ fn parse_drop_table() {
             names,
             cascade,
             purge: _,
+            ..
         } => {
             assert!(if_exists);
             assert_eq!(ObjectType::Table, object_type);

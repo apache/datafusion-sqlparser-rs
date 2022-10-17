@@ -46,11 +46,11 @@ pub enum DataType {
     /// Large character object with optional length e.g. CHARACTER LARGE OBJECT, CHARACTER LARGE OBJECT(1000), [standard]
     ///
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
-    CharacterLargeObject(Option<u64>),
+    CharacterLargeObject(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Large character object with optional length e.g. CHAR LARGE OBJECT, CHAR LARGE OBJECT(1000), [standard]
     ///
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
-    CharLargeObject(Option<u64>),
+    CharLargeObject(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Large character object with optional length e.g. CLOB, CLOB(1000), [standard]
     ///
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
@@ -327,13 +327,17 @@ impl fmt::Display for TimezoneInfo {
 /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum ExactNumberInfo {
     /// No additional information e.g. `DECIMAL`
     None,
     /// Only precision information e.g. `DECIMAL(10)`
-    Precision(u64),
+    Precision(#[cfg_attr(feature = "derive-visitor", drive(skip))] u64),
     /// Precision and scale information e.g. `DECIMAL(10,2)`
-    PrecisionAndScale(u64, u64),
+    PrecisionAndScale(
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] u64,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] u64,
+    ),
 }
 
 impl fmt::Display for ExactNumberInfo {
@@ -357,8 +361,10 @@ impl fmt::Display for ExactNumberInfo {
 /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-length
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct CharacterLength {
     /// Default (if VARYING) or maximum (if not VARYING) length
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
     pub length: u64,
     /// Optional unit. If not informed, the ANSI handles it as CHARACTERS implicitly
     pub unit: Option<CharLengthUnits>,
@@ -379,6 +385,7 @@ impl fmt::Display for CharacterLength {
 /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#char-length-units
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum CharLengthUnits {
     /// CHARACTERS unit
     Characters,

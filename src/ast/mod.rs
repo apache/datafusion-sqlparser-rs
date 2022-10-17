@@ -22,11 +22,6 @@ use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "derive-visitor")]
-pub use derive_visitor::{
-    visitor_enter_fn, visitor_enter_fn_mut, visitor_fn, visitor_fn_mut, Drive, DriveMut,
-    Event as VisitorEvent, Visitor, VisitorMut,
-};
 pub use self::data_type::{
     CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
 };
@@ -41,6 +36,11 @@ pub use self::query::{
     TableFactor, TableWithJoins, Top, Values, With,
 };
 pub use self::value::{DateTimeField, TrimWhereField, Value};
+#[cfg(feature = "derive-visitor")]
+pub use derive_visitor::{
+    visitor_enter_fn, visitor_enter_fn_mut, visitor_fn, visitor_fn_mut, Drive, DriveMut,
+    Event as VisitorEvent, Visitor, VisitorMut,
+};
 
 mod data_type;
 mod ddl;
@@ -1269,6 +1269,7 @@ pub enum Statement {
         cascade: bool,
         /// Whether `RESTRICT` was specified. This will be `false` when
         /// `CASCADE` or no drop behavior at all was specified.
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
         restrict: bool,
         /// Hive allows you specify whether the table's stored data will be
         /// deleted along with the dropped table
@@ -1562,6 +1563,7 @@ pub enum Statement {
         table_flag: Option<ObjectName>,
         // Table name
         table_name: ObjectName,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
         has_as: bool,
         // Table confs
         options: Vec<SqlOption>,
@@ -1572,6 +1574,7 @@ pub enum Statement {
     UNCache {
         // Table name
         table_name: ObjectName,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
         if_exists: bool,
     },
 }
@@ -3518,6 +3521,7 @@ impl fmt::Display for DiscardObject {
 /// Optional context modifier for statements that can be or `LOCAL`, or `SESSION`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum ContextModifier {
     /// No context defined. Each dialect defines the default in this scenario.
     None,

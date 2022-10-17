@@ -23,6 +23,25 @@ use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
 
 #[test]
+fn parse_drop_sequence() {
+    // SimpleLogger::new().init().unwrap();
+    let sql1 = "DROP SEQUENCE IF EXISTS  name0 CASCADE";
+    pg().one_statement_parses_to(sql1, "DROP SEQUENCE IF EXISTS name0 CASCADE");
+    let sql2 = "DROP SEQUENCE IF EXISTS  name1 RESTRICT";
+    pg().one_statement_parses_to(sql2, "DROP SEQUENCE IF EXISTS name1 RESTRICT");
+    let sql3 = "DROP SEQUENCE  name2 CASCADE";
+    pg().one_statement_parses_to(sql3, "DROP SEQUENCE name2 CASCADE");
+    let sql4 = "DROP SEQUENCE  name2";
+    pg().one_statement_parses_to(sql4, "DROP SEQUENCE name2");
+    let sql5 = "DROP SEQUENCE  name0 CASCADE";
+    pg().one_statement_parses_to(sql5, "DROP SEQUENCE name0 CASCADE");
+    let sql6 = "DROP SEQUENCE  name1 RESTRICT";
+    pg().one_statement_parses_to(sql6, "DROP SEQUENCE name1 RESTRICT");
+    let sql7 = "DROP SEQUENCE  name1, name2, name3";
+    pg().one_statement_parses_to(sql7, "DROP SEQUENCE name1, name2, name3");
+}
+
+#[test]
 fn parse_create_table_with_defaults() {
     let sql = "CREATE TABLE public.customer (
             customer_id integer DEFAULT nextval(public.customer_customer_id_seq),
@@ -74,7 +93,10 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "first_name".into(),
-                        data_type: DataType::CharacterVarying(Some(45)),
+                        data_type: DataType::CharacterVarying(Some(CharacterLength {
+                            length: 45,
+                            unit: None
+                        })),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -83,7 +105,10 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "last_name".into(),
-                        data_type: DataType::CharacterVarying(Some(45)),
+                        data_type: DataType::CharacterVarying(Some(CharacterLength {
+                            length: 45,
+                            unit: None
+                        })),
                         collation: Some(ObjectName(vec![Ident::with_quote('"', "es_ES")])),
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -92,7 +117,10 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "email".into(),
-                        data_type: DataType::CharacterVarying(Some(50)),
+                        data_type: DataType::CharacterVarying(Some(CharacterLength {
+                            length: 50,
+                            unit: None
+                        })),
                         collation: None,
                         options: vec![],
                     },
@@ -902,41 +930,44 @@ fn parse_set() {
 
 #[test]
 fn parse_set_role() {
-    let stmt = pg_and_generic().verified_stmt("SET SESSION ROLE NONE");
+    let query = "SET SESSION ROLE NONE";
+    let stmt = pg_and_generic().verified_stmt(query);
     assert_eq!(
         stmt,
         Statement::SetRole {
-            local: false,
-            session: true,
+            context_modifier: ContextModifier::Session,
             role_name: None,
         }
     );
+    assert_eq!(query, stmt.to_string());
 
-    let stmt = pg_and_generic().verified_stmt("SET LOCAL ROLE \"rolename\"");
+    let query = "SET LOCAL ROLE \"rolename\"";
+    let stmt = pg_and_generic().verified_stmt(query);
     assert_eq!(
         stmt,
         Statement::SetRole {
-            local: true,
-            session: false,
+            context_modifier: ContextModifier::Local,
             role_name: Some(Ident {
                 value: "rolename".to_string(),
                 quote_style: Some('\"'),
             }),
         }
     );
+    assert_eq!(query, stmt.to_string());
 
-    let stmt = pg_and_generic().verified_stmt("SET ROLE 'rolename'");
+    let query = "SET ROLE 'rolename'";
+    let stmt = pg_and_generic().verified_stmt(query);
     assert_eq!(
         stmt,
         Statement::SetRole {
-            local: false,
-            session: false,
+            context_modifier: ContextModifier::None,
             role_name: Some(Ident {
                 value: "rolename".to_string(),
                 quote_style: Some('\''),
             }),
         }
     );
+    assert_eq!(query, stmt.to_string());
 }
 
 #[test]

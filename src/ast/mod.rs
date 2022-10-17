@@ -11,12 +11,6 @@
 // limitations under the License.
 
 //! SQL Abstract Syntax Tree (AST) types
-mod data_type;
-mod ddl;
-mod operator;
-mod query;
-mod value;
-
 #[cfg(not(feature = "std"))]
 use alloc::{
     boxed::Box,
@@ -33,9 +27,9 @@ pub use derive_visitor::{
     visitor_enter_fn, visitor_enter_fn_mut, visitor_fn, visitor_fn_mut, Drive, DriveMut,
     Event as VisitorEvent, Visitor, VisitorMut,
 };
-
-pub use self::data_type::DataType;
-pub use self::data_type::TimezoneInfo;
+pub use self::data_type::{
+    CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
+};
 pub use self::ddl::{
     AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
     ReferentialAction, TableConstraint,
@@ -47,6 +41,13 @@ pub use self::query::{
     TableFactor, TableWithJoins, Top, Values, With,
 };
 pub use self::value::{DateTimeField, TrimWhereField, Value};
+
+mod data_type;
+mod ddl;
+pub mod helpers;
+mod operator;
+mod query;
+mod value;
 
 struct DisplaySeparated<'a, T>
 where
@@ -357,6 +358,16 @@ pub enum Expr {
         field: DateTimeField,
         expr: Box<Expr>,
     },
+    /// CEIL(<expr> [TO DateTimeField])
+    Ceil {
+        expr: Box<Expr>,
+        field: DateTimeField,
+    },
+    /// FLOOR(<expr> [TO DateTimeField])
+    Floor {
+        expr: Box<Expr>,
+        field: DateTimeField,
+    },
     /// POSITION(<expr> in <expr>)
     Position { expr: Box<Expr>, r#in: Box<Expr> },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
@@ -619,6 +630,20 @@ impl fmt::Display for Expr {
             Expr::TryCast { expr, data_type } => write!(f, "TRY_CAST({} AS {})", expr, data_type),
             Expr::SafeCast { expr, data_type } => write!(f, "SAFE_CAST({} AS {})", expr, data_type),
             Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
+            Expr::Ceil { expr, field } => {
+                if field == &DateTimeField::NoDateTime {
+                    write!(f, "CEIL({})", expr)
+                } else {
+                    write!(f, "CEIL({} TO {})", expr, field)
+                }
+            }
+            Expr::Floor { expr, field } => {
+                if field == &DateTimeField::NoDateTime {
+                    write!(f, "FLOOR({})", expr)
+                } else {
+                    write!(f, "FLOOR({} TO {})", expr, field)
+                }
+            }
             Expr::Position { expr, r#in } => write!(f, "POSITION({} IN {})", expr, r#in),
             Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),
             Expr::Nested(ast) => write!(f, "({})", ast),
@@ -919,9 +944,9 @@ pub enum WindowFrameBound {
     /// `CURRENT ROW`
     CurrentRow,
     /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
-    Preceding(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    Preceding(Option<Box<Expr>>),
     /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
-    Following(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    Following(Option<Box<Expr>>),
 }
 
 impl fmt::Display for WindowFrameBound {
@@ -1242,6 +1267,9 @@ pub enum Statement {
         /// `RESTRICT` or no drop behavior at all was specified.
         #[cfg_attr(feature = "derive-visitor", drive(skip))]
         cascade: bool,
+        /// Whether `RESTRICT` was specified. This will be `false` when
+        /// `CASCADE` or no drop behavior at all was specified.
+        restrict: bool,
         /// Hive allows you specify whether the table's stored data will be
         /// deleted along with the dropped table
         #[cfg_attr(feature = "derive-visitor", drive(skip))]
@@ -1290,16 +1318,16 @@ pub enum Statement {
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
     Discard { object_type: DiscardObject },
-    /// SET [ SESSION | LOCAL ] ROLE role_name
+    /// SET `[ SESSION | LOCAL ]` ROLE role_name. Examples: [ANSI][1], [Postgresql][2], [MySQL][3], and [Oracle][4].
     ///
-    /// Note: this is a PostgreSQL-specific statement,
-    /// but may also compatible with other SQL.
+    /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#set-role-statement
+    /// [2]: https://www.postgresql.org/docs/14/sql-set-role.html
+    /// [3]: https://dev.mysql.com/doc/refman/8.0/en/set-role.html
+    /// [4]: https://docs.oracle.com/cd/B19306_01/server.102/b14200/statements_10004.htm
     SetRole {
-        #[cfg_attr(feature = "derive-visitor", drive(skip))]
-        local: bool,
-        // SESSION is the default if neither SESSION nor LOCAL appears.
-        #[cfg_attr(feature = "derive-visitor", drive(skip))]
-        session: bool,
+        /// Non-ANSI optional identifier to inform if the role is defined inside the current session (`SESSION`) or transaction (`LOCAL`).
+        context_modifier: ContextModifier,
+        /// Role name. If NONE is specified, then the current role name is removed.
         role_name: Option<Ident>,
     },
     /// SET <variable>
@@ -1526,6 +1554,25 @@ pub enum Statement {
         on: Box<Expr>,
         // Specifies the actions to perform when values match or do not match.
         clauses: Vec<MergeClause>,
+    },
+    /// CACHE [ FLAG ] TABLE <table_name> [ OPTIONS('K1' = 'V1', 'K2' = V2) ] [ AS ] [ <query> ]
+    /// Based on Spark SQL,see <https://docs.databricks.com/spark/latest/spark-sql/language-manual/sql-ref-syntax-aux-cache-cache-table.html>
+    Cache {
+        // Table flag
+        table_flag: Option<ObjectName>,
+        // Table name
+        table_name: ObjectName,
+        has_as: bool,
+        // Table confs
+        options: Vec<SqlOption>,
+        // Cache table as a Query
+        query: Option<Query>,
+    },
+    /// UNCACHE TABLE [ IF EXISTS ]  <table_name>
+    UNCache {
+        // Table name
+        table_name: ObjectName,
+        if_exists: bool,
     },
 }
 
@@ -2221,37 +2268,28 @@ impl fmt::Display for Statement {
                 if_exists,
                 names,
                 cascade,
+                restrict,
                 purge,
             } => write!(
                 f,
-                "DROP {}{} {}{}{}",
+                "DROP {}{} {}{}{}{}",
                 object_type,
                 if *if_exists { " IF EXISTS" } else { "" },
                 display_comma_separated(names),
                 if *cascade { " CASCADE" } else { "" },
+                if *restrict { " RESTRICT" } else { "" },
                 if *purge { " PURGE" } else { "" }
             ),
             Statement::Discard { object_type } => {
                 write!(f, "DISCARD {object_type}", object_type = object_type)?;
                 Ok(())
             }
-            Statement::SetRole {
-                local,
-                session,
+            Self::SetRole {
+                context_modifier,
                 role_name,
             } => {
-                write!(
-                    f,
-                    "SET {local}{session}ROLE",
-                    local = if *local { "LOCAL " } else { "" },
-                    session = if *session { "SESSION " } else { "" },
-                )?;
-                if let Some(role_name) = role_name {
-                    write!(f, " {}", role_name)?;
-                } else {
-                    f.write_str(" NONE")?;
-                }
-                Ok(())
+                let role_name = role_name.clone().unwrap_or_else(|| Ident::new("NONE"));
+                write!(f, "SET{context_modifier} ROLE {role_name}")
             }
             Statement::SetVariable {
                 local,
@@ -2504,6 +2542,53 @@ impl fmt::Display for Statement {
                 )?;
                 write!(f, "ON {} ", on)?;
                 write!(f, "{}", display_separated(clauses, " "))
+            }
+            Statement::Cache {
+                table_name,
+                table_flag,
+                has_as,
+                options,
+                query,
+            } => {
+                if table_flag.is_some() {
+                    write!(
+                        f,
+                        "CACHE {table_flag} TABLE {table_name}",
+                        table_flag = table_flag.clone().unwrap(),
+                        table_name = table_name,
+                    )?;
+                } else {
+                    write!(f, "CACHE TABLE {table_name}", table_name = table_name,)?;
+                }
+
+                if !options.is_empty() {
+                    write!(f, " OPTIONS({})", display_comma_separated(options))?;
+                }
+
+                let has_query = query.is_some();
+                if *has_as && has_query {
+                    write!(f, " AS {query}", query = query.clone().unwrap())
+                } else if !has_as && has_query {
+                    write!(f, " {query}", query = query.clone().unwrap())
+                } else if *has_as && !has_query {
+                    write!(f, " AS")
+                } else {
+                    Ok(())
+                }
+            }
+            Statement::UNCache {
+                table_name,
+                if_exists,
+            } => {
+                if *if_exists {
+                    write!(
+                        f,
+                        "UNCACHE TABLE IF EXISTS {table_name}",
+                        table_name = table_name
+                    )
+                } else {
+                    write!(f, "UNCACHE TABLE {table_name}", table_name = table_name)
+                }
             }
         }
     }
@@ -2972,6 +3057,7 @@ pub enum ObjectType {
     Index,
     Schema,
     Role,
+    Sequence,
 }
 
 impl fmt::Display for ObjectType {
@@ -2982,6 +3068,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Index => "INDEX",
             ObjectType::Schema => "SCHEMA",
             ObjectType::Role => "ROLE",
+            ObjectType::Sequence => "SEQUENCE",
         })
     }
 }
@@ -3424,6 +3511,34 @@ impl fmt::Display for DiscardObject {
             DiscardObject::PLANS => f.write_str("PLANS"),
             DiscardObject::SEQUENCES => f.write_str("SEQUENCES"),
             DiscardObject::TEMP => f.write_str("TEMP"),
+        }
+    }
+}
+
+/// Optional context modifier for statements that can be or `LOCAL`, or `SESSION`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ContextModifier {
+    /// No context defined. Each dialect defines the default in this scenario.
+    None,
+    /// `LOCAL` identifier, usually related to transactional states.
+    Local,
+    /// `SESSION` identifier
+    Session,
+}
+
+impl fmt::Display for ContextModifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::None => {
+                write!(f, "")
+            }
+            Self::Local => {
+                write!(f, " LOCAL")
+            }
+            Self::Session => {
+                write!(f, " SESSION")
+            }
         }
     }
 }

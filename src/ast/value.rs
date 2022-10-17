@@ -11,8 +11,6 @@
 // limitations under the License.
 
 #[cfg(not(feature = "std"))]
-use alloc::boxed::Box;
-#[cfg(not(feature = "std"))]
 use alloc::string::String;
 use core::fmt;
 
@@ -94,14 +92,17 @@ pub enum DateTimeField {
     Isodow,
     Isoyear,
     Julian,
+    Microsecond,
     Microseconds,
     Millenium,
     Millennium,
+    Millisecond,
     Milliseconds,
     Quarter,
     Timezone,
     TimezoneHour,
     TimezoneMinute,
+    NoDateTime,
 }
 
 impl fmt::Display for DateTimeField {
@@ -122,14 +123,17 @@ impl fmt::Display for DateTimeField {
             DateTimeField::Isodow => "ISODOW",
             DateTimeField::Isoyear => "ISOYEAR",
             DateTimeField::Julian => "JULIAN",
+            DateTimeField::Microsecond => "MICROSECOND",
             DateTimeField::Microseconds => "MICROSECONDS",
             DateTimeField::Millenium => "MILLENIUM",
             DateTimeField::Millennium => "MILLENNIUM",
+            DateTimeField::Millisecond => "MILLISECOND",
             DateTimeField::Milliseconds => "MILLISECONDS",
             DateTimeField::Quarter => "QUARTER",
             DateTimeField::Timezone => "TIMEZONE",
             DateTimeField::TimezoneHour => "TIMEZONE_HOUR",
             DateTimeField::TimezoneMinute => "TIMEZONE_MINUTE",
+            DateTimeField::NoDateTime => "NODATETIME",
         })
     }
 }

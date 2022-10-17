@@ -27,6 +27,7 @@ use log::debug;
 use IsLateral::*;
 use IsOptional::*;
 
+use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{self, Keyword};
@@ -169,12 +170,14 @@ impl<'a> Parser<'a> {
                 Keyword::TRUNCATE => Ok(self.parse_truncate()?),
                 Keyword::MSCK => Ok(self.parse_msck()?),
                 Keyword::CREATE => Ok(self.parse_create()?),
+                Keyword::CACHE => Ok(self.parse_cache_table()?),
                 Keyword::DROP => Ok(self.parse_drop()?),
                 Keyword::DISCARD => Ok(self.parse_discard()?),
                 Keyword::DECLARE => Ok(self.parse_declare()?),
                 Keyword::FETCH => Ok(self.parse_fetch_statement()?),
                 Keyword::DELETE => Ok(self.parse_delete()?),
                 Keyword::INSERT => Ok(self.parse_insert()?),
+                Keyword::UNCACHE => Ok(self.parse_uncache_table()?),
                 Keyword::UPDATE => Ok(self.parse_update()?),
                 Keyword::ALTER => Ok(self.parse_alter()?),
                 Keyword::COPY => Ok(self.parse_copy()?),
@@ -450,6 +453,8 @@ impl<'a> Parser<'a> {
                 Keyword::SAFE_CAST => self.parse_safe_cast_expr(),
                 Keyword::EXISTS => self.parse_exists_expr(false),
                 Keyword::EXTRACT => self.parse_extract_expr(),
+                Keyword::CEIL => self.parse_ceil_floor_expr(true),
+                Keyword::FLOOR => self.parse_ceil_floor_expr(false),
                 Keyword::POSITION => self.parse_position_expr(),
                 Keyword::SUBSTRING => self.parse_substring_expr(),
                 Keyword::OVERLAY => self.parse_overlay_expr(),
@@ -620,7 +625,6 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-
         Ok(Expr::Function(Function {
             name,
             args,
@@ -682,7 +686,10 @@ impl<'a> Parser<'a> {
             let rows = if self.parse_keyword(Keyword::UNBOUNDED) {
                 None
             } else {
-                Some(self.parse_literal_uint()?)
+                Some(Box::new(match self.peek_token() {
+                    Token::SingleQuotedString(_) => self.parse_interval()?,
+                    _ => self.parse_expr()?,
+                }))
             };
             if self.parse_keyword(Keyword::PRECEDING) {
                 Ok(WindowFrameBound::Preceding(rows))
@@ -846,6 +853,30 @@ impl<'a> Parser<'a> {
             field,
             expr: Box::new(expr),
         })
+    }
+
+    pub fn parse_ceil_floor_expr(&mut self, is_ceil: bool) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let expr = self.parse_expr()?;
+        // Parse `CEIL/FLOOR(expr)`
+        let mut field = DateTimeField::NoDateTime;
+        let keyword_to = self.parse_keyword(Keyword::TO);
+        if keyword_to {
+            // Parse `CEIL/FLOOR(expr TO DateTimeField)`
+            field = self.parse_date_time_field()?;
+        }
+        self.expect_token(&Token::RParen)?;
+        if is_ceil {
+            Ok(Expr::Ceil {
+                expr: Box::new(expr),
+                field,
+            })
+        } else {
+            Ok(Expr::Floor {
+                expr: Box::new(expr),
+                field,
+            })
+        }
     }
 
     pub fn parse_position_expr(&mut self) -> Result<Expr, ParserError> {
@@ -1040,10 +1071,10 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    // This function parses date/time fields for both the EXTRACT function-like
-    // operator and interval qualifiers. EXTRACT supports a wider set of
-    // date/time fields than interval qualifiers, so this function may need to
-    // be split in two.
+    // This function parses date/time fields for the EXTRACT function-like
+    // operator, interval qualifiers, and the ceil/floor operations.
+    // EXTRACT supports a wider set of date/time fields than interval qualifiers,
+    // so this function may need to be split in two.
     pub fn parse_date_time_field(&mut self) -> Result<DateTimeField, ParserError> {
         match self.next_token() {
             Token::Word(w) => match w.keyword {
@@ -1062,9 +1093,11 @@ impl<'a> Parser<'a> {
                 Keyword::ISODOW => Ok(DateTimeField::Isodow),
                 Keyword::ISOYEAR => Ok(DateTimeField::Isoyear),
                 Keyword::JULIAN => Ok(DateTimeField::Julian),
+                Keyword::MICROSECOND => Ok(DateTimeField::Microsecond),
                 Keyword::MICROSECONDS => Ok(DateTimeField::Microseconds),
                 Keyword::MILLENIUM => Ok(DateTimeField::Millenium),
                 Keyword::MILLENNIUM => Ok(DateTimeField::Millennium),
+                Keyword::MILLISECOND => Ok(DateTimeField::Millisecond),
                 Keyword::MILLISECONDS => Ok(DateTimeField::Milliseconds),
                 Keyword::QUARTER => Ok(DateTimeField::Quarter),
                 Keyword::TIMEZONE => Ok(DateTimeField::Timezone),
@@ -1142,9 +1175,11 @@ impl<'a> Parser<'a> {
                     Keyword::ISODOW,
                     Keyword::ISOYEAR,
                     Keyword::JULIAN,
+                    Keyword::MICROSECOND,
                     Keyword::MICROSECONDS,
                     Keyword::MILLENIUM,
                     Keyword::MILLENNIUM,
+                    Keyword::MILLISECOND,
                     Keyword::MILLISECONDS,
                     Keyword::QUARTER,
                     Keyword::TIMEZONE,
@@ -1874,6 +1909,115 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a CACHE TABLE statement
+    pub fn parse_cache_table(&mut self) -> Result<Statement, ParserError> {
+        let (mut table_flag, mut options, mut has_as, mut query) = (None, vec![], false, None);
+        if self.parse_keyword(Keyword::TABLE) {
+            let table_name = self.parse_object_name()?;
+            if self.peek_token() != Token::EOF {
+                if let Token::Word(word) = self.peek_token() {
+                    if word.keyword == Keyword::OPTIONS {
+                        options = self.parse_options(Keyword::OPTIONS)?
+                    }
+                };
+
+                if self.peek_token() != Token::EOF {
+                    let (a, q) = self.parse_as_query()?;
+                    has_as = a;
+                    query = Some(q);
+                }
+
+                Ok(Statement::Cache {
+                    table_flag,
+                    table_name,
+                    has_as,
+                    options,
+                    query,
+                })
+            } else {
+                Ok(Statement::Cache {
+                    table_flag,
+                    table_name,
+                    has_as,
+                    options,
+                    query,
+                })
+            }
+        } else {
+            table_flag = Some(self.parse_object_name()?);
+            if self.parse_keyword(Keyword::TABLE) {
+                let table_name = self.parse_object_name()?;
+                if self.peek_token() != Token::EOF {
+                    if let Token::Word(word) = self.peek_token() {
+                        if word.keyword == Keyword::OPTIONS {
+                            options = self.parse_options(Keyword::OPTIONS)?
+                        }
+                    };
+
+                    if self.peek_token() != Token::EOF {
+                        let (a, q) = self.parse_as_query()?;
+                        has_as = a;
+                        query = Some(q);
+                    }
+
+                    Ok(Statement::Cache {
+                        table_flag,
+                        table_name,
+                        has_as,
+                        options,
+                        query,
+                    })
+                } else {
+                    Ok(Statement::Cache {
+                        table_flag,
+                        table_name,
+                        has_as,
+                        options,
+                        query,
+                    })
+                }
+            } else {
+                if self.peek_token() == Token::EOF {
+                    self.prev_token();
+                }
+                self.expected("a `TABLE` keyword", self.peek_token())
+            }
+        }
+    }
+
+    /// Parse 'AS' before as query,such as `WITH XXX AS SELECT XXX` oer `CACHE TABLE AS SELECT XXX`
+    pub fn parse_as_query(&mut self) -> Result<(bool, Query), ParserError> {
+        match self.peek_token() {
+            Token::Word(word) => match word.keyword {
+                Keyword::AS => {
+                    self.next_token();
+                    Ok((true, self.parse_query()?))
+                }
+                _ => Ok((false, self.parse_query()?)),
+            },
+            _ => self.expected("a QUERY statement", self.peek_token()),
+        }
+    }
+
+    /// Parse a UNCACHE TABLE statement
+    pub fn parse_uncache_table(&mut self) -> Result<Statement, ParserError> {
+        let has_table = self.parse_keyword(Keyword::TABLE);
+        if has_table {
+            let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+            let table_name = self.parse_object_name()?;
+            if self.peek_token() == Token::EOF {
+                Ok(Statement::UNCache {
+                    table_name,
+                    if_exists,
+                })
+            } else {
+                self.expected("an `EOF`", self.peek_token())
+            }
+        } else {
+            self.expected("a `TABLE` keyword", self.peek_token())
+        }
+    }
+
     /// SQLite-specific `CREATE VIRTUAL TABLE`
     pub fn parse_create_virtual_table(&mut self) -> Result<Statement, ParserError> {
         self.expect_keyword(Keyword::TABLE)?;
@@ -2002,31 +2146,18 @@ impl<'a> Parser<'a> {
         };
         let location = hive_formats.location.clone();
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
-        Ok(Statement::CreateTable {
-            name: table_name,
-            columns,
-            constraints,
-            hive_distribution,
-            hive_formats: Some(hive_formats),
-            with_options: vec![],
-            table_properties,
-            or_replace,
-            if_not_exists,
-            external: true,
-            global: None,
-            temporary: false,
-            file_format,
-            location,
-            query: None,
-            without_rowid: false,
-            like: None,
-            clone: None,
-            default_charset: None,
-            engine: None,
-            collation: None,
-            on_commit: None,
-            on_cluster: None,
-        })
+        Ok(CreateTableBuilder::new(table_name)
+            .columns(columns)
+            .constraints(constraints)
+            .hive_distribution(hive_distribution)
+            .hive_formats(Some(hive_formats))
+            .table_properties(table_properties)
+            .or_replace(or_replace)
+            .if_not_exists(if_not_exists)
+            .external(true)
+            .file_format(file_format)
+            .location(location)
+            .build())
     }
 
     pub fn parse_file_format(&mut self) -> Result<FileFormat, ParserError> {
@@ -2310,9 +2441,11 @@ impl<'a> Parser<'a> {
             ObjectType::Role
         } else if self.parse_keyword(Keyword::SCHEMA) {
             ObjectType::Schema
+        } else if self.parse_keyword(Keyword::SEQUENCE) {
+            ObjectType::Sequence
         } else {
             return self.expected(
-                "TABLE, VIEW, INDEX, ROLE, or SCHEMA after DROP",
+                "TABLE, VIEW, INDEX, ROLE, SCHEMA, or SEQUENCE after DROP",
                 self.peek_token(),
             );
         };
@@ -2334,6 +2467,7 @@ impl<'a> Parser<'a> {
             if_exists,
             names,
             cascade,
+            restrict,
             purge,
         })
     }
@@ -2637,31 +2771,27 @@ impl<'a> Parser<'a> {
                 None
             };
 
-        Ok(Statement::CreateTable {
-            name: table_name,
-            temporary,
-            columns,
-            constraints,
-            with_options,
-            table_properties,
-            or_replace,
-            if_not_exists,
-            hive_distribution,
-            hive_formats: Some(hive_formats),
-            external: false,
-            global,
-            file_format: None,
-            location: None,
-            query,
-            without_rowid,
-            like,
-            clone,
-            engine,
-            default_charset,
-            collation,
-            on_commit,
-            on_cluster,
-        })
+        Ok(CreateTableBuilder::new(table_name)
+            .temporary(temporary)
+            .columns(columns)
+            .constraints(constraints)
+            .with_options(with_options)
+            .table_properties(table_properties)
+            .or_replace(or_replace)
+            .if_not_exists(if_not_exists)
+            .hive_distribution(hive_distribution)
+            .hive_formats(Some(hive_formats))
+            .global(global)
+            .query(query)
+            .without_rowid(without_rowid)
+            .like(like)
+            .clone_clause(clone)
+            .engine(engine)
+            .default_charset(default_charset)
+            .collation(collation)
+            .on_commit(on_commit)
+            .on_cluster(on_cluster)
+            .build())
     }
 
     pub fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
@@ -3412,20 +3542,30 @@ impl<'a> Parser<'a> {
                         Ok(DataType::BigInt(optional_precision?))
                     }
                 }
-                Keyword::VARCHAR => Ok(DataType::Varchar(self.parse_optional_precision()?)),
+                Keyword::VARCHAR => Ok(DataType::Varchar(self.parse_optional_character_length()?)),
                 Keyword::NVARCHAR => Ok(DataType::Nvarchar(self.parse_optional_precision()?)),
                 Keyword::CHARACTER => {
                     if self.parse_keyword(Keyword::VARYING) {
-                        Ok(DataType::CharacterVarying(self.parse_optional_precision()?))
+                        Ok(DataType::CharacterVarying(
+                            self.parse_optional_character_length()?,
+                        ))
+                    } else if self.parse_keywords(&[Keyword::LARGE, Keyword::OBJECT]) {
+                        Ok(DataType::CharacterLargeObject(
+                            self.parse_optional_precision()?,
+                        ))
                     } else {
-                        Ok(DataType::Character(self.parse_optional_precision()?))
+                        Ok(DataType::Character(self.parse_optional_character_length()?))
                     }
                 }
                 Keyword::CHAR => {
                     if self.parse_keyword(Keyword::VARYING) {
-                        Ok(DataType::CharVarying(self.parse_optional_precision()?))
+                        Ok(DataType::CharVarying(
+                            self.parse_optional_character_length()?,
+                        ))
+                    } else if self.parse_keywords(&[Keyword::LARGE, Keyword::OBJECT]) {
+                        Ok(DataType::CharLargeObject(self.parse_optional_precision()?))
                     } else {
-                        Ok(DataType::Char(self.parse_optional_precision()?))
+                        Ok(DataType::Char(self.parse_optional_character_length()?))
                     }
                 }
                 Keyword::CLOB => Ok(DataType::Clob(self.parse_optional_precision()?)),
@@ -3467,10 +3607,9 @@ impl<'a> Parser<'a> {
                 Keyword::STRING => Ok(DataType::String),
                 Keyword::TEXT => Ok(DataType::Text),
                 Keyword::BYTEA => Ok(DataType::Bytea),
-                Keyword::NUMERIC | Keyword::DECIMAL | Keyword::DEC => {
-                    let (precision, scale) = self.parse_optional_precision_scale()?;
-                    Ok(DataType::Decimal(precision, scale))
-                }
+                Keyword::NUMERIC | Keyword::DECIMAL | Keyword::DEC => Ok(DataType::Decimal(
+                    self.parse_exact_number_optional_precision_scale()?,
+                )),
                 Keyword::ENUM => Ok(DataType::Enum(self.parse_string_values()?)),
                 Keyword::SET => Ok(DataType::Set(self.parse_string_values()?)),
                 Keyword::ARRAY => {
@@ -3667,6 +3806,31 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_optional_character_length(
+        &mut self,
+    ) -> Result<Option<CharacterLength>, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let character_length = self.parse_character_length()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Some(character_length))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn parse_character_length(&mut self) -> Result<CharacterLength, ParserError> {
+        let length = self.parse_literal_uint()?;
+        let unit = if self.parse_keyword(Keyword::CHARACTERS) {
+            Some(CharLengthUnits::Characters)
+        } else if self.parse_keyword(Keyword::OCTETS) {
+            Some(CharLengthUnits::Octets)
+        } else {
+            None
+        };
+
+        Ok(CharacterLength { length, unit })
+    }
+
     pub fn parse_optional_precision_scale(
         &mut self,
     ) -> Result<(Option<u64>, Option<u64>), ParserError> {
@@ -3681,6 +3845,28 @@ impl<'a> Parser<'a> {
             Ok((Some(n), scale))
         } else {
             Ok((None, None))
+        }
+    }
+
+    pub fn parse_exact_number_optional_precision_scale(
+        &mut self,
+    ) -> Result<ExactNumberInfo, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let precision = self.parse_literal_uint()?;
+            let scale = if self.consume_token(&Token::Comma) {
+                Some(self.parse_literal_uint()?)
+            } else {
+                None
+            };
+
+            self.expect_token(&Token::RParen)?;
+
+            match scale {
+                None => Ok(ExactNumberInfo::Precision(precision)),
+                Some(scale) => Ok(ExactNumberInfo::PrecisionAndScale(precision, scale)),
+            }
+        } else {
+            Ok(ExactNumberInfo::None)
         }
     }
 
@@ -4078,14 +4264,19 @@ impl<'a> Parser<'a> {
         if let Some(Keyword::HIVEVAR) = modifier {
             self.expect_token(&Token::Colon)?;
         } else if self.parse_keyword(Keyword::ROLE) {
+            let context_modifier = match modifier {
+                Some(keyword) if keyword == Keyword::LOCAL => ContextModifier::Local,
+                Some(keyword) if keyword == Keyword::SESSION => ContextModifier::Session,
+                _ => ContextModifier::None,
+            };
+
             let role_name = if self.parse_keyword(Keyword::NONE) {
                 None
             } else {
                 Some(self.parse_identifier()?)
             };
             return Ok(Statement::SetRole {
-                local: modifier == Some(Keyword::LOCAL),
-                session: modifier == Some(Keyword::SESSION),
+                context_modifier,
                 role_name,
             });
         }
@@ -5297,7 +5488,9 @@ mod tests {
 
     #[cfg(test)]
     mod test_parse_data_type {
-        use crate::ast::{DataType, TimezoneInfo};
+        use crate::ast::{
+            CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
+        };
         use crate::dialect::{AnsiDialect, GenericDialect};
         use crate::test_utils::TestedDialects;
 
@@ -5320,21 +5513,179 @@ mod tests {
 
             test_parse_data_type!(dialect, "CHARACTER", DataType::Character(None));
 
-            test_parse_data_type!(dialect, "CHARACTER(20)", DataType::Character(Some(20)));
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER(20)",
+                DataType::Character(Some(CharacterLength {
+                    length: 20,
+                    unit: None
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER(20 CHARACTERS)",
+                DataType::Character(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Characters)
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER(20 OCTETS)",
+                DataType::Character(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Octets)
+                }))
+            );
 
             test_parse_data_type!(dialect, "CHAR", DataType::Char(None));
 
-            test_parse_data_type!(dialect, "CHAR(20)", DataType::Char(Some(20)));
+            test_parse_data_type!(
+                dialect,
+                "CHAR(20)",
+                DataType::Char(Some(CharacterLength {
+                    length: 20,
+                    unit: None
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHAR(20 CHARACTERS)",
+                DataType::Char(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Characters)
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHAR(20 OCTETS)",
+                DataType::Char(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Octets)
+                }))
+            );
 
             test_parse_data_type!(
                 dialect,
                 "CHARACTER VARYING(20)",
-                DataType::CharacterVarying(Some(20))
+                DataType::CharacterVarying(Some(CharacterLength {
+                    length: 20,
+                    unit: None
+                }))
             );
 
-            test_parse_data_type!(dialect, "CHAR VARYING(20)", DataType::CharVarying(Some(20)));
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER VARYING(20 CHARACTERS)",
+                DataType::CharacterVarying(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Characters)
+                }))
+            );
 
-            test_parse_data_type!(dialect, "VARCHAR(20)", DataType::Varchar(Some(20)));
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER VARYING(20 OCTETS)",
+                DataType::CharacterVarying(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Octets)
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHAR VARYING(20)",
+                DataType::CharVarying(Some(CharacterLength {
+                    length: 20,
+                    unit: None
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHAR VARYING(20 CHARACTERS)",
+                DataType::CharVarying(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Characters)
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHAR VARYING(20 OCTETS)",
+                DataType::CharVarying(Some(CharacterLength {
+                    length: 20,
+                    unit: Some(CharLengthUnits::Octets)
+                }))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "VARCHAR(20)",
+                DataType::Varchar(Some(CharacterLength {
+                    length: 20,
+                    unit: None
+                }))
+            );
+        }
+
+        #[test]
+        fn test_ansii_character_large_object_types() {
+            // Character large object types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-length>
+            let dialect = TestedDialects {
+                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+            };
+
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER LARGE OBJECT",
+                DataType::CharacterLargeObject(None)
+            );
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER LARGE OBJECT(20)",
+                DataType::CharacterLargeObject(Some(20))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHAR LARGE OBJECT",
+                DataType::CharLargeObject(None)
+            );
+            test_parse_data_type!(
+                dialect,
+                "CHAR LARGE OBJECT(20)",
+                DataType::CharLargeObject(Some(20))
+            );
+
+            test_parse_data_type!(dialect, "CLOB", DataType::Clob(None));
+            test_parse_data_type!(dialect, "CLOB(20)", DataType::Clob(Some(20)));
+        }
+
+        #[test]
+        fn test_ansii_exact_numeric_types() {
+            // Exact numeric types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type>
+            let dialect = TestedDialects {
+                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+            };
+
+            test_parse_data_type!(dialect, "NUMERIC", DataType::Decimal(ExactNumberInfo::None));
+
+            test_parse_data_type!(
+                dialect,
+                "NUMERIC(2)",
+                DataType::Decimal(ExactNumberInfo::Precision(2))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "NUMERIC(2,10)",
+                DataType::Decimal(ExactNumberInfo::PrecisionAndScale(2, 10))
+            );
         }
 
         #[test]

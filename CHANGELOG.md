@@ -12,7 +12,7 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 
 ### Added
 
-* Support `AUTHORIZATION` clause in `CREATE SCHEMA` statements (#646) - Thanks @AugustoFKL
+* Support `AUTHORIZATION` clause in `CREATE SCHEMA` statements (#641) - Thanks @AugustoFKL
 * Support optional precision for `CLOB` and `BLOB` (#639) - Thanks @AugustoFKL
 * Support optional precision in `VARBINARY` and `BINARY` (#637) - Thanks @AugustoFKL
 

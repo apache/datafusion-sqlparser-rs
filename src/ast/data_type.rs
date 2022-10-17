@@ -30,20 +30,28 @@ use super::value::escape_single_quote_string;
 #[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum DataType {
     /// Fixed-length character type e.g. CHARACTER(10)
-    Character(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    Character(Option<CharacterLength>),
     /// Fixed-length char type e.g. CHAR(10)
-    Char(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    Char(Option<CharacterLength>),
     /// Character varying type e.g. CHARACTER VARYING(10)
-    CharacterVarying(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    CharacterVarying(Option<CharacterLength>),
     /// Char varying type e.g. CHAR VARYING(10)
-    CharVarying(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    CharVarying(Option<CharacterLength>),
     /// Variable-length character type e.g. VARCHAR(10)
-    Varchar(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    Varchar(Option<CharacterLength>),
     /// Variable-length character type e.g. NVARCHAR(10)
     Nvarchar(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Uuid type
     Uuid,
-    /// Large character object with optional length e.g. CLOB, CLOB(1000), [standard], [Oracle]
+    /// Large character object with optional length e.g. CHARACTER LARGE OBJECT, CHARACTER LARGE OBJECT(1000), [standard]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
+    CharacterLargeObject(Option<u64>),
+    /// Large character object with optional length e.g. CHAR LARGE OBJECT, CHAR LARGE OBJECT(1000), [standard]
+    ///
+    /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
+    CharLargeObject(Option<u64>),
+    /// Large character object with optional length e.g. CLOB, CLOB(1000), [standard]
     ///
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-type
     /// [Oracle]: https://docs.oracle.com/javadb/10.10.1.2/ref/rrefclob.html
@@ -64,10 +72,7 @@ pub enum DataType {
     /// [Oracle]: https://docs.oracle.com/javadb/10.8.3.0/ref/rrefblob.html
     Blob(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
-    Decimal(
-        #[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>,
-        #[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>,
-    ),
+    Decimal(ExactNumberInfo),
     /// Floating point with optional precision e.g. FLOAT(8)
     Float(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Tiny integer with optional display width e.g. TINYINT or TINYINT(3)
@@ -140,33 +145,32 @@ pub enum DataType {
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DataType::Character(size) => {
-                format_type_with_optional_length(f, "CHARACTER", size, false)
-            }
-            DataType::Char(size) => format_type_with_optional_length(f, "CHAR", size, false),
+            DataType::Character(size) => format_character_string_type(f, "CHARACTER", size),
+            DataType::Char(size) => format_character_string_type(f, "CHAR", size),
             DataType::CharacterVarying(size) => {
-                format_type_with_optional_length(f, "CHARACTER VARYING", size, false)
+                format_character_string_type(f, "CHARACTER VARYING", size)
             }
-            DataType::CharVarying(size) => {
-                format_type_with_optional_length(f, "CHAR VARYING", size, false)
-            }
-            DataType::Varchar(size) => format_type_with_optional_length(f, "VARCHAR", size, false),
+
+            DataType::CharVarying(size) => format_character_string_type(f, "CHAR VARYING", size),
+            DataType::Varchar(size) => format_character_string_type(f, "VARCHAR", size),
             DataType::Nvarchar(size) => {
                 format_type_with_optional_length(f, "NVARCHAR", size, false)
             }
             DataType::Uuid => write!(f, "UUID"),
+            DataType::CharacterLargeObject(size) => {
+                format_type_with_optional_length(f, "CHARACTER LARGE OBJECT", size, false)
+            }
+            DataType::CharLargeObject(size) => {
+                format_type_with_optional_length(f, "CHAR LARGE OBJECT", size, false)
+            }
             DataType::Clob(size) => format_type_with_optional_length(f, "CLOB", size, false),
             DataType::Binary(size) => format_type_with_optional_length(f, "BINARY", size, false),
             DataType::Varbinary(size) => {
                 format_type_with_optional_length(f, "VARBINARY", size, false)
             }
             DataType::Blob(size) => format_type_with_optional_length(f, "BLOB", size, false),
-            DataType::Decimal(precision, scale) => {
-                if let Some(scale) = scale {
-                    write!(f, "NUMERIC({},{})", precision.unwrap(), scale)
-                } else {
-                    format_type_with_optional_length(f, "NUMERIC", precision, false)
-                }
+            DataType::Decimal(info) => {
+                write!(f, "NUMERIC{}", info)
             }
             DataType::Float(size) => format_type_with_optional_length(f, "FLOAT", size, false),
             DataType::TinyInt(zerofill) => {
@@ -258,6 +262,18 @@ fn format_type_with_optional_length(
     Ok(())
 }
 
+fn format_character_string_type(
+    f: &mut fmt::Formatter,
+    sql_type: &str,
+    size: &Option<CharacterLength>,
+) -> fmt::Result {
+    write!(f, "{}", sql_type)?;
+    if let Some(size) = size {
+        write!(f, "({})", size)?;
+    }
+    Ok(())
+}
+
 /// Timestamp and Time data types information about TimeZone formatting.
 ///
 /// This is more related to a display information than real differences between each variant. To
@@ -300,6 +316,84 @@ impl fmt::Display for TimezoneInfo {
                 // must be aware of that. Check <https://www.postgresql.org/docs/14/datatype-datetime.html>
                 // for more information
                 write!(f, "TZ")
+            }
+        }
+    }
+}
+
+/// Additional information for `NUMERIC`, `DECIMAL`, and `DEC` data types
+/// following the 2016 [standard].
+///
+/// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ExactNumberInfo {
+    /// No additional information e.g. `DECIMAL`
+    None,
+    /// Only precision information e.g. `DECIMAL(10)`
+    Precision(u64),
+    /// Precision and scale information e.g. `DECIMAL(10,2)`
+    PrecisionAndScale(u64, u64),
+}
+
+impl fmt::Display for ExactNumberInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ExactNumberInfo::None => {
+                write!(f, "")
+            }
+            ExactNumberInfo::Precision(p) => {
+                write!(f, "({p})")
+            }
+            ExactNumberInfo::PrecisionAndScale(p, s) => {
+                write!(f, "({p},{s})")
+            }
+        }
+    }
+}
+
+/// Information about [character length][1], including length and possibly unit.
+///
+/// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-length
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct CharacterLength {
+    /// Default (if VARYING) or maximum (if not VARYING) length
+    pub length: u64,
+    /// Optional unit. If not informed, the ANSI handles it as CHARACTERS implicitly
+    pub unit: Option<CharLengthUnits>,
+}
+
+impl fmt::Display for CharacterLength {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.length)?;
+        if let Some(unit) = &self.unit {
+            write!(f, " {}", unit)?;
+        }
+        Ok(())
+    }
+}
+
+/// Possible units for characters, initially based on 2016 ANSI [standard][1].
+///
+/// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#char-length-units
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum CharLengthUnits {
+    /// CHARACTERS unit
+    Characters,
+    /// OCTETS unit
+    Octets,
+}
+
+impl fmt::Display for CharLengthUnits {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Characters => {
+                write!(f, "CHARACTERS")
+            }
+            Self::Octets => {
+                write!(f, "OCTETS")
             }
         }
     }

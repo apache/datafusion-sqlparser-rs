@@ -5687,6 +5687,40 @@ fn parse_position() {
 }
 
 #[test]
+fn parse_locate() {
+    let sql = "SELECT LOCATE('r', pork)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Locate {
+            find_expr: Box::new(Expr::Value(Value::SingleQuotedString("r".to_string()))),
+            from_expr: Box::new(Expr::Identifier(Ident::new("pork"))),
+            pos_expr: None.map(Box::new),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT LOCATE('k', 'pork with fork', 5)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Locate {
+            find_expr: Box::new(Expr::Value(Value::SingleQuotedString("k".to_string()))),
+            from_expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                "pork with fork".to_string()
+            ))),
+            pos_expr: Some(Box::new(Expr::Value(Value::Number("5".to_owned(), false)))),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let sql = "SELECT LOCATE(egg)";
+    let res = parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Locate function must include at least two args".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_position_negative() {
     let sql = "SELECT POSITION(foo) from bar";
     let res = parse_sql_statements(sql);

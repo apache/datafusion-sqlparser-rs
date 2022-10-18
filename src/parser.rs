@@ -456,6 +456,7 @@ impl<'a> Parser<'a> {
                 Keyword::CEIL => self.parse_ceil_floor_expr(true),
                 Keyword::FLOOR => self.parse_ceil_floor_expr(false),
                 Keyword::POSITION => self.parse_position_expr(),
+                Keyword::LOCATE => self.parse_locate_expr(),
                 Keyword::SUBSTRING => self.parse_substring_expr(),
                 Keyword::OVERLAY => self.parse_overlay_expr(),
                 Keyword::TRIM => self.parse_trim_expr(),
@@ -894,6 +895,30 @@ impl<'a> Parser<'a> {
             })
         } else {
             parser_err!("Position function must include IN keyword".to_string())
+        }
+    }
+
+    pub fn parse_locate_expr(&mut self) -> Result<Expr, ParserError> {
+        // PARSE SELECT LOCATE('@' in field)
+        self.expect_token(&Token::LParen)?;
+
+        let find_expr = self.parse_expr()?;
+        let comma = self.consume_token(&Token::Comma);
+        if !comma {
+            parser_err!("Locate function must include at least two args".to_string())
+        } else {
+            let from_expr = self.parse_expr()?;
+            let mut pos_expr = None;
+            if self.consume_token(&Token::Comma) {
+                pos_expr = Some(self.parse_expr()?);
+            }
+            self.expect_token(&Token::RParen)?;
+
+            Ok(Expr::Locate {
+                find_expr: Box::new(find_expr),
+                from_expr: Box::new(from_expr),
+                pos_expr: pos_expr.map(Box::new),
+            })
         }
     }
 

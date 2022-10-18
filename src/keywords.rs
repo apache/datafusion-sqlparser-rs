@@ -318,6 +318,7 @@ define_keywords!(
     LOCAL,
     LOCALTIME,
     LOCALTIMESTAMP,
+    LOCATE,
     LOCATION,
     LOGIN,
     LOWER,

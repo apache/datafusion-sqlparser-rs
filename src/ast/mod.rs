@@ -346,6 +346,12 @@ pub enum Expr {
     },
     /// POSITION(<expr> in <expr>)
     Position { expr: Box<Expr>, r#in: Box<Expr> },
+    /// LOCATE(<expr>, <expr>)
+    Locate {
+        find_expr: Box<Expr>,
+        from_expr: Box<Expr>,
+        pos_expr: Option<Box<Expr>>,
+    },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     Substring {
         expr: Box<Expr>,
@@ -611,6 +617,17 @@ impl fmt::Display for Expr {
                 }
             }
             Expr::Position { expr, r#in } => write!(f, "POSITION({} IN {})", expr, r#in),
+            Expr::Locate {
+                find_expr,
+                from_expr,
+                pos_expr,
+            } => {
+                write!(f, "LOCATE({}, {}", find_expr, from_expr)?;
+                if let Some(pos) = pos_expr {
+                    write!(f, ", {}", pos)?;
+                }
+                write!(f, ")")
+            }
             Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),
             Expr::Nested(ast) => write!(f, "({})", ast),
             Expr::Value(v) => write!(f, "{}", v),

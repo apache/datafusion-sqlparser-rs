@@ -5699,6 +5699,17 @@ fn parse_locate() {
         expr_from_projection(only(&select.projection))
     );
 
+    let sql = "SELECT LOCATE('r', pork, 2)";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Locate {
+            find_expr: Box::new(Expr::Value(Value::SingleQuotedString("r".to_string()))),
+            from_expr: Box::new(Expr::Identifier(Ident::new("pork"))),
+            pos_expr: Some(Box::new(Expr::Value(number("2")))),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
     let sql = "SELECT LOCATE('k', 'pork with fork', 5)";
     let select = verified_only_select(sql);
     assert_eq!(

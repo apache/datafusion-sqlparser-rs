@@ -5707,7 +5707,7 @@ fn parse_locate() {
             from_expr: Box::new(Expr::Value(Value::SingleQuotedString(
                 "pork with fork".to_string()
             ))),
-            pos_expr: Some(Box::new(Expr::Value(Value::Number("5".to_owned(), false)))),
+            pos_expr: Some(Box::new(Expr::Value(Value::Number(5.to_string(), false)))),
         },
         expr_from_projection(only(&select.projection))
     );

@@ -346,7 +346,7 @@ pub enum Expr {
     },
     /// POSITION(<expr> in <expr>)
     Position { expr: Box<Expr>, r#in: Box<Expr> },
-    /// LOCATE(<expr>, <expr>)
+    /// LOCATE(<expr>, <expr>, <expr>)
     Locate {
         find_expr: Box<Expr>,
         from_expr: Box<Expr>,

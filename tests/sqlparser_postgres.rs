@@ -23,6 +23,23 @@ use sqlparser::dialect::{GenericDialect, PostgreSqlDialect};
 use sqlparser::parser::ParserError;
 
 #[test]
+fn parse_create_sequence() {
+    // SimpleLogger::new().init().unwrap();
+
+    let sql1 = "CREATE SEQUENCE  name0";
+    pg().one_statement_parses_to(sql1, "CREATE SEQUENCE name0");
+
+    let sql2 = "CREATE SEQUENCE  IF NOT EXISTS  name0";
+    pg().one_statement_parses_to(sql2, "CREATE SEQUENCE IF NOT EXISTS name0");
+
+    let sql3 = "CREATE TEMPORARY SEQUENCE  IF NOT EXISTS  name0";
+    pg().one_statement_parses_to(sql3, "CREATE TEMPORARY SEQUENCE IF NOT EXISTS name0");
+
+    let sql4 = "CREATE TEMPORARY SEQUENCE  name0";
+    pg().one_statement_parses_to(sql4, "CREATE TEMPORARY SEQUENCE name0");
+}
+
+#[test]
 fn parse_drop_sequence() {
     // SimpleLogger::new().init().unwrap();
     let sql1 = "DROP SEQUENCE IF EXISTS  name0 CASCADE";

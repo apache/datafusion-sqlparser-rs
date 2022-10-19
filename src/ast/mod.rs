@@ -1452,6 +1452,13 @@ pub enum Statement {
         table_name: ObjectName,
         if_exists: bool,
     },
+    ///CreateSequence -- define a new sequence
+    /// CREATE [ { TEMPORARY | TEMP } ] SEQUENCE [ IF NOT EXISTS ] <sequence_name>
+    CreateSequence {
+        temporary: bool,
+        if_not_exists: bool,
+        name: ObjectName,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -2467,6 +2474,19 @@ impl fmt::Display for Statement {
                 } else {
                     write!(f, "UNCACHE TABLE {table_name}", table_name = table_name)
                 }
+            }
+            Statement::CreateSequence {
+                temporary,
+                if_not_exists,
+                name,
+            } => {
+                write!(
+                    f,
+                    "CREATE {temporary}SEQUENCE {if_not_exists}{name}",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    temporary = if *temporary { "TEMPORARY " } else { "" },
+                    name = name
+                )
             }
         }
     }

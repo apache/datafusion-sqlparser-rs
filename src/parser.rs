@@ -412,7 +412,7 @@ impl<'a> Parser<'a> {
                 // name, resulting in `NOT 'a'` being recognized as a `TypedString` instead of
                 // an unary negation `NOT ('a' LIKE 'b')`. To solve this, we don't accept the
                 // `type 'string'` syntax for the custom data types at all.
-                DataType::Custom(..) | DataType::CustomWithArgs(..) => parser_err!("dummy"),
+                DataType::Custom(..) => parser_err!("dummy"),
                 data_type => Ok(Expr::TypedString {
                     data_type,
                     value: parser.parse_literal_string()?,
@@ -3625,9 +3625,9 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     let type_name = self.parse_object_name()?;
                     if let Some(arguments) = self.parse_optional_type_arguments()? {
-                        Ok(DataType::CustomWithArgs(type_name, arguments))
+                        Ok(DataType::Custom(type_name, arguments))
                     } else {
-                        Ok(DataType::Custom(type_name))
+                        Ok(DataType::Custom(type_name, vec![]))
                     }
                 }
             },
@@ -5703,13 +5703,13 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "GEOMETRY",
-                DataType::Custom(ObjectName(vec!["GEOMETRY".into()]),)
+                DataType::Custom(ObjectName(vec!["GEOMETRY".into()]), vec![])
             );
 
             test_parse_data_type!(
                 dialect,
                 "GEOMETRY(POINT)",
-                DataType::CustomWithArgs(
+                DataType::Custom(
                     ObjectName(vec!["GEOMETRY".into()]),
                     vec!["POINT".to_string()]
                 )
@@ -5718,7 +5718,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "GEOMETRY(POINT, 4326)",
-                DataType::CustomWithArgs(
+                DataType::Custom(
                     ObjectName(vec!["GEOMETRY".into()]),
                     vec!["POINT".to_string(), "4326".to_string()]
                 )

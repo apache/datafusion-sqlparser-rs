@@ -129,9 +129,7 @@ pub enum DataType {
     /// Bytea
     Bytea,
     /// Custom type such as enums
-    Custom(ObjectName),
-    /// Custom type with arguments
-    CustomWithArgs(ObjectName, Vec<String>),
+    Custom(ObjectName, Vec<String>),
     /// Arrays
     Array(Box<DataType>),
     /// Enums
@@ -219,8 +217,13 @@ impl fmt::Display for DataType {
             DataType::String => write!(f, "STRING"),
             DataType::Bytea => write!(f, "BYTEA"),
             DataType::Array(ty) => write!(f, "{}[]", ty),
-            DataType::Custom(ty) => write!(f, "{}", ty),
-            DataType::CustomWithArgs(ty, args) => write!(f, "{}({})", ty, args.join(", ")),
+            DataType::Custom(ty, args) => {
+                if args.is_empty() {
+                    write!(f, "{}", ty)
+                } else {
+                    write!(f, "{}({})", ty, args.join(", "))
+                }
+            }
             DataType::Enum(vals) => {
                 write!(f, "ENUM(")?;
                 for (i, v) in vals.iter().enumerate() {

@@ -3882,14 +3882,17 @@ impl<'a> Parser<'a> {
                     Token::Word(w) => args.push(w.to_string()),
                     Token::Number(n, _) => args.push(n),
                     Token::SingleQuotedString(s) => args.push(s),
+
+                    Token::Comma => {
+                        continue;
+                    }
+                    Token::RParen => {
+                        break;
+                    }
                     unexpected => self.expected("type argument", unexpected)?,
                 }
-
-                if !self.consume_token(&Token::Comma) {
-                    break;
-                }
             }
-            self.expect_token(&Token::RParen)?;
+
             Ok(Some(args))
         } else {
             Ok(None)

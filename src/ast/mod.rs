@@ -26,7 +26,7 @@ pub use self::data_type::{
     CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
 };
 pub use self::ddl::{
-    AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
+    AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, IndexType,
     ReferentialAction, TableConstraint,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};

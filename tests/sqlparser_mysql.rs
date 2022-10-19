@@ -1073,6 +1073,49 @@ fn parse_limit_my_sql_syntax() {
     );
 }
 
+#[test]
+fn parse_create_table_with_index_definition() {
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE tb (id INT, INDEX (id))",
+        "CREATE TABLE tb (id INT, INDEX (id))",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE tb (id INT, index USING BTREE (id))",
+        "CREATE TABLE tb (id INT, INDEX USING BTREE (id))",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE tb (id INT, KEY USING HASH (id))",
+        "CREATE TABLE tb (id INT, KEY USING HASH (id))",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE tb (id INT, key index (id))",
+        "CREATE TABLE tb (id INT, KEY index (id))",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE tb (id INT, INDEX 'index' (id))",
+        "CREATE TABLE tb (id INT, INDEX 'index' (id))",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE tb (id INT, INDEX index USING BTREE (id))",
+        "CREATE TABLE tb (id INT, INDEX index USING BTREE (id))",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE tb (id INT, INDEX index USING HASH (id))",
+        "CREATE TABLE tb (id INT, INDEX index USING HASH (id))",
+    );
+
+    mysql_and_generic().one_statement_parses_to(
+        "CREATE TABLE tb (id INT, INDEX (c1, c2, c3, c4,c5))",
+        "CREATE TABLE tb (id INT, INDEX (c1, c2, c3, c4, c5))",
+    );
+}
+
 fn mysql() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],

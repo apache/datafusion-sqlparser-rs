@@ -3003,6 +3003,31 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::RParen)?;
                 Ok(Some(TableConstraint::Check { name, expr }))
             }
+            Token::Word(w)
+                if (w.keyword == Keyword::INDEX || w.keyword == Keyword::KEY)
+                    && dialect_of!(self is GenericDialect | MySqlDialect) =>
+            {
+                let display_as_key = w.keyword == Keyword::KEY;
+
+                let name = match self.peek_token() {
+                    Token::Word(word) if word.keyword == Keyword::USING => None,
+                    _ => self.maybe_parse(|parser| parser.parse_identifier()),
+                };
+
+                let index_type = if self.parse_keyword(Keyword::USING) {
+                    Some(self.parse_index_type()?)
+                } else {
+                    None
+                };
+                let columns = self.parse_parenthesized_column_list(Mandatory)?;
+
+                Ok(Some(TableConstraint::Index {
+                    display_as_key,
+                    name,
+                    index_type,
+                    columns,
+                }))
+            }
             unexpected => {
                 if name.is_some() {
                     self.expected("PRIMARY, UNIQUE, FOREIGN, or CHECK", unexpected)
@@ -3022,6 +3047,16 @@ impl<'a> Parser<'a> {
             Ok(options)
         } else {
             Ok(vec![])
+        }
+    }
+
+    pub fn parse_index_type(&mut self) -> Result<IndexType, ParserError> {
+        if self.parse_keyword(Keyword::BTREE) {
+            Ok(IndexType::BTree)
+        } else if self.parse_keyword(Keyword::HASH) {
+            Ok(IndexType::Hash)
+        } else {
+            self.expected("index type {BTREE | HASH}", self.peek_token())
         }
     }
 
@@ -5777,6 +5812,102 @@ mod tests {
         test_parse_schema_name!(
             format!("{dummy_name} AUTHORIZATION {dummy_authorization}"),
             SchemaName::NamedAuthorization(dummy_name.clone(), dummy_authorization.clone()),
+        );
+    }
+
+    #[test]
+    fn mysql_parse_index_table_constraint() {
+        macro_rules! test_parse_table_constraint {
+            ($dialect:expr, $input:expr, $expected:expr $(,)?) => {{
+                $dialect.run_parser_method(&*$input, |parser| {
+                    let constraint = parser.parse_optional_table_constraint().unwrap().unwrap();
+                    // Validate that the structure is the same as expected
+                    assert_eq!(constraint, $expected);
+                    // Validate that the input and the expected structure serialization are the same
+                    assert_eq!(constraint.to_string(), $input.to_string());
+                });
+            }};
+        }
+
+        let dialect = TestedDialects {
+            dialects: vec![Box::new(GenericDialect {}), Box::new(MySqlDialect {})],
+        };
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX (c1)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: None,
+                index_type: None,
+                columns: vec![Ident::new("c1")],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "KEY (c1)",
+            TableConstraint::Index {
+                display_as_key: true,
+                name: None,
+                index_type: None,
+                columns: vec![Ident::new("c1")],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX 'index' (c1, c2)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: Some(Ident::with_quote('\'', "index")),
+                index_type: None,
+                columns: vec![Ident::new("c1"), Ident::new("c2")],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX USING BTREE (c1)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: None,
+                index_type: Some(IndexType::BTree),
+                columns: vec![Ident::new("c1")],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX USING HASH (c1)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: None,
+                index_type: Some(IndexType::Hash),
+                columns: vec![Ident::new("c1")],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX idx_name USING BTREE (c1)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: Some(Ident::new("idx_name")),
+                index_type: Some(IndexType::BTree),
+                columns: vec![Ident::new("c1")],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX idx_name USING HASH (c1)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: Some(Ident::new("idx_name")),
+                index_type: Some(IndexType::Hash),
+                columns: vec![Ident::new("c1")],
+            }
         );
     }
 }

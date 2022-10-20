@@ -2515,7 +2515,7 @@ impl fmt::Display for Statement {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// Can use to describe create sequence or table column type identity
+/// Can use to describe options in create sequence or table column type identity
 /// [ INCREMENT [ BY ] increment ]
 ///     [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
 ///     [ START [ WITH ] start ] [ CACHE cache ] [ [ NO ] CYCLE ]
@@ -2581,7 +2581,7 @@ impl fmt::Display for SequenceOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// Can use to describe create sequence or table column type identity
+/// Can use to describe options in  create sequence or table column type identity
 /// [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
 pub enum MinMaxValue {
     // clause is not specified

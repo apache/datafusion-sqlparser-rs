@@ -5459,15 +5459,100 @@ impl<'a> Parser<'a> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         //name
         let name = self.parse_object_name()?;
+        //[ AS data_type ]
+        let mut data_type: Option<DataType> = None;
+        if self.parse_keywords(&[Keyword::AS]) {
+            data_type = Some(self.parse_data_type()?)
+        }
+        let sequence_options = self.parse_create_sequence_options()?;
+        // [ OWNED BY { table_name.column_name | NONE } ]
+        let owned_by = if self.parse_keywords(&[Keyword::OWNED, Keyword::BY]) {
+            if self.parse_keywords(&[Keyword::NONE]) {
+                Some(ObjectName(vec![Ident::new("NONE")]))
+            } else {
+                Some(self.parse_object_name()?)
+            }
+        } else {
+            None
+        };
         Ok(Statement::CreateSequence {
             temporary,
             if_not_exists,
             name,
-            data_type: None,
-            sequence_options: vec![],
-            owned_by: None,
+            data_type,
+            sequence_options,
+            owned_by,
+
         })
     }
+
+    fn parse_create_sequence_options(&mut self) -> Result<Vec<SequenceOptions>, ParserError> {
+        let mut sequence_options = vec![];
+        //[ INCREMENT [ BY ] increment ]
+        if self.parse_keywords(&[Keyword::INCREMENT]) {
+            if self.parse_keywords(&[Keyword::BY]) {
+                sequence_options.push(SequenceOptions::IncrementBy(
+                    Expr::Value(self.parse_number_value()?),
+                    true,
+                ));
+            } else {
+                sequence_options.push(SequenceOptions::IncrementBy(
+                    Expr::Value(self.parse_number_value()?),
+                    false,
+                ));
+            }
+        }
+        //[ MINVALUE minvalue | NO MINVALUE ]
+        if self.parse_keyword(Keyword::MINVALUE) {
+            sequence_options.push(SequenceOptions::MinValue(
+                MinMaxValue::Some(Expr::Value(self.parse_number_value()?))
+            ));
+        } else if self.parse_keywords(&[Keyword::NO, Keyword::MINVALUE]) {
+            sequence_options.push(SequenceOptions::MinValue(MinMaxValue::None));
+        }else {
+            sequence_options.push(SequenceOptions::MinValue(MinMaxValue::Empty));
+        }
+        //[ MAXVALUE maxvalue | NO MAXVALUE ]
+        if self.parse_keywords(&[Keyword::MAXVALUE]) {
+            sequence_options.push(SequenceOptions::MaxValue(
+                MinMaxValue::Some(Expr::Value(self.parse_number_value()?))
+            ));
+        } else if self.parse_keywords(&[Keyword::NO, Keyword::MAXVALUE]) {
+            sequence_options.push(SequenceOptions::MaxValue(MinMaxValue::None));
+        }else {
+            sequence_options.push(SequenceOptions::MaxValue(MinMaxValue::Empty));
+        }
+        //[ START [ WITH ] start ]
+        if self.parse_keywords(&[Keyword::START]) {
+            if self.parse_keywords(&[Keyword::WITH]) {
+                sequence_options.push(SequenceOptions::StartWith(
+                    Expr::Value(self.parse_number_value()?),
+                    true,
+                ));
+            } else {
+                sequence_options.push(SequenceOptions::StartWith(
+                    Expr::Value(self.parse_number_value()?),
+                    false,
+                ));
+            }
+        }
+        //[ CACHE cache ]
+        if self.parse_keywords(&[Keyword::CACHE]) {
+            sequence_options.push(SequenceOptions::Cache(Expr::Value(
+                self.parse_number_value()?,
+            )));
+        }
+        // [ [ NO ] CYCLE ]
+        if self.parse_keywords(&[Keyword::NO]) {
+            if self.parse_keywords(&[Keyword::CYCLE]) {
+                sequence_options.push(SequenceOptions::Cycle(true));
+            }
+        } else if self.parse_keywords(&[Keyword::CYCLE]) {
+            sequence_options.push(SequenceOptions::Cycle(false));
+        }
+        Ok(sequence_options)
+    }
+
 }
 
 impl Word {

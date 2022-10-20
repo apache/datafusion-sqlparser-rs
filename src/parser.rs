@@ -5482,7 +5482,6 @@ impl<'a> Parser<'a> {
             data_type,
             sequence_options,
             owned_by,
-
         })
     }
 
@@ -5504,22 +5503,22 @@ impl<'a> Parser<'a> {
         }
         //[ MINVALUE minvalue | NO MINVALUE ]
         if self.parse_keyword(Keyword::MINVALUE) {
-            sequence_options.push(SequenceOptions::MinValue(
-                MinMaxValue::Some(Expr::Value(self.parse_number_value()?))
-            ));
+            sequence_options.push(SequenceOptions::MinValue(MinMaxValue::Some(Expr::Value(
+                self.parse_number_value()?,
+            ))));
         } else if self.parse_keywords(&[Keyword::NO, Keyword::MINVALUE]) {
             sequence_options.push(SequenceOptions::MinValue(MinMaxValue::None));
-        }else {
+        } else {
             sequence_options.push(SequenceOptions::MinValue(MinMaxValue::Empty));
         }
         //[ MAXVALUE maxvalue | NO MAXVALUE ]
         if self.parse_keywords(&[Keyword::MAXVALUE]) {
-            sequence_options.push(SequenceOptions::MaxValue(
-                MinMaxValue::Some(Expr::Value(self.parse_number_value()?))
-            ));
+            sequence_options.push(SequenceOptions::MaxValue(MinMaxValue::Some(Expr::Value(
+                self.parse_number_value()?,
+            ))));
         } else if self.parse_keywords(&[Keyword::NO, Keyword::MAXVALUE]) {
             sequence_options.push(SequenceOptions::MaxValue(MinMaxValue::None));
-        }else {
+        } else {
             sequence_options.push(SequenceOptions::MaxValue(MinMaxValue::Empty));
         }
         //[ START [ WITH ] start ]
@@ -5552,7 +5551,6 @@ impl<'a> Parser<'a> {
         }
         Ok(sequence_options)
     }
-
 }
 
 impl Word {

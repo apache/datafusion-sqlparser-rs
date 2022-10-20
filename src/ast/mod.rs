@@ -2488,7 +2488,7 @@ impl fmt::Display for Statement {
             } => {
                 let as_type: String = if let Some(dt) = data_type.as_ref() {
                     //Cannot use format!(" AS {}", dt), due to format! is not available in --target thumbv6m-none-eabi
-                    " AS ".to_owned()+&dt.to_string()
+                    " AS ".to_owned() + &dt.to_string()
                 } else {
                     "".to_string()
                 };

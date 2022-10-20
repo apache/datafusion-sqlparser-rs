@@ -1458,6 +1458,9 @@ pub enum Statement {
         temporary: bool,
         if_not_exists: bool,
         name: ObjectName,
+        data_type: Option<DataType>,
+        sequence_options: Vec<SequenceOptions>,
+        owned_by: Option<ObjectName>,
     },
 }
 
@@ -2479,17 +2482,112 @@ impl fmt::Display for Statement {
                 temporary,
                 if_not_exists,
                 name,
+                data_type,
+                sequence_options,
+                owned_by,
             } => {
+                let as_type: String = if let Some(dt) = data_type.as_ref() {
+                    format!(" AS {}", dt)
+                } else {
+                    "".to_string()
+                };
                 write!(
                     f,
-                    "CREATE {temporary}SEQUENCE {if_not_exists}{name}",
+                    "CREATE {temporary}SEQUENCE {if_not_exists}{name}{as_type}",
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     temporary = if *temporary { "TEMPORARY " } else { "" },
-                    name = name
-                )
+                    name = name,
+                    as_type = as_type
+                )?;
+                for sequence_option in sequence_options {
+                    write!(f, "{}", sequence_option)?;
+                }
+                if let Some(ob) = owned_by.as_ref() {
+                    write!(f, " OWNED BY {}", ob)?;
+                }
+                write!(f, "")
             }
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Can use to describe create sequence or table column type identity
+/// [ INCREMENT [ BY ] increment ]
+///     [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
+///     [ START [ WITH ] start ] [ CACHE cache ] [ [ NO ] CYCLE ]
+pub enum SequenceOptions {
+    IncrementBy(Expr, bool),
+    MinValue(MinMaxValue),
+    MaxValue(MinMaxValue),
+    StartWith(Expr, bool),
+    Cache(Expr),
+    Cycle(bool),
+}
+
+impl fmt::Display for SequenceOptions {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SequenceOptions::IncrementBy(increment, by) => {
+                write!(
+                    f,
+                    " INCREMENT{by} {increment}",
+                    by = if *by { " BY" } else { "" },
+                    increment = increment
+                )
+            }
+            SequenceOptions::MinValue(value) => match value {
+                MinMaxValue::Empty => {
+                    write!(f, "")
+                }
+                MinMaxValue::None => {
+                    write!(f, " NO MINVALUE")
+                }
+                MinMaxValue::Some(minvalue) => {
+                    write!(f, " MINVALUE {minvalue}", minvalue = minvalue)
+                }
+            },
+            SequenceOptions::MaxValue(value) => match value {
+                MinMaxValue::Empty => {
+                    write!(f, "")
+                }
+                MinMaxValue::None => {
+                    write!(f, " NO MAXVALUE")
+                }
+                MinMaxValue::Some(maxvalue) => {
+                    write!(f, " MAXVALUE {maxvalue}", maxvalue = maxvalue)
+                }
+            },
+            SequenceOptions::StartWith(start, with) => {
+                write!(
+                    f,
+                    " START{with} {start}",
+                    with = if *with { " WITH" } else { "" },
+                    start = start
+                )
+            }
+            SequenceOptions::Cache(cache) => {
+                write!(f, " CACHE {}", *cache)
+            }
+            SequenceOptions::Cycle(no) => {
+                write!(f, " {}CYCLE", if *no { "NO " } else { "" })
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Can use to describe create sequence or table column type identity
+/// [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
+pub enum MinMaxValue {
+    // clause is not specified
+    Empty,
+    // NO MINVALUE/NO MAX VALUE
+    None,
+    // MINVALUE <expr> / MAXVALUE <expr>
+    Some(Expr),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

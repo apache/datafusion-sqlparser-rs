@@ -5463,6 +5463,9 @@ impl<'a> Parser<'a> {
             temporary,
             if_not_exists,
             name,
+            data_type: None,
+            sequence_options: vec![],
+            owned_by: None,
         })
     }
 }

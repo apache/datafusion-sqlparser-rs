@@ -37,6 +37,49 @@ fn parse_create_sequence() {
 
     let sql4 = "CREATE TEMPORARY SEQUENCE  name0";
     pg().one_statement_parses_to(sql4, "CREATE TEMPORARY SEQUENCE name0");
+
+    let sql2 = "CREATE TEMPORARY SEQUENCE IF NOT EXISTS  name1
+      AS BIGINT
+     INCREMENT BY  1
+     MINVALUE 1  MAXVALUE 20
+     START WITH 10";
+    pg().one_statement_parses_to(
+        sql2,
+        "CREATE TEMPORARY SEQUENCE IF NOT EXISTS name1 AS BIGINT INCREMENT BY 1 MINVALUE 1 MAXVALUE 20 START WITH 10", );
+
+    let sql3 = "CREATE SEQUENCE IF NOT EXISTS  name2
+     AS BIGINT
+     INCREMENT  1
+     MINVALUE 1  MAXVALUE 20
+     START WITH 10 CACHE 2 NO CYCLE";
+    pg().one_statement_parses_to(
+        sql3,
+        "CREATE SEQUENCE IF NOT EXISTS name2 AS BIGINT INCREMENT 1 MINVALUE 1 MAXVALUE 20 START WITH 10 CACHE 2 NO CYCLE",
+    );
+
+    let sql4 = "CREATE TEMPORARY SEQUENCE  IF NOT EXISTS  name3
+         INCREMENT  1
+     NO MINVALUE  MAXVALUE 20 CACHE 2 CYCLE";
+    pg().one_statement_parses_to(
+        sql4,
+        "CREATE TEMPORARY SEQUENCE IF NOT EXISTS name3 INCREMENT 1 NO MINVALUE MAXVALUE 20 CACHE 2 CYCLE",
+    );
+
+    let sql5 = "CREATE TEMPORARY SEQUENCE  IF NOT EXISTS  name3
+         INCREMENT  1
+     NO MINVALUE  MAXVALUE 20 OWNED BY public.table01";
+    pg().one_statement_parses_to(
+        sql5,
+        "CREATE TEMPORARY SEQUENCE IF NOT EXISTS name3 INCREMENT 1 NO MINVALUE MAXVALUE 20 OWNED BY public.table01",
+    );
+
+    let sql6 = "CREATE TEMPORARY SEQUENCE  IF NOT EXISTS  name3
+         INCREMENT  1
+     NO MINVALUE  MAXVALUE 20 OWNED BY NONE";
+    pg().one_statement_parses_to(
+        sql6,
+        "CREATE TEMPORARY SEQUENCE IF NOT EXISTS name3 INCREMENT 1 NO MINVALUE MAXVALUE 20 OWNED BY NONE",
+    );
 }
 
 #[test]

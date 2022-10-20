@@ -217,11 +217,11 @@ impl fmt::Display for DataType {
             DataType::String => write!(f, "STRING"),
             DataType::Bytea => write!(f, "BYTEA"),
             DataType::Array(ty) => write!(f, "{}[]", ty),
-            DataType::Custom(ty, args) => {
-                if args.is_empty() {
+            DataType::Custom(ty, modifiers) => {
+                if modifiers.is_empty() {
                     write!(f, "{}", ty)
                 } else {
-                    write!(f, "{}({})", ty, args.join(", "))
+                    write!(f, "{}({})", ty, modifiers.join(", "))
                 }
             }
             DataType::Enum(vals) => {

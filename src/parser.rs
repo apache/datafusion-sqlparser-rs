@@ -3624,8 +3624,8 @@ impl<'a> Parser<'a> {
                 _ => {
                     self.prev_token();
                     let type_name = self.parse_object_name()?;
-                    if let Some(arguments) = self.parse_optional_type_arguments()? {
-                        Ok(DataType::Custom(type_name, arguments))
+                    if let Some(modifiers) = self.parse_optional_type_modifiers()? {
+                        Ok(DataType::Custom(type_name, modifiers))
                     } else {
                         Ok(DataType::Custom(type_name, vec![]))
                     }
@@ -3874,14 +3874,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_optional_type_arguments(&mut self) -> Result<Option<Vec<String>>, ParserError> {
+    pub fn parse_optional_type_modifiers(&mut self) -> Result<Option<Vec<String>>, ParserError> {
         if self.consume_token(&Token::LParen) {
-            let mut args = Vec::new();
+            let mut modifiers = Vec::new();
             loop {
                 match self.next_token() {
-                    Token::Word(w) => args.push(w.to_string()),
-                    Token::Number(n, _) => args.push(n),
-                    Token::SingleQuotedString(s) => args.push(s),
+                    Token::Word(w) => modifiers.push(w.to_string()),
+                    Token::Number(n, _) => modifiers.push(n),
+                    Token::SingleQuotedString(s) => modifiers.push(s),
 
                     Token::Comma => {
                         continue;
@@ -3889,11 +3889,11 @@ impl<'a> Parser<'a> {
                     Token::RParen => {
                         break;
                     }
-                    unexpected => self.expected("type argument", unexpected)?,
+                    unexpected => self.expected("type modifiers", unexpected)?,
                 }
             }
 
-            Ok(Some(args))
+            Ok(Some(modifiers))
         } else {
             Ok(None)
         }

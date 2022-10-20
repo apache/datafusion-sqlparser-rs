@@ -3661,7 +3661,11 @@ impl<'a> Parser<'a> {
                 _ => {
                     self.prev_token();
                     let type_name = self.parse_object_name()?;
-                    Ok(DataType::Custom(type_name))
+                    if let Some(modifiers) = self.parse_optional_type_modifiers()? {
+                        Ok(DataType::Custom(type_name, modifiers))
+                    } else {
+                        Ok(DataType::Custom(type_name, vec![]))
+                    }
                 }
             },
             unexpected => self.expected("a data type name", unexpected),
@@ -3904,6 +3908,31 @@ impl<'a> Parser<'a> {
             }
         } else {
             Ok(ExactNumberInfo::None)
+        }
+    }
+
+    pub fn parse_optional_type_modifiers(&mut self) -> Result<Option<Vec<String>>, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let mut modifiers = Vec::new();
+            loop {
+                match self.next_token() {
+                    Token::Word(w) => modifiers.push(w.to_string()),
+                    Token::Number(n, _) => modifiers.push(n),
+                    Token::SingleQuotedString(s) => modifiers.push(s),
+
+                    Token::Comma => {
+                        continue;
+                    }
+                    Token::RParen => {
+                        break;
+                    }
+                    unexpected => self.expected("type modifiers", unexpected)?,
+                }
+            }
+
+            Ok(Some(modifiers))
+        } else {
+            Ok(None)
         }
     }
 
@@ -5626,7 +5655,7 @@ mod tests {
     #[cfg(test)]
     mod test_parse_data_type {
         use crate::ast::{
-            CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
+            CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, ObjectName, TimezoneInfo,
         };
         use crate::dialect::{AnsiDialect, GenericDialect};
         use crate::test_utils::TestedDialects;
@@ -5801,6 +5830,36 @@ mod tests {
 
             test_parse_data_type!(dialect, "CLOB", DataType::Clob(None));
             test_parse_data_type!(dialect, "CLOB(20)", DataType::Clob(Some(20)));
+        }
+
+        #[test]
+        fn test_parse_custom_types() {
+            let dialect = TestedDialects {
+                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+            };
+            test_parse_data_type!(
+                dialect,
+                "GEOMETRY",
+                DataType::Custom(ObjectName(vec!["GEOMETRY".into()]), vec![])
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "GEOMETRY(POINT)",
+                DataType::Custom(
+                    ObjectName(vec!["GEOMETRY".into()]),
+                    vec!["POINT".to_string()]
+                )
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "GEOMETRY(POINT, 4326)",
+                DataType::Custom(
+                    ObjectName(vec!["GEOMETRY".into()]),
+                    vec!["POINT".to_string(), "4326".to_string()]
+                )
+            );
         }
 
         #[test]

@@ -2783,9 +2783,10 @@ fn parse_alter_table_drop_primary_key() {
     match verified_stmt("ALTER TABLE tab DROP PRIMARY KEY") {
         Statement::AlterTable {
             name,
-            operation:
-            AlterTableOperation::DropPrimaryKey,
-        } => { assert_eq!("tab", name.to_string()); }
+            operation: AlterTableOperation::DropPrimaryKey,
+        } => {
+            assert_eq!("tab", name.to_string());
+        }
         _ => unreachable!(),
     }
 }

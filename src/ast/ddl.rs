@@ -44,6 +44,10 @@ pub enum AlterTableOperation {
         if_exists: bool,
         cascade: bool,
     },
+    /// `DROP PRIMARY KEY`
+    ///
+    /// Note: this is a MySQL-specific operation.
+    DropPrimaryKey,
     /// `RENAME TO PARTITION (partition=val)`
     RenamePartitions {
         old_partitions: Vec<Expr>,
@@ -124,6 +128,7 @@ impl fmt::Display for AlterTableOperation {
                     if *cascade { " CASCADE" } else { "" },
                 )
             }
+            AlterTableOperation::DropPrimaryKey => write!(f, "DROP PRIMARY KEY"),
             AlterTableOperation::DropColumn {
                 column_name,
                 if_exists,

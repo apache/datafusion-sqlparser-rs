@@ -3136,6 +3136,9 @@ impl<'a> Parser<'a> {
                     name,
                     cascade,
                 }
+            } else if self.parse_keyword(Keyword::PRIMARY) {
+                let _ = self.parse_keyword(Keyword::KEY);
+                AlterTableOperation::DropPrimaryKey
             } else {
                 let _ = self.parse_keyword(Keyword::COLUMN);
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);

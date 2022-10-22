@@ -2921,9 +2921,8 @@ impl<'a> Parser<'a> {
         } else if self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
             && dialect_of!(self is MySqlDialect)
         {
-            Ok(Some(ColumnOption::DialectSpecific(vec![
-                Token::make_keyword("ON UPDATE"),
-            ])))
+            let expr = self.parse_expr()?;
+            Ok(Some(ColumnOption::OnUpdate(expr)))
         } else {
             Ok(None)
         }

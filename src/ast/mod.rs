@@ -26,7 +26,7 @@ pub use self::data_type::{
     CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
 };
 pub use self::ddl::{
-    AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
+    AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, IndexType,
     ReferentialAction, TableConstraint,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -906,9 +906,9 @@ pub enum WindowFrameBound {
     /// `CURRENT ROW`
     CurrentRow,
     /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
-    Preceding(Option<u64>),
+    Preceding(Option<Box<Expr>>),
     /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
-    Following(Option<u64>),
+    Following(Option<Box<Expr>>),
 }
 
 impl fmt::Display for WindowFrameBound {
@@ -1184,6 +1184,9 @@ pub enum Statement {
         /// Whether `CASCADE` was specified. This will be `false` when
         /// `RESTRICT` or no drop behavior at all was specified.
         cascade: bool,
+        /// Whether `RESTRICT` was specified. This will be `false` when
+        /// `CASCADE` or no drop behavior at all was specified.
+        restrict: bool,
         /// Hive allows you specify whether the table's stored data will be
         /// deleted along with the dropped table
         purge: bool,
@@ -1429,6 +1432,32 @@ pub enum Statement {
         on: Box<Expr>,
         // Specifies the actions to perform when values match or do not match.
         clauses: Vec<MergeClause>,
+    },
+    /// CACHE [ FLAG ] TABLE <table_name> [ OPTIONS('K1' = 'V1', 'K2' = V2) ] [ AS ] [ <query> ]
+    /// Based on Spark SQL,see <https://docs.databricks.com/spark/latest/spark-sql/language-manual/sql-ref-syntax-aux-cache-cache-table.html>
+    Cache {
+        // Table flag
+        table_flag: Option<ObjectName>,
+        // Table name
+        table_name: ObjectName,
+        has_as: bool,
+        // Table confs
+        options: Vec<SqlOption>,
+        // Cache table as a Query
+        query: Option<Query>,
+    },
+    /// UNCACHE TABLE [ IF EXISTS ]  <table_name>
+    UNCache {
+        // Table name
+        table_name: ObjectName,
+        if_exists: bool,
+    },
+    ///CreateSequence -- define a new sequence
+    /// CREATE [ { TEMPORARY | TEMP } ] SEQUENCE [ IF NOT EXISTS ] <sequence_name>
+    CreateSequence {
+        temporary: bool,
+        if_not_exists: bool,
+        name: ObjectName,
     },
 }
 
@@ -2124,14 +2153,16 @@ impl fmt::Display for Statement {
                 if_exists,
                 names,
                 cascade,
+                restrict,
                 purge,
             } => write!(
                 f,
-                "DROP {}{} {}{}{}",
+                "DROP {}{} {}{}{}{}",
                 object_type,
                 if *if_exists { " IF EXISTS" } else { "" },
                 display_comma_separated(names),
                 if *cascade { " CASCADE" } else { "" },
+                if *restrict { " RESTRICT" } else { "" },
                 if *purge { " PURGE" } else { "" }
             ),
             Statement::Discard { object_type } => {
@@ -2396,6 +2427,66 @@ impl fmt::Display for Statement {
                 )?;
                 write!(f, "ON {} ", on)?;
                 write!(f, "{}", display_separated(clauses, " "))
+            }
+            Statement::Cache {
+                table_name,
+                table_flag,
+                has_as,
+                options,
+                query,
+            } => {
+                if table_flag.is_some() {
+                    write!(
+                        f,
+                        "CACHE {table_flag} TABLE {table_name}",
+                        table_flag = table_flag.clone().unwrap(),
+                        table_name = table_name,
+                    )?;
+                } else {
+                    write!(f, "CACHE TABLE {table_name}", table_name = table_name,)?;
+                }
+
+                if !options.is_empty() {
+                    write!(f, " OPTIONS({})", display_comma_separated(options))?;
+                }
+
+                let has_query = query.is_some();
+                if *has_as && has_query {
+                    write!(f, " AS {query}", query = query.clone().unwrap())
+                } else if !has_as && has_query {
+                    write!(f, " {query}", query = query.clone().unwrap())
+                } else if *has_as && !has_query {
+                    write!(f, " AS")
+                } else {
+                    Ok(())
+                }
+            }
+            Statement::UNCache {
+                table_name,
+                if_exists,
+            } => {
+                if *if_exists {
+                    write!(
+                        f,
+                        "UNCACHE TABLE IF EXISTS {table_name}",
+                        table_name = table_name
+                    )
+                } else {
+                    write!(f, "UNCACHE TABLE {table_name}", table_name = table_name)
+                }
+            }
+            Statement::CreateSequence {
+                temporary,
+                if_not_exists,
+                name,
+            } => {
+                write!(
+                    f,
+                    "CREATE {temporary}SEQUENCE {if_not_exists}{name}",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    temporary = if *temporary { "TEMPORARY " } else { "" },
+                    name = name
+                )
             }
         }
     }
@@ -2844,6 +2935,7 @@ pub enum ObjectType {
     Index,
     Schema,
     Role,
+    Sequence,
 }
 
 impl fmt::Display for ObjectType {
@@ -2854,6 +2946,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Index => "INDEX",
             ObjectType::Schema => "SCHEMA",
             ObjectType::Role => "ROLE",
+            ObjectType::Sequence => "SEQUENCE",
         })
     }
 }

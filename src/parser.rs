@@ -170,12 +170,14 @@ impl<'a> Parser<'a> {
                 Keyword::TRUNCATE => Ok(self.parse_truncate()?),
                 Keyword::MSCK => Ok(self.parse_msck()?),
                 Keyword::CREATE => Ok(self.parse_create()?),
+                Keyword::CACHE => Ok(self.parse_cache_table()?),
                 Keyword::DROP => Ok(self.parse_drop()?),
                 Keyword::DISCARD => Ok(self.parse_discard()?),
                 Keyword::DECLARE => Ok(self.parse_declare()?),
                 Keyword::FETCH => Ok(self.parse_fetch_statement()?),
                 Keyword::DELETE => Ok(self.parse_delete()?),
                 Keyword::INSERT => Ok(self.parse_insert()?),
+                Keyword::UNCACHE => Ok(self.parse_uncache_table()?),
                 Keyword::UPDATE => Ok(self.parse_update()?),
                 Keyword::ALTER => Ok(self.parse_alter()?),
                 Keyword::COPY => Ok(self.parse_copy()?),
@@ -623,7 +625,6 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-
         Ok(Expr::Function(Function {
             name,
             args,
@@ -685,7 +686,10 @@ impl<'a> Parser<'a> {
             let rows = if self.parse_keyword(Keyword::UNBOUNDED) {
                 None
             } else {
-                Some(self.parse_literal_uint()?)
+                Some(Box::new(match self.peek_token() {
+                    Token::SingleQuotedString(_) => self.parse_interval()?,
+                    _ => self.parse_expr()?,
+                }))
             };
             if self.parse_keyword(Keyword::PRECEDING) {
                 Ok(WindowFrameBound::Preceding(rows))
@@ -1900,8 +1904,119 @@ impl<'a> Parser<'a> {
             self.parse_create_function(temporary)
         } else if self.parse_keyword(Keyword::ROLE) {
             self.parse_create_role()
+        } else if self.parse_keyword(Keyword::SEQUENCE) {
+            self.parse_create_sequence(temporary)
         } else {
             self.expected("an object type after CREATE", self.peek_token())
+        }
+    }
+
+    /// Parse a CACHE TABLE statement
+    pub fn parse_cache_table(&mut self) -> Result<Statement, ParserError> {
+        let (mut table_flag, mut options, mut has_as, mut query) = (None, vec![], false, None);
+        if self.parse_keyword(Keyword::TABLE) {
+            let table_name = self.parse_object_name()?;
+            if self.peek_token() != Token::EOF {
+                if let Token::Word(word) = self.peek_token() {
+                    if word.keyword == Keyword::OPTIONS {
+                        options = self.parse_options(Keyword::OPTIONS)?
+                    }
+                };
+
+                if self.peek_token() != Token::EOF {
+                    let (a, q) = self.parse_as_query()?;
+                    has_as = a;
+                    query = Some(q);
+                }
+
+                Ok(Statement::Cache {
+                    table_flag,
+                    table_name,
+                    has_as,
+                    options,
+                    query,
+                })
+            } else {
+                Ok(Statement::Cache {
+                    table_flag,
+                    table_name,
+                    has_as,
+                    options,
+                    query,
+                })
+            }
+        } else {
+            table_flag = Some(self.parse_object_name()?);
+            if self.parse_keyword(Keyword::TABLE) {
+                let table_name = self.parse_object_name()?;
+                if self.peek_token() != Token::EOF {
+                    if let Token::Word(word) = self.peek_token() {
+                        if word.keyword == Keyword::OPTIONS {
+                            options = self.parse_options(Keyword::OPTIONS)?
+                        }
+                    };
+
+                    if self.peek_token() != Token::EOF {
+                        let (a, q) = self.parse_as_query()?;
+                        has_as = a;
+                        query = Some(q);
+                    }
+
+                    Ok(Statement::Cache {
+                        table_flag,
+                        table_name,
+                        has_as,
+                        options,
+                        query,
+                    })
+                } else {
+                    Ok(Statement::Cache {
+                        table_flag,
+                        table_name,
+                        has_as,
+                        options,
+                        query,
+                    })
+                }
+            } else {
+                if self.peek_token() == Token::EOF {
+                    self.prev_token();
+                }
+                self.expected("a `TABLE` keyword", self.peek_token())
+            }
+        }
+    }
+
+    /// Parse 'AS' before as query,such as `WITH XXX AS SELECT XXX` oer `CACHE TABLE AS SELECT XXX`
+    pub fn parse_as_query(&mut self) -> Result<(bool, Query), ParserError> {
+        match self.peek_token() {
+            Token::Word(word) => match word.keyword {
+                Keyword::AS => {
+                    self.next_token();
+                    Ok((true, self.parse_query()?))
+                }
+                _ => Ok((false, self.parse_query()?)),
+            },
+            _ => self.expected("a QUERY statement", self.peek_token()),
+        }
+    }
+
+    /// Parse a UNCACHE TABLE statement
+    pub fn parse_uncache_table(&mut self) -> Result<Statement, ParserError> {
+        let has_table = self.parse_keyword(Keyword::TABLE);
+        if has_table {
+            let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+            let table_name = self.parse_object_name()?;
+            if self.peek_token() == Token::EOF {
+                Ok(Statement::UNCache {
+                    table_name,
+                    if_exists,
+                })
+            } else {
+                self.expected("an `EOF`", self.peek_token())
+            }
+        } else {
+            self.expected("a `TABLE` keyword", self.peek_token())
         }
     }
 
@@ -2328,9 +2443,11 @@ impl<'a> Parser<'a> {
             ObjectType::Role
         } else if self.parse_keyword(Keyword::SCHEMA) {
             ObjectType::Schema
+        } else if self.parse_keyword(Keyword::SEQUENCE) {
+            ObjectType::Sequence
         } else {
             return self.expected(
-                "TABLE, VIEW, INDEX, ROLE, or SCHEMA after DROP",
+                "TABLE, VIEW, INDEX, ROLE, SCHEMA, or SEQUENCE after DROP",
                 self.peek_token(),
             );
         };
@@ -2352,6 +2469,7 @@ impl<'a> Parser<'a> {
             if_exists,
             names,
             cascade,
+            restrict,
             purge,
         })
     }
@@ -2885,6 +3003,31 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::RParen)?;
                 Ok(Some(TableConstraint::Check { name, expr }))
             }
+            Token::Word(w)
+                if (w.keyword == Keyword::INDEX || w.keyword == Keyword::KEY)
+                    && dialect_of!(self is GenericDialect | MySqlDialect) =>
+            {
+                let display_as_key = w.keyword == Keyword::KEY;
+
+                let name = match self.peek_token() {
+                    Token::Word(word) if word.keyword == Keyword::USING => None,
+                    _ => self.maybe_parse(|parser| parser.parse_identifier()),
+                };
+
+                let index_type = if self.parse_keyword(Keyword::USING) {
+                    Some(self.parse_index_type()?)
+                } else {
+                    None
+                };
+                let columns = self.parse_parenthesized_column_list(Mandatory)?;
+
+                Ok(Some(TableConstraint::Index {
+                    display_as_key,
+                    name,
+                    index_type,
+                    columns,
+                }))
+            }
             unexpected => {
                 if name.is_some() {
                     self.expected("PRIMARY, UNIQUE, FOREIGN, or CHECK", unexpected)
@@ -2904,6 +3047,16 @@ impl<'a> Parser<'a> {
             Ok(options)
         } else {
             Ok(vec![])
+        }
+    }
+
+    pub fn parse_index_type(&mut self) -> Result<IndexType, ParserError> {
+        if self.parse_keyword(Keyword::BTREE) {
+            Ok(IndexType::BTree)
+        } else if self.parse_keyword(Keyword::HASH) {
+            Ok(IndexType::Hash)
+        } else {
+            self.expected("index type {BTREE | HASH}", self.peek_token())
         }
     }
 
@@ -3433,6 +3586,10 @@ impl<'a> Parser<'a> {
                         Ok(DataType::CharacterVarying(
                             self.parse_optional_character_length()?,
                         ))
+                    } else if self.parse_keywords(&[Keyword::LARGE, Keyword::OBJECT]) {
+                        Ok(DataType::CharacterLargeObject(
+                            self.parse_optional_precision()?,
+                        ))
                     } else {
                         Ok(DataType::Character(self.parse_optional_character_length()?))
                     }
@@ -3442,6 +3599,8 @@ impl<'a> Parser<'a> {
                         Ok(DataType::CharVarying(
                             self.parse_optional_character_length()?,
                         ))
+                    } else if self.parse_keywords(&[Keyword::LARGE, Keyword::OBJECT]) {
+                        Ok(DataType::CharLargeObject(self.parse_optional_precision()?))
                     } else {
                         Ok(DataType::Char(self.parse_optional_character_length()?))
                     }
@@ -3502,7 +3661,11 @@ impl<'a> Parser<'a> {
                 _ => {
                     self.prev_token();
                     let type_name = self.parse_object_name()?;
-                    Ok(DataType::Custom(type_name))
+                    if let Some(modifiers) = self.parse_optional_type_modifiers()? {
+                        Ok(DataType::Custom(type_name, modifiers))
+                    } else {
+                        Ok(DataType::Custom(type_name, vec![]))
+                    }
                 }
             },
             unexpected => self.expected("a data type name", unexpected),
@@ -3745,6 +3908,31 @@ impl<'a> Parser<'a> {
             }
         } else {
             Ok(ExactNumberInfo::None)
+        }
+    }
+
+    pub fn parse_optional_type_modifiers(&mut self) -> Result<Option<Vec<String>>, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let mut modifiers = Vec::new();
+            loop {
+                match self.next_token() {
+                    Token::Word(w) => modifiers.push(w.to_string()),
+                    Token::Number(n, _) => modifiers.push(n),
+                    Token::SingleQuotedString(s) => modifiers.push(s),
+
+                    Token::Comma => {
+                        continue;
+                    }
+                    Token::RParen => {
+                        break;
+                    }
+                    unexpected => self.expected("type modifiers", unexpected)?,
+                }
+            }
+
+            Ok(Some(modifiers))
+        } else {
+            Ok(None)
         }
     }
 
@@ -5292,6 +5480,20 @@ impl<'a> Parser<'a> {
             clauses,
         })
     }
+
+    /// https://www.postgresql.org/docs/current/sql-createsequence.html
+    /// CREATE [ { TEMPORARY | TEMP } ] SEQUENCE [ IF NOT EXISTS ] <sequence_name>
+    pub fn parse_create_sequence(&mut self, temporary: bool) -> Result<Statement, ParserError> {
+        //[ IF NOT EXISTS ]
+        let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        //name
+        let name = self.parse_object_name()?;
+        Ok(Statement::CreateSequence {
+            temporary,
+            if_not_exists,
+            name,
+        })
+    }
 }
 
 impl Word {
@@ -5367,7 +5569,7 @@ mod tests {
     #[cfg(test)]
     mod test_parse_data_type {
         use crate::ast::{
-            CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
+            CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, ObjectName, TimezoneInfo,
         };
         use crate::dialect::{AnsiDialect, GenericDialect};
         use crate::test_utils::TestedDialects;
@@ -5512,6 +5714,69 @@ mod tests {
         }
 
         #[test]
+        fn test_ansii_character_large_object_types() {
+            // Character large object types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-length>
+            let dialect = TestedDialects {
+                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+            };
+
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER LARGE OBJECT",
+                DataType::CharacterLargeObject(None)
+            );
+            test_parse_data_type!(
+                dialect,
+                "CHARACTER LARGE OBJECT(20)",
+                DataType::CharacterLargeObject(Some(20))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "CHAR LARGE OBJECT",
+                DataType::CharLargeObject(None)
+            );
+            test_parse_data_type!(
+                dialect,
+                "CHAR LARGE OBJECT(20)",
+                DataType::CharLargeObject(Some(20))
+            );
+
+            test_parse_data_type!(dialect, "CLOB", DataType::Clob(None));
+            test_parse_data_type!(dialect, "CLOB(20)", DataType::Clob(Some(20)));
+        }
+
+        #[test]
+        fn test_parse_custom_types() {
+            let dialect = TestedDialects {
+                dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+            };
+            test_parse_data_type!(
+                dialect,
+                "GEOMETRY",
+                DataType::Custom(ObjectName(vec!["GEOMETRY".into()]), vec![])
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "GEOMETRY(POINT)",
+                DataType::Custom(
+                    ObjectName(vec!["GEOMETRY".into()]),
+                    vec!["POINT".to_string()]
+                )
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "GEOMETRY(POINT, 4326)",
+                DataType::Custom(
+                    ObjectName(vec!["GEOMETRY".into()]),
+                    vec!["POINT".to_string(), "4326".to_string()]
+                )
+            );
+        }
+
+        #[test]
         fn test_ansii_exact_numeric_types() {
             // Exact numeric types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type>
             let dialect = TestedDialects {
@@ -5606,6 +5871,102 @@ mod tests {
         test_parse_schema_name!(
             format!("{dummy_name} AUTHORIZATION {dummy_authorization}"),
             SchemaName::NamedAuthorization(dummy_name.clone(), dummy_authorization.clone()),
+        );
+    }
+
+    #[test]
+    fn mysql_parse_index_table_constraint() {
+        macro_rules! test_parse_table_constraint {
+            ($dialect:expr, $input:expr, $expected:expr $(,)?) => {{
+                $dialect.run_parser_method(&*$input, |parser| {
+                    let constraint = parser.parse_optional_table_constraint().unwrap().unwrap();
+                    // Validate that the structure is the same as expected
+                    assert_eq!(constraint, $expected);
+                    // Validate that the input and the expected structure serialization are the same
+                    assert_eq!(constraint.to_string(), $input.to_string());
+                });
+            }};
+        }
+
+        let dialect = TestedDialects {
+            dialects: vec![Box::new(GenericDialect {}), Box::new(MySqlDialect {})],
+        };
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX (c1)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: None,
+                index_type: None,
+                columns: vec![Ident::new("c1")],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "KEY (c1)",
+            TableConstraint::Index {
+                display_as_key: true,
+                name: None,
+                index_type: None,
+                columns: vec![Ident::new("c1")],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX 'index' (c1, c2)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: Some(Ident::with_quote('\'', "index")),
+                index_type: None,
+                columns: vec![Ident::new("c1"), Ident::new("c2")],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX USING BTREE (c1)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: None,
+                index_type: Some(IndexType::BTree),
+                columns: vec![Ident::new("c1")],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX USING HASH (c1)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: None,
+                index_type: Some(IndexType::Hash),
+                columns: vec![Ident::new("c1")],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX idx_name USING BTREE (c1)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: Some(Ident::new("idx_name")),
+                index_type: Some(IndexType::BTree),
+                columns: vec![Ident::new("c1")],
+            }
+        );
+
+        test_parse_table_constraint!(
+            dialect,
+            "INDEX idx_name USING HASH (c1)",
+            TableConstraint::Index {
+                display_as_key: false,
+                name: Some(Ident::new("idx_name")),
+                index_type: Some(IndexType::Hash),
+                columns: vec![Ident::new("c1")],
+            }
         );
     }
 }

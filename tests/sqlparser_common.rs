@@ -2089,10 +2089,10 @@ fn parse_create_table_hive_array() {
     let dialects = TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(HiveDialect {})],
     };
-    let sql = "CREATE TABLE IF NOT EXISTS something (key int, val array<int>)";
+    let sql = "CREATE TABLE IF NOT EXISTS something (name int, val array<int>)";
     match dialects.one_statement_parses_to(
         sql,
-        "CREATE TABLE IF NOT EXISTS something (key INT, val INT[])",
+        "CREATE TABLE IF NOT EXISTS something (name INT, val INT[])",
     ) {
         Statement::CreateTable {
             if_not_exists,
@@ -2106,7 +2106,7 @@ fn parse_create_table_hive_array() {
                 columns,
                 vec![
                     ColumnDef {
-                        name: Ident::new("key"),
+                        name: Ident::new("name"),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![],
@@ -2123,7 +2123,8 @@ fn parse_create_table_hive_array() {
         _ => unreachable!(),
     }
 
-    let res = parse_sql_statements("CREATE TABLE IF NOT EXISTS something (key int, val array<int)");
+    let res =
+        parse_sql_statements("CREATE TABLE IF NOT EXISTS something (name int, val array<int)");
     assert!(res
         .unwrap_err()
         .to_string()

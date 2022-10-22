@@ -26,7 +26,7 @@ pub use self::data_type::{
     CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
 };
 pub use self::ddl::{
-    AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef,
+    AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, IndexType,
     ReferentialAction, TableConstraint,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -1577,6 +1577,13 @@ pub enum Statement {
         #[cfg_attr(feature = "derive-visitor", drive(skip))]
         if_exists: bool,
     },
+    ///CreateSequence -- define a new sequence
+    /// CREATE [ { TEMPORARY | TEMP } ] SEQUENCE [ IF NOT EXISTS ] <sequence_name>
+    CreateSequence {
+        temporary: bool,
+        if_not_exists: bool,
+        name: ObjectName,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -2592,6 +2599,19 @@ impl fmt::Display for Statement {
                 } else {
                     write!(f, "UNCACHE TABLE {table_name}", table_name = table_name)
                 }
+            }
+            Statement::CreateSequence {
+                temporary,
+                if_not_exists,
+                name,
+            } => {
+                write!(
+                    f,
+                    "CREATE {temporary}SEQUENCE {if_not_exists}{name}",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    temporary = if *temporary { "TEMPORARY " } else { "" },
+                    name = name
+                )
             }
         }
     }

@@ -260,6 +260,24 @@ pub enum TableConstraint {
         name: Option<Ident>,
         expr: Box<Expr>,
     },
+    /// MySQLs [index definition][1] for index creation. Not present on ANSI so, for now, the usage
+    /// is restricted to MySQL, as no other dialects that support this syntax were found.
+    ///
+    /// `{INDEX | KEY} [index_name] [index_type] (key_part,...) [index_option]...`
+    ///
+    /// [1]: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
+    Index {
+        /// Whether this index starts with KEY (true) or INDEX (false), to maintain the same syntax.
+        display_as_key: bool,
+        /// Index name.
+        name: Option<Ident>,
+        /// Optional [index type][1].
+        ///
+        /// [1]: IndexType
+        index_type: Option<IndexType>,
+        /// Referred column identifier list.
+        columns: Vec<Ident>,
+    },
 }
 
 impl fmt::Display for TableConstraint {
@@ -303,6 +321,48 @@ impl fmt::Display for TableConstraint {
             TableConstraint::Check { name, expr } => {
                 write!(f, "{}CHECK ({})", display_constraint_name(name), expr)
             }
+            TableConstraint::Index {
+                display_as_key,
+                name,
+                index_type,
+                columns,
+            } => {
+                write!(f, "{}", if *display_as_key { "KEY" } else { "INDEX" })?;
+                if let Some(name) = name {
+                    write!(f, " {}", name)?;
+                }
+                if let Some(index_type) = index_type {
+                    write!(f, " USING {}", index_type)?;
+                }
+                write!(f, " ({})", display_comma_separated(columns))?;
+
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Indexing method used by that index.
+///
+/// This structure isn't present on ANSI, but is found at least in [MySQL CREATE TABLE][1],
+/// [MySQL CREATE INDEX][2], and [Postgresql CREATE INDEX][3] statements.
+///
+/// [1]: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
+/// [2]: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
+/// [3]: https://www.postgresql.org/docs/14/sql-createindex.html
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum IndexType {
+    BTree,
+    Hash,
+    // TODO add Postgresql's possible indexes
+}
+
+impl fmt::Display for IndexType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::BTree => write!(f, "BTREE"),
+            Self::Hash => write!(f, "HASH"),
         }
     }
 }

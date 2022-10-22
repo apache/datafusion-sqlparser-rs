@@ -8,6 +8,24 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+
+## [0.26.0] 2022-10-19
+
+### Added
+* Support MySQL table option `{INDEX | KEY}` in CREATE TABLE definiton (#665) - Thanks @AugustoFKL
+* Support `CREATE [ { TEMPORARY | TEMP } ] SEQUENCE [ IF NOT EXISTS ] <sequence_name>` (#678) - Thanks @sam-mmm
+* Support `DROP SEQUENCE` statement (#673) - Thanks @sam-mmm
+* Support for ANSI types  `CHARACTER LARGE OBJECT[(p)]` and `CHAR LARGE OBJECT[(p)]` (#671)  - Thanks @AugustoFKL
+* Support `[CACHE|UNCACHE] TABLE` (#670) - Thanks @francis-du
+* Support `CEIL(expr TO DateTimeField)` and `FLOOR(expr TO DateTimeField)` - Thanks @sarahyurick
+* Support all ansii character string types, (#648) - Thanks @AugustoFKL
+
+### Changed
+* Support expressions inside window frames (#655) - Thanks @mustafasrepo and @ozankabak
+* Support unit on char length units for small character strings (#663) - Thanks @AugustoFKL
+* Replace booleans on `SET ROLE` with a single enum. (#664) - Thanks @AugustoFKL
+* Replace `Option`s with enum for `DECIMAL` precision (#654) - Thanks @AugustoFKL
+
 ## [0.25.0] 2022-10-03
 
 ### Added

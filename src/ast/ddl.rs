@@ -268,6 +268,7 @@ pub enum TableConstraint {
     /// [1]: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
     Index {
         /// Whether this index starts with KEY (true) or INDEX (false), to maintain the same syntax.
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
         display_as_key: bool,
         /// Index name.
         name: Option<Ident>,
@@ -352,6 +353,7 @@ impl fmt::Display for TableConstraint {
 /// [3]: https://www.postgresql.org/docs/14/sql-createindex.html
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum IndexType {
     BTree,
     Hash,

@@ -1580,7 +1580,9 @@ pub enum Statement {
     ///CreateSequence -- define a new sequence
     /// CREATE [ { TEMPORARY | TEMP } ] SEQUENCE [ IF NOT EXISTS ] <sequence_name>
     CreateSequence {
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
         temporary: bool,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
         if_not_exists: bool,
         name: ObjectName,
     },

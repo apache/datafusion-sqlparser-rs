@@ -133,7 +133,10 @@ pub enum DataType {
     /// Bytea
     Bytea,
     /// Custom type such as enums
-    Custom(ObjectName, Vec<String>),
+    Custom(
+        ObjectName,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] Vec<String>,
+    ),
     /// Arrays
     Array(Box<DataType>),
     /// Enums

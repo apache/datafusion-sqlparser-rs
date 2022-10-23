@@ -6067,7 +6067,7 @@ mod tests {
             "INDEX 'index' (c1, c2)",
             TableConstraint::Index {
                 display_as_key: false,
-                name: Some(Ident::with_quote('\'', "index")),
+                name: Some(Ident::with_quote(QuoteStyle::SingleQuote, "index")),
                 index_type: None,
                 columns: vec![Ident::new("c1"), Ident::new("c2")],
             }

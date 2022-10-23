@@ -5832,7 +5832,10 @@ fn parse_cache_table() {
         ),
         Statement::Cache {
             table_flag: None,
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_name: ObjectName(vec![Ident::with_quote(
+                QuoteStyle::SingleQuote,
+                cache_table_name
+            )]),
             has_as: false,
             options: vec![],
             query: None,
@@ -5850,7 +5853,10 @@ fn parse_cache_table() {
         ),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_name: ObjectName(vec![Ident::with_quote(
+                QuoteStyle::SingleQuote,
+                cache_table_name
+            )]),
             has_as: false,
             options: vec![],
             query: None,
@@ -5868,15 +5874,18 @@ fn parse_cache_table() {
         ),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_name: ObjectName(vec![Ident::with_quote(
+                QuoteStyle::SingleQuote,
+                cache_table_name
+            )]),
             has_as: false,
             options: vec![
                 SqlOption {
-                    name: Ident::with_quote('\'', "K1"),
+                    name: Ident::with_quote(QuoteStyle::SingleQuote, "K1"),
                     value: Value::SingleQuotedString("V1".into()),
                 },
                 SqlOption {
-                    name: Ident::with_quote('\'', "K2"),
+                    name: Ident::with_quote(QuoteStyle::SingleQuote, "K2"),
                     value: number("0.88"),
                 },
             ],
@@ -5896,15 +5905,18 @@ fn parse_cache_table() {
         ),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_name: ObjectName(vec![Ident::with_quote(
+                QuoteStyle::SingleQuote,
+                cache_table_name
+            )]),
             has_as: false,
             options: vec![
                 SqlOption {
-                    name: Ident::with_quote('\'', "K1"),
+                    name: Ident::with_quote(QuoteStyle::SingleQuote, "K1"),
                     value: Value::SingleQuotedString("V1".into()),
                 },
                 SqlOption {
-                    name: Ident::with_quote('\'', "K2"),
+                    name: Ident::with_quote(QuoteStyle::SingleQuote, "K2"),
                     value: number("0.88"),
                 },
             ],
@@ -5924,15 +5936,18 @@ fn parse_cache_table() {
         ),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_name: ObjectName(vec![Ident::with_quote(
+                QuoteStyle::SingleQuote,
+                cache_table_name
+            )]),
             has_as: true,
             options: vec![
                 SqlOption {
-                    name: Ident::with_quote('\'', "K1"),
+                    name: Ident::with_quote(QuoteStyle::SingleQuote, "K1"),
                     value: Value::SingleQuotedString("V1".into()),
                 },
                 SqlOption {
-                    name: Ident::with_quote('\'', "K2"),
+                    name: Ident::with_quote(QuoteStyle::SingleQuote, "K2"),
                     value: number("0.88"),
                 },
             ],
@@ -5952,7 +5967,10 @@ fn parse_cache_table() {
         ),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_name: ObjectName(vec![Ident::with_quote(
+                QuoteStyle::SingleQuote,
+                cache_table_name
+            )]),
             has_as: false,
             options: vec![],
             query: Some(query.clone()),
@@ -5970,7 +5988,10 @@ fn parse_cache_table() {
         ),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_name: ObjectName(vec![Ident::with_quote(
+                QuoteStyle::SingleQuote,
+                cache_table_name
+            )]),
             has_as: true,
             options: vec![],
             query: Some(query),
@@ -6033,7 +6054,10 @@ fn parse_uncache_table() {
     assert_eq!(
         verified_stmt("UNCACHE TABLE 'table_name'"),
         Statement::UNCache {
-            table_name: ObjectName(vec![Ident::with_quote('\'', "table_name")]),
+            table_name: ObjectName(vec![Ident::with_quote(
+                QuoteStyle::SingleQuote,
+                "table_name"
+            )]),
             if_exists: false,
         }
     );
@@ -6041,7 +6065,10 @@ fn parse_uncache_table() {
     assert_eq!(
         verified_stmt("UNCACHE TABLE IF EXISTS 'table_name'"),
         Statement::UNCache {
-            table_name: ObjectName(vec![Ident::with_quote('\'', "table_name")]),
+            table_name: ObjectName(vec![Ident::with_quote(
+                QuoteStyle::SingleQuote,
+                "table_name"
+            )]),
             if_exists: true,
         }
     );

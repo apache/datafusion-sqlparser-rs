@@ -169,7 +169,10 @@ fn parse_create_table_with_defaults() {
                             length: 45,
                             unit: None
                         })),
-                        collation: Some(ObjectName(vec![Ident::with_quote('"', "es_ES")])),
+                        collation: Some(ObjectName(vec![Ident::with_quote(
+                            QuoteStyle::DoubleQuote,
+                            "es_ES"
+                        )])),
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,

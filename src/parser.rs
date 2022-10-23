@@ -3448,9 +3448,9 @@ impl<'a> Parser<'a> {
                 Keyword::TRUE => Ok(Value::Boolean(true)),
                 Keyword::FALSE => Ok(Value::Boolean(false)),
                 Keyword::NULL => Ok(Value::Null),
-                Keyword::NoKeyword if w.quote_style.is_some() => match w.quote_style {
-                    Some('"') => Ok(Value::DoubleQuotedString(w.value)),
-                    Some('\'') => Ok(Value::SingleQuotedString(w.value)),
+                Keyword::NoKeyword => match w.quote_style {
+                    QuoteStyle::SingleQuote => Ok(Value::SingleQuotedString(w.value)),
+                    QuoteStyle::DoubleQuote => Ok(Value::DoubleQuotedString(w.value)),
                     _ => self.expected("A value?", Token::Word(w))?,
                 },
                 // Case when Snowflake Semi-structured data like key:value
@@ -3748,7 +3748,7 @@ impl<'a> Parser<'a> {
             //    character. When it sees such a <literal>, your DBMS will
             //    ignore the <separator> and treat the multiple strings as
             //    a single <literal>."
-            Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
+            Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote(QuoteStyle::SingleQuote, s))),
             not_an_ident => {
                 if after_as {
                     return self.expected("an identifier after AS", not_an_ident);
@@ -3831,7 +3831,7 @@ impl<'a> Parser<'a> {
     pub fn parse_identifier(&mut self) -> Result<Ident, ParserError> {
         match self.next_token() {
             Token::Word(w) => Ok(w.to_ident()),
-            Token::SingleQuotedString(s) => Ok(Ident::with_quote('\'', s)),
+            Token::SingleQuotedString(s) => Ok(Ident::with_quote(QuoteStyle::SingleQuote, s)),
             unexpected => self.expected("identifier", unexpected),
         }
     }
@@ -5627,13 +5627,25 @@ mod tests {
             assert_eq!(parser.next_token(), Token::make_keyword("SELECT"));
             parser.prev_token();
             assert_eq!(parser.next_token(), Token::make_keyword("SELECT"));
-            assert_eq!(parser.next_token(), Token::make_word("version", None));
+            assert_eq!(
+                parser.next_token(),
+                Token::make_word("version", QuoteStyle::None)
+            );
             parser.prev_token();
-            assert_eq!(parser.peek_token(), Token::make_word("version", None));
-            assert_eq!(parser.next_token(), Token::make_word("version", None));
+            assert_eq!(
+                parser.peek_token(),
+                Token::make_word("version", QuoteStyle::None)
+            );
+            assert_eq!(
+                parser.next_token(),
+                Token::make_word("version", QuoteStyle::None)
+            );
             assert_eq!(parser.peek_token(), Token::EOF);
             parser.prev_token();
-            assert_eq!(parser.next_token(), Token::make_word("version", None));
+            assert_eq!(
+                parser.next_token(),
+                Token::make_word("version", QuoteStyle::None)
+            );
             assert_eq!(parser.next_token(), Token::EOF);
             assert_eq!(parser.next_token(), Token::EOF);
             parser.prev_token();

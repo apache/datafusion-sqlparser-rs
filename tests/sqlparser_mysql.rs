@@ -423,7 +423,7 @@ fn parse_quote_identifiers() {
             assert_eq!(name.to_string(), "`PRIMARY`");
             assert_eq!(
                 vec![ColumnDef {
-                    name: Ident::with_quote('`', "BEGIN"),
+                    name: Ident::with_quote(QuoteStyle::BackTick, "BEGIN"),
                     data_type: DataType::Int(None),
                     collation: None,
                     options: vec![ColumnOptionDef {
@@ -450,7 +450,7 @@ fn parse_quote_identifiers_2() {
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "quoted ` identifier".into(),
-                    quote_style: Some('`'),
+                    quote_style: QuoteStyle::BackTick,
                 }))],
                 into: None,
                 from: vec![],
@@ -484,7 +484,7 @@ fn parse_quote_identifiers_3() {
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "`quoted identifier`".into(),
-                    quote_style: Some('`'),
+                    quote_style: QuoteStyle::BackTick,
                 }))],
                 into: None,
                 from: vec![],
@@ -935,7 +935,7 @@ fn parse_substring_in_select() {
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
                             expr: Box::new(Expr::Identifier(Ident {
                                 value: "description".to_string(),
-                                quote_style: None
+                                quote_style: QuoteStyle::None
                             })),
                             substring_from: Some(Box::new(Expr::Value(Value::Number(
                                 "0".to_string(),
@@ -951,7 +951,7 @@ fn parse_substring_in_select() {
                             relation: TableFactor::Table {
                                 name: ObjectName(vec![Ident {
                                     value: "test".to_string(),
-                                    quote_style: None
+                                    quote_style: QuoteStyle::None
                                 }]),
                                 alias: None,
                                 args: None,
@@ -1026,7 +1026,7 @@ fn parse_table_colum_option_on_update() {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
-                    name: Ident::with_quote('`', "modification_time"),
+                    name: Ident::with_quote(QuoteStyle::BackTick, "modification_time"),
                     data_type: DataType::Datetime,
                     collation: None,
                     options: vec![ColumnOptionDef {

@@ -256,7 +256,7 @@ fn parse_delete_statement() {
         Statement::Delete { table_name, .. } => {
             assert_eq!(
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::with_quote('"', "table")]),
+                    name: ObjectName(vec![Ident::with_quote(QuoteStyle::DoubleQuote, "table")]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -677,7 +677,7 @@ fn parse_select_with_date_column_name() {
     assert_eq!(
         &Expr::Identifier(Ident {
             value: "date".into(),
-            quote_style: None,
+            quote_style: QuoteStyle::None
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -958,8 +958,8 @@ fn parse_null_like() {
             },
             alias: Ident {
                 value: "col_null".to_owned(),
-                quote_style: None,
-            },
+                quote_style: QuoteStyle::None
+            }
         },
         select.projection[0]
     );
@@ -973,8 +973,8 @@ fn parse_null_like() {
             },
             alias: Ident {
                 value: "null_col".to_owned(),
-                quote_style: None,
-            },
+                quote_style: QuoteStyle::None
+            }
         },
         select.projection[1]
     );
@@ -1858,7 +1858,7 @@ fn parse_listagg() {
         OrderByExpr {
             expr: Expr::Identifier(Ident {
                 value: "id".to_string(),
-                quote_style: None,
+                quote_style: QuoteStyle::None,
             }),
             asc: None,
             nulls_first: None,
@@ -1866,7 +1866,7 @@ fn parse_listagg() {
         OrderByExpr {
             expr: Expr::Identifier(Ident {
                 value: "username".to_string(),
-                quote_style: None,
+                quote_style: QuoteStyle::None,
             }),
             asc: None,
             nulls_first: None,
@@ -3231,7 +3231,7 @@ fn parse_at_timezone() {
             timestamp: Box::new(Expr::Function(Function {
                 name: ObjectName(vec![Ident {
                     value: "FROM_UNIXTIME".to_string(),
-                    quote_style: None,
+                    quote_style: QuoteStyle::None
                 }]),
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(zero.clone()))],
                 over: None,
@@ -3250,14 +3250,14 @@ fn parse_at_timezone() {
             expr: Expr::Function(Function {
                 name: ObjectName(vec![Ident {
                     value: "DATE_FORMAT".to_string(),
-                    quote_style: None,
+                    quote_style: QuoteStyle::None,
                 },],),
                 args: vec![
                     FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::AtTimeZone {
                         timestamp: Box::new(Expr::Function(Function {
                             name: ObjectName(vec![Ident {
                                 value: "FROM_UNIXTIME".to_string(),
-                                quote_style: None,
+                                quote_style: QuoteStyle::None,
                             },],),
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(zero))],
                             over: None,
@@ -3276,7 +3276,7 @@ fn parse_at_timezone() {
             },),
             alias: Ident {
                 value: "hour".to_string(),
-                quote_style: Some('"'),
+                quote_style: QuoteStyle::DoubleQuote,
             },
         },
         only(&select.projection),
@@ -3459,8 +3459,14 @@ fn parse_delimited_identifiers() {
             args,
             with_hints,
         } => {
-            assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert_eq!(
+                vec![Ident::with_quote(QuoteStyle::DoubleQuote, "a table")],
+                name.0
+            );
+            assert_eq!(
+                Ident::with_quote(QuoteStyle::DoubleQuote, "alias"),
+                alias.unwrap().name
+            );
             assert!(args.is_none());
             assert!(with_hints.is_empty());
         }
@@ -3470,14 +3476,14 @@ fn parse_delimited_identifiers() {
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::CompoundIdentifier(vec![
-            Ident::with_quote('"', "alias"),
-            Ident::with_quote('"', "bar baz"),
+            Ident::with_quote(QuoteStyle::DoubleQuote, "alias"),
+            Ident::with_quote(QuoteStyle::DoubleQuote, "bar baz")
         ]),
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            name: ObjectName(vec![Ident::with_quote(QuoteStyle::DoubleQuote, "myfun")]),
             args: vec![],
             over: None,
             distinct: false,
@@ -3487,8 +3493,14 @@ fn parse_delimited_identifiers() {
     );
     match &select.projection[2] {
         SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+            assert_eq!(
+                &Expr::Identifier(Ident::with_quote(QuoteStyle::DoubleQuote, "simple id")),
+                expr
+            );
+            assert_eq!(
+                &Ident::with_quote(QuoteStyle::DoubleQuote, "column alias"),
+                alias
+            );
         }
         _ => panic!("Expected ExprWithAlias"),
     }
@@ -4000,11 +4012,11 @@ fn parse_recursive_cte() {
         alias: TableAlias {
             name: Ident {
                 value: "nums".to_string(),
-                quote_style: None,
+                quote_style: QuoteStyle::None,
             },
             columns: vec![Ident {
                 value: "val".to_string(),
-                quote_style: None,
+                quote_style: QuoteStyle::None,
             }],
         },
         query: Box::new(cte_query),
@@ -5076,12 +5088,12 @@ fn parse_grant() {
                             columns: Some(vec![
                                 Ident {
                                     value: "shape".into(),
-                                    quote_style: None,
+                                    quote_style: QuoteStyle::None
                                 },
                                 Ident {
                                     value: "size".into(),
-                                    quote_style: None,
-                                },
+                                    quote_style: QuoteStyle::None
+                                }
                             ])
                         },
                         Action::Usage,
@@ -5301,7 +5313,7 @@ fn parse_merge() {
                     alias: Some(TableAlias {
                         name: Ident {
                             value: "stg".to_string(),
-                            quote_style: None,
+                            quote_style: QuoteStyle::None
                         },
                         columns: vec![],
                     }),

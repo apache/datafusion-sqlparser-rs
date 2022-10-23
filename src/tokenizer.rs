@@ -24,16 +24,16 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use core::fmt;
+use core::fmt::{self};
 use core::iter::Peekable;
 use core::str::Chars;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::dialect::SnowflakeDialect;
 use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
+use crate::{ast::QuoteStyle, dialect::SnowflakeDialect};
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -221,15 +221,15 @@ impl fmt::Display for Token {
 
 impl Token {
     pub fn make_keyword(keyword: &str) -> Self {
-        Token::make_word(keyword, None)
+        Token::make_word(keyword, QuoteStyle::None)
     }
 
-    pub fn make_word(word: &str, quote_style: Option<char>) -> Self {
+    pub fn make_word(word: &str, quote_style: QuoteStyle) -> Self {
         let word_uppercase = word.to_uppercase();
         Token::Word(Word {
             value: word.to_string(),
             quote_style,
-            keyword: if quote_style.is_none() {
+            keyword: if quote_style == QuoteStyle::None {
                 let keyword = ALL_KEYWORDS.binary_search(&word_uppercase.as_str());
                 keyword.map_or(Keyword::NoKeyword, |x| ALL_KEYWORDS_INDEX[x])
             } else {
@@ -249,7 +249,7 @@ pub struct Word {
     /// An identifier can be "quoted" (&lt;delimited identifier> in ANSI parlance).
     /// The standard and most implementations allow using double quotes for this,
     /// but some implementations support other quoting styles as well (e.g. \[MS SQL])
-    pub quote_style: Option<char>,
+    pub quote_style: QuoteStyle,
     /// If the word was not quoted and it matched one of the known keywords,
     /// this will have one of the values from dialect::keywords, otherwise empty
     pub keyword: Keyword,
@@ -258,11 +258,11 @@ pub struct Word {
 impl fmt::Display for Word {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.quote_style {
-            Some(s) if s == '"' || s == '[' || s == '`' => {
-                write!(f, "{}{}{}", s, self.value, Word::matching_end_quote(s))
+            QuoteStyle::None => write!(f, "{}", self.value),
+            QuoteStyle::SingleQuote | QuoteStyle::DoubleQuote | QuoteStyle::BackTick => {
+                write!(f, "{}{}{}", self.quote_style, self.value, self.quote_style)
             }
-            None => f.write_str(&self.value),
-            _ => panic!("Unexpected quote_style!"),
+            QuoteStyle::SquareBracket => write!(f, "[{}]", self.value),
         }
     }
 }
@@ -356,7 +356,7 @@ impl<'a> Tokenizer<'a> {
                 Token::Whitespace(Whitespace::Tab) => self.col += 4,
                 Token::Word(w) => {
                     self.col += w.value.chars().count() as u64;
-                    if w.quote_style.is_some() {
+                    if w.quote_style != QuoteStyle::None {
                         self.col += 2
                     }
                 }
@@ -399,7 +399,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "N"
                             let s = self.tokenize_word(n, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word(&s, QuoteStyle::None)))
                         }
                     }
                 }
@@ -414,7 +414,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "E" or "e"
                             let s = self.tokenize_word(x, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word(&s, QuoteStyle::None)))
                         }
                     }
                 }
@@ -431,7 +431,7 @@ impl<'a> Tokenizer<'a> {
                         _ => {
                             // regular identifier starting with an "X"
                             let s = self.tokenize_word(x, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                            Ok(Some(Token::make_word(&s, QuoteStyle::None)))
                         }
                     }
                 }
@@ -448,7 +448,7 @@ impl<'a> Tokenizer<'a> {
                         s += s2.as_str();
                         return Ok(Some(Token::Number(s, false)));
                     }
-                    Ok(Some(Token::make_word(&s, None)))
+                    Ok(Some(Token::make_word(&s, QuoteStyle::None)))
                 }
                 // single quoted string
                 '\'' => {
@@ -476,7 +476,18 @@ impl<'a> Tokenizer<'a> {
                     let (s, last_char) = parse_quoted_ident(chars, quote_end);
 
                     if last_char == Some(quote_end) {
-                        Ok(Some(Token::make_word(&s, Some(quote_start))))
+                        let quote_style = match quote_start {
+                            '\'' => QuoteStyle::SingleQuote,
+                            '[' => QuoteStyle::SquareBracket,
+                            '"' => QuoteStyle::DoubleQuote,
+                            '`' => QuoteStyle::BackTick,
+                            _ => {
+                                return self.tokenizer_error(format!(
+                                    "Quote style isn't supported: {quote_start}"
+                                ))
+                            }
+                        };
+                        Ok(Some(Token::make_word(&s, quote_style)))
                     } else {
                         self.tokenizer_error(format!(
                             "Expected close delimiter '{}' before EOF.",
@@ -965,7 +976,7 @@ mod tests {
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("sqrt", None),
+            Token::make_word("sqrt", QuoteStyle::None),
             Token::LParen,
             Token::Number(String::from("1"), false),
             Token::RParen,
@@ -1003,15 +1014,15 @@ mod tests {
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("one", None),
+            Token::make_word("one", QuoteStyle::None),
             Token::Whitespace(Whitespace::Space),
             Token::Pipe,
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("two", None),
+            Token::make_word("two", QuoteStyle::None),
             Token::Whitespace(Whitespace::Space),
             Token::Caret,
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("three", None),
+            Token::make_word("three", QuoteStyle::None),
         ];
         compare(expected, tokens);
     }
@@ -1071,11 +1082,11 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("customer", None),
+            Token::make_word("customer", QuoteStyle::None),
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("WHERE"),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("id", None),
+            Token::make_word("id", QuoteStyle::None),
             Token::Whitespace(Whitespace::Space),
             Token::Eq,
             Token::Whitespace(Whitespace::Space),
@@ -1105,11 +1116,11 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("customer", None),
+            Token::make_word("customer", QuoteStyle::None),
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("WHERE"),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("id", None),
+            Token::make_word("id", QuoteStyle::None),
             Token::Whitespace(Whitespace::Space),
             Token::Eq,
             Token::Whitespace(Whitespace::Space),
@@ -1137,11 +1148,11 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("customer", None),
+            Token::make_word("customer", QuoteStyle::None),
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("WHERE"),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("id", None),
+            Token::make_word("id", QuoteStyle::None),
             Token::Whitespace(Whitespace::Space),
             Token::Eq,
             Token::Whitespace(Whitespace::Space),
@@ -1165,11 +1176,11 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("customer", None),
+            Token::make_word("customer", QuoteStyle::None),
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("WHERE"),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("salary", None),
+            Token::make_word("salary", QuoteStyle::None),
             Token::Whitespace(Whitespace::Space),
             Token::Neq,
             Token::Whitespace(Whitespace::Space),
@@ -1194,7 +1205,7 @@ mod tests {
             Token::Char('ط'),
             Token::Char('ف'),
             Token::Char('ى'),
-            Token::make_word("h", None),
+            Token::make_word("h", QuoteStyle::None),
         ];
         compare(expected, tokens);
     }
@@ -1266,7 +1277,7 @@ mod tests {
             Token::Char('ط'),
             Token::Char('ف'),
             Token::Char('ى'),
-            Token::make_word("h", None),
+            Token::make_word("h", QuoteStyle::None),
         ];
         compare(expected, tokens);
     }
@@ -1278,11 +1289,11 @@ mod tests {
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![
-            Token::make_word("FUNCTION", None),
+            Token::make_word("FUNCTION", QuoteStyle::None),
             Token::LParen,
-            Token::make_word("key", None),
+            Token::make_word("key", QuoteStyle::None),
             Token::RArrow,
-            Token::make_word("value", None),
+            Token::make_word("value", QuoteStyle::None),
             Token::RParen,
         ];
         compare(expected, tokens);
@@ -1296,7 +1307,7 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected = vec![
-            Token::make_word("a", None),
+            Token::make_word("a", QuoteStyle::None),
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("IS"),
             Token::Whitespace(Whitespace::Space),
@@ -1409,13 +1420,13 @@ mod tests {
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![
-            Token::make_word("line1", None),
+            Token::make_word("line1", QuoteStyle::None),
             Token::Whitespace(Whitespace::Newline),
-            Token::make_word("line2", None),
+            Token::make_word("line2", QuoteStyle::None),
             Token::Whitespace(Whitespace::Newline),
-            Token::make_word("line3", None),
+            Token::make_word("line3", QuoteStyle::None),
             Token::Whitespace(Whitespace::Newline),
-            Token::make_word("line4", None),
+            Token::make_word("line4", QuoteStyle::None),
             Token::Whitespace(Whitespace::Newline),
         ];
         compare(expected, tokens);
@@ -1434,11 +1445,11 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from("5"), false),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("bar", Some('[')),
+            Token::make_word("bar", QuoteStyle::SquareBracket),
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("FROM"),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("foo", None),
+            Token::make_word("foo", QuoteStyle::None),
         ];
         compare(expected, tokens);
     }
@@ -1452,28 +1463,28 @@ mod tests {
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("col", None),
+            Token::make_word("col", QuoteStyle::None),
             Token::Whitespace(Whitespace::Space),
             Token::Tilde,
             Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("col", None),
+            Token::make_word("col", QuoteStyle::None),
             Token::Whitespace(Whitespace::Space),
             Token::TildeAsterisk,
             Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("col", None),
+            Token::make_word("col", QuoteStyle::None),
             Token::Whitespace(Whitespace::Space),
             Token::ExclamationMarkTilde,
             Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
             Token::Comma,
             Token::Whitespace(Whitespace::Space),
-            Token::make_word("col", None),
+            Token::make_word("col", QuoteStyle::None),
             Token::Whitespace(Whitespace::Space),
             Token::ExclamationMarkTildeAsterisk,
             Token::Whitespace(Whitespace::Space),
@@ -1490,11 +1501,11 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"a " b"#, Some('"')),
+            Token::make_word(r#"a " b"#, QuoteStyle::DoubleQuote),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"a ""#, Some('"')),
+            Token::make_word(r#"a ""#, QuoteStyle::DoubleQuote),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"c """#, Some('"')),
+            Token::make_word(r#"c """#, QuoteStyle::DoubleQuote),
             Token::Whitespace(Whitespace::Space),
         ];
         compare(expected, tokens);

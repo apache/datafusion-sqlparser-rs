@@ -89,7 +89,7 @@ pub struct Ident {
     pub value: String,
     /// The starting quote if any. Valid quote characters are the single quote,
     /// double quote, backtick, and opening square bracket.
-    pub quote_style: Option<char>,
+    pub quote_style: QuoteStyle,
 }
 
 impl Ident {
@@ -100,20 +100,19 @@ impl Ident {
     {
         Ident {
             value: value.into(),
-            quote_style: None,
+            quote_style: QuoteStyle::None,
         }
     }
 
     /// Create a new quoted identifier with the given quote and value. This function
     /// panics if the given quote is not a valid quote character.
-    pub fn with_quote<S>(quote: char, value: S) -> Self
+    pub fn with_quote<S>(quote_style: QuoteStyle, value: S) -> Self
     where
         S: Into<String>,
     {
-        assert!(quote == '\'' || quote == '"' || quote == '`' || quote == '[');
         Ident {
             value: value.into(),
-            quote_style: Some(quote),
+            quote_style,
         }
     }
 }
@@ -122,7 +121,7 @@ impl From<&str> for Ident {
     fn from(value: &str) -> Self {
         Ident {
             value: value.to_string(),
-            quote_style: None,
+            quote_style: QuoteStyle::None,
         }
     }
 }
@@ -130,13 +129,51 @@ impl From<&str> for Ident {
 impl fmt::Display for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.quote_style {
-            Some(q) if q == '"' || q == '\'' || q == '`' => {
-                let escaped = value::escape_quoted_string(&self.value, q);
-                write!(f, "{}{}{}", q, escaped, q)
+            QuoteStyle::None => f.write_str(&self.value),
+            QuoteStyle::SingleQuote | QuoteStyle::DoubleQuote | QuoteStyle::BackTick => {
+                let escaped = value::escape_quoted_string(&self.value, self.quote_style.as_char());
+                write!(f, "{}{}{}", self.quote_style, escaped, self.quote_style)
             }
-            Some(q) if q == '[' => write!(f, "[{}]", self.value),
-            None => f.write_str(&self.value),
-            _ => panic!("unexpected quote style"),
+            QuoteStyle::SquareBracket => write!(f, "[{}]", self.value),
+        }
+    }
+}
+
+/// Valid quoting characters
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum QuoteStyle {
+    /// No quote
+    None,
+    /// Quote with `'`
+    SingleQuote,
+    /// Quote with `"`
+    DoubleQuote,
+    /// Quote with ``` (BackTick)
+    BackTick,
+    /// Quote with `[]` (Square bracket)
+    SquareBracket,
+}
+impl fmt::Display for QuoteStyle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            QuoteStyle::SingleQuote => write!(f, "'"),
+            QuoteStyle::DoubleQuote => write!(f, "\""),
+            QuoteStyle::BackTick => write!(f, "`"),
+            QuoteStyle::SquareBracket | QuoteStyle::None => Ok(()),
+        }
+    }
+}
+
+impl QuoteStyle {
+    fn as_char(&self) -> char {
+        match self {
+            QuoteStyle::SingleQuote => '\'',
+            QuoteStyle::DoubleQuote => '"',
+            QuoteStyle::BackTick => '`',
+            QuoteStyle::SquareBracket | QuoteStyle::None => {
+                panic!("Not supported for quote style {}", self)
+            }
         }
     }
 }

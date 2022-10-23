@@ -58,11 +58,14 @@ fn parse_table_identifiers() {
 
     test_table_ident("da-sh-es", vec![Ident::new("da-sh-es")]);
 
-    test_table_ident("`spa ce`", vec![Ident::with_quote('`', "spa ce")]);
+    test_table_ident(
+        "`spa ce`",
+        vec![Ident::with_quote(QuoteStyle::BackTick, "spa ce")],
+    );
 
     test_table_ident(
         "`!@#$%^&*()-=_+`",
-        vec![Ident::with_quote('`', "!@#$%^&*()-=_+")],
+        vec![Ident::with_quote(QuoteStyle::BackTick, "!@#$%^&*()-=_+")],
     );
 
     test_table_ident(
@@ -71,7 +74,10 @@ fn parse_table_identifiers() {
     );
     test_table_ident(
         "`5abc`.dataField",
-        vec![Ident::with_quote('`', "5abc"), Ident::new("dataField")],
+        vec![
+            Ident::with_quote(QuoteStyle::BackTick, "5abc"),
+            Ident::new("dataField"),
+        ],
     );
 
     test_table_ident_err("5abc.dataField");
@@ -85,7 +91,10 @@ fn parse_table_identifiers() {
 
     test_table_ident(
         "`GROUP`.dataField",
-        vec![Ident::with_quote('`', "GROUP"), Ident::new("dataField")],
+        vec![
+            Ident::with_quote(QuoteStyle::BackTick, "GROUP"),
+            Ident::new("dataField"),
+        ],
     );
 
     // TODO: this should be error

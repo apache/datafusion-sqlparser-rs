@@ -871,7 +871,7 @@ fn parse_set() {
             variable: ObjectName(vec![Ident::new("a")]),
             value: vec![Expr::Identifier(Ident {
                 value: "b".into(),
-                quote_style: None
+                quote_style: QuoteStyle::None
             })],
         }
     );
@@ -913,7 +913,7 @@ fn parse_set() {
             variable: ObjectName(vec![Ident::new("a")]),
             value: vec![Expr::Identifier(Ident {
                 value: "DEFAULT".into(),
-                quote_style: None
+                quote_style: QuoteStyle::None
             })],
         }
     );
@@ -938,7 +938,7 @@ fn parse_set() {
             variable: ObjectName(vec![Ident::new("a"), Ident::new("b"), Ident::new("c")]),
             value: vec![Expr::Identifier(Ident {
                 value: "b".into(),
-                quote_style: None
+                quote_style: QuoteStyle::None
             })],
         }
     );
@@ -1009,7 +1009,7 @@ fn parse_set_role() {
             context_modifier: ContextModifier::Local,
             role_name: Some(Ident {
                 value: "rolename".to_string(),
-                quote_style: Some('\"'),
+                quote_style: QuoteStyle::DoubleQuote,
             }),
         }
     );
@@ -1023,7 +1023,7 @@ fn parse_set_role() {
             context_modifier: ContextModifier::None,
             role_name: Some(Ident {
                 value: "rolename".to_string(),
-                quote_style: Some('\''),
+                quote_style: QuoteStyle::SingleQuote,
             }),
         }
     );
@@ -1301,11 +1301,11 @@ fn parse_array_index_expr() {
                 num[0].clone(),
                 Expr::Identifier(Ident {
                     value: "baz".to_string(),
-                    quote_style: Some('"')
+                    quote_style: QuoteStyle::DoubleQuote
                 }),
                 Expr::Identifier(Ident {
                     value: "fooz".to_string(),
-                    quote_style: Some('"')
+                    quote_style: QuoteStyle::DoubleQuote
                 })
             ],
         },
@@ -1789,7 +1789,7 @@ fn parse_custom_operator() {
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident {
                 value: "relname".into(),
-                quote_style: None,
+                quote_style: QuoteStyle::None,
             })),
             op: BinaryOperator::PGCustomBinaryOperator(vec![
                 "database".into(),
@@ -1808,7 +1808,7 @@ fn parse_custom_operator() {
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident {
                 value: "relname".into(),
-                quote_style: None,
+                quote_style: QuoteStyle::None,
             })),
             op: BinaryOperator::PGCustomBinaryOperator(vec!["pg_catalog".into(), "~".into()]),
             right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
@@ -1823,7 +1823,7 @@ fn parse_custom_operator() {
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident {
                 value: "relname".into(),
-                quote_style: None,
+                quote_style: QuoteStyle::None,
             })),
             op: BinaryOperator::PGCustomBinaryOperator(vec!["~".into()]),
             right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))

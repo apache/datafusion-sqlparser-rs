@@ -49,7 +49,7 @@ fn test_snowflake_single_line_tokenize() {
             prefix: "#".to_string(),
             comment: " this is a comment \n".to_string(),
         }),
-        Token::make_word("table_1", None),
+        Token::make_word("table_1", QuoteStyle::None),
     ];
 
     assert_eq!(expected, tokens);
@@ -66,7 +66,7 @@ fn test_snowflake_single_line_tokenize() {
             prefix: "//".to_string(),
             comment: " this is a comment \n".to_string(),
         }),
-        Token::make_word("table_1", None),
+        Token::make_word("table_1", QuoteStyle::None),
     ];
 
     assert_eq!(expected, tokens);

@@ -37,7 +37,7 @@ fn parse_map_access_expr() {
             projection: vec![UnnamedExpr(MapAccess {
                 column: Box::new(Identifier(Ident {
                     value: "string_values".to_string(),
-                    quote_style: None,
+                    quote_style: QuoteStyle::None,
                 })),
                 keys: vec![Expr::Function(Function {
                     name: ObjectName(vec!["indexOf".into()]),

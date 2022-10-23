@@ -132,7 +132,7 @@ fn parse_mssql_create_role() {
                 authorization_owner,
                 Some(ObjectName(vec![Ident {
                     value: "helena".into(),
-                    quote_style: None
+                    quote_style: QuoteStyle::None
                 }]))
             );
         }

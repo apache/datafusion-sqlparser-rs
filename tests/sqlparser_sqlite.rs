@@ -101,13 +101,13 @@ fn parse_create_sqlite_quote() {
             assert_eq!(
                 vec![
                     ColumnDef {
-                        name: Ident::with_quote('"', "KEY"),
+                        name: Ident::with_quote(QuoteStyle::DoubleQuote, "KEY"),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::with_quote('[', "INDEX"),
+                        name: Ident::with_quote(QuoteStyle::SquareBracket, "INDEX"),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![],

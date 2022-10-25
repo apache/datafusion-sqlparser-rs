@@ -4832,7 +4832,8 @@ impl<'a> Parser<'a> {
             let source = Box::new(self.parse_query()?);
             let on = if self.parse_keyword(Keyword::ON) {
                 if self.parse_keyword(Keyword::CONFLICT) {
-                    let conflict_target = self.parse_parenthesized_column_list(IsOptional::Optional)?;
+                    let conflict_target =
+                        self.parse_parenthesized_column_list(IsOptional::Optional)?;
 
                     self.expect_keyword(Keyword::DO)?;
                     let action = if self.parse_keyword(Keyword::NOTHING) {
@@ -4844,7 +4845,10 @@ impl<'a> Parser<'a> {
                         OnConflictAction::DoUpdate(l)
                     };
 
-                    Some(OnInsert::OnConflict(OnConflict { conflict_target, action }))
+                    Some(OnInsert::OnConflict(OnConflict {
+                        conflict_target,
+                        action,
+                    }))
                 } else {
                     self.expect_keyword(Keyword::DUPLICATE)?;
                     self.expect_keyword(Keyword::KEY)?;

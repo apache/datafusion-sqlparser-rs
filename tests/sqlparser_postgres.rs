@@ -476,6 +476,7 @@ fn parse_update_set_from() {
                     Ident::new("id")
                 ])),
             }),
+            returning: None,
         }
     );
 }

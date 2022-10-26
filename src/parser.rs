@@ -4176,7 +4176,7 @@ impl<'a> Parser<'a> {
             expr = SetExpr::SetOperation {
                 left: Box::new(expr),
                 op: op.unwrap(),
-                all: self.parse_keyword(Keyword::ALL),
+                op_option: self.parse_set_operator_option(),
                 right: Box::new(self.parse_query_body(next_precedence)?),
             };
         }
@@ -4191,6 +4191,17 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::INTERSECT => Some(SetOperator::Intersect),
             _ => None,
         }
+    }
+
+    pub fn parse_set_operator_option(&mut self) -> Option<SetOperatorOption> {
+        let op_option = if self.parse_keyword(Keyword::ALL) {
+            Some(SetOperatorOption::All)
+        } else if self.parse_keyword(Keyword::DISTINCT) {
+            Some(SetOperatorOption::Distinct)
+        } else {
+            None
+        };
+        op_option
     }
 
     /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`),

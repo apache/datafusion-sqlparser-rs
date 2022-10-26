@@ -64,6 +64,23 @@ impl fmt::Display for Query {
     }
 }
 
+/// Options for SetOperator
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum SetOperatorOption {
+    All,
+    Distinct,
+}
+
+impl fmt::Display for SetOperatorOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SetOperatorOption::All => write!(f, " ALL"),
+            SetOperatorOption::Distinct => write!(f, " DISTINCT"),
+        }
+    }
+}
+
 /// A node in a tree, representing a "query body" expression, roughly:
 /// `SELECT ... [ {UNION|EXCEPT|INTERSECT} SELECT ...]`
 #[allow(clippy::large_enum_variant)]
@@ -78,7 +95,7 @@ pub enum SetExpr {
     /// UNION/EXCEPT/INTERSECT of two queries
     SetOperation {
         op: SetOperator,
-        all: bool,
+        op_option: Option<SetOperatorOption>,
         left: Box<SetExpr>,
         right: Box<SetExpr>,
     },
@@ -98,10 +115,14 @@ impl fmt::Display for SetExpr {
                 left,
                 right,
                 op,
-                all,
+                op_option,
             } => {
-                let all_str = if *all { " ALL" } else { "" };
-                write!(f, "{} {}{} {}", left, op, all_str, right)
+                write!(f, "{} {}", left, op)?;
+                if let Some(ref o) = op_option {
+                    write!(f, "{}", o)?;
+                }
+                write!(f, " {}", right)?;
+                Ok(())
             }
         }
     }

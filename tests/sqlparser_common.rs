@@ -1755,6 +1755,7 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(MONTH FROM d)");
     verified_stmt("SELECT EXTRACT(WEEK FROM d)");
     verified_stmt("SELECT EXTRACT(DAY FROM d)");
+    verified_stmt("SELECT EXTRACT(DATE FROM d)");
     verified_stmt("SELECT EXTRACT(HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(MINUTE FROM d)");
     verified_stmt("SELECT EXTRACT(SECOND FROM d)");

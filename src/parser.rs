@@ -1082,6 +1082,7 @@ impl<'a> Parser<'a> {
                 Keyword::MONTH => Ok(DateTimeField::Month),
                 Keyword::WEEK => Ok(DateTimeField::Week),
                 Keyword::DAY => Ok(DateTimeField::Day),
+                Keyword::DATE => Ok(DateTimeField::Date),
                 Keyword::HOUR => Ok(DateTimeField::Hour),
                 Keyword::MINUTE => Ok(DateTimeField::Minute),
                 Keyword::SECOND => Ok(DateTimeField::Second),

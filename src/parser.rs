@@ -4173,10 +4173,11 @@ impl<'a> Parser<'a> {
                 break;
             }
             self.next_token(); // skip past the set operator
+            let op_option = self.parse_set_operator_option(&op);
             expr = SetExpr::SetOperation {
                 left: Box::new(expr),
                 op: op.unwrap(),
-                op_option: self.parse_set_operator_option(),
+                op_option,
                 right: Box::new(self.parse_query_body(next_precedence)?),
             };
         }
@@ -4193,15 +4194,38 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_set_operator_option(&mut self) -> Option<SetOperatorOption> {
-        let op_option = if self.parse_keyword(Keyword::ALL) {
-            Some(SetOperatorOption::All)
-        } else if self.parse_keyword(Keyword::DISTINCT) {
-            Some(SetOperatorOption::Distinct)
-        } else {
-            None
-        };
-        op_option
+    pub fn parse_set_operator_option(
+        &mut self,
+        op: &Option<SetOperator>,
+    ) -> Option<SetOperatorOption> {
+        match op {
+            Some(SetOperator::Union) => {
+                if self.parse_keyword(Keyword::ALL) {
+                    Some(SetOperatorOption::All)
+                } else if self.parse_keyword(Keyword::DISTINCT)
+                    && dialect_of!(self is MySqlDialect | BigQueryDialect)
+                {
+                    Some(SetOperatorOption::Distinct)
+                } else {
+                    None
+                }
+            }
+            Some(SetOperator::Except) => {
+                if self.parse_keyword(Keyword::ALL) {
+                    Some(SetOperatorOption::All)
+                } else {
+                    None
+                }
+            }
+            Some(SetOperator::Intersect) => {
+                if self.parse_keyword(Keyword::ALL) {
+                    Some(SetOperatorOption::All)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
     }
 
     /// Parse a restricted `SELECT` statement (no CTEs / `UNION` / `ORDER BY`),

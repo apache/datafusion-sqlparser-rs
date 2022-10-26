@@ -26,7 +26,7 @@ use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, GenericDialect, HiveDialect, MsSqlDialect,
-    PostgreSqlDialect, SQLiteDialect, SnowflakeDialect,
+    MySqlDialect, PostgreSqlDialect, SQLiteDialect, SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
@@ -4094,6 +4094,16 @@ fn parse_union() {
     verified_stmt("SELECT 1 UNION SELECT 2 INTERSECT SELECT 3"); // Union[1, Intersect[2,3]]
     verified_stmt("SELECT foo FROM tab UNION SELECT bar FROM TAB");
     verified_stmt("(SELECT * FROM new EXCEPT SELECT * FROM old) UNION ALL (SELECT * FROM old EXCEPT SELECT * FROM new) ORDER BY 1");
+}
+
+#[test]
+fn parse_union_distinct() {
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(BigQueryDialect {}), Box::new(MySqlDialect {})],
+    };
+    dialects.verified_stmt("SELECT 1 UNION DISTINCT SELECT 2");
+    dialects.verified_stmt("SELECT 1 UNION DISTINCT SELECT 2 INTERSECT ALL SELECT 3");
+    dialects.verified_stmt("SELECT 1 EXCEPT (SELECT 2 UNION DISTINCT SELECT 3)");
 }
 
 #[test]

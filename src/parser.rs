@@ -1426,6 +1426,12 @@ impl<'a> Parser<'a> {
                 return self.parse_array_index(expr);
             }
             self.parse_map_access(expr)
+        } else if Token::Colon == tok {
+            Ok(Expr::JsonAccess {
+                left: Box::new(expr),
+                operator: JsonOperator::LongArrow,
+                right: Box::new(self.parse_subexpr(51)?),
+            })
         } else if Token::Arrow == tok
             || Token::LongArrow == tok
             || Token::HashArrow == tok
@@ -1627,6 +1633,7 @@ impl<'a> Parser<'a> {
             Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
             Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
+            Token::Colon => Ok(50),
             Token::ExclamationMark => Ok(50),
             Token::LBracket
             | Token::LongArrow

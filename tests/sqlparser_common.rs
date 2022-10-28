@@ -26,7 +26,7 @@ use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, GenericDialect, HiveDialect, MsSqlDialect,
-    PostgreSqlDialect, SQLiteDialect, SnowflakeDialect,
+    PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
@@ -183,6 +183,93 @@ fn parse_update() {
     assert_eq!(
         ParserError::ParserError("Expected end of statement, found: extrabadstuff".to_string()),
         res.unwrap_err()
+    );
+}
+
+#[test]
+fn parse_update_set_from() {
+    let sql = "UPDATE t1 SET name = t2.name FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 WHERE t1.id = t2.id";
+    let dialects = TestedDialects {
+        dialects: vec![
+            Box::new(PostgreSqlDialect {}),
+            Box::new(BigQueryDialect {}),
+            Box::new(RedshiftSqlDialect {}),
+            Box::new(MsSqlDialect {}),
+        ],
+    };
+    let stmt = dialects.verified_stmt(sql);
+    assert_eq!(
+        stmt,
+        Statement::Update {
+            table: TableWithJoins {
+                relation: TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("t1")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                joins: vec![],
+            },
+            assignments: vec![Assignment {
+                id: vec![Ident::new("name")],
+                value: Expr::CompoundIdentifier(vec![Ident::new("t2"), Ident::new("name")])
+            }],
+            from: Some(TableWithJoins {
+                relation: TableFactor::Derived {
+                    lateral: false,
+                    subquery: Box::new(Query {
+                        with: None,
+                        body: Box::new(SetExpr::Select(Box::new(Select {
+                            distinct: false,
+                            top: None,
+                            projection: vec![
+                                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
+                                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
+                            ],
+                            into: None,
+                            from: vec![TableWithJoins {
+                                relation: TableFactor::Table {
+                                    name: ObjectName(vec![Ident::new("t1")]),
+                                    alias: None,
+                                    args: None,
+                                    with_hints: vec![],
+                                },
+                                joins: vec![],
+                            }],
+                            lateral_views: vec![],
+                            selection: None,
+                            group_by: vec![Expr::Identifier(Ident::new("id"))],
+                            cluster_by: vec![],
+                            distribute_by: vec![],
+                            sort_by: vec![],
+                            having: None,
+                            qualify: None
+                        }))),
+                        order_by: vec![],
+                        limit: None,
+                        offset: None,
+                        fetch: None,
+                        lock: None,
+                    }),
+                    alias: Some(TableAlias {
+                        name: Ident::new("t2"),
+                        columns: vec![],
+                    })
+                },
+                joins: vec![],
+            }),
+            selection: Some(Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("t1"),
+                    Ident::new("id")
+                ])),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("t2"),
+                    Ident::new("id")
+                ])),
+            }),
+        }
     );
 }
 

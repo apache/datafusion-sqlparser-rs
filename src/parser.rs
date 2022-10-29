@@ -2051,19 +2051,33 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_schema_name(&mut self) -> Result<SchemaName, ParserError> {
+    fn parse_schema_name(&mut self) -> Result<SchemaNameClause, ParserError> {
         if self.parse_keyword(Keyword::AUTHORIZATION) {
-            Ok(SchemaName::UnnamedAuthorization(self.parse_identifier()?))
+            Ok(SchemaNameClause::UnnamedAuthorization(
+                self.parse_identifier()?,
+            ))
         } else {
-            let name = self.parse_object_name()?;
+            let mut catalog_name = None;
+            let mut schema_name = self.parse_identifier()?;
+
+            if self.consume_token(&Token::Period) {
+                catalog_name = Some(schema_name);
+                schema_name = self.parse_identifier()?
+            }
+
+            if self.consume_token(&Token::Period) {
+                return parser_err!(format!("Expected schema name with no more than two qualifications, but found a period after the second name"));
+            }
+
+            let name = SchemaName::new(schema_name, catalog_name);
 
             if self.parse_keyword(Keyword::AUTHORIZATION) {
-                Ok(SchemaName::NamedAuthorization(
+                Ok(SchemaNameClause::NamedAuthorization(
                     name,
                     self.parse_identifier()?,
                 ))
             } else {
-                Ok(SchemaName::Simple(name))
+                Ok(SchemaNameClause::Simple(name))
             }
         }
     }
@@ -5856,22 +5870,50 @@ mod tests {
             }};
         }
 
-        let dummy_name = ObjectName(vec![Ident::new("dummy_name")]);
+        let dummy_name = SchemaName::new(Ident::new("dummy_name"), None);
         let dummy_authorization = Ident::new("dummy_authorization");
 
         test_parse_schema_name!(
             format!("{dummy_name}"),
-            SchemaName::Simple(dummy_name.clone())
+            SchemaNameClause::Simple(dummy_name.clone())
         );
 
         test_parse_schema_name!(
             format!("AUTHORIZATION {dummy_authorization}"),
-            SchemaName::UnnamedAuthorization(dummy_authorization.clone()),
+            SchemaNameClause::UnnamedAuthorization(dummy_authorization.clone()),
         );
         test_parse_schema_name!(
             format!("{dummy_name} AUTHORIZATION {dummy_authorization}"),
-            SchemaName::NamedAuthorization(dummy_name.clone(), dummy_authorization.clone()),
+            SchemaNameClause::NamedAuthorization(dummy_name.clone(), dummy_authorization.clone()),
         );
+
+        let dummy_qualified_name =
+            SchemaName::new(Ident::new("dummy_name"), Some(Ident::new("potato")));
+
+        test_parse_schema_name!(
+            format!("{dummy_qualified_name}"),
+            SchemaNameClause::Simple(dummy_qualified_name.clone())
+        );
+
+        test_parse_schema_name!(
+            format!("AUTHORIZATION {dummy_authorization}"),
+            SchemaNameClause::UnnamedAuthorization(dummy_authorization.clone()),
+        );
+        test_parse_schema_name!(
+            format!("{dummy_qualified_name} AUTHORIZATION {dummy_authorization}"),
+            SchemaNameClause::NamedAuthorization(
+                dummy_qualified_name.clone(),
+                dummy_authorization.clone()
+            ),
+        );
+    }
+
+    #[test]
+    #[should_panic = "Expected schema name with no more than two qualifications, but found a period after the second name"]
+    fn test_parse_schema_name_invalid_name() {
+        all_dialects().run_parser_method("name_1.name_2.name_3", |parser| {
+            parser.parse_schema_name().unwrap();
+        });
     }
 
     #[test]

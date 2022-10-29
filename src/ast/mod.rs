@@ -1332,7 +1332,7 @@ pub enum Statement {
     /// CREATE SCHEMA
     CreateSchema {
         /// `<schema name> | AUTHORIZATION <schema authorization identifier>  | <schema name>  AUTHORIZATION <schema authorization identifier>`
-        schema_name: SchemaName,
+        schema_name: SchemaNameClause,
         if_not_exists: bool,
     },
     /// CREATE DATABASE
@@ -3419,28 +3419,64 @@ impl fmt::Display for CreateFunctionUsing {
 /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#schema-definition
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum SchemaName {
+pub enum SchemaNameClause {
     /// Only schema name specified: `<schema name>`.
-    Simple(ObjectName),
+    Simple(SchemaName),
     /// Only authorization identifier specified: `AUTHORIZATION <schema authorization identifier>`.
     UnnamedAuthorization(Ident),
     /// Both schema name and authorization identifier specified: `<schema name>  AUTHORIZATION <schema authorization identifier>`.
-    NamedAuthorization(ObjectName, Ident),
+    NamedAuthorization(SchemaName, Ident),
+}
+
+impl fmt::Display for SchemaNameClause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SchemaNameClause::Simple(name) => {
+                write!(f, "{name}")
+            }
+            SchemaNameClause::UnnamedAuthorization(authorization) => {
+                write!(f, "AUTHORIZATION {authorization}")
+            }
+            SchemaNameClause::NamedAuthorization(name, authorization) => {
+                write!(f, "{name} AUTHORIZATION {authorization}")
+            }
+        }
+    }
+}
+
+/// Qualified or unqualified schema name ([1]).
+///
+/// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#schema-name
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct SchemaName {
+    /// Schema unqualified name
+    name: Ident,
+    /// Schema name qualification
+    catalog_name: Option<Ident>,
+}
+
+impl SchemaName {
+    pub fn new(name: Ident, catalog_name: Option<Ident>) -> Self {
+        Self { name, catalog_name }
+    }
+
+    pub fn name(&self) -> &Ident {
+        &self.name
+    }
+
+    pub fn catalog_name(&self) -> Option<&Ident> {
+        self.catalog_name.as_ref()
+    }
 }
 
 impl fmt::Display for SchemaName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SchemaName::Simple(name) => {
-                write!(f, "{name}")
-            }
-            SchemaName::UnnamedAuthorization(authorization) => {
-                write!(f, "AUTHORIZATION {authorization}")
-            }
-            SchemaName::NamedAuthorization(name, authorization) => {
-                write!(f, "{name} AUTHORIZATION {authorization}")
-            }
+        if let Some(catalog_name) = &self.catalog_name {
+            write!(f, "{catalog_name}.")?;
         }
+        write!(f, "{}", self.name)?;
+        Ok(())
     }
 }
 

@@ -152,6 +152,7 @@ pub enum QuoteStyle {
     /// Quote with ``` (BackTick)
     BackTick,
     /// Quote with `[]` (Square bracket)
+    /// Used by Redshift and SqLite
     SquareBracket,
 }
 impl fmt::Display for QuoteStyle {

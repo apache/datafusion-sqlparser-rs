@@ -191,6 +191,7 @@ fn parse_update_set_from() {
     let sql = "UPDATE t1 SET name = t2.name FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 WHERE t1.id = t2.id";
     let dialects = TestedDialects {
         dialects: vec![
+            Box::new(GenericDialect {}),
             Box::new(PostgreSqlDialect {}),
             Box::new(BigQueryDialect {}),
             Box::new(RedshiftSqlDialect {}),

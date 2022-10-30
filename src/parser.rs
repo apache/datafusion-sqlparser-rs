@@ -1429,7 +1429,7 @@ impl<'a> Parser<'a> {
         } else if Token::Colon == tok {
             Ok(Expr::JsonAccess {
                 left: Box::new(expr),
-                operator: JsonOperator::LongArrow,
+                operator: JsonOperator::Colon,
                 right: Box::new(self.parse_subexpr(51)?),
             })
         } else if Token::Arrow == tok

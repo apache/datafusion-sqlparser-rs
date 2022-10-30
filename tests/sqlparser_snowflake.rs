@@ -143,6 +143,25 @@ fn test_single_table_in_parenthesis_with_alias() {
     );
 }
 
+#[test]
+fn parse_json_using_colon() {
+    let sql = "SELECT field:key FROM t";
+    let select = snowflake().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::new("field"))),
+            operator: JsonOperator::Colon,
+            right: Box::new(Expr::Identifier(Ident::new("key"))),
+        }),
+        select.projection[0]
+    );
+
+    snowflake().one_statement_parses_to(
+        "SELECT field:key::int FROM t",
+        "SELECT CAST(field:key AS INT) FROM t",
+    );
+}
+
 fn snowflake() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SnowflakeDialect {})],

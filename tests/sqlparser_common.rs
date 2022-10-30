@@ -1595,15 +1595,6 @@ fn parse_limit_accepts_all() {
 }
 
 #[test]
-fn parse_json_using_colon() {
-    one_statement_parses_to("SELECT field:key FROM t", "SELECT field ->> key FROM t");
-    one_statement_parses_to(
-        "SELECT field:key::int FROM t",
-        "SELECT CAST(field ->> key AS INT) FROM t",
-    );
-}
-
-#[test]
 fn parse_cast() {
     let sql = "SELECT CAST(id AS BIGINT) FROM customer";
     let select = verified_only_select(sql);

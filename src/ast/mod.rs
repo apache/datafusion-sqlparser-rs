@@ -187,6 +187,8 @@ pub enum JsonOperator {
     HashArrow,
     /// #>> Extracts JSON sub-object at the specified path as text
     HashLongArrow,
+    /// : Colon is used by Snowflake (Which is similar to LongArrow)
+    Colon,
 }
 
 impl fmt::Display for JsonOperator {
@@ -203,6 +205,9 @@ impl fmt::Display for JsonOperator {
             }
             JsonOperator::HashLongArrow => {
                 write!(f, "#>>")
+            }
+            JsonOperator::Colon => {
+                write!(f, ":")
             }
         }
     }
@@ -757,7 +762,12 @@ impl fmt::Display for Expr {
                 operator,
                 right,
             } => {
-                write!(f, "{} {} {}", left, operator, right)
+                if operator == &JsonOperator::Colon  {   
+                    write!(f, "{}{}{}", left, operator, right)
+                } else {
+                    write!(f, "{} {} {}", left, operator, right)
+                }
+                
             }
             Expr::CompositeAccess { expr, key } => {
                 write!(f, "{}.{}", expr, key)

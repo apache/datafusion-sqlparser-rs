@@ -194,6 +194,7 @@ fn parse_update_set_from() {
             Box::new(GenericDialect {}),
             Box::new(PostgreSqlDialect {}),
             Box::new(BigQueryDialect {}),
+            Box::new(SnowflakeDialect {}),
             Box::new(RedshiftSqlDialect {}),
             Box::new(MsSqlDialect {}),
         ],

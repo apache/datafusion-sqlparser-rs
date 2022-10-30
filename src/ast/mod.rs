@@ -762,12 +762,11 @@ impl fmt::Display for Expr {
                 operator,
                 right,
             } => {
-                if operator == &JsonOperator::Colon  {   
+                if operator == &JsonOperator::Colon {
                     write!(f, "{}{}{}", left, operator, right)
                 } else {
                     write!(f, "{} {} {}", left, operator, right)
                 }
-                
             }
             Expr::CompositeAccess { expr, key } => {
                 write!(f, "{}.{}", expr, key)

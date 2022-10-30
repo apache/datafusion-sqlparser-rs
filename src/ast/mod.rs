@@ -131,7 +131,10 @@ impl fmt::Display for Ident {
         match self.quote_style {
             QuoteStyle::None => f.write_str(&self.value),
             QuoteStyle::SingleQuote | QuoteStyle::DoubleQuote | QuoteStyle::BackTick => {
-                let escaped = value::escape_quoted_string(&self.value, self.quote_style.as_char());
+                let escaped = value::escape_quoted_string(
+                    &self.value,
+                    self.quote_style.as_char().map_err(|_| fmt::Error)?,
+                );
                 write!(f, "{}{}{}", self.quote_style, escaped, self.quote_style)
             }
             QuoteStyle::SquareBracket => write!(f, "[{}]", self.value),
@@ -150,6 +153,7 @@ pub enum QuoteStyle {
     /// Quote with `"`
     DoubleQuote,
     /// Quote with ``` (BackTick)
+    /// Used by MySql and BigQuery
     BackTick,
     /// Quote with `[]` (Square bracket)
     /// Used by Redshift and SqLite
@@ -167,17 +171,18 @@ impl fmt::Display for QuoteStyle {
 }
 
 impl QuoteStyle {
-    fn as_char(&self) -> char {
+    fn as_char(&self) -> Result<char, QuoteStyleToCharError> {
         match self {
-            QuoteStyle::SingleQuote => '\'',
-            QuoteStyle::DoubleQuote => '"',
-            QuoteStyle::BackTick => '`',
-            QuoteStyle::SquareBracket | QuoteStyle::None => {
-                panic!("Not supported for quote style {}", self)
-            }
+            QuoteStyle::SingleQuote => Ok('\''),
+            QuoteStyle::DoubleQuote => Ok('"'),
+            QuoteStyle::BackTick => Ok('`'),
+            QuoteStyle::SquareBracket | QuoteStyle::None => Err(QuoteStyleToCharError),
         }
     }
 }
+
+#[derive(Debug)]
+struct QuoteStyleToCharError;
 
 /// A name of a table, view, custom type, etc., possibly multi-part, i.e. db.schema.obj
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

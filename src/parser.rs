@@ -3645,7 +3645,13 @@ impl<'a> Parser<'a> {
                 Keyword::STRING => Ok(DataType::String),
                 Keyword::TEXT => Ok(DataType::Text),
                 Keyword::BYTEA => Ok(DataType::Bytea),
-                Keyword::NUMERIC | Keyword::DECIMAL | Keyword::DEC => Ok(DataType::Decimal(
+                Keyword::NUMERIC => Ok(DataType::Numeric(
+                    self.parse_exact_number_optional_precision_scale()?,
+                )),
+                Keyword::DECIMAL => Ok(DataType::Decimal(
+                    self.parse_exact_number_optional_precision_scale()?,
+                )),
+                Keyword::DEC => Ok(DataType::Dec(
                     self.parse_exact_number_optional_precision_scale()?,
                 )),
                 Keyword::ENUM => Ok(DataType::Enum(self.parse_string_values()?)),
@@ -5784,18 +5790,46 @@ mod tests {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
             };
 
-            test_parse_data_type!(dialect, "NUMERIC", DataType::Decimal(ExactNumberInfo::None));
+            test_parse_data_type!(dialect, "NUMERIC", DataType::Numeric(ExactNumberInfo::None));
 
             test_parse_data_type!(
                 dialect,
                 "NUMERIC(2)",
-                DataType::Decimal(ExactNumberInfo::Precision(2))
+                DataType::Numeric(ExactNumberInfo::Precision(2))
             );
 
             test_parse_data_type!(
                 dialect,
                 "NUMERIC(2,10)",
+                DataType::Numeric(ExactNumberInfo::PrecisionAndScale(2, 10))
+            );
+
+            test_parse_data_type!(dialect, "DECIMAL", DataType::Decimal(ExactNumberInfo::None));
+
+            test_parse_data_type!(
+                dialect,
+                "DECIMAL(2)",
+                DataType::Decimal(ExactNumberInfo::Precision(2))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "DECIMAL(2,10)",
                 DataType::Decimal(ExactNumberInfo::PrecisionAndScale(2, 10))
+            );
+
+            test_parse_data_type!(dialect, "DEC", DataType::Dec(ExactNumberInfo::None));
+
+            test_parse_data_type!(
+                dialect,
+                "DEC(2)",
+                DataType::Dec(ExactNumberInfo::Precision(2))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "DEC(2,10)",
+                DataType::Dec(ExactNumberInfo::PrecisionAndScale(2, 10))
             );
         }
 

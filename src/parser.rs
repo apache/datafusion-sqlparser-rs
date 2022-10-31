@@ -4173,11 +4173,11 @@ impl<'a> Parser<'a> {
                 break;
             }
             self.next_token(); // skip past the set operator
-            let op_option = self.parse_set_operator_option(&op);
+            let set_qualifier = self.parse_set_operator_option(&op);
             expr = SetExpr::SetOperation {
                 left: Box::new(expr),
                 op: op.unwrap(),
-                op_option,
+                set_qualifier,
                 right: Box::new(self.parse_query_body(next_precedence)?),
             };
         }
@@ -4197,29 +4197,29 @@ impl<'a> Parser<'a> {
     pub fn parse_set_operator_option(
         &mut self,
         op: &Option<SetOperator>,
-    ) -> Option<SetOperatorOption> {
+    ) -> Option<SetQualifier> {
         match op {
             Some(SetOperator::Union) => {
                 if self.parse_keyword(Keyword::ALL) {
-                    Some(SetOperatorOption::All)
+                    Some(SetQualifier::All)
                 } else if self.parse_keyword(Keyword::DISTINCT)
                     && dialect_of!(self is MySqlDialect | BigQueryDialect)
                 {
-                    Some(SetOperatorOption::Distinct)
+                    Some(SetQualifier::Distinct)
                 } else {
                     None
                 }
             }
             Some(SetOperator::Except) => {
                 if self.parse_keyword(Keyword::ALL) {
-                    Some(SetOperatorOption::All)
+                    Some(SetQualifier::All)
                 } else {
                     None
                 }
             }
             Some(SetOperator::Intersect) => {
                 if self.parse_keyword(Keyword::ALL) {
-                    Some(SetOperatorOption::All)
+                    Some(SetQualifier::All)
                 } else {
                     None
                 }

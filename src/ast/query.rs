@@ -67,16 +67,16 @@ impl fmt::Display for Query {
 /// Options for SetOperator
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum SetOperatorOption {
+pub enum SetQualifier {
     All,
     Distinct,
 }
 
-impl fmt::Display for SetOperatorOption {
+impl fmt::Display for SetQualifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            SetOperatorOption::All => write!(f, " ALL"),
-            SetOperatorOption::Distinct => write!(f, " DISTINCT"),
+            SetQualifier::All => write!(f, "ALL"),
+            SetQualifier::Distinct => write!(f, "DISTINCT"),
         }
     }
 }
@@ -95,7 +95,7 @@ pub enum SetExpr {
     /// UNION/EXCEPT/INTERSECT of two queries
     SetOperation {
         op: SetOperator,
-        op_option: Option<SetOperatorOption>,
+        set_qualifier: Option<SetQualifier>,
         left: Box<SetExpr>,
         right: Box<SetExpr>,
     },
@@ -115,11 +115,11 @@ impl fmt::Display for SetExpr {
                 left,
                 right,
                 op,
-                op_option,
+                set_qualifier,
             } => {
                 write!(f, "{} {}", left, op)?;
-                if let Some(ref o) = op_option {
-                    write!(f, "{}", o)?;
+                if let Some(ref sq) = set_qualifier {
+                    write!(f, " {}", sq)?;
                 }
                 write!(f, " {}", right)?;
                 Ok(())

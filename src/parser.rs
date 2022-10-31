@@ -1430,7 +1430,7 @@ impl<'a> Parser<'a> {
             Ok(Expr::JsonAccess {
                 left: Box::new(expr),
                 operator: JsonOperator::Colon,
-                right: Box::new(self.parse_subexpr(51)?),
+                right: Box::new(Expr::Value(self.parse_value()?)),
             })
         } else if Token::Arrow == tok
             || Token::LongArrow == tok
@@ -3448,6 +3448,9 @@ impl<'a> Parser<'a> {
                     Some('\'') => Ok(Value::SingleQuotedString(w.value)),
                     _ => self.expected("A value?", Token::Word(w))?,
                 },
+                Keyword::NoKeyword if dialect_of!(self is SnowflakeDialect) => {
+                    Ok(Value::UnQuotedString(w.value))
+                }
                 _ => self.expected("a concrete value", Token::Word(w)),
             },
             // The call to n.parse() returns a bigdecimal when the

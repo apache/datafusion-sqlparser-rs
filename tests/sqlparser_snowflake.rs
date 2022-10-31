@@ -156,10 +156,7 @@ fn parse_json_using_colon() {
         select.projection[0]
     );
 
-    snowflake().one_statement_parses_to(
-        "SELECT a:b::int FROM t",
-        "SELECT CAST(a:b AS INT) FROM t",
-    );
+    snowflake().one_statement_parses_to("SELECT a:b::int FROM t", "SELECT CAST(a:b AS INT) FROM t");
 }
 
 fn snowflake() -> TestedDialects {

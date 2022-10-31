@@ -3136,8 +3136,9 @@ impl<'a> Parser<'a> {
                     name,
                     cascade,
                 }
-            } else if self.parse_keyword(Keyword::PRIMARY) {
-                let _ = self.parse_keyword(Keyword::KEY);
+            } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY])
+                && dialect_of!(self is MySqlDialect | GenericDialect)
+            {
                 AlterTableOperation::DropPrimaryKey
             } else {
                 let _ = self.parse_keyword(Keyword::COLUMN);

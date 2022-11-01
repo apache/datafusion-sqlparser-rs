@@ -3448,7 +3448,7 @@ impl<'a> Parser<'a> {
                     Some('\'') => Ok(Value::SingleQuotedString(w.value)),
                     _ => self.expected("A value?", Token::Word(w))?,
                 },
-                Keyword::NoKeyword if dialect_of!(self is SnowflakeDialect) => {
+                Keyword::NoKeyword if dialect_of!(self is SnowflakeDialect | GenericDialect) => {
                     Ok(Value::UnQuotedString(w.value))
                 }
                 _ => self.expected("a concrete value", Token::Word(w)),

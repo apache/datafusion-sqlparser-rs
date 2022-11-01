@@ -2919,7 +2919,7 @@ impl<'a> Parser<'a> {
                 Token::make_keyword("AUTOINCREMENT"),
             ])))
         } else if self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
-            && dialect_of!(self is MySqlDialect)
+            && dialect_of!(self is MySqlDialect | GenericDialect)
         {
             let expr = self.parse_expr()?;
             Ok(Some(ColumnOption::OnUpdate(expr)))

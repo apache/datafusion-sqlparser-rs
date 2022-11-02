@@ -2586,7 +2586,7 @@ impl fmt::Display for SequenceOptions {
 pub enum MinMaxValue {
     // clause is not specified
     Empty,
-    // NO MINVALUE/NO MAX VALUE
+    // NO MINVALUE/NO MAXVALUE
     None,
     // MINVALUE <expr> / MAXVALUE <expr>
     Some(Expr),

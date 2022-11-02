@@ -3651,7 +3651,10 @@ impl<'a> Parser<'a> {
                 Keyword::SET => Ok(DataType::Set(self.parse_string_values()?)),
                 Keyword::ARRAY => {
                     if dialect_of!(self is SnowflakeDialect) {
-                        Ok(DataType::SnowflakeArray)
+                        Ok(DataType::Array(Box::new(DataType::Custom(
+                            ObjectName(vec!["VARAINT".into()]),
+                            vec![],
+                        ))))
                     } else {
                         // Hive array syntax. Note that nesting arrays - or other Hive syntax
                         // that ends with > will fail due to "C++" problem - >> is parsed as

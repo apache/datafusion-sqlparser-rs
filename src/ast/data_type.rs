@@ -136,6 +136,8 @@ pub enum DataType {
     Enum(Vec<String>),
     /// Set
     Set(Vec<String>),
+    // SnowflakeArray (Not Typed, without [])
+    SnowflakeArray,
 }
 
 impl fmt::Display for DataType {
@@ -216,6 +218,7 @@ impl fmt::Display for DataType {
             DataType::Text => write!(f, "TEXT"),
             DataType::String => write!(f, "STRING"),
             DataType::Bytea => write!(f, "BYTEA"),
+            DataType::SnowflakeArray => write!(f, "ARRAY"),
             DataType::Array(ty) => write!(f, "{}[]", ty),
             DataType::Custom(ty, modifiers) => {
                 if modifiers.is_empty() {

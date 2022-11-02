@@ -143,6 +143,19 @@ fn test_single_table_in_parenthesis_with_alias() {
     );
 }
 
+#[test]
+fn parse_array() {
+    let sql = "SELECT CAST(a AS ARRAY) FROM customer";
+    let select = snowflake().verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("a"))),
+            data_type: DataType::SnowflakeArray,
+        },
+        expr_from_projection(only(&select.projection))
+    );
+}
+
 fn snowflake() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SnowflakeDialect {})],

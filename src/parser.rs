@@ -3650,13 +3650,17 @@ impl<'a> Parser<'a> {
                 Keyword::ENUM => Ok(DataType::Enum(self.parse_string_values()?)),
                 Keyword::SET => Ok(DataType::Set(self.parse_string_values()?)),
                 Keyword::ARRAY => {
-                    // Hive array syntax. Note that nesting arrays - or other Hive syntax
-                    // that ends with > will fail due to "C++" problem - >> is parsed as
-                    // Token::ShiftRight
-                    self.expect_token(&Token::Lt)?;
-                    let inside_type = self.parse_data_type()?;
-                    self.expect_token(&Token::Gt)?;
-                    Ok(DataType::Array(Box::new(inside_type)))
+                    if dialect_of!(self is SnowflakeDialect) {
+                        Ok(DataType::SnowflakeArray)
+                    } else {
+                        // Hive array syntax. Note that nesting arrays - or other Hive syntax
+                        // that ends with > will fail due to "C++" problem - >> is parsed as
+                        // Token::ShiftRight
+                        self.expect_token(&Token::Lt)?;
+                        let inside_type = self.parse_data_type()?;
+                        self.expect_token(&Token::Gt)?;
+                        Ok(DataType::Array(Box::new(inside_type)))
+                    }
                 }
                 _ => {
                     self.prev_token();

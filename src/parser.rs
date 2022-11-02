@@ -1427,6 +1427,12 @@ impl<'a> Parser<'a> {
                 return self.parse_array_index(expr);
             }
             self.parse_map_access(expr)
+        } else if Token::Colon == tok {
+            Ok(Expr::JsonAccess {
+                left: Box::new(expr),
+                operator: JsonOperator::Colon,
+                right: Box::new(Expr::Value(self.parse_value()?)),
+            })
         } else if Token::Arrow == tok
             || Token::LongArrow == tok
             || Token::HashArrow == tok
@@ -1628,6 +1634,7 @@ impl<'a> Parser<'a> {
             Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
             Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
+            Token::Colon => Ok(50),
             Token::ExclamationMark => Ok(50),
             Token::LBracket
             | Token::LongArrow
@@ -3446,6 +3453,10 @@ impl<'a> Parser<'a> {
                     Some('\'') => Ok(Value::SingleQuotedString(w.value)),
                     _ => self.expected("A value?", Token::Word(w))?,
                 },
+                // Case when Snowflake Semi-structured data like key:value
+                Keyword::NoKeyword | Keyword::LOCATION if dialect_of!(self is SnowflakeDialect | GenericDialect) => {
+                    Ok(Value::UnQuotedString(w.value))
+                }
                 _ => self.expected("a concrete value", Token::Word(w)),
             },
             // The call to n.parse() returns a bigdecimal when the

@@ -45,6 +45,8 @@ pub enum Value {
     Null,
     /// `?` or `$` Prepared statement arg placeholder
     Placeholder(String),
+    /// Add support of snowflake field:key - key should be a value
+    UnQuotedString(String),
 }
 
 impl fmt::Display for Value {
@@ -59,6 +61,7 @@ impl fmt::Display for Value {
             Value::Boolean(v) => write!(f, "{}", v),
             Value::Null => write!(f, "NULL"),
             Value::Placeholder(v) => write!(f, "{}", v),
+            Value::UnQuotedString(v) => write!(f, "{}", v),
         }
     }
 }

@@ -876,6 +876,19 @@ fn parse_update_with_joins() {
 }
 
 #[test]
+fn parse_alter_table_drop_primary_key() {
+    match mysql_and_generic().verified_stmt("ALTER TABLE tab DROP PRIMARY KEY") {
+        Statement::AlterTable {
+            name,
+            operation: AlterTableOperation::DropPrimaryKey,
+        } => {
+            assert_eq!("tab", name.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_alter_table_change_column() {
     let expected_name = ObjectName(vec![Ident::new("orders")]);
     let expected_operation = AlterTableOperation::ChangeColumn {

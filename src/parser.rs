@@ -1082,6 +1082,7 @@ impl<'a> Parser<'a> {
                 Keyword::MONTH => Ok(DateTimeField::Month),
                 Keyword::WEEK => Ok(DateTimeField::Week),
                 Keyword::DAY => Ok(DateTimeField::Day),
+                Keyword::DATE => Ok(DateTimeField::Date),
                 Keyword::HOUR => Ok(DateTimeField::Hour),
                 Keyword::MINUTE => Ok(DateTimeField::Minute),
                 Keyword::SECOND => Ok(DateTimeField::Second),
@@ -1426,6 +1427,12 @@ impl<'a> Parser<'a> {
                 return self.parse_array_index(expr);
             }
             self.parse_map_access(expr)
+        } else if Token::Colon == tok {
+            Ok(Expr::JsonAccess {
+                left: Box::new(expr),
+                operator: JsonOperator::Colon,
+                right: Box::new(Expr::Value(self.parse_value()?)),
+            })
         } else if Token::Arrow == tok
             || Token::LongArrow == tok
             || Token::HashArrow == tok
@@ -1627,6 +1634,7 @@ impl<'a> Parser<'a> {
             Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
             Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
+            Token::Colon => Ok(50),
             Token::ExclamationMark => Ok(50),
             Token::LBracket
             | Token::LongArrow
@@ -3136,6 +3144,10 @@ impl<'a> Parser<'a> {
                     name,
                     cascade,
                 }
+            } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY])
+                && dialect_of!(self is MySqlDialect | GenericDialect)
+            {
+                AlterTableOperation::DropPrimaryKey
             } else {
                 let _ = self.parse_keyword(Keyword::COLUMN);
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
@@ -3441,6 +3453,10 @@ impl<'a> Parser<'a> {
                     Some('\'') => Ok(Value::SingleQuotedString(w.value)),
                     _ => self.expected("A value?", Token::Word(w))?,
                 },
+                // Case when Snowflake Semi-structured data like key:value
+                Keyword::NoKeyword | Keyword::LOCATION if dialect_of!(self is SnowflakeDialect | GenericDialect) => {
+                    Ok(Value::UnQuotedString(w.value))
+                }
                 _ => self.expected("a concrete value", Token::Word(w)),
             },
             // The call to n.parse() returns a bigdecimal when the
@@ -3644,7 +3660,13 @@ impl<'a> Parser<'a> {
                 Keyword::STRING => Ok(DataType::String),
                 Keyword::TEXT => Ok(DataType::Text),
                 Keyword::BYTEA => Ok(DataType::Bytea),
-                Keyword::NUMERIC | Keyword::DECIMAL | Keyword::DEC => Ok(DataType::Decimal(
+                Keyword::NUMERIC => Ok(DataType::Numeric(
+                    self.parse_exact_number_optional_precision_scale()?,
+                )),
+                Keyword::DECIMAL => Ok(DataType::Decimal(
+                    self.parse_exact_number_optional_precision_scale()?,
+                )),
+                Keyword::DEC => Ok(DataType::Dec(
                     self.parse_exact_number_optional_precision_scale()?,
                 )),
                 Keyword::ENUM => Ok(DataType::Enum(self.parse_string_values()?)),
@@ -5790,18 +5812,46 @@ mod tests {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
             };
 
-            test_parse_data_type!(dialect, "NUMERIC", DataType::Decimal(ExactNumberInfo::None));
+            test_parse_data_type!(dialect, "NUMERIC", DataType::Numeric(ExactNumberInfo::None));
 
             test_parse_data_type!(
                 dialect,
                 "NUMERIC(2)",
-                DataType::Decimal(ExactNumberInfo::Precision(2))
+                DataType::Numeric(ExactNumberInfo::Precision(2))
             );
 
             test_parse_data_type!(
                 dialect,
                 "NUMERIC(2,10)",
+                DataType::Numeric(ExactNumberInfo::PrecisionAndScale(2, 10))
+            );
+
+            test_parse_data_type!(dialect, "DECIMAL", DataType::Decimal(ExactNumberInfo::None));
+
+            test_parse_data_type!(
+                dialect,
+                "DECIMAL(2)",
+                DataType::Decimal(ExactNumberInfo::Precision(2))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "DECIMAL(2,10)",
                 DataType::Decimal(ExactNumberInfo::PrecisionAndScale(2, 10))
+            );
+
+            test_parse_data_type!(dialect, "DEC", DataType::Dec(ExactNumberInfo::None));
+
+            test_parse_data_type!(
+                dialect,
+                "DEC(2)",
+                DataType::Dec(ExactNumberInfo::Precision(2))
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "DEC(2,10)",
+                DataType::Dec(ExactNumberInfo::PrecisionAndScale(2, 10))
             );
         }
 

@@ -18,10 +18,8 @@
 //! sqlparser regardless of the chosen dialect (i.e. it doesn't conflict with
 //! dialect-specific parsing rules).
 
-#[macro_use]
-mod test_utils;
-
 use matches::assert_matches;
+
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
@@ -30,11 +28,13 @@ use sqlparser::dialect::{
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
-
 use test_utils::{
     all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
     TestedDialects,
 };
+
+#[macro_use]
+mod test_utils;
 
 #[test]
 fn parse_insert_values() {
@@ -1628,15 +1628,9 @@ fn parse_cast() {
 
     verified_stmt("SELECT CAST(id AS NUMERIC) FROM customer");
 
-    one_statement_parses_to(
-        "SELECT CAST(id AS DEC) FROM customer",
-        "SELECT CAST(id AS NUMERIC) FROM customer",
-    );
+    verified_stmt("SELECT CAST(id AS DEC) FROM customer");
 
-    one_statement_parses_to(
-        "SELECT CAST(id AS DECIMAL) FROM customer",
-        "SELECT CAST(id AS NUMERIC) FROM customer",
-    );
+    verified_stmt("SELECT CAST(id AS DECIMAL) FROM customer");
 
     let sql = "SELECT CAST(id AS NVARCHAR(50)) FROM customer";
     let select = verified_only_select(sql);
@@ -1720,22 +1714,13 @@ fn parse_try_cast() {
         },
         expr_from_projection(only(&select.projection))
     );
-    one_statement_parses_to(
-        "SELECT TRY_CAST(id AS BIGINT) FROM customer",
-        "SELECT TRY_CAST(id AS BIGINT) FROM customer",
-    );
+    verified_stmt("SELECT TRY_CAST(id AS BIGINT) FROM customer");
 
     verified_stmt("SELECT TRY_CAST(id AS NUMERIC) FROM customer");
 
-    one_statement_parses_to(
-        "SELECT TRY_CAST(id AS DEC) FROM customer",
-        "SELECT TRY_CAST(id AS NUMERIC) FROM customer",
-    );
+    verified_stmt("SELECT TRY_CAST(id AS DEC) FROM customer");
 
-    one_statement_parses_to(
-        "SELECT TRY_CAST(id AS DECIMAL) FROM customer",
-        "SELECT TRY_CAST(id AS NUMERIC) FROM customer",
-    );
+    verified_stmt("SELECT TRY_CAST(id AS DECIMAL) FROM customer");
 }
 
 #[test]
@@ -1755,6 +1740,7 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(MONTH FROM d)");
     verified_stmt("SELECT EXTRACT(WEEK FROM d)");
     verified_stmt("SELECT EXTRACT(DAY FROM d)");
+    verified_stmt("SELECT EXTRACT(DATE FROM d)");
     verified_stmt("SELECT EXTRACT(HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(MINUTE FROM d)");
     verified_stmt("SELECT EXTRACT(SECOND FROM d)");

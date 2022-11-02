@@ -67,8 +67,18 @@ pub enum DataType {
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-large-object-string-type
     /// [Oracle]: https://docs.oracle.com/javadb/10.8.3.0/ref/rrefblob.html
     Blob(Option<u64>),
-    /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
+    /// Numeric type with optional precision and scale e.g. NUMERIC(10,2), [standard][1]
+    ///
+    /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
+    Numeric(ExactNumberInfo),
+    /// Decimal type with optional precision and scale e.g. DECIMAL(10,2), [standard][1]
+    ///
+    /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
     Decimal(ExactNumberInfo),
+    /// Dec type with optional precision and scale e.g. DEC(10,2), [standard][1]
+    ///
+    /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
+    Dec(ExactNumberInfo),
     /// Floating point with optional precision e.g. FLOAT(8)
     Float(Option<u64>),
     /// Tiny integer with optional display width e.g. TINYINT or TINYINT(3)
@@ -165,8 +175,14 @@ impl fmt::Display for DataType {
                 format_type_with_optional_length(f, "VARBINARY", size, false)
             }
             DataType::Blob(size) => format_type_with_optional_length(f, "BLOB", size, false),
-            DataType::Decimal(info) => {
+            DataType::Numeric(info) => {
                 write!(f, "NUMERIC{}", info)
+            }
+            DataType::Decimal(info) => {
+                write!(f, "DECIMAL{}", info)
+            }
+            DataType::Dec(info) => {
+                write!(f, "DEC{}", info)
             }
             DataType::Float(size) => format_type_with_optional_length(f, "FLOAT", size, false),
             DataType::TinyInt(zerofill) => {

@@ -159,6 +159,22 @@ fn parse_array() {
     );
 }
 
+#[test]
+fn parse_json_using_colon() {
+    let sql = "SELECT a:b FROM t";
+    let select = snowflake().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            operator: JsonOperator::Colon,
+            right: Box::new(Expr::Value(Value::UnQuotedString("b".to_string()))),
+        }),
+        select.projection[0]
+    );
+
+    snowflake().one_statement_parses_to("SELECT a:b::int FROM t", "SELECT CAST(a:b AS INT) FROM t");
+}
+
 fn snowflake() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SnowflakeDialect {})],

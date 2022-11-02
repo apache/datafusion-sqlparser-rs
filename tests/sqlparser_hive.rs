@@ -156,8 +156,7 @@ fn long_numerics() {
 #[test]
 fn decimal_precision() {
     let query = "SELECT CAST(a AS DECIMAL(18,2)) FROM db.table";
-    let expected = "SELECT CAST(a AS NUMERIC(18,2)) FROM db.table";
-    hive().one_statement_parses_to(query, expected);
+    hive().verified_stmt(query);
 }
 
 #[test]

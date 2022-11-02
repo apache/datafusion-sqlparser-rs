@@ -217,10 +217,7 @@ impl fmt::Display for DataType {
             DataType::String => write!(f, "STRING"),
             DataType::Bytea => write!(f, "BYTEA"),
             DataType::Array(ty) => {
-                if ty.to_string()
-                    == Box::new(DataType::Custom(ObjectName(vec!["VARAINT".into()]), vec![]))
-                        .to_string()
-                {
+                if ty == &Box::new(DataType::Custom(ObjectName(vec!["VARAINT".into()]), vec![])) {
                     write!(f, "ARRAY")
                 } else {
                     write!(f, "{}[]", ty)

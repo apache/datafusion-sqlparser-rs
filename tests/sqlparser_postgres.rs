@@ -1281,9 +1281,9 @@ fn parse_array_index_expr() {
                     })],
                     named: true,
                 })),
-                data_type: DataType::Array(Box::new(DataType::Array(Box::new(DataType::Int(
-                    None
-                )))))
+                data_type: DataType::Array(Some(Box::new(DataType::Array(Some(Box::new(
+                    DataType::Int(None)
+                ))))))
             }))),
             indexes: vec![num[1].clone(), num[2].clone()],
         },

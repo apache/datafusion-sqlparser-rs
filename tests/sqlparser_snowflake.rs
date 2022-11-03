@@ -150,10 +150,7 @@ fn parse_array() {
     assert_eq!(
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("a"))),
-            data_type: DataType::Array(Box::new(DataType::Custom(
-                ObjectName(vec!["VARAINT".into()]),
-                vec![]
-            ))),
+            data_type: DataType::Array(None),
         },
         expr_from_projection(only(&select.projection))
     );

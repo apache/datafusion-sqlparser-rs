@@ -141,7 +141,7 @@ pub enum DataType {
     /// Custom type such as enums
     Custom(ObjectName, Vec<String>),
     /// Arrays
-    Array(Box<DataType>),
+    Array(Option<Box<DataType>>),
     /// Enums
     Enum(Vec<String>),
     /// Set
@@ -233,10 +233,10 @@ impl fmt::Display for DataType {
             DataType::String => write!(f, "STRING"),
             DataType::Bytea => write!(f, "BYTEA"),
             DataType::Array(ty) => {
-                if ty == &Box::new(DataType::Custom(ObjectName(vec!["VARAINT".into()]), vec![])) {
-                    write!(f, "ARRAY")
+                if let Some(t) = &ty {
+                    write!(f, "{}[]", t)
                 } else {
-                    write!(f, "{}[]", ty)
+                    write!(f, "ARRAY")
                 }
             }
             DataType::Custom(ty, modifiers) => {

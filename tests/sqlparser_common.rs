@@ -2099,7 +2099,7 @@ fn parse_create_table_hive_array() {
                     },
                     ColumnDef {
                         name: Ident::new("val"),
-                        data_type: DataType::Array(Box::new(DataType::Int(None))),
+                        data_type: DataType::Array(Some(Box::new(DataType::Int(None)))),
                         collation: None,
                         options: vec![],
                     },

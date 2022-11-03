@@ -3673,10 +3673,7 @@ impl<'a> Parser<'a> {
                 Keyword::SET => Ok(DataType::Set(self.parse_string_values()?)),
                 Keyword::ARRAY => {
                     if dialect_of!(self is SnowflakeDialect) {
-                        Ok(DataType::Array(Box::new(DataType::Custom(
-                            ObjectName(vec!["VARAINT".into()]),
-                            vec![],
-                        ))))
+                        Ok(DataType::Array(None))
                     } else {
                         // Hive array syntax. Note that nesting arrays - or other Hive syntax
                         // that ends with > will fail due to "C++" problem - >> is parsed as
@@ -3684,7 +3681,7 @@ impl<'a> Parser<'a> {
                         self.expect_token(&Token::Lt)?;
                         let inside_type = self.parse_data_type()?;
                         self.expect_token(&Token::Gt)?;
-                        Ok(DataType::Array(Box::new(inside_type)))
+                        Ok(DataType::Array(Some(Box::new(inside_type))))
                     }
                 }
                 _ => {
@@ -3704,7 +3701,7 @@ impl<'a> Parser<'a> {
         // Keyword::ARRAY syntax from above
         while self.consume_token(&Token::LBracket) {
             self.expect_token(&Token::RBracket)?;
-            data = DataType::Array(Box::new(data))
+            data = DataType::Array(Some(Box::new(data)))
         }
         Ok(data)
     }

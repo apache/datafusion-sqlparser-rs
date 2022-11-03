@@ -257,13 +257,7 @@ pub struct Word {
 
 impl fmt::Display for Word {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.quote_style {
-            QuoteStyle::None => write!(f, "{}", self.value),
-            QuoteStyle::SingleQuote | QuoteStyle::DoubleQuote | QuoteStyle::BackTick => {
-                write!(f, "{}{}{}", self.quote_style, self.value, self.quote_style)
-            }
-            QuoteStyle::SquareBracket => write!(f, "[{}]", self.value),
-        }
+        write!(f, "{}", self.quote_style.quote(self.value.clone()))
     }
 }
 

@@ -17,7 +17,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::fmt;
+use core::fmt::{self, Display};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -129,15 +129,25 @@ impl From<&str> for Ident {
 impl fmt::Display for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.quote_style {
-            QuoteStyle::None => f.write_str(&self.value),
-            QuoteStyle::SingleQuote | QuoteStyle::DoubleQuote | QuoteStyle::BackTick => {
-                let escaped = value::escape_quoted_string(
-                    &self.value,
-                    self.quote_style.as_char().map_err(|_| fmt::Error)?,
-                );
-                write!(f, "{}{}{}", self.quote_style, escaped, self.quote_style)
+            QuoteStyle::SingleQuote => {
+                let escaped = value::escape_quoted_string(&self.value, '\'');
+                let quoted = self.quote_style.quote(escaped.to_string());
+                write!(f, "{}", quoted)
             }
-            QuoteStyle::SquareBracket => write!(f, "[{}]", self.value),
+            QuoteStyle::DoubleQuote => {
+                let escaped = value::escape_quoted_string(&self.value, '"');
+                let quoted = self.quote_style.quote(escaped.to_string());
+                write!(f, "{}", quoted)
+            }
+            QuoteStyle::BackTick => {
+                let escaped = value::escape_quoted_string(&self.value, '`');
+                let quoted = self.quote_style.quote(escaped.to_string());
+                write!(f, "{}", quoted)
+            }
+            QuoteStyle::None | QuoteStyle::SquareBracket => {
+                let quoted = self.quote_style.quote(self.value.clone());
+                write!(f, "{}", quoted)
+            }
         }
     }
 }
@@ -159,24 +169,14 @@ pub enum QuoteStyle {
     /// Used by Redshift and SqLite
     SquareBracket,
 }
-impl fmt::Display for QuoteStyle {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            QuoteStyle::SingleQuote => write!(f, "'"),
-            QuoteStyle::DoubleQuote => write!(f, "\""),
-            QuoteStyle::BackTick => write!(f, "`"),
-            QuoteStyle::SquareBracket | QuoteStyle::None => Ok(()),
-        }
-    }
-}
-
 impl QuoteStyle {
-    fn as_char(&self) -> Result<char, QuoteStyleToCharError> {
+    pub fn quote(self, value: String) -> impl Display {
         match self {
-            QuoteStyle::SingleQuote => Ok('\''),
-            QuoteStyle::DoubleQuote => Ok('"'),
-            QuoteStyle::BackTick => Ok('`'),
-            QuoteStyle::SquareBracket | QuoteStyle::None => Err(QuoteStyleToCharError),
+            QuoteStyle::None => value,
+            QuoteStyle::SingleQuote => format!("'{}'", value),
+            QuoteStyle::DoubleQuote => format!("\"{}\"", value),
+            QuoteStyle::BackTick => format!("`{}`", value),
+            QuoteStyle::SquareBracket => format!("[{}]", value),
         }
     }
 }

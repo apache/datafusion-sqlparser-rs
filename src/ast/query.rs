@@ -64,25 +64,6 @@ impl fmt::Display for Query {
     }
 }
 
-/// Options for SetOperator
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum SetQuantifier {
-    All,
-    Distinct,
-    None,
-}
-
-impl fmt::Display for SetQuantifier {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            SetQuantifier::All => write!(f, "ALL"),
-            SetQuantifier::Distinct => write!(f, "DISTINCT"),
-            SetQuantifier::None => write!(f, ""),
-        }
-    }
-}
-
 /// A node in a tree, representing a "query body" expression, roughly:
 /// `SELECT ... [ {UNION|EXCEPT|INTERSECT} SELECT ...]`
 #[allow(clippy::large_enum_variant)]
@@ -151,6 +132,26 @@ impl fmt::Display for SetOperator {
     }
 }
 
+/// A quantifier for [SetOperator].
+// TODO: Restrict some dialects to parse, specific SetQuantifier.
+// For example, BigQuery does not support `DISTINCT` for `EXCEPT` and `INTERSECT`
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum SetQuantifier {
+    All,
+    Distinct,
+    None,
+}
+
+impl fmt::Display for SetQuantifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SetQuantifier::All => write!(f, "ALL"),
+            SetQuantifier::Distinct => write!(f, "DISTINCT"),
+            SetQuantifier::None => write!(f, ""),
+        }
+    }
+}
 /// A restricted variant of `SELECT` (without CTEs/`ORDER BY`), which may
 /// appear either as the only body item of a `Query`, or as an operand
 /// to a set operation like `UNION`.

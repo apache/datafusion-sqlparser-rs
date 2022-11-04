@@ -70,6 +70,7 @@ impl fmt::Display for Query {
 pub enum SetQualifier {
     All,
     Distinct,
+    None
 }
 
 impl fmt::Display for SetQualifier {
@@ -77,6 +78,7 @@ impl fmt::Display for SetQualifier {
         match self {
             SetQualifier::All => write!(f, "ALL"),
             SetQualifier::Distinct => write!(f, "DISTINCT"),
+            SetQualifier::None => write!(f, ""),
         }
     }
 }
@@ -95,7 +97,7 @@ pub enum SetExpr {
     /// UNION/EXCEPT/INTERSECT of two queries
     SetOperation {
         op: SetOperator,
-        set_qualifier: Option<SetQualifier>,
+        set_qualifier: SetQualifier,
         left: Box<SetExpr>,
         right: Box<SetExpr>,
     },
@@ -118,8 +120,9 @@ impl fmt::Display for SetExpr {
                 set_qualifier,
             } => {
                 write!(f, "{} {}", left, op)?;
-                if let Some(ref sq) = set_qualifier {
-                    write!(f, " {}", sq)?;
+                match set_qualifier {
+                    SetQualifier::All | SetQualifier::Distinct => write!(f, " {}", set_qualifier)?,
+                    SetQualifier::None => write!(f, "{}", set_qualifier)?,
                 }
                 write!(f, " {}", right)?;
                 Ok(())

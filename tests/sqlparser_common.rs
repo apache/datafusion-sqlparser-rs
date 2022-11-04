@@ -24,7 +24,7 @@ use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, GenericDialect, HiveDialect, MsSqlDialect,
-    PostgreSqlDialect, SQLiteDialect, SnowflakeDialect,
+    MySqlDialect, PostgreSqlDialect, SQLiteDialect, SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
@@ -2099,7 +2099,7 @@ fn parse_create_table_hive_array() {
                     },
                     ColumnDef {
                         name: Ident::new("val"),
-                        data_type: DataType::Array(Box::new(DataType::Int(None))),
+                        data_type: DataType::Array(Some(Box::new(DataType::Int(None)))),
                         collation: None,
                         options: vec![],
                     },
@@ -2109,12 +2109,20 @@ fn parse_create_table_hive_array() {
         _ => unreachable!(),
     }
 
-    let res =
-        parse_sql_statements("CREATE TABLE IF NOT EXISTS something (name int, val array<int)");
-    assert!(res
-        .unwrap_err()
-        .to_string()
-        .contains("Expected >, found: )"));
+    // SnowflakeDialect using array diffrent
+    let dialects = TestedDialects {
+        dialects: vec![
+            Box::new(PostgreSqlDialect {}),
+            Box::new(HiveDialect {}),
+            Box::new(MySqlDialect {}),
+        ],
+    };
+    let sql = "CREATE TABLE IF NOT EXISTS something (name int, val array<int)";
+
+    assert_eq!(
+        dialects.parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError("Expected >, found: )".to_string())
+    );
 }
 
 #[test]

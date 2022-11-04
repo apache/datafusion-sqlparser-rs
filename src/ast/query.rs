@@ -133,7 +133,7 @@ impl fmt::Display for SetOperator {
 }
 
 /// A quantifier for [SetOperator].
-// TODO: Restrict some dialects to parse, specific SetQuantifier.
+// TODO: Restrict parsing specific SetQuantifier in some specific dialects.
 // For example, BigQuery does not support `DISTINCT` for `EXCEPT` and `INTERSECT`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

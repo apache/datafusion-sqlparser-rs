@@ -67,18 +67,18 @@ impl fmt::Display for Query {
 /// Options for SetOperator
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum SetQualifier {
+pub enum SetQuantifier {
     All,
     Distinct,
     None,
 }
 
-impl fmt::Display for SetQualifier {
+impl fmt::Display for SetQuantifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            SetQualifier::All => write!(f, "ALL"),
-            SetQualifier::Distinct => write!(f, "DISTINCT"),
-            SetQualifier::None => write!(f, ""),
+            SetQuantifier::All => write!(f, "ALL"),
+            SetQuantifier::Distinct => write!(f, "DISTINCT"),
+            SetQuantifier::None => write!(f, ""),
         }
     }
 }
@@ -97,7 +97,7 @@ pub enum SetExpr {
     /// UNION/EXCEPT/INTERSECT of two queries
     SetOperation {
         op: SetOperator,
-        set_qualifier: SetQualifier,
+        set_quantifier: SetQuantifier,
         left: Box<SetExpr>,
         right: Box<SetExpr>,
     },
@@ -117,12 +117,12 @@ impl fmt::Display for SetExpr {
                 left,
                 right,
                 op,
-                set_qualifier,
+                set_quantifier,
             } => {
                 write!(f, "{} {}", left, op)?;
-                match set_qualifier {
-                    SetQualifier::All | SetQualifier::Distinct => write!(f, " {}", set_qualifier)?,
-                    SetQualifier::None => write!(f, "{}", set_qualifier)?,
+                match set_quantifier {
+                    SetQuantifier::All | SetQuantifier::Distinct => write!(f, " {}", set_quantifier)?,
+                    SetQuantifier::None => write!(f, "{}", set_quantifier)?,
                 }
                 write!(f, " {}", right)?;
                 Ok(())

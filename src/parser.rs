@@ -4173,11 +4173,11 @@ impl<'a> Parser<'a> {
                 break;
             }
             self.next_token(); // skip past the set operator
-            let set_qualifier = self.parse_set_operator_option(&op);
+            let set_quantifier = self.parse_set_operator_option(&op);
             expr = SetExpr::SetOperation {
                 left: Box::new(expr),
                 op: op.unwrap(),
-                set_qualifier,
+                set_quantifier,
                 right: Box::new(self.parse_query_body(next_precedence)?),
             };
         }
@@ -4194,27 +4194,27 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_set_operator_option(&mut self, op: &Option<SetOperator>) -> SetQualifier {
+    pub fn parse_set_operator_option(&mut self, op: &Option<SetOperator>) -> SetQuantifier {
         match op {
             Some(SetOperator::Union) => {
                 if self.parse_keyword(Keyword::ALL) {
-                    SetQualifier::All
+                    SetQuantifier::All
                 } else if self.parse_keyword(Keyword::DISTINCT) {
-                    SetQualifier::Distinct
+                    SetQuantifier::Distinct
                 } else {
-                    SetQualifier::None
+                    SetQuantifier::None
                 }
             }
             Some(SetOperator::Except) | Some(SetOperator::Intersect) => {
                 if self.parse_keyword(Keyword::ALL) {
-                    SetQualifier::All
+                    SetQuantifier::All
                 } else if self.parse_keyword(Keyword::DISTINCT) {
-                    SetQualifier::Distinct
+                    SetQuantifier::Distinct
                 } else {
-                    SetQualifier::None
+                    SetQuantifier::None
                 }
             }
-            _ => SetQualifier::None,
+            _ => SetQuantifier::None,
         }
     }
 

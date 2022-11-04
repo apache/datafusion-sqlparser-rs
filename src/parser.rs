@@ -4194,17 +4194,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_set_operator_option(
-        &mut self,
-        op: &Option<SetOperator>,
-    ) -> SetQualifier {
+    pub fn parse_set_operator_option(&mut self, op: &Option<SetOperator>) -> SetQualifier {
         match op {
             Some(SetOperator::Union) => {
                 if self.parse_keyword(Keyword::ALL) {
                     SetQualifier::All
-                } else if self.parse_keyword(Keyword::DISTINCT)
-                    && dialect_of!(self is MySqlDialect | BigQueryDialect)
-                {
+                } else if self.parse_keyword(Keyword::DISTINCT) {
                     SetQualifier::Distinct
                 } else {
                     SetQualifier::None
@@ -4213,6 +4208,8 @@ impl<'a> Parser<'a> {
             Some(SetOperator::Except) | Some(SetOperator::Intersect) => {
                 if self.parse_keyword(Keyword::ALL) {
                     SetQualifier::All
+                } else if self.parse_keyword(Keyword::DISTINCT) {
+                    SetQualifier::Distinct
                 } else {
                     SetQualifier::None
                 }

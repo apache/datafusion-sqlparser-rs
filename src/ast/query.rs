@@ -70,7 +70,7 @@ impl fmt::Display for Query {
 pub enum SetQualifier {
     All,
     Distinct,
-    None
+    None,
 }
 
 impl fmt::Display for SetQualifier {

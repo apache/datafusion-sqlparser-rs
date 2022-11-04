@@ -4173,7 +4173,7 @@ impl<'a> Parser<'a> {
                 break;
             }
             self.next_token(); // skip past the set operator
-            let set_quantifier = self.parse_set_operator_option(&op);
+            let set_quantifier = self.parse_set_quantifier(&op);
             expr = SetExpr::SetOperation {
                 left: Box::new(expr),
                 op: op.unwrap(),
@@ -4194,7 +4194,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_set_operator_option(&mut self, op: &Option<SetOperator>) -> SetQuantifier {
+    pub fn parse_set_quantifier(&mut self, op: &Option<SetOperator>) -> SetQuantifier {
         match op {
             Some(SetOperator::Union) => {
                 if self.parse_keyword(Keyword::ALL) {

@@ -27,7 +27,7 @@ pub use self::data_type::{
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, IndexType,
-    ReferentialAction, TableConstraint,
+    KeyOrIndexDisplay, ReferentialAction, TableConstraint,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{

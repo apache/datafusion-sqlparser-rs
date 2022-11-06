@@ -227,7 +227,7 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "last_update".into(),
-                        data_type: DataType::Timestamp(TimezoneInfo::WithoutTimeZone),
+                        data_type: DataType::Timestamp(None, TimezoneInfo::WithoutTimeZone),
                         collation: None,
                         options: vec![
                             ColumnOptionDef {

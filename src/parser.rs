@@ -3627,31 +3627,41 @@ impl<'a> Parser<'a> {
                 Keyword::BLOB => Ok(DataType::Blob(self.parse_optional_precision()?)),
                 Keyword::UUID => Ok(DataType::Uuid),
                 Keyword::DATE => Ok(DataType::Date),
-                Keyword::DATETIME => Ok(DataType::Datetime),
+                Keyword::DATETIME => Ok(DataType::Datetime(self.parse_optional_precision()?)),
                 Keyword::TIMESTAMP => {
-                    if self.parse_keyword(Keyword::WITH) {
+                    let precision = self.parse_optional_precision()?;
+                    let tz = if self.parse_keyword(Keyword::WITH) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
-                        Ok(DataType::Timestamp(TimezoneInfo::WithTimeZone))
+                        TimezoneInfo::WithTimeZone
                     } else if self.parse_keyword(Keyword::WITHOUT) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
-                        Ok(DataType::Timestamp(TimezoneInfo::WithoutTimeZone))
+                        TimezoneInfo::WithoutTimeZone
                     } else {
-                        Ok(DataType::Timestamp(TimezoneInfo::None))
-                    }
+                        TimezoneInfo::None
+                    };
+                    Ok(DataType::Timestamp(precision, tz))
                 }
-                Keyword::TIMESTAMPTZ => Ok(DataType::Timestamp(TimezoneInfo::Tz)),
+                Keyword::TIMESTAMPTZ => Ok(DataType::Timestamp(
+                    self.parse_optional_precision()?,
+                    TimezoneInfo::Tz,
+                )),
                 Keyword::TIME => {
-                    if self.parse_keyword(Keyword::WITH) {
+                    let precision = self.parse_optional_precision()?;
+                    let tz = if self.parse_keyword(Keyword::WITH) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
-                        Ok(DataType::Time(TimezoneInfo::WithTimeZone))
+                        TimezoneInfo::WithTimeZone
                     } else if self.parse_keyword(Keyword::WITHOUT) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
-                        Ok(DataType::Time(TimezoneInfo::WithoutTimeZone))
+                        TimezoneInfo::WithoutTimeZone
                     } else {
-                        Ok(DataType::Time(TimezoneInfo::None))
-                    }
+                        TimezoneInfo::None
+                    };
+                    Ok(DataType::Time(precision, tz))
                 }
-                Keyword::TIMETZ => Ok(DataType::Time(TimezoneInfo::Tz)),
+                Keyword::TIMETZ => Ok(DataType::Time(
+                    self.parse_optional_precision()?,
+                    TimezoneInfo::Tz,
+                )),
                 // Interval types can be followed by a complicated interval
                 // qualifier that we don't currently support. See
                 // parse_interval for a taste.
@@ -5680,6 +5690,7 @@ mod tests {
 
     #[cfg(test)]
     mod test_parse_data_type {
+
         use crate::ast::{
             CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, ObjectName, TimezoneInfo,
         };
@@ -5690,8 +5701,8 @@ mod tests {
             ($dialect:expr, $input:expr, $expected_type:expr $(,)?) => {{
                 $dialect.run_parser_method(&*$input, |parser| {
                     let data_type = parser.parse_data_type().unwrap();
-                    assert_eq!(data_type, $expected_type);
-                    assert_eq!(data_type.to_string(), $input.to_string());
+                    assert_eq!($expected_type, data_type);
+                    assert_eq!($input.to_string(), data_type.to_string());
                 });
             }};
         }
@@ -5939,7 +5950,7 @@ mod tests {
         }
 
         #[test]
-        fn test_ansii_datetime_types() {
+        fn test_ansii_date_type() {
             // Datetime types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type>
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
@@ -5947,36 +5958,60 @@ mod tests {
 
             test_parse_data_type!(dialect, "DATE", DataType::Date);
 
-            test_parse_data_type!(dialect, "TIME", DataType::Time(TimezoneInfo::None));
+            test_parse_data_type!(dialect, "TIME", DataType::Time(None, TimezoneInfo::None));
+
+            test_parse_data_type!(
+                dialect,
+                "TIME(6)",
+                DataType::Time(Some(6), TimezoneInfo::None)
+            );
 
             test_parse_data_type!(
                 dialect,
                 "TIME WITH TIME ZONE",
-                DataType::Time(TimezoneInfo::WithTimeZone)
+                DataType::Time(None, TimezoneInfo::WithTimeZone)
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "TIME(6) WITH TIME ZONE",
+                DataType::Time(Some(6), TimezoneInfo::WithTimeZone)
             );
 
             test_parse_data_type!(
                 dialect,
                 "TIME WITHOUT TIME ZONE",
-                DataType::Time(TimezoneInfo::WithoutTimeZone)
+                DataType::Time(None, TimezoneInfo::WithoutTimeZone)
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "TIME(6) WITHOUT TIME ZONE",
+                DataType::Time(Some(6), TimezoneInfo::WithoutTimeZone)
             );
 
             test_parse_data_type!(
                 dialect,
                 "TIMESTAMP",
-                DataType::Timestamp(TimezoneInfo::None)
+                DataType::Timestamp(None, TimezoneInfo::None)
             );
 
             test_parse_data_type!(
                 dialect,
-                "TIMESTAMP WITH TIME ZONE",
-                DataType::Timestamp(TimezoneInfo::WithTimeZone)
+                "TIMESTAMP(22)",
+                DataType::Timestamp(Some(22), TimezoneInfo::None)
             );
 
             test_parse_data_type!(
                 dialect,
-                "TIMESTAMP WITHOUT TIME ZONE",
-                DataType::Timestamp(TimezoneInfo::WithoutTimeZone)
+                "TIMESTAMP(22) WITH TIME ZONE",
+                DataType::Timestamp(Some(22), TimezoneInfo::WithTimeZone)
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "TIMESTAMP(33) WITHOUT TIME ZONE",
+                DataType::Timestamp(Some(33), TimezoneInfo::WithoutTimeZone)
             );
         }
     }

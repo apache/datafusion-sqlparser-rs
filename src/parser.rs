@@ -4199,10 +4199,11 @@ impl<'a> Parser<'a> {
                 break;
             }
             self.next_token(); // skip past the set operator
+            let set_quantifier = self.parse_set_quantifier(&op);
             expr = SetExpr::SetOperation {
                 left: Box::new(expr),
                 op: op.unwrap(),
-                all: self.parse_keyword(Keyword::ALL),
+                set_quantifier,
                 right: Box::new(self.parse_query_body(next_precedence)?),
             };
         }
@@ -4216,6 +4217,30 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::EXCEPT => Some(SetOperator::Except),
             Token::Word(w) if w.keyword == Keyword::INTERSECT => Some(SetOperator::Intersect),
             _ => None,
+        }
+    }
+
+    pub fn parse_set_quantifier(&mut self, op: &Option<SetOperator>) -> SetQuantifier {
+        match op {
+            Some(SetOperator::Union) => {
+                if self.parse_keyword(Keyword::ALL) {
+                    SetQuantifier::All
+                } else if self.parse_keyword(Keyword::DISTINCT) {
+                    SetQuantifier::Distinct
+                } else {
+                    SetQuantifier::None
+                }
+            }
+            Some(SetOperator::Except) | Some(SetOperator::Intersect) => {
+                if self.parse_keyword(Keyword::ALL) {
+                    SetQuantifier::All
+                } else if self.parse_keyword(Keyword::DISTINCT) {
+                    SetQuantifier::Distinct
+                } else {
+                    SetQuantifier::None
+                }
+            }
+            _ => SetQuantifier::None,
         }
     }
 

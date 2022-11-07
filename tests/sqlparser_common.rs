@@ -4072,14 +4072,17 @@ fn parse_derived_tables() {
 }
 
 #[test]
-fn parse_union() {
+fn parse_union_except_intersect() {
     // TODO: add assertions
     verified_stmt("SELECT 1 UNION SELECT 2");
     verified_stmt("SELECT 1 UNION ALL SELECT 2");
+    verified_stmt("SELECT 1 UNION DISTINCT SELECT 1");
     verified_stmt("SELECT 1 EXCEPT SELECT 2");
     verified_stmt("SELECT 1 EXCEPT ALL SELECT 2");
+    verified_stmt("SELECT 1 EXCEPT DISTINCT SELECT 1");
     verified_stmt("SELECT 1 INTERSECT SELECT 2");
     verified_stmt("SELECT 1 INTERSECT ALL SELECT 2");
+    verified_stmt("SELECT 1 INTERSECT DISTINCT SELECT 1");
     verified_stmt("SELECT 1 UNION SELECT 2 UNION SELECT 3");
     verified_stmt("SELECT 1 EXCEPT SELECT 2 UNION SELECT 3"); // Union[Except[1,2], 3]
     verified_stmt("SELECT 1 INTERSECT (SELECT 2 EXCEPT SELECT 3)");
@@ -4088,6 +4091,7 @@ fn parse_union() {
     verified_stmt("SELECT 1 UNION SELECT 2 INTERSECT SELECT 3"); // Union[1, Intersect[2,3]]
     verified_stmt("SELECT foo FROM tab UNION SELECT bar FROM TAB");
     verified_stmt("(SELECT * FROM new EXCEPT SELECT * FROM old) UNION ALL (SELECT * FROM old EXCEPT SELECT * FROM new) ORDER BY 1");
+    verified_stmt("(SELECT * FROM new EXCEPT DISTINCT SELECT * FROM old) UNION DISTINCT (SELECT * FROM old EXCEPT DISTINCT SELECT * FROM new) ORDER BY 1");
 }
 
 #[test]

@@ -179,6 +179,12 @@ impl QuoteStyle {
             QuoteStyle::SquareBracket => format!("[{}]", value),
         }
     }
+    pub fn is_some(&self) -> bool {
+        match self {
+            QuoteStyle::None => false,
+            _ => true,
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -3448,7 +3448,7 @@ impl<'a> Parser<'a> {
                 Keyword::TRUE => Ok(Value::Boolean(true)),
                 Keyword::FALSE => Ok(Value::Boolean(false)),
                 Keyword::NULL => Ok(Value::Null),
-                Keyword::NoKeyword => match w.quote_style {
+                Keyword::NoKeyword if w.quote_style.is_some() => match w.quote_style {
                     QuoteStyle::SingleQuote => Ok(Value::SingleQuotedString(w.value)),
                     QuoteStyle::DoubleQuote => Ok(Value::DoubleQuotedString(w.value)),
                     _ => self.expected("A value?", Token::Word(w))?,

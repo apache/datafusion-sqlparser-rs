@@ -3753,6 +3753,8 @@ impl<'a> Parser<'a> {
             //    ignore the <separator> and treat the multiple strings as
             //    a single <literal>."
             Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
+            // Support for MySql dialect double qouted string, `AS "HOUR"` for example
+            Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote('\"', s))),
             not_an_ident => {
                 if after_as {
                     return self.expected("an identifier after AS", not_an_ident);
@@ -3836,6 +3838,7 @@ impl<'a> Parser<'a> {
         match self.next_token() {
             Token::Word(w) => Ok(w.to_ident()),
             Token::SingleQuotedString(s) => Ok(Ident::with_quote('\'', s)),
+            Token::DoubleQuotedString(s) => Ok(Ident::with_quote('\"', s)),
             unexpected => self.expected("identifier", unexpected),
         }
     }

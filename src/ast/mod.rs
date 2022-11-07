@@ -35,7 +35,7 @@ pub use self::query::{
     OrderByExpr, Query, Select, SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier,
     TableAlias, TableFactor, TableWithJoins, Top, Values, With,
 };
-pub use self::value::{DateTimeField, TrimWhereField, Value};
+pub use self::value::{escape_quoted_string, DateTimeField, TrimWhereField, Value};
 
 mod data_type;
 mod ddl;

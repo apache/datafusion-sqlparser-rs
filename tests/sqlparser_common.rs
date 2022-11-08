@@ -2154,6 +2154,19 @@ fn parse_create_table_as() {
 }
 
 #[test]
+fn parse_create_table_as_table() {
+    let sql = "CREATE TABLE new_table AS TABLE old_table";
+
+    match verified_stmt(sql) {
+        Statement::CreateTable { name, query, .. } => {
+            assert_eq!(name.to_string(), "new_table".to_string());
+            assert_eq!(query, Some(Box::new(verified_query("SELECT * FROM old_table"))));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_on_cluster() {
     // Using single-quote literal to define current cluster
     let sql = "CREATE TABLE t ON CLUSTER '{cluster}' (a INT, b INT)";

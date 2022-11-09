@@ -4397,35 +4397,14 @@ impl<'a> Parser<'a> {
 
     /// Parse `CREATE TABLE x AS TABLE y`
     /// the same as `CREATE TABLE x AS SELECT * FROM y`
-    /// Mostly the same logic as parse_select,
-    /// except for the "projection" and "from" variables
+    /// Note logic for the "projection" and "from" variables
     pub fn parse_as_table(&mut self) -> Result<Select, ParserError> {
-        let distinct = self.parse_all_or_distinct()?;
-
-        let top = if self.parse_keyword(Keyword::TOP) {
-            Some(self.parse_top()?)
-        } else {
-            None
-        };
+        let distinct = false;
+        let top = None;
 
         let projection = vec![SelectItem::Wildcard];
 
-        let into = if self.parse_keyword(Keyword::INTO) {
-            let temporary = self
-                .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
-                .is_some();
-            let unlogged = self.parse_keyword(Keyword::UNLOGGED);
-            let table = self.parse_keyword(Keyword::TABLE);
-            let name = self.parse_object_name()?;
-            Some(SelectInto {
-                temporary,
-                unlogged,
-                table,
-                name,
-            })
-        } else {
-            None
-        };
+        let into = None;
 
         let mut as_flag = false;
         let mut table_flag = false;
@@ -4460,78 +4439,14 @@ impl<'a> Parser<'a> {
             joins: vec![],
         }];
 
-        let mut lateral_views = vec![];
-        loop {
-            if self.parse_keywords(&[Keyword::LATERAL, Keyword::VIEW]) {
-                let outer = self.parse_keyword(Keyword::OUTER);
-                let lateral_view = self.parse_expr()?;
-                let lateral_view_name = self.parse_object_name()?;
-                let lateral_col_alias = self
-                    .parse_comma_separated(|parser| {
-                        parser.parse_optional_alias(&[
-                            Keyword::WHERE,
-                            Keyword::GROUP,
-                            Keyword::CLUSTER,
-                            Keyword::HAVING,
-                            Keyword::LATERAL,
-                        ])
-                    })?
-                    .into_iter()
-                    .flatten()
-                    .collect();
-
-                lateral_views.push(LateralView {
-                    lateral_view,
-                    lateral_view_name,
-                    lateral_col_alias,
-                    outer,
-                });
-            } else {
-                break;
-            }
-        }
-
-        let selection = if self.parse_keyword(Keyword::WHERE) {
-            Some(self.parse_expr()?)
-        } else {
-            None
-        };
-
-        let group_by = if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
-            self.parse_comma_separated(Parser::parse_group_by_expr)?
-        } else {
-            vec![]
-        };
-
-        let cluster_by = if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
-            self.parse_comma_separated(Parser::parse_expr)?
-        } else {
-            vec![]
-        };
-
-        let distribute_by = if self.parse_keywords(&[Keyword::DISTRIBUTE, Keyword::BY]) {
-            self.parse_comma_separated(Parser::parse_expr)?
-        } else {
-            vec![]
-        };
-
-        let sort_by = if self.parse_keywords(&[Keyword::SORT, Keyword::BY]) {
-            self.parse_comma_separated(Parser::parse_expr)?
-        } else {
-            vec![]
-        };
-
-        let having = if self.parse_keyword(Keyword::HAVING) {
-            Some(self.parse_expr()?)
-        } else {
-            None
-        };
-
-        let qualify = if self.parse_keyword(Keyword::QUALIFY) {
-            Some(self.parse_expr()?)
-        } else {
-            None
-        };
+        let lateral_views = vec![];
+        let selection = None;
+        let group_by = vec![];
+        let cluster_by = vec![];
+        let distribute_by = vec![];
+        let sort_by = vec![];
+        let having = None;
+        let qualify = None;
 
         Ok(Select {
             distinct,

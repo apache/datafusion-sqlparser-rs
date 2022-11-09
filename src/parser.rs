@@ -4187,17 +4187,14 @@ impl<'a> Parser<'a> {
                     if w.keyword == Keyword::CREATE {
                         SetExpr::Select(Box::new(self.parse_as_table()?))
                     } else {
-                        return self.expected(  // SARAH
+                        return self.expected(
                             "CREATE statement",
                             Token::SingleQuotedString(w.value.clone()),
-                        )
+                        );
                     }
                 }
                 unexpected => {
-                    return self.expected(
-                        "CREATE TABLE ... AS TABLE ...",
-                        unexpected.clone(),
-                    )
+                    return self.expected("CREATE TABLE ... AS TABLE ...", unexpected.clone())
                 }
             }
         } else {
@@ -4435,38 +4432,33 @@ impl<'a> Parser<'a> {
         let mut table_name = "";
         // Grab the table name after `AS TABLE ...`
         for token in self.tokens.iter() {
-            match token {
-                Token::Word(w) => {
-                    if w.keyword == Keyword::AS {
-                        as_flag = true;
-                    } else if w.keyword == Keyword::TABLE && as_flag {
-                        table_flag = true;
-                    } else if as_flag && table_flag {
-                        table_name = &w.value;
-                        as_flag = false;
-                        table_flag = false;
-                    } else if w.keyword != Keyword::TABLE && as_flag {
-                        as_flag = false;
-                    }
+            if let Token::Word(w) = token {
+                if w.keyword == Keyword::AS {
+                    as_flag = true;
+                } else if w.keyword == Keyword::TABLE && as_flag {
+                    table_flag = true;
+                } else if as_flag && table_flag {
+                    table_name = &w.value;
+                    as_flag = false;
+                    table_flag = false;
+                } else if w.keyword != Keyword::TABLE && as_flag {
+                    as_flag = false;
                 }
-                _ => ()
             }
         }
 
-        let from = vec![
-            TableWithJoins {
-                relation: TableFactor::Table {
-                    name: ObjectName(vec![Ident {
-                        value: table_name.to_string(),
-                        quote_style: None,
-                    }]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                },
-                joins: vec![],
-            }
-        ];
+        let from = vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: table_name.to_string(),
+                    quote_style: None,
+                }]),
+                alias: None,
+                args: None,
+                with_hints: vec![],
+            },
+            joins: vec![],
+        }];
 
         let mut lateral_views = vec![];
         loop {

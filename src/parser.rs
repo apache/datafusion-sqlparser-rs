@@ -389,7 +389,7 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::AND => Ok(0),
             Token::Word(w) if w.keyword == Keyword::OR => Ok(0),
             Token::Word(w) if w.keyword == Keyword::XOR => Ok(0),
-            _ => self.get_next_precedence()
+            _ => self.get_next_precedence(),
         }
     }
 

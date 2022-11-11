@@ -3085,6 +3085,38 @@ impl<'a> Parser<'a> {
                     columns,
                 }))
             }
+            Token::Word(w)
+                if (w.keyword == Keyword::FULLTEXT || w.keyword == Keyword::SPATIAL)
+                    && dialect_of!(self is GenericDialect | MySqlDialect) =>
+            {
+                if let Some(name) = name {
+                    return self.expected(
+                        "FULLTEXT or SPATIAL option without constraint name",
+                        Token::make_keyword(&name.to_string()),
+                    );
+                }
+
+                let fulltext = w.keyword == Keyword::FULLTEXT;
+
+                let index_type_display = if self.parse_keyword(Keyword::KEY) {
+                    KeyOrIndexDisplay::Key
+                } else if self.parse_keyword(Keyword::INDEX) {
+                    KeyOrIndexDisplay::Index
+                } else {
+                    KeyOrIndexDisplay::None
+                };
+
+                let opt_index_name = self.maybe_parse(|parser| parser.parse_identifier());
+
+                let columns = self.parse_parenthesized_column_list(Mandatory)?;
+
+                Ok(Some(TableConstraint::FulltextOrSpatial {
+                    fulltext,
+                    index_type_display,
+                    opt_index_name,
+                    columns,
+                }))
+            }
             unexpected => {
                 if name.is_some() {
                     self.expected("PRIMARY, UNIQUE, FOREIGN, or CHECK", unexpected)

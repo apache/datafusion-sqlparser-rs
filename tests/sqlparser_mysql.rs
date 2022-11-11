@@ -1026,7 +1026,7 @@ fn parse_table_colum_option_on_update() {
             assert_eq!(
                 vec![ColumnDef {
                     name: Ident::with_quote('`', "modification_time"),
-                    data_type: DataType::Datetime,
+                    data_type: DataType::Datetime(None),
                     collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,

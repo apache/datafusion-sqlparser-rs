@@ -1049,6 +1049,8 @@ pub enum Statement {
         /// whether the insert has the table keyword (Hive)
         table: bool,
         on: Option<OnInsert>,
+        /// RETURNING
+        returning: Option<Vec<SelectItem>>,
     },
     // TODO: Support ROW FORMAT
     Directory {
@@ -1089,6 +1091,8 @@ pub enum Statement {
         from: Option<TableWithJoins>,
         /// WHERE
         selection: Option<Expr>,
+        /// RETURNING
+        returning: Option<Vec<SelectItem>>,
     },
     /// DELETE
     Delete {
@@ -1098,6 +1102,8 @@ pub enum Statement {
         using: Option<TableFactor>,
         /// WHERE
         selection: Option<Expr>,
+        /// RETURNING
+        returning: Option<Vec<SelectItem>>,
     },
     /// CREATE VIEW
     CreateView {
@@ -1679,6 +1685,7 @@ impl fmt::Display for Statement {
                 source,
                 table,
                 on,
+                returning,
             } => {
                 if let Some(action) = or {
                     write!(f, "INSERT OR {} INTO {} ", action, table_name)?;
@@ -1706,10 +1713,14 @@ impl fmt::Display for Statement {
                 write!(f, "{}", source)?;
 
                 if let Some(on) = on {
-                    write!(f, "{}", on)
-                } else {
-                    Ok(())
+                    write!(f, "{}", on)?;
                 }
+
+                if let Some(returning) = returning {
+                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
+                }
+
+                Ok(())
             }
 
             Statement::Copy {
@@ -1753,6 +1764,7 @@ impl fmt::Display for Statement {
                 assignments,
                 from,
                 selection,
+                returning,
             } => {
                 write!(f, "UPDATE {}", table)?;
                 if !assignments.is_empty() {
@@ -1764,12 +1776,16 @@ impl fmt::Display for Statement {
                 if let Some(selection) = selection {
                     write!(f, " WHERE {}", selection)?;
                 }
+                if let Some(returning) = returning {
+                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
+                }
                 Ok(())
             }
             Statement::Delete {
                 table_name,
                 using,
                 selection,
+                returning,
             } => {
                 write!(f, "DELETE FROM {}", table_name)?;
                 if let Some(using) = using {
@@ -1777,6 +1793,9 @@ impl fmt::Display for Statement {
                 }
                 if let Some(selection) = selection {
                     write!(f, " WHERE {}", selection)?;
+                }
+                if let Some(returning) = returning {
+                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
                 }
                 Ok(())
             }
@@ -2610,6 +2629,21 @@ pub enum MinMaxValue {
 pub enum OnInsert {
     /// ON DUPLICATE KEY UPDATE (MySQL when the key already exists, then execute an update instead)
     DuplicateKeyUpdate(Vec<Assignment>),
+    /// ON CONFLICT is a PostgreSQL and Sqlite extension
+    OnConflict(OnConflict),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct OnConflict {
+    pub conflict_target: Vec<Ident>,
+    pub action: OnConflictAction,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum OnConflictAction {
+    DoNothing,
+    DoUpdate(Vec<Assignment>),
 }
 
 impl fmt::Display for OnInsert {
@@ -2620,6 +2654,24 @@ impl fmt::Display for OnInsert {
                 " ON DUPLICATE KEY UPDATE {}",
                 display_comma_separated(expr)
             ),
+            Self::OnConflict(o) => write!(f, " {o}"),
+        }
+    }
+}
+impl fmt::Display for OnConflict {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, " ON CONFLICT")?;
+        if !self.conflict_target.is_empty() {
+            write!(f, "({})", display_comma_separated(&self.conflict_target))?;
+        }
+        write!(f, " {}", self.action)
+    }
+}
+impl fmt::Display for OnConflictAction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::DoNothing => write!(f, "DO NOTHING"),
+            Self::DoUpdate(a) => write!(f, "DO UPDATE SET {}", display_comma_separated(a)),
         }
     }
 }

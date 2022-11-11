@@ -195,6 +195,7 @@ fn parse_update_with_table_alias() {
             assignments,
             from: _from,
             selection,
+            returning,
         } => {
             assert_eq!(
                 TableWithJoins {
@@ -231,6 +232,7 @@ fn parse_update_with_table_alias() {
                 }),
                 selection
             );
+            assert_eq!(None, returning);
         }
         _ => unreachable!(),
     }
@@ -278,6 +280,7 @@ fn parse_where_delete_statement() {
             table_name,
             using,
             selection,
+            returning,
         } => {
             assert_eq!(
                 TableFactor::Table {
@@ -298,6 +301,7 @@ fn parse_where_delete_statement() {
                 },
                 selection.unwrap(),
             );
+            assert_eq!(None, returning);
         }
         _ => unreachable!(),
     }
@@ -313,6 +317,7 @@ fn parse_where_delete_with_alias_statement() {
             table_name,
             using,
             selection,
+            returning,
         } => {
             assert_eq!(
                 TableFactor::Table {
@@ -353,6 +358,7 @@ fn parse_where_delete_with_alias_statement() {
                 },
                 selection.unwrap(),
             );
+            assert_eq!(None, returning);
         }
         _ => unreachable!(),
     }

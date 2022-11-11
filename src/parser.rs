@@ -4070,10 +4070,17 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let returning = if self.parse_keyword(Keyword::RETURNING) {
+            Some(self.parse_comma_separated(Parser::parse_select_item)?)
+        } else {
+            None
+        };
+
         Ok(Statement::Delete {
             table_name,
             using,
             selection,
+            returning,
         })
     }
 
@@ -5191,12 +5198,38 @@ impl<'a> Parser<'a> {
 
             let source = Box::new(self.parse_query()?);
             let on = if self.parse_keyword(Keyword::ON) {
-                self.expect_keyword(Keyword::DUPLICATE)?;
-                self.expect_keyword(Keyword::KEY)?;
-                self.expect_keyword(Keyword::UPDATE)?;
-                let l = self.parse_comma_separated(Parser::parse_assignment)?;
+                if self.parse_keyword(Keyword::CONFLICT) {
+                    let conflict_target =
+                        self.parse_parenthesized_column_list(IsOptional::Optional)?;
 
-                Some(OnInsert::DuplicateKeyUpdate(l))
+                    self.expect_keyword(Keyword::DO)?;
+                    let action = if self.parse_keyword(Keyword::NOTHING) {
+                        OnConflictAction::DoNothing
+                    } else {
+                        self.expect_keyword(Keyword::UPDATE)?;
+                        self.expect_keyword(Keyword::SET)?;
+                        let l = self.parse_comma_separated(Parser::parse_assignment)?;
+                        OnConflictAction::DoUpdate(l)
+                    };
+
+                    Some(OnInsert::OnConflict(OnConflict {
+                        conflict_target,
+                        action,
+                    }))
+                } else {
+                    self.expect_keyword(Keyword::DUPLICATE)?;
+                    self.expect_keyword(Keyword::KEY)?;
+                    self.expect_keyword(Keyword::UPDATE)?;
+                    let l = self.parse_comma_separated(Parser::parse_assignment)?;
+
+                    Some(OnInsert::DuplicateKeyUpdate(l))
+                }
+            } else {
+                None
+            };
+
+            let returning = if self.parse_keyword(Keyword::RETURNING) {
+                Some(self.parse_comma_separated(Parser::parse_select_item)?)
             } else {
                 None
             };
@@ -5212,6 +5245,7 @@ impl<'a> Parser<'a> {
                 source,
                 table,
                 on,
+                returning,
             })
         }
     }
@@ -5230,11 +5264,17 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        let returning = if self.parse_keyword(Keyword::RETURNING) {
+            Some(self.parse_comma_separated(Parser::parse_select_item)?)
+        } else {
+            None
+        };
         Ok(Statement::Update {
             table,
             assignments,
             from,
             selection,
+            returning,
         })
     }
 

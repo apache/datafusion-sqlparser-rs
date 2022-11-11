@@ -814,6 +814,7 @@ fn parse_update_with_joins() {
             assignments,
             from: _from,
             selection,
+            returning,
         } => {
             assert_eq!(
                 TableWithJoins {
@@ -869,6 +870,7 @@ fn parse_update_with_joins() {
                 }),
                 selection
             );
+            assert_eq!(None, returning);
         }
         _ => unreachable!(),
     }

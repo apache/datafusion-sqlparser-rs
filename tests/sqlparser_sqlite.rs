@@ -133,6 +133,115 @@ fn test_placeholder() {
     );
 }
 
+#[test]
+fn parse_like() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}LIKE '%a'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = sqlite().verified_only_select(sql);
+        assert_eq!(
+            Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: None,
+            },
+            select.selection.unwrap()
+        );
+
+        // Test with escape char
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '\\'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = sqlite().verified_only_select(sql);
+        assert_eq!(
+            Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: Some('\\'),
+            },
+            select.selection.unwrap()
+        );
+
+        // This statement tests that LIKE and NOT LIKE have the same precedence.
+        // This was previously mishandled (#81).
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}LIKE '%a' IS NULL",
+            if negated { "NOT " } else { "" }
+        );
+        let select = sqlite().verified_only_select(sql);
+        assert_eq!(
+            Expr::IsNull(Box::new(Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: None,
+            })),
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
+}
+
+#[test]
+fn parse_similar_to() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = sqlite().verified_only_select(sql);
+        assert_eq!(
+            Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: None,
+            },
+            select.selection.unwrap()
+        );
+
+        // Test with escape char
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = sqlite().verified_only_select(sql);
+        assert_eq!(
+            Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: Some('\\'),
+            },
+            select.selection.unwrap()
+        );
+
+        // This statement tests that SIMILAR TO and NOT SIMILAR TO have the same precedence.
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL",
+            if negated { "NOT " } else { "" }
+        );
+        let select = sqlite().verified_only_select(sql);
+        assert_eq!(
+            Expr::IsNull(Box::new(Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: Some('\\'),
+            })),
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SQLiteDialect {})],

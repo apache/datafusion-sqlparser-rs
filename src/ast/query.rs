@@ -78,7 +78,7 @@ pub enum SetExpr {
     /// UNION/EXCEPT/INTERSECT of two queries
     SetOperation {
         op: SetOperator,
-        all: bool,
+        set_quantifier: SetQuantifier,
         left: Box<SetExpr>,
         right: Box<SetExpr>,
     },
@@ -98,10 +98,17 @@ impl fmt::Display for SetExpr {
                 left,
                 right,
                 op,
-                all,
+                set_quantifier,
             } => {
-                let all_str = if *all { " ALL" } else { "" };
-                write!(f, "{} {}{} {}", left, op, all_str, right)
+                write!(f, "{} {}", left, op)?;
+                match set_quantifier {
+                    SetQuantifier::All | SetQuantifier::Distinct => {
+                        write!(f, " {}", set_quantifier)?
+                    }
+                    SetQuantifier::None => write!(f, "{}", set_quantifier)?,
+                }
+                write!(f, " {}", right)?;
+                Ok(())
             }
         }
     }
@@ -125,6 +132,26 @@ impl fmt::Display for SetOperator {
     }
 }
 
+/// A quantifier for [SetOperator].
+// TODO: Restrict parsing specific SetQuantifier in some specific dialects.
+// For example, BigQuery does not support `DISTINCT` for `EXCEPT` and `INTERSECT`
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum SetQuantifier {
+    All,
+    Distinct,
+    None,
+}
+
+impl fmt::Display for SetQuantifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SetQuantifier::All => write!(f, "ALL"),
+            SetQuantifier::Distinct => write!(f, "DISTINCT"),
+            SetQuantifier::None => write!(f, ""),
+        }
+    }
+}
 /// A restricted variant of `SELECT` (without CTEs/`ORDER BY`), which may
 /// appear either as the only body item of a `Query`, or as an operand
 /// to a set operation like `UNION`.

@@ -28,4 +28,8 @@ impl Dialect for SnowflakeDialect {
             || ch == '$'
             || ch == '_'
     }
+
+    fn supports_within_after_array_aggregation(&self) -> bool {
+        true
+    }
 }

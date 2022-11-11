@@ -18,23 +18,23 @@
 //! sqlparser regardless of the chosen dialect (i.e. it doesn't conflict with
 //! dialect-specific parsing rules).
 
-#[macro_use]
-mod test_utils;
-
 use matches::assert_matches;
+
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, GenericDialect, HiveDialect, MsSqlDialect,
-    PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect,
+    MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
-
 use test_utils::{
     all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
     TestedDialects,
 };
+
+#[macro_use]
+mod test_utils;
 
 #[test]
 fn parse_insert_values() {
@@ -271,6 +271,7 @@ fn parse_update_set_from() {
                     Ident::new("id")
                 ])),
             }),
+            returning: None,
         }
     );
 }
@@ -284,6 +285,7 @@ fn parse_update_with_table_alias() {
             assignments,
             from: _from,
             selection,
+            returning,
         } => {
             assert_eq!(
                 TableWithJoins {
@@ -320,6 +322,7 @@ fn parse_update_with_table_alias() {
                 }),
                 selection
             );
+            assert_eq!(None, returning);
         }
         _ => unreachable!(),
     }
@@ -367,6 +370,7 @@ fn parse_where_delete_statement() {
             table_name,
             using,
             selection,
+            returning,
         } => {
             assert_eq!(
                 TableFactor::Table {
@@ -387,6 +391,7 @@ fn parse_where_delete_statement() {
                 },
                 selection.unwrap(),
             );
+            assert_eq!(None, returning);
         }
         _ => unreachable!(),
     }
@@ -402,6 +407,7 @@ fn parse_where_delete_with_alias_statement() {
             table_name,
             using,
             selection,
+            returning,
         } => {
             assert_eq!(
                 TableFactor::Table {
@@ -442,6 +448,7 @@ fn parse_where_delete_with_alias_statement() {
                 },
                 selection.unwrap(),
             );
+            assert_eq!(None, returning);
         }
         _ => unreachable!(),
     }
@@ -976,61 +983,6 @@ fn parse_not_precedence() {
 }
 
 #[test]
-fn parse_like() {
-    fn chk(negated: bool) {
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = verified_only_select(sql);
-        assert_eq!(
-            Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            },
-            select.selection.unwrap()
-        );
-
-        // Test with escape char
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '\\'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = verified_only_select(sql);
-        assert_eq!(
-            Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            },
-            select.selection.unwrap()
-        );
-
-        // This statement tests that LIKE and NOT LIKE have the same precedence.
-        // This was previously mishandled (#81).
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}LIKE '%a' IS NULL",
-            if negated { "NOT " } else { "" }
-        );
-        let select = verified_only_select(sql);
-        assert_eq!(
-            Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            })),
-            select.selection.unwrap()
-        );
-    }
-    chk(false);
-    chk(true);
-}
-
-#[test]
 fn parse_null_like() {
     let sql = "SELECT \
             column1 LIKE NULL AS col_null, \
@@ -1116,60 +1068,6 @@ fn parse_ilike() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            })),
-            select.selection.unwrap()
-        );
-    }
-    chk(false);
-    chk(true);
-}
-
-#[test]
-fn parse_similar_to() {
-    fn chk(negated: bool) {
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = verified_only_select(sql);
-        assert_eq!(
-            Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: None,
-            },
-            select.selection.unwrap()
-        );
-
-        // Test with escape char
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'",
-            if negated { "NOT " } else { "" }
-        );
-        let select = verified_only_select(sql);
-        assert_eq!(
-            Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
-            },
-            select.selection.unwrap()
-        );
-
-        // This statement tests that SIMILAR TO and NOT SIMILAR TO have the same precedence.
-        let sql = &format!(
-            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL",
-            if negated { "NOT " } else { "" }
-        );
-        let select = verified_only_select(sql);
-        assert_eq!(
-            Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
-                negated,
-                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
-                escape_char: Some('\\'),
             })),
             select.selection.unwrap()
         );
@@ -1717,15 +1615,9 @@ fn parse_cast() {
 
     verified_stmt("SELECT CAST(id AS NUMERIC) FROM customer");
 
-    one_statement_parses_to(
-        "SELECT CAST(id AS DEC) FROM customer",
-        "SELECT CAST(id AS NUMERIC) FROM customer",
-    );
+    verified_stmt("SELECT CAST(id AS DEC) FROM customer");
 
-    one_statement_parses_to(
-        "SELECT CAST(id AS DECIMAL) FROM customer",
-        "SELECT CAST(id AS NUMERIC) FROM customer",
-    );
+    verified_stmt("SELECT CAST(id AS DECIMAL) FROM customer");
 
     let sql = "SELECT CAST(id AS NVARCHAR(50)) FROM customer";
     let select = verified_only_select(sql);
@@ -1809,22 +1701,13 @@ fn parse_try_cast() {
         },
         expr_from_projection(only(&select.projection))
     );
-    one_statement_parses_to(
-        "SELECT TRY_CAST(id AS BIGINT) FROM customer",
-        "SELECT TRY_CAST(id AS BIGINT) FROM customer",
-    );
+    verified_stmt("SELECT TRY_CAST(id AS BIGINT) FROM customer");
 
     verified_stmt("SELECT TRY_CAST(id AS NUMERIC) FROM customer");
 
-    one_statement_parses_to(
-        "SELECT TRY_CAST(id AS DEC) FROM customer",
-        "SELECT TRY_CAST(id AS NUMERIC) FROM customer",
-    );
+    verified_stmt("SELECT TRY_CAST(id AS DEC) FROM customer");
 
-    one_statement_parses_to(
-        "SELECT TRY_CAST(id AS DECIMAL) FROM customer",
-        "SELECT TRY_CAST(id AS NUMERIC) FROM customer",
-    );
+    verified_stmt("SELECT TRY_CAST(id AS DECIMAL) FROM customer");
 }
 
 #[test]
@@ -1844,6 +1727,7 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(MONTH FROM d)");
     verified_stmt("SELECT EXTRACT(WEEK FROM d)");
     verified_stmt("SELECT EXTRACT(DAY FROM d)");
+    verified_stmt("SELECT EXTRACT(DATE FROM d)");
     verified_stmt("SELECT EXTRACT(HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(MINUTE FROM d)");
     verified_stmt("SELECT EXTRACT(SECOND FROM d)");
@@ -1987,6 +1871,27 @@ fn parse_listagg() {
         }),
         expr_from_projection(only(&select.projection))
     );
+}
+
+#[test]
+fn parse_array_agg_func() {
+    let supported_dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(MsSqlDialect {}),
+            Box::new(AnsiDialect {}),
+            Box::new(HiveDialect {}),
+        ],
+    };
+
+    for sql in [
+        "SELECT ARRAY_AGG(x ORDER BY x) AS a FROM T",
+        "SELECT ARRAY_AGG(x ORDER BY x LIMIT 2) FROM tbl",
+        "SELECT ARRAY_AGG(DISTINCT x ORDER BY x LIMIT 2) FROM tbl",
+    ] {
+        supported_dialects.verified_stmt(sql);
+    }
 }
 
 #[test]
@@ -2202,7 +2107,7 @@ fn parse_create_table_hive_array() {
                     },
                     ColumnDef {
                         name: Ident::new("val"),
-                        data_type: DataType::Array(Box::new(DataType::Int(None))),
+                        data_type: DataType::Array(Some(Box::new(DataType::Int(None)))),
                         collation: None,
                         options: vec![],
                     },
@@ -2212,12 +2117,20 @@ fn parse_create_table_hive_array() {
         _ => unreachable!(),
     }
 
-    let res =
-        parse_sql_statements("CREATE TABLE IF NOT EXISTS something (name int, val array<int)");
-    assert!(res
-        .unwrap_err()
-        .to_string()
-        .contains("Expected >, found: )"));
+    // SnowflakeDialect using array diffrent
+    let dialects = TestedDialects {
+        dialects: vec![
+            Box::new(PostgreSqlDialect {}),
+            Box::new(HiveDialect {}),
+            Box::new(MySqlDialect {}),
+        ],
+    };
+    let sql = "CREATE TABLE IF NOT EXISTS something (name int, val array<int)";
+
+    assert_eq!(
+        dialects.parse_sql_statements(sql).unwrap_err(),
+        ParserError::ParserError("Expected >, found: )".to_string())
+    );
 }
 
 #[test]
@@ -3127,7 +3040,7 @@ fn parse_literal_time() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::Time(TimezoneInfo::None),
+            data_type: DataType::Time(None, TimezoneInfo::None),
             value: "01:23:34".into(),
         },
         expr_from_projection(only(&select.projection)),
@@ -3140,7 +3053,7 @@ fn parse_literal_datetime() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::Datetime,
+            data_type: DataType::Datetime(None),
             value: "1999-01-01 01:23:34.45".into(),
         },
         expr_from_projection(only(&select.projection)),
@@ -3153,7 +3066,7 @@ fn parse_literal_timestamp_without_time_zone() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::Timestamp(TimezoneInfo::None),
+            data_type: DataType::Timestamp(None, TimezoneInfo::None),
             value: "1999-01-01 01:23:34".into(),
         },
         expr_from_projection(only(&select.projection)),
@@ -3168,7 +3081,7 @@ fn parse_literal_timestamp_with_time_zone() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::Timestamp(TimezoneInfo::Tz),
+            data_type: DataType::Timestamp(None, TimezoneInfo::Tz),
             value: "1999-01-01 01:23:34Z".into(),
         },
         expr_from_projection(only(&select.projection)),
@@ -3546,59 +3459,6 @@ fn parse_unnest() {
             joins: vec![],
         }],
     );
-}
-
-#[test]
-fn parse_delimited_identifiers() {
-    // check that quoted identifiers in any position remain quoted after serialization
-    let select = verified_only_select(
-        r#"SELECT "alias"."bar baz", "myfun"(), "simple id" AS "column alias" FROM "a table" AS "alias""#,
-    );
-    // check FROM
-    match only(select.from).relation {
-        TableFactor::Table {
-            name,
-            alias,
-            args,
-            with_hints,
-        } => {
-            assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
-            assert!(args.is_none());
-            assert!(with_hints.is_empty());
-        }
-        _ => panic!("Expecting TableFactor::Table"),
-    }
-    // check SELECT
-    assert_eq!(3, select.projection.len());
-    assert_eq!(
-        &Expr::CompoundIdentifier(vec![
-            Ident::with_quote('"', "alias"),
-            Ident::with_quote('"', "bar baz"),
-        ]),
-        expr_from_projection(&select.projection[0]),
-    );
-    assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
-            args: vec![],
-            over: None,
-            distinct: false,
-            special: false,
-        }),
-        expr_from_projection(&select.projection[1]),
-    );
-    match &select.projection[2] {
-        SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
-        }
-        _ => panic!("Expected ExprWithAlias"),
-    }
-
-    verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
-    verified_stmt(r#"ALTER TABLE foo ADD CONSTRAINT "bar" PRIMARY KEY (baz)"#);
-    //TODO verified_stmt(r#"UPDATE foo SET "bar" = 5"#);
 }
 
 #[test]
@@ -4167,14 +4027,17 @@ fn parse_derived_tables() {
 }
 
 #[test]
-fn parse_union() {
+fn parse_union_except_intersect() {
     // TODO: add assertions
     verified_stmt("SELECT 1 UNION SELECT 2");
     verified_stmt("SELECT 1 UNION ALL SELECT 2");
+    verified_stmt("SELECT 1 UNION DISTINCT SELECT 1");
     verified_stmt("SELECT 1 EXCEPT SELECT 2");
     verified_stmt("SELECT 1 EXCEPT ALL SELECT 2");
+    verified_stmt("SELECT 1 EXCEPT DISTINCT SELECT 1");
     verified_stmt("SELECT 1 INTERSECT SELECT 2");
     verified_stmt("SELECT 1 INTERSECT ALL SELECT 2");
+    verified_stmt("SELECT 1 INTERSECT DISTINCT SELECT 1");
     verified_stmt("SELECT 1 UNION SELECT 2 UNION SELECT 3");
     verified_stmt("SELECT 1 EXCEPT SELECT 2 UNION SELECT 3"); // Union[Except[1,2], 3]
     verified_stmt("SELECT 1 INTERSECT (SELECT 2 EXCEPT SELECT 3)");
@@ -4183,6 +4046,7 @@ fn parse_union() {
     verified_stmt("SELECT 1 UNION SELECT 2 INTERSECT SELECT 3"); // Union[1, Intersect[2,3]]
     verified_stmt("SELECT foo FROM tab UNION SELECT bar FROM TAB");
     verified_stmt("(SELECT * FROM new EXCEPT SELECT * FROM old) UNION ALL (SELECT * FROM old EXCEPT SELECT * FROM new) ORDER BY 1");
+    verified_stmt("(SELECT * FROM new EXCEPT DISTINCT SELECT * FROM old) UNION DISTINCT (SELECT * FROM old EXCEPT DISTINCT SELECT * FROM new) ORDER BY 1");
 }
 
 #[test]

@@ -43,6 +43,7 @@ pub use self::value::{
     escape_quoted_string, DateTimeField, DollarQuotedString, TrimWhereField, Value,
 };
 
+pub use crate::location::{Located, Location, Range};
 #[cfg(feature = "visitor")]
 pub use visitor::*;
 
@@ -107,7 +108,7 @@ pub struct Ident {
 
 impl Ident {
     /// Create a new identifier with the given value and no quotes.
-    pub fn new<S>(value: S) -> Self
+    pub fn new_unlocated<S>(value: S) -> Self
     where
         S: Into<String>,
     {
@@ -117,9 +118,24 @@ impl Ident {
         }
     }
 
+    /// Create a new identifier with the given value and no quotes.
+    pub fn new<S>(value: S) -> Located<Self>
+    where
+        S: Into<String>,
+    {
+        Located::new(Ident::new_unlocated(value), None)
+    }
+
+    pub fn new_located<S>(value: S, range: Range) -> Located<Self>
+    where
+        S: Into<String>,
+    {
+        Located::new(Ident::new_unlocated(value), range.into_option())
+    }
+
     /// Create a new quoted identifier with the given quote and value. This function
     /// panics if the given quote is not a valid quote character.
-    pub fn with_quote<S>(quote: char, value: S) -> Self
+    pub fn with_quote_unlocated<S>(quote: char, value: S) -> Self
     where
         S: Into<String>,
     {
@@ -129,6 +145,27 @@ impl Ident {
             quote_style: Some(quote),
         }
     }
+
+    pub fn with_quote<S>(quote: char, value: S) -> Located<Self>
+    where
+        S: Into<String>,
+    {
+        Located::new(Ident::with_quote_unlocated(quote, value), None)
+    }
+
+    pub fn with_quote_located<S>(quote: char, value: S, range: Range) -> Located<Self>
+    where
+        S: Into<String>,
+    {
+        Located::new(
+            Ident::with_quote_unlocated(quote, value),
+            range.into_option(),
+        )
+    }
+
+    pub fn into_located(self, range: Range) -> Located<Self> {
+        Located::new(self, range.into_option())
+    }
 }
 
 impl From<&str> for Ident {
@@ -137,6 +174,18 @@ impl From<&str> for Ident {
             value: value.to_string(),
             quote_style: None,
         }
+    }
+}
+
+impl From<&str> for Located<Ident> {
+    fn from(value: &str) -> Self {
+        Located::new(
+            Ident {
+                value: value.to_string(),
+                quote_style: None,
+            },
+            None,
+        )
     }
 }
 
@@ -158,7 +207,7 @@ impl fmt::Display for Ident {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ObjectName(pub Vec<Ident>);
+pub struct ObjectName(pub Vec<Located<Ident>>);
 
 impl fmt::Display for ObjectName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -264,9 +313,9 @@ impl fmt::Display for JsonOperator {
 )]
 pub enum Expr {
     /// Identifier e.g. table name or column name
-    Identifier(Ident),
+    Identifier(Located<Ident>),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
-    CompoundIdentifier(Vec<Ident>),
+    CompoundIdentifier(Vec<Located<Ident>>),
     /// JSON access (postgres)  eg: data->'tags'
     JsonAccess {
         left: Box<Expr>,
@@ -274,7 +323,10 @@ pub enum Expr {
         right: Box<Expr>,
     },
     /// CompositeAccess (postgres) eg: SELECT (information_schema._pg_expandarray(array['i','i'])).n
-    CompositeAccess { expr: Box<Expr>, key: Ident },
+    CompositeAccess {
+        expr: Box<Expr>,
+        key: Located<Ident>,
+    },
     /// `IS FALSE` operator
     IsFalse(Box<Expr>),
     /// `IS NOT FALSE` operator
@@ -518,7 +570,7 @@ pub enum Expr {
     /// [(1)]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-search.html#function_match
     MatchAgainst {
         /// `(<col>, <col>, ...)`.
-        columns: Vec<Ident>,
+        columns: Vec<Located<Ident>>,
         /// `<expr>`.
         match_value: Value,
         /// `<search modifier>`
@@ -1114,7 +1166,7 @@ pub enum Statement {
         table_name: ObjectName,
         partitions: Option<Vec<Expr>>,
         for_columns: bool,
-        columns: Vec<Ident>,
+        columns: Vec<Located<Ident>>,
         cache_metadata: bool,
         noscan: bool,
         compute_statistics: bool,
@@ -1144,7 +1196,7 @@ pub enum Statement {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         /// COLUMNS
-        columns: Vec<Ident>,
+        columns: Vec<Located<Ident>>,
         /// Overwrite (Hive)
         overwrite: bool,
         /// A SQL query that specifies what to insert
@@ -1152,7 +1204,7 @@ pub enum Statement {
         /// partitioned insert (Hive)
         partitioned: Option<Vec<Expr>>,
         /// Columns defined after PARTITION
-        after_columns: Vec<Ident>,
+        after_columns: Vec<Located<Ident>>,
         /// whether the insert has the table keyword (Hive)
         table: bool,
         on: Option<OnInsert>,
@@ -1172,7 +1224,7 @@ pub enum Statement {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         /// COLUMNS
-        columns: Vec<Ident>,
+        columns: Vec<Located<Ident>>,
         /// If true, is a 'COPY TO' statement. If false is a 'COPY FROM'
         to: bool,
         /// The source of 'COPY FROM', or the target of 'COPY TO'
@@ -1219,10 +1271,10 @@ pub enum Statement {
         materialized: bool,
         /// View name
         name: ObjectName,
-        columns: Vec<Ident>,
+        columns: Vec<Located<Ident>>,
         query: Box<Query>,
         with_options: Vec<SqlOption>,
-        cluster_by: Vec<Ident>,
+        cluster_by: Vec<Located<Ident>>,
     },
     /// CREATE TABLE
     CreateTable {
@@ -1260,8 +1312,8 @@ pub enum Statement {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         name: ObjectName,
         if_not_exists: bool,
-        module_name: Ident,
-        module_args: Vec<Ident>,
+        module_name: Located<Ident>,
+        module_args: Vec<Located<Ident>>,
     },
     /// CREATE INDEX
     CreateIndex {
@@ -1269,7 +1321,7 @@ pub enum Statement {
         name: ObjectName,
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
-        using: Option<Ident>,
+        using: Option<Located<Ident>>,
         columns: Vec<OrderByExpr>,
         unique: bool,
         if_not_exists: bool,
@@ -1290,11 +1342,11 @@ pub enum Statement {
         replication: Option<bool>,
         connection_limit: Option<Expr>,
         valid_until: Option<Expr>,
-        in_role: Vec<Ident>,
-        in_group: Vec<Ident>,
-        role: Vec<Ident>,
-        user: Vec<Ident>,
-        admin: Vec<Ident>,
+        in_role: Vec<Located<Ident>>,
+        in_group: Vec<Located<Ident>>,
+        role: Vec<Located<Ident>>,
+        user: Vec<Located<Ident>>,
+        admin: Vec<Located<Ident>>,
         // MSSQL
         authorization_owner: Option<ObjectName>,
     },
@@ -1341,7 +1393,7 @@ pub enum Statement {
     /// but may also compatible with other SQL.
     Declare {
         /// Cursor name
-        name: Ident,
+        name: Located<Ident>,
         /// Causes the cursor to return data in binary rather than in text format.
         binary: bool,
         /// None = Not specified
@@ -1364,7 +1416,7 @@ pub enum Statement {
     /// but may also compatible with other SQL.
     Fetch {
         /// Cursor name
-        name: Ident,
+        name: Located<Ident>,
         direction: FetchDirection,
         /// Optional, It's possible to fetch rows form cursor to the table
         into: Option<ObjectName>,
@@ -1384,7 +1436,7 @@ pub enum Statement {
         /// Non-ANSI optional identifier to inform if the role is defined inside the current session (`SESSION`) or transaction (`LOCAL`).
         context_modifier: ContextModifier,
         /// Role name. If NONE is specified, then the current role name is removed.
-        role_name: Option<Ident>,
+        role_name: Option<Located<Ident>>,
     },
     /// ```sql
     /// SET <variable>
@@ -1426,7 +1478,7 @@ pub enum Statement {
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    ShowVariable { variable: Vec<Ident> },
+    ShowVariable { variable: Vec<Located<Ident>> },
     /// SHOW VARIABLES
     ///
     /// Note: this is a MySQL-specific statement.
@@ -1454,7 +1506,7 @@ pub enum Statement {
     ShowTables {
         extended: bool,
         full: bool,
-        db_name: Option<Ident>,
+        db_name: Option<Located<Ident>>,
         filter: Option<ShowStatementFilter>,
     },
     /// SHOW COLLATION
@@ -1464,7 +1516,7 @@ pub enum Statement {
     /// USE
     ///
     /// Note: This is a MySQL-specific statement.
-    Use { db_name: Ident },
+    Use { db_name: Located<Ident> },
     /// `{ BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...`
     StartTransaction { modes: Vec<TransactionMode> },
     /// `SET TRANSACTION ...`
@@ -1523,31 +1575,34 @@ pub enum Statement {
     Grant {
         privileges: Privileges,
         objects: GrantObjects,
-        grantees: Vec<Ident>,
+        grantees: Vec<Located<Ident>>,
         with_grant_option: bool,
-        granted_by: Option<Ident>,
+        granted_by: Option<Located<Ident>>,
     },
     /// REVOKE privileges ON objects FROM grantees
     Revoke {
         privileges: Privileges,
         objects: GrantObjects,
-        grantees: Vec<Ident>,
-        granted_by: Option<Ident>,
+        grantees: Vec<Located<Ident>>,
+        granted_by: Option<Located<Ident>>,
         cascade: bool,
     },
     /// `DEALLOCATE [ PREPARE ] { name | ALL }`
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Deallocate { name: Ident, prepare: bool },
+    Deallocate { name: Located<Ident>, prepare: bool },
     /// `EXECUTE name [ ( parameter [, ...] ) ]`
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Execute { name: Ident, parameters: Vec<Expr> },
+    Execute {
+        name: Located<Ident>,
+        parameters: Vec<Expr>,
+    },
     /// `PREPARE name [ ( data_type [, ...] ) ] AS statement`
     ///
     /// Note: this is a PostgreSQL-specific statement.
     Prepare {
-        name: Ident,
+        name: Located<Ident>,
         data_types: Vec<DataType>,
         statement: Box<Statement>,
     },
@@ -1583,7 +1638,7 @@ pub enum Statement {
         format: Option<AnalyzeFormat>,
     },
     /// SAVEPOINT -- define a new savepoint within the current transaction
-    Savepoint { name: Ident },
+    Savepoint { name: Located<Ident> },
     // MERGE INTO statement, based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
     Merge {
         // optional INTO keyword
@@ -2844,7 +2899,7 @@ pub struct OnConflict {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ConflictTarget {
-    Columns(Vec<Ident>),
+    Columns(Vec<Located<Ident>>),
     OnConstraint(ObjectName),
 }
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -3026,13 +3081,21 @@ pub enum Action {
     Create,
     Delete,
     Execute,
-    Insert { columns: Option<Vec<Ident>> },
-    References { columns: Option<Vec<Ident>> },
-    Select { columns: Option<Vec<Ident>> },
+    Insert {
+        columns: Option<Vec<Located<Ident>>>,
+    },
+    References {
+        columns: Option<Vec<Located<Ident>>>,
+    },
+    Select {
+        columns: Option<Vec<Located<Ident>>>,
+    },
     Temporary,
     Trigger,
     Truncate,
-    Update { columns: Option<Vec<Ident>> },
+    Update {
+        columns: Option<Vec<Located<Ident>>>,
+    },
     Usage,
 }
 
@@ -3119,7 +3182,7 @@ impl fmt::Display for GrantObjects {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Assignment {
-    pub id: Vec<Ident>,
+    pub id: Vec<Located<Ident>>,
     pub value: Expr,
 }
 
@@ -3154,7 +3217,10 @@ impl fmt::Display for FunctionArgExpr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FunctionArg {
-    Named { name: Ident, arg: FunctionArgExpr },
+    Named {
+        name: Located<Ident>,
+        arg: FunctionArgExpr,
+    },
     Unnamed(FunctionArgExpr),
 }
 
@@ -3172,7 +3238,7 @@ impl fmt::Display for FunctionArg {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CloseCursor {
     All,
-    Specific { name: Ident },
+    Specific { name: Located<Ident> },
 }
 
 impl fmt::Display for CloseCursor {
@@ -3438,7 +3504,7 @@ pub enum HiveDistributionStyle {
         columns: Vec<ColumnDef>,
     },
     CLUSTERED {
-        columns: Vec<Ident>,
+        columns: Vec<Located<Ident>>,
         sorted_by: Vec<ColumnDef>,
         num_buckets: i32,
     },
@@ -3485,7 +3551,7 @@ pub struct HiveFormat {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct SqlOption {
-    pub name: Ident,
+    pub name: Located<Ident>,
     pub value: Value,
 }
 
@@ -3650,7 +3716,7 @@ pub enum OnCommit {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CopyOption {
     /// FORMAT format_name
-    Format(Ident),
+    Format(Located<Ident>),
     /// FREEZE \[ boolean \]
     Freeze(bool),
     /// DELIMITER 'delimiter_character'
@@ -3664,11 +3730,11 @@ pub enum CopyOption {
     /// ESCAPE 'escape_character'
     Escape(char),
     /// FORCE_QUOTE { ( column_name [, ...] ) | * }
-    ForceQuote(Vec<Ident>),
+    ForceQuote(Vec<Located<Ident>>),
     /// FORCE_NOT_NULL ( column_name [, ...] )
-    ForceNotNull(Vec<Ident>),
+    ForceNotNull(Vec<Located<Ident>>),
     /// FORCE_NULL ( column_name [, ...] )
-    ForceNull(Vec<Ident>),
+    ForceNull(Vec<Located<Ident>>),
     /// ENCODING 'encoding_name'
     Encoding(String),
 }
@@ -3739,9 +3805,9 @@ pub enum CopyLegacyCsvOption {
     /// ESCAPE \[ AS \] 'escape_character'
     Escape(char),
     /// FORCE QUOTE { column_name [, ...] | * }
-    ForceQuote(Vec<Ident>),
+    ForceQuote(Vec<Located<Ident>>),
     /// FORCE NOT NULL column_name [, ...]
-    ForceNotNull(Vec<Ident>),
+    ForceNotNull(Vec<Located<Ident>>),
 }
 
 impl fmt::Display for CopyLegacyCsvOption {
@@ -3771,7 +3837,7 @@ pub enum MergeClause {
     MatchedDelete(Option<Expr>),
     NotMatched {
         predicate: Option<Expr>,
-        columns: Vec<Ident>,
+        columns: Vec<Located<Ident>>,
         values: Values,
     },
 }
@@ -3914,7 +3980,7 @@ impl fmt::Display for DropFunctionDesc {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct OperateFunctionArg {
     pub mode: Option<ArgMode>,
-    pub name: Option<Ident>,
+    pub name: Option<Located<Ident>>,
     pub data_type: DataType,
     pub default_expr: Option<Expr>,
 }
@@ -4024,7 +4090,7 @@ impl fmt::Display for FunctionDefinition {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct CreateFunctionBody {
     /// LANGUAGE lang_name
-    pub language: Option<Ident>,
+    pub language: Option<Located<Ident>>,
     /// IMMUTABLE | STABLE | VOLATILE
     pub behavior: Option<FunctionBehavior>,
     /// AS 'definition'
@@ -4088,9 +4154,9 @@ pub enum SchemaName {
     /// Only schema name specified: `<schema name>`.
     Simple(ObjectName),
     /// Only authorization identifier specified: `AUTHORIZATION <schema authorization identifier>`.
-    UnnamedAuthorization(Ident),
+    UnnamedAuthorization(Located<Ident>),
     /// Both schema name and authorization identifier specified: `<schema name>  AUTHORIZATION <schema authorization identifier>`.
-    NamedAuthorization(ObjectName, Ident),
+    NamedAuthorization(ObjectName, Located<Ident>),
 }
 
 impl fmt::Display for SchemaName {

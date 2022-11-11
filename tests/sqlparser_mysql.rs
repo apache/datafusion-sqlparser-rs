@@ -447,10 +447,9 @@ fn parse_quote_identifiers_2() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: false,
                 top: None,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "quoted ` identifier".into(),
-                    quote_style: Some('`'),
-                }))],
+                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(
+                    Ident::with_quote('`', "quoted ` identifier")
+                ))],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -481,10 +480,9 @@ fn parse_quote_identifiers_3() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: false,
                 top: None,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "`quoted identifier`".into(),
-                    quote_style: Some('`'),
-                }))],
+                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(
+                    Ident::with_quote('`', "`quoted identifier`")
+                ))],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -979,10 +977,7 @@ fn parse_substring_in_select() {
                         distinct: true,
                         top: None,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
-                            expr: Box::new(Expr::Identifier(Ident {
-                                value: "description".to_string(),
-                                quote_style: None
-                            })),
+                            expr: Box::new(Expr::Identifier(Ident::new("description"))),
                             substring_from: Some(Box::new(Expr::Value(Value::Number(
                                 "0".to_string(),
                                 false
@@ -995,10 +990,7 @@ fn parse_substring_in_select() {
                         into: None,
                         from: vec![TableWithJoins {
                             relation: TableFactor::Table {
-                                name: ObjectName(vec![Ident {
-                                    value: "test".to_string(),
-                                    quote_style: None
-                                }]),
+                                name: ObjectName(vec![Ident::new("test")]),
                                 alias: None,
                                 args: None,
                                 with_hints: vec![]

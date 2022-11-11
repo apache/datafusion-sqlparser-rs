@@ -56,6 +56,7 @@ pub mod ast;
 #[macro_use]
 pub mod dialect;
 pub mod keywords;
+pub mod location;
 pub mod parser;
 pub mod tokenizer;
 

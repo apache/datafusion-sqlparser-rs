@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::*;
+use crate::location::Located;
 
 /// The most complete variant of a `SELECT` query expression, optionally
 /// including `WITH`, `UNION` / other set operations, and `ORDER BY`.
@@ -283,7 +284,7 @@ pub struct LateralView {
     /// LATERAL VIEW table name
     pub lateral_view_name: ObjectName,
     /// LATERAL VIEW optional column aliases
-    pub lateral_col_alias: Vec<Ident>,
+    pub lateral_col_alias: Vec<Located<Ident>>,
     /// LATERAL VIEW OUTER
     pub outer: bool,
 }
@@ -337,7 +338,7 @@ impl fmt::Display for With {
 pub struct Cte {
     pub alias: TableAlias,
     pub query: Box<Query>,
-    pub from: Option<Ident>,
+    pub from: Option<Located<Ident>>,
 }
 
 impl fmt::Display for Cte {
@@ -358,7 +359,7 @@ pub enum SelectItem {
     /// Any expression, not followed by `[ AS ] alias`
     UnnamedExpr(Expr),
     /// An expression, followed by `[ AS ] alias`
-    ExprWithAlias { expr: Expr, alias: Ident },
+    ExprWithAlias { expr: Expr, alias: Located<Ident> },
     /// `alias.*` or even `schema.table.*`
     QualifiedWildcard(ObjectName, WildcardAdditionalOptions),
     /// An unqualified `*`
@@ -375,8 +376,8 @@ pub enum SelectItem {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct IdentWithAlias {
-    pub ident: Ident,
-    pub alias: Ident,
+    pub ident: Located<Ident>,
+    pub alias: Located<Ident>,
 }
 
 impl fmt::Display for IdentWithAlias {
@@ -430,13 +431,13 @@ pub enum ExcludeSelectItem {
     /// ```plaintext
     /// <col_name>
     /// ```
-    Single(Ident),
+    Single(Located<Ident>),
     /// Multiple column names inside parenthesis.
     /// # Syntax
     /// ```plaintext
     /// (<col_name>, <col_name>, ...)
     /// ```
-    Multiple(Vec<Ident>),
+    Multiple(Vec<Located<Ident>>),
 }
 
 impl fmt::Display for ExcludeSelectItem {
@@ -506,9 +507,9 @@ impl fmt::Display for RenameSelectItem {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ExceptSelectItem {
     /// First guaranteed column.
-    pub first_element: Ident,
+    pub first_element: Located<Ident>,
     /// Additional columns. This list can be empty.
-    pub additional_elements: Vec<Ident>,
+    pub additional_elements: Vec<Located<Ident>>,
 }
 
 impl fmt::Display for ExceptSelectItem {
@@ -609,7 +610,7 @@ pub enum TableFactor {
         alias: Option<TableAlias>,
         array_expr: Box<Expr>,
         with_offset: bool,
-        with_offset_alias: Option<Ident>,
+        with_offset_alias: Option<Located<Ident>>,
     },
     /// Represents a parenthesized table factor. The SQL spec only allows a
     /// join expression (`(foo <JOIN> bar [ <JOIN> baz ... ])`) to be nested,
@@ -701,8 +702,8 @@ impl fmt::Display for TableFactor {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableAlias {
-    pub name: Ident,
-    pub columns: Vec<Ident>,
+    pub name: Located<Ident>,
+    pub columns: Vec<Located<Ident>>,
 }
 
 impl fmt::Display for TableAlias {
@@ -838,7 +839,7 @@ pub enum JoinOperator {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum JoinConstraint {
     On(Expr),
-    Using(Vec<Ident>),
+    Using(Vec<Located<Ident>>),
     Natural,
     None,
 }

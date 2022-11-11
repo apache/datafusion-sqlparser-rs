@@ -17,6 +17,7 @@ use test_utils::*;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
+use sqlparser::location::Located;
 
 #[test]
 fn parse_literal_string() {
@@ -35,7 +36,7 @@ fn parse_literal_string() {
 
 #[test]
 fn parse_table_identifiers() {
-    fn test_table_ident(ident: &str, expected: Vec<Ident>) {
+    fn test_table_ident(ident: &str, expected: Vec<Located<Ident>>) {
         let sql = format!("SELECT 1 FROM {}", ident);
         let select = bigquery().verified_only_select(&sql);
         assert_eq!(

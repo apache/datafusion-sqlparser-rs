@@ -25,6 +25,7 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{display_comma_separated, display_separated, DataType, Expr, Ident, ObjectName};
+use crate::location::Located;
 use crate::tokenizer::Token;
 
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation
@@ -46,12 +47,12 @@ pub enum AlterTableOperation {
     /// `DROP CONSTRAINT [ IF EXISTS ] <name>`
     DropConstraint {
         if_exists: bool,
-        name: Ident,
+        name: Located<Ident>,
         cascade: bool,
     },
     /// `DROP [ COLUMN ] [ IF EXISTS ] <column_name> [ CASCADE ]`
     DropColumn {
-        column_name: Ident,
+        column_name: Located<Ident>,
         if_exists: bool,
         cascade: bool,
     },
@@ -75,25 +76,28 @@ pub enum AlterTableOperation {
     },
     /// `RENAME [ COLUMN ] <old_column_name> TO <new_column_name>`
     RenameColumn {
-        old_column_name: Ident,
-        new_column_name: Ident,
+        old_column_name: Located<Ident>,
+        new_column_name: Located<Ident>,
     },
     /// `RENAME TO <table_name>`
     RenameTable { table_name: ObjectName },
     // CHANGE [ COLUMN ] <old_name> <new_name> <data_type> [ <options> ]
     ChangeColumn {
-        old_name: Ident,
-        new_name: Ident,
+        old_name: Located<Ident>,
+        new_name: Located<Ident>,
         data_type: DataType,
         options: Vec<ColumnOption>,
     },
     /// `RENAME CONSTRAINT <old_constraint_name> TO <new_constraint_name>`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    RenameConstraint { old_name: Ident, new_name: Ident },
+    RenameConstraint {
+        old_name: Located<Ident>,
+        new_name: Located<Ident>,
+    },
     /// `ALTER [ COLUMN ]`
     AlterColumn {
-        column_name: Ident,
+        column_name: Located<Ident>,
         op: AlterColumnOperation,
     },
 }
@@ -272,8 +276,8 @@ impl fmt::Display for AlterColumnOperation {
 pub enum TableConstraint {
     /// `[ CONSTRAINT <name> ] { PRIMARY KEY | UNIQUE } (<columns>)`
     Unique {
-        name: Option<Ident>,
-        columns: Vec<Ident>,
+        name: Option<Located<Ident>>,
+        columns: Vec<Located<Ident>>,
         /// Whether this is a `PRIMARY KEY` or just a `UNIQUE` constraint
         is_primary: bool,
     },
@@ -283,16 +287,16 @@ pub enum TableConstraint {
     ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
     /// }`).
     ForeignKey {
-        name: Option<Ident>,
-        columns: Vec<Ident>,
+        name: Option<Located<Ident>>,
+        columns: Vec<Located<Ident>>,
         foreign_table: ObjectName,
-        referred_columns: Vec<Ident>,
+        referred_columns: Vec<Located<Ident>>,
         on_delete: Option<ReferentialAction>,
         on_update: Option<ReferentialAction>,
     },
     /// `[ CONSTRAINT <name> ] CHECK (<expr>)`
     Check {
-        name: Option<Ident>,
+        name: Option<Located<Ident>>,
         expr: Box<Expr>,
     },
     /// MySQLs [index definition][1] for index creation. Not present on ANSI so, for now, the usage
@@ -305,13 +309,13 @@ pub enum TableConstraint {
         /// Whether this index starts with KEY (true) or INDEX (false), to maintain the same syntax.
         display_as_key: bool,
         /// Index name.
-        name: Option<Ident>,
+        name: Option<Located<Ident>>,
         /// Optional [index type][1].
         ///
         /// [1]: IndexType
         index_type: Option<IndexType>,
         /// Referred column identifier list.
-        columns: Vec<Ident>,
+        columns: Vec<Located<Ident>>,
     },
     /// MySQLs [fulltext][1] definition. Since the [`SPATIAL`][2] definition is exactly the same,
     /// and MySQL displays both the same way, it is part of this definition as well.
@@ -332,9 +336,9 @@ pub enum TableConstraint {
         /// Whether the type is followed by the keyword `KEY`, `INDEX`, or no keyword at all.
         index_type_display: KeyOrIndexDisplay,
         /// Optional index name.
-        opt_index_name: Option<Ident>,
+        opt_index_name: Option<Located<Ident>>,
         /// Referred column identifier list.
-        columns: Vec<Ident>,
+        columns: Vec<Located<Ident>>,
     },
 }
 
@@ -490,7 +494,7 @@ impl fmt::Display for IndexType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ColumnDef {
-    pub name: Ident,
+    pub name: Located<Ident>,
     pub data_type: DataType,
     pub collation: Option<ObjectName>,
     pub options: Vec<ColumnOptionDef>,
@@ -526,7 +530,7 @@ impl fmt::Display for ColumnDef {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ColumnOptionDef {
-    pub name: Option<Ident>,
+    pub name: Option<Located<Ident>>,
     pub option: ColumnOption,
 }
 
@@ -559,7 +563,7 @@ pub enum ColumnOption {
     /// }`).
     ForeignKey {
         foreign_table: ObjectName,
-        referred_columns: Vec<Ident>,
+        referred_columns: Vec<Located<Ident>>,
         on_delete: Option<ReferentialAction>,
         on_update: Option<ReferentialAction>,
     },
@@ -611,8 +615,8 @@ impl fmt::Display for ColumnOption {
     }
 }
 
-fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
-    struct ConstraintName<'a>(&'a Option<Ident>);
+fn display_constraint_name(name: &'_ Option<Located<Ident>>) -> impl fmt::Display + '_ {
+    struct ConstraintName<'a>(&'a Option<Located<Ident>>);
     impl<'a> fmt::Display for ConstraintName<'a> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             if let Some(name) = self.0 {

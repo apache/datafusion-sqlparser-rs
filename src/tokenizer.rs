@@ -38,6 +38,7 @@ use crate::ast::DollarQuotedString;
 use crate::dialect::SnowflakeDialect;
 use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
+pub use crate::location::Location;
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -264,6 +265,19 @@ impl Token {
             },
         })
     }
+
+    pub fn make_ident(ident: &str) -> Self {
+        Token::make_word(ident, Some('\"'))
+    }
+
+    pub fn from_keyword(keyword: Keyword) -> Self {
+        let index = ALL_KEYWORDS_INDEX.binary_search(&keyword).unwrap();
+        Token::Word(Word {
+            value: ALL_KEYWORDS[index].to_string(),
+            quote_style: None,
+            keyword,
+        })
+    }
 }
 
 /// A keyword (like SELECT) or an optionally quoted SQL identifier
@@ -327,15 +341,6 @@ impl fmt::Display for Whitespace {
             Whitespace::MultiLineComment(s) => write!(f, "/*{}*/", s),
         }
     }
-}
-
-/// Location in input string
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Location {
-    /// Line number, starting from 1
-    pub line: u64,
-    /// Line column, starting from 1
-    pub column: u64,
 }
 
 /// A [Token] with [Location] attached to it
@@ -445,7 +450,7 @@ impl<'a> Tokenizer<'a> {
 
     /// Tokenize the statement and produce a vector of tokens
     pub fn tokenize(&mut self) -> Result<Vec<Token>, TokenizerError> {
-        let twl = self.tokenize_with_location()?;
+        let (twl, _) = self.tokenize_with_location()?;
 
         let mut tokens: Vec<Token> = vec![];
         tokens.reserve(twl.len());
@@ -456,7 +461,9 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Tokenize the statement and produce a vector of tokens with location information
-    pub fn tokenize_with_location(&mut self) -> Result<Vec<TokenWithLocation>, TokenizerError> {
+    pub fn tokenize_with_location(
+        &mut self,
+    ) -> Result<(Vec<TokenWithLocation>, Location), TokenizerError> {
         let mut state = State {
             peekable: self.query.chars().peekable(),
             line: 1,
@@ -474,7 +481,7 @@ impl<'a> Tokenizer<'a> {
 
             location = state.location();
         }
-        Ok(tokens)
+        Ok((tokens, state.location()))
     }
 
     /// Get the next token or return None
@@ -1813,7 +1820,7 @@ mod tests {
         let sql = "SELECT a,\n b";
         let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, sql);
-        let tokens = tokenizer.tokenize_with_location().unwrap();
+        let (tokens, _) = tokenizer.tokenize_with_location().unwrap();
         let expected = vec![
             TokenWithLocation::new(Token::make_keyword("SELECT"), 1, 1),
             TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 1, 7),

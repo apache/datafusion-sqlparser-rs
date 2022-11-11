@@ -23,24 +23,15 @@ fn test_square_brackets_over_db_schema_table_name() {
     let select = redshift().verified_only_select("SELECT [col1] FROM [test_schema].[test_table]");
     assert_eq!(
         select.projection[0],
-        SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-            value: "col1".to_string(),
-            quote_style: Some('[')
-        })),
+        SelectItem::UnnamedExpr(Expr::Identifier(Ident::with_quote('[', "col1"))),
     );
     assert_eq!(
         select.from[0],
         TableWithJoins {
             relation: TableFactor::Table {
                 name: ObjectName(vec![
-                    Ident {
-                        value: "test_schema".to_string(),
-                        quote_style: Some('[')
-                    },
-                    Ident {
-                        value: "test_table".to_string(),
-                        quote_style: Some('[')
-                    }
+                    Ident::with_quote('[', "test_schema"),
+                    Ident::with_quote('[', "test_table"),
                 ]),
                 alias: None,
                 args: None,
@@ -67,24 +58,15 @@ fn test_double_quotes_over_db_schema_table_name() {
         redshift().verified_only_select("SELECT \"col1\" FROM \"test_schema\".\"test_table\"");
     assert_eq!(
         select.projection[0],
-        SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-            value: "col1".to_string(),
-            quote_style: Some('"')
-        })),
+        SelectItem::UnnamedExpr(Expr::Identifier(Ident::with_quote('"', "col1"))),
     );
     assert_eq!(
         select.from[0],
         TableWithJoins {
             relation: TableFactor::Table {
                 name: ObjectName(vec![
-                    Ident {
-                        value: "test_schema".to_string(),
-                        quote_style: Some('"')
-                    },
-                    Ident {
-                        value: "test_table".to_string(),
-                        quote_style: Some('"')
-                    }
+                    Ident::with_quote('"', "test_schema"),
+                    Ident::with_quote('"', "test_table"),
                 ]),
                 alias: None,
                 args: None,

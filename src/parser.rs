@@ -31,6 +31,7 @@ use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{self, Keyword};
+use crate::location::*;
 use crate::tokenizer::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -198,7 +199,9 @@ const DEFAULT_REMAINING_DEPTH: usize = 50;
 pub struct Parser<'a> {
     tokens: Vec<TokenWithLocation>,
     /// The index of the first unprocessed token in `self.tokens`
-    index: usize,
+    pub index: usize,
+    eof_loc: Location,
+    autocomplete: Vec<Vec<Token>>,
     /// The current dialect to use
     dialect: &'a dyn Dialect,
     /// ensure the stack does not overflow by limiting recusion depth
@@ -222,9 +225,38 @@ impl<'a> Parser<'a> {
     /// # }
     /// ```
     pub fn new(dialect: &'a dyn Dialect) -> Self {
-        Self {
-            tokens: vec![],
+        Parser::new_without_locations(vec![], dialect)
+    }
+
+    pub fn new_without_locations(tokens: Vec<Token>, dialect: &'a dyn Dialect) -> Self {
+        // Put in dummy locations
+        let tokens_with_locations: Vec<TokenWithLocation> = tokens
+            .into_iter()
+            .map(|token| TokenWithLocation {
+                token,
+                location: Location { line: 0, column: 0 },
+            })
+            .collect();
+        Parser::new_with_locations(
+            tokens_with_locations,
+            Location { line: 0, column: 0 },
+            dialect,
+        )
+    }
+
+    /// Parse the specified tokens
+    pub fn new_with_locations(
+        tokens: Vec<TokenWithLocation>,
+        eof_loc: Location,
+        dialect: &'a dyn Dialect,
+    ) -> Self {
+        let mut autocomplete: Vec<_> = tokens.iter().map(|_| Vec::new()).collect();
+        autocomplete.push(Vec::new());
+        Parser {
+            tokens,
             index: 0,
+            eof_loc,
+            autocomplete,
             dialect,
             recursion_counter: RecursionCounter::new(DEFAULT_REMAINING_DEPTH),
         }
@@ -312,7 +344,7 @@ impl<'a> Parser<'a> {
                 expecting_statement_delimiter = false;
             }
 
-            if self.peek_token() == Token::EOF {
+            if self.peek_token().token == Token::EOF {
                 break;
             }
             if expecting_statement_delimiter {
@@ -355,6 +387,46 @@ impl<'a> Parser<'a> {
             return statement;
         }
 
+        self.autocomplete_tokens(&[Token::LParen]);
+        self.autocomplete_keywords(&[
+            Keyword::KILL,
+            Keyword::DESCRIBE,
+            Keyword::EXPLAIN,
+            Keyword::ANALYZE,
+            Keyword::SELECT,
+            Keyword::WITH,
+            Keyword::VALUES,
+            Keyword::TRUNCATE,
+            Keyword::MSCK,
+            Keyword::CREATE,
+            Keyword::CACHE,
+            Keyword::DROP,
+            Keyword::DISCARD,
+            Keyword::DECLARE,
+            Keyword::FETCH,
+            Keyword::DELETE,
+            Keyword::INSERT,
+            Keyword::UNCACHE,
+            Keyword::UPDATE,
+            Keyword::ALTER,
+            Keyword::COPY,
+            Keyword::CLOSE,
+            Keyword::SET,
+            Keyword::SHOW,
+            Keyword::USE,
+            Keyword::GRANT,
+            Keyword::REVOKE,
+            Keyword::START,
+            Keyword::BEGIN,
+            Keyword::SAVEPOINT,
+            Keyword::COMMIT,
+            Keyword::ROLLBACK,
+            Keyword::ASSERT,
+            Keyword::DEALLOCATE,
+            Keyword::EXECUTE,
+            Keyword::PREPARE,
+            Keyword::MERGE,
+        ]);
         let next_token = self.next_token();
         match &next_token.token {
             Token::Word(w) => match w.keyword {
@@ -513,15 +585,18 @@ impl<'a> Parser<'a> {
     pub fn parse_wildcard_expr(&mut self) -> Result<WildcardExpr, ParserError> {
         let index = self.index;
 
+        self.autocomplete_tokens(&[Token::Mul, Token::make_ident("")]);
+        let range = self.peek_token_range();
         let next_token = self.next_token();
         match next_token.token {
             Token::Word(w) if self.peek_token().token == Token::Period => {
-                let mut id_parts: Vec<Ident> = vec![w.to_ident()];
+                let mut id_parts: Vec<Located<Ident>> = vec![w.to_located_ident(range)];
 
                 while self.consume_token(&Token::Period) {
+                    let range = self.peek_token_range();
                     let next_token = self.next_token();
                     match next_token.token {
-                        Token::Word(w) => id_parts.push(w.to_ident()),
+                        Token::Word(w) => id_parts.push(w.to_located_ident(range)),
                         Token::Mul => {
                             return Ok(WildcardExpr::QualifiedWildcard(ObjectName(id_parts)));
                         }
@@ -652,6 +727,49 @@ impl<'a> Parser<'a> {
             }
         }));
 
+        self.autocomplete_tokens(&[
+            Token::LBracket,
+            Token::Minus,
+            Token::Plus,
+            Token::DoubleExclamationMark,
+            Token::PGSquareRoot,
+            Token::PGCubeRoot,
+            Token::AtSign,
+            Token::Tilde,
+            Token::LParen,
+            Token::Colon,
+        ]);
+        self.autocomplete_keywords(&[
+            Keyword::TRUE,
+            Keyword::FALSE,
+            Keyword::NULL,
+            Keyword::CURRENT_CATALOG,
+            Keyword::CURRENT_USER,
+            Keyword::SESSION_USER,
+            Keyword::USER,
+            Keyword::CURRENT_TIMESTAMP,
+            Keyword::CURRENT_TIME,
+            Keyword::CURRENT_DATE,
+            Keyword::LOCALTIME,
+            Keyword::LOCALTIMESTAMP,
+            Keyword::CASE,
+            Keyword::CAST,
+            Keyword::TRY_CAST,
+            Keyword::SAFE_CAST,
+            Keyword::EXISTS,
+            Keyword::EXTRACT,
+            Keyword::CEIL,
+            Keyword::FLOOR,
+            Keyword::POSITION,
+            Keyword::SUBSTRING,
+            Keyword::OVERLAY,
+            Keyword::TRIM,
+            Keyword::INTERVAL,
+            Keyword::LISTAGG,
+            Keyword::ARRAY,
+            Keyword::NOT,
+        ]);
+        let range = self.peek_token_range();
         let next_token = self.next_token();
         let expr = match next_token.token {
             Token::Word(w) => match w.keyword {
@@ -666,7 +784,7 @@ impl<'a> Parser<'a> {
                     if dialect_of!(self is PostgreSqlDialect | GenericDialect) =>
                 {
                     Ok(Expr::Function(Function {
-                        name: ObjectName(vec![w.to_ident()]),
+                        name: ObjectName(vec![w.to_located_ident(range)]),
                         args: vec![],
                         over: None,
                         distinct: false,
@@ -678,7 +796,7 @@ impl<'a> Parser<'a> {
                 | Keyword::CURRENT_DATE
                 | Keyword::LOCALTIME
                 | Keyword::LOCALTIMESTAMP => {
-                    self.parse_time_functions(ObjectName(vec![w.to_ident()]))
+                    self.parse_time_functions(ObjectName(vec![w.to_located_ident(range)]))
                 }
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CAST => self.parse_cast_expr(),
@@ -695,12 +813,12 @@ impl<'a> Parser<'a> {
                 Keyword::INTERVAL => self.parse_interval(),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
                 // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as subquery or a function call
-                Keyword::ARRAY if self.peek_token() == Token::LBracket => {
+                Keyword::ARRAY if self.peek_token().token == Token::LBracket => {
                     self.expect_token(&Token::LBracket)?;
                     self.parse_array_expr(true)
                 }
                 Keyword::ARRAY
-                    if self.peek_token() == Token::LParen
+                    if self.peek_token().token == Token::LParen
                         && !dialect_of!(self is ClickHouseDialect) =>
                 {
                     self.expect_token(&Token::LParen)?;
@@ -713,29 +831,38 @@ impl<'a> Parser<'a> {
                 }
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
-                _ => match self.peek_token().token {
-                    Token::LParen | Token::Period => {
-                        let mut id_parts: Vec<Ident> = vec![w.to_ident()];
-                        while self.consume_token(&Token::Period) {
-                            let next_token = self.next_token();
-                            match next_token.token {
-                                Token::Word(w) => id_parts.push(w.to_ident()),
-                                _ => {
-                                    return self
-                                        .expected("an identifier or a '*' after '.'", next_token);
+                _ => {
+                    self.autocomplete_tokens(&[Token::LParen, Token::Period]);
+                    match self.peek_token().token {
+                        Token::LParen | Token::Period => {
+                            let mut id_parts: Vec<Located<Ident>> = vec![w.to_located_ident(range)];
+                            while self.consume_token(&Token::Period) {
+                                self.autocomplete_tokens(&[Token::make_ident(
+                                    ObjectName(id_parts.clone()).to_string().as_str(),
+                                )]);
+                                let range = self.peek_token_range();
+                                let next_token = self.next_token();
+                                match next_token.token {
+                                    Token::Word(w) => id_parts.push(w.to_located_ident(range)),
+                                    _ => {
+                                        return self.expected(
+                                            "an identifier or a '*' after '.'",
+                                            next_token,
+                                        );
+                                    }
                                 }
                             }
-                        }
 
-                        if self.consume_token(&Token::LParen) {
-                            self.prev_token();
-                            self.parse_function(ObjectName(id_parts))
-                        } else {
-                            Ok(Expr::CompoundIdentifier(id_parts))
+                            if self.consume_token(&Token::LParen) {
+                                self.prev_token();
+                                self.parse_function(ObjectName(id_parts))
+                            } else {
+                                Ok(Expr::CompoundIdentifier(id_parts))
+                            }
                         }
+                        _ => Ok(Expr::Identifier(w.to_located_ident(range))),
                     }
-                    _ => Ok(Expr::Identifier(w.to_ident())),
-                },
+                }
             }, // End of Token::Word
             // array `[1, 2, 3]`
             Token::LBracket => self.parse_array_expr(false),
@@ -802,9 +929,11 @@ impl<'a> Parser<'a> {
                 if !self.consume_token(&Token::Period) {
                     Ok(expr)
                 } else {
+                    self.autocomplete_tokens(&[Token::make_ident(expr.to_string().as_str())]);
+                    let range = self.peek_token_range();
                     let tok = self.next_token();
                     let key = match tok.token {
-                        Token::Word(word) => word.to_ident(),
+                        Token::Word(word) => word.to_located_ident(range),
                         _ => return parser_err!(format!("Expected identifier, found: {}", tok)),
                     };
                     Ok(Expr::CompositeAccess {
@@ -889,6 +1018,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_window_frame_units(&mut self) -> Result<WindowFrameUnits, ParserError> {
+        self.autocomplete_keywords(&[Keyword::ROWS, Keyword::RANGE, Keyword::GROUPS]);
         let next_token = self.next_token();
         match &next_token.token {
             Token::Word(w) => match w.keyword {
@@ -1217,6 +1347,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_trim_where(&mut self) -> Result<TrimWhereField, ParserError> {
+        self.autocomplete_keywords(&[Keyword::BOTH, Keyword::LEADING, Keyword::TRAILING]);
         let next_token = self.next_token();
         match &next_token.token {
             Token::Word(w) => match w.keyword {
@@ -1232,6 +1363,7 @@ impl<'a> Parser<'a> {
     /// Parses an array expression `[ex1, ex2, ..]`
     /// if `named` is `true`, came from an expression like  `ARRAY[ex1, ex2]`
     pub fn parse_array_expr(&mut self, named: bool) -> Result<Expr, ParserError> {
+        self.autocomplete_tokens(&[Token::RBracket]);
         if self.peek_token().token == Token::RBracket {
             let _ = self.next_token(); // consume ]
             Ok(Expr::Array(Array {
@@ -1368,6 +1500,33 @@ impl<'a> Parser<'a> {
     // EXTRACT supports a wider set of date/time fields than interval qualifiers,
     // so this function may need to be split in two.
     pub fn parse_date_time_field(&mut self) -> Result<DateTimeField, ParserError> {
+        self.autocomplete_keywords(&[
+            Keyword::YEAR,
+            Keyword::MONTH,
+            Keyword::WEEK,
+            Keyword::DAY,
+            Keyword::HOUR,
+            Keyword::MINUTE,
+            Keyword::SECOND,
+            Keyword::CENTURY,
+            Keyword::DECADE,
+            Keyword::DOY,
+            Keyword::DOW,
+            Keyword::EPOCH,
+            Keyword::ISODOW,
+            Keyword::ISOYEAR,
+            Keyword::JULIAN,
+            Keyword::MICROSECOND,
+            Keyword::MICROSECONDS,
+            Keyword::MILLENIUM,
+            Keyword::MILLENNIUM,
+            Keyword::MILLISECOND,
+            Keyword::MILLISECONDS,
+            Keyword::QUARTER,
+            Keyword::TIMEZONE,
+            Keyword::TIMEZONE_HOUR,
+            Keyword::TIMEZONE_MINUTE,
+        ]);
         let next_token = self.next_token();
         match &next_token.token {
             Token::Word(w) => match w.keyword {
@@ -1406,6 +1565,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_not(&mut self) -> Result<Expr, ParserError> {
+        self.autocomplete_keywords(&[Keyword::EXISTS]);
         match self.peek_token().token {
             Token::Word(w) => match w.keyword {
                 Keyword::EXISTS => {
@@ -1504,6 +1664,33 @@ impl<'a> Parser<'a> {
         //
         // Note that PostgreSQL allows omitting the qualifier, so we provide
         // this more general implementation.
+        self.autocomplete_keywords(&[
+            Keyword::YEAR,
+            Keyword::MONTH,
+            Keyword::WEEK,
+            Keyword::DAY,
+            Keyword::HOUR,
+            Keyword::MINUTE,
+            Keyword::SECOND,
+            Keyword::CENTURY,
+            Keyword::DECADE,
+            Keyword::DOW,
+            Keyword::DOY,
+            Keyword::EPOCH,
+            Keyword::ISODOW,
+            Keyword::ISOYEAR,
+            Keyword::JULIAN,
+            Keyword::MICROSECOND,
+            Keyword::MICROSECONDS,
+            Keyword::MILLENIUM,
+            Keyword::MILLENNIUM,
+            Keyword::MILLISECOND,
+            Keyword::MILLISECONDS,
+            Keyword::QUARTER,
+            Keyword::TIMEZONE,
+            Keyword::TIMEZONE_HOUR,
+            Keyword::TIMEZONE_MINUTE,
+        ]);
         let leading_field = match self.peek_token().token {
             Token::Word(kw)
                 if [
@@ -1583,6 +1770,50 @@ impl<'a> Parser<'a> {
         if let Some(infix) = self.dialect.parse_infix(self, &expr, precedence) {
             return infix;
         }
+
+        self.autocomplete_tokens(&[
+            Token::Spaceship,
+            Token::DoubleEq,
+            Token::Eq,
+            Token::Neq,
+            Token::Gt,
+            Token::GtEq,
+            Token::Lt,
+            Token::LtEq,
+            Token::Plus,
+            Token::Minus,
+            Token::Mul,
+            Token::Mod,
+            Token::StringConcat,
+            Token::Pipe,
+            Token::Caret,
+            Token::Ampersand,
+            Token::Div,
+            Token::ShiftLeft,
+            Token::ShiftRight,
+            Token::Sharp,
+            Token::Tilde,
+            Token::TildeAsterisk,
+            Token::ExclamationMarkTilde,
+            Token::ExclamationMarkTildeAsterisk,
+            Token::DoubleColon,
+            Token::ExclamationMark,
+            Token::LBracket,
+            Token::Arrow,
+            Token::LongArrow,
+            Token::HashArrow,
+            Token::HashLongArrow,
+        ]);
+        self.autocomplete_keywords(&[
+            Keyword::IS,
+            Keyword::AT,
+            Keyword::NOT,
+            Keyword::IN,
+            Keyword::BETWEEN,
+            Keyword::LIKE,
+            Keyword::ILIKE,
+            Keyword::SIMILAR,
+        ]);
 
         let tok = self.next_token();
 
@@ -1761,15 +1992,15 @@ impl<'a> Parser<'a> {
                 // Can only happen if `get_next_precedence` got out of sync with this function
                 _ => parser_err!(format!("No infix parser for token {:?}", tok.token)),
             }
-        } else if Token::DoubleColon == tok {
+        } else if Token::DoubleColon == tok.token {
             self.parse_pg_cast(expr)
-        } else if Token::ExclamationMark == tok {
+        } else if Token::ExclamationMark == tok.token {
             // PostgreSQL factorial operation
             Ok(Expr::UnaryOp {
                 op: UnaryOperator::PGPostfixFactorial,
                 expr: Box::new(expr),
             })
-        } else if Token::LBracket == tok {
+        } else if Token::LBracket == tok.token {
             if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
                 // parse index
                 return self.parse_array_index(expr);
@@ -1934,9 +2165,9 @@ impl<'a> Parser<'a> {
 
         let token = self.peek_token();
         debug!("get_next_precedence() {:?}", token);
-        let token_0 = self.peek_nth_token(0);
-        let token_1 = self.peek_nth_token(1);
-        let token_2 = self.peek_nth_token(2);
+        let token_0 = self.peek_nth_token(0).1;
+        let token_1 = self.peek_nth_token(1).1;
+        let token_2 = self.peek_nth_token(2).1;
         debug!("0: {token_0} 1: {token_1} 2: {token_2}");
         match token.token {
             Token::Word(w) if w.keyword == Keyword::OR => Ok(Self::OR_PREC),
@@ -1944,7 +2175,10 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::XOR => Ok(Self::XOR_PREC),
 
             Token::Word(w) if w.keyword == Keyword::AT => {
-                match (self.peek_nth_token(1).token, self.peek_nth_token(2).token) {
+                match (
+                    self.peek_nth_token(1).1.token,
+                    self.peek_nth_token(2).1.token,
+                ) {
                     (Token::Word(w), Token::Word(w2))
                         if w.keyword == Keyword::TIME && w2.keyword == Keyword::ZONE =>
                     {
@@ -1954,7 +2188,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            Token::Word(w) if w.keyword == Keyword::NOT => match self.peek_nth_token(1).token {
+            Token::Word(w) if w.keyword == Keyword::NOT => match self.peek_nth_token(1).1.token {
                 // The precedence of NOT varies depending on keyword that
                 // follows it. If it is followed by IN, BETWEEN, or LIKE,
                 // it takes on the precedence of those tokens. Otherwise it
@@ -2008,14 +2242,21 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn eof_token(&self) -> TokenWithLocation {
+        TokenWithLocation {
+            token: Token::EOF,
+            location: self.eof_loc.clone(),
+        }
+    }
+
     /// Return the first non-whitespace token that has not yet been processed
     /// (or None if reached end-of-file)
     pub fn peek_token(&self) -> TokenWithLocation {
-        self.peek_nth_token(0)
+        self.peek_nth_token(0).1
     }
 
     /// Return nth non-whitespace token that has not yet been processed
-    pub fn peek_nth_token(&self, mut n: usize) -> TokenWithLocation {
+    pub fn peek_nth_token(&self, mut n: usize) -> (usize, TokenWithLocation) {
         let mut index = self.index;
         loop {
             index += 1;
@@ -2026,10 +2267,10 @@ impl<'a> Parser<'a> {
                 }) => continue,
                 non_whitespace => {
                     if n == 0 {
-                        return non_whitespace.cloned().unwrap_or(TokenWithLocation {
-                            token: Token::EOF,
-                            location: Location { line: 0, column: 0 },
-                        });
+                        return (
+                            index - 1,
+                            non_whitespace.cloned().unwrap_or(self.eof_token()),
+                        );
                     }
                     n -= 1;
                 }
@@ -2048,11 +2289,7 @@ impl<'a> Parser<'a> {
                     token: Token::Whitespace(_),
                     location: _,
                 }) => continue,
-                token => {
-                    return token
-                        .cloned()
-                        .unwrap_or_else(|| TokenWithLocation::wrap(Token::EOF))
-                }
+                token => return token.cloned().unwrap_or(self.eof_token()),
             }
         }
     }
@@ -2089,6 +2326,7 @@ impl<'a> Parser<'a> {
     /// Look for an expected keyword and consume it if it exists
     #[must_use]
     pub fn parse_keyword(&mut self, expected: Keyword) -> bool {
+        self.autocomplete_keywords(&[expected.clone()]);
         match self.peek_token().token {
             Token::Word(w) if expected == w.keyword => {
                 self.next_token();
@@ -2116,6 +2354,7 @@ impl<'a> Parser<'a> {
     /// Look for one of the given keywords and return the one that matches.
     #[must_use]
     pub fn parse_one_of_keywords(&mut self, keywords: &[Keyword]) -> Option<Keyword> {
+        self.autocomplete_keywords(keywords);
         match self.peek_token().token {
             Token::Word(w) => {
                 keywords
@@ -2164,7 +2403,8 @@ impl<'a> Parser<'a> {
     /// Consume the next token if it matches the expected token, otherwise return false
     #[must_use]
     pub fn consume_token(&mut self, expected: &Token) -> bool {
-        if self.peek_token() == *expected {
+        self.autocomplete_tokens(&[expected.clone()]);
+        if self.peek_token().token == *expected {
             self.next_token();
             true
         } else {
@@ -2221,6 +2461,168 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(values)
+    }
+
+    pub fn current_index(&self) -> usize {
+        self.index
+    }
+
+    pub fn reset(&mut self, index: usize) {
+        self.index = index;
+    }
+
+    pub fn start_location(&self, index: usize) -> Location {
+        self.tokens
+            .get(index)
+            .unwrap_or(&self.eof_token())
+            .location
+            .clone()
+    }
+
+    pub fn end_location(&self, index: usize) -> Location {
+        if !self.has_locations() {
+            return Location { line: 0, column: 0 };
+        }
+
+        let mut end = self
+            .tokens
+            .get(index + 1)
+            .unwrap_or(&self.eof_token())
+            .location
+            .clone();
+
+        if end.column > 1 {
+            end.column -= 1;
+        } else {
+            // The previous token must be a newline, so we simply mark that as the end.
+            end = self
+                .tokens
+                .get(index)
+                .unwrap_or(&self.eof_token())
+                .location
+                .clone();
+        }
+        assert!(end.valid());
+
+        end
+    }
+
+    pub fn has_locations(&self) -> bool {
+        self.eof_loc.valid()
+    }
+
+    pub fn peek_start_location(&self) -> Location {
+        self.peek_token().location
+    }
+
+    pub fn peek_end_location(&self) -> Location {
+        self.end_location(self.peek_nth_token(0).0)
+    }
+
+    pub fn prev_end_location(&self) -> Location {
+        self.end_location(self.index - 1)
+    }
+
+    fn peek_token_range(&self) -> Range {
+        Range {
+            start: self.peek_start_location(),
+            end: self.peek_end_location(),
+        }
+    }
+
+    fn track_autocomplete(&mut self, token: Token) {
+        let index = std::cmp::min(self.index, self.autocomplete.len());
+        if index > 0 {
+            self.autocomplete[index - 1].push(token);
+        }
+    }
+
+    pub fn autocomplete_tokens(&mut self, tokens: &[Token]) {
+        let index = self.index;
+        self.next_token();
+        for token in tokens {
+            self.track_autocomplete(token.clone());
+        }
+        self.index = index;
+    }
+
+    pub fn autocomplete_keywords(&mut self, keywords: &[Keyword]) {
+        let index = self.index;
+        self.next_token();
+        for keyword in keywords {
+            self.track_autocomplete(Token::from_keyword(keyword.clone()));
+        }
+        self.index = index;
+    }
+
+    pub fn get_autocomplete(&self, loc: Location) -> (TokenWithLocation, Vec<Token>) {
+        let eof_autocomplete = self.autocomplete.last().unwrap().clone();
+        if self.tokens.len() == 0 || self.tokens[0].location > loc {
+            return (self.eof_token(), eof_autocomplete);
+        }
+
+        // Find the index of the token this location is inside
+        //
+        let mut index = self.tokens.partition_point(|a| {
+            if a.location.line == loc.line {
+                a.location.column <= loc.column
+            } else {
+                a.location.line < loc.line
+            }
+        }) - 1;
+
+        // If we're at the start of our token, the previous token is a word and the current token
+        // is whitespace, then return the suggestions for the previous token.
+        //
+        if index > 0
+            && self.tokens[index].location == loc
+            && matches!(self.tokens[index - 1].token, Token::Word(_))
+            && matches!(self.tokens[index].token, Token::Whitespace(_))
+        {
+            return (
+                self.tokens[index - 1].clone(),
+                self.autocomplete[index - 1].clone(),
+            );
+        }
+
+        // If the current token is not a word, skip its suggestions and look for subsequent ones.
+        //
+        if !matches!(self.tokens[index].token, Token::Word(_)) {
+            index += 1;
+        }
+
+        // Find the next token that has suggestions and return those.
+        //
+        for i in index..self.tokens.len() {
+            if self.autocomplete[i].len() > 0 {
+                let token = self.tokens[i].clone();
+                return (token, self.autocomplete[i].clone());
+            }
+        }
+
+        // If we've reached the end of the stream without finding any suggestions, return the EOF
+        // suggestions.  As a special case, do not return any suggestions if the last token was a
+        // word, since it has no whitespace after it.
+        //
+        if match self.tokens.last().unwrap().token {
+            Token::Word(_)
+            | Token::Number { .. }
+            | Token::SingleQuotedString(_)
+            | Token::DoubleQuotedString(_)
+            | Token::NationalStringLiteral(_)
+            | Token::EscapedStringLiteral(_)
+            | Token::HexStringLiteral(_)
+            | Token::Placeholder(_) => true,
+            _ => false,
+        } {
+            return (self.eof_token(), Vec::new());
+        } else {
+            return (self.eof_token(), eof_autocomplete);
+        }
+    }
+
+    pub fn get_autocompletes(&self) -> Vec<Vec<Token>> {
+        self.autocomplete.clone()
     }
 
     /// Run a parser method `f`, reverting back to the current position
@@ -2337,14 +2739,14 @@ impl<'a> Parser<'a> {
             table_flag = Some(self.parse_object_name()?);
             if self.parse_keyword(Keyword::TABLE) {
                 let table_name = self.parse_object_name()?;
-                if self.peek_token() != Token::EOF {
+                if self.peek_token().token != Token::EOF {
                     if let Token::Word(word) = self.peek_token().token {
                         if word.keyword == Keyword::OPTIONS {
                             options = self.parse_options(Keyword::OPTIONS)?
                         }
                     };
 
-                    if self.peek_token() != Token::EOF {
+                    if self.peek_token().token != Token::EOF {
                         let (a, q) = self.parse_as_query()?;
                         has_as = a;
                         query = Some(q);
@@ -2367,7 +2769,7 @@ impl<'a> Parser<'a> {
                     })
                 }
             } else {
-                if self.peek_token() == Token::EOF {
+                if self.peek_token().token == Token::EOF {
                     self.prev_token();
                 }
                 self.expected("a `TABLE` keyword", self.peek_token())
@@ -2377,6 +2779,7 @@ impl<'a> Parser<'a> {
 
     /// Parse 'AS' before as query,such as `WITH XXX AS SELECT XXX` oer `CACHE TABLE AS SELECT XXX`
     pub fn parse_as_query(&mut self) -> Result<(bool, Query), ParserError> {
+        self.autocomplete_keywords(&[Keyword::AS]);
         match self.peek_token().token {
             Token::Word(word) => match word.keyword {
                 Keyword::AS => {
@@ -2663,6 +3066,15 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_file_format(&mut self) -> Result<FileFormat, ParserError> {
+        self.autocomplete_keywords(&[
+            Keyword::AVRO,
+            Keyword::JSONFILE,
+            Keyword::ORC,
+            Keyword::PARQUET,
+            Keyword::RCFILE,
+            Keyword::SEQUENCEFILE,
+            Keyword::TEXTFILE,
+        ]);
         let next_token = self.next_token();
         match &next_token.token {
             Token::Word(w) => match w.keyword {
@@ -2680,6 +3092,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_analyze_format(&mut self) -> Result<AnalyzeFormat, ParserError> {
+        self.autocomplete_keywords(&[Keyword::TEXT, Keyword::GRAPHVIZ, Keyword::JSON]);
         let next_token = self.next_token();
         match &next_token.token {
             Token::Word(w) => match w.keyword {
@@ -4072,6 +4485,8 @@ impl<'a> Parser<'a> {
 
     /// Parse a literal value (numbers, strings, date/time, booleans)
     pub fn parse_value(&mut self) -> Result<Value, ParserError> {
+        self.autocomplete_tokens(&[Token::Colon, Token::AtSign]);
+        self.autocomplete_keywords(&[Keyword::TRUE, Keyword::FALSE, Keyword::NULL]);
         let next_token = self.next_token();
         let location = next_token.location;
         match next_token.token {
@@ -4181,11 +4596,12 @@ impl<'a> Parser<'a> {
 
     /// Parse a map key string
     pub fn parse_map_key(&mut self) -> Result<Expr, ParserError> {
+        let range = self.peek_token_range();
         let next_token = self.next_token();
         match next_token.token {
             Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => {
-                if self.peek_token() == Token::LParen {
-                    return self.parse_function(ObjectName(vec![Ident::new(value)]));
+                if self.peek_token().token == Token::LParen {
+                    return self.parse_function(ObjectName(vec![Ident::new_located(value, range)]));
                 }
                 Ok(Expr::Value(Value::SingleQuotedString(value)))
             }
@@ -4200,6 +4616,43 @@ impl<'a> Parser<'a> {
 
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)
     pub fn parse_data_type(&mut self) -> Result<DataType, ParserError> {
+        self.autocomplete_keywords(&[
+            Keyword::BOOLEAN,
+            Keyword::FLOAT,
+            Keyword::REAL,
+            Keyword::TINYINT,
+            Keyword::SMALLINT,
+            Keyword::MEDIUMINT,
+            Keyword::INT,
+            Keyword::INTEGER,
+            Keyword::BIGINT,
+            Keyword::VARCHAR,
+            Keyword::NVARCHAR,
+            Keyword::CHARACTER,
+            Keyword::CHAR,
+            Keyword::CLOB,
+            Keyword::BINARY,
+            Keyword::VARBINARY,
+            Keyword::BLOB,
+            Keyword::UUID,
+            Keyword::DATE,
+            Keyword::DATETIME,
+            Keyword::TIMESTAMP,
+            Keyword::TIMESTAMPTZ,
+            Keyword::TIME,
+            Keyword::TIMETZ,
+            Keyword::INTERVAL,
+            Keyword::REGCLASS,
+            Keyword::STRING,
+            Keyword::TEXT,
+            Keyword::BYTEA,
+            Keyword::NUMERIC,
+            Keyword::DECIMAL,
+            Keyword::DEC,
+            Keyword::ENUM,
+            Keyword::SET,
+            Keyword::ARRAY,
+        ]);
         let next_token = self.next_token();
         let mut data = match next_token.token {
             Token::Word(w) => match w.keyword {
@@ -4391,6 +4844,7 @@ impl<'a> Parser<'a> {
                 Token::SingleQuotedString(value) => values.push(value),
                 _ => self.expected("a string", next_token)?,
             }
+            self.autocomplete_tokens(&[Token::Comma, Token::RParen]);
             let next_token = self.next_token();
             match next_token.token {
                 Token::Comma => (),
@@ -4415,17 +4869,19 @@ impl<'a> Parser<'a> {
     pub fn parse_optional_alias(
         &mut self,
         reserved_kwds: &[Keyword],
-    ) -> Result<Option<Ident>, ParserError> {
+    ) -> Result<Option<Located<Ident>>, ParserError> {
         let after_as = self.parse_keyword(Keyword::AS);
+        self.autocomplete_tokens(&[Token::make_ident("")]);
+        let range = self.peek_token_range();
         let next_token = self.next_token();
-        match next_token.token {
+        match &next_token.token {
             // Accept any identifier after `AS` (though many dialects have restrictions on
             // keywords that may appear here). If there's no `AS`: don't parse keywords,
             // which may start a construct allowed in this position, to be parsed as aliases.
             // (For example, in `FROM t1 JOIN` the `JOIN` will always be parsed as a keyword,
             // not an alias.)
             Token::Word(w) if after_as || !reserved_kwds.contains(&w.keyword) => {
-                Ok(Some(w.to_ident()))
+                Ok(Some(w.to_located_ident(range)))
             }
             // MSSQL supports single-quoted strings as aliases for columns
             // We accept them as table aliases too, although MSSQL does not.
@@ -4439,9 +4895,9 @@ impl<'a> Parser<'a> {
             //    character. When it sees such a <literal>, your DBMS will
             //    ignore the <separator> and treat the multiple strings as
             //    a single <literal>."
-            Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
+            Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote_located('\'', s, range))),
             // Support for MySql dialect double quoted string, `AS "HOUR"` for example
-            Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote('\"', s))),
+            Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote_located('\"', s, range))),
             _ => {
                 if after_as {
                     return self.expected("an identifier after AS", next_token);
@@ -4474,6 +4930,9 @@ impl<'a> Parser<'a> {
     pub fn parse_object_name(&mut self) -> Result<ObjectName, ParserError> {
         let mut idents = vec![];
         loop {
+            self.autocomplete_tokens(&[Token::make_ident(
+                ObjectName(idents.clone()).to_string().as_str(),
+            )]);
             idents.push(self.parse_identifier()?);
             if !self.consume_token(&Token::Period) {
                 break;
@@ -4483,12 +4942,13 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse identifiers
-    pub fn parse_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
+    pub fn parse_identifiers(&mut self) -> Result<Vec<Located<Ident>>, ParserError> {
         let mut idents = vec![];
         loop {
+            self.autocomplete_tokens(&[Token::make_ident("")]);
             match self.peek_token().token {
                 Token::Word(w) => {
-                    idents.push(w.to_ident());
+                    idents.push(w.to_located_ident(self.peek_token_range()));
                 }
                 Token::EOF | Token::Eq => break,
                 _ => {}
@@ -4499,12 +4959,14 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a simple one-word identifier (possibly quoted, possibly a keyword)
-    pub fn parse_identifier(&mut self) -> Result<Ident, ParserError> {
+    pub fn parse_identifier(&mut self) -> Result<Located<Ident>, ParserError> {
+        self.autocomplete_tokens(&[Token::make_ident("")]);
+        let range = self.peek_token_range();
         let next_token = self.next_token();
         match next_token.token {
-            Token::Word(w) => Ok(w.to_ident()),
-            Token::SingleQuotedString(s) => Ok(Ident::with_quote('\'', s)),
-            Token::DoubleQuotedString(s) => Ok(Ident::with_quote('\"', s)),
+            Token::Word(w) => Ok(w.to_located_ident(range)),
+            Token::SingleQuotedString(s) => Ok(Ident::with_quote_located('\'', s, range)),
+            Token::DoubleQuotedString(s) => Ok(Ident::with_quote_located('\"', s, range)),
             _ => self.expected("identifier", next_token),
         }
     }
@@ -4514,7 +4976,7 @@ impl<'a> Parser<'a> {
         &mut self,
         optional: IsOptional,
         allow_empty: bool,
-    ) -> Result<Vec<Ident>, ParserError> {
+    ) -> Result<Vec<Located<Ident>>, ParserError> {
         if self.consume_token(&Token::LParen) {
             if allow_empty && self.peek_token().token == Token::RParen {
                 self.next_token();
@@ -4874,6 +5336,7 @@ impl<'a> Parser<'a> {
         };
 
         loop {
+            self.autocomplete_keywords(&[Keyword::UNION, Keyword::EXCEPT, Keyword::INTERSECT]);
             // The query can be optionally followed by a set operator:
             let op = self.parse_set_operator(&self.peek_token().token);
             let next_precedence = match op {
@@ -5132,8 +5595,10 @@ impl<'a> Parser<'a> {
             });
         }
 
+        let start = self.peek_start_location();
         let variable = if self.parse_keywords(&[Keyword::TIME, Keyword::ZONE]) {
-            ObjectName(vec!["TIMEZONE".into()])
+            let end = self.peek_end_location();
+            ObjectName(vec![Ident::new_located("TIMEZONE", Range { start, end })])
         } else {
             self.parse_object_name()?
         };
@@ -5376,6 +5841,14 @@ impl<'a> Parser<'a> {
                 }
             } else {
                 let natural = self.parse_keyword(Keyword::NATURAL);
+                self.autocomplete_keywords(&[
+                    Keyword::INNER,
+                    Keyword::JOIN,
+                    Keyword::LEFT,
+                    Keyword::RIGHT,
+                    Keyword::FULL,
+                ]);
+
                 let peek_keyword = if let Token::Word(w) = self.peek_token().token {
                     w.keyword
                 } else {
@@ -5768,7 +6241,9 @@ impl<'a> Parser<'a> {
         Ok((privileges, objects))
     }
 
-    pub fn parse_grant_permission(&mut self) -> Result<(Keyword, Option<Vec<Ident>>), ParserError> {
+    pub fn parse_grant_permission(
+        &mut self,
+    ) -> Result<(Keyword, Option<Vec<Located<Ident>>>), ParserError> {
         if let Some(kw) = self.parse_one_of_keywords(&[
             Keyword::CONNECT,
             Keyword::CREATE,
@@ -5995,7 +6470,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
-        if self.peek_nth_token(1) == Token::RArrow {
+        if self.peek_nth_token(1).1.token == Token::RArrow {
             let name = self.parse_identifier()?;
 
             self.expect_token(&Token::RArrow)?;
@@ -6412,7 +6887,8 @@ impl<'a> Parser<'a> {
     pub fn parse_merge_clauses(&mut self) -> Result<Vec<MergeClause>, ParserError> {
         let mut clauses: Vec<MergeClause> = vec![];
         loop {
-            if self.peek_token() == Token::EOF || self.peek_token() == Token::SemiColon {
+            if self.peek_token().token == Token::EOF || self.peek_token().token == Token::SemiColon
+            {
                 break;
             }
             self.expect_keyword(Keyword::WHEN)?;
@@ -6623,6 +7099,10 @@ impl Word {
             quote_style: self.quote_style,
         }
     }
+
+    pub fn to_located_ident(&self, range: Range) -> Located<Ident> {
+        self.to_ident().into_located(range)
+    }
 }
 
 #[cfg(test)]
@@ -6635,19 +7115,19 @@ mod tests {
     fn test_prev_index() {
         let sql = "SELECT version";
         all_dialects().run_parser_method(sql, |parser| {
-            assert_eq!(parser.peek_token(), Token::make_keyword("SELECT"));
-            assert_eq!(parser.next_token(), Token::make_keyword("SELECT"));
+            assert_eq!(parser.peek_token().token, Token::make_keyword("SELECT"));
+            assert_eq!(parser.next_token().token, Token::make_keyword("SELECT"));
             parser.prev_token();
-            assert_eq!(parser.next_token(), Token::make_keyword("SELECT"));
-            assert_eq!(parser.next_token(), Token::make_word("version", None));
+            assert_eq!(parser.next_token().token, Token::make_keyword("SELECT"));
+            assert_eq!(parser.next_token().token, Token::make_word("version", None));
             parser.prev_token();
-            assert_eq!(parser.peek_token(), Token::make_word("version", None));
-            assert_eq!(parser.next_token(), Token::make_word("version", None));
-            assert_eq!(parser.peek_token(), Token::EOF);
+            assert_eq!(parser.peek_token().token, Token::make_word("version", None));
+            assert_eq!(parser.next_token().token, Token::make_word("version", None));
+            assert_eq!(parser.peek_token().token, Token::EOF);
             parser.prev_token();
-            assert_eq!(parser.next_token(), Token::make_word("version", None));
-            assert_eq!(parser.next_token(), Token::EOF);
-            assert_eq!(parser.next_token(), Token::EOF);
+            assert_eq!(parser.next_token().token, Token::make_word("version", None));
+            assert_eq!(parser.next_token().token, Token::EOF);
+            assert_eq!(parser.next_token().token, Token::EOF);
             parser.prev_token();
         });
     }
@@ -6684,6 +7164,17 @@ mod tests {
             let ast = parser.parse_query().unwrap();
             assert_eq!(ast.to_string(), sql.to_string());
         });
+    }
+
+    #[test]
+    fn test_end_location() {
+        let sql = "SELECT 1\nSELECT a";
+        let mut tokenizer = Tokenizer::new(&GenericDialect {}, sql);
+        let (tokens, eof_loc) = tokenizer.tokenize_with_location().unwrap();
+
+        let mut parser = Parser::new_with_locations(tokens, eof_loc, &GenericDialect {});
+        parser.parse_query().unwrap();
+        assert_eq!(parser.prev_end_location(), Location { line: 1, column: 9 });
     }
 
     #[cfg(test)]

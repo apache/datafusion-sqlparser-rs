@@ -3133,53 +3133,86 @@ fn parse_interval_and_or_xor() {
         body: Box::new(SetExpr::Select(Box::new(Select {
             distinct: false,
             top: None,
-            projection: vec![UnnamedExpr(Expr::Identifier(Ident { value: "col".to_string(), quote_style: None }))],
+            projection: vec![UnnamedExpr(Expr::Identifier(Ident {
+                value: "col".to_string(),
+                quote_style: None,
+            }))],
             into: None,
             from: vec![TableWithJoins {
                 relation: TableFactor::Table {
-                    name: ObjectName(vec![Ident { value: "test".to_string(), quote_style: None }]),
+                    name: ObjectName(vec![Ident {
+                        value: "test".to_string(),
+                        quote_style: None,
+                    }]),
                     alias: None,
                     args: None,
-                    with_hints: vec![] },
-                joins: vec![] }],
+                    with_hints: vec![],
+                },
+                joins: vec![],
+            }],
             lateral_views: vec![],
             selection: Some(Expr::BinaryOp {
                 left: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident { value: "d3_date".to_string(), quote_style: None })),
+                    left: Box::new(Expr::Identifier(Ident {
+                        value: "d3_date".to_string(),
+                        quote_style: None,
+                    })),
                     op: BinaryOperator::Gt,
                     right: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident { value: "d1_date".to_string(), quote_style: None })),
+                        left: Box::new(Expr::Identifier(Ident {
+                            value: "d1_date".to_string(),
+                            quote_style: None,
+                        })),
                         op: BinaryOperator::Plus,
                         right: Box::new(Expr::Interval {
-                            value: Box::new(Expr::Value(Value::SingleQuotedString("5 days".to_string()))),  // Token ?
+                            value: Box::new(Expr::Value(Value::SingleQuotedString(
+                                "5 days".to_string(),
+                            ))),
                             leading_field: None,
                             leading_precision: None,
                             last_field: None,
-                            fractional_seconds_precision: None }) }) }),
+                            fractional_seconds_precision: None,
+                        }),
+                    }),
+                }),
                 op: BinaryOperator::And,
                 right: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident { value: "d2_date".to_string(), quote_style: None })),
+                    left: Box::new(Expr::Identifier(Ident {
+                        value: "d2_date".to_string(),
+                        quote_style: None,
+                    })),
                     op: BinaryOperator::Gt,
                     right: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident { value: "d1_date".to_string(), quote_style: None })),
+                        left: Box::new(Expr::Identifier(Ident {
+                            value: "d1_date".to_string(),
+                            quote_style: None,
+                        })),
                         op: BinaryOperator::Plus,
                         right: Box::new(Expr::Interval {
-                            value: Box::new(Expr::Value(Value::SingleQuotedString("3 days".to_string()))),  // Token ?
+                            value: Box::new(Expr::Value(Value::SingleQuotedString(
+                                "3 days".to_string(),
+                            ))),
                             leading_field: None,
                             leading_precision: None,
                             last_field: None,
-                            fractional_seconds_precision: None }) }) }) }),
+                            fractional_seconds_precision: None,
+                        }),
+                    }),
+                }),
+            }),
             group_by: vec![],
             cluster_by: vec![],
             distribute_by: vec![],
             sort_by: vec![],
             having: None,
-            qualify: None }))),
+            qualify: None,
+        }))),
         order_by: vec![],
         limit: None,
         offset: None,
         fetch: None,
-        lock: None }))];
+        lock: None,
+    }))];
 
     assert_eq!(actual_ast, expected_ast);
 }

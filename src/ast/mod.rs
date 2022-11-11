@@ -416,6 +416,8 @@ pub enum Expr {
     ArraySubquery(Box<Query>),
     /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
     ListAgg(ListAgg),
+    /// The `ARRAY_AGG` function `SELECT ARRAY_AGG(... ORDER BY ...)`
+    ArrayAgg(ArrayAgg),
     /// The `GROUPING SETS` expr.
     GroupingSets(Vec<Vec<Expr>>),
     /// The `CUBE` expr.
@@ -655,6 +657,7 @@ impl fmt::Display for Expr {
             Expr::Subquery(s) => write!(f, "({})", s),
             Expr::ArraySubquery(s) => write!(f, "ARRAY({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
+            Expr::ArrayAgg(arrayagg) => write!(f, "{}", arrayagg),
             Expr::GroupingSets(sets) => {
                 write!(f, "GROUPING SETS (")?;
                 let mut sep = "";
@@ -3033,6 +3036,45 @@ impl fmt::Display for ListAggOnOverflow {
                 write!(f, " COUNT")
             }
         }
+    }
+}
+
+/// An `ARRAY_AGG` invocation `ARRAY_AGG( [ DISTINCT ] <expr> [ORDER BY <expr>] [LIMIT <n>] )`
+/// Or `ARRAY_AGG( [ DISTINCT ] <expr> ) [ WITHIN GROUP ( ORDER BY <expr> ) ]`
+/// ORDER BY position is defined differently for BigQuery, Postgres and Snowflake.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ArrayAgg {
+    pub distinct: bool,
+    pub expr: Box<Expr>,
+    pub order_by: Option<Box<OrderByExpr>>,
+    pub limit: Option<Box<Expr>>,
+    pub within_group: bool, // order by is used inside a within group or not
+}
+
+impl fmt::Display for ArrayAgg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ARRAY_AGG({}{}",
+            if self.distinct { "DISTINCT " } else { "" },
+            self.expr
+        )?;
+        if !self.within_group {
+            if let Some(order_by) = &self.order_by {
+                write!(f, " ORDER BY {}", order_by)?;
+            }
+            if let Some(limit) = &self.limit {
+                write!(f, " LIMIT {}", limit)?;
+            }
+        }
+        write!(f, ")")?;
+        if self.within_group {
+            if let Some(order_by) = &self.order_by {
+                write!(f, " WITHIN GROUP (ORDER BY {})", order_by)?;
+            }
+        }
+        Ok(())
     }
 }
 

@@ -281,8 +281,8 @@ fn parse_create_function() {
 #[test]
 fn filtering_during_aggregation() {
     let rename = "SELECT \
-        array_agg(name) FILTER (WHERE name IS NOT NULL), \
-        array_agg(name) FILTER (WHERE name LIKE 'a%') \
+        ARRAY_AGG(name) FILTER (WHERE name IS NOT NULL), \
+        ARRAY_AGG(name) FILTER (WHERE name LIKE 'a%') \
         FROM region";
     println!("{}", hive().verified_stmt(rename));
 }
@@ -290,8 +290,8 @@ fn filtering_during_aggregation() {
 #[test]
 fn filtering_during_aggregation_aliased() {
     let rename = "SELECT \
-        array_agg(name) FILTER (WHERE name IS NOT NULL) AS agg1, \
-        array_agg(name) FILTER (WHERE name LIKE 'a%') AS agg2 \
+        ARRAY_AGG(name) FILTER (WHERE name IS NOT NULL) AS agg1, \
+        ARRAY_AGG(name) FILTER (WHERE name LIKE 'a%') AS agg2 \
         FROM region";
     println!("{}", hive().verified_stmt(rename));
 }

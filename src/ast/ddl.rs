@@ -298,6 +298,7 @@ pub enum TableConstraint {
     /// [1]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-natural-language.html
     FulltextOrSpatial {
         /// Whether this is a `FULLTEXT` (true) or `SPATIAL` (false) definition.
+        #[cfg_attr(feature = "derive-visitor", drive(skip))]
         fulltext: bool,
         /// Whether the type is followed by the keyword `KEY`, `INDEX`, or no keyword at all.
         index_type_display: KeyOrIndexDisplay,
@@ -403,6 +404,7 @@ impl fmt::Display for TableConstraint {
 /// [1]: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum KeyOrIndexDisplay {
     /// Nothing to display
     None,

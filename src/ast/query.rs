@@ -143,6 +143,7 @@ impl fmt::Display for SetOperator {
 // For example, BigQuery does not support `DISTINCT` for `EXCEPT` and `INTERSECT`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum SetQuantifier {
     All,
     Distinct,

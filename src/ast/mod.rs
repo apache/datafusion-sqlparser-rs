@@ -2674,17 +2674,18 @@ impl fmt::Display for Statement {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 /// Can use to describe options in create sequence or table column type identity
 /// [ INCREMENT [ BY ] increment ]
 ///     [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
 ///     [ START [ WITH ] start ] [ CACHE cache ] [ [ NO ] CYCLE ]
 pub enum SequenceOptions {
-    IncrementBy(Expr, bool),
+    IncrementBy(Expr, #[cfg_attr(feature = "derive-visitor", drive(skip))] bool),
     MinValue(MinMaxValue),
     MaxValue(MinMaxValue),
-    StartWith(Expr, bool),
+    StartWith(Expr, #[cfg_attr(feature = "derive-visitor", drive(skip))] bool),
     Cache(Expr),
-    Cycle(bool),
+    Cycle(#[cfg_attr(feature = "derive-visitor", drive(skip))] bool),
 }
 
 impl fmt::Display for SequenceOptions {
@@ -2765,12 +2766,14 @@ pub enum OnInsert {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct OnConflict {
     pub conflict_target: Vec<Ident>,
     pub action: OnConflictAction,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub enum OnConflictAction {
     DoNothing,
     DoUpdate(Vec<Assignment>),
@@ -3244,11 +3247,14 @@ impl fmt::Display for ListAggOnOverflow {
 /// ORDER BY position is defined differently for BigQuery, Postgres and Snowflake.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
 pub struct ArrayAgg {
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
     pub distinct: bool,
     pub expr: Box<Expr>,
     pub order_by: Option<Box<OrderByExpr>>,
     pub limit: Option<Box<Expr>>,
+    #[cfg_attr(feature = "derive-visitor", drive(skip))]
     pub within_group: bool, // order by is used inside a within group or not
 }
 

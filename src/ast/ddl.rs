@@ -52,6 +52,10 @@ pub enum AlterTableOperation {
         #[cfg_attr(feature = "derive-visitor", drive(skip))]
         cascade: bool,
     },
+    /// `DROP PRIMARY KEY`
+    ///
+    /// Note: this is a MySQL-specific operation.
+    DropPrimaryKey,
     /// `RENAME TO PARTITION (partition=val)`
     RenamePartitions {
         old_partitions: Vec<Expr>,
@@ -134,6 +138,7 @@ impl fmt::Display for AlterTableOperation {
                     if *cascade { " CASCADE" } else { "" },
                 )
             }
+            AlterTableOperation::DropPrimaryKey => write!(f, "DROP PRIMARY KEY"),
             AlterTableOperation::DropColumn {
                 column_name,
                 if_exists,
@@ -279,6 +284,28 @@ pub enum TableConstraint {
         /// Referred column identifier list.
         columns: Vec<Ident>,
     },
+    /// MySQLs [fulltext][1] definition. Since the [`SPATIAL`][2] definition is exactly the same,
+    /// and MySQL displays both the same way, it is part of this definition as well.
+    ///
+    /// Supported syntax:
+    ///
+    /// ```markdown
+    /// {FULLTEXT | SPATIAL} [INDEX | KEY] [index_name] (key_part,...)
+    ///
+    /// key_part: col_name
+    /// ```
+    ///
+    /// [1]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-natural-language.html
+    FulltextOrSpatial {
+        /// Whether this is a `FULLTEXT` (true) or `SPATIAL` (false) definition.
+        fulltext: bool,
+        /// Whether the type is followed by the keyword `KEY`, `INDEX`, or no keyword at all.
+        index_type_display: KeyOrIndexDisplay,
+        /// Optional index name.
+        opt_index_name: Option<Ident>,
+        /// Referred column identifier list.
+        columns: Vec<Ident>,
+    },
 }
 
 impl fmt::Display for TableConstraint {
@@ -338,6 +365,64 @@ impl fmt::Display for TableConstraint {
                 write!(f, " ({})", display_comma_separated(columns))?;
 
                 Ok(())
+            }
+            Self::FulltextOrSpatial {
+                fulltext,
+                index_type_display,
+                opt_index_name,
+                columns,
+            } => {
+                if *fulltext {
+                    write!(f, "FULLTEXT")?;
+                } else {
+                    write!(f, "SPATIAL")?;
+                }
+
+                if !matches!(index_type_display, KeyOrIndexDisplay::None) {
+                    write!(f, " {}", index_type_display)?;
+                }
+
+                if let Some(name) = opt_index_name {
+                    write!(f, " {}", name)?;
+                }
+
+                write!(f, " ({})", display_comma_separated(columns))?;
+
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Representation whether a definition can can contains the KEY or INDEX keywords with the same
+/// meaning.
+///
+/// This enum initially is directed to `FULLTEXT`,`SPATIAL`, and `UNIQUE` indexes on create table
+/// statements of `MySQL` [(1)].
+///
+/// [1]: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum KeyOrIndexDisplay {
+    /// Nothing to display
+    None,
+    /// Display the KEY keyword
+    Key,
+    /// Display the INDEX keyword
+    Index,
+}
+
+impl fmt::Display for KeyOrIndexDisplay {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            KeyOrIndexDisplay::None => {
+                write!(f, "")
+            }
+            KeyOrIndexDisplay::Key => {
+                write!(f, "KEY")
+            }
+            KeyOrIndexDisplay::Index => {
+                write!(f, "INDEX")
             }
         }
     }

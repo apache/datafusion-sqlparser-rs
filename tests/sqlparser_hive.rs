@@ -15,7 +15,10 @@
 //! Test SQL syntax specific to Hive. The parser based on the generic dialect
 //! is also tested (on the inputs it can handle).
 
-use sqlparser::ast::{CreateFunctionUsing, Expr, Ident, ObjectName, Statement, UnaryOperator};
+use sqlparser::ast::{
+    CreateFunctionUsing, Expr, Function, Ident, ObjectName, SelectItem, Statement, TableFactor,
+    UnaryOperator, Value,
+};
 use sqlparser::dialect::{GenericDialect, HiveDialect};
 use sqlparser::parser::ParserError;
 use sqlparser::test_utils::*;
@@ -156,8 +159,7 @@ fn long_numerics() {
 #[test]
 fn decimal_precision() {
     let query = "SELECT CAST(a AS DECIMAL(18,2)) FROM db.table";
-    let expected = "SELECT CAST(a AS NUMERIC(18,2)) FROM db.table";
-    hive().one_statement_parses_to(query, expected);
+    hive().verified_stmt(query);
 }
 
 #[test]
@@ -279,8 +281,8 @@ fn parse_create_function() {
 #[test]
 fn filtering_during_aggregation() {
     let rename = "SELECT \
-        array_agg(name) FILTER (WHERE name IS NOT NULL), \
-        array_agg(name) FILTER (WHERE name LIKE 'a%') \
+        ARRAY_AGG(name) FILTER (WHERE name IS NOT NULL), \
+        ARRAY_AGG(name) FILTER (WHERE name LIKE 'a%') \
         FROM region";
     println!("{}", hive().verified_stmt(rename));
 }
@@ -288,8 +290,8 @@ fn filtering_during_aggregation() {
 #[test]
 fn filtering_during_aggregation_aliased() {
     let rename = "SELECT \
-        array_agg(name) FILTER (WHERE name IS NOT NULL) AS agg1, \
-        array_agg(name) FILTER (WHERE name LIKE 'a%') AS agg2 \
+        ARRAY_AGG(name) FILTER (WHERE name IS NOT NULL) AS agg1, \
+        ARRAY_AGG(name) FILTER (WHERE name LIKE 'a%') AS agg2 \
         FROM region";
     println!("{}", hive().verified_stmt(rename));
 }
@@ -299,6 +301,168 @@ fn filter_as_alias() {
     let sql = "SELECT name filter FROM region";
     let expected = "SELECT name AS filter FROM region";
     println!("{}", hive().one_statement_parses_to(sql, expected));
+}
+
+#[test]
+fn parse_delimited_identifiers() {
+    // check that quoted identifiers in any position remain quoted after serialization
+    let select = hive().verified_only_select(
+        r#"SELECT "alias"."bar baz", "myfun"(), "simple id" AS "column alias" FROM "a table" AS "alias""#,
+    );
+    // check FROM
+    match only(select.from).relation {
+        TableFactor::Table {
+            name,
+            alias,
+            args,
+            with_hints,
+        } => {
+            assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
+            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert!(args.is_none());
+            assert!(with_hints.is_empty());
+        }
+        _ => panic!("Expecting TableFactor::Table"),
+    }
+    // check SELECT
+    assert_eq!(3, select.projection.len());
+    assert_eq!(
+        &Expr::CompoundIdentifier(vec![
+            Ident::with_quote('"', "alias"),
+            Ident::with_quote('"', "bar baz"),
+        ]),
+        expr_from_projection(&select.projection[0]),
+    );
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+            special: false,
+        }),
+        expr_from_projection(&select.projection[1]),
+    );
+    match &select.projection[2] {
+        SelectItem::ExprWithAlias { expr, alias } => {
+            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
+            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+        }
+        _ => panic!("Expected ExprWithAlias"),
+    }
+
+    hive().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
+    hive().verified_stmt(r#"ALTER TABLE foo ADD CONSTRAINT "bar" PRIMARY KEY (baz)"#);
+    //TODO verified_stmt(r#"UPDATE foo SET "bar" = 5"#);
+}
+
+#[test]
+fn parse_like() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}LIKE '%a'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = hive().verified_only_select(sql);
+        assert_eq!(
+            Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: None,
+            },
+            select.selection.unwrap()
+        );
+
+        // Test with escape char
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '\\'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = hive().verified_only_select(sql);
+        assert_eq!(
+            Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: Some('\\'),
+            },
+            select.selection.unwrap()
+        );
+
+        // This statement tests that LIKE and NOT LIKE have the same precedence.
+        // This was previously mishandled (#81).
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}LIKE '%a' IS NULL",
+            if negated { "NOT " } else { "" }
+        );
+        let select = hive().verified_only_select(sql);
+        assert_eq!(
+            Expr::IsNull(Box::new(Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: None,
+            })),
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
+}
+
+#[test]
+fn parse_similar_to() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = hive().verified_only_select(sql);
+        assert_eq!(
+            Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: None,
+            },
+            select.selection.unwrap()
+        );
+
+        // Test with escape char
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = hive().verified_only_select(sql);
+        assert_eq!(
+            Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: Some('\\'),
+            },
+            select.selection.unwrap()
+        );
+
+        // This statement tests that SIMILAR TO and NOT SIMILAR TO have the same precedence.
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL",
+            if negated { "NOT " } else { "" }
+        );
+        let select = hive().verified_only_select(sql);
+        assert_eq!(
+            Expr::IsNull(Box::new(Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: Some('\\'),
+            })),
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
 }
 
 fn hive() -> TestedDialects {

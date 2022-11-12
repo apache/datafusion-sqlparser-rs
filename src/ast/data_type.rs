@@ -11,7 +11,7 @@
 // limitations under the License.
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, format, string::String, vec::Vec};
 use core::fmt;
 
 #[cfg(feature = "serde")]
@@ -71,8 +71,18 @@ pub enum DataType {
     /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#binary-large-object-string-type
     /// [Oracle]: https://docs.oracle.com/javadb/10.8.3.0/ref/rrefblob.html
     Blob(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
-    /// Decimal type with optional precision and scale e.g. DECIMAL(10,2)
+    /// Numeric type with optional precision and scale e.g. NUMERIC(10,2), [standard][1]
+    ///
+    /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
+    Numeric(ExactNumberInfo),
+    /// Decimal type with optional precision and scale e.g. DECIMAL(10,2), [standard][1]
+    ///
+    /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
     Decimal(ExactNumberInfo),
+    /// Dec type with optional precision and scale e.g. DEC(10,2), [standard][1]
+    ///
+    /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
+    Dec(ExactNumberInfo),
     /// Floating point with optional precision e.g. FLOAT(8)
     Float(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
     /// Tiny integer with optional display width e.g. TINYINT or TINYINT(3)
@@ -116,12 +126,24 @@ pub enum DataType {
     Boolean,
     /// Date
     Date,
-    /// Time
-    Time(#[cfg_attr(feature = "derive-visitor", drive(skip))] TimezoneInfo),
-    /// Datetime
-    Datetime,
-    /// Timestamp
-    Timestamp(#[cfg_attr(feature = "derive-visitor", drive(skip))] TimezoneInfo),
+    /// Time with optional time precision and time zone information e.g. [standard][1].
+    ///
+    /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
+    Time(
+      #[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>,
+      #[cfg_attr(feature = "derive-visitor", drive(skip))] TimezoneInfo
+    ),
+    /// Datetime with optional time precision e.g. [MySQL][1].
+    ///
+    /// [1]: https://dev.mysql.com/doc/refman/8.0/en/datetime.html
+    Datetime(#[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>),
+    /// Timestamp with optional time precision and time zone information e.g. [standard][1].
+    ///
+    /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
+    Timestamp(
+      #[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>, 
+      #[cfg_attr(feature = "derive-visitor", drive(skip))] TimezoneInfo
+    ),
     /// Interval
     Interval,
     /// Regclass used in postgresql serial
@@ -138,7 +160,7 @@ pub enum DataType {
         #[cfg_attr(feature = "derive-visitor", drive(skip))] Vec<String>,
     ),
     /// Arrays
-    Array(Box<DataType>),
+    Array(Option<Box<DataType>>),
     /// Enums
     Enum(#[cfg_attr(feature = "derive-visitor", drive(skip))] Vec<String>),
     /// Set
@@ -172,8 +194,14 @@ impl fmt::Display for DataType {
                 format_type_with_optional_length(f, "VARBINARY", size, false)
             }
             DataType::Blob(size) => format_type_with_optional_length(f, "BLOB", size, false),
-            DataType::Decimal(info) => {
+            DataType::Numeric(info) => {
                 write!(f, "NUMERIC{}", info)
+            }
+            DataType::Decimal(info) => {
+                write!(f, "DECIMAL{}", info)
+            }
+            DataType::Dec(info) => {
+                write!(f, "DEC{}", info)
             }
             DataType::Float(size) => format_type_with_optional_length(f, "FLOAT", size, false),
             DataType::TinyInt(zerofill) => {
@@ -215,15 +243,27 @@ impl fmt::Display for DataType {
             DataType::DoublePrecision => write!(f, "DOUBLE PRECISION"),
             DataType::Boolean => write!(f, "BOOLEAN"),
             DataType::Date => write!(f, "DATE"),
-            DataType::Time(timezone_info) => write!(f, "TIME{}", timezone_info),
-            DataType::Datetime => write!(f, "DATETIME"),
-            DataType::Timestamp(timezone_info) => write!(f, "TIMESTAMP{}", timezone_info),
+            DataType::Time(precision, timezone_info) => {
+                format_datetime_precision_and_tz(f, "TIME", precision, timezone_info)
+            }
+            DataType::Datetime(precision) => {
+                format_type_with_optional_length(f, "DATETIME", precision, false)
+            }
+            DataType::Timestamp(precision, timezone_info) => {
+                format_datetime_precision_and_tz(f, "TIMESTAMP", precision, timezone_info)
+            }
             DataType::Interval => write!(f, "INTERVAL"),
             DataType::Regclass => write!(f, "REGCLASS"),
             DataType::Text => write!(f, "TEXT"),
             DataType::String => write!(f, "STRING"),
             DataType::Bytea => write!(f, "BYTEA"),
-            DataType::Array(ty) => write!(f, "{}[]", ty),
+            DataType::Array(ty) => {
+                if let Some(t) = &ty {
+                    write!(f, "{}[]", t)
+                } else {
+                    write!(f, "ARRAY")
+                }
+            }
             DataType::Custom(ty, modifiers) => {
                 if modifiers.is_empty() {
                     write!(f, "{}", ty)
@@ -280,6 +320,27 @@ fn format_character_string_type(
     if let Some(size) = size {
         write!(f, "({})", size)?;
     }
+    Ok(())
+}
+
+fn format_datetime_precision_and_tz(
+    f: &mut fmt::Formatter,
+    sql_type: &'static str,
+    len: &Option<u64>,
+    time_zone: &TimezoneInfo,
+) -> fmt::Result {
+    write!(f, "{}", sql_type)?;
+    let len_fmt = len.as_ref().map(|l| format!("({l})")).unwrap_or_default();
+
+    match time_zone {
+        TimezoneInfo::Tz => {
+            write!(f, "{time_zone}{len_fmt}")?;
+        }
+        _ => {
+            write!(f, "{len_fmt}{time_zone}")?;
+        }
+    }
+
     Ok(())
 }
 

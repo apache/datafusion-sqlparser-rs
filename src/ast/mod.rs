@@ -27,20 +27,21 @@ pub use self::data_type::{
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, IndexType,
-    ReferentialAction, TableConstraint,
+    KeyOrIndexDisplay, ReferentialAction, TableConstraint,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     Cte, Fetch, Join, JoinConstraint, JoinOperator, LateralView, LockType, Offset, OffsetRows,
-    OrderByExpr, Query, Select, SelectInto, SelectItem, SetExpr, SetOperator, TableAlias,
-    TableFactor, TableWithJoins, Top, Values, With,
+    OrderByExpr, Query, Select, SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier,
+    TableAlias, TableFactor, TableWithJoins, Top, Values, With,
 };
-pub use self::value::{DateTimeField, TrimWhereField, Value};
+
 #[cfg(feature = "derive-visitor")]
 pub use derive_visitor::{
     visitor_enter_fn, visitor_enter_fn_mut, visitor_fn, visitor_fn_mut, Drive, DriveMut,
     Event as VisitorEvent, Visitor, VisitorMut,
 };
+pub use self::value::{escape_quoted_string, DateTimeField, TrimWhereField, Value};
 
 mod data_type;
 mod ddl;
@@ -199,6 +200,8 @@ pub enum JsonOperator {
     HashArrow,
     /// #>> Extracts JSON sub-object at the specified path as text
     HashLongArrow,
+    /// : Colon is used by Snowflake (Which is similar to LongArrow)
+    Colon,
 }
 
 impl fmt::Display for JsonOperator {
@@ -215,6 +218,9 @@ impl fmt::Display for JsonOperator {
             }
             JsonOperator::HashLongArrow => {
                 write!(f, "#>>")
+            }
+            JsonOperator::Colon => {
+                write!(f, ":")
             }
         }
     }
@@ -443,6 +449,8 @@ pub enum Expr {
     ArraySubquery(Box<Query>),
     /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
     ListAgg(ListAgg),
+    /// The `ARRAY_AGG` function `SELECT ARRAY_AGG(... ORDER BY ...)`
+    ArrayAgg(ArrayAgg),
     /// The `GROUPING SETS` expr.
     GroupingSets(Vec<Vec<Expr>>),
     /// The `CUBE` expr.
@@ -684,6 +692,7 @@ impl fmt::Display for Expr {
             Expr::Subquery(s) => write!(f, "({})", s),
             Expr::ArraySubquery(s) => write!(f, "ARRAY({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
+            Expr::ArrayAgg(arrayagg) => write!(f, "{}", arrayagg),
             Expr::GroupingSets(sets) => {
                 write!(f, "GROUPING SETS (")?;
                 let mut sep = "";
@@ -791,7 +800,11 @@ impl fmt::Display for Expr {
                 operator,
                 right,
             } => {
-                write!(f, "{} {} {}", left, operator, right)
+                if operator == &JsonOperator::Colon {
+                    write!(f, "{}{}{}", left, operator, right)
+                } else {
+                    write!(f, "{} {} {}", left, operator, right)
+                }
             }
             Expr::CompositeAccess { expr, key } => {
                 write!(f, "{}.{}", expr, key)
@@ -1088,6 +1101,8 @@ pub enum Statement {
         #[cfg_attr(feature = "derive-visitor", drive(skip))]
         table: bool,
         on: Option<OnInsert>,
+        /// RETURNING
+        returning: Option<Vec<SelectItem>>,
     },
     // TODO: Support ROW FORMAT
     Directory {
@@ -1133,6 +1148,8 @@ pub enum Statement {
         from: Option<TableWithJoins>,
         /// WHERE
         selection: Option<Expr>,
+        /// RETURNING
+        returning: Option<Vec<SelectItem>>,
     },
     /// DELETE
     Delete {
@@ -1142,6 +1159,8 @@ pub enum Statement {
         using: Option<TableFactor>,
         /// WHERE
         selection: Option<Expr>,
+        /// RETURNING
+        returning: Option<Vec<SelectItem>>,
     },
     /// CREATE VIEW
     CreateView {
@@ -1585,6 +1604,9 @@ pub enum Statement {
         #[cfg_attr(feature = "derive-visitor", drive(skip))]
         if_not_exists: bool,
         name: ObjectName,
+        data_type: Option<DataType>,
+        sequence_options: Vec<SequenceOptions>,
+        owned_by: Option<ObjectName>,
     },
 }
 
@@ -1791,6 +1813,7 @@ impl fmt::Display for Statement {
                 source,
                 table,
                 on,
+                returning,
             } => {
                 if let Some(action) = or {
                     write!(f, "INSERT OR {} INTO {} ", action, table_name)?;
@@ -1818,10 +1841,14 @@ impl fmt::Display for Statement {
                 write!(f, "{}", source)?;
 
                 if let Some(on) = on {
-                    write!(f, "{}", on)
-                } else {
-                    Ok(())
+                    write!(f, "{}", on)?;
                 }
+
+                if let Some(returning) = returning {
+                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
+                }
+
+                Ok(())
             }
 
             Statement::Copy {
@@ -1865,6 +1892,7 @@ impl fmt::Display for Statement {
                 assignments,
                 from,
                 selection,
+                returning,
             } => {
                 write!(f, "UPDATE {}", table)?;
                 if !assignments.is_empty() {
@@ -1876,12 +1904,16 @@ impl fmt::Display for Statement {
                 if let Some(selection) = selection {
                     write!(f, " WHERE {}", selection)?;
                 }
+                if let Some(returning) = returning {
+                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
+                }
                 Ok(())
             }
             Statement::Delete {
                 table_name,
                 using,
                 selection,
+                returning,
             } => {
                 write!(f, "DELETE FROM {}", table_name)?;
                 if let Some(using) = using {
@@ -1889,6 +1921,9 @@ impl fmt::Display for Statement {
                 }
                 if let Some(selection) = selection {
                     write!(f, " WHERE {}", selection)?;
+                }
+                if let Some(returning) = returning {
+                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
                 }
                 Ok(())
             }
@@ -2606,17 +2641,115 @@ impl fmt::Display for Statement {
                 temporary,
                 if_not_exists,
                 name,
+                data_type,
+                sequence_options,
+                owned_by,
             } => {
+                let as_type: String = if let Some(dt) = data_type.as_ref() {
+                    //Cannot use format!(" AS {}", dt), due to format! is not available in --target thumbv6m-none-eabi
+                    // " AS ".to_owned() + &dt.to_string()
+                    [" AS ", &dt.to_string()].concat()
+                } else {
+                    "".to_string()
+                };
                 write!(
                     f,
-                    "CREATE {temporary}SEQUENCE {if_not_exists}{name}",
+                    "CREATE {temporary}SEQUENCE {if_not_exists}{name}{as_type}",
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     temporary = if *temporary { "TEMPORARY " } else { "" },
-                    name = name
-                )
+                    name = name,
+                    as_type = as_type
+                )?;
+                for sequence_option in sequence_options {
+                    write!(f, "{}", sequence_option)?;
+                }
+                if let Some(ob) = owned_by.as_ref() {
+                    write!(f, " OWNED BY {}", ob)?;
+                }
+                write!(f, "")
             }
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Can use to describe options in create sequence or table column type identity
+/// [ INCREMENT [ BY ] increment ]
+///     [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
+///     [ START [ WITH ] start ] [ CACHE cache ] [ [ NO ] CYCLE ]
+pub enum SequenceOptions {
+    IncrementBy(Expr, bool),
+    MinValue(MinMaxValue),
+    MaxValue(MinMaxValue),
+    StartWith(Expr, bool),
+    Cache(Expr),
+    Cycle(bool),
+}
+
+impl fmt::Display for SequenceOptions {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SequenceOptions::IncrementBy(increment, by) => {
+                write!(
+                    f,
+                    " INCREMENT{by} {increment}",
+                    by = if *by { " BY" } else { "" },
+                    increment = increment
+                )
+            }
+            SequenceOptions::MinValue(value) => match value {
+                MinMaxValue::Empty => {
+                    write!(f, "")
+                }
+                MinMaxValue::None => {
+                    write!(f, " NO MINVALUE")
+                }
+                MinMaxValue::Some(minvalue) => {
+                    write!(f, " MINVALUE {minvalue}", minvalue = minvalue)
+                }
+            },
+            SequenceOptions::MaxValue(value) => match value {
+                MinMaxValue::Empty => {
+                    write!(f, "")
+                }
+                MinMaxValue::None => {
+                    write!(f, " NO MAXVALUE")
+                }
+                MinMaxValue::Some(maxvalue) => {
+                    write!(f, " MAXVALUE {maxvalue}", maxvalue = maxvalue)
+                }
+            },
+            SequenceOptions::StartWith(start, with) => {
+                write!(
+                    f,
+                    " START{with} {start}",
+                    with = if *with { " WITH" } else { "" },
+                    start = start
+                )
+            }
+            SequenceOptions::Cache(cache) => {
+                write!(f, " CACHE {}", *cache)
+            }
+            SequenceOptions::Cycle(no) => {
+                write!(f, " {}CYCLE", if *no { "NO " } else { "" })
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "derive-visitor", derive(Drive, DriveMut))]
+/// Can use to describe options in  create sequence or table column type identity
+/// [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
+pub enum MinMaxValue {
+    // clause is not specified
+    Empty,
+    // NO MINVALUE/NO MAXVALUE
+    None,
+    // MINVALUE <expr> / MAXVALUE <expr>
+    Some(Expr),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -2626,6 +2759,21 @@ impl fmt::Display for Statement {
 pub enum OnInsert {
     /// ON DUPLICATE KEY UPDATE (MySQL when the key already exists, then execute an update instead)
     DuplicateKeyUpdate(Vec<Assignment>),
+    /// ON CONFLICT is a PostgreSQL and Sqlite extension
+    OnConflict(OnConflict),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct OnConflict {
+    pub conflict_target: Vec<Ident>,
+    pub action: OnConflictAction,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum OnConflictAction {
+    DoNothing,
+    DoUpdate(Vec<Assignment>),
 }
 
 impl fmt::Display for OnInsert {
@@ -2636,6 +2784,24 @@ impl fmt::Display for OnInsert {
                 " ON DUPLICATE KEY UPDATE {}",
                 display_comma_separated(expr)
             ),
+            Self::OnConflict(o) => write!(f, " {o}"),
+        }
+    }
+}
+impl fmt::Display for OnConflict {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, " ON CONFLICT")?;
+        if !self.conflict_target.is_empty() {
+            write!(f, "({})", display_comma_separated(&self.conflict_target))?;
+        }
+        write!(f, " {}", self.action)
+    }
+}
+impl fmt::Display for OnConflictAction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::DoNothing => write!(f, "DO NOTHING"),
+            Self::DoUpdate(a) => write!(f, "DO UPDATE SET {}", display_comma_separated(a)),
         }
     }
 }
@@ -3070,6 +3236,45 @@ impl fmt::Display for ListAggOnOverflow {
                 write!(f, " COUNT")
             }
         }
+    }
+}
+
+/// An `ARRAY_AGG` invocation `ARRAY_AGG( [ DISTINCT ] <expr> [ORDER BY <expr>] [LIMIT <n>] )`
+/// Or `ARRAY_AGG( [ DISTINCT ] <expr> ) [ WITHIN GROUP ( ORDER BY <expr> ) ]`
+/// ORDER BY position is defined differently for BigQuery, Postgres and Snowflake.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ArrayAgg {
+    pub distinct: bool,
+    pub expr: Box<Expr>,
+    pub order_by: Option<Box<OrderByExpr>>,
+    pub limit: Option<Box<Expr>>,
+    pub within_group: bool, // order by is used inside a within group or not
+}
+
+impl fmt::Display for ArrayAgg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ARRAY_AGG({}{}",
+            if self.distinct { "DISTINCT " } else { "" },
+            self.expr
+        )?;
+        if !self.within_group {
+            if let Some(order_by) = &self.order_by {
+                write!(f, " ORDER BY {}", order_by)?;
+            }
+            if let Some(limit) = &self.limit {
+                write!(f, " LIMIT {}", limit)?;
+            }
+        }
+        write!(f, ")")?;
+        if self.within_group {
+            if let Some(order_by) = &self.order_by {
+                write!(f, " WITHIN GROUP (ORDER BY {})", order_by)?;
+            }
+        }
+        Ok(())
     }
 }
 

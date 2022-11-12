@@ -37,6 +37,49 @@ fn parse_create_sequence() {
 
     let sql4 = "CREATE TEMPORARY SEQUENCE  name0";
     pg().one_statement_parses_to(sql4, "CREATE TEMPORARY SEQUENCE name0");
+
+    let sql2 = "CREATE TEMPORARY SEQUENCE IF NOT EXISTS  name1
+      AS BIGINT
+     INCREMENT BY  1
+     MINVALUE 1  MAXVALUE 20
+     START WITH 10";
+    pg().one_statement_parses_to(
+        sql2,
+        "CREATE TEMPORARY SEQUENCE IF NOT EXISTS name1 AS BIGINT INCREMENT BY 1 MINVALUE 1 MAXVALUE 20 START WITH 10", );
+
+    let sql3 = "CREATE SEQUENCE IF NOT EXISTS  name2
+     AS BIGINT
+     INCREMENT  1
+     MINVALUE 1  MAXVALUE 20
+     START WITH 10 CACHE 2 NO CYCLE";
+    pg().one_statement_parses_to(
+        sql3,
+        "CREATE SEQUENCE IF NOT EXISTS name2 AS BIGINT INCREMENT 1 MINVALUE 1 MAXVALUE 20 START WITH 10 CACHE 2 NO CYCLE",
+    );
+
+    let sql4 = "CREATE TEMPORARY SEQUENCE  IF NOT EXISTS  name3
+         INCREMENT  1
+     NO MINVALUE  MAXVALUE 20 CACHE 2 CYCLE";
+    pg().one_statement_parses_to(
+        sql4,
+        "CREATE TEMPORARY SEQUENCE IF NOT EXISTS name3 INCREMENT 1 NO MINVALUE MAXVALUE 20 CACHE 2 CYCLE",
+    );
+
+    let sql5 = "CREATE TEMPORARY SEQUENCE  IF NOT EXISTS  name3
+         INCREMENT  1
+     NO MINVALUE  MAXVALUE 20 OWNED BY public.table01";
+    pg().one_statement_parses_to(
+        sql5,
+        "CREATE TEMPORARY SEQUENCE IF NOT EXISTS name3 INCREMENT 1 NO MINVALUE MAXVALUE 20 OWNED BY public.table01",
+    );
+
+    let sql6 = "CREATE TEMPORARY SEQUENCE  IF NOT EXISTS  name3
+         INCREMENT  1
+     NO MINVALUE  MAXVALUE 20 OWNED BY NONE";
+    pg().one_statement_parses_to(
+        sql6,
+        "CREATE TEMPORARY SEQUENCE IF NOT EXISTS name3 INCREMENT 1 NO MINVALUE MAXVALUE 20 OWNED BY NONE",
+    );
 }
 
 #[test]
@@ -184,7 +227,7 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "last_update".into(),
-                        data_type: DataType::Timestamp(TimezoneInfo::WithoutTimeZone),
+                        data_type: DataType::Timestamp(None, TimezoneInfo::WithoutTimeZone),
                         collation: None,
                         options: vec![
                             ColumnOptionDef {
@@ -444,85 +487,6 @@ PHP	₱ USD $
     let ast = pg_and_generic().one_statement_parses_to(sql, "");
     println!("{:#?}", ast);
     //assert_eq!(sql, ast.to_string());
-}
-
-#[test]
-fn parse_update_set_from() {
-    let sql = "UPDATE t1 SET name = t2.name FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 WHERE t1.id = t2.id";
-    let stmt = pg().verified_stmt(sql);
-    assert_eq!(
-        stmt,
-        Statement::Update {
-            table: TableWithJoins {
-                relation: TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("t1")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                },
-                joins: vec![],
-            },
-            assignments: vec![Assignment {
-                id: vec![Ident::new("name")],
-                value: Expr::CompoundIdentifier(vec![Ident::new("t2"), Ident::new("name")])
-            }],
-            from: Some(TableWithJoins {
-                relation: TableFactor::Derived {
-                    lateral: false,
-                    subquery: Box::new(Query {
-                        with: None,
-                        body: Box::new(SetExpr::Select(Box::new(Select {
-                            distinct: false,
-                            top: None,
-                            projection: vec![
-                                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
-                                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
-                            ],
-                            into: None,
-                            from: vec![TableWithJoins {
-                                relation: TableFactor::Table {
-                                    name: ObjectName(vec![Ident::new("t1")]),
-                                    alias: None,
-                                    args: None,
-                                    with_hints: vec![],
-                                },
-                                joins: vec![],
-                            }],
-                            lateral_views: vec![],
-                            selection: None,
-                            group_by: vec![Expr::Identifier(Ident::new("id"))],
-                            cluster_by: vec![],
-                            distribute_by: vec![],
-                            sort_by: vec![],
-                            having: None,
-                            qualify: None
-                        }))),
-                        order_by: vec![],
-                        limit: None,
-                        offset: None,
-                        fetch: None,
-                        lock: None,
-                    }),
-                    alias: Some(TableAlias {
-                        name: Ident::new("t2"),
-                        columns: vec![],
-                    })
-                },
-                joins: vec![],
-            }),
-            selection: Some(Expr::BinaryOp {
-                left: Box::new(Expr::CompoundIdentifier(vec![
-                    Ident::new("t1"),
-                    Ident::new("id")
-                ])),
-                op: BinaryOperator::Eq,
-                right: Box::new(Expr::CompoundIdentifier(vec![
-                    Ident::new("t2"),
-                    Ident::new("id")
-                ])),
-            }),
-        }
-    );
 }
 
 #[test]
@@ -1135,6 +1099,143 @@ fn parse_prepare() {
 }
 
 #[test]
+fn parse_pg_on_conflict() {
+    let stmt = pg_and_generic().verified_stmt(
+        "INSERT INTO distributors (did, dname) \
+        VALUES (5, 'Gizmo Transglobal'), (6, 'Associated Computing, Inc')  \
+        ON CONFLICT(did) \
+        DO UPDATE SET dname = EXCLUDED.dname",
+    );
+    match stmt {
+        Statement::Insert {
+            on:
+                Some(OnInsert::OnConflict(OnConflict {
+                    conflict_target,
+                    action,
+                })),
+            ..
+        } => {
+            assert_eq!(vec![Ident::from("did")], conflict_target);
+            assert_eq!(
+                OnConflictAction::DoUpdate(vec![Assignment {
+                    id: vec!["dname".into()],
+                    value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "dname".into()])
+                },]),
+                action
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    let stmt = pg_and_generic().verified_stmt(
+        "INSERT INTO distributors (did, dname, area) \
+        VALUES (5, 'Gizmo Transglobal', 'Mars'), (6, 'Associated Computing, Inc', 'Venus')  \
+        ON CONFLICT(did, area) \
+        DO UPDATE SET dname = EXCLUDED.dname, area = EXCLUDED.area",
+    );
+    match stmt {
+        Statement::Insert {
+            on:
+                Some(OnInsert::OnConflict(OnConflict {
+                    conflict_target,
+                    action,
+                })),
+            ..
+        } => {
+            assert_eq!(
+                vec![Ident::from("did"), Ident::from("area"),],
+                conflict_target
+            );
+            assert_eq!(
+                OnConflictAction::DoUpdate(vec![
+                    Assignment {
+                        id: vec!["dname".into()],
+                        value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "dname".into()])
+                    },
+                    Assignment {
+                        id: vec!["area".into()],
+                        value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "area".into()])
+                    },
+                ]),
+                action
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    let stmt = pg_and_generic().verified_stmt(
+        "INSERT INTO distributors (did, dname) \
+    VALUES (5, 'Gizmo Transglobal'), (6, 'Associated Computing, Inc')  \
+    ON CONFLICT DO NOTHING",
+    );
+    match stmt {
+        Statement::Insert {
+            on:
+                Some(OnInsert::OnConflict(OnConflict {
+                    conflict_target,
+                    action,
+                })),
+            ..
+        } => {
+            assert_eq!(Vec::<Ident>::new(), conflict_target);
+            assert_eq!(OnConflictAction::DoNothing, action);
+        }
+        _ => unreachable!(),
+    };
+}
+
+#[test]
+fn parse_pg_returning() {
+    let stmt = pg_and_generic().verified_stmt(
+        "INSERT INTO distributors (did, dname) VALUES (DEFAULT, 'XYZ Widgets') RETURNING did",
+    );
+    match stmt {
+        Statement::Insert { returning, .. } => {
+            assert_eq!(
+                Some(vec![SelectItem::UnnamedExpr(Expr::Identifier(
+                    "did".into()
+                )),]),
+                returning
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    let stmt = pg_and_generic().verified_stmt(
+        "UPDATE weather SET temp_lo = temp_lo + 1, temp_hi = temp_lo + 15, prcp = DEFAULT \
+             WHERE city = 'San Francisco' AND date = '2003-07-03' \
+             RETURNING temp_lo AS lo, temp_hi AS hi, prcp",
+    );
+    match stmt {
+        Statement::Update { returning, .. } => {
+            assert_eq!(
+                Some(vec![
+                    SelectItem::ExprWithAlias {
+                        expr: Expr::Identifier("temp_lo".into()),
+                        alias: "lo".into()
+                    },
+                    SelectItem::ExprWithAlias {
+                        expr: Expr::Identifier("temp_hi".into()),
+                        alias: "hi".into()
+                    },
+                    SelectItem::UnnamedExpr(Expr::Identifier("prcp".into())),
+                ]),
+                returning
+            );
+        }
+        _ => unreachable!(),
+    };
+    let stmt =
+        pg_and_generic().verified_stmt("DELETE FROM tasks WHERE status = 'DONE' RETURNING *");
+    match stmt {
+        Statement::Delete { returning, .. } => {
+            assert_eq!(Some(vec![SelectItem::Wildcard,]), returning);
+        }
+        _ => unreachable!(),
+    };
+}
+
+#[test]
 fn parse_pg_bitwise_binary_ops() {
     let bitwise_ops = &[
         // Sharp char cannot be used with Generic Dialect, it conflicts with identifiers
@@ -1281,9 +1382,9 @@ fn parse_array_index_expr() {
                     })],
                     named: true,
                 })),
-                data_type: DataType::Array(Box::new(DataType::Array(Box::new(DataType::Int(
-                    None
-                )))))
+                data_type: DataType::Array(Some(Box::new(DataType::Array(Some(Box::new(
+                    DataType::Int(None)
+                ))))))
             }))),
             indexes: vec![num[1].clone(), num[2].clone()],
         },
@@ -1310,7 +1411,7 @@ fn parse_array_subquery_expr() {
             with: None,
             body: Box::new(SetExpr::SetOperation {
                 op: SetOperator::Union,
-                all: false,
+                set_quantifier: SetQuantifier::None,
                 left: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: false,
                     top: None,
@@ -1922,4 +2023,166 @@ fn parse_create_role() {
             panic!("Should not be able to parse CREATE ROLE containing both negated and non-negated versions of the same keyword: {}", negatable_kw)
         }
     }
+}
+
+#[test]
+fn parse_delimited_identifiers() {
+    // check that quoted identifiers in any position remain quoted after serialization
+    let select = pg().verified_only_select(
+        r#"SELECT "alias"."bar baz", "myfun"(), "simple id" AS "column alias" FROM "a table" AS "alias""#,
+    );
+    // check FROM
+    match only(select.from).relation {
+        TableFactor::Table {
+            name,
+            alias,
+            args,
+            with_hints,
+        } => {
+            assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
+            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert!(args.is_none());
+            assert!(with_hints.is_empty());
+        }
+        _ => panic!("Expecting TableFactor::Table"),
+    }
+    // check SELECT
+    assert_eq!(3, select.projection.len());
+    assert_eq!(
+        &Expr::CompoundIdentifier(vec![
+            Ident::with_quote('"', "alias"),
+            Ident::with_quote('"', "bar baz"),
+        ]),
+        expr_from_projection(&select.projection[0]),
+    );
+    assert_eq!(
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            args: vec![],
+            over: None,
+            distinct: false,
+            special: false,
+        }),
+        expr_from_projection(&select.projection[1]),
+    );
+    match &select.projection[2] {
+        SelectItem::ExprWithAlias { expr, alias } => {
+            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
+            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+        }
+        _ => panic!("Expected ExprWithAlias"),
+    }
+
+    pg().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
+    pg().verified_stmt(r#"ALTER TABLE foo ADD CONSTRAINT "bar" PRIMARY KEY (baz)"#);
+    //TODO verified_stmt(r#"UPDATE foo SET "bar" = 5"#);
+}
+
+#[test]
+fn parse_like() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}LIKE '%a'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = pg().verified_only_select(sql);
+        assert_eq!(
+            Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: None,
+            },
+            select.selection.unwrap()
+        );
+
+        // Test with escape char
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}LIKE '%a' ESCAPE '\\'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = pg().verified_only_select(sql);
+        assert_eq!(
+            Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: Some('\\'),
+            },
+            select.selection.unwrap()
+        );
+
+        // This statement tests that LIKE and NOT LIKE have the same precedence.
+        // This was previously mishandled (#81).
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}LIKE '%a' IS NULL",
+            if negated { "NOT " } else { "" }
+        );
+        let select = pg().verified_only_select(sql);
+        assert_eq!(
+            Expr::IsNull(Box::new(Expr::Like {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: None,
+            })),
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
+}
+
+#[test]
+fn parse_similar_to() {
+    fn chk(negated: bool) {
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = pg().verified_only_select(sql);
+        assert_eq!(
+            Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: None,
+            },
+            select.selection.unwrap()
+        );
+
+        // Test with escape char
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\'",
+            if negated { "NOT " } else { "" }
+        );
+        let select = pg().verified_only_select(sql);
+        assert_eq!(
+            Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: Some('\\'),
+            },
+            select.selection.unwrap()
+        );
+
+        // This statement tests that SIMILAR TO and NOT SIMILAR TO have the same precedence.
+        let sql = &format!(
+            "SELECT * FROM customers WHERE name {}SIMILAR TO '%a' ESCAPE '\\' IS NULL",
+            if negated { "NOT " } else { "" }
+        );
+        let select = pg().verified_only_select(sql);
+        assert_eq!(
+            Expr::IsNull(Box::new(Expr::SimilarTo {
+                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                negated,
+                pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
+                escape_char: Some('\\'),
+            })),
+            select.selection.unwrap()
+        );
+    }
+    chk(false);
+    chk(true);
 }

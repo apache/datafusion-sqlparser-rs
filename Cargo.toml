@@ -1,7 +1,7 @@
 [package]
 name = "sqlparser"
 description = "Extensible SQL Lexer and Parser with support for ANSI SQL:2011"
-version = "0.26.0"
+version = "0.27.0"
 authors = ["Andy Grove <andygrove73@gmail.com>"]
 homepage = "https://github.com/sqlparser-rs/sqlparser-rs"
 documentation = "https://docs.rs/sqlparser/"
@@ -35,7 +35,7 @@ serde_json = { version = "1.0", optional = true }
 derive-visitor = { version = "0.3.0", optional = true }
 
 [dev-dependencies]
-simple_logger = "2.1"
+simple_logger = "4.0"
 matches = "0.1"
 pretty_assertions = "1"
 

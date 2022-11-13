@@ -2528,8 +2528,15 @@ fn parse_alter_table() {
     match one_statement_parses_to(add_column, "ALTER TABLE tab ADD COLUMN foo TEXT") {
         Statement::AlterTable {
             name,
-            operation: AlterTableOperation::AddColumn { column_def },
+            operation:
+                AlterTableOperation::AddColumn {
+                    column_keyword,
+                    if_not_exists,
+                    column_def,
+                },
         } => {
+            assert!(column_keyword);
+            assert!(!if_not_exists);
             assert_eq!("tab", name.to_string());
             assert_eq!("foo", column_def.name.to_string());
             assert_eq!("TEXT", column_def.data_type.to_string());
@@ -2565,6 +2572,66 @@ fn parse_alter_table() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_alter_table_add_column() {
+    match verified_stmt("ALTER TABLE tab ADD foo TEXT") {
+        Statement::AlterTable {
+            operation: AlterTableOperation::AddColumn { column_keyword, .. },
+            ..
+        } => {
+            assert!(!column_keyword);
+        }
+        _ => unreachable!(),
+    };
+
+    match verified_stmt("ALTER TABLE tab ADD COLUMN foo TEXT") {
+        Statement::AlterTable {
+            operation: AlterTableOperation::AddColumn { column_keyword, .. },
+            ..
+        } => {
+            assert!(column_keyword);
+        }
+        _ => unreachable!(),
+    };
+}
+
+#[test]
+fn parse_alter_table_add_column_if_not_exists() {
+    let dialects = TestedDialects {
+        dialects: vec![
+            Box::new(PostgreSqlDialect {}),
+            Box::new(BigQueryDialect {}),
+            Box::new(GenericDialect {}),
+        ],
+    };
+
+    match dialects.verified_stmt("ALTER TABLE tab ADD IF NOT EXISTS foo TEXT") {
+        Statement::AlterTable {
+            operation: AlterTableOperation::AddColumn { if_not_exists, .. },
+            ..
+        } => {
+            assert!(if_not_exists);
+        }
+        _ => unreachable!(),
+    };
+
+    match dialects.verified_stmt("ALTER TABLE tab ADD COLUMN IF NOT EXISTS foo TEXT") {
+        Statement::AlterTable {
+            operation:
+                AlterTableOperation::AddColumn {
+                    column_keyword,
+                    if_not_exists,
+                    ..
+                },
+            ..
+        } => {
+            assert!(column_keyword);
+            assert!(if_not_exists);
+        }
+        _ => unreachable!(),
+    };
 }
 
 #[test]

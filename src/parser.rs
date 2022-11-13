@@ -3175,9 +3175,22 @@ impl<'a> Parser<'a> {
                         new_partitions: partitions,
                     }
                 } else {
-                    let _ = self.parse_keyword(Keyword::COLUMN);
+                    let column_keyword = self.parse_keyword(Keyword::COLUMN);
+
+                    let if_not_exists = if dialect_of!(self is PostgreSqlDialect | BigQueryDialect | GenericDialect)
+                    {
+                        self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS])
+                            || if_not_exists
+                    } else {
+                        false
+                    };
+
                     let column_def = self.parse_column_def()?;
-                    AlterTableOperation::AddColumn { column_def }
+                    AlterTableOperation::AddColumn {
+                        column_keyword,
+                        if_not_exists,
+                        column_def,
+                    }
                 }
             }
         } else if self.parse_keyword(Keyword::RENAME) {
@@ -5841,7 +5854,6 @@ mod tests {
 
     #[cfg(test)]
     mod test_parse_data_type {
-
         use crate::ast::{
             CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, ObjectName, TimezoneInfo,
         };

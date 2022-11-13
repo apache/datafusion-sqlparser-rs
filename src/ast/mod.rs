@@ -36,12 +36,12 @@ pub use self::query::{
     TableAlias, TableFactor, TableWithJoins, Top, Values, With,
 };
 
+pub use self::value::{escape_quoted_string, DateTimeField, TrimWhereField, Value};
 #[cfg(feature = "derive-visitor")]
 pub use derive_visitor::{
     visitor_enter_fn, visitor_enter_fn_mut, visitor_fn, visitor_fn_mut, Drive, DriveMut,
     Event as VisitorEvent, Visitor, VisitorMut,
 };
-pub use self::value::{escape_quoted_string, DateTimeField, TrimWhereField, Value};
 
 mod data_type;
 mod ddl;
@@ -2680,10 +2680,16 @@ impl fmt::Display for Statement {
 ///     [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
 ///     [ START [ WITH ] start ] [ CACHE cache ] [ [ NO ] CYCLE ]
 pub enum SequenceOptions {
-    IncrementBy(Expr, #[cfg_attr(feature = "derive-visitor", drive(skip))] bool),
+    IncrementBy(
+        Expr,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] bool,
+    ),
     MinValue(MinMaxValue),
     MaxValue(MinMaxValue),
-    StartWith(Expr, #[cfg_attr(feature = "derive-visitor", drive(skip))] bool),
+    StartWith(
+        Expr,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] bool,
+    ),
     Cache(Expr),
     Cycle(#[cfg_attr(feature = "derive-visitor", drive(skip))] bool),
 }

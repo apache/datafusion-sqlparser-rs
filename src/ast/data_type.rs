@@ -130,8 +130,8 @@ pub enum DataType {
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
     Time(
-      #[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>,
-      #[cfg_attr(feature = "derive-visitor", drive(skip))] TimezoneInfo
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] TimezoneInfo,
     ),
     /// Datetime with optional time precision e.g. [MySQL][1].
     ///
@@ -141,8 +141,8 @@ pub enum DataType {
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
     Timestamp(
-      #[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>, 
-      #[cfg_attr(feature = "derive-visitor", drive(skip))] TimezoneInfo
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] Option<u64>,
+        #[cfg_attr(feature = "derive-visitor", drive(skip))] TimezoneInfo,
     ),
     /// Interval
     Interval,

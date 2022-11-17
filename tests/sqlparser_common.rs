@@ -2155,13 +2155,24 @@ fn parse_create_table_as() {
 
 #[test]
 fn parse_create_table_as_table() {
-    let sql1 = "CREATE TABLE new_table AS TABLE old_table";
-    let actual_ast = Parser::parse_sql(&GenericDialect {}, sql1).unwrap();
+    let sql = "CREATE TABLE new_table AS TABLE old_table";
 
-    let sql2 = "CREATE TABLE new_table AS SELECT * FROM old_table";
-    let expected_ast = Parser::parse_sql(&GenericDialect {}, sql2).unwrap();
+    let expected_query = Box::new(Query {
+        with: None,
+        body: Box::new(SetExpr::Table(Box::new(Table { table_name: "old_table".to_string() }))),
+        order_by: vec![],
+        limit: None,
+        offset: None,
+        fetch: None,
+        lock: None,
+    });
 
-    assert_eq!(actual_ast, expected_ast);
+    match verified_stmt(sql) {
+        Statement::CreateTable { query, .. } => {
+            assert_eq!(query.unwrap(), expected_query);
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

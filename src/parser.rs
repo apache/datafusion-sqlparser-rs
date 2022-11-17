@@ -4185,7 +4185,7 @@ impl<'a> Parser<'a> {
             match &self.tokens[0] {
                 Token::Word(w) => {
                     if w.keyword == Keyword::CREATE {
-                        SetExpr::Select(Box::new(self.parse_as_table()?))
+                        SetExpr::Table(Box::new(self.parse_as_table()?))
                     } else {
                         return self.expected(
                             "CREATE statement",
@@ -4396,16 +4396,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse `CREATE TABLE x AS TABLE y`
-    /// the same as `CREATE TABLE x AS SELECT * FROM y`
-    /// Note logic for the "projection" and "from" variables
-    pub fn parse_as_table(&mut self) -> Result<Select, ParserError> {
-        let distinct = false;
-        let top = None;
-
-        let projection = vec![SelectItem::Wildcard];
-
-        let into = None;
-
+    pub fn parse_as_table(&mut self) -> Result<Table, ParserError> {
         let mut as_flag = false;
         let mut table_flag = false;
         let mut table_name = "";
@@ -4426,43 +4417,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let from = vec![TableWithJoins {
-            relation: TableFactor::Table {
-                name: ObjectName(vec![Ident {
-                    value: table_name.to_string(),
-                    quote_style: None,
-                }]),
-                alias: None,
-                args: None,
-                with_hints: vec![],
-            },
-            joins: vec![],
-        }];
-
-        let lateral_views = vec![];
-        let selection = None;
-        let group_by = vec![];
-        let cluster_by = vec![];
-        let distribute_by = vec![];
-        let sort_by = vec![];
-        let having = None;
-        let qualify = None;
-
-        Ok(Select {
-            distinct,
-            top,
-            projection,
-            into,
-            from,
-            lateral_views,
-            selection,
-            group_by,
-            cluster_by,
-            distribute_by,
-            sort_by,
-            having,
-            qualify,
-        })
+        Ok(Table { table_name: table_name.to_string() })
     }
 
     pub fn parse_set(&mut self) -> Result<Statement, ParserError> {

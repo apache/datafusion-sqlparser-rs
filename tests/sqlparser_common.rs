@@ -2159,7 +2159,9 @@ fn parse_create_table_as_table() {
 
     let expected_query = Box::new(Query {
         with: None,
-        body: Box::new(SetExpr::Table(Box::new(Table { table_name: "old_table".to_string() }))),
+        body: Box::new(SetExpr::Table(Box::new(Table {
+            table_name: "old_table".to_string(),
+        }))),
         order_by: vec![],
         limit: None,
         offset: None,

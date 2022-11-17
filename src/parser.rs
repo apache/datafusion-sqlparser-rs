@@ -4417,7 +4417,9 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok(Table { table_name: table_name.to_string() })
+        Ok(Table {
+            table_name: table_name.to_string(),
+        })
     }
 
     pub fn parse_set(&mut self) -> Result<Statement, ParserError> {

@@ -163,11 +163,7 @@ pub struct Table {
 
 impl fmt::Display for Table {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "TABLE {}",
-            self.table_name,
-        )?;
+        write!(f, "TABLE {}", self.table_name,)?;
         Ok(())
     }
 }

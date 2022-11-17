@@ -3216,19 +3216,22 @@ fn parse_interval_and_or_xor() {
 
     assert_eq!(actual_ast, expected_ast);
 
-    verified_stmt("SELECT col FROM test \
+    verified_stmt(
+        "SELECT col FROM test \
         WHERE d3_date > d1_date + INTERVAL '5 days' \
-        AND d2_date > d1_date + INTERVAL '3 days'"
+        AND d2_date > d1_date + INTERVAL '3 days'",
     );
 
-    verified_stmt("SELECT col FROM test \
+    verified_stmt(
+        "SELECT col FROM test \
         WHERE d3_date > d1_date + INTERVAL '5 days' \
-        OR d2_date > d1_date + INTERVAL '3 days'"
+        OR d2_date > d1_date + INTERVAL '3 days'",
     );
 
-    verified_stmt("SELECT col FROM test \
+    verified_stmt(
+        "SELECT col FROM test \
         WHERE d3_date > d1_date + INTERVAL '5 days' \
-        XOR d2_date > d1_date + INTERVAL '3 days'"
+        XOR d2_date > d1_date + INTERVAL '3 days'",
     );
 }
 

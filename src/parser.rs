@@ -4428,7 +4428,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if schema_name == "" {
+        if schema_name.is_empty() {
             Ok(Table {
                 table_name: Some(table_name.to_string()),
                 schema_name: None,

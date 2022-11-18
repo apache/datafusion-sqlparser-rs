@@ -171,11 +171,7 @@ impl fmt::Display for Table {
                 self.table_name.as_ref().unwrap(),
             )?;
         } else {
-            write!(
-                f,
-                "TABLE {}",
-                self.table_name.as_ref().unwrap(),
-            )?;
+            write!(f, "TABLE {}", self.table_name.as_ref().unwrap(),)?;
         }
         Ok(())
     }

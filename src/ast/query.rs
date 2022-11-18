@@ -157,13 +157,26 @@ impl fmt::Display for SetQuantifier {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Table {
-    pub table_name: String,
-    // pub schema_name: String,
+    pub table_name: Option<String>,
+    pub schema_name: Option<String>,
 }
 
 impl fmt::Display for Table {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "TABLE {}", self.table_name,)?;
+        if let Some(ref schema_name) = self.schema_name {
+            write!(
+                f,
+                "TABLE {}.{}",
+                schema_name,
+                self.table_name.as_ref().unwrap(),
+            )?;
+        } else {
+            write!(
+                f,
+                "TABLE {}",
+                self.table_name.as_ref().unwrap(),
+            )?;
+        }
         Ok(())
     }
 }

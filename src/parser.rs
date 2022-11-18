@@ -4182,6 +4182,8 @@ impl<'a> Parser<'a> {
             SetExpr::Values(self.parse_values()?)
         } else if self.parse_keyword(Keyword::TABLE) {
             self.next_token();
+            self.next_token();
+            self.next_token();
             match &self.tokens[0] {
                 Token::Word(w) => {
                     if w.keyword == Keyword::CREATE {
@@ -4400,26 +4402,43 @@ impl<'a> Parser<'a> {
         let mut as_flag = false;
         let mut table_flag = false;
         let mut table_name = "";
-        // Grab the table name after `AS TABLE ...`
-        for token in self.tokens.iter() {
+        let mut schema_name = "";
+
+        let mut tokens_iter = self.tokens.iter().enumerate().peekable();
+        while let Some((_, token)) = tokens_iter.next() {
             if let Token::Word(w) = token {
                 if w.keyword == Keyword::AS {
                     as_flag = true;
                 } else if w.keyword == Keyword::TABLE && as_flag {
                     table_flag = true;
                 } else if as_flag && table_flag {
-                    table_name = &w.value;
-                    as_flag = false;
-                    table_flag = false;
+                    match tokens_iter.peek() {
+                        Some((_, Token::Period)) => {
+                            schema_name = &w.value;
+                        }
+                        _ => {
+                            table_name = &w.value;
+                            as_flag = false;
+                            table_flag = false;
+                        }
+                    }
                 } else if w.keyword != Keyword::TABLE && as_flag {
                     as_flag = false;
                 }
             }
         }
 
-        Ok(Table {
-            table_name: table_name.to_string(),
-        })
+        if schema_name == "" {
+            Ok(Table {
+                table_name: Some(table_name.to_string()),
+                schema_name: None,
+            })
+        } else {
+            Ok(Table {
+                table_name: Some(table_name.to_string()),
+                schema_name: Some(schema_name.to_string()),
+            })
+        }
     }
 
     pub fn parse_set(&mut self) -> Result<Statement, ParserError> {

@@ -211,7 +211,7 @@ fn parse_show_create() {
         assert_eq!(
             mysql_and_generic().verified_stmt(format!("SHOW CREATE {} myident", obj_type).as_str()),
             Statement::ShowCreate {
-                obj_type: obj_type.clone(),
+                obj_type: *obj_type,
                 obj_name: obj_name.clone(),
             }
         );

@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use super::display_separated;
 
 /// Unary operators
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum UnaryOperator {
     Plus,
@@ -57,7 +57,7 @@ impl fmt::Display for UnaryOperator {
 }
 
 /// Binary operators
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BinaryOperator {
     Plus,

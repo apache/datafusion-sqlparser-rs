@@ -25,7 +25,7 @@ use crate::ast::{display_comma_separated, display_separated, DataType, Expr, Ide
 use crate::tokenizer::Token;
 
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AlterTableOperation {
     /// `ADD <table_constraint>`
@@ -181,7 +181,7 @@ impl fmt::Display for AlterTableOperation {
 }
 
 /// An `ALTER COLUMN` (`Statement::AlterTable`) operation
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AlterColumnOperation {
     /// `SET NOT NULL`
@@ -224,7 +224,7 @@ impl fmt::Display for AlterColumnOperation {
 
 /// A table-level constraint, specified in a `CREATE TABLE` or an
 /// `ALTER TABLE ADD <constraint>` statement.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TableConstraint {
     /// `[ CONSTRAINT <name> ] { PRIMARY KEY | UNIQUE } (<columns>)`
@@ -387,7 +387,7 @@ impl fmt::Display for TableConstraint {
 /// statements of `MySQL` [(1)].
 ///
 /// [1]: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum KeyOrIndexDisplay {
     /// Nothing to display
@@ -422,7 +422,7 @@ impl fmt::Display for KeyOrIndexDisplay {
 /// [1]: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
 /// [2]: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
 /// [3]: https://www.postgresql.org/docs/14/sql-createindex.html
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum IndexType {
     BTree,
@@ -440,7 +440,7 @@ impl fmt::Display for IndexType {
 }
 
 /// SQL column definition
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ColumnDef {
     pub name: Ident,
@@ -475,7 +475,7 @@ impl fmt::Display for ColumnDef {
 /// For maximum flexibility, we don't distinguish between constraint and
 /// non-constraint options, lumping them all together under the umbrella of
 /// "column options," and we allow any column option to be named.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ColumnOptionDef {
     pub name: Option<Ident>,
@@ -490,7 +490,7 @@ impl fmt::Display for ColumnOptionDef {
 
 /// `ColumnOption`s are modifiers that follow a column definition in a `CREATE
 /// TABLE` statement.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ColumnOption {
     /// `NULL`
@@ -577,7 +577,7 @@ fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
 /// { RESTRICT | CASCADE | SET NULL | NO ACTION | SET DEFAULT }`
 ///
 /// Used in foreign key constraints in `ON UPDATE` and `ON DELETE` options.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ReferentialAction {
     Restrict,

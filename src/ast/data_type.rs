@@ -22,7 +22,7 @@ use crate::ast::ObjectName;
 use super::value::escape_single_quote_string;
 
 /// SQL data types
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DataType {
     /// Fixed-length character type e.g. CHARACTER(10)
@@ -335,7 +335,7 @@ fn format_datetime_precision_and_tz(
 ///
 /// This is more related to a display information than real differences between each variant. To
 /// guarantee compatibility with the input query we must maintain its exact information.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TimezoneInfo {
     /// No information about time zone. E.g., TIMESTAMP
@@ -382,7 +382,7 @@ impl fmt::Display for TimezoneInfo {
 /// following the 2016 [standard].
 ///
 /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ExactNumberInfo {
     /// No additional information e.g. `DECIMAL`
@@ -412,7 +412,7 @@ impl fmt::Display for ExactNumberInfo {
 /// Information about [character length][1], including length and possibly unit.
 ///
 /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-length
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CharacterLength {
     /// Default (if VARYING) or maximum (if not VARYING) length
@@ -434,7 +434,7 @@ impl fmt::Display for CharacterLength {
 /// Possible units for characters, initially based on 2016 ANSI [standard][1].
 ///
 /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#char-length-units
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CharLengthUnits {
     /// CHARACTERS unit

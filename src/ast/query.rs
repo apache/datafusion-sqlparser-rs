@@ -321,9 +321,49 @@ pub enum SelectItem {
     /// An expression, followed by `[ AS ] alias`
     ExprWithAlias { expr: Expr, alias: Ident },
     /// `alias.*` or even `schema.table.*`
-    QualifiedWildcard(ObjectName),
+    QualifiedWildcard(ObjectName, Option<ExcludeSelectItem>),
     /// An unqualified `*`
-    Wildcard,
+    Wildcard(Option<ExcludeSelectItem>),
+}
+
+/// Snowflake `EXCLUDE` information.
+///
+/// # Syntax
+/// ```plaintext
+/// <col_name>
+/// | (<col_name>, <col_name>, ...)
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ExcludeSelectItem {
+    /// Single column name without parenthesis.
+    ///
+    /// # Syntax
+    /// ```plaintext
+    /// <col_name>
+    /// ```
+    Single(Ident),
+    /// Multiple column names inside parenthesis.
+    /// # Syntax
+    /// ```plaintext
+    /// (<col_name>, <col_name>, ...)
+    /// ```
+    Multiple(Vec<Ident>),
+}
+
+impl fmt::Display for ExcludeSelectItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "EXCLUDE")?;
+        match self {
+            Self::Single(column) => {
+                write!(f, " {column}")?;
+            }
+            Self::Multiple(columns) => {
+                write!(f, " ({})", display_comma_separated(columns))?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl fmt::Display for SelectItem {
@@ -331,8 +371,20 @@ impl fmt::Display for SelectItem {
         match &self {
             SelectItem::UnnamedExpr(expr) => write!(f, "{}", expr),
             SelectItem::ExprWithAlias { expr, alias } => write!(f, "{} AS {}", expr, alias),
-            SelectItem::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
-            SelectItem::Wildcard => write!(f, "*"),
+            SelectItem::QualifiedWildcard(prefix, opt_exclude) => {
+                write!(f, "{}.*", prefix)?;
+                if let Some(exclude) = opt_exclude {
+                    write!(f, " {exclude}")?;
+                }
+                Ok(())
+            }
+            SelectItem::Wildcard(opt_exclude) => {
+                write!(f, "*")?;
+                if let Some(exclude) = opt_exclude {
+                    write!(f, " {exclude}")?;
+                }
+                Ok(())
+            }
         }
     }
 }

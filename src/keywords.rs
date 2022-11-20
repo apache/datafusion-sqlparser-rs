@@ -225,6 +225,7 @@ define_keywords!(
     EVENT,
     EVERY,
     EXCEPT,
+    EXCLUDE,
     EXEC,
     EXECUTE,
     EXISTS,

@@ -578,22 +578,22 @@ fn parse_select_into() {
 fn parse_select_wildcard() {
     let sql = "SELECT * FROM foo";
     let select = verified_only_select(sql);
-    assert_eq!(&SelectItem::Wildcard, only(&select.projection));
+    assert_eq!(&SelectItem::Wildcard(None), only(&select.projection));
 
     let sql = "SELECT foo.* FROM foo";
     let select = verified_only_select(sql);
     assert_eq!(
-        &SelectItem::QualifiedWildcard(ObjectName(vec![Ident::new("foo")])),
+        &SelectItem::QualifiedWildcard(ObjectName(vec![Ident::new("foo")]), None),
         only(&select.projection)
     );
 
     let sql = "SELECT myschema.mytable.* FROM myschema.mytable";
     let select = verified_only_select(sql);
     assert_eq!(
-        &SelectItem::QualifiedWildcard(ObjectName(vec![
-            Ident::new("myschema"),
-            Ident::new("mytable"),
-        ])),
+        &SelectItem::QualifiedWildcard(
+            ObjectName(vec![Ident::new("myschema"), Ident::new("mytable"),]),
+            None
+        ),
         only(&select.projection)
     );
 
@@ -5239,7 +5239,7 @@ fn parse_merge() {
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             distinct: false,
                             top: None,
-                            projection: vec![SelectItem::Wildcard],
+                            projection: vec![SelectItem::Wildcard(None)],
                             into: None,
                             from: vec![TableWithJoins {
                                 relation: TableFactor::Table {

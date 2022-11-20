@@ -142,6 +142,7 @@ define_keywords!(
     COMMENT,
     COMMIT,
     COMMITTED,
+    COMPRESSION,
     COMPUTE,
     CONDITION,
     CONFLICT,

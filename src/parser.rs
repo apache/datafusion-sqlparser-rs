@@ -2188,7 +2188,7 @@ impl<'a> Parser<'a> {
             })
         } else if dialect_of!(self is PostgreSqlDialect) {
             self.expect_token(&Token::LParen)?;
-            let args = self.parse_comma_separated(Parser::parse_data_type)?;
+            let args = self.parse_comma_separated(Parser::parse_create_function_arg)?;
             self.expect_token(&Token::RParen)?;
 
             let return_type = if self.parse_keyword(Keyword::RETURNS) {
@@ -2216,7 +2216,41 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_create_function_body(&mut self) -> Result<CreateFunctionBody, ParserError> {
+    fn parse_create_function_arg(&mut self) -> Result<CreateFunctionArg, ParserError> {
+        let mode = if self.parse_keyword(Keyword::IN) {
+            Some(ArgMode::In)
+        } else if self.parse_keyword(Keyword::OUT) {
+            Some(ArgMode::Out)
+        } else if self.parse_keyword(Keyword::INOUT) {
+            Some(ArgMode::InOut)
+        } else {
+            None
+        };
+
+        // parse: [ argname ] argtype
+        let mut name = None;
+        let mut data_type = self.parse_data_type()?;
+        if let DataType::Custom(n, _) = &data_type {
+            // the first token is actually a name
+            name = Some(n.0[0].clone());
+            data_type = self.parse_data_type()?;
+        }
+
+        let default_expr = if self.parse_keyword(Keyword::DEFAULT) || self.consume_token(&Token::Eq)
+        {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+        Ok(CreateFunctionArg {
+            mode,
+            name,
+            data_type,
+            default_expr,
+        })
+    }
+
+    fn parse_create_function_body(&mut self) -> Result<CreateFunctionBody, ParserError> {
         if self.parse_keyword(Keyword::AS) {
             Ok(CreateFunctionBody::As(self.parse_literal_string()?))
         } else if self.parse_keyword(Keyword::LANGUAGE) {
@@ -2227,6 +2261,9 @@ impl<'a> Parser<'a> {
             Ok(CreateFunctionBody::Behavior(FunctionBehavior::Stable))
         } else if self.parse_keyword(Keyword::VOLATILE) {
             Ok(CreateFunctionBody::Behavior(FunctionBehavior::Volatile))
+        } else if self.parse_keyword(Keyword::RETURN) {
+            let expr = self.parse_expr()?;
+            Ok(CreateFunctionBody::Return(expr))
         } else {
             self.expected("AS or USING", self.peek_token())
         }

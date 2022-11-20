@@ -2198,12 +2198,41 @@ fn parse_create_function() {
         Statement::CreateFunction {
             temporary: false,
             name: ObjectName(vec![Ident::new("add")]),
-            args: Some(vec![DataType::Integer(None), DataType::Integer(None)]),
+            args: Some(vec![
+                CreateFunctionArg::unnamed(DataType::Integer(None)),
+                CreateFunctionArg::unnamed(DataType::Integer(None)),
+            ]),
             return_type: Some(DataType::Integer(None)),
             bodies: vec![
                 CreateFunctionBody::As("select $1 + $2;".into()),
                 CreateFunctionBody::Language("SQL".into()),
                 CreateFunctionBody::Behavior(FunctionBehavior::Immutable),
+            ],
+        }
+    );
+
+    let sql = "CREATE FUNCTION add(a integer, b integer) RETURNS integer
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURN a + b;";
+    assert_eq!(
+        pg().one_statement_parses_to(sql, ""),
+        Statement::CreateFunction {
+            temporary: false,
+            name: ObjectName(vec![Ident::new("add")]),
+            args: Some(vec![
+                CreateFunctionArg::with_name("a", DataType::Integer(None)),
+                CreateFunctionArg::with_name("b", DataType::Integer(None)),
+            ]),
+            return_type: Some(DataType::Integer(None)),
+            bodies: vec![
+                CreateFunctionBody::Language("SQL".into()),
+                CreateFunctionBody::Behavior(FunctionBehavior::Immutable),
+                CreateFunctionBody::Return(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier("a".into())),
+                    op: BinaryOperator::Plus,
+                    right: Box::new(Expr::Identifier("b".into())),
+                }),
             ],
         }
     );

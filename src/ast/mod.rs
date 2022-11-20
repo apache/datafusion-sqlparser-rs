@@ -1367,7 +1367,7 @@ pub enum Statement {
     CreateFunction {
         temporary: bool,
         name: ObjectName,
-        args: Option<Vec<DataType>>,
+        args: Option<Vec<CreateFunctionArg>>,
         return_type: Option<DataType>,
         bodies: Vec<CreateFunctionBody>,
     },
@@ -3605,6 +3605,73 @@ impl fmt::Display for ContextModifier {
     }
 }
 
+/// Function argument in CREATE FUNCTION.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct CreateFunctionArg {
+    pub mode: Option<ArgMode>,
+    pub name: Option<Ident>,
+    pub data_type: DataType,
+    pub default_expr: Option<Expr>,
+}
+
+impl CreateFunctionArg {
+    /// Returns an unnamed argument.
+    pub fn unnamed(data_type: DataType) -> Self {
+        Self {
+            mode: None,
+            name: None,
+            data_type,
+            default_expr: None,
+        }
+    }
+
+    /// Returns an argument with name.
+    pub fn with_name(name: &str, data_type: DataType) -> Self {
+        Self {
+            mode: None,
+            name: Some(name.into()),
+            data_type,
+            default_expr: None,
+        }
+    }
+}
+
+impl fmt::Display for CreateFunctionArg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(mode) = &self.mode {
+            write!(f, "{} ", mode)?;
+        }
+        if let Some(name) = &self.name {
+            write!(f, "{} ", name)?;
+        }
+        write!(f, "{}", self.data_type)?;
+        if let Some(default_expr) = &self.default_expr {
+            write!(f, " DEFAULT {}", default_expr)?;
+        }
+        Ok(())
+    }
+}
+
+/// The mode of an argument in CREATE FUNCTION.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ArgMode {
+    In,
+    Out,
+    InOut,
+}
+
+impl fmt::Display for ArgMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ArgMode::In => write!(f, "IN"),
+            ArgMode::Out => write!(f, "OUT"),
+            ArgMode::InOut => write!(f, "INOUT"),
+        }
+    }
+}
+
 /// These attributes inform the query optimizer about the behavior of the function.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -3635,6 +3702,8 @@ pub enum CreateFunctionBody {
     Language(Ident),
     /// IMMUTABLE | STABLE | VOLATILE
     Behavior(FunctionBehavior),
+    /// RETURN expression
+    Return(Expr),
     /// USING ... (Hive)
     Using(CreateFunctionUsing),
 }
@@ -3645,6 +3714,7 @@ impl fmt::Display for CreateFunctionBody {
             Self::As(definition) => write!(f, "AS '{definition}'"),
             Self::Language(lang) => write!(f, "LANGUAGE {lang}"),
             Self::Behavior(behavior) => write!(f, "{behavior}"),
+            Self::Return(expr) => write!(f, "RETURN {expr}"),
             Self::Using(using) => write!(f, "{using}"),
         }
     }

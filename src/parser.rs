@@ -1957,7 +1957,7 @@ impl<'a> Parser<'a> {
             self.parse_create_schema()
         } else if self.parse_keyword(Keyword::DATABASE) {
             self.parse_create_database()
-        } else if dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::FUNCTION) {
+        } else if self.parse_keyword(Keyword::FUNCTION) {
             self.parse_create_function(temporary)
         } else if self.parse_keyword(Keyword::ROLE) {
             self.parse_create_role()
@@ -2171,16 +2171,65 @@ impl<'a> Parser<'a> {
 
     pub fn parse_create_function(&mut self, temporary: bool) -> Result<Statement, ParserError> {
         let name = self.parse_object_name()?;
-        self.expect_keyword(Keyword::AS)?;
-        let class_name = self.parse_literal_string()?;
-        let using = self.parse_optional_create_function_using()?;
+        if dialect_of!(self is HiveDialect) {
+            self.expect_keyword(Keyword::AS)?;
+            let class_name = self.parse_literal_string()?;
+            let mut bodies = vec![CreateFunctionBody::As(class_name)];
+            if let Some(using) = self.parse_optional_create_function_using()? {
+                bodies.push(CreateFunctionBody::Using(using));
+            }
 
-        Ok(Statement::CreateFunction {
-            temporary,
-            name,
-            class_name,
-            using,
-        })
+            Ok(Statement::CreateFunction {
+                temporary,
+                name,
+                args: None,
+                return_type: None,
+                bodies,
+            })
+        } else if dialect_of!(self is PostgreSqlDialect) {
+            self.expect_token(&Token::LParen)?;
+            let args = self.parse_comma_separated(Parser::parse_data_type)?;
+            self.expect_token(&Token::RParen)?;
+
+            let return_type = if self.parse_keyword(Keyword::RETURNS) {
+                Some(self.parse_data_type()?)
+            } else {
+                None
+            };
+
+            let mut bodies = vec![];
+            while let Ok(body) = self.parse_create_function_body() {
+                bodies.push(body);
+            }
+
+            Ok(Statement::CreateFunction {
+                temporary,
+                name,
+                args: Some(args),
+                return_type,
+                bodies,
+            })
+        } else {
+            Err(ParserError::ParserError(
+                "Expected an object type after CREATE, found: FUNCTION".to_string(),
+            ))
+        }
+    }
+
+    pub fn parse_create_function_body(&mut self) -> Result<CreateFunctionBody, ParserError> {
+        if self.parse_keyword(Keyword::AS) {
+            Ok(CreateFunctionBody::As(self.parse_literal_string()?))
+        } else if self.parse_keyword(Keyword::LANGUAGE) {
+            Ok(CreateFunctionBody::Language(self.parse_identifier()?))
+        } else if self.parse_keyword(Keyword::IMMUTABLE) {
+            Ok(CreateFunctionBody::Behavior(FunctionBehavior::Immutable))
+        } else if self.parse_keyword(Keyword::STABLE) {
+            Ok(CreateFunctionBody::Behavior(FunctionBehavior::Stable))
+        } else if self.parse_keyword(Keyword::VOLATILE) {
+            Ok(CreateFunctionBody::Behavior(FunctionBehavior::Volatile))
+        } else {
+            self.expected("AS or USING", self.peek_token())
+        }
     }
 
     pub fn parse_create_external_table(

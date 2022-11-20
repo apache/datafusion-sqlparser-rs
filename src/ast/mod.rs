@@ -1363,11 +1363,13 @@ pub enum Statement {
     /// CREATE FUNCTION
     ///
     /// Hive: https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction
+    /// Postgres: https://www.postgresql.org/docs/15/sql-createfunction.html
     CreateFunction {
         temporary: bool,
         name: ObjectName,
-        class_name: String,
-        using: Option<CreateFunctionUsing>,
+        args: Option<Vec<DataType>>,
+        return_type: Option<DataType>,
+        bodies: Vec<CreateFunctionBody>,
     },
     /// `ASSERT <condition> [AS <message>]`
     Assert {
@@ -1826,17 +1828,22 @@ impl fmt::Display for Statement {
             Statement::CreateFunction {
                 temporary,
                 name,
-                class_name,
-                using,
+                args,
+                return_type,
+                bodies,
             } => {
                 write!(
                     f,
-                    "CREATE {temp}FUNCTION {name} AS '{class_name}'",
+                    "CREATE {temp}FUNCTION {name}",
                     temp = if *temporary { "TEMPORARY " } else { "" },
                 )?;
-                if let Some(u) = using {
-                    write!(f, " {}", u)?;
+                if let Some(args) = args {
+                    write!(f, "{}", display_comma_separated(args))?;
                 }
+                if let Some(return_type) = return_type {
+                    write!(f, " RETURNS {}", return_type)?;
+                }
+                write!(f, " {}", display_separated(bodies, " "))?;
                 Ok(())
             }
             Statement::CreateView {
@@ -3594,6 +3601,51 @@ impl fmt::Display for ContextModifier {
             Self::Session => {
                 write!(f, " SESSION")
             }
+        }
+    }
+}
+
+/// These attributes inform the query optimizer about the behavior of the function.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum FunctionBehavior {
+    Immutable,
+    Stable,
+    Volatile,
+}
+
+impl fmt::Display for FunctionBehavior {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FunctionBehavior::Immutable => write!(f, "IMMUTABLE"),
+            FunctionBehavior::Stable => write!(f, "STABLE"),
+            FunctionBehavior::Volatile => write!(f, "VOLATILE"),
+        }
+    }
+}
+
+/// Postgres: https://www.postgresql.org/docs/15/sql-createfunction.html
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
+pub enum CreateFunctionBody {
+    /// AS 'definition'
+    As(String),
+    /// LANGUAGE lang_name
+    Language(Ident),
+    /// IMMUTABLE | STABLE | VOLATILE
+    Behavior(FunctionBehavior),
+    /// USING ... (Hive)
+    Using(CreateFunctionUsing),
+}
+
+impl fmt::Display for CreateFunctionBody {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::As(definition) => write!(f, "AS '{definition}'"),
+            Self::Language(lang) => write!(f, "LANGUAGE {lang}"),
+            Self::Behavior(behavior) => write!(f, "{behavior}"),
+            Self::Using(using) => write!(f, "{using}"),
         }
     }
 }

@@ -2186,3 +2186,25 @@ fn parse_similar_to() {
     chk(false);
     chk(true);
 }
+
+#[test]
+fn parse_create_function() {
+    let sql = "CREATE FUNCTION add(integer, integer) RETURNS integer
+    AS 'select $1 + $2;'
+    LANGUAGE SQL
+    IMMUTABLE;";
+    assert_eq!(
+        pg().one_statement_parses_to(sql, ""),
+        Statement::CreateFunction {
+            temporary: false,
+            name: ObjectName(vec![Ident::new("add")]),
+            args: Some(vec![DataType::Integer(None), DataType::Integer(None)]),
+            return_type: Some(DataType::Integer(None)),
+            bodies: vec![
+                CreateFunctionBody::As("select $1 + $2;".into()),
+                CreateFunctionBody::Language("SQL".into()),
+                CreateFunctionBody::Behavior(FunctionBehavior::Immutable),
+            ],
+        }
+    );
+}

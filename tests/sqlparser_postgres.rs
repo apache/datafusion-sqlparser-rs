@@ -2222,7 +2222,7 @@ fn parse_create_function() {
                     mode: Some(ArgMode::In),
                     name: Some("b".into()),
                     data_type: DataType::Integer(None),
-                    default_expr: Some(Expr::Value(Value::Number("1".into(), false))),
+                    default_expr: Some(Expr::Value(Value::Number("1".parse().unwrap(), false))),
                 }
             ]),
             return_type: Some(DataType::Integer(None)),

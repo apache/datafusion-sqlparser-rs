@@ -1838,7 +1838,7 @@ impl fmt::Display for Statement {
                     temp = if *temporary { "TEMPORARY " } else { "" },
                 )?;
                 if let Some(args) = args {
-                    write!(f, "{}", display_comma_separated(args))?;
+                    write!(f, "({})", display_comma_separated(args))?;
                 }
                 if let Some(return_type) = return_type {
                     write!(f, " RETURNS {}", return_type)?;
@@ -3647,7 +3647,7 @@ impl fmt::Display for CreateFunctionArg {
         }
         write!(f, "{}", self.data_type)?;
         if let Some(default_expr) = &self.default_expr {
-            write!(f, " DEFAULT {}", default_expr)?;
+            write!(f, " = {}", default_expr)?;
         }
         Ok(())
     }

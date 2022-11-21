@@ -2189,12 +2189,9 @@ fn parse_similar_to() {
 
 #[test]
 fn parse_create_function() {
-    let sql = "CREATE FUNCTION add(integer, integer) RETURNS integer
-    AS 'select $1 + $2;'
-    LANGUAGE SQL
-    IMMUTABLE;";
+    let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER AS 'select $1 + $2;' LANGUAGE SQL IMMUTABLE";
     assert_eq!(
-        pg().one_statement_parses_to(sql, ""),
+        pg().verified_stmt(sql),
         Statement::CreateFunction {
             temporary: false,
             name: ObjectName(vec![Ident::new("add")]),
@@ -2211,18 +2208,20 @@ fn parse_create_function() {
         }
     );
 
-    let sql = "CREATE FUNCTION add(a integer, b integer) RETURNS integer
-    LANGUAGE SQL
-    IMMUTABLE
-    RETURN a + b;";
+    let sql = "CREATE FUNCTION add(a INTEGER, IN b INTEGER = 1) RETURNS INTEGER LANGUAGE SQL IMMUTABLE RETURN a + b";
     assert_eq!(
-        pg().one_statement_parses_to(sql, ""),
+        pg().verified_stmt(sql),
         Statement::CreateFunction {
             temporary: false,
             name: ObjectName(vec![Ident::new("add")]),
             args: Some(vec![
                 CreateFunctionArg::with_name("a", DataType::Integer(None)),
-                CreateFunctionArg::with_name("b", DataType::Integer(None)),
+                CreateFunctionArg {
+                    mode: Some(ArgMode::In),
+                    name: Some("b".into()),
+                    data_type: DataType::Integer(None),
+                    default_expr: Some(Expr::Value(Value::Number("1".into(), false))),
+                }
             ]),
             return_type: Some(DataType::Integer(None)),
             bodies: vec![

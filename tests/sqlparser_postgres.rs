@@ -2193,6 +2193,7 @@ fn parse_create_function() {
     assert_eq!(
         pg().verified_stmt(sql),
         Statement::CreateFunction {
+            or_replace: false,
             temporary: false,
             name: ObjectName(vec![Ident::new("add")]),
             args: Some(vec![
@@ -2208,10 +2209,11 @@ fn parse_create_function() {
         }
     );
 
-    let sql = "CREATE FUNCTION add(a INTEGER, IN b INTEGER = 1) RETURNS INTEGER LANGUAGE SQL IMMUTABLE RETURN a + b";
+    let sql = "CREATE OR REPLACE FUNCTION add(a INTEGER, IN b INTEGER = 1) RETURNS INTEGER LANGUAGE SQL IMMUTABLE RETURN a + b";
     assert_eq!(
         pg().verified_stmt(sql),
         Statement::CreateFunction {
+            or_replace: true,
             temporary: false,
             name: ObjectName(vec![Ident::new("add")]),
             args: Some(vec![

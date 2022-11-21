@@ -1942,9 +1942,11 @@ impl<'a> Parser<'a> {
             self.parse_create_view(or_replace)
         } else if self.parse_keyword(Keyword::EXTERNAL) {
             self.parse_create_external_table(or_replace)
+        } else if self.parse_keyword(Keyword::FUNCTION) {
+            self.parse_create_function(or_replace, temporary)
         } else if or_replace {
             self.expected(
-                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW after CREATE OR REPLACE",
+                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION after CREATE OR REPLACE",
                 self.peek_token(),
             )
         } else if self.parse_keyword(Keyword::INDEX) {
@@ -1957,8 +1959,6 @@ impl<'a> Parser<'a> {
             self.parse_create_schema()
         } else if self.parse_keyword(Keyword::DATABASE) {
             self.parse_create_database()
-        } else if self.parse_keyword(Keyword::FUNCTION) {
-            self.parse_create_function(temporary)
         } else if self.parse_keyword(Keyword::ROLE) {
             self.parse_create_role()
         } else if self.parse_keyword(Keyword::SEQUENCE) {
@@ -2169,9 +2169,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_create_function(&mut self, temporary: bool) -> Result<Statement, ParserError> {
-        let name = self.parse_object_name()?;
+    pub fn parse_create_function(
+        &mut self,
+        or_replace: bool,
+        temporary: bool,
+    ) -> Result<Statement, ParserError> {
         if dialect_of!(self is HiveDialect) {
+            let name = self.parse_object_name()?;
             self.expect_keyword(Keyword::AS)?;
             let class_name = self.parse_literal_string()?;
             let mut bodies = vec![CreateFunctionBody::As(class_name)];
@@ -2180,6 +2184,7 @@ impl<'a> Parser<'a> {
             }
 
             Ok(Statement::CreateFunction {
+                or_replace,
                 temporary,
                 name,
                 args: None,
@@ -2187,6 +2192,7 @@ impl<'a> Parser<'a> {
                 bodies,
             })
         } else if dialect_of!(self is PostgreSqlDialect) {
+            let name = self.parse_object_name()?;
             self.expect_token(&Token::LParen)?;
             let args = self.parse_comma_separated(Parser::parse_create_function_arg)?;
             self.expect_token(&Token::RParen)?;
@@ -2203,6 +2209,7 @@ impl<'a> Parser<'a> {
             }
 
             Ok(Statement::CreateFunction {
+                or_replace,
                 temporary,
                 name,
                 args: Some(args),
@@ -2210,9 +2217,8 @@ impl<'a> Parser<'a> {
                 bodies,
             })
         } else {
-            Err(ParserError::ParserError(
-                "Expected an object type after CREATE, found: FUNCTION".to_string(),
-            ))
+            self.prev_token();
+            self.expected("an object type after CREATE", self.peek_token())
         }
     }
 
@@ -2265,7 +2271,7 @@ impl<'a> Parser<'a> {
             let expr = self.parse_expr()?;
             Ok(CreateFunctionBody::Return(expr))
         } else {
-            self.expected("AS or USING", self.peek_token())
+            self.expected("AS or LANGUAGE or RETURN", self.peek_token())
         }
     }
 

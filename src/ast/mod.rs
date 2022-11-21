@@ -1365,6 +1365,7 @@ pub enum Statement {
     /// Hive: https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction
     /// Postgres: https://www.postgresql.org/docs/15/sql-createfunction.html
     CreateFunction {
+        or_replace: bool,
         temporary: bool,
         name: ObjectName,
         args: Option<Vec<CreateFunctionArg>>,
@@ -1826,6 +1827,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateFunction {
+                or_replace,
                 temporary,
                 name,
                 args,
@@ -1834,8 +1836,9 @@ impl fmt::Display for Statement {
             } => {
                 write!(
                     f,
-                    "CREATE {temp}FUNCTION {name}",
+                    "CREATE {or_replace}{temp}FUNCTION {name}",
                     temp = if *temporary { "TEMPORARY " } else { "" },
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
                 )?;
                 if let Some(args) = args {
                     write!(f, "({})", display_comma_separated(args))?;

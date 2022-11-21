@@ -14,6 +14,10 @@ foundation for vendor-specific parsers.
 This parser is currently being used by the [DataFusion] query engine,
 [LocustDB], [Ballista] and [GlueSQL].
 
+This parser is used as a syntax analyzer. We don't intend to have more semantic logic because it varies drastically
+between dialects, the same is true for projects like compilers. If you want to do semantic analysis, feel free to use 
+this project as a base
+
 ## Example
 
 To parse a simple `SELECT` statement:

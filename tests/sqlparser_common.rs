@@ -3238,6 +3238,121 @@ fn parse_interval() {
 }
 
 #[test]
+fn parse_interval_and_or_xor() {
+    let sql = "SELECT col FROM test \
+        WHERE d3_date > d1_date + INTERVAL '5 days' \
+        AND d2_date > d1_date + INTERVAL '3 days'";
+
+    let actual_ast = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
+
+    let expected_ast = vec![Statement::Query(Box::new(Query {
+        with: None,
+        body: Box::new(SetExpr::Select(Box::new(Select {
+            distinct: false,
+            top: None,
+            projection: vec![UnnamedExpr(Expr::Identifier(Ident {
+                value: "col".to_string(),
+                quote_style: None,
+            }))],
+            into: None,
+            from: vec![TableWithJoins {
+                relation: TableFactor::Table {
+                    name: ObjectName(vec![Ident {
+                        value: "test".to_string(),
+                        quote_style: None,
+                    }]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                joins: vec![],
+            }],
+            lateral_views: vec![],
+            selection: Some(Expr::BinaryOp {
+                left: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident {
+                        value: "d3_date".to_string(),
+                        quote_style: None,
+                    })),
+                    op: BinaryOperator::Gt,
+                    right: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident {
+                            value: "d1_date".to_string(),
+                            quote_style: None,
+                        })),
+                        op: BinaryOperator::Plus,
+                        right: Box::new(Expr::Interval {
+                            value: Box::new(Expr::Value(Value::SingleQuotedString(
+                                "5 days".to_string(),
+                            ))),
+                            leading_field: None,
+                            leading_precision: None,
+                            last_field: None,
+                            fractional_seconds_precision: None,
+                        }),
+                    }),
+                }),
+                op: BinaryOperator::And,
+                right: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident {
+                        value: "d2_date".to_string(),
+                        quote_style: None,
+                    })),
+                    op: BinaryOperator::Gt,
+                    right: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident {
+                            value: "d1_date".to_string(),
+                            quote_style: None,
+                        })),
+                        op: BinaryOperator::Plus,
+                        right: Box::new(Expr::Interval {
+                            value: Box::new(Expr::Value(Value::SingleQuotedString(
+                                "3 days".to_string(),
+                            ))),
+                            leading_field: None,
+                            leading_precision: None,
+                            last_field: None,
+                            fractional_seconds_precision: None,
+                        }),
+                    }),
+                }),
+            }),
+            group_by: vec![],
+            cluster_by: vec![],
+            distribute_by: vec![],
+            sort_by: vec![],
+            having: None,
+            qualify: None,
+        }))),
+        order_by: vec![],
+        limit: None,
+        offset: None,
+        fetch: None,
+        lock: None,
+    }))];
+
+    assert_eq!(actual_ast, expected_ast);
+
+    verified_stmt(
+        "SELECT col FROM test \
+        WHERE d3_date > d1_date + INTERVAL '5 days' \
+        AND d2_date > d1_date + INTERVAL '3 days'",
+    );
+
+    verified_stmt(
+        "SELECT col FROM test \
+        WHERE d3_date > d1_date + INTERVAL '5 days' \
+        OR d2_date > d1_date + INTERVAL '3 days'",
+    );
+
+    verified_stmt(
+        "SELECT col FROM test \
+        WHERE d3_date > d1_date + INTERVAL '5 days' \
+        XOR d2_date > d1_date + INTERVAL '3 days'",
+    );
+}
+
+#[test]
 fn parse_at_timezone() {
     let zero = Expr::Value(number("0"));
     let sql = "SELECT FROM_UNIXTIME(0) AT TIME ZONE 'UTC-06:00' FROM t";

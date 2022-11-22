@@ -363,6 +363,36 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
+    pub fn parse_interval_expr(&mut self) -> Result<Expr, ParserError> {
+        let precedence = 0;
+        let mut expr = self.parse_prefix()?;
+
+        loop {
+            let next_precedence = self.get_next_interval_precedence()?;
+
+            if precedence >= next_precedence {
+                break;
+            }
+
+            expr = self.parse_infix(expr, next_precedence)?;
+        }
+
+        Ok(expr)
+    }
+
+    /// Get the precedence of the next token
+    /// With AND, OR, and XOR
+    pub fn get_next_interval_precedence(&self) -> Result<u8, ParserError> {
+        let token = self.peek_token();
+
+        match token {
+            Token::Word(w) if w.keyword == Keyword::AND => Ok(0),
+            Token::Word(w) if w.keyword == Keyword::OR => Ok(0),
+            Token::Word(w) if w.keyword == Keyword::XOR => Ok(0),
+            _ => self.get_next_precedence(),
+        }
+    }
+
     pub fn parse_assert(&mut self) -> Result<Statement, ParserError> {
         let condition = self.parse_expr()?;
         let message = if self.parse_keyword(Keyword::AS) {
@@ -1200,7 +1230,7 @@ impl<'a> Parser<'a> {
 
         // The first token in an interval is a string literal which specifies
         // the duration of the interval.
-        let value = self.parse_expr()?;
+        let value = self.parse_interval_expr()?;
 
         // Following the string literal is a qualifier which indicates the units
         // of the duration specified in the string literal.

@@ -6284,8 +6284,8 @@ mod tests {
                 classification=$6,
                 sort=$7
                 WHERE id=$8"#;
-        let mut pg_dialect = PostgreSqlDialect {};
-        let ast = Parser::parse_sql(&mut pg_dialect, sql).unwrap();
+        let pg_dialect = PostgreSqlDialect {};
+        let ast = Parser::parse_sql(&pg_dialect, sql).unwrap();
         assert_eq!(
             ast[0].to_string(),
             r#"UPDATE test SET name = $1, value = $2, where = $3, create = $4, is_default = $5, classification = $6, sort = $7 WHERE id = $8"#

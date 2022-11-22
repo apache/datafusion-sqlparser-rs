@@ -3886,41 +3886,19 @@ impl<'a> Parser<'a> {
         Ok(ObjectName(idents))
     }
 
-    /// Parse identifiers strictly i.e. don't parse keywords
-    pub fn parse_identifiers_non_keywords(&mut self) -> Result<Vec<Ident>, ParserError> {
+    /// Parse identifiers
+    pub fn parse_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
         let mut idents = vec![];
         loop {
             match self.peek_token() {
                 Token::Word(w) => {
-                    if w.keyword != Keyword::NoKeyword {
-                        break;
-                    }
-
                     idents.push(w.to_ident());
                 }
                 Token::EOF | Token::Eq => break,
                 _ => {}
             }
-
             self.next_token();
         }
-
-        Ok(idents)
-    }
-
-    /// Parse identifiers
-    pub fn parse_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
-        let mut idents = vec![];
-        loop {
-            match self.next_token() {
-                Token::Word(w) => {
-                    idents.push(w.to_ident());
-                }
-                Token::EOF => break,
-                _ => {}
-            }
-        }
-
         Ok(idents)
     }
 
@@ -5282,7 +5260,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a `var = expr` assignment, used in an UPDATE statement
     pub fn parse_assignment(&mut self) -> Result<Assignment, ParserError> {
-        let id = self.parse_identifiers_non_keywords()?;
+        let id = self.parse_identifiers()?;
         self.expect_token(&Token::Eq)?;
         let value = self.parse_expr()?;
         Ok(Assignment { id, value })
@@ -6293,6 +6271,24 @@ mod tests {
                 index_type: Some(IndexType::Hash),
                 columns: vec![Ident::new("c1")],
             }
+        );
+    }
+
+    #[test]
+    fn test_update_has_keyword() {
+        let sql = r#"UPDATE test SET name=$1,
+                value=$2,
+                where=$3,
+                create=$4,
+                is_default=$5,
+                classification=$6,
+                sort=$7
+                WHERE id=$8"#;
+        let mut pg_dialect = PostgreSqlDialect {};
+        let ast = Parser::parse_sql(&mut pg_dialect, sql).unwrap();
+        assert_eq!(
+            ast[0].to_string(),
+            r#"UPDATE test SET name = $1, value = $2, where = $3, create = $4, is_default = $5, classification = $6, sort = $7 WHERE id = $8"#
         );
     }
 }

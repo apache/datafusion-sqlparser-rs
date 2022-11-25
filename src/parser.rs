@@ -4553,8 +4553,9 @@ impl<'a> Parser<'a> {
                 charset_name,
                 collation_name,
             })
-        } else if (self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO))
-            || (variable == ObjectName(vec!["TIMEZONE".into()]))
+        } else if self.consume_token(&Token::Eq)
+            || self.parse_keyword(Keyword::TO)
+            || variable == ObjectName(vec!["TIMEZONE".into()])
         {
             // when the object name is TIMEZONE, we support `SET TIMEZONE 'UTC'` without Eq sign or TO
             let mut values = vec![];

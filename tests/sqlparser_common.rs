@@ -5099,7 +5099,6 @@ fn test_create_index_with_using_function() {
     }
 }
 
-
 #[test]
 fn parse_drop_index() {
     let sql = "DROP INDEX idx_a";

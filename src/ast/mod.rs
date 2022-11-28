@@ -2093,7 +2093,7 @@ impl fmt::Display for Statement {
                     write!(f, " USING {} ", value)?;
                 }
                 write!(f, "({})", display_separated(columns, ","))
-            },
+            }
             Statement::CreateRole {
                 names,
                 if_not_exists,

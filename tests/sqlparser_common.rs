@@ -5049,6 +5049,7 @@ fn parse_create_index() {
         Statement::CreateIndex {
             name,
             table_name,
+            using,
             columns,
             unique,
             if_not_exists,
@@ -5061,6 +5062,17 @@ fn parse_create_index() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_create_index_with_using_function() {
+    let sql = r#"CREATE INDEX "test_indexes" ON "public"."test" USING btree ("id","user_id","action","result");"#;
+    let pg_dialect = PostgreSqlDialect {};
+    let ast = Parser::parse_sql(&pg_dialect, sql).unwrap();
+    assert_eq!(
+        ast[0].to_string(),
+        r#"CREATE INDEX "test_indexes" ON "public"."test" USING btree ("id","user_id","action","result")"#
+    );
 }
 
 #[test]

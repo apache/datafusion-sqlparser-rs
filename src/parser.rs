@@ -4551,6 +4551,15 @@ impl<'a> Parser<'a> {
                     value: values,
                 });
             }
+        } else if variable.to_string().eq_ignore_ascii_case("TIMEZONE") {
+            // for some db (e.g. postgresql), SET TIME ZONE <value> is an alias for SET TIMEZONE [TO|=] <value>
+            match self.parse_expr() {
+                Ok(expr) => Ok(Statement::SetTimeZone {
+                    local: modifier == Some(Keyword::LOCAL),
+                    value: expr,
+                }),
+                _ => self.expected("timezone value", self.peek_token())?,
+            }
         } else if variable.to_string() == "CHARACTERISTICS" {
             self.expect_keywords(&[Keyword::AS, Keyword::TRANSACTION])?;
             Ok(Statement::SetTransaction {

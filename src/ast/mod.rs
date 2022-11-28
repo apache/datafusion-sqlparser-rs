@@ -1271,6 +1271,11 @@ pub enum Statement {
         variable: ObjectName,
         value: Vec<Expr>,
     },
+    /// SET TIME ZONE <value>
+    ///
+    /// Note: this is a PostgreSQL-specific statements
+    /// SET TIME ZONE <value> is an alias for SET timezone TO <value> in PostgreSQL
+    SetTimeZone { local: bool, value: Expr },
     /// SET NAMES 'charset_name' [COLLATE 'collation_name']
     ///
     /// Note: this is a MySQL-specific statement.
@@ -2227,6 +2232,13 @@ impl fmt::Display for Statement {
                     name = variable,
                     value = display_comma_separated(value)
                 )
+            }
+            Statement::SetTimeZone { local, value } => {
+                f.write_str("SET ")?;
+                if *local {
+                    f.write_str("LOCAL ")?;
+                }
+                write!(f, "TIME ZONE {value}")
             }
             Statement::SetNames {
                 charset_name,

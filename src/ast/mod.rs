@@ -2089,11 +2089,9 @@ impl fmt::Display for Statement {
                     name = name,
                     table_name = table_name
                 )?;
-
                 if let Some(value) = using {
                     write!(f, " USING {} ", value)?;
                 }
-
                 write!(f, "({})", display_separated(columns, ","))
             }
             Statement::CreateRole {

@@ -2698,7 +2698,7 @@ impl<'a> Parser<'a> {
 
         let using = if self.expect_keyword(Keyword::USING).is_ok() {
             Some(self.parse_identifier()?)
-        }else {
+        } else {
             None
         };
 

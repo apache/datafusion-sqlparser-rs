@@ -4980,6 +4980,19 @@ fn parse_set_time_zone() {
 }
 
 #[test]
+fn parse_set_time_zone_alias() {
+    println!("wew");
+    match verified_stmt("SET TIME ZONE 'UTC'") {
+        Statement::SetTimeZone { local, value } => {
+            assert!(!local);
+            println!("wew");
+            assert_eq!(value, Expr::Value(Value::SingleQuotedString("UTC".into())));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_commit() {
     match verified_stmt("COMMIT") {
         Statement::Commit { chain: false } => (),

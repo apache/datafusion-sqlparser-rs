@@ -4553,11 +4553,7 @@ impl<'a> Parser<'a> {
                 charset_name,
                 collation_name,
             })
-        } else if self.consume_token(&Token::Eq)
-            || self.parse_keyword(Keyword::TO)
-            || variable == ObjectName(vec!["TIMEZONE".into()])
-        {
-            // when the object name is TIMEZONE, we support `SET TIMEZONE 'UTC'` without Eq sign or TO
+        } else if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
             let mut values = vec![];
             loop {
                 let value = if let Ok(expr) = self.parse_expr() {
@@ -4576,6 +4572,15 @@ impl<'a> Parser<'a> {
                     variable,
                     value: values,
                 });
+            }
+        } else if variable.to_string().eq_ignore_ascii_case("TIMEZONE") {
+            // for some db (e.g. postgresql), SET TIME ZONE <value> is an alias for SET TIMEZONE [TO|=] <value>
+            match self.parse_expr() {
+                Ok(expr) => Ok(Statement::SetTimeZone {
+                    local: modifier == Some(Keyword::LOCAL),
+                    value: expr,
+                }),
+                _ => self.expected("timezone value", self.peek_token())?,
             }
         } else if variable.to_string() == "CHARACTERISTICS" {
             self.expect_keywords(&[Keyword::AS, Keyword::TRANSACTION])?;

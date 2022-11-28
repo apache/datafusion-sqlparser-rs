@@ -5775,6 +5775,11 @@ impl<'a> Parser<'a> {
         }
         Ok(sequence_options)
     }
+
+    /// The index of the first unprocessed token.
+    pub fn index(&self) -> usize {
+        self.index
+    }
 }
 
 impl Word {

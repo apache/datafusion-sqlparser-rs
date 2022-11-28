@@ -5052,6 +5052,7 @@ fn parse_create_index() {
             columns,
             unique,
             if_not_exists,
+            ..
         } => {
             assert_eq!("idx_name", name.to_string());
             assert_eq!("test", table_name.to_string());
@@ -5062,6 +5063,42 @@ fn parse_create_index() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn test_create_index_with_using_function() {
+    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test USING btree (name,age DESC)";
+    let indexed_columns = vec![
+        OrderByExpr {
+            expr: Expr::Identifier(Ident::new("name")),
+            asc: None,
+            nulls_first: None,
+        },
+        OrderByExpr {
+            expr: Expr::Identifier(Ident::new("age")),
+            asc: Some(false),
+            nulls_first: None,
+        },
+    ];
+    match verified_stmt(sql) {
+        Statement::CreateIndex {
+            name,
+            table_name,
+            using,
+            columns,
+            unique,
+            if_not_exists,
+        } => {
+            assert_eq!("idx_name", name.to_string());
+            assert_eq!("test", table_name.to_string());
+            assert_eq!("btree", using.unwrap().to_string());
+            assert_eq!(indexed_columns, columns);
+            assert!(unique);
+            assert!(if_not_exists)
+        }
+        _ => unreachable!(),
+    }
+}
+
 
 #[test]
 fn parse_drop_index() {

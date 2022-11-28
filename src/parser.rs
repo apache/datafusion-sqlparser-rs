@@ -2695,12 +2695,18 @@ impl<'a> Parser<'a> {
         let index_name = self.parse_object_name()?;
         self.expect_keyword(Keyword::ON)?;
         let table_name = self.parse_object_name()?;
+        let using = if self.expect_keyword(Keyword::USING).is_ok() {
+            Some(self.parse_identifier()?)
+        }else {
+            None
+        };
         self.expect_token(&Token::LParen)?;
         let columns = self.parse_comma_separated(Parser::parse_order_by_expr)?;
         self.expect_token(&Token::RParen)?;
         Ok(Statement::CreateIndex {
             name: index_name,
             table_name,
+            using,
             columns,
             unique,
             if_not_exists,

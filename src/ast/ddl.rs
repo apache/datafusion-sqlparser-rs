@@ -30,8 +30,15 @@ use crate::tokenizer::Token;
 pub enum AlterTableOperation {
     /// `ADD <table_constraint>`
     AddConstraint(TableConstraint),
-    /// `ADD [ COLUMN ] <column_def>`
-    AddColumn { column_def: ColumnDef },
+    /// `ADD [COLUMN] [IF NOT EXISTS] <column_def>`
+    AddColumn {
+        /// `[COLUMN]`.
+        column_keyword: bool,
+        /// `[IF NOT EXISTS]`
+        if_not_exists: bool,
+        /// <column_def>.
+        column_def: ColumnDef,
+    },
     /// `DROP CONSTRAINT [ IF EXISTS ] <name>`
     DropConstraint {
         if_exists: bool,
@@ -100,8 +107,21 @@ impl fmt::Display for AlterTableOperation {
                 ine = if *if_not_exists { " IF NOT EXISTS" } else { "" }
             ),
             AlterTableOperation::AddConstraint(c) => write!(f, "ADD {}", c),
-            AlterTableOperation::AddColumn { column_def } => {
-                write!(f, "ADD COLUMN {}", column_def)
+            AlterTableOperation::AddColumn {
+                column_keyword,
+                if_not_exists,
+                column_def,
+            } => {
+                write!(f, "ADD")?;
+                if *column_keyword {
+                    write!(f, " COLUMN")?;
+                }
+                if *if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " {column_def}")?;
+
+                Ok(())
             }
             AlterTableOperation::AlterColumn { column_name, op } => {
                 write!(f, "ALTER COLUMN {} {}", column_name, op)
@@ -416,8 +436,8 @@ impl fmt::Display for KeyOrIndexDisplay {
 
 /// Indexing method used by that index.
 ///
-/// This structure isn't present on ANSI, but is found at least in [MySQL CREATE TABLE][1],
-/// [MySQL CREATE INDEX][2], and [Postgresql CREATE INDEX][3] statements.
+/// This structure isn't present on ANSI, but is found at least in [`MySQL` CREATE TABLE][1],
+/// [`MySQL` CREATE INDEX][2], and [Postgresql CREATE INDEX][3] statements.
 ///
 /// [1]: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
 /// [2]: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
@@ -466,7 +486,7 @@ impl fmt::Display for ColumnDef {
 /// they are allowed to be named. The specification distinguishes between
 /// constraints (NOT NULL, UNIQUE, PRIMARY KEY, and CHECK), which can be named
 /// and can appear in any order, and other options (DEFAULT, GENERATED), which
-/// cannot be named and must appear in a fixed order. PostgreSQL, however,
+/// cannot be named and must appear in a fixed order. `PostgreSQL`, however,
 /// allows preceding any option with `CONSTRAINT <name>`, even those that are
 /// not really constraints, like NULL and DEFAULT. MSSQL is less permissive,
 /// allowing DEFAULT, UNIQUE, PRIMARY KEY and CHECK to be named, but not NULL or

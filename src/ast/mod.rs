@@ -2655,7 +2655,16 @@ pub struct OnConflict {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum OnConflictAction {
     DoNothing,
-    DoUpdate(Vec<Assignment>),
+    DoUpdate(DoUpdate),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct DoUpdate {
+    /// Column assignments
+    pub assignments: Vec<Assignment>,
+    /// WHERE
+    pub selection: Option<Expr>,
 }
 
 impl fmt::Display for OnInsert {
@@ -2683,7 +2692,20 @@ impl fmt::Display for OnConflictAction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::DoNothing => write!(f, "DO NOTHING"),
-            Self::DoUpdate(a) => write!(f, "DO UPDATE SET {}", display_comma_separated(a)),
+            Self::DoUpdate(do_update) => {
+                write!(f, "DO UPDATE")?;
+                if !do_update.assignments.is_empty() {
+                    write!(
+                        f,
+                        " SET {}",
+                        display_comma_separated(&do_update.assignments)
+                    )?;
+                }
+                if let Some(selection) = &do_update.selection {
+                    write!(f, " WHERE {}", selection)?;
+                }
+                Ok(())
+            }
         }
     }
 }

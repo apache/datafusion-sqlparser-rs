@@ -4397,6 +4397,7 @@ fn parse_create_view() {
             or_replace,
             materialized,
             with_options,
+            cluster_by,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<Ident>::new(), columns);
@@ -4404,6 +4405,7 @@ fn parse_create_view() {
             assert!(!materialized);
             assert!(!or_replace);
             assert_eq!(with_options, vec![]);
+            assert_eq!(cluster_by, vec![]);
         }
         _ => unreachable!(),
     }
@@ -4443,13 +4445,15 @@ fn parse_create_view_with_columns() {
             with_options,
             query,
             materialized,
+            cluster_by,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![Ident::new("has"), Ident::new("cols")]);
             assert_eq!(with_options, vec![]);
             assert_eq!("SELECT 1, 2", query.to_string());
             assert!(!materialized);
-            assert!(!or_replace)
+            assert!(!or_replace);
+            assert_eq!(cluster_by, vec![]);
         }
         _ => unreachable!(),
     }
@@ -4466,13 +4470,15 @@ fn parse_create_or_replace_view() {
             with_options,
             query,
             materialized,
+            cluster_by,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
             assert_eq!(with_options, vec![]);
             assert_eq!("SELECT 1", query.to_string());
             assert!(!materialized);
-            assert!(or_replace)
+            assert!(or_replace);
+            assert_eq!(cluster_by, vec![]);
         }
         _ => unreachable!(),
     }
@@ -4493,13 +4499,15 @@ fn parse_create_or_replace_materialized_view() {
             with_options,
             query,
             materialized,
+            cluster_by,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
             assert_eq!(with_options, vec![]);
             assert_eq!("SELECT 1", query.to_string());
             assert!(materialized);
-            assert!(or_replace)
+            assert!(or_replace);
+            assert_eq!(cluster_by, vec![]);
         }
         _ => unreachable!(),
     }
@@ -4516,6 +4524,7 @@ fn parse_create_materialized_view() {
             query,
             materialized,
             with_options,
+            cluster_by,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<Ident>::new(), columns);
@@ -4523,6 +4532,32 @@ fn parse_create_materialized_view() {
             assert!(materialized);
             assert_eq!(with_options, vec![]);
             assert!(!or_replace);
+            assert_eq!(cluster_by, vec![]);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_materialized_view_with_cluster_by() {
+    let sql = "CREATE MATERIALIZED VIEW myschema.myview CLUSTER BY (foo) AS SELECT foo FROM bar";
+    match verified_stmt(sql) {
+        Statement::CreateView {
+            name,
+            or_replace,
+            columns,
+            query,
+            materialized,
+            with_options,
+            cluster_by,
+        } => {
+            assert_eq!("myschema.myview", name.to_string());
+            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!("SELECT foo FROM bar", query.to_string());
+            assert!(materialized);
+            assert_eq!(with_options, vec![]);
+            assert!(!or_replace);
+            assert_eq!(cluster_by, vec![Ident::new("foo")]);
         }
         _ => unreachable!(),
     }

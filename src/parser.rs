@@ -2285,6 +2285,14 @@ impl<'a> Parser<'a> {
         let name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
         let with_options = self.parse_options(Keyword::WITH)?;
+
+        let cluster_by = if self.parse_keyword(Keyword::CLUSTER) {
+            self.expect_keyword(Keyword::BY)?;
+            self.parse_parenthesized_column_list(Optional)?
+        } else {
+            vec![]
+        };
+
         self.expect_keyword(Keyword::AS)?;
         let query = Box::new(self.parse_query()?);
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
@@ -2295,6 +2303,7 @@ impl<'a> Parser<'a> {
             materialized,
             or_replace,
             with_options,
+            cluster_by,
         })
     }
 

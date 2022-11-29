@@ -1114,6 +1114,7 @@ pub enum Statement {
         columns: Vec<Ident>,
         query: Box<Query>,
         with_options: Vec<SqlOption>,
+        cluster_by: Vec<Ident>,
     },
     /// CREATE TABLE
     CreateTable {
@@ -1851,6 +1852,7 @@ impl fmt::Display for Statement {
                 query,
                 materialized,
                 with_options,
+                cluster_by,
             } => {
                 write!(
                     f,
@@ -1864,6 +1866,9 @@ impl fmt::Display for Statement {
                 }
                 if !columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(columns))?;
+                }
+                if !cluster_by.is_empty() {
+                    write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
                 }
                 write!(f, " AS {}", query)
             }

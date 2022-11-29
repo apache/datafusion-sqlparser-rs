@@ -4913,12 +4913,15 @@ impl<'a> Parser<'a> {
                 Err(_) => false,
             };
 
-            let with_offset_alias =
+            let with_offset_alias = if with_offset {
                 match self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS) {
                     Ok(Some(alias)) => Some(alias),
                     Ok(None) => None,
                     Err(e) => return Err(e),
-                };
+                }
+            } else {
+                None
+            };
 
             Ok(TableFactor::UNNEST {
                 alias,

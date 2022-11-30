@@ -2749,7 +2749,7 @@ impl<'a> Parser<'a> {
         let index_name = self.parse_object_name()?;
         self.expect_keyword(Keyword::ON)?;
         let table_name = self.parse_object_name()?;
-        let using = if self.expect_keyword(Keyword::USING).is_ok() {
+        let using = if self.parse_keyword(Keyword::USING) {
             Some(self.parse_identifier()?)
         } else {
             None

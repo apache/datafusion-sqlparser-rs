@@ -4832,6 +4832,7 @@ impl<'a> Parser<'a> {
                     }
                     kw @ Keyword::LEFT | kw @ Keyword::RIGHT => {
                         let _ = self.next_token();
+                        let is_left = kw == Keyword::LEFT;
                         let join_type = self.parse_one_of_keywords(&[
                             Keyword::OUTER,
                             Keyword::SEMI,
@@ -4841,33 +4842,35 @@ impl<'a> Parser<'a> {
                         match join_type {
                             Some(Keyword::OUTER) => {
                                 self.expect_keyword(Keyword::JOIN)?;
-                                match kw {
-                                    Keyword::LEFT => JoinOperator::LeftOuter,
-                                    Keyword::RIGHT => JoinOperator::RightOuter,
-                                    _ => unreachable!(),
+                                if is_left {
+                                    JoinOperator::LeftOuter
+                                } else {
+                                    JoinOperator::RightOuter
                                 }
                             }
                             Some(Keyword::SEMI) => {
                                 self.expect_keyword(Keyword::JOIN)?;
-                                match kw {
-                                    Keyword::LEFT => JoinOperator::LeftSemi,
-                                    Keyword::RIGHT => JoinOperator::RightSemi,
-                                    _ => unreachable!(),
+                                if is_left {
+                                    JoinOperator::LeftSemi
+                                } else {
+                                    JoinOperator::RightSemi
                                 }
                             }
                             Some(Keyword::ANTI) => {
                                 self.expect_keyword(Keyword::JOIN)?;
-                                match kw {
-                                    Keyword::LEFT => JoinOperator::LeftAnti,
-                                    Keyword::RIGHT => JoinOperator::RightAnti,
-                                    _ => unreachable!(),
+                                if is_left {
+                                    JoinOperator::LeftAnti
+                                } else {
+                                    JoinOperator::RightAnti
                                 }
                             }
-                            Some(Keyword::JOIN) => match kw {
-                                Keyword::LEFT => JoinOperator::LeftOuter,
-                                Keyword::RIGHT => JoinOperator::RightOuter,
-                                _ => unreachable!(),
-                            },
+                            Some(Keyword::JOIN) => {
+                                if is_left {
+                                    JoinOperator::LeftOuter
+                                } else {
+                                    JoinOperator::RightOuter
+                                }
+                            }
                             _ => {
                                 return Err(ParserError::ParserError(format!(
                                     "expected OUTER, SEMI, ANTI or JOIN after {:?}",

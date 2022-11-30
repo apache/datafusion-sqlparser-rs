@@ -2705,7 +2705,7 @@ pub enum OnConflictAction {
     DoUpdate(DoUpdate),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DoUpdate {
     /// Column assignments

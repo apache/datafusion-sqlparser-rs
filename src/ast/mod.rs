@@ -1192,6 +1192,7 @@ pub enum Statement {
         /// index name
         name: ObjectName,
         table_name: ObjectName,
+        using: Option<Ident>,
         columns: Vec<OrderByExpr>,
         unique: bool,
         if_not_exists: bool,
@@ -2115,18 +2116,24 @@ impl fmt::Display for Statement {
             Statement::CreateIndex {
                 name,
                 table_name,
+                using,
                 columns,
                 unique,
                 if_not_exists,
-            } => write!(
-                f,
-                "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}({columns})",
-                unique = if *unique { "UNIQUE " } else { "" },
-                if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                name = name,
-                table_name = table_name,
-                columns = display_separated(columns, ",")
-            ),
+            } => {
+                write!(
+                    f,
+                    "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}",
+                    unique = if *unique { "UNIQUE " } else { "" },
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    name = name,
+                    table_name = table_name
+                )?;
+                if let Some(value) = using {
+                    write!(f, " USING {} ", value)?;
+                }
+                write!(f, "({})", display_separated(columns, ","))
+            }
             Statement::CreateRole {
                 names,
                 if_not_exists,

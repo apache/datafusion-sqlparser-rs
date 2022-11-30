@@ -1149,6 +1149,7 @@ pub enum Statement {
         columns: Vec<Ident>,
         query: Box<Query>,
         with_options: Vec<SqlOption>,
+        cluster_by: Vec<Ident>,
     },
     /// CREATE TABLE
     CreateTable {
@@ -1192,6 +1193,7 @@ pub enum Statement {
         /// index name
         name: ObjectName,
         table_name: ObjectName,
+        using: Option<Ident>,
         columns: Vec<OrderByExpr>,
         unique: bool,
         if_not_exists: bool,
@@ -1886,6 +1888,7 @@ impl fmt::Display for Statement {
                 query,
                 materialized,
                 with_options,
+                cluster_by,
             } => {
                 write!(
                     f,
@@ -1899,6 +1902,9 @@ impl fmt::Display for Statement {
                 }
                 if !columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(columns))?;
+                }
+                if !cluster_by.is_empty() {
+                    write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
                 }
                 write!(f, " AS {}", query)
             }
@@ -2115,18 +2121,24 @@ impl fmt::Display for Statement {
             Statement::CreateIndex {
                 name,
                 table_name,
+                using,
                 columns,
                 unique,
                 if_not_exists,
-            } => write!(
-                f,
-                "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}({columns})",
-                unique = if *unique { "UNIQUE " } else { "" },
-                if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                name = name,
-                table_name = table_name,
-                columns = display_separated(columns, ",")
-            ),
+            } => {
+                write!(
+                    f,
+                    "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}",
+                    unique = if *unique { "UNIQUE " } else { "" },
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    name = name,
+                    table_name = table_name
+                )?;
+                if let Some(value) = using {
+                    write!(f, " USING {} ", value)?;
+                }
+                write!(f, "({})", display_separated(columns, ","))
+            }
             Statement::CreateRole {
                 names,
                 if_not_exists,
@@ -2690,7 +2702,16 @@ pub struct OnConflict {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum OnConflictAction {
     DoNothing,
-    DoUpdate(Vec<Assignment>),
+    DoUpdate(DoUpdate),
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct DoUpdate {
+    /// Column assignments
+    pub assignments: Vec<Assignment>,
+    /// WHERE
+    pub selection: Option<Expr>,
 }
 
 impl fmt::Display for OnInsert {
@@ -2718,7 +2739,20 @@ impl fmt::Display for OnConflictAction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::DoNothing => write!(f, "DO NOTHING"),
-            Self::DoUpdate(a) => write!(f, "DO UPDATE SET {}", display_comma_separated(a)),
+            Self::DoUpdate(do_update) => {
+                write!(f, "DO UPDATE")?;
+                if !do_update.assignments.is_empty() {
+                    write!(
+                        f,
+                        " SET {}",
+                        display_comma_separated(&do_update.assignments)
+                    )?;
+                }
+                if let Some(selection) = &do_update.selection {
+                    write!(f, " WHERE {}", selection)?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -3697,7 +3731,7 @@ impl fmt::Display for SchemaName {
 /// Fulltext search modifiers ([1]).
 ///
 /// [1]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-search.html#function_match
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SearchModifier {
     /// `IN NATURAL LANGUAGE MODE`.

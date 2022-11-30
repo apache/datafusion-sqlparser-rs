@@ -14,6 +14,17 @@ foundation for vendor-specific parsers.
 This parser is currently being used by the [DataFusion] query engine,
 [LocustDB], [Ballista] and [GlueSQL].
 
+This crate provides only a syntax parser, and tries to avoid applying
+any SQL semantics, and accepts queries that specific databases would
+reject, even when using that Database's specific `Dialect`. For
+example, `CREATE TABLE(x int, x int)` is accepted by this crate, even
+though most SQL engines will reject this statement due to the repeated
+column name `x`.
+
+This crate avoids semantic analysis because it varies drastically
+between dialects and implementations. If you want to do semantic
+analysis, feel free to use this project as a base
+
 ## Example
 
 To parse a simple `SELECT` statement:

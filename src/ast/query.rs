@@ -359,7 +359,7 @@ pub enum SelectItem {
 /// <col_name>
 /// | (<col_name>, <col_name>, ...)
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ExcludeSelectItem {
     /// Single column name without parenthesis.
@@ -637,6 +637,34 @@ impl fmt::Display for Join {
                 suffix(constraint)
             ),
             JoinOperator::CrossJoin => write!(f, " CROSS JOIN {}", self.relation),
+            JoinOperator::LeftSemi(constraint) => write!(
+                f,
+                " {}LEFT SEMI JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
+            JoinOperator::RightSemi(constraint) => write!(
+                f,
+                " {}RIGHT SEMI JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
+            JoinOperator::LeftAnti(constraint) => write!(
+                f,
+                " {}LEFT ANTI JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
+            JoinOperator::RightAnti(constraint) => write!(
+                f,
+                " {}RIGHT ANTI JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
             JoinOperator::CrossApply => write!(f, " CROSS APPLY {}", self.relation),
             JoinOperator::OuterApply => write!(f, " OUTER APPLY {}", self.relation),
         }
@@ -651,6 +679,14 @@ pub enum JoinOperator {
     RightOuter(JoinConstraint),
     FullOuter(JoinConstraint),
     CrossJoin,
+    /// LEFT SEMI (non-standard)
+    LeftSemi(JoinConstraint),
+    /// RIGHT SEMI (non-standard)
+    RightSemi(JoinConstraint),
+    /// LEFT ANTI (non-standard)
+    LeftAnti(JoinConstraint),
+    /// RIGHT ANTI (non-standard)
+    RightAnti(JoinConstraint),
     /// CROSS APPLY (non-standard)
     CrossApply,
     /// OUTER APPLY (non-standard)

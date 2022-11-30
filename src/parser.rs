@@ -2339,6 +2339,14 @@ impl<'a> Parser<'a> {
         let name = self.parse_object_name()?;
         let columns = self.parse_parenthesized_column_list(Optional)?;
         let with_options = self.parse_options(Keyword::WITH)?;
+
+        let cluster_by = if self.parse_keyword(Keyword::CLUSTER) {
+            self.expect_keyword(Keyword::BY)?;
+            self.parse_parenthesized_column_list(Optional)?
+        } else {
+            vec![]
+        };
+
         self.expect_keyword(Keyword::AS)?;
         let query = Box::new(self.parse_query()?);
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
@@ -2349,6 +2357,7 @@ impl<'a> Parser<'a> {
             materialized,
             or_replace,
             with_options,
+            cluster_by,
         })
     }
 
@@ -2749,12 +2758,18 @@ impl<'a> Parser<'a> {
         let index_name = self.parse_object_name()?;
         self.expect_keyword(Keyword::ON)?;
         let table_name = self.parse_object_name()?;
+        let using = if self.parse_keyword(Keyword::USING) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
         self.expect_token(&Token::LParen)?;
         let columns = self.parse_comma_separated(Parser::parse_order_by_expr)?;
         self.expect_token(&Token::RParen)?;
         Ok(Statement::CreateIndex {
             name: index_name,
             table_name,
+            using,
             columns,
             unique,
             if_not_exists,
@@ -4893,16 +4908,60 @@ impl<'a> Parser<'a> {
                         self.expect_keyword(Keyword::JOIN)?;
                         JoinOperator::Inner
                     }
-                    kw @ Keyword::LEFT | kw @ Keyword::RIGHT | kw @ Keyword::FULL => {
+                    kw @ Keyword::LEFT | kw @ Keyword::RIGHT => {
+                        let _ = self.next_token();
+                        let is_left = kw == Keyword::LEFT;
+                        let join_type = self.parse_one_of_keywords(&[
+                            Keyword::OUTER,
+                            Keyword::SEMI,
+                            Keyword::ANTI,
+                            Keyword::JOIN,
+                        ]);
+                        match join_type {
+                            Some(Keyword::OUTER) => {
+                                self.expect_keyword(Keyword::JOIN)?;
+                                if is_left {
+                                    JoinOperator::LeftOuter
+                                } else {
+                                    JoinOperator::RightOuter
+                                }
+                            }
+                            Some(Keyword::SEMI) => {
+                                self.expect_keyword(Keyword::JOIN)?;
+                                if is_left {
+                                    JoinOperator::LeftSemi
+                                } else {
+                                    JoinOperator::RightSemi
+                                }
+                            }
+                            Some(Keyword::ANTI) => {
+                                self.expect_keyword(Keyword::JOIN)?;
+                                if is_left {
+                                    JoinOperator::LeftAnti
+                                } else {
+                                    JoinOperator::RightAnti
+                                }
+                            }
+                            Some(Keyword::JOIN) => {
+                                if is_left {
+                                    JoinOperator::LeftOuter
+                                } else {
+                                    JoinOperator::RightOuter
+                                }
+                            }
+                            _ => {
+                                return Err(ParserError::ParserError(format!(
+                                    "expected OUTER, SEMI, ANTI or JOIN after {:?}",
+                                    kw
+                                )))
+                            }
+                        }
+                    }
+                    Keyword::FULL => {
                         let _ = self.next_token();
                         let _ = self.parse_keyword(Keyword::OUTER);
                         self.expect_keyword(Keyword::JOIN)?;
-                        match kw {
-                            Keyword::LEFT => JoinOperator::LeftOuter,
-                            Keyword::RIGHT => JoinOperator::RightOuter,
-                            Keyword::FULL => JoinOperator::FullOuter,
-                            _ => unreachable!(),
-                        }
+                        JoinOperator::FullOuter
                     }
                     Keyword::OUTER => {
                         return self.expected("LEFT, RIGHT, or FULL", self.peek_token());
@@ -5355,8 +5414,16 @@ impl<'a> Parser<'a> {
                     } else {
                         self.expect_keyword(Keyword::UPDATE)?;
                         self.expect_keyword(Keyword::SET)?;
-                        let l = self.parse_comma_separated(Parser::parse_assignment)?;
-                        OnConflictAction::DoUpdate(l)
+                        let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
+                        let selection = if self.parse_keyword(Keyword::WHERE) {
+                            Some(self.parse_expr()?)
+                        } else {
+                            None
+                        };
+                        OnConflictAction::DoUpdate(DoUpdate {
+                            assignments,
+                            selection,
+                        })
                     };
 
                     Some(OnInsert::OnConflict(OnConflict {
@@ -5951,6 +6018,11 @@ impl<'a> Parser<'a> {
             sequence_options.push(SequenceOptions::Cycle(false));
         }
         Ok(sequence_options)
+    }
+
+    /// The index of the first unprocessed token.
+    pub fn index(&self) -> usize {
+        self.index
     }
 }
 

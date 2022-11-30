@@ -505,6 +505,9 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::ARRAY_AGG => self.parse_array_agg_expr(),
                 Keyword::NOT => self.parse_not(),
+                Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
+                    self.parse_match_against()
+                }
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {
@@ -1207,6 +1210,57 @@ impl<'a> Parser<'a> {
                 expr: Box::new(self.parse_subexpr(Self::UNARY_NOT_PREC)?),
             }),
         }
+    }
+
+    /// Parses fulltext expressions [(1)]
+    ///
+    /// # Errors
+    /// This method will raise an error if the column list is empty or with invalid identifiers,
+    /// the match expression is not a literal string, or if the search modifier is not valid.
+    ///
+    /// [(1)]: Expr::MatchAgainst
+    pub fn parse_match_against(&mut self) -> Result<Expr, ParserError> {
+        let columns = self.parse_parenthesized_column_list(Mandatory)?;
+
+        self.expect_keyword(Keyword::AGAINST)?;
+
+        self.expect_token(&Token::LParen)?;
+
+        // MySQL is too permissive about the value, IMO we can't validate it perfectly on syntax level.
+        let match_value = self.parse_value()?;
+
+        let in_natural_language_mode_keywords = &[
+            Keyword::IN,
+            Keyword::NATURAL,
+            Keyword::LANGUAGE,
+            Keyword::MODE,
+        ];
+
+        let with_query_expansion_keywords = &[Keyword::WITH, Keyword::QUERY, Keyword::EXPANSION];
+
+        let in_boolean_mode_keywords = &[Keyword::IN, Keyword::BOOLEAN, Keyword::MODE];
+
+        let opt_search_modifier = if self.parse_keywords(in_natural_language_mode_keywords) {
+            if self.parse_keywords(with_query_expansion_keywords) {
+                Some(SearchModifier::InNaturalLanguageModeWithQueryExpansion)
+            } else {
+                Some(SearchModifier::InNaturalLanguageMode)
+            }
+        } else if self.parse_keywords(in_boolean_mode_keywords) {
+            Some(SearchModifier::InBooleanMode)
+        } else if self.parse_keywords(with_query_expansion_keywords) {
+            Some(SearchModifier::WithQueryExpansion)
+        } else {
+            None
+        };
+
+        self.expect_token(&Token::RParen)?;
+
+        Ok(Expr::MatchAgainst {
+            columns,
+            match_value,
+            opt_search_modifier,
+        })
     }
 
     /// Parse an INTERVAL expression.

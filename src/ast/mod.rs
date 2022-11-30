@@ -449,6 +449,26 @@ pub enum Expr {
         /// or as `__ TO SECOND(x)`.
         fractional_seconds_precision: Option<u64>,
     },
+    /// `MySQL` specific text search function [(1)].
+    ///
+    /// Syntax:
+    /// ```text
+    /// MARCH (<col>, <col>, ...) AGAINST (<expr> [<search modifier>])
+    ///
+    /// <col> = CompoundIdentifier
+    /// <expr> = String literal
+    /// ```
+    ///
+    ///
+    /// [(1)]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-search.html#function_match
+    MatchAgainst {
+        /// `(<col>, <col>, ...)`.
+        columns: Vec<Ident>,
+        /// `<expr>`.
+        match_value: Value,
+        /// `<search modifier>`
+        opt_search_modifier: Option<SearchModifier>,
+    },
 }
 
 impl fmt::Display for Expr {
@@ -816,6 +836,21 @@ impl fmt::Display for Expr {
                 if let Some(fractional_seconds_precision) = fractional_seconds_precision {
                     write!(f, " ({})", fractional_seconds_precision)?;
                 }
+                Ok(())
+            }
+            Expr::MatchAgainst {
+                columns,
+                match_value: match_expr,
+                opt_search_modifier,
+            } => {
+                write!(f, "MATCH ({}) AGAINST ", display_comma_separated(columns),)?;
+
+                if let Some(search_modifier) = opt_search_modifier {
+                    write!(f, "({match_expr} {search_modifier})")?;
+                } else {
+                    write!(f, "({match_expr})")?;
+                }
+
                 Ok(())
             }
         }
@@ -3656,6 +3691,43 @@ impl fmt::Display for SchemaName {
                 write!(f, "{name} AUTHORIZATION {authorization}")
             }
         }
+    }
+}
+
+/// Fulltext search modifiers ([1]).
+///
+/// [1]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-search.html#function_match
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum SearchModifier {
+    /// `IN NATURAL LANGUAGE MODE`.
+    InNaturalLanguageMode,
+    /// `IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION`.
+    InNaturalLanguageModeWithQueryExpansion,
+    ///`IN BOOLEAN MODE`.
+    InBooleanMode,
+    ///`WITH QUERY EXPANSION`.
+    WithQueryExpansion,
+}
+
+impl fmt::Display for SearchModifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InNaturalLanguageMode => {
+                write!(f, "IN NATURAL LANGUAGE MODE")?;
+            }
+            Self::InNaturalLanguageModeWithQueryExpansion => {
+                write!(f, "IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION")?;
+            }
+            Self::InBooleanMode => {
+                write!(f, "IN BOOLEAN MODE")?;
+            }
+            Self::WithQueryExpansion => {
+                write!(f, "WITH QUERY EXPANSION")?;
+            }
+        }
+
+        Ok(())
     }
 }
 

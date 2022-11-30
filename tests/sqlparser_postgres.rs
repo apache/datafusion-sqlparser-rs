@@ -1271,7 +1271,7 @@ fn parse_pg_unary_ops() {
         let select = pg().verified_only_select(&format!("SELECT {}a", &str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
-                op: op.clone(),
+                op: *op,
                 expr: Box::new(Expr::Identifier(Ident::new("a"))),
             }),
             select.projection[0]
@@ -1287,7 +1287,7 @@ fn parse_pg_postfix_factorial() {
         let select = pg().verified_only_select(&format!("SELECT a{}", &str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
-                op: op.clone(),
+                op: *op,
                 expr: Box::new(Expr::Identifier(Ident::new("a"))),
             }),
             select.projection[0]

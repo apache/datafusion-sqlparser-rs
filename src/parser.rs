@@ -2281,7 +2281,7 @@ impl<'a> Parser<'a> {
 
         let file_format = if let Some(ff) = &hive_formats.storage {
             match ff {
-                HiveIOFormat::FileFormat { format } => Some(format.clone()),
+                HiveIOFormat::FileFormat { format } => Some(*format),
                 _ => None,
             }
         } else {

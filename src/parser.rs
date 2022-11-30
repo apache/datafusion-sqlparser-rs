@@ -4369,24 +4369,13 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::VALUES) {
             SetExpr::Values(self.parse_values()?)
         } else if self.parse_keyword(Keyword::TABLE) {
+            let token1 = self.peek_token();
+            let token2 = self.peek_nth_token(1);
+            let token3 = self.peek_nth_token(2);
             self.next_token();
             self.next_token();
             self.next_token();
-            match &self.tokens[0] {
-                Token::Word(w) => {
-                    if w.keyword == Keyword::CREATE {
-                        SetExpr::Table(Box::new(self.parse_as_table()?))
-                    } else {
-                        return self.expected(
-                            "CREATE statement",
-                            Token::SingleQuotedString(w.value.clone()),
-                        );
-                    }
-                }
-                unexpected => {
-                    return self.expected("CREATE TABLE ... AS TABLE ...", unexpected.clone())
-                }
-            }
+            SetExpr::Table(Box::new(self.parse_as_table(token1, token2, token3)?))
         } else {
             return self.expected(
                 "SELECT, VALUES, or a subquery in the query body",
@@ -4586,45 +4575,42 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse `CREATE TABLE x AS TABLE y`
-    pub fn parse_as_table(&mut self) -> Result<Table, ParserError> {
-        let mut as_flag = false;
-        let mut table_flag = false;
-        let mut table_name = "";
-        let mut schema_name = "";
-
-        let mut tokens_iter = self.tokens.iter().enumerate().peekable();
-        while let Some((_, token)) = tokens_iter.next() {
-            if let Token::Word(w) = token {
-                if w.keyword == Keyword::AS {
-                    as_flag = true;
-                } else if w.keyword == Keyword::TABLE && as_flag {
-                    table_flag = true;
-                } else if as_flag && table_flag {
-                    match tokens_iter.peek() {
-                        Some((_, Token::Period)) => {
-                            schema_name = &w.value;
-                        }
-                        _ => {
-                            table_name = &w.value;
-                            as_flag = false;
-                            table_flag = false;
-                        }
-                    }
-                } else if w.keyword != Keyword::TABLE && as_flag {
-                    as_flag = false;
+    pub fn parse_as_table(&self, token1: Token, token2: Token, token3: Token) -> Result<Table, ParserError> {
+        let table_name;
+        let schema_name;
+        if token2 == Token::Period {
+            match token1 {
+                Token::Word(w) => {
+                    schema_name = w.value;
+                }
+                _ => {
+                    return self.expected("Schema name", token1);
                 }
             }
-        }
-
-        if schema_name.is_empty() {
-            Ok(Table {
-                table_name: Some(table_name.to_string()),
-                schema_name: None,
-            })
-        } else {
+            match token3 {
+                Token::Word(w) => {
+                    table_name = w.value;
+                }
+                _ => {
+                    return self.expected("Table name", token3);
+                }
+            }
             Ok(Table {
                 table_name: Some(table_name.to_string()),
                 schema_name: Some(schema_name.to_string()),
+            })
+        } else {
+            match token1 {
+                Token::Word(w) => {
+                    table_name = w.value;
+                }
+                _ => {
+                    return self.expected("Table name", token1);
+                }
+            }
+            Ok(Table {
+                table_name: Some(table_name.to_string()),
+                schema_name: None,
             })
         }
     }

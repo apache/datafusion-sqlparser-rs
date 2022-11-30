@@ -31,9 +31,9 @@ pub use self::ddl::{
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    Cte, Fetch, Join, JoinConstraint, JoinOperator, LateralView, LockType, Offset, OffsetRows,
-    OrderByExpr, Query, Select, SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier,
-    TableAlias, TableFactor, TableWithJoins, Top, Values, With,
+    Cte, ExcludeSelectItem, Fetch, Join, JoinConstraint, JoinOperator, LateralView, LockType,
+    Offset, OffsetRows, OrderByExpr, Query, Select, SelectInto, SelectItem, SetExpr, SetOperator,
+    SetQuantifier, TableAlias, TableFactor, TableWithJoins, Top, Values, With,
 };
 pub use self::value::{escape_quoted_string, DateTimeField, TrimWhereField, Value};
 

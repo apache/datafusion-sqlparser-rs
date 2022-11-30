@@ -1229,7 +1229,7 @@ fn parse_pg_returning() {
         pg_and_generic().verified_stmt("DELETE FROM tasks WHERE status = 'DONE' RETURNING *");
     match stmt {
         Statement::Delete { returning, .. } => {
-            assert_eq!(Some(vec![SelectItem::Wildcard,]), returning);
+            assert_eq!(Some(vec![SelectItem::Wildcard(None),]), returning);
         }
         _ => unreachable!(),
     };

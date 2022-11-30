@@ -5423,9 +5423,47 @@ impl<'a> Parser<'a> {
                         None => SelectItem::UnnamedExpr(expr),
                     })
             }
-            WildcardExpr::QualifiedWildcard(prefix) => Ok(SelectItem::QualifiedWildcard(prefix)),
-            WildcardExpr::Wildcard => Ok(SelectItem::Wildcard),
+            WildcardExpr::QualifiedWildcard(prefix) => {
+                let opt_exclude = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
+                    self.parse_optional_select_item_exclude()?
+                } else {
+                    None
+                };
+
+                Ok(SelectItem::QualifiedWildcard(prefix, opt_exclude))
+            }
+            WildcardExpr::Wildcard => {
+                let opt_exclude = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
+                    self.parse_optional_select_item_exclude()?
+                } else {
+                    None
+                };
+
+                Ok(SelectItem::Wildcard(opt_exclude))
+            }
         }
+    }
+
+    /// Parse an [`Exclude`](ExcludeSelectItem) information for wildcard select items.
+    ///
+    /// If it is not possible to parse it, will return an option.
+    pub fn parse_optional_select_item_exclude(
+        &mut self,
+    ) -> Result<Option<ExcludeSelectItem>, ParserError> {
+        let opt_exclude = if self.parse_keyword(Keyword::EXCLUDE) {
+            if self.consume_token(&Token::LParen) {
+                let columns = self.parse_comma_separated(|parser| parser.parse_identifier())?;
+                self.expect_token(&Token::RParen)?;
+                Some(ExcludeSelectItem::Multiple(columns))
+            } else {
+                let column = self.parse_identifier()?;
+                Some(ExcludeSelectItem::Single(column))
+            }
+        } else {
+            None
+        };
+
+        Ok(opt_exclude)
     }
 
     /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)

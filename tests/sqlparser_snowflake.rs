@@ -14,14 +14,14 @@
 //! Test SQL syntax specific to Snowflake. The parser based on the
 //! generic dialect is also tested (on the inputs it can handle).
 
-#[macro_use]
-mod test_utils;
-use test_utils::*;
-
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SnowflakeDialect};
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::*;
+use test_utils::*;
+
+#[macro_use]
+mod test_utils;
 
 #[test]
 fn test_snowflake_create_table() {
@@ -363,4 +363,62 @@ fn snowflake_and_generic() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SnowflakeDialect {}), Box::new(GenericDialect {})],
     }
+}
+
+#[test]
+fn test_select_wildcard_with_exclude() {
+    match snowflake_and_generic().verified_stmt("SELECT * EXCLUDE (col_a) FROM data") {
+        Statement::Query(query) => match *query.body {
+            SetExpr::Select(select) => match &select.projection[0] {
+                SelectItem::Wildcard(Some(exclude)) => {
+                    assert_eq!(
+                        *exclude,
+                        ExcludeSelectItem::Multiple(vec![Ident::new("col_a")])
+                    )
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
+
+    match snowflake_and_generic()
+        .verified_stmt("SELECT name.* EXCLUDE department_id FROM employee_table")
+    {
+        Statement::Query(query) => match *query.body {
+            SetExpr::Select(select) => match &select.projection[0] {
+                SelectItem::QualifiedWildcard(_, Some(exclude)) => {
+                    assert_eq!(
+                        *exclude,
+                        ExcludeSelectItem::Single(Ident::new("department_id"))
+                    )
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
+
+    match snowflake_and_generic()
+        .verified_stmt("SELECT * EXCLUDE (department_id, employee_id) FROM employee_table")
+    {
+        Statement::Query(query) => match *query.body {
+            SetExpr::Select(select) => match &select.projection[0] {
+                SelectItem::Wildcard(Some(exclude)) => {
+                    assert_eq!(
+                        *exclude,
+                        ExcludeSelectItem::Multiple(vec![
+                            Ident::new("department_id"),
+                            Ident::new("employee_id")
+                        ])
+                    )
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
 }

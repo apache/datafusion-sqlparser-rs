@@ -4830,16 +4830,57 @@ impl<'a> Parser<'a> {
                         self.expect_keyword(Keyword::JOIN)?;
                         JoinOperator::Inner
                     }
-                    kw @ Keyword::LEFT | kw @ Keyword::RIGHT | kw @ Keyword::FULL => {
+                    kw @ Keyword::LEFT | kw @ Keyword::RIGHT => {
+                        let _ = self.next_token();
+                        let join_type = self.parse_one_of_keywords(&[
+                            Keyword::OUTER,
+                            Keyword::SEMI,
+                            Keyword::ANTI,
+                            Keyword::JOIN,
+                        ]);
+                        match join_type {
+                            Some(Keyword::OUTER) => {
+                                self.expect_keyword(Keyword::JOIN)?;
+                                match kw {
+                                    Keyword::LEFT => JoinOperator::LeftOuter,
+                                    Keyword::RIGHT => JoinOperator::RightOuter,
+                                    _ => unreachable!(),
+                                }
+                            }
+                            Some(Keyword::SEMI) => {
+                                self.expect_keyword(Keyword::JOIN)?;
+                                match kw {
+                                    Keyword::LEFT => JoinOperator::LeftSemi,
+                                    Keyword::RIGHT => JoinOperator::RightSemi,
+                                    _ => unreachable!(),
+                                }
+                            }
+                            Some(Keyword::ANTI) => {
+                                self.expect_keyword(Keyword::JOIN)?;
+                                match kw {
+                                    Keyword::LEFT => JoinOperator::LeftAnti,
+                                    Keyword::RIGHT => JoinOperator::RightAnti,
+                                    _ => unreachable!(),
+                                }
+                            }
+                            Some(Keyword::JOIN) => match kw {
+                                Keyword::LEFT => JoinOperator::LeftOuter,
+                                Keyword::RIGHT => JoinOperator::RightOuter,
+                                _ => unreachable!(),
+                            },
+                            _ => {
+                                return Err(ParserError::ParserError(format!(
+                                    "expected OUTER, SEMI, ANTI or JOIN after {:?}",
+                                    kw
+                                )))
+                            }
+                        }
+                    }
+                    Keyword::FULL => {
                         let _ = self.next_token();
                         let _ = self.parse_keyword(Keyword::OUTER);
                         self.expect_keyword(Keyword::JOIN)?;
-                        match kw {
-                            Keyword::LEFT => JoinOperator::LeftOuter,
-                            Keyword::RIGHT => JoinOperator::RightOuter,
-                            Keyword::FULL => JoinOperator::FullOuter,
-                            _ => unreachable!(),
-                        }
+                        JoinOperator::FullOuter
                     }
                     Keyword::OUTER => {
                         return self.expected("LEFT, RIGHT, or FULL", self.peek_token());

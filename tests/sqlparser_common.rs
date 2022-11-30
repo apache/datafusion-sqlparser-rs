@@ -3869,6 +3869,22 @@ fn parse_joins_on() {
         vec![join_with_constraint("t2", None, JoinOperator::RightOuter)]
     );
     assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 LEFT SEMI JOIN t2 ON c1 = c2").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::LeftSemi)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 RIGHT SEMI JOIN t2 ON c1 = c2").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::RightSemi)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 LEFT ANTI JOIN t2 ON c1 = c2").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::LeftAnti)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 RIGHT ANTI JOIN t2 ON c1 = c2").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::RightAnti)]
+    );
+    assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 FULL JOIN t2 ON c1 = c2").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::FullOuter)]
     );
@@ -3916,6 +3932,22 @@ fn parse_joins_using() {
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 RIGHT JOIN t2 USING(c1)").from).joins,
         vec![join_with_constraint("t2", None, JoinOperator::RightOuter)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 LEFT SEMI JOIN t2 USING(c1)").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::LeftSemi)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 RIGHT SEMI JOIN t2 USING(c1)").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::RightSemi)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 LEFT ANTI JOIN t2 USING(c1)").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::LeftAnti)]
+    );
+    assert_eq!(
+        only(&verified_only_select("SELECT * FROM t1 RIGHT ANTI JOIN t2 USING(c1)").from).joins,
+        vec![join_with_constraint("t2", None, JoinOperator::RightAnti)]
     );
     assert_eq!(
         only(&verified_only_select("SELECT * FROM t1 FULL JOIN t2 USING(c1)").from).joins,

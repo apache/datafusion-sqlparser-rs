@@ -3697,7 +3697,7 @@ impl fmt::Display for SchemaName {
 /// Fulltext search modifiers ([1]).
 ///
 /// [1]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-search.html#function_match
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SearchModifier {
     /// `IN NATURAL LANGUAGE MODE`.

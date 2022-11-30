@@ -333,7 +333,7 @@ pub enum SelectItem {
 /// <col_name>
 /// | (<col_name>, <col_name>, ...)
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ExcludeSelectItem {
     /// Single column name without parenthesis.

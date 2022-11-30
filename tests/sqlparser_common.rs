@@ -2288,7 +2288,8 @@ fn parse_create_table_as_table() {
     });
 
     match verified_stmt(sql1) {
-        Statement::CreateTable { query, .. } => {
+        Statement::CreateTable { query, name, .. } => {
+            assert_eq!(name, ObjectName(vec![Ident::new("new_table")]));
             assert_eq!(query.unwrap(), expected_query1);
         }
         _ => unreachable!(),
@@ -2310,7 +2311,8 @@ fn parse_create_table_as_table() {
     });
 
     match verified_stmt(sql2) {
-        Statement::CreateTable { query, .. } => {
+        Statement::CreateTable { query, name, .. } => {
+            assert_eq!(name, ObjectName(vec![Ident::new("new_table")]));
             assert_eq!(query.unwrap(), expected_query2);
         }
         _ => unreachable!(),

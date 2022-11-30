@@ -1067,7 +1067,9 @@ fn parse_prepare() {
                 Expr::Identifier("a3".into()),
             ]];
             match &*source.body {
-                SetExpr::Values(Values(values)) => assert_eq!(values.as_slice(), &expected_values),
+                SetExpr::Values(Values { rows, .. }) => {
+                    assert_eq!(rows.as_slice(), &expected_values)
+                }
                 _ => unreachable!(),
             }
         }

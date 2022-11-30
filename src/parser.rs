@@ -4162,6 +4162,10 @@ impl<'a> Parser<'a> {
     /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
     /// expect the initial keyword to be already consumed
     pub fn parse_query(&mut self) -> Result<Query, ParserError> {
+        self.parse_query_impl(false)
+    }
+
+    pub fn parse_query_impl(&mut self, within_insert: bool) -> Result<Query, ParserError> {
         let with = if self.parse_keyword(Keyword::WITH) {
             Some(With {
                 recursive: self.parse_keyword(Keyword::RECURSIVE),
@@ -4172,7 +4176,7 @@ impl<'a> Parser<'a> {
         };
 
         if !self.parse_keyword(Keyword::INSERT) {
-            let body = Box::new(self.parse_query_body(0)?);
+            let body = Box::new(self.parse_query_body(0, within_insert)?);
 
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
                 self.parse_comma_separated(Parser::parse_order_by_expr)?
@@ -4287,7 +4291,11 @@ impl<'a> Parser<'a> {
     ///   subquery ::= query_body [ order_by_limit ]
     ///   set_operation ::= query_body { 'UNION' | 'EXCEPT' | 'INTERSECT' } [ 'ALL' ] query_body
     /// ```
-    pub fn parse_query_body(&mut self, precedence: u8) -> Result<SetExpr, ParserError> {
+    pub fn parse_query_body(
+        &mut self,
+        precedence: u8,
+        within_insert: bool,
+    ) -> Result<SetExpr, ParserError> {
         // We parse the expression using a Pratt parser, as in `parse_expr()`.
         // Start by parsing a restricted SELECT or a `(subquery)`:
         let mut expr = if self.parse_keyword(Keyword::SELECT) {
@@ -4298,7 +4306,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             SetExpr::Query(Box::new(subquery))
         } else if self.parse_keyword(Keyword::VALUES) {
-            SetExpr::Values(self.parse_values()?)
+            SetExpr::Values(self.parse_values(within_insert)?)
         } else {
             return self.expected(
                 "SELECT, VALUES, or a subquery in the query body",
@@ -4326,7 +4334,7 @@ impl<'a> Parser<'a> {
                 left: Box::new(expr),
                 op: op.unwrap(),
                 set_quantifier,
-                right: Box::new(self.parse_query_body(next_precedence)?),
+                right: Box::new(self.parse_query_body(next_precedence, within_insert)?),
             };
         }
 
@@ -5226,7 +5234,7 @@ impl<'a> Parser<'a> {
             // Hive allows you to specify columns after partitions as well if you want.
             let after_columns = self.parse_parenthesized_column_list(Optional)?;
 
-            let source = Box::new(self.parse_query()?);
+            let source = Box::new(self.parse_query_impl(true)?);
             let on = if self.parse_keyword(Keyword::ON) {
                 if self.parse_keyword(Keyword::CONFLICT) {
                     let conflict_target =
@@ -5482,14 +5490,25 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_values(&mut self) -> Result<Values, ParserError> {
-        let values = self.parse_comma_separated(|parser| {
+    pub fn parse_values(&mut self, within_insert: bool) -> Result<Values, ParserError> {
+        let mut explicit_row = false;
+
+        let rows = self.parse_comma_separated(|parser| {
+            if parser.parse_keyword(Keyword::ROW) {
+                explicit_row = true;
+            } else {
+                if !within_insert && parser.dialect.values_require_row_in_select() {
+                    parser
+                        .expected(format!("{:?}", &Keyword::ROW).as_str(), parser.peek_token())?;
+                }
+            }
+
             parser.expect_token(&Token::LParen)?;
             let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
             parser.expect_token(&Token::RParen)?;
             Ok(exprs)
         })?;
-        Ok(Values(values))
+        Ok(Values { explicit_row, rows })
     }
 
     pub fn parse_start_transaction(&mut self) -> Result<Statement, ParserError> {
@@ -5655,7 +5674,7 @@ impl<'a> Parser<'a> {
                         }
                         let columns = self.parse_parenthesized_column_list(Optional)?;
                         self.expect_keyword(Keyword::VALUES)?;
-                        let values = self.parse_values()?;
+                        let values = self.parse_values(true)?;
                         MergeClause::NotMatched {
                             predicate,
                             columns,

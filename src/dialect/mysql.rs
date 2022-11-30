@@ -35,4 +35,8 @@ impl Dialect for MySqlDialect {
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '`'
     }
+
+    fn values_require_row_in_select(&self) -> bool {
+        true
+    }
 }

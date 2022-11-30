@@ -660,20 +660,25 @@ fn parse_simple_insert() {
             assert_eq!(
                 Box::new(Query {
                     with: None,
-                    body: Box::new(SetExpr::Values(Values(vec![
-                        vec![
-                            Expr::Value(Value::SingleQuotedString("Test Some Inserts".to_string())),
-                            Expr::Value(Value::Number("1".to_string(), false))
-                        ],
-                        vec![
-                            Expr::Value(Value::SingleQuotedString("Test Entry 2".to_string())),
-                            Expr::Value(Value::Number("2".to_string(), false))
-                        ],
-                        vec![
-                            Expr::Value(Value::SingleQuotedString("Test Entry 3".to_string())),
-                            Expr::Value(Value::Number("3".to_string(), false))
+                    body: Box::new(SetExpr::Values(Values {
+                        explicit_row: false,
+                        rows: vec![
+                            vec![
+                                Expr::Value(Value::SingleQuotedString(
+                                    "Test Some Inserts".to_string()
+                                )),
+                                Expr::Value(Value::Number("1".to_string(), false))
+                            ],
+                            vec![
+                                Expr::Value(Value::SingleQuotedString("Test Entry 2".to_string())),
+                                Expr::Value(Value::Number("2".to_string(), false))
+                            ],
+                            vec![
+                                Expr::Value(Value::SingleQuotedString("Test Entry 3".to_string())),
+                                Expr::Value(Value::Number("3".to_string(), false))
+                            ]
                         ]
-                    ]))),
+                    })),
                     order_by: vec![],
                     limit: None,
                     offset: None,
@@ -717,16 +722,21 @@ fn parse_insert_with_on_duplicate_update() {
             assert_eq!(
                 Box::new(Query {
                     with: None,
-                    body: Box::new(SetExpr::Values(Values(vec![vec![
-                        Expr::Value(Value::SingleQuotedString("accounting_manager".to_string())),
-                        Expr::Value(Value::SingleQuotedString(
-                            "Some description about the group".to_string()
-                        )),
-                        Expr::Value(Value::Boolean(true)),
-                        Expr::Value(Value::Boolean(true)),
-                        Expr::Value(Value::Boolean(true)),
-                        Expr::Value(Value::Boolean(true)),
-                    ]]))),
+                    body: Box::new(SetExpr::Values(Values {
+                        explicit_row: false,
+                        rows: vec![vec![
+                            Expr::Value(Value::SingleQuotedString(
+                                "accounting_manager".to_string()
+                            )),
+                            Expr::Value(Value::SingleQuotedString(
+                                "Some description about the group".to_string()
+                            )),
+                            Expr::Value(Value::Boolean(true)),
+                            Expr::Value(Value::Boolean(true)),
+                            Expr::Value(Value::Boolean(true)),
+                            Expr::Value(Value::Boolean(true)),
+                        ]]
+                    })),
                     order_by: vec![],
                     limit: None,
                     offset: None,
@@ -1182,4 +1192,10 @@ fn mysql_and_generic() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {}), Box::new(GenericDialect {})],
     }
+}
+
+#[test]
+fn parse_values() {
+    mysql().verified_stmt("VALUES ROW(1, true, 'a')");
+    mysql().verified_stmt("SELECT a, c FROM (VALUES ROW(1, true, 'a'), ROW(2, false, 'b'), ROW(3, false, 'c')) AS t (a, b, c)");
 }

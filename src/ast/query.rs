@@ -709,16 +709,20 @@ impl fmt::Display for Top {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Values(pub Vec<Vec<Expr>>);
+pub struct Values {
+    pub explicit_row: bool,
+    pub rows: Vec<Vec<Expr>>,
+}
 
 impl fmt::Display for Values {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "VALUES ")?;
+        let prefix = if self.explicit_row { "ROW" } else { "" };
         let mut delim = "";
-        for row in &self.0 {
+        for row in &self.rows {
             write!(f, "{}", delim)?;
             delim = ", ";
-            write!(f, "({})", display_comma_separated(row))?;
+            write!(f, "{prefix}({})", display_comma_separated(row))?;
         }
         Ok(())
     }

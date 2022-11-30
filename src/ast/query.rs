@@ -710,6 +710,8 @@ impl fmt::Display for Top {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Values {
+    /// Was there an explict ROWs keyword (MySQL)?
+    /// <https://dev.mysql.com/doc/refman/8.0/en/values.html>
     pub explicit_row: bool,
     pub rows: Vec<Vec<Expr>>,
 }

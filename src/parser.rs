@@ -4575,7 +4575,12 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse `CREATE TABLE x AS TABLE y`
-    pub fn parse_as_table(&self, token1: Token, token2: Token, token3: Token) -> Result<Table, ParserError> {
+    pub fn parse_as_table(
+        &self,
+        token1: Token,
+        token2: Token,
+        token3: Token,
+    ) -> Result<Table, ParserError> {
         let table_name;
         let schema_name;
         if token2 == Token::Period {
@@ -4596,8 +4601,8 @@ impl<'a> Parser<'a> {
                 }
             }
             Ok(Table {
-                table_name: Some(table_name.to_string()),
-                schema_name: Some(schema_name.to_string()),
+                table_name: Some(table_name),
+                schema_name: Some(schema_name),
             })
         } else {
             match token1 {
@@ -4609,7 +4614,7 @@ impl<'a> Parser<'a> {
                 }
             }
             Ok(Table {
-                table_name: Some(table_name.to_string()),
+                table_name: Some(table_name),
                 schema_name: None,
             })
         }

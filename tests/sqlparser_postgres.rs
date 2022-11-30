@@ -227,7 +227,7 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "last_update".into(),
-                        data_type: DataType::Timestamp(TimezoneInfo::WithoutTimeZone),
+                        data_type: DataType::Timestamp(None, TimezoneInfo::WithoutTimeZone),
                         collation: None,
                         options: vec![
                             ColumnOptionDef {
@@ -487,85 +487,6 @@ PHP	₱ USD $
     let ast = pg_and_generic().one_statement_parses_to(sql, "");
     println!("{:#?}", ast);
     //assert_eq!(sql, ast.to_string());
-}
-
-#[test]
-fn parse_update_set_from() {
-    let sql = "UPDATE t1 SET name = t2.name FROM (SELECT name, id FROM t1 GROUP BY id) AS t2 WHERE t1.id = t2.id";
-    let stmt = pg().verified_stmt(sql);
-    assert_eq!(
-        stmt,
-        Statement::Update {
-            table: TableWithJoins {
-                relation: TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("t1")]),
-                    alias: None,
-                    args: None,
-                    with_hints: vec![],
-                },
-                joins: vec![],
-            },
-            assignments: vec![Assignment {
-                id: vec![Ident::new("name")],
-                value: Expr::CompoundIdentifier(vec![Ident::new("t2"), Ident::new("name")])
-            }],
-            from: Some(TableWithJoins {
-                relation: TableFactor::Derived {
-                    lateral: false,
-                    subquery: Box::new(Query {
-                        with: None,
-                        body: Box::new(SetExpr::Select(Box::new(Select {
-                            distinct: false,
-                            top: None,
-                            projection: vec![
-                                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
-                                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
-                            ],
-                            into: None,
-                            from: vec![TableWithJoins {
-                                relation: TableFactor::Table {
-                                    name: ObjectName(vec![Ident::new("t1")]),
-                                    alias: None,
-                                    args: None,
-                                    with_hints: vec![],
-                                },
-                                joins: vec![],
-                            }],
-                            lateral_views: vec![],
-                            selection: None,
-                            group_by: vec![Expr::Identifier(Ident::new("id"))],
-                            cluster_by: vec![],
-                            distribute_by: vec![],
-                            sort_by: vec![],
-                            having: None,
-                            qualify: None
-                        }))),
-                        order_by: vec![],
-                        limit: None,
-                        offset: None,
-                        fetch: None,
-                        lock: None,
-                    }),
-                    alias: Some(TableAlias {
-                        name: Ident::new("t2"),
-                        columns: vec![],
-                    })
-                },
-                joins: vec![],
-            }),
-            selection: Some(Expr::BinaryOp {
-                left: Box::new(Expr::CompoundIdentifier(vec![
-                    Ident::new("t1"),
-                    Ident::new("id")
-                ])),
-                op: BinaryOperator::Eq,
-                right: Box::new(Expr::CompoundIdentifier(vec![
-                    Ident::new("t2"),
-                    Ident::new("id")
-                ])),
-            }),
-        }
-    );
 }
 
 #[test]
@@ -1178,6 +1099,143 @@ fn parse_prepare() {
 }
 
 #[test]
+fn parse_pg_on_conflict() {
+    let stmt = pg_and_generic().verified_stmt(
+        "INSERT INTO distributors (did, dname) \
+        VALUES (5, 'Gizmo Transglobal'), (6, 'Associated Computing, Inc')  \
+        ON CONFLICT(did) \
+        DO UPDATE SET dname = EXCLUDED.dname",
+    );
+    match stmt {
+        Statement::Insert {
+            on:
+                Some(OnInsert::OnConflict(OnConflict {
+                    conflict_target,
+                    action,
+                })),
+            ..
+        } => {
+            assert_eq!(vec![Ident::from("did")], conflict_target);
+            assert_eq!(
+                OnConflictAction::DoUpdate(vec![Assignment {
+                    id: vec!["dname".into()],
+                    value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "dname".into()])
+                },]),
+                action
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    let stmt = pg_and_generic().verified_stmt(
+        "INSERT INTO distributors (did, dname, area) \
+        VALUES (5, 'Gizmo Transglobal', 'Mars'), (6, 'Associated Computing, Inc', 'Venus')  \
+        ON CONFLICT(did, area) \
+        DO UPDATE SET dname = EXCLUDED.dname, area = EXCLUDED.area",
+    );
+    match stmt {
+        Statement::Insert {
+            on:
+                Some(OnInsert::OnConflict(OnConflict {
+                    conflict_target,
+                    action,
+                })),
+            ..
+        } => {
+            assert_eq!(
+                vec![Ident::from("did"), Ident::from("area"),],
+                conflict_target
+            );
+            assert_eq!(
+                OnConflictAction::DoUpdate(vec![
+                    Assignment {
+                        id: vec!["dname".into()],
+                        value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "dname".into()])
+                    },
+                    Assignment {
+                        id: vec!["area".into()],
+                        value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "area".into()])
+                    },
+                ]),
+                action
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    let stmt = pg_and_generic().verified_stmt(
+        "INSERT INTO distributors (did, dname) \
+    VALUES (5, 'Gizmo Transglobal'), (6, 'Associated Computing, Inc')  \
+    ON CONFLICT DO NOTHING",
+    );
+    match stmt {
+        Statement::Insert {
+            on:
+                Some(OnInsert::OnConflict(OnConflict {
+                    conflict_target,
+                    action,
+                })),
+            ..
+        } => {
+            assert_eq!(Vec::<Ident>::new(), conflict_target);
+            assert_eq!(OnConflictAction::DoNothing, action);
+        }
+        _ => unreachable!(),
+    };
+}
+
+#[test]
+fn parse_pg_returning() {
+    let stmt = pg_and_generic().verified_stmt(
+        "INSERT INTO distributors (did, dname) VALUES (DEFAULT, 'XYZ Widgets') RETURNING did",
+    );
+    match stmt {
+        Statement::Insert { returning, .. } => {
+            assert_eq!(
+                Some(vec![SelectItem::UnnamedExpr(Expr::Identifier(
+                    "did".into()
+                )),]),
+                returning
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    let stmt = pg_and_generic().verified_stmt(
+        "UPDATE weather SET temp_lo = temp_lo + 1, temp_hi = temp_lo + 15, prcp = DEFAULT \
+             WHERE city = 'San Francisco' AND date = '2003-07-03' \
+             RETURNING temp_lo AS lo, temp_hi AS hi, prcp",
+    );
+    match stmt {
+        Statement::Update { returning, .. } => {
+            assert_eq!(
+                Some(vec![
+                    SelectItem::ExprWithAlias {
+                        expr: Expr::Identifier("temp_lo".into()),
+                        alias: "lo".into()
+                    },
+                    SelectItem::ExprWithAlias {
+                        expr: Expr::Identifier("temp_hi".into()),
+                        alias: "hi".into()
+                    },
+                    SelectItem::UnnamedExpr(Expr::Identifier("prcp".into())),
+                ]),
+                returning
+            );
+        }
+        _ => unreachable!(),
+    };
+    let stmt =
+        pg_and_generic().verified_stmt("DELETE FROM tasks WHERE status = 'DONE' RETURNING *");
+    match stmt {
+        Statement::Delete { returning, .. } => {
+            assert_eq!(Some(vec![SelectItem::Wildcard(None),]), returning);
+        }
+        _ => unreachable!(),
+    };
+}
+
+#[test]
 fn parse_pg_bitwise_binary_ops() {
     let bitwise_ops = &[
         // Sharp char cannot be used with Generic Dialect, it conflicts with identifiers
@@ -1213,7 +1271,7 @@ fn parse_pg_unary_ops() {
         let select = pg().verified_only_select(&format!("SELECT {}a", &str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
-                op: op.clone(),
+                op: *op,
                 expr: Box::new(Expr::Identifier(Ident::new("a"))),
             }),
             select.projection[0]
@@ -1229,7 +1287,7 @@ fn parse_pg_postfix_factorial() {
         let select = pg().verified_only_select(&format!("SELECT a{}", &str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
-                op: op.clone(),
+                op: *op,
                 expr: Box::new(Expr::Identifier(Ident::new("a"))),
             }),
             select.projection[0]

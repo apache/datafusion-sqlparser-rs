@@ -14,16 +14,15 @@
 //! Test SQL syntax specific to MySQL. The parser based on the generic dialect
 //! is also tested (on the inputs it can handle).
 
-#[macro_use]
-mod test_utils;
-
-use test_utils::*;
-
 use sqlparser::ast::Expr;
 use sqlparser::ast::Value;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
 use sqlparser::tokenizer::Token;
+use test_utils::*;
+
+#[macro_use]
+mod test_utils;
 
 #[test]
 fn parse_identifiers() {
@@ -212,7 +211,7 @@ fn parse_show_create() {
         assert_eq!(
             mysql_and_generic().verified_stmt(format!("SHOW CREATE {} myident", obj_type).as_str()),
             Statement::ShowCreate {
-                obj_type: obj_type.clone(),
+                obj_type: *obj_type,
                 obj_name: obj_name.clone(),
             }
         );
@@ -815,6 +814,7 @@ fn parse_update_with_joins() {
             assignments,
             from: _from,
             selection,
+            returning,
         } => {
             assert_eq!(
                 TableWithJoins {
@@ -870,6 +870,7 @@ fn parse_update_with_joins() {
                 }),
                 selection
             );
+            assert_eq!(None, returning);
         }
         _ => unreachable!(),
     }
@@ -1027,7 +1028,7 @@ fn parse_table_colum_option_on_update() {
             assert_eq!(
                 vec![ColumnDef {
                     name: Ident::with_quote('`', "modification_time"),
-                    data_type: DataType::Datetime,
+                    data_type: DataType::Datetime(None),
                     collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,
@@ -1127,6 +1128,74 @@ fn parse_create_table_with_index_definition() {
         "CREATE TABLE tb (id INT, INDEX (c1, c2, c3, c4,c5))",
         "CREATE TABLE tb (id INT, INDEX (c1, c2, c3, c4, c5))",
     );
+}
+
+#[test]
+fn parse_create_table_with_fulltext_definition() {
+    mysql_and_generic().verified_stmt("CREATE TABLE tb (id INT, FULLTEXT (id))");
+
+    mysql_and_generic().verified_stmt("CREATE TABLE tb (id INT, FULLTEXT INDEX (id))");
+
+    mysql_and_generic().verified_stmt("CREATE TABLE tb (id INT, FULLTEXT KEY (id))");
+
+    mysql_and_generic().verified_stmt("CREATE TABLE tb (id INT, FULLTEXT potato (id))");
+
+    mysql_and_generic().verified_stmt("CREATE TABLE tb (id INT, FULLTEXT INDEX potato (id))");
+
+    mysql_and_generic().verified_stmt("CREATE TABLE tb (id INT, FULLTEXT KEY potato (id))");
+
+    mysql_and_generic()
+        .verified_stmt("CREATE TABLE tb (c1 INT, c2 INT, FULLTEXT KEY potato (c1, c2))");
+}
+
+#[test]
+fn parse_create_table_with_spatial_definition() {
+    mysql_and_generic().verified_stmt("CREATE TABLE tb (id INT, SPATIAL (id))");
+
+    mysql_and_generic().verified_stmt("CREATE TABLE tb (id INT, SPATIAL INDEX (id))");
+
+    mysql_and_generic().verified_stmt("CREATE TABLE tb (id INT, SPATIAL KEY (id))");
+
+    mysql_and_generic().verified_stmt("CREATE TABLE tb (id INT, SPATIAL potato (id))");
+
+    mysql_and_generic().verified_stmt("CREATE TABLE tb (id INT, SPATIAL INDEX potato (id))");
+
+    mysql_and_generic().verified_stmt("CREATE TABLE tb (id INT, SPATIAL KEY potato (id))");
+
+    mysql_and_generic()
+        .verified_stmt("CREATE TABLE tb (c1 INT, c2 INT, SPATIAL KEY potato (c1, c2))");
+}
+
+#[test]
+fn parse_fulltext_expression() {
+    mysql_and_generic().verified_stmt("SELECT * FROM tb WHERE MATCH (c1) AGAINST ('string')");
+
+    mysql_and_generic().verified_stmt(
+        "SELECT * FROM tb WHERE MATCH (c1) AGAINST ('string' IN NATURAL LANGUAGE MODE)",
+    );
+
+    mysql_and_generic().verified_stmt("SELECT * FROM tb WHERE MATCH (c1) AGAINST ('string' IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION)");
+
+    mysql_and_generic()
+        .verified_stmt("SELECT * FROM tb WHERE MATCH (c1) AGAINST ('string' IN BOOLEAN MODE)");
+
+    mysql_and_generic()
+        .verified_stmt("SELECT * FROM tb WHERE MATCH (c1) AGAINST ('string' WITH QUERY EXPANSION)");
+
+    mysql_and_generic()
+        .verified_stmt("SELECT * FROM tb WHERE MATCH (c1, c2, c3) AGAINST ('string')");
+
+    mysql_and_generic().verified_stmt("SELECT * FROM tb WHERE MATCH (c1) AGAINST (123)");
+
+    mysql_and_generic().verified_stmt("SELECT * FROM tb WHERE MATCH (c1) AGAINST (NULL)");
+
+    mysql_and_generic().verified_stmt("SELECT COUNT(IF(MATCH (title, body) AGAINST ('database' IN NATURAL LANGUAGE MODE), 1, NULL)) AS count FROM articles");
+}
+
+#[test]
+#[should_panic = "Expected FULLTEXT or SPATIAL option without constraint name, found: cons"]
+fn parse_create_table_with_fulltext_definition_should_not_accept_constraint_name() {
+    mysql_and_generic().verified_stmt("CREATE TABLE tb (c1 INT, CONSTRAINT cons FULLTEXT (c1))");
 }
 
 fn mysql() -> TestedDialects {

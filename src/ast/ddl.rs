@@ -25,13 +25,20 @@ use crate::ast::{display_comma_separated, display_separated, DataType, Expr, Ide
 use crate::tokenizer::Token;
 
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AlterTableOperation {
     /// `ADD <table_constraint>`
     AddConstraint(TableConstraint),
-    /// `ADD [ COLUMN ] <column_def>`
-    AddColumn { column_def: ColumnDef },
+    /// `ADD [COLUMN] [IF NOT EXISTS] <column_def>`
+    AddColumn {
+        /// `[COLUMN]`.
+        column_keyword: bool,
+        /// `[IF NOT EXISTS]`
+        if_not_exists: bool,
+        /// <column_def>.
+        column_def: ColumnDef,
+    },
     /// `DROP CONSTRAINT [ IF EXISTS ] <name>`
     DropConstraint {
         if_exists: bool,
@@ -100,8 +107,21 @@ impl fmt::Display for AlterTableOperation {
                 ine = if *if_not_exists { " IF NOT EXISTS" } else { "" }
             ),
             AlterTableOperation::AddConstraint(c) => write!(f, "ADD {}", c),
-            AlterTableOperation::AddColumn { column_def } => {
-                write!(f, "ADD COLUMN {}", column_def)
+            AlterTableOperation::AddColumn {
+                column_keyword,
+                if_not_exists,
+                column_def,
+            } => {
+                write!(f, "ADD")?;
+                if *column_keyword {
+                    write!(f, " COLUMN")?;
+                }
+                if *if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " {column_def}")?;
+
+                Ok(())
             }
             AlterTableOperation::AlterColumn { column_name, op } => {
                 write!(f, "ALTER COLUMN {} {}", column_name, op)
@@ -181,7 +201,7 @@ impl fmt::Display for AlterTableOperation {
 }
 
 /// An `ALTER COLUMN` (`Statement::AlterTable`) operation
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AlterColumnOperation {
     /// `SET NOT NULL`
@@ -224,7 +244,7 @@ impl fmt::Display for AlterColumnOperation {
 
 /// A table-level constraint, specified in a `CREATE TABLE` or an
 /// `ALTER TABLE ADD <constraint>` statement.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TableConstraint {
     /// `[ CONSTRAINT <name> ] { PRIMARY KEY | UNIQUE } (<columns>)`
@@ -267,6 +287,28 @@ pub enum TableConstraint {
         ///
         /// [1]: IndexType
         index_type: Option<IndexType>,
+        /// Referred column identifier list.
+        columns: Vec<Ident>,
+    },
+    /// MySQLs [fulltext][1] definition. Since the [`SPATIAL`][2] definition is exactly the same,
+    /// and MySQL displays both the same way, it is part of this definition as well.
+    ///
+    /// Supported syntax:
+    ///
+    /// ```markdown
+    /// {FULLTEXT | SPATIAL} [INDEX | KEY] [index_name] (key_part,...)
+    ///
+    /// key_part: col_name
+    /// ```
+    ///
+    /// [1]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-natural-language.html
+    FulltextOrSpatial {
+        /// Whether this is a `FULLTEXT` (true) or `SPATIAL` (false) definition.
+        fulltext: bool,
+        /// Whether the type is followed by the keyword `KEY`, `INDEX`, or no keyword at all.
+        index_type_display: KeyOrIndexDisplay,
+        /// Optional index name.
+        opt_index_name: Option<Ident>,
         /// Referred column identifier list.
         columns: Vec<Ident>,
     },
@@ -330,19 +372,77 @@ impl fmt::Display for TableConstraint {
 
                 Ok(())
             }
+            Self::FulltextOrSpatial {
+                fulltext,
+                index_type_display,
+                opt_index_name,
+                columns,
+            } => {
+                if *fulltext {
+                    write!(f, "FULLTEXT")?;
+                } else {
+                    write!(f, "SPATIAL")?;
+                }
+
+                if !matches!(index_type_display, KeyOrIndexDisplay::None) {
+                    write!(f, " {}", index_type_display)?;
+                }
+
+                if let Some(name) = opt_index_name {
+                    write!(f, " {}", name)?;
+                }
+
+                write!(f, " ({})", display_comma_separated(columns))?;
+
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Representation whether a definition can can contains the KEY or INDEX keywords with the same
+/// meaning.
+///
+/// This enum initially is directed to `FULLTEXT`,`SPATIAL`, and `UNIQUE` indexes on create table
+/// statements of `MySQL` [(1)].
+///
+/// [1]: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum KeyOrIndexDisplay {
+    /// Nothing to display
+    None,
+    /// Display the KEY keyword
+    Key,
+    /// Display the INDEX keyword
+    Index,
+}
+
+impl fmt::Display for KeyOrIndexDisplay {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            KeyOrIndexDisplay::None => {
+                write!(f, "")
+            }
+            KeyOrIndexDisplay::Key => {
+                write!(f, "KEY")
+            }
+            KeyOrIndexDisplay::Index => {
+                write!(f, "INDEX")
+            }
         }
     }
 }
 
 /// Indexing method used by that index.
 ///
-/// This structure isn't present on ANSI, but is found at least in [MySQL CREATE TABLE][1],
-/// [MySQL CREATE INDEX][2], and [Postgresql CREATE INDEX][3] statements.
+/// This structure isn't present on ANSI, but is found at least in [`MySQL` CREATE TABLE][1],
+/// [`MySQL` CREATE INDEX][2], and [Postgresql CREATE INDEX][3] statements.
 ///
 /// [1]: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
 /// [2]: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
 /// [3]: https://www.postgresql.org/docs/14/sql-createindex.html
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum IndexType {
     BTree,
@@ -360,7 +460,7 @@ impl fmt::Display for IndexType {
 }
 
 /// SQL column definition
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ColumnDef {
     pub name: Ident,
@@ -386,7 +486,7 @@ impl fmt::Display for ColumnDef {
 /// they are allowed to be named. The specification distinguishes between
 /// constraints (NOT NULL, UNIQUE, PRIMARY KEY, and CHECK), which can be named
 /// and can appear in any order, and other options (DEFAULT, GENERATED), which
-/// cannot be named and must appear in a fixed order. PostgreSQL, however,
+/// cannot be named and must appear in a fixed order. `PostgreSQL`, however,
 /// allows preceding any option with `CONSTRAINT <name>`, even those that are
 /// not really constraints, like NULL and DEFAULT. MSSQL is less permissive,
 /// allowing DEFAULT, UNIQUE, PRIMARY KEY and CHECK to be named, but not NULL or
@@ -395,7 +495,7 @@ impl fmt::Display for ColumnDef {
 /// For maximum flexibility, we don't distinguish between constraint and
 /// non-constraint options, lumping them all together under the umbrella of
 /// "column options," and we allow any column option to be named.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ColumnOptionDef {
     pub name: Option<Ident>,
@@ -410,7 +510,7 @@ impl fmt::Display for ColumnOptionDef {
 
 /// `ColumnOption`s are modifiers that follow a column definition in a `CREATE
 /// TABLE` statement.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ColumnOption {
     /// `NULL`
@@ -497,7 +597,7 @@ fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
 /// { RESTRICT | CASCADE | SET NULL | NO ACTION | SET DEFAULT }`
 ///
 /// Used in foreign key constraints in `ON UPDATE` and `ON DELETE` options.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ReferentialAction {
     Restrict,

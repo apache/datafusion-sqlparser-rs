@@ -9,6 +9,30 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
 
+## [0.27.0] 2022-11-11
+
+### Added
+* Support `ON CONFLICT` and `RETURNING` in `UPDATE` statement (#666) - Thanks @main and @gamife
+* Support `FULLTEXT` option on create table for MySQL and Generic dialects (#702) - Thanks @AugustoFKL
+* Support `ARRAY_AGG` for Bigquery and Snowflake (#662) - Thanks @SuperBo
+* Support DISTINCT for SetOperator (#689) - Thanks @unvalley
+* Support the ARRAY type of Snowflake (#699) - Thanks @yuval-illumex
+* Support create sequence with options INCREMENT, MINVALUE, MAXVALUE, START etc. (#681) - Thanks @sam-mmm
+* Support `:` operator for semi-structured data in Snowflake(#693) - Thanks @yuval-illumex
+* Support ALTER TABLE DROP PRIMARY KEY (#682) - Thanks @ding-young
+* Support `NUMERIC` and `DEC` ANSI data types (#695) - Thanks @AugustoFKL
+* Support modifiers for Custom Datatype (#680) - Thanks @sunng87
+
+### Changed
+* Add precision for TIME, DATETIME, and TIMESTAMP data types (#701) - Thanks @AugustoFKL
+* add Date keyword (#691) - Thanks @sarahyurick
+* Update simple_logger requirement from 2.1 to 4.0 - Thanks @dependabot
+
+### Fixed
+* Fix broken DataFusion link (#703) - Thanks @jmg-duarte
+* Add MySql, BigQuery to all dialects tests, fixed bugs (#697) - Thanks @omer-shtivi
+
+
 ## [0.26.0] 2022-10-19
 
 ### Added

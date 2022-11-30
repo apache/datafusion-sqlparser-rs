@@ -363,6 +363,36 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
+    pub fn parse_interval_expr(&mut self) -> Result<Expr, ParserError> {
+        let precedence = 0;
+        let mut expr = self.parse_prefix()?;
+
+        loop {
+            let next_precedence = self.get_next_interval_precedence()?;
+
+            if precedence >= next_precedence {
+                break;
+            }
+
+            expr = self.parse_infix(expr, next_precedence)?;
+        }
+
+        Ok(expr)
+    }
+
+    /// Get the precedence of the next token
+    /// With AND, OR, and XOR
+    pub fn get_next_interval_precedence(&self) -> Result<u8, ParserError> {
+        let token = self.peek_token();
+
+        match token {
+            Token::Word(w) if w.keyword == Keyword::AND => Ok(0),
+            Token::Word(w) if w.keyword == Keyword::OR => Ok(0),
+            Token::Word(w) if w.keyword == Keyword::XOR => Ok(0),
+            _ => self.get_next_precedence(),
+        }
+    }
+
     pub fn parse_assert(&mut self) -> Result<Statement, ParserError> {
         let condition = self.parse_expr()?;
         let message = if self.parse_keyword(Keyword::AS) {
@@ -473,7 +503,11 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::LParen)?;
                     self.parse_array_subquery()
                 }
+                Keyword::ARRAY_AGG => self.parse_array_agg_expr(),
                 Keyword::NOT => self.parse_not(),
+                Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
+                    self.parse_match_against()
+                }
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {
@@ -1071,6 +1105,54 @@ impl<'a> Parser<'a> {
         }))
     }
 
+    pub fn parse_array_agg_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let distinct = self.parse_keyword(Keyword::DISTINCT);
+        let expr = Box::new(self.parse_expr()?);
+        // ANSI SQL and BigQuery define ORDER BY inside function.
+        if !self.dialect.supports_within_after_array_aggregation() {
+            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                let order_by_expr = self.parse_order_by_expr()?;
+                Some(Box::new(order_by_expr))
+            } else {
+                None
+            };
+            let limit = if self.parse_keyword(Keyword::LIMIT) {
+                self.parse_limit()?.map(Box::new)
+            } else {
+                None
+            };
+            self.expect_token(&Token::RParen)?;
+            return Ok(Expr::ArrayAgg(ArrayAgg {
+                distinct,
+                expr,
+                order_by,
+                limit,
+                within_group: false,
+            }));
+        }
+        // Snowflake defines ORDERY BY in within group instead of inside the function like
+        // ANSI SQL.
+        self.expect_token(&Token::RParen)?;
+        let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
+            self.expect_token(&Token::LParen)?;
+            self.expect_keywords(&[Keyword::ORDER, Keyword::BY])?;
+            let order_by_expr = self.parse_order_by_expr()?;
+            self.expect_token(&Token::RParen)?;
+            Some(Box::new(order_by_expr))
+        } else {
+            None
+        };
+
+        Ok(Expr::ArrayAgg(ArrayAgg {
+            distinct,
+            expr,
+            order_by: within_group,
+            limit: None,
+            within_group: true,
+        }))
+    }
+
     // This function parses date/time fields for the EXTRACT function-like
     // operator, interval qualifiers, and the ceil/floor operations.
     // EXTRACT supports a wider set of date/time fields than interval qualifiers,
@@ -1130,6 +1212,57 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parses fulltext expressions [(1)]
+    ///
+    /// # Errors
+    /// This method will raise an error if the column list is empty or with invalid identifiers,
+    /// the match expression is not a literal string, or if the search modifier is not valid.
+    ///
+    /// [(1)]: Expr::MatchAgainst
+    pub fn parse_match_against(&mut self) -> Result<Expr, ParserError> {
+        let columns = self.parse_parenthesized_column_list(Mandatory)?;
+
+        self.expect_keyword(Keyword::AGAINST)?;
+
+        self.expect_token(&Token::LParen)?;
+
+        // MySQL is too permissive about the value, IMO we can't validate it perfectly on syntax level.
+        let match_value = self.parse_value()?;
+
+        let in_natural_language_mode_keywords = &[
+            Keyword::IN,
+            Keyword::NATURAL,
+            Keyword::LANGUAGE,
+            Keyword::MODE,
+        ];
+
+        let with_query_expansion_keywords = &[Keyword::WITH, Keyword::QUERY, Keyword::EXPANSION];
+
+        let in_boolean_mode_keywords = &[Keyword::IN, Keyword::BOOLEAN, Keyword::MODE];
+
+        let opt_search_modifier = if self.parse_keywords(in_natural_language_mode_keywords) {
+            if self.parse_keywords(with_query_expansion_keywords) {
+                Some(SearchModifier::InNaturalLanguageModeWithQueryExpansion)
+            } else {
+                Some(SearchModifier::InNaturalLanguageMode)
+            }
+        } else if self.parse_keywords(in_boolean_mode_keywords) {
+            Some(SearchModifier::InBooleanMode)
+        } else if self.parse_keywords(with_query_expansion_keywords) {
+            Some(SearchModifier::WithQueryExpansion)
+        } else {
+            None
+        };
+
+        self.expect_token(&Token::RParen)?;
+
+        Ok(Expr::MatchAgainst {
+            columns,
+            match_value,
+            opt_search_modifier,
+        })
+    }
+
     /// Parse an INTERVAL expression.
     ///
     /// Some syntactically valid intervals:
@@ -1151,7 +1284,7 @@ impl<'a> Parser<'a> {
 
         // The first token in an interval is a string literal which specifies
         // the duration of the interval.
-        let value = self.parse_expr()?;
+        let value = self.parse_interval_expr()?;
 
         // Following the string literal is a qualifier which indicates the units
         // of the duration specified in the string literal.
@@ -2148,7 +2281,7 @@ impl<'a> Parser<'a> {
 
         let file_format = if let Some(ff) = &hive_formats.storage {
             match ff {
-                HiveIOFormat::FileFormat { format } => Some(format.clone()),
+                HiveIOFormat::FileFormat { format } => Some(*format),
                 _ => None,
             }
         } else {
@@ -3036,6 +3169,38 @@ impl<'a> Parser<'a> {
                     columns,
                 }))
             }
+            Token::Word(w)
+                if (w.keyword == Keyword::FULLTEXT || w.keyword == Keyword::SPATIAL)
+                    && dialect_of!(self is GenericDialect | MySqlDialect) =>
+            {
+                if let Some(name) = name {
+                    return self.expected(
+                        "FULLTEXT or SPATIAL option without constraint name",
+                        Token::make_keyword(&name.to_string()),
+                    );
+                }
+
+                let fulltext = w.keyword == Keyword::FULLTEXT;
+
+                let index_type_display = if self.parse_keyword(Keyword::KEY) {
+                    KeyOrIndexDisplay::Key
+                } else if self.parse_keyword(Keyword::INDEX) {
+                    KeyOrIndexDisplay::Index
+                } else {
+                    KeyOrIndexDisplay::None
+                };
+
+                let opt_index_name = self.maybe_parse(|parser| parser.parse_identifier());
+
+                let columns = self.parse_parenthesized_column_list(Mandatory)?;
+
+                Ok(Some(TableConstraint::FulltextOrSpatial {
+                    fulltext,
+                    index_type_display,
+                    opt_index_name,
+                    columns,
+                }))
+            }
             unexpected => {
                 if name.is_some() {
                     self.expected("PRIMARY, UNIQUE, FOREIGN, or CHECK", unexpected)
@@ -3094,9 +3259,22 @@ impl<'a> Parser<'a> {
                         new_partitions: partitions,
                     }
                 } else {
-                    let _ = self.parse_keyword(Keyword::COLUMN);
+                    let column_keyword = self.parse_keyword(Keyword::COLUMN);
+
+                    let if_not_exists = if dialect_of!(self is PostgreSqlDialect | BigQueryDialect | GenericDialect)
+                    {
+                        self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS])
+                            || if_not_exists
+                    } else {
+                        false
+                    };
+
                     let column_def = self.parse_column_def()?;
-                    AlterTableOperation::AddColumn { column_def }
+                    AlterTableOperation::AddColumn {
+                        column_keyword,
+                        if_not_exists,
+                        column_def,
+                    }
                 }
             }
         } else if self.parse_keyword(Keyword::RENAME) {
@@ -3627,31 +3805,41 @@ impl<'a> Parser<'a> {
                 Keyword::BLOB => Ok(DataType::Blob(self.parse_optional_precision()?)),
                 Keyword::UUID => Ok(DataType::Uuid),
                 Keyword::DATE => Ok(DataType::Date),
-                Keyword::DATETIME => Ok(DataType::Datetime),
+                Keyword::DATETIME => Ok(DataType::Datetime(self.parse_optional_precision()?)),
                 Keyword::TIMESTAMP => {
-                    if self.parse_keyword(Keyword::WITH) {
+                    let precision = self.parse_optional_precision()?;
+                    let tz = if self.parse_keyword(Keyword::WITH) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
-                        Ok(DataType::Timestamp(TimezoneInfo::WithTimeZone))
+                        TimezoneInfo::WithTimeZone
                     } else if self.parse_keyword(Keyword::WITHOUT) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
-                        Ok(DataType::Timestamp(TimezoneInfo::WithoutTimeZone))
+                        TimezoneInfo::WithoutTimeZone
                     } else {
-                        Ok(DataType::Timestamp(TimezoneInfo::None))
-                    }
+                        TimezoneInfo::None
+                    };
+                    Ok(DataType::Timestamp(precision, tz))
                 }
-                Keyword::TIMESTAMPTZ => Ok(DataType::Timestamp(TimezoneInfo::Tz)),
+                Keyword::TIMESTAMPTZ => Ok(DataType::Timestamp(
+                    self.parse_optional_precision()?,
+                    TimezoneInfo::Tz,
+                )),
                 Keyword::TIME => {
-                    if self.parse_keyword(Keyword::WITH) {
+                    let precision = self.parse_optional_precision()?;
+                    let tz = if self.parse_keyword(Keyword::WITH) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
-                        Ok(DataType::Time(TimezoneInfo::WithTimeZone))
+                        TimezoneInfo::WithTimeZone
                     } else if self.parse_keyword(Keyword::WITHOUT) {
                         self.expect_keywords(&[Keyword::TIME, Keyword::ZONE])?;
-                        Ok(DataType::Time(TimezoneInfo::WithoutTimeZone))
+                        TimezoneInfo::WithoutTimeZone
                     } else {
-                        Ok(DataType::Time(TimezoneInfo::None))
-                    }
+                        TimezoneInfo::None
+                    };
+                    Ok(DataType::Time(precision, tz))
                 }
-                Keyword::TIMETZ => Ok(DataType::Time(TimezoneInfo::Tz)),
+                Keyword::TIMETZ => Ok(DataType::Time(
+                    self.parse_optional_precision()?,
+                    TimezoneInfo::Tz,
+                )),
                 // Interval types can be followed by a complicated interval
                 // qualifier that we don't currently support. See
                 // parse_interval for a taste.
@@ -3795,41 +3983,19 @@ impl<'a> Parser<'a> {
         Ok(ObjectName(idents))
     }
 
-    /// Parse identifiers strictly i.e. don't parse keywords
-    pub fn parse_identifiers_non_keywords(&mut self) -> Result<Vec<Ident>, ParserError> {
+    /// Parse identifiers
+    pub fn parse_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
         let mut idents = vec![];
         loop {
             match self.peek_token() {
                 Token::Word(w) => {
-                    if w.keyword != Keyword::NoKeyword {
-                        break;
-                    }
-
                     idents.push(w.to_ident());
                 }
                 Token::EOF | Token::Eq => break,
                 _ => {}
             }
-
             self.next_token();
         }
-
-        Ok(idents)
-    }
-
-    /// Parse identifiers
-    pub fn parse_identifiers(&mut self) -> Result<Vec<Ident>, ParserError> {
-        let mut idents = vec![];
-        loop {
-            match self.next_token() {
-                Token::Word(w) => {
-                    idents.push(w.to_ident());
-                }
-                Token::EOF => break,
-                _ => {}
-            }
-        }
-
         Ok(idents)
     }
 
@@ -3979,10 +4145,17 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let returning = if self.parse_keyword(Keyword::RETURNING) {
+            Some(self.parse_comma_separated(Parser::parse_select_item)?)
+        } else {
+            None
+        };
+
         Ok(Statement::Delete {
             table_name,
             using,
             selection,
+            returning,
         })
     }
 
@@ -4507,6 +4680,15 @@ impl<'a> Parser<'a> {
                     variable,
                     value: values,
                 });
+            }
+        } else if variable.to_string().eq_ignore_ascii_case("TIMEZONE") {
+            // for some db (e.g. postgresql), SET TIME ZONE <value> is an alias for SET TIMEZONE [TO|=] <value>
+            match self.parse_expr() {
+                Ok(expr) => Ok(Statement::SetTimeZone {
+                    local: modifier == Some(Keyword::LOCAL),
+                    value: expr,
+                }),
+                _ => self.expected("timezone value", self.peek_token())?,
             }
         } else if variable.to_string() == "CHARACTERISTICS" {
             self.expect_keywords(&[Keyword::AS, Keyword::TRANSACTION])?;
@@ -5163,12 +5345,38 @@ impl<'a> Parser<'a> {
 
             let source = Box::new(self.parse_query()?);
             let on = if self.parse_keyword(Keyword::ON) {
-                self.expect_keyword(Keyword::DUPLICATE)?;
-                self.expect_keyword(Keyword::KEY)?;
-                self.expect_keyword(Keyword::UPDATE)?;
-                let l = self.parse_comma_separated(Parser::parse_assignment)?;
+                if self.parse_keyword(Keyword::CONFLICT) {
+                    let conflict_target =
+                        self.parse_parenthesized_column_list(IsOptional::Optional)?;
 
-                Some(OnInsert::DuplicateKeyUpdate(l))
+                    self.expect_keyword(Keyword::DO)?;
+                    let action = if self.parse_keyword(Keyword::NOTHING) {
+                        OnConflictAction::DoNothing
+                    } else {
+                        self.expect_keyword(Keyword::UPDATE)?;
+                        self.expect_keyword(Keyword::SET)?;
+                        let l = self.parse_comma_separated(Parser::parse_assignment)?;
+                        OnConflictAction::DoUpdate(l)
+                    };
+
+                    Some(OnInsert::OnConflict(OnConflict {
+                        conflict_target,
+                        action,
+                    }))
+                } else {
+                    self.expect_keyword(Keyword::DUPLICATE)?;
+                    self.expect_keyword(Keyword::KEY)?;
+                    self.expect_keyword(Keyword::UPDATE)?;
+                    let l = self.parse_comma_separated(Parser::parse_assignment)?;
+
+                    Some(OnInsert::DuplicateKeyUpdate(l))
+                }
+            } else {
+                None
+            };
+
+            let returning = if self.parse_keyword(Keyword::RETURNING) {
+                Some(self.parse_comma_separated(Parser::parse_select_item)?)
             } else {
                 None
             };
@@ -5184,6 +5392,7 @@ impl<'a> Parser<'a> {
                 source,
                 table,
                 on,
+                returning,
             })
         }
     }
@@ -5192,7 +5401,9 @@ impl<'a> Parser<'a> {
         let table = self.parse_table_and_joins()?;
         self.expect_keyword(Keyword::SET)?;
         let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
-        let from = if self.parse_keyword(Keyword::FROM) && dialect_of!(self is PostgreSqlDialect) {
+        let from = if self.parse_keyword(Keyword::FROM)
+            && dialect_of!(self is GenericDialect | PostgreSqlDialect | BigQueryDialect | SnowflakeDialect | RedshiftSqlDialect | MsSqlDialect)
+        {
             Some(self.parse_table_and_joins()?)
         } else {
             None
@@ -5202,17 +5413,23 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        let returning = if self.parse_keyword(Keyword::RETURNING) {
+            Some(self.parse_comma_separated(Parser::parse_select_item)?)
+        } else {
+            None
+        };
         Ok(Statement::Update {
             table,
             assignments,
             from,
             selection,
+            returning,
         })
     }
 
     /// Parse a `var = expr` assignment, used in an UPDATE statement
     pub fn parse_assignment(&mut self) -> Result<Assignment, ParserError> {
-        let id = self.parse_identifiers_non_keywords()?;
+        let id = self.parse_identifiers()?;
         self.expect_token(&Token::Eq)?;
         let value = self.parse_expr()?;
         Ok(Assignment { id, value })
@@ -5269,9 +5486,47 @@ impl<'a> Parser<'a> {
                         None => SelectItem::UnnamedExpr(expr),
                     })
             }
-            WildcardExpr::QualifiedWildcard(prefix) => Ok(SelectItem::QualifiedWildcard(prefix)),
-            WildcardExpr::Wildcard => Ok(SelectItem::Wildcard),
+            WildcardExpr::QualifiedWildcard(prefix) => {
+                let opt_exclude = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
+                    self.parse_optional_select_item_exclude()?
+                } else {
+                    None
+                };
+
+                Ok(SelectItem::QualifiedWildcard(prefix, opt_exclude))
+            }
+            WildcardExpr::Wildcard => {
+                let opt_exclude = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
+                    self.parse_optional_select_item_exclude()?
+                } else {
+                    None
+                };
+
+                Ok(SelectItem::Wildcard(opt_exclude))
+            }
         }
+    }
+
+    /// Parse an [`Exclude`](ExcludeSelectItem) information for wildcard select items.
+    ///
+    /// If it is not possible to parse it, will return an option.
+    pub fn parse_optional_select_item_exclude(
+        &mut self,
+    ) -> Result<Option<ExcludeSelectItem>, ParserError> {
+        let opt_exclude = if self.parse_keyword(Keyword::EXCLUDE) {
+            if self.consume_token(&Token::LParen) {
+                let columns = self.parse_comma_separated(|parser| parser.parse_identifier())?;
+                self.expect_token(&Token::RParen)?;
+                Some(ExcludeSelectItem::Multiple(columns))
+            } else {
+                let column = self.parse_identifier()?;
+                Some(ExcludeSelectItem::Single(column))
+            }
+        } else {
+            None
+        };
+
+        Ok(opt_exclude)
     }
 
     /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)
@@ -5781,8 +6036,8 @@ mod tests {
             ($dialect:expr, $input:expr, $expected_type:expr $(,)?) => {{
                 $dialect.run_parser_method(&*$input, |parser| {
                     let data_type = parser.parse_data_type().unwrap();
-                    assert_eq!(data_type, $expected_type);
-                    assert_eq!(data_type.to_string(), $input.to_string());
+                    assert_eq!($expected_type, data_type);
+                    assert_eq!($input.to_string(), data_type.to_string());
                 });
             }};
         }
@@ -6030,7 +6285,7 @@ mod tests {
         }
 
         #[test]
-        fn test_ansii_datetime_types() {
+        fn test_ansii_date_type() {
             // Datetime types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type>
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
@@ -6038,36 +6293,60 @@ mod tests {
 
             test_parse_data_type!(dialect, "DATE", DataType::Date);
 
-            test_parse_data_type!(dialect, "TIME", DataType::Time(TimezoneInfo::None));
+            test_parse_data_type!(dialect, "TIME", DataType::Time(None, TimezoneInfo::None));
+
+            test_parse_data_type!(
+                dialect,
+                "TIME(6)",
+                DataType::Time(Some(6), TimezoneInfo::None)
+            );
 
             test_parse_data_type!(
                 dialect,
                 "TIME WITH TIME ZONE",
-                DataType::Time(TimezoneInfo::WithTimeZone)
+                DataType::Time(None, TimezoneInfo::WithTimeZone)
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "TIME(6) WITH TIME ZONE",
+                DataType::Time(Some(6), TimezoneInfo::WithTimeZone)
             );
 
             test_parse_data_type!(
                 dialect,
                 "TIME WITHOUT TIME ZONE",
-                DataType::Time(TimezoneInfo::WithoutTimeZone)
+                DataType::Time(None, TimezoneInfo::WithoutTimeZone)
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "TIME(6) WITHOUT TIME ZONE",
+                DataType::Time(Some(6), TimezoneInfo::WithoutTimeZone)
             );
 
             test_parse_data_type!(
                 dialect,
                 "TIMESTAMP",
-                DataType::Timestamp(TimezoneInfo::None)
+                DataType::Timestamp(None, TimezoneInfo::None)
             );
 
             test_parse_data_type!(
                 dialect,
-                "TIMESTAMP WITH TIME ZONE",
-                DataType::Timestamp(TimezoneInfo::WithTimeZone)
+                "TIMESTAMP(22)",
+                DataType::Timestamp(Some(22), TimezoneInfo::None)
             );
 
             test_parse_data_type!(
                 dialect,
-                "TIMESTAMP WITHOUT TIME ZONE",
-                DataType::Timestamp(TimezoneInfo::WithoutTimeZone)
+                "TIMESTAMP(22) WITH TIME ZONE",
+                DataType::Timestamp(Some(22), TimezoneInfo::WithTimeZone)
+            );
+
+            test_parse_data_type!(
+                dialect,
+                "TIMESTAMP(33) WITHOUT TIME ZONE",
+                DataType::Timestamp(Some(33), TimezoneInfo::WithoutTimeZone)
             );
         }
     }
@@ -6198,6 +6477,24 @@ mod tests {
                 index_type: Some(IndexType::Hash),
                 columns: vec![Ident::new("c1")],
             }
+        );
+    }
+
+    #[test]
+    fn test_update_has_keyword() {
+        let sql = r#"UPDATE test SET name=$1,
+                value=$2,
+                where=$3,
+                create=$4,
+                is_default=$5,
+                classification=$6,
+                sort=$7
+                WHERE id=$8"#;
+        let pg_dialect = PostgreSqlDialect {};
+        let ast = Parser::parse_sql(&pg_dialect, sql).unwrap();
+        assert_eq!(
+            ast[0].to_string(),
+            r#"UPDATE test SET name = $1, value = $2, where = $3, create = $4, is_default = $5, classification = $6, sort = $7 WHERE id = $8"#
         );
     }
 }

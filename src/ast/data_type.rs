@@ -11,7 +11,7 @@
 // limitations under the License.
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, format, string::String, vec::Vec};
 use core::fmt;
 
 #[cfg(feature = "serde")]
@@ -22,7 +22,7 @@ use crate::ast::ObjectName;
 use super::value::escape_single_quote_string;
 
 /// SQL data types
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DataType {
     /// Fixed-length character type e.g. CHARACTER(10)
@@ -122,12 +122,18 @@ pub enum DataType {
     Boolean,
     /// Date
     Date,
-    /// Time
-    Time(TimezoneInfo),
-    /// Datetime
-    Datetime,
-    /// Timestamp
-    Timestamp(TimezoneInfo),
+    /// Time with optional time precision and time zone information e.g. [standard][1].
+    ///
+    /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
+    Time(Option<u64>, TimezoneInfo),
+    /// Datetime with optional time precision e.g. [MySQL][1].
+    ///
+    /// [1]: https://dev.mysql.com/doc/refman/8.0/en/datetime.html
+    Datetime(Option<u64>),
+    /// Timestamp with optional time precision and time zone information e.g. [standard][1].
+    ///
+    /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type
+    Timestamp(Option<u64>, TimezoneInfo),
     /// Interval
     Interval,
     /// Regclass used in postgresql serial
@@ -224,9 +230,15 @@ impl fmt::Display for DataType {
             DataType::DoublePrecision => write!(f, "DOUBLE PRECISION"),
             DataType::Boolean => write!(f, "BOOLEAN"),
             DataType::Date => write!(f, "DATE"),
-            DataType::Time(timezone_info) => write!(f, "TIME{}", timezone_info),
-            DataType::Datetime => write!(f, "DATETIME"),
-            DataType::Timestamp(timezone_info) => write!(f, "TIMESTAMP{}", timezone_info),
+            DataType::Time(precision, timezone_info) => {
+                format_datetime_precision_and_tz(f, "TIME", precision, timezone_info)
+            }
+            DataType::Datetime(precision) => {
+                format_type_with_optional_length(f, "DATETIME", precision, false)
+            }
+            DataType::Timestamp(precision, timezone_info) => {
+                format_datetime_precision_and_tz(f, "TIMESTAMP", precision, timezone_info)
+            }
             DataType::Interval => write!(f, "INTERVAL"),
             DataType::Regclass => write!(f, "REGCLASS"),
             DataType::Text => write!(f, "TEXT"),
@@ -298,11 +310,32 @@ fn format_character_string_type(
     Ok(())
 }
 
+fn format_datetime_precision_and_tz(
+    f: &mut fmt::Formatter,
+    sql_type: &'static str,
+    len: &Option<u64>,
+    time_zone: &TimezoneInfo,
+) -> fmt::Result {
+    write!(f, "{}", sql_type)?;
+    let len_fmt = len.as_ref().map(|l| format!("({l})")).unwrap_or_default();
+
+    match time_zone {
+        TimezoneInfo::Tz => {
+            write!(f, "{time_zone}{len_fmt}")?;
+        }
+        _ => {
+            write!(f, "{len_fmt}{time_zone}")?;
+        }
+    }
+
+    Ok(())
+}
+
 /// Timestamp and Time data types information about TimeZone formatting.
 ///
 /// This is more related to a display information than real differences between each variant. To
 /// guarantee compatibility with the input query we must maintain its exact information.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TimezoneInfo {
     /// No information about time zone. E.g., TIMESTAMP
@@ -349,7 +382,7 @@ impl fmt::Display for TimezoneInfo {
 /// following the 2016 [standard].
 ///
 /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ExactNumberInfo {
     /// No additional information e.g. `DECIMAL`
@@ -379,7 +412,7 @@ impl fmt::Display for ExactNumberInfo {
 /// Information about [character length][1], including length and possibly unit.
 ///
 /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-length
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CharacterLength {
     /// Default (if VARYING) or maximum (if not VARYING) length
@@ -401,7 +434,7 @@ impl fmt::Display for CharacterLength {
 /// Possible units for characters, initially based on 2016 ANSI [standard][1].
 ///
 /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#char-length-units
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CharLengthUnits {
     /// CHARACTERS unit

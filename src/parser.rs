@@ -5351,8 +5351,16 @@ impl<'a> Parser<'a> {
                     } else {
                         self.expect_keyword(Keyword::UPDATE)?;
                         self.expect_keyword(Keyword::SET)?;
-                        let l = self.parse_comma_separated(Parser::parse_assignment)?;
-                        OnConflictAction::DoUpdate(l)
+                        let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
+                        let selection = if self.parse_keyword(Keyword::WHERE) {
+                            Some(self.parse_expr()?)
+                        } else {
+                            None
+                        };
+                        OnConflictAction::DoUpdate(DoUpdate {
+                            assignments,
+                            selection,
+                        })
                     };
 
                     Some(OnInsert::OnConflict(OnConflict {

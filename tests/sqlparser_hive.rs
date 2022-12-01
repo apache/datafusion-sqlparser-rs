@@ -244,19 +244,20 @@ fn parse_create_function() {
         Statement::CreateFunction {
             temporary,
             name,
-            bodies,
+            params,
             ..
         } => {
             assert!(temporary);
             assert_eq!(name.to_string(), "mydb.myfunc");
             assert_eq!(
-                bodies,
-                vec![
-                    CreateFunctionBody::As("org.random.class.Name".to_string()),
-                    CreateFunctionBody::Using(CreateFunctionUsing::Jar(
+                params,
+                CreateFunctionBody {
+                    as_: Some("org.random.class.Name".to_string()),
+                    using: Some(CreateFunctionUsing::Jar(
                         "hdfs://somewhere.com:8020/very/far".to_string()
-                    ))
-                ]
+                    )),
+                    ..Default::default()
+                }
             )
         }
         _ => unreachable!(),

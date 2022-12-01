@@ -2235,7 +2235,7 @@ fn parse_similar_to() {
 
 #[test]
 fn parse_create_function() {
-    let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER AS 'select $1 + $2;' LANGUAGE SQL IMMUTABLE";
+    let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL IMMUTABLE AS 'select $1 + $2;'";
     assert_eq!(
         pg().verified_stmt(sql),
         Statement::CreateFunction {
@@ -2247,11 +2247,12 @@ fn parse_create_function() {
                 CreateFunctionArg::unnamed(DataType::Integer(None)),
             ]),
             return_type: Some(DataType::Integer(None)),
-            bodies: vec![
-                CreateFunctionBody::As("select $1 + $2;".into()),
-                CreateFunctionBody::Language("SQL".into()),
-                CreateFunctionBody::Behavior(FunctionBehavior::Immutable),
-            ],
+            params: CreateFunctionBody {
+                language: Some("SQL".into()),
+                behavior: Some(FunctionBehavior::Immutable),
+                as_: Some("select $1 + $2;".into()),
+                ..Default::default()
+            },
         }
     );
 
@@ -2272,15 +2273,16 @@ fn parse_create_function() {
                 }
             ]),
             return_type: Some(DataType::Integer(None)),
-            bodies: vec![
-                CreateFunctionBody::Language("SQL".into()),
-                CreateFunctionBody::Behavior(FunctionBehavior::Immutable),
-                CreateFunctionBody::Return(Expr::BinaryOp {
+            params: CreateFunctionBody {
+                language: Some("SQL".into()),
+                behavior: Some(FunctionBehavior::Immutable),
+                return_: Some(Expr::BinaryOp {
                     left: Box::new(Expr::Identifier("a".into())),
                     op: BinaryOperator::Plus,
                     right: Box::new(Expr::Identifier("b".into())),
                 }),
-            ],
+                ..Default::default()
+            },
         }
     );
 }

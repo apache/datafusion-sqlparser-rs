@@ -1412,7 +1412,8 @@ pub enum Statement {
         name: ObjectName,
         args: Option<Vec<CreateFunctionArg>>,
         return_type: Option<DataType>,
-        bodies: Vec<CreateFunctionBody>,
+        /// Optional parameters.
+        params: CreateFunctionBody,
     },
     /// `ASSERT <condition> [AS <message>]`
     Assert {
@@ -1874,7 +1875,7 @@ impl fmt::Display for Statement {
                 name,
                 args,
                 return_type,
-                bodies,
+                params,
             } => {
                 write!(
                     f,
@@ -1888,7 +1889,7 @@ impl fmt::Display for Statement {
                 if let Some(return_type) = return_type {
                     write!(f, " RETURNS {}", return_type)?;
                 }
-                write!(f, " {}", display_separated(bodies, " "))?;
+                write!(f, "{params}")?;
                 Ok(())
             }
             Statement::CreateView {
@@ -3776,31 +3777,41 @@ impl fmt::Display for FunctionBehavior {
 }
 
 /// Postgres: https://www.postgresql.org/docs/15/sql-createfunction.html
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[non_exhaustive]
-pub enum CreateFunctionBody {
-    /// AS 'definition'
-    As(String),
+pub struct CreateFunctionBody {
     /// LANGUAGE lang_name
-    Language(Ident),
+    pub language: Option<Ident>,
     /// IMMUTABLE | STABLE | VOLATILE
-    Behavior(FunctionBehavior),
+    pub behavior: Option<FunctionBehavior>,
+    /// AS 'definition'
+    ///
+    /// Note that Hive's `AS class_name` is also parsed here.
+    pub as_: Option<String>,
     /// RETURN expression
-    Return(Expr),
-    /// USING ... (Hive)
-    Using(CreateFunctionUsing),
+    pub return_: Option<Expr>,
+    /// USING ... (Hive only)
+    pub using: Option<CreateFunctionUsing>,
 }
 
 impl fmt::Display for CreateFunctionBody {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::As(definition) => write!(f, "AS '{definition}'"),
-            Self::Language(lang) => write!(f, "LANGUAGE {lang}"),
-            Self::Behavior(behavior) => write!(f, "{behavior}"),
-            Self::Return(expr) => write!(f, "RETURN {expr}"),
-            Self::Using(using) => write!(f, "{using}"),
+        if let Some(language) = &self.language {
+            write!(f, " LANGUAGE {language}")?;
         }
+        if let Some(behavior) = &self.behavior {
+            write!(f, " {behavior}")?;
+        }
+        if let Some(definition) = &self.as_ {
+            write!(f, " AS '{definition}'")?;
+        }
+        if let Some(expr) = &self.return_ {
+            write!(f, " RETURN {expr}")?;
+        }
+        if let Some(using) = &self.using {
+            write!(f, " {using}")?;
+        }
+        Ok(())
     }
 }
 

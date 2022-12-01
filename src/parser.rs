@@ -2262,10 +2262,11 @@ impl<'a> Parser<'a> {
             let name = self.parse_object_name()?;
             self.expect_keyword(Keyword::AS)?;
             let class_name = self.parse_literal_string()?;
-            let mut bodies = vec![CreateFunctionBody::As(class_name)];
-            if let Some(using) = self.parse_optional_create_function_using()? {
-                bodies.push(CreateFunctionBody::Using(using));
-            }
+            let params = CreateFunctionBody {
+                as_: Some(class_name),
+                using: self.parse_optional_create_function_using()?,
+                ..Default::default()
+            };
 
             Ok(Statement::CreateFunction {
                 or_replace,
@@ -2273,7 +2274,7 @@ impl<'a> Parser<'a> {
                 name,
                 args: None,
                 return_type: None,
-                bodies,
+                params,
             })
         } else if dialect_of!(self is PostgreSqlDialect) {
             let name = self.parse_object_name()?;
@@ -2287,10 +2288,7 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            let mut bodies = vec![];
-            while let Ok(body) = self.parse_create_function_body() {
-                bodies.push(body);
-            }
+            let params = self.parse_create_function_body()?;
 
             Ok(Statement::CreateFunction {
                 or_replace,
@@ -2298,7 +2296,7 @@ impl<'a> Parser<'a> {
                 name,
                 args: Some(args),
                 return_type,
-                bodies,
+                params,
             })
         } else {
             self.prev_token();
@@ -2341,21 +2339,37 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_create_function_body(&mut self) -> Result<CreateFunctionBody, ParserError> {
-        if self.parse_keyword(Keyword::AS) {
-            Ok(CreateFunctionBody::As(self.parse_literal_string()?))
-        } else if self.parse_keyword(Keyword::LANGUAGE) {
-            Ok(CreateFunctionBody::Language(self.parse_identifier()?))
-        } else if self.parse_keyword(Keyword::IMMUTABLE) {
-            Ok(CreateFunctionBody::Behavior(FunctionBehavior::Immutable))
-        } else if self.parse_keyword(Keyword::STABLE) {
-            Ok(CreateFunctionBody::Behavior(FunctionBehavior::Stable))
-        } else if self.parse_keyword(Keyword::VOLATILE) {
-            Ok(CreateFunctionBody::Behavior(FunctionBehavior::Volatile))
-        } else if self.parse_keyword(Keyword::RETURN) {
-            let expr = self.parse_expr()?;
-            Ok(CreateFunctionBody::Return(expr))
-        } else {
-            self.expected("AS or LANGUAGE or RETURN", self.peek_token())
+        let mut body = CreateFunctionBody::default();
+        loop {
+            fn ensure_not_set<T>(field: &Option<T>, name: &str) -> Result<(), ParserError> {
+                if field.is_some() {
+                    return Err(ParserError::ParserError(format!(
+                        "{name} specified more than once",
+                    )));
+                }
+                Ok(())
+            }
+            if self.parse_keyword(Keyword::AS) {
+                ensure_not_set(&body.as_, "AS")?;
+                body.as_ = Some(self.parse_literal_string()?);
+            } else if self.parse_keyword(Keyword::LANGUAGE) {
+                ensure_not_set(&body.language, "LANGUAGE")?;
+                body.language = Some(self.parse_identifier()?);
+            } else if self.parse_keyword(Keyword::IMMUTABLE) {
+                ensure_not_set(&body.behavior, "IMMUTABLE | STABLE | VOLATILE")?;
+                body.behavior = Some(FunctionBehavior::Immutable);
+            } else if self.parse_keyword(Keyword::STABLE) {
+                ensure_not_set(&body.behavior, "IMMUTABLE | STABLE | VOLATILE")?;
+                body.behavior = Some(FunctionBehavior::Stable);
+            } else if self.parse_keyword(Keyword::VOLATILE) {
+                ensure_not_set(&body.behavior, "IMMUTABLE | STABLE | VOLATILE")?;
+                body.behavior = Some(FunctionBehavior::Volatile);
+            } else if self.parse_keyword(Keyword::RETURN) {
+                ensure_not_set(&body.return_, "RETURN")?;
+                body.return_ = Some(self.parse_expr()?);
+            } else {
+                return Ok(body);
+            }
         }
     }
 

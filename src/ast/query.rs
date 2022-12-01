@@ -797,16 +797,22 @@ impl fmt::Display for Top {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Values(pub Vec<Vec<Expr>>);
+pub struct Values {
+    /// Was there an explict ROWs keyword (MySQL)?
+    /// <https://dev.mysql.com/doc/refman/8.0/en/values.html>
+    pub explicit_row: bool,
+    pub rows: Vec<Vec<Expr>>,
+}
 
 impl fmt::Display for Values {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "VALUES ")?;
+        let prefix = if self.explicit_row { "ROW" } else { "" };
         let mut delim = "";
-        for row in &self.0 {
+        for row in &self.rows {
             write!(f, "{}", delim)?;
             delim = ", ";
-            write!(f, "({})", display_comma_separated(row))?;
+            write!(f, "{prefix}({})", display_comma_separated(row))?;
         }
         Ok(())
     }

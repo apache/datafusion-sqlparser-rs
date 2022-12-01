@@ -5642,13 +5642,19 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_values(&mut self) -> Result<Values, ParserError> {
-        let values = self.parse_comma_separated(|parser| {
+        let mut explicit_row = false;
+
+        let rows = self.parse_comma_separated(|parser| {
+            if parser.parse_keyword(Keyword::ROW) {
+                explicit_row = true;
+            }
+
             parser.expect_token(&Token::LParen)?;
             let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
             parser.expect_token(&Token::RParen)?;
             Ok(exprs)
         })?;
-        Ok(Values(values))
+        Ok(Values { explicit_row, rows })
     }
 
     pub fn parse_start_transaction(&mut self) -> Result<Statement, ParserError> {

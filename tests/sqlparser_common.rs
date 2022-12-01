@@ -88,7 +88,9 @@ fn parse_insert_values() {
                     assert_eq!(column, &Ident::new(expected_columns[index].clone()));
                 }
                 match &*source.body {
-                    SetExpr::Values(Values(values)) => assert_eq!(values.as_slice(), expected_rows),
+                    SetExpr::Values(Values { rows, .. }) => {
+                        assert_eq!(rows.as_slice(), expected_rows)
+                    }
                     _ => unreachable!(),
                 }
             }
@@ -460,6 +462,7 @@ fn parse_top_level() {
     verified_stmt("(SELECT 1)");
     verified_stmt("((SELECT 1))");
     verified_stmt("VALUES (1)");
+    verified_stmt("VALUES ROW(1, true, 'a'), ROW(2, false, 'b')");
 }
 
 #[test]
@@ -4268,6 +4271,7 @@ fn parse_values() {
     verified_stmt("SELECT * FROM (VALUES (1), (2), (3))");
     verified_stmt("SELECT * FROM (VALUES (1), (2), (3)), (VALUES (1, 2, 3))");
     verified_stmt("SELECT * FROM (VALUES (1)) UNION VALUES (1)");
+    verified_stmt("SELECT * FROM (VALUES ROW(1, true, 'a'), ROW(2, false, 'b')) AS t (a, b, c)");
 }
 
 #[test]
@@ -5608,11 +5612,14 @@ fn parse_merge() {
                     MergeClause::NotMatched {
                         predicate: None,
                         columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C")],
-                        values: Values(vec![vec![
-                            Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("A")]),
-                            Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("B")]),
-                            Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("C")]),
-                        ]]),
+                        values: Values {
+                            explicit_row: false,
+                            rows: vec![vec![
+                                Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("A")]),
+                                Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("B")]),
+                                Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("C")]),
+                            ]]
+                        },
                     },
                     MergeClause::MatchedUpdate {
                         predicate: Some(Expr::BinaryOp {

@@ -2026,9 +2026,11 @@ impl<'a> Parser<'a> {
             self.parse_create_view(or_replace)
         } else if self.parse_keyword(Keyword::EXTERNAL) {
             self.parse_create_external_table(or_replace)
+        } else if self.parse_keyword(Keyword::FUNCTION) {
+            self.parse_create_function(or_replace, temporary)
         } else if or_replace {
             self.expected(
-                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW after CREATE OR REPLACE",
+                "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION after CREATE OR REPLACE",
                 self.peek_token(),
             )
         } else if self.parse_keyword(Keyword::INDEX) {
@@ -2041,8 +2043,6 @@ impl<'a> Parser<'a> {
             self.parse_create_schema()
         } else if self.parse_keyword(Keyword::DATABASE) {
             self.parse_create_database()
-        } else if dialect_of!(self is HiveDialect) && self.parse_keyword(Keyword::FUNCTION) {
-            self.parse_create_function(temporary)
         } else if self.parse_keyword(Keyword::ROLE) {
             self.parse_create_role()
         } else if self.parse_keyword(Keyword::SEQUENCE) {
@@ -2253,18 +2253,124 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_create_function(&mut self, temporary: bool) -> Result<Statement, ParserError> {
-        let name = self.parse_object_name()?;
-        self.expect_keyword(Keyword::AS)?;
-        let class_name = self.parse_literal_string()?;
-        let using = self.parse_optional_create_function_using()?;
+    pub fn parse_create_function(
+        &mut self,
+        or_replace: bool,
+        temporary: bool,
+    ) -> Result<Statement, ParserError> {
+        if dialect_of!(self is HiveDialect) {
+            let name = self.parse_object_name()?;
+            self.expect_keyword(Keyword::AS)?;
+            let class_name = self.parse_literal_string()?;
+            let params = CreateFunctionBody {
+                as_: Some(class_name),
+                using: self.parse_optional_create_function_using()?,
+                ..Default::default()
+            };
 
-        Ok(Statement::CreateFunction {
-            temporary,
+            Ok(Statement::CreateFunction {
+                or_replace,
+                temporary,
+                name,
+                args: None,
+                return_type: None,
+                params,
+            })
+        } else if dialect_of!(self is PostgreSqlDialect) {
+            let name = self.parse_object_name()?;
+            self.expect_token(&Token::LParen)?;
+            let args = self.parse_comma_separated(Parser::parse_create_function_arg)?;
+            self.expect_token(&Token::RParen)?;
+
+            let return_type = if self.parse_keyword(Keyword::RETURNS) {
+                Some(self.parse_data_type()?)
+            } else {
+                None
+            };
+
+            let params = self.parse_create_function_body()?;
+
+            Ok(Statement::CreateFunction {
+                or_replace,
+                temporary,
+                name,
+                args: Some(args),
+                return_type,
+                params,
+            })
+        } else {
+            self.prev_token();
+            self.expected("an object type after CREATE", self.peek_token())
+        }
+    }
+
+    fn parse_create_function_arg(&mut self) -> Result<CreateFunctionArg, ParserError> {
+        let mode = if self.parse_keyword(Keyword::IN) {
+            Some(ArgMode::In)
+        } else if self.parse_keyword(Keyword::OUT) {
+            Some(ArgMode::Out)
+        } else if self.parse_keyword(Keyword::INOUT) {
+            Some(ArgMode::InOut)
+        } else {
+            None
+        };
+
+        // parse: [ argname ] argtype
+        let mut name = None;
+        let mut data_type = self.parse_data_type()?;
+        if let DataType::Custom(n, _) = &data_type {
+            // the first token is actually a name
+            name = Some(n.0[0].clone());
+            data_type = self.parse_data_type()?;
+        }
+
+        let default_expr = if self.parse_keyword(Keyword::DEFAULT) || self.consume_token(&Token::Eq)
+        {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+        Ok(CreateFunctionArg {
+            mode,
             name,
-            class_name,
-            using,
+            data_type,
+            default_expr,
         })
+    }
+
+    fn parse_create_function_body(&mut self) -> Result<CreateFunctionBody, ParserError> {
+        let mut body = CreateFunctionBody::default();
+        loop {
+            fn ensure_not_set<T>(field: &Option<T>, name: &str) -> Result<(), ParserError> {
+                if field.is_some() {
+                    return Err(ParserError::ParserError(format!(
+                        "{name} specified more than once",
+                    )));
+                }
+                Ok(())
+            }
+            if self.parse_keyword(Keyword::AS) {
+                ensure_not_set(&body.as_, "AS")?;
+                body.as_ = Some(self.parse_literal_string()?);
+            } else if self.parse_keyword(Keyword::LANGUAGE) {
+                ensure_not_set(&body.language, "LANGUAGE")?;
+                body.language = Some(self.parse_identifier()?);
+            } else if self.parse_keyword(Keyword::IMMUTABLE) {
+                ensure_not_set(&body.behavior, "IMMUTABLE | STABLE | VOLATILE")?;
+                body.behavior = Some(FunctionBehavior::Immutable);
+            } else if self.parse_keyword(Keyword::STABLE) {
+                ensure_not_set(&body.behavior, "IMMUTABLE | STABLE | VOLATILE")?;
+                body.behavior = Some(FunctionBehavior::Stable);
+            } else if self.parse_keyword(Keyword::VOLATILE) {
+                ensure_not_set(&body.behavior, "IMMUTABLE | STABLE | VOLATILE")?;
+                body.behavior = Some(FunctionBehavior::Volatile);
+            } else if self.parse_keyword(Keyword::RETURN) {
+                ensure_not_set(&body.return_, "RETURN")?;
+                body.return_ = Some(self.parse_expr()?);
+            } else {
+                return Ok(body);
+            }
+        }
     }
 
     pub fn parse_create_external_table(

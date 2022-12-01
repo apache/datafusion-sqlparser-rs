@@ -2234,3 +2234,57 @@ fn parse_similar_to() {
     chk(false);
     chk(true);
 }
+
+#[test]
+fn parse_create_function() {
+    let sql = "CREATE FUNCTION add(INTEGER, INTEGER) RETURNS INTEGER LANGUAGE SQL IMMUTABLE AS 'select $1 + $2;'";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::CreateFunction {
+            or_replace: false,
+            temporary: false,
+            name: ObjectName(vec![Ident::new("add")]),
+            args: Some(vec![
+                CreateFunctionArg::unnamed(DataType::Integer(None)),
+                CreateFunctionArg::unnamed(DataType::Integer(None)),
+            ]),
+            return_type: Some(DataType::Integer(None)),
+            params: CreateFunctionBody {
+                language: Some("SQL".into()),
+                behavior: Some(FunctionBehavior::Immutable),
+                as_: Some("select $1 + $2;".into()),
+                ..Default::default()
+            },
+        }
+    );
+
+    let sql = "CREATE OR REPLACE FUNCTION add(a INTEGER, IN b INTEGER = 1) RETURNS INTEGER LANGUAGE SQL IMMUTABLE RETURN a + b";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::CreateFunction {
+            or_replace: true,
+            temporary: false,
+            name: ObjectName(vec![Ident::new("add")]),
+            args: Some(vec![
+                CreateFunctionArg::with_name("a", DataType::Integer(None)),
+                CreateFunctionArg {
+                    mode: Some(ArgMode::In),
+                    name: Some("b".into()),
+                    data_type: DataType::Integer(None),
+                    default_expr: Some(Expr::Value(Value::Number("1".parse().unwrap(), false))),
+                }
+            ]),
+            return_type: Some(DataType::Integer(None)),
+            params: CreateFunctionBody {
+                language: Some("SQL".into()),
+                behavior: Some(FunctionBehavior::Immutable),
+                return_: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier("a".into())),
+                    op: BinaryOperator::Plus,
+                    right: Box::new(Expr::Identifier("b".into())),
+                }),
+                ..Default::default()
+            },
+        }
+    );
+}

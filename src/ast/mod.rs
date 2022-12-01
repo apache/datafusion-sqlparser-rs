@@ -1405,11 +1405,15 @@ pub enum Statement {
     /// CREATE FUNCTION
     ///
     /// Hive: https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction
+    /// Postgres: https://www.postgresql.org/docs/15/sql-createfunction.html
     CreateFunction {
+        or_replace: bool,
         temporary: bool,
         name: ObjectName,
-        class_name: String,
-        using: Option<CreateFunctionUsing>,
+        args: Option<Vec<CreateFunctionArg>>,
+        return_type: Option<DataType>,
+        /// Optional parameters.
+        params: CreateFunctionBody,
     },
     /// `ASSERT <condition> [AS <message>]`
     Assert {
@@ -1866,19 +1870,26 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::CreateFunction {
+                or_replace,
                 temporary,
                 name,
-                class_name,
-                using,
+                args,
+                return_type,
+                params,
             } => {
                 write!(
                     f,
-                    "CREATE {temp}FUNCTION {name} AS '{class_name}'",
+                    "CREATE {or_replace}{temp}FUNCTION {name}",
                     temp = if *temporary { "TEMPORARY " } else { "" },
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
                 )?;
-                if let Some(u) = using {
-                    write!(f, " {}", u)?;
+                if let Some(args) = args {
+                    write!(f, "({})", display_comma_separated(args))?;
                 }
+                if let Some(return_type) = return_type {
+                    write!(f, " RETURNS {}", return_type)?;
+                }
+                write!(f, "{params}")?;
                 Ok(())
             }
             Statement::CreateView {
@@ -3676,6 +3687,131 @@ impl fmt::Display for ContextModifier {
                 write!(f, " SESSION")
             }
         }
+    }
+}
+
+/// Function argument in CREATE FUNCTION.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct CreateFunctionArg {
+    pub mode: Option<ArgMode>,
+    pub name: Option<Ident>,
+    pub data_type: DataType,
+    pub default_expr: Option<Expr>,
+}
+
+impl CreateFunctionArg {
+    /// Returns an unnamed argument.
+    pub fn unnamed(data_type: DataType) -> Self {
+        Self {
+            mode: None,
+            name: None,
+            data_type,
+            default_expr: None,
+        }
+    }
+
+    /// Returns an argument with name.
+    pub fn with_name(name: &str, data_type: DataType) -> Self {
+        Self {
+            mode: None,
+            name: Some(name.into()),
+            data_type,
+            default_expr: None,
+        }
+    }
+}
+
+impl fmt::Display for CreateFunctionArg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(mode) = &self.mode {
+            write!(f, "{} ", mode)?;
+        }
+        if let Some(name) = &self.name {
+            write!(f, "{} ", name)?;
+        }
+        write!(f, "{}", self.data_type)?;
+        if let Some(default_expr) = &self.default_expr {
+            write!(f, " = {}", default_expr)?;
+        }
+        Ok(())
+    }
+}
+
+/// The mode of an argument in CREATE FUNCTION.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ArgMode {
+    In,
+    Out,
+    InOut,
+}
+
+impl fmt::Display for ArgMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ArgMode::In => write!(f, "IN"),
+            ArgMode::Out => write!(f, "OUT"),
+            ArgMode::InOut => write!(f, "INOUT"),
+        }
+    }
+}
+
+/// These attributes inform the query optimizer about the behavior of the function.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum FunctionBehavior {
+    Immutable,
+    Stable,
+    Volatile,
+}
+
+impl fmt::Display for FunctionBehavior {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FunctionBehavior::Immutable => write!(f, "IMMUTABLE"),
+            FunctionBehavior::Stable => write!(f, "STABLE"),
+            FunctionBehavior::Volatile => write!(f, "VOLATILE"),
+        }
+    }
+}
+
+/// Postgres: https://www.postgresql.org/docs/15/sql-createfunction.html
+#[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct CreateFunctionBody {
+    /// LANGUAGE lang_name
+    pub language: Option<Ident>,
+    /// IMMUTABLE | STABLE | VOLATILE
+    pub behavior: Option<FunctionBehavior>,
+    /// AS 'definition'
+    ///
+    /// Note that Hive's `AS class_name` is also parsed here.
+    pub as_: Option<String>,
+    /// RETURN expression
+    pub return_: Option<Expr>,
+    /// USING ... (Hive only)
+    pub using: Option<CreateFunctionUsing>,
+}
+
+impl fmt::Display for CreateFunctionBody {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(language) = &self.language {
+            write!(f, " LANGUAGE {language}")?;
+        }
+        if let Some(behavior) = &self.behavior {
+            write!(f, " {behavior}")?;
+        }
+        if let Some(definition) = &self.as_ {
+            write!(f, " AS '{definition}'")?;
+        }
+        if let Some(expr) = &self.return_ {
+            write!(f, " RETURN {expr}")?;
+        }
+        if let Some(using) = &self.using {
+            write!(f, " {using}")?;
+        }
+        Ok(())
     }
 }
 

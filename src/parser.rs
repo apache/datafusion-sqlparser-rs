@@ -154,7 +154,7 @@ impl<'a> Parser<'a> {
                 expecting_statement_delimiter = false;
             }
 
-            if parser.peek_token().token == Token::EOF {
+            if parser.peek_token() == Token::EOF {
                 break;
             }
             if expecting_statement_delimiter {
@@ -515,12 +515,12 @@ impl<'a> Parser<'a> {
                 Keyword::INTERVAL => self.parse_interval(),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
                 // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as subquery or a function call
-                Keyword::ARRAY if self.peek_token().token == Token::LBracket => {
+                Keyword::ARRAY if self.peek_token() == Token::LBracket => {
                     self.expect_token(&Token::LBracket)?;
                     self.parse_array_expr(true)
                 }
                 Keyword::ARRAY
-                    if self.peek_token().token == Token::LParen
+                    if self.peek_token() == Token::LParen
                         && !dialect_of!(self is ClickHouseDialect) =>
                 {
                     self.expect_token(&Token::LParen)?;
@@ -1574,30 +1574,30 @@ impl<'a> Parser<'a> {
                 // Can only happen if `get_next_precedence` got out of sync with this function
                 _ => parser_err!(format!("No infix parser for token {:?}", tok.token)),
             }
-        } else if Token::DoubleColon == tok.token {
+        } else if Token::DoubleColon == tok {
             self.parse_pg_cast(expr)
-        } else if Token::ExclamationMark == tok.token {
+        } else if Token::ExclamationMark == tok {
             // PostgreSQL factorial operation
             Ok(Expr::UnaryOp {
                 op: UnaryOperator::PGPostfixFactorial,
                 expr: Box::new(expr),
             })
-        } else if Token::LBracket == tok.token {
+        } else if Token::LBracket == tok {
             if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
                 // parse index
                 return self.parse_array_index(expr);
             }
             self.parse_map_access(expr)
-        } else if Token::Colon == tok.token {
+        } else if Token::Colon == tok {
             Ok(Expr::JsonAccess {
                 left: Box::new(expr),
                 operator: JsonOperator::Colon,
                 right: Box::new(Expr::Value(self.parse_value()?)),
             })
-        } else if Token::Arrow == tok.token
-            || Token::LongArrow == tok.token
-            || Token::HashArrow == tok.token
-            || Token::HashLongArrow == tok.token
+        } else if Token::Arrow == tok
+            || Token::LongArrow == tok
+            || Token::HashArrow == tok
+            || Token::HashLongArrow == tok
         {
             let operator = match tok.token {
                 Token::Arrow => JsonOperator::Arrow,
@@ -1962,7 +1962,7 @@ impl<'a> Parser<'a> {
     /// Consume the next token if it matches the expected token, otherwise return false
     #[must_use]
     pub fn consume_token(&mut self, expected: &Token) -> bool {
-        if self.peek_token().token == *expected {
+        if self.peek_token() == *expected {
             self.next_token();
             true
         } else {
@@ -2135,14 +2135,14 @@ impl<'a> Parser<'a> {
             table_flag = Some(self.parse_object_name()?);
             if self.parse_keyword(Keyword::TABLE) {
                 let table_name = self.parse_object_name()?;
-                if self.peek_token().token != Token::EOF {
+                if self.peek_token() != Token::EOF {
                     if let Token::Word(word) = self.peek_token().token {
                         if word.keyword == Keyword::OPTIONS {
                             options = self.parse_options(Keyword::OPTIONS)?
                         }
                     };
 
-                    if self.peek_token().token != Token::EOF {
+                    if self.peek_token() != Token::EOF {
                         let (a, q) = self.parse_as_query()?;
                         has_as = a;
                         query = Some(q);
@@ -2165,7 +2165,7 @@ impl<'a> Parser<'a> {
                     })
                 }
             } else {
-                if self.peek_token().token == Token::EOF {
+                if self.peek_token() == Token::EOF {
                     self.prev_token();
                 }
                 self.expected("a `TABLE` keyword", self.peek_token())
@@ -3898,7 +3898,7 @@ impl<'a> Parser<'a> {
         let next_token = self.next_token();
         match next_token.token {
             Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => {
-                if self.peek_token().token == Token::LParen {
+                if self.peek_token() == Token::LParen {
                     return self.parse_function(ObjectName(vec![Ident::new(value)]));
                 }
                 Ok(Expr::Value(Value::SingleQuotedString(value)))
@@ -6008,8 +6008,7 @@ impl<'a> Parser<'a> {
     pub fn parse_merge_clauses(&mut self) -> Result<Vec<MergeClause>, ParserError> {
         let mut clauses: Vec<MergeClause> = vec![];
         loop {
-            if self.peek_token().token == Token::EOF || self.peek_token().token == Token::SemiColon
-            {
+            if self.peek_token() == Token::EOF || self.peek_token() == Token::SemiColon {
                 break;
             }
             self.expect_keyword(Keyword::WHEN)?;
@@ -6228,19 +6227,19 @@ mod tests {
     fn test_prev_index() {
         let sql = "SELECT version";
         all_dialects().run_parser_method(sql, |parser| {
-            assert_eq!(parser.peek_token().token, Token::make_keyword("SELECT"));
-            assert_eq!(parser.next_token().token, Token::make_keyword("SELECT"));
+            assert_eq!(parser.peek_token(), Token::make_keyword("SELECT"));
+            assert_eq!(parser.next_token(), Token::make_keyword("SELECT"));
             parser.prev_token();
-            assert_eq!(parser.next_token().token, Token::make_keyword("SELECT"));
-            assert_eq!(parser.next_token().token, Token::make_word("version", None));
+            assert_eq!(parser.next_token(), Token::make_keyword("SELECT"));
+            assert_eq!(parser.next_token(), Token::make_word("version", None));
             parser.prev_token();
-            assert_eq!(parser.peek_token().token, Token::make_word("version", None));
-            assert_eq!(parser.next_token().token, Token::make_word("version", None));
-            assert_eq!(parser.peek_token().token, Token::EOF);
+            assert_eq!(parser.peek_token(), Token::make_word("version", None));
+            assert_eq!(parser.next_token(), Token::make_word("version", None));
+            assert_eq!(parser.peek_token(), Token::EOF);
             parser.prev_token();
-            assert_eq!(parser.next_token().token, Token::make_word("version", None));
-            assert_eq!(parser.next_token().token, Token::EOF);
-            assert_eq!(parser.next_token().token, Token::EOF);
+            assert_eq!(parser.next_token(), Token::make_word("version", None));
+            assert_eq!(parser.next_token(), Token::EOF);
+            assert_eq!(parser.next_token(), Token::EOF);
             parser.prev_token();
         });
     }

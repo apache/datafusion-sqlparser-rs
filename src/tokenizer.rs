@@ -335,6 +335,12 @@ impl PartialEq<Token> for TokenWithLocation {
     }
 }
 
+impl PartialEq<TokenWithLocation> for Token {
+    fn eq(&self, other: &TokenWithLocation) -> bool {
+        self == &other.token
+    }
+}
+
 impl fmt::Display for TokenWithLocation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.token.fmt(f)

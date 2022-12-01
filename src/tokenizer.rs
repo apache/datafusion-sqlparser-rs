@@ -1615,7 +1615,25 @@ mod tests {
         compare(expected, tokens);
     }
 
-    fn compare(expected: Vec<Token>, actual: Vec<Token>) {
+    #[test]
+    fn tokenize_with_location() {
+        let sql = "SELECT a,\n b";
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, sql);
+        let tokens = tokenizer.tokenize_with_location().unwrap();
+        let expected = vec![
+            TokenWithLocation::new(Token::make_keyword("SELECT"), 1, 1),
+            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 1, 7),
+            TokenWithLocation::new(Token::make_word("a", None), 1, 8),
+            TokenWithLocation::new(Token::Comma, 1, 9),
+            TokenWithLocation::new(Token::Whitespace(Whitespace::Newline), 1, 10),
+            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 2, 1),
+            TokenWithLocation::new(Token::make_word("b", None), 2, 2),
+        ];
+        compare(expected, tokens);
+    }
+
+    fn compare<T: PartialEq + std::fmt::Debug>(expected: Vec<T>, actual: Vec<T>) {
         //println!("------------------------------");
         //println!("tokens   = {:?}", actual);
         //println!("expected = {:?}", expected);

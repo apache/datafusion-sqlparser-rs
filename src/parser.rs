@@ -6751,4 +6751,31 @@ mod tests {
             r#"UPDATE test SET name = $1, value = $2, where = $3, create = $4, is_default = $5, classification = $6, sort = $7 WHERE id = $8"#
         );
     }
+
+    #[test]
+    fn test_tokenizer_error_loc() {
+        let sql = "foo '";
+        let ast = Parser::parse_sql(&GenericDialect, sql);
+        assert_eq!(
+            ast,
+            Err(ParserError::TokenizerError(
+                "Unterminated string literal at Line: 1, Column 5".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parser_error_loc() {
+        // TODO: Once we thread token locations through the parser, we should update this
+        // test to assert the locations of the referenced token
+        let sql = "SELECT this is a syntax error";
+        let ast = Parser::parse_sql(&GenericDialect, sql);
+        assert_eq!(
+            ast,
+            Err(ParserError::ParserError(
+                "Expected [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a"
+                    .to_string()
+            ))
+        );
+    }
 }

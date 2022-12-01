@@ -31,9 +31,9 @@ pub use self::ddl::{
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    Cte, Fetch, Join, JoinConstraint, JoinOperator, LateralView, LockType, Offset, OffsetRows,
-    OrderByExpr, Query, Select, SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier,
-    TableAlias, TableFactor, TableWithJoins, Top, Values, With,
+    Cte, ExcludeSelectItem, Fetch, Join, JoinConstraint, JoinOperator, LateralView, LockType,
+    Offset, OffsetRows, OrderByExpr, Query, Select, SelectInto, SelectItem, SetExpr, SetOperator,
+    SetQuantifier, TableAlias, TableFactor, TableWithJoins, Top, Values, With,
 };
 pub use self::value::{escape_quoted_string, DateTimeField, TrimWhereField, Value};
 
@@ -82,7 +82,7 @@ where
 }
 
 /// An identifier, decomposed into its value or character data and the quote style.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Ident {
     /// The value of the identifier without quotes.
@@ -142,7 +142,7 @@ impl fmt::Display for Ident {
 }
 
 /// A name of a table, view, custom type, etc., possibly multi-part, i.e. db.schema.obj
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ObjectName(pub Vec<Ident>);
 
@@ -152,7 +152,7 @@ impl fmt::Display for ObjectName {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Represents an Array Expression, either
 /// `ARRAY[..]`, or `[..]`
@@ -176,7 +176,7 @@ impl fmt::Display for Array {
 }
 
 /// JsonOperator
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum JsonOperator {
     /// -> keeps the value as json
@@ -218,7 +218,7 @@ impl fmt::Display for JsonOperator {
 /// The parser does not distinguish between expressions of different types
 /// (e.g. boolean vs string), so the caller must handle expressions of
 /// inappropriate type, like `WHERE 1` or `SELECT 1=1`, as necessary.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Expr {
     /// Identifier e.g. table name or column name
@@ -448,6 +448,26 @@ pub enum Expr {
         /// will be `Second` and the `last_field` will be `None`),
         /// or as `__ TO SECOND(x)`.
         fractional_seconds_precision: Option<u64>,
+    },
+    /// `MySQL` specific text search function [(1)].
+    ///
+    /// Syntax:
+    /// ```text
+    /// MARCH (<col>, <col>, ...) AGAINST (<expr> [<search modifier>])
+    ///
+    /// <col> = CompoundIdentifier
+    /// <expr> = String literal
+    /// ```
+    ///
+    ///
+    /// [(1)]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-search.html#function_match
+    MatchAgainst {
+        /// `(<col>, <col>, ...)`.
+        columns: Vec<Ident>,
+        /// `<expr>`.
+        match_value: Value,
+        /// `<search modifier>`
+        opt_search_modifier: Option<SearchModifier>,
     },
 }
 
@@ -818,12 +838,27 @@ impl fmt::Display for Expr {
                 }
                 Ok(())
             }
+            Expr::MatchAgainst {
+                columns,
+                match_value: match_expr,
+                opt_search_modifier,
+            } => {
+                write!(f, "MATCH ({}) AGAINST ", display_comma_separated(columns),)?;
+
+                if let Some(search_modifier) = opt_search_modifier {
+                    write!(f, "({match_expr} {search_modifier})")?;
+                } else {
+                    write!(f, "({match_expr})")?;
+                }
+
+                Ok(())
+            }
         }
     }
 }
 
 /// A window specification (i.e. `OVER (PARTITION BY .. ORDER BY .. etc.)`)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct WindowSpec {
     pub partition_by: Vec<Expr>,
@@ -868,7 +903,7 @@ impl fmt::Display for WindowSpec {
 ///
 /// Note: The parser does not validate the specified bounds; the caller should
 /// reject invalid bounds like `ROWS UNBOUNDED FOLLOWING` before execution.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct WindowFrame {
     pub units: WindowFrameUnits,
@@ -893,7 +928,7 @@ impl Default for WindowFrame {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum WindowFrameUnits {
     Rows,
@@ -912,7 +947,7 @@ impl fmt::Display for WindowFrameUnits {
 }
 
 /// Specifies [WindowFrame]'s `start_bound` and `end_bound`
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum WindowFrameBound {
     /// `CURRENT ROW`
@@ -935,7 +970,7 @@ impl fmt::Display for WindowFrameBound {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AddDropSync {
     ADD,
@@ -953,7 +988,7 @@ impl fmt::Display for AddDropSync {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ShowCreateObject {
     Event,
@@ -977,7 +1012,7 @@ impl fmt::Display for ShowCreateObject {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CommentObject {
     Column,
@@ -993,7 +1028,7 @@ impl fmt::Display for CommentObject {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Password {
     Password(Expr),
@@ -1002,7 +1037,7 @@ pub enum Password {
 
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Statement {
     /// Analyze (Hive)
@@ -1114,6 +1149,7 @@ pub enum Statement {
         columns: Vec<Ident>,
         query: Box<Query>,
         with_options: Vec<SqlOption>,
+        cluster_by: Vec<Ident>,
     },
     /// CREATE TABLE
     CreateTable {
@@ -1157,6 +1193,7 @@ pub enum Statement {
         /// index name
         name: ObjectName,
         table_name: ObjectName,
+        using: Option<Ident>,
         columns: Vec<OrderByExpr>,
         unique: bool,
         if_not_exists: bool,
@@ -1271,6 +1308,11 @@ pub enum Statement {
         variable: ObjectName,
         value: Vec<Expr>,
     },
+    /// SET TIME ZONE <value>
+    ///
+    /// Note: this is a PostgreSQL-specific statements
+    /// SET TIME ZONE <value> is an alias for SET timezone TO <value> in PostgreSQL
+    SetTimeZone { local: bool, value: Expr },
     /// SET NAMES 'charset_name' [COLLATE 'collation_name']
     ///
     /// Note: this is a MySQL-specific statement.
@@ -1856,6 +1898,7 @@ impl fmt::Display for Statement {
                 query,
                 materialized,
                 with_options,
+                cluster_by,
             } => {
                 write!(
                     f,
@@ -1869,6 +1912,9 @@ impl fmt::Display for Statement {
                 }
                 if !columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(columns))?;
+                }
+                if !cluster_by.is_empty() {
+                    write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
                 }
                 write!(f, " AS {}", query)
             }
@@ -2085,18 +2131,24 @@ impl fmt::Display for Statement {
             Statement::CreateIndex {
                 name,
                 table_name,
+                using,
                 columns,
                 unique,
                 if_not_exists,
-            } => write!(
-                f,
-                "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}({columns})",
-                unique = if *unique { "UNIQUE " } else { "" },
-                if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                name = name,
-                table_name = table_name,
-                columns = display_separated(columns, ",")
-            ),
+            } => {
+                write!(
+                    f,
+                    "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}",
+                    unique = if *unique { "UNIQUE " } else { "" },
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    name = name,
+                    table_name = table_name
+                )?;
+                if let Some(value) = using {
+                    write!(f, " USING {} ", value)?;
+                }
+                write!(f, "({})", display_separated(columns, ","))
+            }
             Statement::CreateRole {
                 names,
                 if_not_exists,
@@ -2237,6 +2289,13 @@ impl fmt::Display for Statement {
                     name = variable,
                     value = display_comma_separated(value)
                 )
+            }
+            Statement::SetTimeZone { local, value } => {
+                f.write_str("SET ")?;
+                if *local {
+                    f.write_str("LOCAL ")?;
+                }
+                write!(f, "TIME ZONE {value}")
             }
             Statement::SetNames {
                 charset_name,
@@ -2554,12 +2613,12 @@ impl fmt::Display for Statement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Can use to describe options in create sequence or table column type identity
 /// [ INCREMENT [ BY ] increment ]
 ///     [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
 ///     [ START [ WITH ] start ] [ CACHE cache ] [ [ NO ] CYCLE ]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SequenceOptions {
     IncrementBy(Expr, bool),
     MinValue(MinMaxValue),
@@ -2620,10 +2679,10 @@ impl fmt::Display for SequenceOptions {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Can use to describe options in  create sequence or table column type identity
 /// [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum MinMaxValue {
     // clause is not specified
     Empty,
@@ -2633,7 +2692,7 @@ pub enum MinMaxValue {
     Some(Expr),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[non_exhaustive]
 pub enum OnInsert {
@@ -2643,17 +2702,26 @@ pub enum OnInsert {
     OnConflict(OnConflict),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct OnConflict {
     pub conflict_target: Vec<Ident>,
     pub action: OnConflictAction,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum OnConflictAction {
     DoNothing,
-    DoUpdate(Vec<Assignment>),
+    DoUpdate(DoUpdate),
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct DoUpdate {
+    /// Column assignments
+    pub assignments: Vec<Assignment>,
+    /// WHERE
+    pub selection: Option<Expr>,
 }
 
 impl fmt::Display for OnInsert {
@@ -2681,13 +2749,26 @@ impl fmt::Display for OnConflictAction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::DoNothing => write!(f, "DO NOTHING"),
-            Self::DoUpdate(a) => write!(f, "DO UPDATE SET {}", display_comma_separated(a)),
+            Self::DoUpdate(do_update) => {
+                write!(f, "DO UPDATE")?;
+                if !do_update.assignments.is_empty() {
+                    write!(
+                        f,
+                        " SET {}",
+                        display_comma_separated(&do_update.assignments)
+                    )?;
+                }
+                if let Some(selection) = &do_update.selection {
+                    write!(f, " WHERE {}", selection)?;
+                }
+                Ok(())
+            }
         }
     }
 }
 
 /// Privileges granted in a GRANT statement or revoked in a REVOKE statement.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Privileges {
     /// All privileges applicable to the object type
@@ -2723,7 +2804,7 @@ impl fmt::Display for Privileges {
 }
 
 /// Specific direction for FETCH statement
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FetchDirection {
     Count { limit: Value },
@@ -2786,7 +2867,7 @@ impl fmt::Display for FetchDirection {
 }
 
 /// A privilege on a database object (table, sequence, etc.).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Action {
     Connect,
@@ -2835,7 +2916,7 @@ impl fmt::Display for Action {
 }
 
 /// Objects on which privileges are granted in a GRANT statement.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum GrantObjects {
     /// Grant privileges on `ALL SEQUENCES IN SCHEMA <schema_name> [, ...]`
@@ -2881,7 +2962,7 @@ impl fmt::Display for GrantObjects {
 }
 
 /// SQL assignment `foo = expr` as used in SQLUpdate
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Assignment {
     pub id: Vec<Ident>,
@@ -2894,7 +2975,7 @@ impl fmt::Display for Assignment {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FunctionArgExpr {
     Expr(Expr),
@@ -2914,7 +2995,7 @@ impl fmt::Display for FunctionArgExpr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FunctionArg {
     Named { name: Ident, arg: FunctionArgExpr },
@@ -2930,7 +3011,7 @@ impl fmt::Display for FunctionArg {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CloseCursor {
     All,
@@ -2947,7 +3028,7 @@ impl fmt::Display for CloseCursor {
 }
 
 /// A function call
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Function {
     pub name: ObjectName,
@@ -2960,7 +3041,7 @@ pub struct Function {
     pub special: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AnalyzeFormat {
     TEXT,
@@ -3001,7 +3082,7 @@ impl fmt::Display for Function {
 }
 
 /// External table's available file format
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FileFormat {
     TEXTFILE,
@@ -3030,7 +3111,7 @@ impl fmt::Display for FileFormat {
 
 /// A `LISTAGG` invocation `LISTAGG( [ DISTINCT ] <expr>[, <separator> ] [ON OVERFLOW <on_overflow>] ) )
 /// [ WITHIN GROUP (ORDER BY <within_group1>[, ...] ) ]`
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ListAgg {
     pub distinct: bool,
@@ -3067,7 +3148,7 @@ impl fmt::Display for ListAgg {
 }
 
 /// The `ON OVERFLOW` clause of a LISTAGG invocation
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ListAggOnOverflow {
     /// `ON OVERFLOW ERROR`
@@ -3104,7 +3185,7 @@ impl fmt::Display for ListAggOnOverflow {
 /// An `ARRAY_AGG` invocation `ARRAY_AGG( [ DISTINCT ] <expr> [ORDER BY <expr>] [LIMIT <n>] )`
 /// Or `ARRAY_AGG( [ DISTINCT ] <expr> ) [ WITHIN GROUP ( ORDER BY <expr> ) ]`
 /// ORDER BY position is defined differently for BigQuery, Postgres and Snowflake.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ArrayAgg {
     pub distinct: bool,
@@ -3140,7 +3221,7 @@ impl fmt::Display for ArrayAgg {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ObjectType {
     Table,
@@ -3164,7 +3245,7 @@ impl fmt::Display for ObjectType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum KillType {
     Connection,
@@ -3184,7 +3265,7 @@ impl fmt::Display for KillType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum HiveDistributionStyle {
     PARTITIONED {
@@ -3203,7 +3284,7 @@ pub enum HiveDistributionStyle {
     NONE,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum HiveRowFormat {
     SERDE { class: String },
@@ -3211,7 +3292,7 @@ pub enum HiveRowFormat {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[allow(clippy::large_enum_variant)]
 pub enum HiveIOFormat {
@@ -3224,7 +3305,7 @@ pub enum HiveIOFormat {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct HiveFormat {
     pub row_format: Option<HiveRowFormat>,
@@ -3232,7 +3313,7 @@ pub struct HiveFormat {
     pub location: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SqlOption {
     pub name: Ident,
@@ -3245,7 +3326,7 @@ impl fmt::Display for SqlOption {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TransactionMode {
     AccessMode(TransactionAccessMode),
@@ -3262,7 +3343,7 @@ impl fmt::Display for TransactionMode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TransactionAccessMode {
     ReadOnly,
@@ -3279,7 +3360,7 @@ impl fmt::Display for TransactionAccessMode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TransactionIsolationLevel {
     ReadUncommitted,
@@ -3300,7 +3381,7 @@ impl fmt::Display for TransactionIsolationLevel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ShowStatementFilter {
     Like(String),
@@ -3322,7 +3403,7 @@ impl fmt::Display for ShowStatementFilter {
 /// Sqlite specific syntax
 ///
 /// https://sqlite.org/lang_conflict.html
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SqliteOnConflict {
     Rollback,
@@ -3345,7 +3426,7 @@ impl fmt::Display for SqliteOnConflict {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CopyTarget {
     Stdin,
@@ -3376,7 +3457,7 @@ impl fmt::Display for CopyTarget {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum OnCommit {
     DeleteRows,
@@ -3387,7 +3468,7 @@ pub enum OnCommit {
 /// An option in `COPY` statement.
 ///
 /// <https://www.postgresql.org/docs/14/sql-copy.html>
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CopyOption {
     /// FORMAT format_name
@@ -3440,7 +3521,7 @@ impl fmt::Display for CopyOption {
 /// An option in `COPY` statement before PostgreSQL version 9.0.
 ///
 /// <https://www.postgresql.org/docs/8.4/sql-copy.html>
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CopyLegacyOption {
     /// BINARY
@@ -3468,7 +3549,7 @@ impl fmt::Display for CopyLegacyOption {
 /// A `CSV` option in `COPY` statement before PostgreSQL version 9.0.
 ///
 /// <https://www.postgresql.org/docs/8.4/sql-copy.html>
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CopyLegacyCsvOption {
     /// HEADER
@@ -3499,7 +3580,7 @@ impl fmt::Display for CopyLegacyCsvOption {
 }
 
 ///
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum MergeClause {
     MatchedUpdate {
@@ -3560,7 +3641,7 @@ impl fmt::Display for MergeClause {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DiscardObject {
     ALL,
@@ -3581,7 +3662,7 @@ impl fmt::Display for DiscardObject {
 }
 
 /// Optional context modifier for statements that can be or `LOCAL`, or `SESSION`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ContextModifier {
     /// No context defined. Each dialect defines the default in this scenario.
@@ -3609,7 +3690,7 @@ impl fmt::Display for ContextModifier {
 }
 
 /// Function argument in CREATE FUNCTION.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CreateFunctionArg {
     pub mode: Option<ArgMode>,
@@ -3657,7 +3738,7 @@ impl fmt::Display for CreateFunctionArg {
 }
 
 /// The mode of an argument in CREATE FUNCTION.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ArgMode {
     In,
@@ -3676,7 +3757,7 @@ impl fmt::Display for ArgMode {
 }
 
 /// These attributes inform the query optimizer about the behavior of the function.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FunctionBehavior {
     Immutable,
@@ -3695,7 +3776,7 @@ impl fmt::Display for FunctionBehavior {
 }
 
 /// Postgres: https://www.postgresql.org/docs/15/sql-createfunction.html
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[non_exhaustive]
 pub enum CreateFunctionBody {
@@ -3723,7 +3804,7 @@ impl fmt::Display for CreateFunctionBody {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CreateFunctionUsing {
     Jar(String),
@@ -3745,7 +3826,7 @@ impl fmt::Display for CreateFunctionUsing {
 /// Schema possible naming variants ([1]).
 ///
 /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#schema-definition
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SchemaName {
     /// Only schema name specified: `<schema name>`.
@@ -3769,6 +3850,43 @@ impl fmt::Display for SchemaName {
                 write!(f, "{name} AUTHORIZATION {authorization}")
             }
         }
+    }
+}
+
+/// Fulltext search modifiers ([1]).
+///
+/// [1]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-search.html#function_match
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum SearchModifier {
+    /// `IN NATURAL LANGUAGE MODE`.
+    InNaturalLanguageMode,
+    /// `IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION`.
+    InNaturalLanguageModeWithQueryExpansion,
+    ///`IN BOOLEAN MODE`.
+    InBooleanMode,
+    ///`WITH QUERY EXPANSION`.
+    WithQueryExpansion,
+}
+
+impl fmt::Display for SearchModifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InNaturalLanguageMode => {
+                write!(f, "IN NATURAL LANGUAGE MODE")?;
+            }
+            Self::InNaturalLanguageModeWithQueryExpansion => {
+                write!(f, "IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION")?;
+            }
+            Self::InBooleanMode => {
+                write!(f, "IN BOOLEAN MODE")?;
+            }
+            Self::WithQueryExpansion => {
+                write!(f, "WITH QUERY EXPANSION")?;
+            }
+        }
+
+        Ok(())
     }
 }
 

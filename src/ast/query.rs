@@ -20,7 +20,7 @@ use crate::ast::*;
 
 /// The most complete variant of a `SELECT` query expression, optionally
 /// including `WITH`, `UNION` / other set operations, and `ORDER BY`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Query {
     /// WITH (common table expressions, or CTEs)
@@ -67,7 +67,7 @@ impl fmt::Display for Query {
 /// A node in a tree, representing a "query body" expression, roughly:
 /// `SELECT ... [ {UNION|EXCEPT|INTERSECT} SELECT ...]`
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SetExpr {
     /// Restricted SELECT .. FROM .. HAVING (no ORDER BY or set operations)
@@ -114,7 +114,7 @@ impl fmt::Display for SetExpr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SetOperator {
     Union,
@@ -135,7 +135,7 @@ impl fmt::Display for SetOperator {
 /// A quantifier for [SetOperator].
 // TODO: Restrict parsing specific SetQuantifier in some specific dialects.
 // For example, BigQuery does not support `DISTINCT` for `EXCEPT` and `INTERSECT`
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SetQuantifier {
     All,
@@ -155,7 +155,7 @@ impl fmt::Display for SetQuantifier {
 /// A restricted variant of `SELECT` (without CTEs/`ORDER BY`), which may
 /// appear either as the only body item of a `Query`, or as an operand
 /// to a set operation like `UNION`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Select {
     pub distinct: bool,
@@ -239,7 +239,7 @@ impl fmt::Display for Select {
 }
 
 /// A hive LATERAL VIEW with potential column aliases
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct LateralView {
     /// LATERAL VIEW
@@ -272,7 +272,7 @@ impl fmt::Display for LateralView {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct With {
     pub recursive: bool,
@@ -294,7 +294,7 @@ impl fmt::Display for With {
 /// The names in the column list before `AS`, when specified, replace the names
 /// of the columns returned by the query. The parser does not validate that the
 /// number of columns in the query matches the number of columns in the query.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Cte {
     pub alias: TableAlias,
@@ -313,7 +313,7 @@ impl fmt::Display for Cte {
 }
 
 /// One item of the comma-separated list following `SELECT`
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SelectItem {
     /// Any expression, not followed by `[ AS ] alias`
@@ -321,9 +321,49 @@ pub enum SelectItem {
     /// An expression, followed by `[ AS ] alias`
     ExprWithAlias { expr: Expr, alias: Ident },
     /// `alias.*` or even `schema.table.*`
-    QualifiedWildcard(ObjectName),
+    QualifiedWildcard(ObjectName, Option<ExcludeSelectItem>),
     /// An unqualified `*`
-    Wildcard,
+    Wildcard(Option<ExcludeSelectItem>),
+}
+
+/// Snowflake `EXCLUDE` information.
+///
+/// # Syntax
+/// ```plaintext
+/// <col_name>
+/// | (<col_name>, <col_name>, ...)
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ExcludeSelectItem {
+    /// Single column name without parenthesis.
+    ///
+    /// # Syntax
+    /// ```plaintext
+    /// <col_name>
+    /// ```
+    Single(Ident),
+    /// Multiple column names inside parenthesis.
+    /// # Syntax
+    /// ```plaintext
+    /// (<col_name>, <col_name>, ...)
+    /// ```
+    Multiple(Vec<Ident>),
+}
+
+impl fmt::Display for ExcludeSelectItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "EXCLUDE")?;
+        match self {
+            Self::Single(column) => {
+                write!(f, " {column}")?;
+            }
+            Self::Multiple(columns) => {
+                write!(f, " ({})", display_comma_separated(columns))?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl fmt::Display for SelectItem {
@@ -331,13 +371,25 @@ impl fmt::Display for SelectItem {
         match &self {
             SelectItem::UnnamedExpr(expr) => write!(f, "{}", expr),
             SelectItem::ExprWithAlias { expr, alias } => write!(f, "{} AS {}", expr, alias),
-            SelectItem::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
-            SelectItem::Wildcard => write!(f, "*"),
+            SelectItem::QualifiedWildcard(prefix, opt_exclude) => {
+                write!(f, "{}.*", prefix)?;
+                if let Some(exclude) = opt_exclude {
+                    write!(f, " {exclude}")?;
+                }
+                Ok(())
+            }
+            SelectItem::Wildcard(opt_exclude) => {
+                write!(f, "*")?;
+                if let Some(exclude) = opt_exclude {
+                    write!(f, " {exclude}")?;
+                }
+                Ok(())
+            }
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TableWithJoins {
     pub relation: TableFactor,
@@ -355,7 +407,7 @@ impl fmt::Display for TableWithJoins {
 }
 
 /// A table name or a parenthesized subquery with an optional alias
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TableFactor {
     Table {
@@ -482,7 +534,7 @@ impl fmt::Display for TableFactor {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TableAlias {
     pub name: Ident,
@@ -499,7 +551,7 @@ impl fmt::Display for TableAlias {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Join {
     pub relation: TableFactor,
@@ -559,13 +611,41 @@ impl fmt::Display for Join {
                 suffix(constraint)
             ),
             JoinOperator::CrossJoin => write!(f, " CROSS JOIN {}", self.relation),
+            JoinOperator::LeftSemi(constraint) => write!(
+                f,
+                " {}LEFT SEMI JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
+            JoinOperator::RightSemi(constraint) => write!(
+                f,
+                " {}RIGHT SEMI JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
+            JoinOperator::LeftAnti(constraint) => write!(
+                f,
+                " {}LEFT ANTI JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
+            JoinOperator::RightAnti(constraint) => write!(
+                f,
+                " {}RIGHT ANTI JOIN {}{}",
+                prefix(constraint),
+                self.relation,
+                suffix(constraint)
+            ),
             JoinOperator::CrossApply => write!(f, " CROSS APPLY {}", self.relation),
             JoinOperator::OuterApply => write!(f, " OUTER APPLY {}", self.relation),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum JoinOperator {
     Inner(JoinConstraint),
@@ -573,13 +653,21 @@ pub enum JoinOperator {
     RightOuter(JoinConstraint),
     FullOuter(JoinConstraint),
     CrossJoin,
+    /// LEFT SEMI (non-standard)
+    LeftSemi(JoinConstraint),
+    /// RIGHT SEMI (non-standard)
+    RightSemi(JoinConstraint),
+    /// LEFT ANTI (non-standard)
+    LeftAnti(JoinConstraint),
+    /// RIGHT ANTI (non-standard)
+    RightAnti(JoinConstraint),
     /// CROSS APPLY (non-standard)
     CrossApply,
     /// OUTER APPLY (non-standard)
     OuterApply,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum JoinConstraint {
     On(Expr),
@@ -589,7 +677,7 @@ pub enum JoinConstraint {
 }
 
 /// An `ORDER BY` expression
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct OrderByExpr {
     pub expr: Expr,
@@ -616,7 +704,7 @@ impl fmt::Display for OrderByExpr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Offset {
     pub value: Expr,
@@ -630,7 +718,7 @@ impl fmt::Display for Offset {
 }
 
 /// Stores the keyword after `OFFSET <number>`
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum OffsetRows {
     /// Omitting ROW/ROWS is non-standard MySQL quirk.
@@ -649,7 +737,7 @@ impl fmt::Display for OffsetRows {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Fetch {
     pub with_ties: bool,
@@ -669,7 +757,7 @@ impl fmt::Display for Fetch {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum LockType {
     Share,
@@ -686,7 +774,7 @@ impl fmt::Display for LockType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Top {
     /// SQL semantic equivalent of LIMIT but with same structure as FETCH.
@@ -707,7 +795,7 @@ impl fmt::Display for Top {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Values(pub Vec<Vec<Expr>>);
 
@@ -724,7 +812,7 @@ impl fmt::Display for Values {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SelectInto {
     pub temporary: bool,

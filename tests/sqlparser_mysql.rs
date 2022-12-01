@@ -211,7 +211,7 @@ fn parse_show_create() {
         assert_eq!(
             mysql_and_generic().verified_stmt(format!("SHOW CREATE {} myident", obj_type).as_str()),
             Statement::ShowCreate {
-                obj_type: obj_type.clone(),
+                obj_type: *obj_type,
                 obj_name: obj_name.clone(),
             }
         );
@@ -1164,6 +1164,32 @@ fn parse_create_table_with_spatial_definition() {
 
     mysql_and_generic()
         .verified_stmt("CREATE TABLE tb (c1 INT, c2 INT, SPATIAL KEY potato (c1, c2))");
+}
+
+#[test]
+fn parse_fulltext_expression() {
+    mysql_and_generic().verified_stmt("SELECT * FROM tb WHERE MATCH (c1) AGAINST ('string')");
+
+    mysql_and_generic().verified_stmt(
+        "SELECT * FROM tb WHERE MATCH (c1) AGAINST ('string' IN NATURAL LANGUAGE MODE)",
+    );
+
+    mysql_and_generic().verified_stmt("SELECT * FROM tb WHERE MATCH (c1) AGAINST ('string' IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION)");
+
+    mysql_and_generic()
+        .verified_stmt("SELECT * FROM tb WHERE MATCH (c1) AGAINST ('string' IN BOOLEAN MODE)");
+
+    mysql_and_generic()
+        .verified_stmt("SELECT * FROM tb WHERE MATCH (c1) AGAINST ('string' WITH QUERY EXPANSION)");
+
+    mysql_and_generic()
+        .verified_stmt("SELECT * FROM tb WHERE MATCH (c1, c2, c3) AGAINST ('string')");
+
+    mysql_and_generic().verified_stmt("SELECT * FROM tb WHERE MATCH (c1) AGAINST (123)");
+
+    mysql_and_generic().verified_stmt("SELECT * FROM tb WHERE MATCH (c1) AGAINST (NULL)");
+
+    mysql_and_generic().verified_stmt("SELECT COUNT(IF(MATCH (title, body) AGAINST ('database' IN NATURAL LANGUAGE MODE), 1, NULL)) AS count FROM articles");
 }
 
 #[test]

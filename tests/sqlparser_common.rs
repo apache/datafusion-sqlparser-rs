@@ -461,7 +461,8 @@ fn parse_top_level() {
     verified_stmt("SELECT 1");
     verified_stmt("(SELECT 1)");
     verified_stmt("((SELECT 1))");
-    all_but_mysql().verified_stmt("VALUES (1)");
+    verified_stmt("VALUES (1)");
+    verified_stmt("VALUES ROW(1, true, 'a'), ROW(2, false, 'b')");
 }
 
 #[test]
@@ -4235,9 +4236,10 @@ fn parse_union_except_intersect() {
 
 #[test]
 fn parse_values() {
-    all_but_mysql().verified_stmt("SELECT * FROM (VALUES (1), (2), (3))");
-    all_but_mysql().verified_stmt("SELECT * FROM (VALUES (1), (2), (3)), (VALUES (1, 2, 3))");
-    all_but_mysql().verified_stmt("SELECT * FROM (VALUES (1)) UNION VALUES (1)");
+    verified_stmt("SELECT * FROM (VALUES (1), (2), (3))");
+    verified_stmt("SELECT * FROM (VALUES (1), (2), (3)), (VALUES (1, 2, 3))");
+    verified_stmt("SELECT * FROM (VALUES (1)) UNION VALUES (1)");
+    verified_stmt("SELECT * FROM (VALUES ROW(1, true, 'a'), ROW(2, false, 'b')) AS t (a, b, c)");
 }
 
 #[test]
@@ -5683,21 +5685,6 @@ fn verified_only_select(query: &str) -> Select {
 
 fn verified_expr(query: &str) -> Expr {
     all_dialects().verified_expr(query)
-}
-
-fn all_but_mysql() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![
-            Box::new(GenericDialect {}),
-            Box::new(PostgreSqlDialect {}),
-            Box::new(MsSqlDialect {}),
-            Box::new(AnsiDialect {}),
-            Box::new(SnowflakeDialect {}),
-            Box::new(HiveDialect {}),
-            Box::new(RedshiftSqlDialect {}),
-            Box::new(BigQueryDialect {}),
-        ],
-    }
 }
 
 #[test]

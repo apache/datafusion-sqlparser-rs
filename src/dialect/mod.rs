@@ -102,10 +102,6 @@ pub trait Dialect: Debug + Any {
         // return None to fall back to the default behavior
         None
     }
-    /// Returns true if VALUES requires ROW keywords in SELECT.
-    fn values_require_row_in_select(&self) -> bool {
-        false
-    }
 }
 
 impl dyn Dialect {

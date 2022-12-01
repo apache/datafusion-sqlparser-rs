@@ -329,6 +329,12 @@ impl TokenWithLocation {
     }
 }
 
+impl PartialEq<Token> for TokenWithLocation {
+    fn eq(&self, other: &Token) -> bool {
+        &self.token == other
+    }
+}
+
 impl fmt::Display for TokenWithLocation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.token.fmt(f)
@@ -474,7 +480,8 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume, to check the next char
                     match chars.peek() {
                         Some('\'') => {
-                            let s = self.tokenize_escaped_single_quoted_string(starting_loc, chars)?;
+                            let s =
+                                self.tokenize_escaped_single_quoted_string(starting_loc, chars)?;
                             Ok(Some(Token::EscapedStringLiteral(s)))
                         }
                         _ => {
@@ -933,8 +940,10 @@ impl<'a> Tokenizer<'a> {
                     last_ch = ch;
                 }
                 None => {
-                    break self
-                        .tokenizer_error(chars.location(), "Unexpected EOF while in a multi-line comment")
+                    break self.tokenizer_error(
+                        chars.location(),
+                        "Unexpected EOF while in a multi-line comment",
+                    )
                 }
             }
         }

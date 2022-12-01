@@ -4369,13 +4369,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::VALUES) {
             SetExpr::Values(self.parse_values()?)
         } else if self.parse_keyword(Keyword::TABLE) {
-            let token1 = self.peek_token();
-            let token2 = self.peek_nth_token(1);
-            let token3 = self.peek_nth_token(2);
-            self.next_token();
-            self.next_token();
-            self.next_token();
-            SetExpr::Table(Box::new(self.parse_as_table(token1, token2, token3)?))
+            SetExpr::Table(Box::new(self.parse_as_table()?))
         } else {
             return self.expected(
                 "SELECT, VALUES, or a subquery in the query body",
@@ -4575,12 +4569,11 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse `CREATE TABLE x AS TABLE y`
-    pub fn parse_as_table(
-        &self,
-        token1: Token,
-        token2: Token,
-        token3: Token,
-    ) -> Result<Table, ParserError> {
+    pub fn parse_as_table(&mut self) -> Result<Table, ParserError> {
+        let token1 = self.next_token();
+        let token2 = self.next_token();
+        let token3 = self.next_token();
+
         let table_name;
         let schema_name;
         if token2 == Token::Period {

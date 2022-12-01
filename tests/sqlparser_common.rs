@@ -2274,6 +2274,55 @@ fn parse_create_table_as() {
 }
 
 #[test]
+fn parse_create_table_as_table() {
+    let sql1 = "CREATE TABLE new_table AS TABLE old_table";
+
+    let expected_query1 = Box::new(Query {
+        with: None,
+        body: Box::new(SetExpr::Table(Box::new(Table {
+            table_name: Some("old_table".to_string()),
+            schema_name: None,
+        }))),
+        order_by: vec![],
+        limit: None,
+        offset: None,
+        fetch: None,
+        lock: None,
+    });
+
+    match verified_stmt(sql1) {
+        Statement::CreateTable { query, name, .. } => {
+            assert_eq!(name, ObjectName(vec![Ident::new("new_table")]));
+            assert_eq!(query.unwrap(), expected_query1);
+        }
+        _ => unreachable!(),
+    }
+
+    let sql2 = "CREATE TABLE new_table AS TABLE schema_name.old_table";
+
+    let expected_query2 = Box::new(Query {
+        with: None,
+        body: Box::new(SetExpr::Table(Box::new(Table {
+            table_name: Some("old_table".to_string()),
+            schema_name: Some("schema_name".to_string()),
+        }))),
+        order_by: vec![],
+        limit: None,
+        offset: None,
+        fetch: None,
+        lock: None,
+    });
+
+    match verified_stmt(sql2) {
+        Statement::CreateTable { query, name, .. } => {
+            assert_eq!(name, ObjectName(vec![Ident::new("new_table")]));
+            assert_eq!(query.unwrap(), expected_query2);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_on_cluster() {
     // Using single-quote literal to define current cluster
     let sql = "CREATE TABLE t ON CLUSTER '{cluster}' (a INT, b INT)";

@@ -84,7 +84,7 @@ pub enum SetExpr {
     },
     Values(Values),
     Insert(Statement),
-    // TODO: ANSI SQL supports `TABLE` here.
+    Table(Box<Table>),
 }
 
 impl fmt::Display for SetExpr {
@@ -94,6 +94,7 @@ impl fmt::Display for SetExpr {
             SetExpr::Query(q) => write!(f, "({})", q),
             SetExpr::Values(v) => write!(f, "{}", v),
             SetExpr::Insert(v) => write!(f, "{}", v),
+            SetExpr::Table(t) => write!(f, "{}", t),
             SetExpr::SetOperation {
                 left,
                 right,
@@ -152,6 +153,31 @@ impl fmt::Display for SetQuantifier {
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// A [`TABLE` command]( https://www.postgresql.org/docs/current/sql-select.html#SQL-TABLE)
+pub struct Table {
+    pub table_name: Option<String>,
+    pub schema_name: Option<String>,
+}
+
+impl fmt::Display for Table {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(ref schema_name) = self.schema_name {
+            write!(
+                f,
+                "TABLE {}.{}",
+                schema_name,
+                self.table_name.as_ref().unwrap(),
+            )?;
+        } else {
+            write!(f, "TABLE {}", self.table_name.as_ref().unwrap(),)?;
+        }
+        Ok(())
+    }
+}
+
 /// A restricted variant of `SELECT` (without CTEs/`ORDER BY`), which may
 /// appear either as the only body item of a `Query`, or as an operand
 /// to a set operation like `UNION`.

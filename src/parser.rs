@@ -4368,6 +4368,14 @@ impl<'a> Parser<'a> {
             SetExpr::Query(Box::new(subquery))
         } else if self.parse_keyword(Keyword::VALUES) {
             SetExpr::Values(self.parse_values()?)
+        } else if self.parse_keyword(Keyword::TABLE) {
+            let token1 = self.peek_token();
+            let token2 = self.peek_nth_token(1);
+            let token3 = self.peek_nth_token(2);
+            self.next_token();
+            self.next_token();
+            self.next_token();
+            SetExpr::Table(Box::new(self.parse_as_table(token1, token2, token3)?))
         } else {
             return self.expected(
                 "SELECT, VALUES, or a subquery in the query body",
@@ -4564,6 +4572,52 @@ impl<'a> Parser<'a> {
             having,
             qualify,
         })
+    }
+
+    /// Parse `CREATE TABLE x AS TABLE y`
+    pub fn parse_as_table(
+        &self,
+        token1: Token,
+        token2: Token,
+        token3: Token,
+    ) -> Result<Table, ParserError> {
+        let table_name;
+        let schema_name;
+        if token2 == Token::Period {
+            match token1 {
+                Token::Word(w) => {
+                    schema_name = w.value;
+                }
+                _ => {
+                    return self.expected("Schema name", token1);
+                }
+            }
+            match token3 {
+                Token::Word(w) => {
+                    table_name = w.value;
+                }
+                _ => {
+                    return self.expected("Table name", token3);
+                }
+            }
+            Ok(Table {
+                table_name: Some(table_name),
+                schema_name: Some(schema_name),
+            })
+        } else {
+            match token1 {
+                Token::Word(w) => {
+                    table_name = w.value;
+                }
+                _ => {
+                    return self.expected("Table name", token1);
+                }
+            }
+            Ok(Table {
+                table_name: Some(table_name),
+                schema_name: None,
+            })
+        }
     }
 
     pub fn parse_set(&mut self) -> Result<Statement, ParserError> {

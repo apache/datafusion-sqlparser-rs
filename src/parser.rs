@@ -4769,7 +4769,7 @@ impl<'a> Parser<'a> {
         let table_name;
         let schema_name;
         if token2 == Token::Period {
-            match token1 {
+            match token1.token {
                 Token::Word(w) => {
                     schema_name = w.value;
                 }
@@ -4777,7 +4777,7 @@ impl<'a> Parser<'a> {
                     return self.expected("Schema name", token1);
                 }
             }
-            match token3 {
+            match token3.token {
                 Token::Word(w) => {
                     table_name = w.value;
                 }
@@ -4790,7 +4790,7 @@ impl<'a> Parser<'a> {
                 schema_name: Some(schema_name),
             })
         } else {
-            match token1 {
+            match token1.token {
                 Token::Word(w) => {
                     table_name = w.value;
                 }

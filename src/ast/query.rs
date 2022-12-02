@@ -347,9 +347,31 @@ pub enum SelectItem {
     /// An expression, followed by `[ AS ] alias`
     ExprWithAlias { expr: Expr, alias: Ident },
     /// `alias.*` or even `schema.table.*`
-    QualifiedWildcard(ObjectName, Option<ExcludeSelectItem>),
+    QualifiedWildcard(ObjectName, WildcardAdditionalOptions),
     /// An unqualified `*`
-    Wildcard(Option<ExcludeSelectItem>),
+    Wildcard(WildcardAdditionalOptions),
+}
+
+/// Additional options for wildcards, e.g. Snowflake `EXCLUDE` and Bigquery `EXCEPT`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct WildcardAdditionalOptions {
+    /// `[EXCLUDE...]`.
+    pub opt_exclude: Option<ExcludeSelectItem>,
+    /// `[EXCEPT...]`.
+    pub opt_except: Option<ExceptSelectItem>,
+}
+
+impl fmt::Display for WildcardAdditionalOptions {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(exclude) = &self.opt_exclude {
+            write!(f, " {exclude}")?;
+        }
+        if let Some(except) = &self.opt_except {
+            write!(f, " {except}")?;
+        }
+        Ok(())
+    }
 }
 
 /// Snowflake `EXCLUDE` information.
@@ -392,23 +414,51 @@ impl fmt::Display for ExcludeSelectItem {
     }
 }
 
+/// Bigquery `EXCEPT` information, with at least one column.
+///
+/// # Syntax
+/// ```plaintext
+/// EXCEPT (<col_name> [, ...])
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ExceptSelectItem {
+    /// First guaranteed column.
+    pub fist_elemnt: Ident,
+    /// Additional columns. This list can be empty.
+    pub additional_elements: Vec<Ident>,
+}
+
+impl fmt::Display for ExceptSelectItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "EXCEPT ")?;
+        if self.additional_elements.is_empty() {
+            write!(f, "({})", self.fist_elemnt)?;
+        } else {
+            write!(
+                f,
+                "({}, {})",
+                self.fist_elemnt,
+                display_comma_separated(&self.additional_elements)
+            )?;
+        }
+        Ok(())
+    }
+}
+
 impl fmt::Display for SelectItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self {
             SelectItem::UnnamedExpr(expr) => write!(f, "{}", expr),
             SelectItem::ExprWithAlias { expr, alias } => write!(f, "{} AS {}", expr, alias),
-            SelectItem::QualifiedWildcard(prefix, opt_exclude) => {
+            SelectItem::QualifiedWildcard(prefix, additional_options) => {
                 write!(f, "{}.*", prefix)?;
-                if let Some(exclude) = opt_exclude {
-                    write!(f, " {exclude}")?;
-                }
+                write!(f, "{additional_options}")?;
                 Ok(())
             }
-            SelectItem::Wildcard(opt_exclude) => {
+            SelectItem::Wildcard(additional_options) => {
                 write!(f, "*")?;
-                if let Some(exclude) = opt_exclude {
-                    write!(f, " {exclude}")?;
-                }
+                write!(f, "{additional_options}")?;
                 Ok(())
             }
         }

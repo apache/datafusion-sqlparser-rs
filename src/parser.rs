@@ -1849,7 +1849,7 @@ impl<'a> Parser<'a> {
                 token => {
                     return token
                         .cloned()
-                        .unwrap_or(TokenWithLocation::wrap(Token::EOF))
+                        .unwrap_or_else(|| TokenWithLocation::wrap(Token::EOF))
                 }
             }
         }

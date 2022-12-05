@@ -301,7 +301,7 @@ impl fmt::Display for Whitespace {
 }
 
 /// Location in input string
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Location {
     /// Line number, starting from 1
     pub line: u64,
@@ -310,7 +310,7 @@ pub struct Location {
 }
 
 /// A [Token] with [Location] attached to it
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct TokenWithLocation {
     pub token: Token,
     pub location: Location,

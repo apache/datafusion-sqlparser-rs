@@ -283,27 +283,13 @@ fn test_select_wildcard_with_except() {
         _ => unreachable!(),
     };
 
-    match bigquery_and_generic().verified_stmt("SELECT * EXCEPT (col1, col2) FROM _table") {
-        Statement::Query(query) => match *query.body {
-            SetExpr::Select(select) => match &select.projection[0] {
-                SelectItem::Wildcard(WildcardAdditionalOptions {
-                    opt_except: Some(except),
-                    ..
-                }) => {
-                    assert_eq!(
-                        *except,
-                        ExceptSelectItem {
-                            fist_elemnt: Ident::new("col1"),
-                            additional_elements: vec![Ident::new("col2")]
-                        }
-                    )
-                }
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    };
+    assert_eq!(
+        bigquery_and_generic()
+            .parse_sql_statements("SELECT * EXCEPT () FROM employee_table")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected identifier, found: )"
+    );
 }
 
 fn bigquery() -> TestedDialects {

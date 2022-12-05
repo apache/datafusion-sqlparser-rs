@@ -1,7 +1,7 @@
 [package]
 name = "sqlparser"
 description = "Extensible SQL Lexer and Parser with support for ANSI SQL:2011"
-version = "0.27.0"
+version = "0.28.0"
 authors = ["Andy Grove <andygrove73@gmail.com>"]
 homepage = "https://github.com/sqlparser-rs/sqlparser-rs"
 documentation = "https://docs.rs/sqlparser/"

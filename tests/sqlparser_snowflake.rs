@@ -370,7 +370,10 @@ fn test_select_wildcard_with_exclude() {
     match snowflake_and_generic().verified_stmt("SELECT * EXCLUDE (col_a) FROM data") {
         Statement::Query(query) => match *query.body {
             SetExpr::Select(select) => match &select.projection[0] {
-                SelectItem::Wildcard(Some(exclude)) => {
+                SelectItem::Wildcard(WildcardAdditionalOptions {
+                    opt_exclude: Some(exclude),
+                    ..
+                }) => {
                     assert_eq!(
                         *exclude,
                         ExcludeSelectItem::Multiple(vec![Ident::new("col_a")])
@@ -388,7 +391,13 @@ fn test_select_wildcard_with_exclude() {
     {
         Statement::Query(query) => match *query.body {
             SetExpr::Select(select) => match &select.projection[0] {
-                SelectItem::QualifiedWildcard(_, Some(exclude)) => {
+                SelectItem::QualifiedWildcard(
+                    _,
+                    WildcardAdditionalOptions {
+                        opt_exclude: Some(exclude),
+                        ..
+                    },
+                ) => {
                     assert_eq!(
                         *exclude,
                         ExcludeSelectItem::Single(Ident::new("department_id"))
@@ -406,7 +415,10 @@ fn test_select_wildcard_with_exclude() {
     {
         Statement::Query(query) => match *query.body {
             SetExpr::Select(select) => match &select.projection[0] {
-                SelectItem::Wildcard(Some(exclude)) => {
+                SelectItem::Wildcard(WildcardAdditionalOptions {
+                    opt_exclude: Some(exclude),
+                    ..
+                }) => {
                     assert_eq!(
                         *exclude,
                         ExcludeSelectItem::Multiple(vec![

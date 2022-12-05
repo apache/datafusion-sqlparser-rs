@@ -16,7 +16,7 @@ mod test_utils;
 use test_utils::*;
 
 use sqlparser::ast::*;
-use sqlparser::dialect::BigQueryDialect;
+use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 
 #[test]
 fn parse_literal_string() {
@@ -235,8 +235,85 @@ fn parse_array_agg_func() {
     }
 }
 
+#[test]
+fn test_select_wildcard_with_except() {
+    match bigquery_and_generic().verified_stmt("SELECT * EXCEPT (col_a) FROM data") {
+        Statement::Query(query) => match *query.body {
+            SetExpr::Select(select) => match &select.projection[0] {
+                SelectItem::Wildcard(WildcardAdditionalOptions {
+                    opt_except: Some(except),
+                    ..
+                }) => {
+                    assert_eq!(
+                        *except,
+                        ExceptSelectItem {
+                            fist_elemnt: Ident::new("col_a"),
+                            additional_elements: vec![]
+                        }
+                    )
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
+
+    match bigquery_and_generic()
+        .verified_stmt("SELECT * EXCEPT (department_id, employee_id) FROM employee_table")
+    {
+        Statement::Query(query) => match *query.body {
+            SetExpr::Select(select) => match &select.projection[0] {
+                SelectItem::Wildcard(WildcardAdditionalOptions {
+                    opt_except: Some(except),
+                    ..
+                }) => {
+                    assert_eq!(
+                        *except,
+                        ExceptSelectItem {
+                            fist_elemnt: Ident::new("department_id"),
+                            additional_elements: vec![Ident::new("employee_id")]
+                        }
+                    )
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
+
+    match bigquery_and_generic().verified_stmt("SELECT * EXCEPT (col1, col2) FROM _table") {
+        Statement::Query(query) => match *query.body {
+            SetExpr::Select(select) => match &select.projection[0] {
+                SelectItem::Wildcard(WildcardAdditionalOptions {
+                    opt_except: Some(except),
+                    ..
+                }) => {
+                    assert_eq!(
+                        *except,
+                        ExceptSelectItem {
+                            fist_elemnt: Ident::new("col1"),
+                            additional_elements: vec![Ident::new("col2")]
+                        }
+                    )
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
+}
+
 fn bigquery() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(BigQueryDialect {})],
+    }
+}
+
+fn bigquery_and_generic() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(BigQueryDialect {}), Box::new(GenericDialect {})],
     }
 }

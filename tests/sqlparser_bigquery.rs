@@ -99,7 +99,7 @@ fn parse_join_constraint_unnest_alias() {
     assert_eq!(
         only(
             bigquery()
-                .verified_only_select(&"SELECT * FROM t1 JOIN UNNEST(t1.a) AS f ON c1 = c2")
+                .verified_only_select("SELECT * FROM t1 JOIN UNNEST(t1.a) AS f ON c1 = c2")
                 .from
         )
         .joins,

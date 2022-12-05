@@ -5643,25 +5643,37 @@ impl<'a> Parser<'a> {
                         None => SelectItem::UnnamedExpr(expr),
                     })
             }
-            WildcardExpr::QualifiedWildcard(prefix) => {
-                let opt_exclude = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
-                    self.parse_optional_select_item_exclude()?
-                } else {
-                    None
-                };
-
-                Ok(SelectItem::QualifiedWildcard(prefix, opt_exclude))
-            }
-            WildcardExpr::Wildcard => {
-                let opt_exclude = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
-                    self.parse_optional_select_item_exclude()?
-                } else {
-                    None
-                };
-
-                Ok(SelectItem::Wildcard(opt_exclude))
-            }
+            WildcardExpr::QualifiedWildcard(prefix) => Ok(SelectItem::QualifiedWildcard(
+                prefix,
+                self.parse_wildcard_additional_options()?,
+            )),
+            WildcardExpr::Wildcard => Ok(SelectItem::Wildcard(
+                self.parse_wildcard_additional_options()?,
+            )),
         }
+    }
+
+    /// Parse an [`WildcardAdditionalOptions`](WildcardAdditionalOptions) information for wildcard select items.
+    ///
+    /// If it is not possible to parse it, will return an option.
+    pub fn parse_wildcard_additional_options(
+        &mut self,
+    ) -> Result<WildcardAdditionalOptions, ParserError> {
+        let opt_exclude = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
+            self.parse_optional_select_item_exclude()?
+        } else {
+            None
+        };
+        let opt_except = if dialect_of!(self is GenericDialect | BigQueryDialect) {
+            self.parse_optional_select_item_except()?
+        } else {
+            None
+        };
+
+        Ok(WildcardAdditionalOptions {
+            opt_exclude,
+            opt_except,
+        })
     }
 
     /// Parse an [`Exclude`](ExcludeSelectItem) information for wildcard select items.
@@ -5684,6 +5696,33 @@ impl<'a> Parser<'a> {
         };
 
         Ok(opt_exclude)
+    }
+
+    /// Parse an [`Except`](ExceptSelectItem) information for wildcard select items.
+    ///
+    /// If it is not possible to parse it, will return an option.
+    pub fn parse_optional_select_item_except(
+        &mut self,
+    ) -> Result<Option<ExceptSelectItem>, ParserError> {
+        let opt_except = if self.parse_keyword(Keyword::EXCEPT) {
+            let idents = self.parse_parenthesized_column_list(Mandatory)?;
+            match &idents[..] {
+                [] => {
+                    return self.expected(
+                        "at least one column should be parsed by the expect clause",
+                        self.peek_token(),
+                    )?;
+                }
+                [first, idents @ ..] => Some(ExceptSelectItem {
+                    fist_elemnt: first.clone(),
+                    additional_elements: idents.to_vec(),
+                }),
+            }
+        } else {
+            None
+        };
+
+        Ok(opt_except)
     }
 
     /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)

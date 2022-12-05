@@ -8,6 +8,41 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.28.0] 2022-12-05
+
+### Added
+* Support for `EXCEPT` clause on wildcards (#745) - Thanks @AugustoFKL
+* Support `CREATE FUNCTION` Postgres options (#722) - Thanks @wangrunji0408
+* Support `CREATE TABLE x AS TABLE y` (#704) - Thanks @sarahyurick
+* Support MySQL `ROWS` syntax for `VALUES` (#737) - Thanks @aljazerzen
+* Support `WHERE` condition for `UPDATE ON CONFLICT` (#735) - Thanks @zidaye
+* Support `CLUSTER BY` when creating Materialized View (#736) - Thanks @yuval-illumex
+* Support nested comments (#726) - Thanks @yang-han
+* Support `USING` method when creating indexes. (#731) - Thanks @step-baby and @yangjiaxin01
+* Support `SEMI`/`ANTI` `JOIN` syntax (#723) - Thanks @mingmwang
+* Support `EXCLUDE` support for snowflake and generic dialect (#721) - Thanks @AugustoFKL
+* Support `MATCH AGAINST` (#708) - Thanks @AugustoFKL
+* Support `IF NOT EXISTS` in `ALTER TABLE ADD COLUMN` (#707) - Thanks @AugustoFKL
+* Support `SET TIME ZONE <value>` (#727)  - Thanks @waitingkuo
+* Support `UPDATE ... FROM ( subquery )` (#694) - Thanks  @unvalley
+
+### Changed
+* Add `Parser::index()` method to get current parsing index (#728) - Thanks @neverchanje
+* Add `COMPRESSION` as keyword (#720)- Thanks @AugustoFKL
+* Derive `PartialOrd`, `Ord`, and `Copy` whenever possible (#717) - Thanks @AugustoFKL
+* Fixed `INTERVAL` parsing logic and precedence (#705) - Thanks @sarahyurick
+* Support updating multiple column names whose names are the same as(#725)  - Thanks @step-baby
+
+### Fixed
+* Clean up some redundant code in parser (#741) - Thanks @alamb
+* Fix logical conflict - Thanks @alamb
+* Cleanup to avoid is_ok() (#740) - Thanks @alamb
+* Cleanup to avoid using unreachable! when parsing semi/anti join (#738) - Thanks @alamb
+* Add an example to docs to clarify semantic analysis (#739) - Thanks @alamb
+* Add information about parting semantic logic to README.md (#724) - Thanks @AugustoFKL
+* Logical conflicts - Thanks @alamb
+* Tiny typo in docs (#709) - Thanks @pmcgee69
+
 
 ## [0.27.0] 2022-11-11
 

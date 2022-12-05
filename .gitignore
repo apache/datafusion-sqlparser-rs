@@ -13,3 +13,5 @@ Cargo.lock
 # IDEs
 .idea
 .vscode
+
+*.swp

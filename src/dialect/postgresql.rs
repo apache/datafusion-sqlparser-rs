@@ -52,7 +52,7 @@ pub fn parse_comment(parser: &mut Parser) -> Result<Statement, ParserError> {
     parser.expect_keyword(Keyword::ON)?;
     let token = parser.next_token();
 
-    let (object_type, object_name) = match token {
+    let (object_type, object_name) = match token.token {
         Token::Word(w) if w.keyword == Keyword::COLUMN => {
             let object_name = parser.parse_object_name()?;
             (CommentObject::Column, object_name)

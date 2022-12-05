@@ -300,6 +300,53 @@ impl fmt::Display for Whitespace {
     }
 }
 
+/// Location in input string
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct Location {
+    /// Line number, starting from 1
+    pub line: u64,
+    /// Line column, starting from 1
+    pub column: u64,
+}
+
+/// A [Token] with [Location] attached to it
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct TokenWithLocation {
+    pub token: Token,
+    pub location: Location,
+}
+
+impl TokenWithLocation {
+    pub fn new(token: Token, line: u64, column: u64) -> TokenWithLocation {
+        TokenWithLocation {
+            token,
+            location: Location { line, column },
+        }
+    }
+
+    pub fn wrap(token: Token) -> TokenWithLocation {
+        TokenWithLocation::new(token, 0, 0)
+    }
+}
+
+impl PartialEq<Token> for TokenWithLocation {
+    fn eq(&self, other: &Token) -> bool {
+        &self.token == other
+    }
+}
+
+impl PartialEq<TokenWithLocation> for Token {
+    fn eq(&self, other: &TokenWithLocation) -> bool {
+        self == &other.token
+    }
+}
+
+impl fmt::Display for TokenWithLocation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.token.fmt(f)
+    }
+}
+
 /// Tokenizer error
 #[derive(Debug, PartialEq, Eq)]
 pub struct TokenizerError {
@@ -321,58 +368,88 @@ impl fmt::Display for TokenizerError {
 #[cfg(feature = "std")]
 impl std::error::Error for TokenizerError {}
 
+struct State<'a> {
+    peekable: Peekable<Chars<'a>>,
+    pub line: u64,
+    pub col: u64,
+}
+
+impl<'a> State<'a> {
+    pub fn next(&mut self) -> Option<char> {
+        match self.peekable.next() {
+            None => None,
+            Some(s) => {
+                if s == '\n' {
+                    self.line += 1;
+                    self.col = 1;
+                } else {
+                    self.col += 1;
+                }
+                Some(s)
+            }
+        }
+    }
+
+    pub fn peek(&mut self) -> Option<&char> {
+        self.peekable.peek()
+    }
+
+    pub fn location(&self) -> Location {
+        Location {
+            line: self.line,
+            column: self.col,
+        }
+    }
+}
+
 /// SQL Tokenizer
 pub struct Tokenizer<'a> {
     dialect: &'a dyn Dialect,
     query: &'a str,
-    line: u64,
-    col: u64,
 }
 
 impl<'a> Tokenizer<'a> {
     /// Create a new SQL tokenizer for the specified SQL statement
     pub fn new(dialect: &'a dyn Dialect, query: &'a str) -> Self {
-        Self {
-            dialect,
-            query,
-            line: 1,
-            col: 1,
-        }
+        Self { dialect, query }
     }
 
     /// Tokenize the statement and produce a vector of tokens
     pub fn tokenize(&mut self) -> Result<Vec<Token>, TokenizerError> {
-        let mut peekable = self.query.chars().peekable();
+        let twl = self.tokenize_with_location()?;
 
         let mut tokens: Vec<Token> = vec![];
+        tokens.reserve(twl.len());
+        for token_with_location in twl {
+            tokens.push(token_with_location.token);
+        }
+        Ok(tokens)
+    }
 
-        while let Some(token) = self.next_token(&mut peekable)? {
-            match &token {
-                Token::Whitespace(Whitespace::Newline) => {
-                    self.line += 1;
-                    self.col = 1;
-                }
+    /// Tokenize the statement and produce a vector of tokens with location information
+    pub fn tokenize_with_location(&mut self) -> Result<Vec<TokenWithLocation>, TokenizerError> {
+        let mut state = State {
+            peekable: self.query.chars().peekable(),
+            line: 1,
+            col: 1,
+        };
 
-                Token::Whitespace(Whitespace::Tab) => self.col += 4,
-                Token::Word(w) => {
-                    self.col += w.value.chars().count() as u64;
-                    if w.quote_style.is_some() {
-                        self.col += 2
-                    }
-                }
-                Token::Number(s, _) => self.col += s.chars().count() as u64,
-                Token::SingleQuotedString(s) => self.col += s.chars().count() as u64,
-                Token::Placeholder(s) => self.col += s.chars().count() as u64,
-                _ => self.col += 1,
-            }
+        let mut tokens: Vec<TokenWithLocation> = vec![];
 
-            tokens.push(token);
+        let mut location = state.location();
+        while let Some(token) = self.next_token(&mut state)? {
+            tokens.push(TokenWithLocation {
+                token,
+                location: location.clone(),
+            });
+
+            location = state.location();
         }
         Ok(tokens)
     }
 
     /// Get the next token or return None
-    fn next_token(&self, chars: &mut Peekable<Chars<'_>>) -> Result<Option<Token>, TokenizerError> {
+    fn next_token(&self, chars: &mut State) -> Result<Option<Token>, TokenizerError> {
         //println!("next_token: {:?}", chars.peek());
         match chars.peek() {
             Some(&ch) => match ch {
@@ -405,10 +482,12 @@ impl<'a> Tokenizer<'a> {
                 }
                 // PostgreSQL accepts "escape" string constants, which are an extension to the SQL standard.
                 x @ 'e' | x @ 'E' => {
+                    let starting_loc = chars.location();
                     chars.next(); // consume, to check the next char
                     match chars.peek() {
                         Some('\'') => {
-                            let s = self.tokenize_escaped_single_quoted_string(chars)?;
+                            let s =
+                                self.tokenize_escaped_single_quoted_string(starting_loc, chars)?;
                             Ok(Some(Token::EscapedStringLiteral(s)))
                         }
                         _ => {
@@ -441,7 +520,12 @@ impl<'a> Tokenizer<'a> {
                     let s = self.tokenize_word(ch, chars);
 
                     if s.chars().all(|x| ('0'..='9').contains(&x) || x == '.') {
-                        let mut s = peeking_take_while(&mut s.chars().peekable(), |ch| {
+                        let mut inner_state = State {
+                            peekable: s.chars().peekable(),
+                            line: 0,
+                            col: 0,
+                        };
+                        let mut s = peeking_take_while(&mut inner_state, |ch| {
                             matches!(ch, '0'..='9' | '.')
                         });
                         let s2 = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
@@ -469,8 +553,9 @@ impl<'a> Tokenizer<'a> {
                     if self.dialect.is_delimited_identifier_start(ch)
                         && self
                             .dialect
-                            .is_proper_identifier_inside_quotes(chars.clone()) =>
+                            .is_proper_identifier_inside_quotes(chars.peekable.clone()) =>
                 {
+                    let error_loc = chars.location();
                     chars.next(); // consume the opening quote
                     let quote_end = Word::matching_end_quote(quote_start);
                     let (s, last_char) = parse_quoted_ident(chars, quote_end);
@@ -478,10 +563,10 @@ impl<'a> Tokenizer<'a> {
                     if last_char == Some(quote_end) {
                         Ok(Some(Token::make_word(&s, Some(quote_start))))
                     } else {
-                        self.tokenizer_error(format!(
-                            "Expected close delimiter '{}' before EOF.",
-                            quote_end
-                        ))
+                        self.tokenizer_error(
+                            error_loc,
+                            format!("Expected close delimiter '{}' before EOF.", quote_end),
+                        )
                     }
                 }
                 // numbers and period
@@ -698,16 +783,20 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn tokenizer_error<R>(&self, message: impl Into<String>) -> Result<R, TokenizerError> {
+    fn tokenizer_error<R>(
+        &self,
+        loc: Location,
+        message: impl Into<String>,
+    ) -> Result<R, TokenizerError> {
         Err(TokenizerError {
             message: message.into(),
-            col: self.col,
-            line: self.line,
+            col: loc.column,
+            line: loc.line,
         })
     }
 
     // Consume characters until newline
-    fn tokenize_single_line_comment(&self, chars: &mut Peekable<Chars<'_>>) -> String {
+    fn tokenize_single_line_comment(&self, chars: &mut State) -> String {
         let mut comment = peeking_take_while(chars, |ch| ch != '\n');
         if let Some(ch) = chars.next() {
             assert_eq!(ch, '\n');
@@ -717,7 +806,7 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Tokenize an identifier or keyword, after the first char is already consumed.
-    fn tokenize_word(&self, first_char: char, chars: &mut Peekable<Chars<'_>>) -> String {
+    fn tokenize_word(&self, first_char: char, chars: &mut State) -> String {
         let mut s = first_char.to_string();
         s.push_str(&peeking_take_while(chars, |ch| {
             self.dialect.is_identifier_part(ch)
@@ -728,9 +817,13 @@ impl<'a> Tokenizer<'a> {
     /// Read a single quoted string, starting with the opening quote.
     fn tokenize_escaped_single_quoted_string(
         &self,
-        chars: &mut Peekable<Chars<'_>>,
+        starting_loc: Location,
+        chars: &mut State,
     ) -> Result<String, TokenizerError> {
         let mut s = String::new();
+
+        // This case is a bit tricky
+
         chars.next(); // consume the opening quote
 
         // slash escaping
@@ -782,16 +875,18 @@ impl<'a> Tokenizer<'a> {
                 }
             }
         }
-        self.tokenizer_error("Unterminated encoded string literal")
+        self.tokenizer_error(starting_loc, "Unterminated encoded string literal")
     }
 
     /// Read a single quoted string, starting with the opening quote.
     fn tokenize_quoted_string(
         &self,
-        chars: &mut Peekable<Chars<'_>>,
+        chars: &mut State,
         quote_style: char,
     ) -> Result<String, TokenizerError> {
         let mut s = String::new();
+        let error_loc = chars.location();
+
         chars.next(); // consume the opening quote
 
         // slash escaping is specific to MySQL dialect
@@ -824,12 +919,12 @@ impl<'a> Tokenizer<'a> {
                 }
             }
         }
-        self.tokenizer_error("Unterminated string literal")
+        self.tokenizer_error(error_loc, "Unterminated string literal")
     }
 
     fn tokenize_multiline_comment(
         &self,
-        chars: &mut Peekable<Chars<'_>>,
+        chars: &mut State,
     ) -> Result<Option<Token>, TokenizerError> {
         let mut s = String::new();
         let mut nested = 1;
@@ -850,7 +945,12 @@ impl<'a> Tokenizer<'a> {
                     s.push(ch);
                     last_ch = ch;
                 }
-                None => break self.tokenizer_error("Unexpected EOF while in a multi-line comment"),
+                None => {
+                    break self.tokenizer_error(
+                        chars.location(),
+                        "Unexpected EOF while in a multi-line comment",
+                    )
+                }
             }
         }
     }
@@ -858,7 +958,7 @@ impl<'a> Tokenizer<'a> {
     #[allow(clippy::unnecessary_wraps)]
     fn consume_and_return(
         &self,
-        chars: &mut Peekable<Chars<'_>>,
+        chars: &mut State,
         t: Token,
     ) -> Result<Option<Token>, TokenizerError> {
         chars.next();
@@ -869,10 +969,7 @@ impl<'a> Tokenizer<'a> {
 /// Read from `chars` until `predicate` returns `false` or EOF is hit.
 /// Return the characters read as String, and keep the first non-matching
 /// char available as `chars.next()`.
-fn peeking_take_while(
-    chars: &mut Peekable<Chars<'_>>,
-    mut predicate: impl FnMut(char) -> bool,
-) -> String {
+fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool) -> String {
     let mut s = String::new();
     while let Some(&ch) = chars.peek() {
         if predicate(ch) {
@@ -885,7 +982,7 @@ fn peeking_take_while(
     s
 }
 
-fn parse_quoted_ident(chars: &mut Peekable<Chars<'_>>, quote_end: char) -> (String, Option<char>) {
+fn parse_quoted_ident(chars: &mut State, quote_end: char) -> (String, Option<char>) {
     let mut last_char = None;
     let mut s = String::new();
     while let Some(ch) = chars.next() {
@@ -1518,7 +1615,25 @@ mod tests {
         compare(expected, tokens);
     }
 
-    fn compare(expected: Vec<Token>, actual: Vec<Token>) {
+    #[test]
+    fn tokenize_with_location() {
+        let sql = "SELECT a,\n b";
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, sql);
+        let tokens = tokenizer.tokenize_with_location().unwrap();
+        let expected = vec![
+            TokenWithLocation::new(Token::make_keyword("SELECT"), 1, 1),
+            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 1, 7),
+            TokenWithLocation::new(Token::make_word("a", None), 1, 8),
+            TokenWithLocation::new(Token::Comma, 1, 9),
+            TokenWithLocation::new(Token::Whitespace(Whitespace::Newline), 1, 10),
+            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 2, 1),
+            TokenWithLocation::new(Token::make_word("b", None), 2, 2),
+        ];
+        compare(expected, tokens);
+    }
+
+    fn compare<T: PartialEq + std::fmt::Debug>(expected: Vec<T>, actual: Vec<T>) {
         //println!("------------------------------");
         //println!("tokens   = {:?}", actual);
         //println!("expected = {:?}", expected);

@@ -1740,6 +1740,9 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(MINUTE FROM d)");
     verified_stmt("SELECT EXTRACT(SECOND FROM d)");
+    verified_stmt("SELECT EXTRACT(MILLISECOND FROM d)");
+    verified_stmt("SELECT EXTRACT(MICROSECOND FROM d)");
+    verified_stmt("SELECT EXTRACT(NANOSECOND FROM d)");
     verified_stmt("SELECT EXTRACT(CENTURY FROM d)");
     verified_stmt("SELECT EXTRACT(DECADE FROM d)");
     verified_stmt("SELECT EXTRACT(DOW FROM d)");

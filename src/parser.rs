@@ -3818,7 +3818,7 @@ impl<'a> Parser<'a> {
                     )?,
                 },
                 // Case when Snowflake Semi-structured data like key:value
-                Keyword::NoKeyword | Keyword::LOCATION if dialect_of!(self is SnowflakeDialect | GenericDialect) => {
+                Keyword::NoKeyword | Keyword::LOCATION | Keyword::TYPE if dialect_of!(self is SnowflakeDialect | GenericDialect) => {
                     Ok(Value::UnQuotedString(w.value))
                 }
                 _ => self.expected(

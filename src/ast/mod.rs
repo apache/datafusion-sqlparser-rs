@@ -2038,10 +2038,10 @@ impl fmt::Display for Statement {
                     }
 
                     if let Some(HiveFormat {
-                                    row_format,
-                                    storage,
-                                    location,
-                                }) = hive_formats
+                        row_format,
+                        storage,
+                        location,
+                    }) = hive_formats
                     {
                         match row_format {
                             Some(HiveRowFormat::SERDE { class }) => {
@@ -2052,9 +2052,9 @@ impl fmt::Display for Statement {
                         }
                         match storage {
                             Some(HiveIOFormat::IOF {
-                                     input_format,
-                                     output_format,
-                                 }) => write!(
+                                input_format,
+                                output_format,
+                            }) => write!(
                                 f,
                                 " STORED AS INPUTFORMAT {} OUTPUTFORMAT {}",
                                 input_format, output_format

@@ -3903,7 +3903,7 @@ impl<'a> Parser<'a> {
                         }
                     }
                 }
-                return Ok(FunctionDefinition::DoubleDollarDef(func_desc));
+                Ok(FunctionDefinition::DoubleDollarDef(func_desc))
             }
             _ => Ok(FunctionDefinition::SingleQuotedDef(
                 self.parse_literal_string()?,

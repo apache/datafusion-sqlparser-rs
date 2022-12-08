@@ -161,7 +161,9 @@ impl<'a> Parser<'a> {
                 return parser.expected("end of statement", parser.peek_token());
             }
 
-            let statement = parser.parse_statement()?;
+            let statement = stacker::maybe_grow(2 * 1024 * 1024, 5 * 1024 * 1024, || {
+                parser.parse_statement()
+            })?;
             stmts.push(statement);
             expecting_statement_delimiter = true;
         }
@@ -6819,6 +6821,18 @@ mod tests {
                 "Expected [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a"
                     .to_string()
             ))
+        );
+    }
+
+    #[test]
+    fn test_stack_overflow() {
+        let pg_dialect = PostgreSqlDialect {};
+        let sql = r#"
+        SELECT COUNT(*) FROM (SELECT id, user_id FROM test WHERE ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((user_id = $1 OR user_id = $2) OR user_id = $3) OR user_id = $4) OR user_id = $5) OR user_id = $6) OR user_id = $7) OR user_id = $8) OR user_id = $9) OR user_id = $10) OR user_id = $11) OR user_id = $12) OR user_id = $13) OR user_id = $14) OR user_id = $15) OR user_id = $16) OR user_id = $17) OR user_id = $18) OR user_id = $19) OR user_id = $20) OR user_id = $21) OR user_id = $22) OR user_id = $23) OR user_id = $24) OR user_id = $25) OR user_id = $26) OR user_id = $27) OR user_id = $28) OR user_id = $29) OR user_id = $30) OR user_id = $31) OR user_id = $32) OR user_id = $33) OR user_id = $34) OR user_id = $35) OR user_id = $36) OR user_id = $37) OR user_id = $38) OR user_id = $39) OR user_id = $40) OR user_id = $41) OR user_id = $42) OR user_id = $43) OR user_id = $44) OR user_id = $45) OR user_id = $46) OR user_id = $47) OR user_id = $48) OR user_id = $49) OR user_id = $50) OR user_id = $51) OR user_id = $52) OR user_id = $53) OR user_id = $54) OR user_id = $55) OR user_id = $56) OR user_id = $57) OR user_id = $58) OR user_id = $59) OR user_id = $60) OR user_id = $61) OR user_id = $62) OR user_id = $63) OR user_id = $64) OR user_id = $65) OR user_id = $66) OR user_id = $67) OR user_id = $68) OR user_id = $69) OR user_id = $70) OR user_id = $71) OR user_id = $72) OR user_id = $73) OR user_id = $74) OR user_id = $75) OR user_id = $76) OR user_id = $77) OR user_id = $78) OR user_id = $79) OR user_id = $80) OR user_id = $81) OR user_id = $82) OR user_id = $83) OR user_id = $84) OR user_id = $85) OR user_id = $86) OR user_id = $87) OR user_id = $88) OR user_id = $89) OR user_id = $90) OR user_id = $91) OR user_id = $92) OR user_id = $93) OR user_id = $94) OR user_id = $95) OR user_id = $96) OR user_id = $97) OR user_id = $98) OR user_id = $99) OR user_id = $100) OR user_id = $101) OR user_id = $102) OR user_id = $103) OR user_id = $104) OR user_id = $105) OR user_id = $106) OR user_id = $107) OR user_id = $108) OR user_id = $109) OR user_id = $110) OR user_id = $111) OR user_id = $112) OR user_id = $113) AND visible = $114) t"#;
+        let mut ast = Parser::parse_sql(&pg_dialect, sql).unwrap();
+        assert_eq!(
+            ast[0].to_string(),
+            r#"SELECT COUNT(*) FROM (SELECT id, user_id FROM test WHERE ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((user_id = $1 OR user_id = $2) OR user_id = $3) OR user_id = $4) OR user_id = $5) OR user_id = $6) OR user_id = $7) OR user_id = $8) OR user_id = $9) OR user_id = $10) OR user_id = $11) OR user_id = $12) OR user_id = $13) OR user_id = $14) OR user_id = $15) OR user_id = $16) OR user_id = $17) OR user_id = $18) OR user_id = $19) OR user_id = $20) OR user_id = $21) OR user_id = $22) OR user_id = $23) OR user_id = $24) OR user_id = $25) OR user_id = $26) OR user_id = $27) OR user_id = $28) OR user_id = $29) OR user_id = $30) OR user_id = $31) OR user_id = $32) OR user_id = $33) OR user_id = $34) OR user_id = $35) OR user_id = $36) OR user_id = $37) OR user_id = $38) OR user_id = $39) OR user_id = $40) OR user_id = $41) OR user_id = $42) OR user_id = $43) OR user_id = $44) OR user_id = $45) OR user_id = $46) OR user_id = $47) OR user_id = $48) OR user_id = $49) OR user_id = $50) OR user_id = $51) OR user_id = $52) OR user_id = $53) OR user_id = $54) OR user_id = $55) OR user_id = $56) OR user_id = $57) OR user_id = $58) OR user_id = $59) OR user_id = $60) OR user_id = $61) OR user_id = $62) OR user_id = $63) OR user_id = $64) OR user_id = $65) OR user_id = $66) OR user_id = $67) OR user_id = $68) OR user_id = $69) OR user_id = $70) OR user_id = $71) OR user_id = $72) OR user_id = $73) OR user_id = $74) OR user_id = $75) OR user_id = $76) OR user_id = $77) OR user_id = $78) OR user_id = $79) OR user_id = $80) OR user_id = $81) OR user_id = $82) OR user_id = $83) OR user_id = $84) OR user_id = $85) OR user_id = $86) OR user_id = $87) OR user_id = $88) OR user_id = $89) OR user_id = $90) OR user_id = $91) OR user_id = $92) OR user_id = $93) OR user_id = $94) OR user_id = $95) OR user_id = $96) OR user_id = $97) OR user_id = $98) OR user_id = $99) OR user_id = $100) OR user_id = $101) OR user_id = $102) OR user_id = $103) OR user_id = $104) OR user_id = $105) OR user_id = $106) OR user_id = $107) OR user_id = $108) OR user_id = $109) OR user_id = $110) OR user_id = $111) OR user_id = $112) OR user_id = $113) AND visible = $114) AS t"#,
         );
     }
 }

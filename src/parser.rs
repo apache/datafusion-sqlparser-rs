@@ -2328,7 +2328,7 @@ impl<'a> Parser<'a> {
         } else if dialect_of!(self is PostgreSqlDialect) {
             let name = self.parse_object_name()?;
             self.expect_token(&Token::LParen)?;
-            let args = self.parse_comma_separated(Parser::parse_create_function_arg)?;
+            let args = self.parse_comma_separated(Parser::parse_function_arg)?;
             self.expect_token(&Token::RParen)?;
 
             let return_type = if self.parse_keyword(Keyword::RETURNS) {
@@ -2353,7 +2353,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_create_function_arg(&mut self) -> Result<CreateFunctionArg, ParserError> {
+    fn parse_function_arg(&mut self) -> Result<OperateFunctionArg, ParserError> {
         let mode = if self.parse_keyword(Keyword::IN) {
             Some(ArgMode::In)
         } else if self.parse_keyword(Keyword::OUT) {
@@ -2379,7 +2379,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(CreateFunctionArg {
+        Ok(OperateFunctionArg {
             mode,
             name,
             data_type,
@@ -2752,9 +2752,11 @@ impl<'a> Parser<'a> {
             ObjectType::Schema
         } else if self.parse_keyword(Keyword::SEQUENCE) {
             ObjectType::Sequence
+        } else if self.parse_keyword(Keyword::FUNCTION) {
+            return self.parse_drop_function();
         } else {
             return self.expected(
-                "TABLE, VIEW, INDEX, ROLE, SCHEMA, or SEQUENCE after DROP",
+                "TABLE, VIEW, INDEX, ROLE, SCHEMA, FUNCTION or SEQUENCE after DROP",
                 self.peek_token(),
             );
         };
@@ -2779,6 +2781,39 @@ impl<'a> Parser<'a> {
             restrict,
             purge,
         })
+    }
+
+    /// DROP FUNCTION [ IF EXISTS ] name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ] [, ...]
+    /// [ CASCADE | RESTRICT ]
+    fn parse_drop_function(&mut self) -> Result<Statement, ParserError> {
+        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let func_desc = self.parse_comma_separated(Parser::parse_drop_function_desc)?;
+        let cascade = self.parse_keyword(Keyword::CASCADE);
+        let restrict = self.parse_keyword(Keyword::RESTRICT);
+        Ok(Statement::DropFunction {
+            if_exists,
+            func_desc,
+            cascade,
+            restrict,
+        })
+    }
+
+    fn parse_drop_function_desc(&mut self) -> Result<DropFunctionDesc, ParserError> {
+        let name = self.parse_object_name()?;
+
+        let args = if self.consume_token(&Token::LParen) {
+            if self.consume_token(&Token::RParen) {
+                None
+            } else {
+                let args = self.parse_comma_separated(Parser::parse_function_arg)?;
+                self.expect_token(&Token::RParen)?;
+                Some(args)
+            }
+        } else {
+            None
+        };
+
+        Ok(DropFunctionDesc { name, args })
     }
 
     /// DECLARE name [ BINARY ] [ ASENSITIVE | INSENSITIVE ] [ [ NO ] SCROLL ]

@@ -1247,6 +1247,14 @@ pub enum Statement {
         /// deleted along with the dropped table
         purge: bool,
     },
+    /// DROP Function
+    DropFunction {
+        if_exists: bool,
+        /// One or more function to drop
+        func_desc: Vec<DropFunctionDesc>,
+        cascade: bool,
+        restrict: bool,
+    },
     /// DECLARE - Declaring Cursor Variables
     ///
     /// Note: this is a PostgreSQL-specific statement,
@@ -1411,7 +1419,7 @@ pub enum Statement {
         or_replace: bool,
         temporary: bool,
         name: ObjectName,
-        args: Option<Vec<CreateFunctionArg>>,
+        args: Option<Vec<OperateFunctionArg>>,
         return_type: Option<DataType>,
         /// Optional parameters.
         params: CreateFunctionBody,
@@ -2262,6 +2270,19 @@ impl fmt::Display for Statement {
                 if *cascade { " CASCADE" } else { "" },
                 if *restrict { " RESTRICT" } else { "" },
                 if *purge { " PURGE" } else { "" }
+            ),
+            Statement::DropFunction {
+                if_exists,
+                func_desc,
+                cascade,
+                restrict,
+            } => write!(
+                f,
+                "DROP FUNCTION{} {}{}{}",
+                if *if_exists { " IF EXISTS" } else { "" },
+                display_comma_separated(func_desc),
+                if *cascade { " CASCADE" } else { "" },
+                if *restrict { " RESTRICT" } else { "" }
             ),
             Statement::Discard { object_type } => {
                 write!(f, "DISCARD {object_type}", object_type = object_type)?;
@@ -3691,17 +3712,35 @@ impl fmt::Display for ContextModifier {
     }
 }
 
-/// Function argument in CREATE FUNCTION.
+/// Function describe in DROP FUNCTION.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct CreateFunctionArg {
+pub struct DropFunctionDesc {
+    pub name: ObjectName,
+    pub args: Option<Vec<OperateFunctionArg>>,
+}
+
+impl fmt::Display for DropFunctionDesc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(args) = &self.args {
+            write!(f, "({})", display_comma_separated(args))?;
+        }
+        Ok(())
+    }
+}
+
+/// Function argument in CREATE OR DROP FUNCTION.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct OperateFunctionArg {
     pub mode: Option<ArgMode>,
     pub name: Option<Ident>,
     pub data_type: DataType,
     pub default_expr: Option<Expr>,
 }
 
-impl CreateFunctionArg {
+impl OperateFunctionArg {
     /// Returns an unnamed argument.
     pub fn unnamed(data_type: DataType) -> Self {
         Self {
@@ -3723,7 +3762,7 @@ impl CreateFunctionArg {
     }
 }
 
-impl fmt::Display for CreateFunctionArg {
+impl fmt::Display for OperateFunctionArg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(mode) = &self.mode {
             write!(f, "{} ", mode)?;

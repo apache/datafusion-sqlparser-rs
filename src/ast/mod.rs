@@ -3777,6 +3777,23 @@ impl fmt::Display for FunctionBehavior {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum FunctionDefinition {
+    SingleQuotedDef(String),
+    DoubleDollarDef(String),
+}
+
+impl fmt::Display for FunctionDefinition {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FunctionDefinition::SingleQuotedDef(s) => write!(f, "'{s}'")?,
+            FunctionDefinition::DoubleDollarDef(s) => write!(f, "$${s}$$")?,
+        }
+        Ok(())
+    }
+}
+
 /// Postgres: https://www.postgresql.org/docs/15/sql-createfunction.html
 #[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -3788,7 +3805,7 @@ pub struct CreateFunctionBody {
     /// AS 'definition'
     ///
     /// Note that Hive's `AS class_name` is also parsed here.
-    pub as_: Option<String>,
+    pub as_: Option<FunctionDefinition>,
     /// RETURN expression
     pub return_: Option<Expr>,
     /// USING ... (Hive only)
@@ -3804,7 +3821,7 @@ impl fmt::Display for CreateFunctionBody {
             write!(f, " {behavior}")?;
         }
         if let Some(definition) = &self.as_ {
-            write!(f, " AS '{definition}'")?;
+            write!(f, " AS {definition}")?;
         }
         if let Some(expr) = &self.return_ {
             write!(f, " RETURN {expr}")?;

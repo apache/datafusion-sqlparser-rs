@@ -2025,6 +2025,25 @@ impl<'a> Parser<'a> {
         Ok(values)
     }
 
+    /// Parse a keyword-separated list of 1+ items accepted by `F`
+    pub fn parse_keyword_separated<T, F>(
+        &mut self,
+        keyword: Keyword,
+        mut f: F,
+    ) -> Result<Vec<T>, ParserError>
+    where
+        F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
+    {
+        let mut values = vec![];
+        loop {
+            values.push(f(self)?);
+            if !self.parse_keyword(keyword) {
+                break;
+            }
+        }
+        Ok(values)
+    }
+
     /// Run a parser method `f`, reverting back to the current position
     /// if unsuccessful.
     #[must_use]
@@ -2077,6 +2096,8 @@ impl<'a> Parser<'a> {
             self.parse_create_external_table(or_replace)
         } else if self.parse_keyword(Keyword::FUNCTION) {
             self.parse_create_function(or_replace, temporary)
+        } else if self.parse_keyword(Keyword::TRIGGER) {
+            self.parse_create_trigger(or_replace)
         } else if or_replace {
             self.expected(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION after CREATE OR REPLACE",
@@ -2302,6 +2323,170 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_create_trigger(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
+        if dialect_of!(self is PostgreSqlDialect) {
+            let name = self.parse_object_name()?;
+            let period = self.parse_trigger_period()?;
+
+            let event = self.parse_keyword_separated(Keyword::OR, Parser::parse_trigger_event)?;
+            let table_name = if self.parse_keyword(Keyword::ON) {
+                self.parse_object_name()?
+            } else {
+                return self.expected("keyword `ON`", self.peek_token());
+            };
+
+            let mut referencing = vec![];
+            if self.parse_keyword(Keyword::REFERENCING) {
+                loop {
+                    if let Some(refer) = self.parse_trigger_referencing()? {
+                        referencing.push(refer);
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            let for_each = if self.parse_keywords(&[Keyword::FOR]) {
+                let _ = self.parse_keyword(Keyword::EACH);
+                match self.parse_one_of_keywords(&[Keyword::ROW, Keyword::STATEMENT]) {
+                    Some(Keyword::ROW) => Some(TriggerObject::Row),
+                    Some(Keyword::STATEMENT) => Some(TriggerObject::Statement),
+                    _ => {
+                        return self.expected("an `ROW` OR `STATEMENT`", self.peek_token());
+                    }
+                }
+            } else {
+                None
+            };
+
+            let condition = if self.parse_keyword(Keyword::WHEN) {
+                self.expect_token(&Token::LParen)?;
+                let mut lparen_count = 1;
+                let mut condition_str = String::new();
+                loop {
+                    if lparen_count == 0 {
+                        break;
+                    }
+                    if let Some(next_token) = self.next_token_no_skip() {
+                        match &next_token.token {
+                            Token::LParen => lparen_count += 1,
+                            Token::RParen => lparen_count -= 1,
+                            Token::EOF => {
+                                return self.expected(" `)` ", TokenWithLocation::wrap(Token::EOF));
+                            }
+                            _ => {}
+                        }
+                        if lparen_count == 0 {
+                            break;
+                        }
+                        condition_str.push_str(next_token.token.to_string().as_str());
+                    }
+                }
+                Some(condition_str)
+            } else {
+                None
+            };
+            let exec_body = if self.parse_keyword(Keyword::EXECUTE) {
+                self.parse_trigger_exec_body()?
+            } else {
+                return self.expected("an `EXECUTE`", self.peek_token());
+            };
+
+            Ok(Statement::CreateTrigger {
+                or_replace,
+                name,
+                period,
+                event,
+                table_name,
+                referencing,
+                for_each,
+                condition,
+                exec_body,
+            })
+        } else {
+            self.prev_token();
+            self.expected("an object type after CREATE", self.peek_token())
+        }
+    }
+
+    pub fn parse_trigger_period(&mut self) -> Result<TriggerPeriod, ParserError> {
+        match self.parse_one_of_keywords(&[Keyword::BEFORE, Keyword::AFTER, Keyword::INSTEAD]) {
+            Some(Keyword::BEFORE) => Ok(TriggerPeriod::Before),
+            Some(Keyword::AFTER) => Ok(TriggerPeriod::After),
+            Some(Keyword::INSTEAD) => {
+                if self.parse_keyword(Keyword::OF) {
+                    Ok(TriggerPeriod::InsteadOf)
+                } else {
+                    self.expected("an `OF` after `INSTEAD` ", self.peek_token())
+                }
+            }
+            _ => self.expected("an `BEFORE`, `AFTER` OR `INSTEAD OF`", self.peek_token()),
+        }
+    }
+
+    pub fn parse_trigger_event(&mut self) -> Result<TriggerEvent, ParserError> {
+        match self.parse_one_of_keywords(&[
+            Keyword::INSERT,
+            Keyword::UPDATE,
+            Keyword::DELETE,
+            Keyword::TRUNCATE,
+        ]) {
+            Some(Keyword::INSERT) => Ok(TriggerEvent::Insert),
+            Some(Keyword::UPDATE) => {
+                if self.parse_keyword(Keyword::OF) {
+                    let cols = self.parse_comma_separated(Parser::parse_identifier)?;
+                    Ok(TriggerEvent::Update(cols))
+                } else {
+                    Ok(TriggerEvent::Update(vec![]))
+                }
+            }
+            Some(Keyword::DELETE) => Ok(TriggerEvent::Delete),
+            Some(Keyword::TRUNCATE) => Ok(TriggerEvent::Truncate),
+            _ => self.expected(
+                "an `INSERT`, `UPDATE`, `DELETE` OR `TRUNCATE`",
+                self.peek_token(),
+            ),
+        }
+    }
+
+    pub fn parse_trigger_referencing(&mut self) -> Result<Option<TriggerReferencing>, ParserError> {
+        let refer_type = match self.parse_one_of_keywords(&[Keyword::OLD, Keyword::NEW]) {
+            Some(Keyword::OLD) if self.parse_keyword(Keyword::TABLE) => {
+                TriggerReferencingType::OldTable
+            }
+            Some(Keyword::NEW) if self.parse_keyword(Keyword::TABLE) => {
+                TriggerReferencingType::NewTable
+            }
+            _ => {
+                return Ok(None);
+            }
+        };
+
+        let is_as = self.parse_keyword(Keyword::AS);
+        let transition_relation_name = self.parse_object_name()?;
+        Ok(Some(TriggerReferencing {
+            refer_type,
+            is_as,
+            transition_relation_name,
+        }))
+    }
+
+    pub fn parse_trigger_exec_body(&mut self) -> Result<TriggerExecBody, ParserError> {
+        let exec_type = match self.parse_one_of_keywords(&[Keyword::FUNCTION, Keyword::PROCEDURE]) {
+            Some(Keyword::FUNCTION) => ExecBodyType::Function,
+            Some(Keyword::PROCEDURE) => ExecBodyType::Proceduer,
+            _ => {
+                return self.expected("an `FUNCTION` OR `PROCEDURE`", self.peek_token());
+            }
+        };
+
+        let func_desc = self.parse_function_desc()?;
+        Ok(TriggerExecBody {
+            exec_type,
+            func_desc,
+        })
+    }
+
     pub fn parse_create_function(
         &mut self,
         or_replace: bool,
@@ -2328,7 +2513,7 @@ impl<'a> Parser<'a> {
         } else if dialect_of!(self is PostgreSqlDialect) {
             let name = self.parse_object_name()?;
             self.expect_token(&Token::LParen)?;
-            let args = self.parse_comma_separated(Parser::parse_create_function_arg)?;
+            let args = self.parse_comma_separated(Parser::parse_operation_function_arg)?;
             self.expect_token(&Token::RParen)?;
 
             let return_type = if self.parse_keyword(Keyword::RETURNS) {
@@ -2353,7 +2538,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_create_function_arg(&mut self) -> Result<CreateFunctionArg, ParserError> {
+    fn parse_operation_function_arg(&mut self) -> Result<OperateFunctionArg, ParserError> {
         let mode = if self.parse_keyword(Keyword::IN) {
             Some(ArgMode::In)
         } else if self.parse_keyword(Keyword::OUT) {
@@ -2379,7 +2564,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(CreateFunctionArg {
+        Ok(OperateFunctionArg {
             mode,
             name,
             data_type,
@@ -2420,6 +2605,23 @@ impl<'a> Parser<'a> {
                 return Ok(body);
             }
         }
+    }
+
+    fn parse_function_desc(&mut self) -> Result<FunctionDesc, ParserError> {
+        let name = self.parse_object_name()?;
+        let args = if self.consume_token(&Token::LParen) {
+            if self.consume_token(&Token::RParen) {
+                vec![]
+            } else {
+                let args = self.parse_comma_separated(Parser::parse_operation_function_arg)?;
+                self.expect_token(&Token::RParen)?;
+                args
+            }
+        } else {
+            vec![]
+        };
+
+        Ok(FunctionDesc { name, args })
     }
 
     pub fn parse_create_external_table(

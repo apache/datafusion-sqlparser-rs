@@ -1411,10 +1411,30 @@ pub enum Statement {
         or_replace: bool,
         temporary: bool,
         name: ObjectName,
-        args: Option<Vec<CreateFunctionArg>>,
+        args: Option<Vec<OperateFunctionArg>>,
         return_type: Option<DataType>,
         /// Optional parameters.
         params: CreateFunctionBody,
+    },
+    /// CREATE TRIGGER
+    ///
+    /// Postgres: https://www.postgresql.org/docs/current/sql-createtrigger.html
+    CreateTrigger {
+        or_replace: bool,
+        name: ObjectName,
+        /// Determines whether the function is called before, after, or instead of the event.
+        period: TriggerPeriod,
+        /// Multiple events can be specified using OR
+        event: Vec<TriggerEvent>,
+        table_name: ObjectName,
+        /// This keyword immediately precedes the declaration of one or two relation names that provide access to the transition relations of the triggering statement.
+        referencing: Vec<TriggerReferencing>,
+        /// This specifies whether the trigger function should be fired once for every row affected by the trigger event, or just once per SQL statement.
+        for_each: Option<TriggerObject>,
+        ///  Triggering conditions
+        condition: Option<String>,
+        /// Execute logic block
+        exec_body: TriggerExecBody,
     },
     /// `ASSERT <condition> [AS <message>]`
     Assert {
@@ -1892,6 +1912,37 @@ impl fmt::Display for Statement {
                 }
                 write!(f, "{params}")?;
                 Ok(())
+            }
+            Statement::CreateTrigger {
+                or_replace,
+                name,
+                period,
+                event,
+                table_name,
+                referencing,
+                for_each,
+                condition,
+                exec_body,
+            } => {
+                write!(
+                    f,
+                    "CREATE {or_replace}TRIGGER {name} {period}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                )?;
+                if !event.is_empty() {
+                    write!(f, " {}", display_separated(event, "or"))?;
+                }
+                write!(f, " ON {table_name}")?;
+                if !referencing.is_empty() {
+                    write!(f, " REFERENCING {}", display_separated(referencing, " "))?;
+                }
+                if let Some(trigger_object) = for_each {
+                    write!(f, " FOR EACH {trigger_object}")?;
+                }
+                if let Some(condition) = condition {
+                    write!(f, " WHEN ({condition})")?;
+                }
+                write!(f, " EXECUTE {exec_body}")
             }
             Statement::CreateView {
                 name,
@@ -3694,14 +3745,14 @@ impl fmt::Display for ContextModifier {
 /// Function argument in CREATE FUNCTION.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct CreateFunctionArg {
+pub struct OperateFunctionArg {
     pub mode: Option<ArgMode>,
     pub name: Option<Ident>,
     pub data_type: DataType,
     pub default_expr: Option<Expr>,
 }
 
-impl CreateFunctionArg {
+impl OperateFunctionArg {
     /// Returns an unnamed argument.
     pub fn unnamed(data_type: DataType) -> Self {
         Self {
@@ -3723,7 +3774,7 @@ impl CreateFunctionArg {
     }
 }
 
-impl fmt::Display for CreateFunctionArg {
+impl fmt::Display for OperateFunctionArg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(mode) = &self.mode {
             write!(f, "{} ", mode)?;
@@ -3755,6 +3806,157 @@ impl fmt::Display for ArgMode {
             ArgMode::Out => write!(f, "OUT"),
             ArgMode::InOut => write!(f, "INOUT"),
         }
+    }
+}
+
+/// Function describe in DROP FUNCTION.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct FunctionDesc {
+    pub name: ObjectName,
+    pub args: Vec<OperateFunctionArg>,
+}
+
+impl fmt::Display for FunctionDesc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}({})", self.name, display_comma_separated(&self.args))
+    }
+}
+
+/// This specifies whether the trigger function should be fired once for every row affected by the trigger event, or just once per SQL statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum TriggerObject {
+    Row,
+    Statement,
+}
+
+impl fmt::Display for TriggerObject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TriggerObject::Row => write!(f, "ROW"),
+            TriggerObject::Statement => write!(f, "STATEMENT"),
+        }
+    }
+}
+
+/// This clause indicates whether the following relation name is for the before-image transition relation or the after-image transition relation
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum TriggerReferencingType {
+    OldTable,
+    NewTable,
+}
+
+impl fmt::Display for TriggerReferencingType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TriggerReferencingType::OldTable => write!(f, "OLD TABLE"),
+            TriggerReferencingType::NewTable => write!(f, "NEW TABLE"),
+        }
+    }
+}
+
+/// This keyword immediately precedes the declaration of one or two relation names that provide access to the transition relations of the triggering statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct TriggerReferencing {
+    pub refer_type: TriggerReferencingType,
+    pub is_as: bool,
+    pub transition_relation_name: ObjectName,
+}
+
+impl fmt::Display for TriggerReferencing {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{refer_type}{is_as} {relation_name}",
+            refer_type = self.refer_type,
+            is_as = if self.is_as { " AS" } else { "" },
+            relation_name = self.transition_relation_name
+        )
+    }
+}
+
+/// Used to describe trigger events
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum TriggerEvent {
+    Insert,
+    Update(Vec<Ident>),
+    Delete,
+    Truncate,
+}
+
+impl fmt::Display for TriggerEvent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TriggerEvent::Insert => write!(f, "INSERT"),
+            TriggerEvent::Update(columns) => {
+                write!(f, "UPDATE")?;
+                if !columns.is_empty() {
+                    write!(f, " OF")?;
+                    write!(f, " {}", display_comma_separated(columns))?;
+                }
+                Ok(())
+            }
+            TriggerEvent::Delete => write!(f, "DELETE"),
+            TriggerEvent::Truncate => write!(f, "TRUNCATE"),
+        }
+    }
+}
+
+/// Trigger period
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum TriggerPeriod {
+    After,
+    Before,
+    InsteadOf,
+}
+
+impl fmt::Display for TriggerPeriod {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TriggerPeriod::After => write!(f, "AFTER"),
+            TriggerPeriod::Before => write!(f, "BEFORE"),
+            TriggerPeriod::InsteadOf => write!(f, "INSTEAD OF"),
+        }
+    }
+}
+
+/// Execute function or stored procedure
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ExecBodyType {
+    Function,
+    Proceduer,
+}
+
+impl fmt::Display for ExecBodyType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ExecBodyType::Function => write!(f, "FUNCTION"),
+            ExecBodyType::Proceduer => write!(f, "PROCEDURE"),
+        }
+    }
+}
+/// This keyword immediately precedes the declaration of one or two relation names that provide access to the transition relations of the triggering statement
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct TriggerExecBody {
+    pub exec_type: ExecBodyType,
+    pub func_desc: FunctionDesc,
+}
+
+impl fmt::Display for TriggerExecBody {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{exec_type} {func_desc}",
+            exec_type = self.exec_type,
+            func_desc = self.func_desc
+        )
     }
 }
 

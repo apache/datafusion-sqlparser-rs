@@ -2337,12 +2337,8 @@ impl<'a> Parser<'a> {
 
             let mut referencing = vec![];
             if self.parse_keyword(Keyword::REFERENCING) {
-                loop {
-                    if let Some(refer) = self.parse_trigger_referencing()? {
-                        referencing.push(refer);
-                    } else {
-                        break;
-                    }
+                while let Some(refer) = self.parse_trigger_referencing()? {
+                    referencing.push(refer);
                 }
             }
 

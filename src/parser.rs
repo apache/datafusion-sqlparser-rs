@@ -2788,13 +2788,15 @@ impl<'a> Parser<'a> {
     fn parse_drop_function(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let func_desc = self.parse_comma_separated(Parser::parse_drop_function_desc)?;
-        let cascade = self.parse_keyword(Keyword::CASCADE);
-        let restrict = self.parse_keyword(Keyword::RESTRICT);
+        let option = match self.parse_one_of_keywords(&[Keyword::CASCADE, Keyword::RESTRICT]) {
+            Some(Keyword::CASCADE) => Some(DropFunctionOption::Cascade),
+            Some(Keyword::RESTRICT) => Some(DropFunctionOption::Restrict),
+            _ => None,
+        };
         Ok(Statement::DropFunction {
             if_exists,
             func_desc,
-            cascade,
-            restrict,
+            option,
         })
     }
 

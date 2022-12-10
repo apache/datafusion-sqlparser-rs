@@ -2308,8 +2308,7 @@ fn parse_drop_function() {
                 }]),
                 args: None
             }],
-            cascade: false,
-            restrict: false
+            option: None
         }
     );
 
@@ -2333,8 +2332,7 @@ fn parse_drop_function() {
                     }
                 ]),
             }],
-            cascade: false,
-            restrict: false
+            option: None
         }
     );
 
@@ -2381,8 +2379,7 @@ fn parse_drop_function() {
                     ]),
                 }
             ],
-            cascade: false,
-            restrict: false
+            option: None
         }
     );
 }

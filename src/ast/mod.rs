@@ -1252,8 +1252,8 @@ pub enum Statement {
         if_exists: bool,
         /// One or more function to drop
         func_desc: Vec<DropFunctionDesc>,
-        cascade: bool,
-        restrict: bool,
+        /// `CASCADE` or `RESTRICT`
+        option: Option<DropFunctionOption>,
     },
     /// DECLARE - Declaring Cursor Variables
     ///
@@ -2274,16 +2274,19 @@ impl fmt::Display for Statement {
             Statement::DropFunction {
                 if_exists,
                 func_desc,
-                cascade,
-                restrict,
-            } => write!(
-                f,
-                "DROP FUNCTION{} {}{}{}",
-                if *if_exists { " IF EXISTS" } else { "" },
-                display_comma_separated(func_desc),
-                if *cascade { " CASCADE" } else { "" },
-                if *restrict { " RESTRICT" } else { "" }
-            ),
+                option,
+            } => {
+                write!(
+                    f,
+                    "DROP FUNCTION{} {}",
+                    if *if_exists { " IF EXISTS" } else { "" },
+                    display_comma_separated(func_desc),
+                )?;
+                if let Some(op) = option {
+                    write!(f, " {}", op)?;
+                }
+                Ok(())
+            }
             Statement::Discard { object_type } => {
                 write!(f, "DISCARD {object_type}", object_type = object_type)?;
                 Ok(())
@@ -3708,6 +3711,23 @@ impl fmt::Display for ContextModifier {
             Self::Session => {
                 write!(f, " SESSION")
             }
+        }
+    }
+}
+
+/// Function describe in DROP FUNCTION.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum DropFunctionOption {
+    Restrict,
+    Cascade,
+}
+
+impl fmt::Display for DropFunctionOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DropFunctionOption::Restrict => write!(f, "RESTRICT "),
+            DropFunctionOption::Cascade => write!(f, "CASCADE  "),
         }
     }
 }

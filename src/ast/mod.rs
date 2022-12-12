@@ -1530,1090 +1530,1097 @@ pub enum Statement {
 }
 
 impl fmt::Display for Statement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // ensure stack does not overflow for deeply nested queries
+        stacker::maybe_grow(2 * 1024 * 1024, 5 * 1024 * 1024, || self.fmt_inner(f))
+    }
+}
+
+impl Statement {
+    /// Implement unguarded stack display logic
+    ///
     // Clippy thinks this function is too complicated, but it is painful to
     // split up without extracting structs for each `Statement` variant.
     #[allow(clippy::cognitive_complexity)]
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        stacker::maybe_grow(2 * 1024 * 1024, 5 * 1024 * 1024, || {
-            match self {
-                Statement::Kill { modifier, id } => {
-                    write!(f, "KILL ")?;
+    fn fmt_inner(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Statement::Kill { modifier, id } => {
+                write!(f, "KILL ")?;
 
-                    if let Some(m) = modifier {
-                        write!(f, "{} ", m)?;
-                    }
-
-                    write!(f, "{}", id)
+                if let Some(m) = modifier {
+                    write!(f, "{} ", m)?;
                 }
-                Statement::ExplainTable {
-                    describe_alias,
-                    table_name,
-                } => {
-                    if *describe_alias {
-                        write!(f, "DESCRIBE ")?;
+
+                write!(f, "{}", id)
+            }
+            Statement::ExplainTable {
+                describe_alias,
+                table_name,
+            } => {
+                if *describe_alias {
+                    write!(f, "DESCRIBE ")?;
+                } else {
+                    write!(f, "EXPLAIN ")?;
+                }
+
+                write!(f, "{}", table_name)
+            }
+            Statement::Explain {
+                describe_alias,
+                verbose,
+                analyze,
+                statement,
+                format,
+            } => {
+                if *describe_alias {
+                    write!(f, "DESCRIBE ")?;
+                } else {
+                    write!(f, "EXPLAIN ")?;
+                }
+
+                if *analyze {
+                    write!(f, "ANALYZE ")?;
+                }
+
+                if *verbose {
+                    write!(f, "VERBOSE ")?;
+                }
+
+                if let Some(format) = format {
+                    write!(f, "FORMAT {} ", format)?;
+                }
+
+                write!(f, "{}", statement)
+            }
+            Statement::Query(s) => write!(f, "{}", s),
+            Statement::Declare {
+                name,
+                binary,
+                sensitive,
+                scroll,
+                hold,
+                query,
+            } => {
+                write!(f, "DECLARE {} ", name)?;
+
+                if *binary {
+                    write!(f, "BINARY ")?;
+                }
+
+                if let Some(sensitive) = sensitive {
+                    if *sensitive {
+                        write!(f, "INSENSITIVE ")?;
                     } else {
-                        write!(f, "EXPLAIN ")?;
+                        write!(f, "ASENSITIVE ")?;
                     }
-
-                    write!(f, "{}", table_name)
                 }
-                Statement::Explain {
-                    describe_alias,
-                    verbose,
-                    analyze,
-                    statement,
-                    format,
-                } => {
-                    if *describe_alias {
-                        write!(f, "DESCRIBE ")?;
+
+                if let Some(scroll) = scroll {
+                    if *scroll {
+                        write!(f, "SCROLL ")?;
                     } else {
-                        write!(f, "EXPLAIN ")?;
+                        write!(f, "NO SCROLL ")?;
                     }
-
-                    if *analyze {
-                        write!(f, "ANALYZE ")?;
-                    }
-
-                    if *verbose {
-                        write!(f, "VERBOSE ")?;
-                    }
-
-                    if let Some(format) = format {
-                        write!(f, "FORMAT {} ", format)?;
-                    }
-
-                    write!(f, "{}", statement)
                 }
-                Statement::Query(s) => write!(f, "{}", s),
-                Statement::Declare {
-                    name,
-                    binary,
-                    sensitive,
-                    scroll,
-                    hold,
-                    query,
-                } => {
-                    write!(f, "DECLARE {} ", name)?;
 
-                    if *binary {
-                        write!(f, "BINARY ")?;
+                write!(f, "CURSOR ")?;
+
+                if let Some(hold) = hold {
+                    if *hold {
+                        write!(f, "WITH HOLD ")?;
+                    } else {
+                        write!(f, "WITHOUT HOLD ")?;
                     }
-
-                    if let Some(sensitive) = sensitive {
-                        if *sensitive {
-                            write!(f, "INSENSITIVE ")?;
-                        } else {
-                            write!(f, "ASENSITIVE ")?;
-                        }
-                    }
-
-                    if let Some(scroll) = scroll {
-                        if *scroll {
-                            write!(f, "SCROLL ")?;
-                        } else {
-                            write!(f, "NO SCROLL ")?;
-                        }
-                    }
-
-                    write!(f, "CURSOR ")?;
-
-                    if let Some(hold) = hold {
-                        if *hold {
-                            write!(f, "WITH HOLD ")?;
-                        } else {
-                            write!(f, "WITHOUT HOLD ")?;
-                        }
-                    }
-
-                    write!(f, "FOR {}", query)
                 }
-                Statement::Fetch {
-                    name,
-                    direction,
-                    into,
-                } => {
-                    write!(f, "FETCH {} ", direction)?;
 
-                    write!(f, "IN {}", name)?;
+                write!(f, "FOR {}", query)
+            }
+            Statement::Fetch {
+                name,
+                direction,
+                into,
+            } => {
+                write!(f, "FETCH {} ", direction)?;
 
-                    if let Some(into) = into {
-                        write!(f, " INTO {}", into)?;
-                    }
+                write!(f, "IN {}", name)?;
 
-                    Ok(())
+                if let Some(into) = into {
+                    write!(f, " INTO {}", into)?;
                 }
-                Statement::Directory {
-                    overwrite,
-                    local,
-                    path,
-                    file_format,
-                    source,
-                } => {
+
+                Ok(())
+            }
+            Statement::Directory {
+                overwrite,
+                local,
+                path,
+                file_format,
+                source,
+            } => {
+                write!(
+                    f,
+                    "INSERT{overwrite}{local} DIRECTORY '{path}'",
+                    overwrite = if *overwrite { " OVERWRITE" } else { "" },
+                    local = if *local { " LOCAL" } else { "" },
+                    path = path
+                )?;
+                if let Some(ref ff) = file_format {
+                    write!(f, " STORED AS {}", ff)?
+                }
+                write!(f, " {}", source)
+            }
+            Statement::Msck {
+                table_name,
+                repair,
+                partition_action,
+            } => {
+                write!(
+                    f,
+                    "MSCK {repair}TABLE {table}",
+                    repair = if *repair { "REPAIR " } else { "" },
+                    table = table_name
+                )?;
+                if let Some(pa) = partition_action {
+                    write!(f, " {}", pa)?;
+                }
+                Ok(())
+            }
+            Statement::Truncate {
+                table_name,
+                partitions,
+            } => {
+                write!(f, "TRUNCATE TABLE {}", table_name)?;
+                if let Some(ref parts) = partitions {
+                    if !parts.is_empty() {
+                        write!(f, " PARTITION ({})", display_comma_separated(parts))?;
+                    }
+                }
+                Ok(())
+            }
+            Statement::Analyze {
+                table_name,
+                partitions,
+                for_columns,
+                columns,
+                cache_metadata,
+                noscan,
+                compute_statistics,
+            } => {
+                write!(f, "ANALYZE TABLE {}", table_name)?;
+                if let Some(ref parts) = partitions {
+                    if !parts.is_empty() {
+                        write!(f, " PARTITION ({})", display_comma_separated(parts))?;
+                    }
+                }
+
+                if *compute_statistics {
+                    write!(f, " COMPUTE STATISTICS")?;
+                }
+                if *noscan {
+                    write!(f, " NOSCAN")?;
+                }
+                if *cache_metadata {
+                    write!(f, " CACHE METADATA")?;
+                }
+                if *for_columns {
+                    write!(f, " FOR COLUMNS")?;
+                    if !columns.is_empty() {
+                        write!(f, " {}", display_comma_separated(columns))?;
+                    }
+                }
+                Ok(())
+            }
+            Statement::Insert {
+                or,
+                into,
+                table_name,
+                overwrite,
+                partitioned,
+                columns,
+                after_columns,
+                source,
+                table,
+                on,
+                returning,
+            } => {
+                if let Some(action) = or {
+                    write!(f, "INSERT OR {} INTO {} ", action, table_name)?;
+                } else {
                     write!(
                         f,
-                        "INSERT{overwrite}{local} DIRECTORY '{path}'",
-                        overwrite = if *overwrite { " OVERWRITE" } else { "" },
-                        local = if *local { " LOCAL" } else { "" },
-                        path = path
+                        "INSERT{over}{int}{tbl} {table_name} ",
+                        table_name = table_name,
+                        over = if *overwrite { " OVERWRITE" } else { "" },
+                        int = if *into { " INTO" } else { "" },
+                        tbl = if *table { " TABLE" } else { "" }
                     )?;
-                    if let Some(ref ff) = file_format {
-                        write!(f, " STORED AS {}", ff)?
-                    }
-                    write!(f, " {}", source)
                 }
-                Statement::Msck {
-                    table_name,
-                    repair,
-                    partition_action,
-                } => {
-                    write!(
-                        f,
-                        "MSCK {repair}TABLE {table}",
-                        repair = if *repair { "REPAIR " } else { "" },
-                        table = table_name
-                    )?;
-                    if let Some(pa) = partition_action {
-                        write!(f, " {}", pa)?;
-                    }
-                    Ok(())
+                if !columns.is_empty() {
+                    write!(f, "({}) ", display_comma_separated(columns))?;
                 }
-                Statement::Truncate {
-                    table_name,
-                    partitions,
-                } => {
-                    write!(f, "TRUNCATE TABLE {}", table_name)?;
-                    if let Some(ref parts) = partitions {
-                        if !parts.is_empty() {
-                            write!(f, " PARTITION ({})", display_comma_separated(parts))?;
+                if let Some(ref parts) = partitioned {
+                    if !parts.is_empty() {
+                        write!(f, "PARTITION ({}) ", display_comma_separated(parts))?;
+                    }
+                }
+                if !after_columns.is_empty() {
+                    write!(f, "({}) ", display_comma_separated(after_columns))?;
+                }
+                write!(f, "{}", source)?;
+
+                if let Some(on) = on {
+                    write!(f, "{}", on)?;
+                }
+
+                if let Some(returning) = returning {
+                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
+                }
+
+                Ok(())
+            }
+
+            Statement::Copy {
+                table_name,
+                columns,
+                to,
+                target,
+                options,
+                legacy_options,
+                values,
+            } => {
+                write!(f, "COPY {}", table_name)?;
+                if !columns.is_empty() {
+                    write!(f, " ({})", display_comma_separated(columns))?;
+                }
+                write!(f, " {} {}", if *to { "TO" } else { "FROM" }, target)?;
+                if !options.is_empty() {
+                    write!(f, " ({})", display_comma_separated(options))?;
+                }
+                if !legacy_options.is_empty() {
+                    write!(f, " {}", display_separated(legacy_options, " "))?;
+                }
+                if !values.is_empty() {
+                    writeln!(f, ";")?;
+                    let mut delim = "";
+                    for v in values {
+                        write!(f, "{}", delim)?;
+                        delim = "\t";
+                        if let Some(v) = v {
+                            write!(f, "{}", v)?;
+                        } else {
+                            write!(f, "\\N")?;
                         }
                     }
-                    Ok(())
+                    write!(f, "\n\\.")?;
                 }
-                Statement::Analyze {
-                    table_name,
-                    partitions,
-                    for_columns,
-                    columns,
-                    cache_metadata,
-                    noscan,
-                    compute_statistics,
-                } => {
-                    write!(f, "ANALYZE TABLE {}", table_name)?;
-                    if let Some(ref parts) = partitions {
-                        if !parts.is_empty() {
-                            write!(f, " PARTITION ({})", display_comma_separated(parts))?;
-                        }
-                    }
-
-                    if *compute_statistics {
-                        write!(f, " COMPUTE STATISTICS")?;
-                    }
-                    if *noscan {
-                        write!(f, " NOSCAN")?;
-                    }
-                    if *cache_metadata {
-                        write!(f, " CACHE METADATA")?;
-                    }
-                    if *for_columns {
-                        write!(f, " FOR COLUMNS")?;
-                        if !columns.is_empty() {
-                            write!(f, " {}", display_comma_separated(columns))?;
-                        }
-                    }
-                    Ok(())
+                Ok(())
+            }
+            Statement::Update {
+                table,
+                assignments,
+                from,
+                selection,
+                returning,
+            } => {
+                write!(f, "UPDATE {}", table)?;
+                if !assignments.is_empty() {
+                    write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
-                Statement::Insert {
-                    or,
-                    into,
-                    table_name,
-                    overwrite,
-                    partitioned,
-                    columns,
-                    after_columns,
-                    source,
-                    table,
-                    on,
-                    returning,
-                } => {
-                    if let Some(action) = or {
-                        write!(f, "INSERT OR {} INTO {} ", action, table_name)?;
-                    } else {
-                        write!(
-                            f,
-                            "INSERT{over}{int}{tbl} {table_name} ",
-                            table_name = table_name,
-                            over = if *overwrite { " OVERWRITE" } else { "" },
-                            int = if *into { " INTO" } else { "" },
-                            tbl = if *table { " TABLE" } else { "" }
-                        )?;
-                    }
-                    if !columns.is_empty() {
-                        write!(f, "({}) ", display_comma_separated(columns))?;
-                    }
-                    if let Some(ref parts) = partitioned {
-                        if !parts.is_empty() {
-                            write!(f, "PARTITION ({}) ", display_comma_separated(parts))?;
-                        }
-                    }
-                    if !after_columns.is_empty() {
-                        write!(f, "({}) ", display_comma_separated(after_columns))?;
-                    }
-                    write!(f, "{}", source)?;
-
-                    if let Some(on) = on {
-                        write!(f, "{}", on)?;
-                    }
-
-                    if let Some(returning) = returning {
-                        write!(f, " RETURNING {}", display_comma_separated(returning))?;
-                    }
-
-                    Ok(())
+                if let Some(from) = from {
+                    write!(f, " FROM {}", from)?;
                 }
+                if let Some(selection) = selection {
+                    write!(f, " WHERE {}", selection)?;
+                }
+                if let Some(returning) = returning {
+                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
+                }
+                Ok(())
+            }
+            Statement::Delete {
+                table_name,
+                using,
+                selection,
+                returning,
+            } => {
+                write!(f, "DELETE FROM {}", table_name)?;
+                if let Some(using) = using {
+                    write!(f, " USING {}", using)?;
+                }
+                if let Some(selection) = selection {
+                    write!(f, " WHERE {}", selection)?;
+                }
+                if let Some(returning) = returning {
+                    write!(f, " RETURNING {}", display_comma_separated(returning))?;
+                }
+                Ok(())
+            }
+            Statement::Close { cursor } => {
+                write!(f, "CLOSE {}", cursor)?;
 
-                Statement::Copy {
-                    table_name,
-                    columns,
-                    to,
-                    target,
-                    options,
-                    legacy_options,
-                    values,
-                } => {
-                    write!(f, "COPY {}", table_name)?;
-                    if !columns.is_empty() {
-                        write!(f, " ({})", display_comma_separated(columns))?;
-                    }
-                    write!(f, " {} {}", if *to { "TO" } else { "FROM" }, target)?;
-                    if !options.is_empty() {
-                        write!(f, " ({})", display_comma_separated(options))?;
-                    }
-                    if !legacy_options.is_empty() {
-                        write!(f, " {}", display_separated(legacy_options, " "))?;
-                    }
-                    if !values.is_empty() {
-                        writeln!(f, ";")?;
-                        let mut delim = "";
-                        for v in values {
-                            write!(f, "{}", delim)?;
-                            delim = "\t";
-                            if let Some(v) = v {
-                                write!(f, "{}", v)?;
+                Ok(())
+            }
+            Statement::CreateDatabase {
+                db_name,
+                if_not_exists,
+                location,
+                managed_location,
+            } => {
+                write!(f, "CREATE DATABASE")?;
+                if *if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " {}", db_name)?;
+                if let Some(l) = location {
+                    write!(f, " LOCATION '{}'", l)?;
+                }
+                if let Some(ml) = managed_location {
+                    write!(f, " MANAGEDLOCATION '{}'", ml)?;
+                }
+                Ok(())
+            }
+            Statement::CreateFunction {
+                or_replace,
+                temporary,
+                name,
+                args,
+                return_type,
+                params,
+            } => {
+                write!(
+                    f,
+                    "CREATE {or_replace}{temp}FUNCTION {name}",
+                    temp = if *temporary { "TEMPORARY " } else { "" },
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                )?;
+                if let Some(args) = args {
+                    write!(f, "({})", display_comma_separated(args))?;
+                }
+                if let Some(return_type) = return_type {
+                    write!(f, " RETURNS {}", return_type)?;
+                }
+                write!(f, "{params}")?;
+                Ok(())
+            }
+            Statement::CreateView {
+                name,
+                or_replace,
+                columns,
+                query,
+                materialized,
+                with_options,
+                cluster_by,
+            } => {
+                write!(
+                    f,
+                    "CREATE {or_replace}{materialized}VIEW {name}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                    materialized = if *materialized { "MATERIALIZED " } else { "" },
+                    name = name
+                )?;
+                if !with_options.is_empty() {
+                    write!(f, " WITH ({})", display_comma_separated(with_options))?;
+                }
+                if !columns.is_empty() {
+                    write!(f, " ({})", display_comma_separated(columns))?;
+                }
+                if !cluster_by.is_empty() {
+                    write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
+                }
+                write!(f, " AS {}", query)
+            }
+            Statement::CreateTable {
+                name,
+                columns,
+                constraints,
+                table_properties,
+                with_options,
+                or_replace,
+                if_not_exists,
+                hive_distribution,
+                hive_formats,
+                external,
+                global,
+                temporary,
+                file_format,
+                location,
+                query,
+                without_rowid,
+                like,
+                clone,
+                default_charset,
+                engine,
+                collation,
+                on_commit,
+                on_cluster,
+            } => {
+                // We want to allow the following options
+                // Empty column list, allowed by PostgreSQL:
+                //   `CREATE TABLE t ()`
+                // No columns provided for CREATE TABLE AS:
+                //   `CREATE TABLE t AS SELECT a from t2`
+                // Columns provided for CREATE TABLE AS:
+                //   `CREATE TABLE t (a INT) AS SELECT a from t2`
+                write!(
+                    f,
+                    "CREATE {or_replace}{external}{global}{temporary}TABLE {if_not_exists}{name}",
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                    external = if *external { "EXTERNAL " } else { "" },
+                    global = global
+                        .map(|global| {
+                            if global {
+                                "GLOBAL "
                             } else {
-                                write!(f, "\\N")?;
+                                "LOCAL "
                             }
-                        }
-                        write!(f, "\n\\.")?;
-                    }
-                    Ok(())
+                        })
+                        .unwrap_or(""),
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    temporary = if *temporary { "TEMPORARY " } else { "" },
+                    name = name,
+                )?;
+                if let Some(on_cluster) = on_cluster {
+                    write!(
+                        f,
+                        " ON CLUSTER {}",
+                        on_cluster.replace('{', "'{").replace('}', "}'")
+                    )?;
                 }
-                Statement::Update {
-                    table,
-                    assignments,
-                    from,
-                    selection,
-                    returning,
-                } => {
-                    write!(f, "UPDATE {}", table)?;
-                    if !assignments.is_empty() {
-                        write!(f, " SET {}", display_comma_separated(assignments))?;
+                if !columns.is_empty() || !constraints.is_empty() {
+                    write!(f, " ({}", display_comma_separated(columns))?;
+                    if !columns.is_empty() && !constraints.is_empty() {
+                        write!(f, ", ")?;
                     }
-                    if let Some(from) = from {
-                        write!(f, " FROM {}", from)?;
-                    }
-                    if let Some(selection) = selection {
-                        write!(f, " WHERE {}", selection)?;
-                    }
-                    if let Some(returning) = returning {
-                        write!(f, " RETURNING {}", display_comma_separated(returning))?;
-                    }
-                    Ok(())
+                    write!(f, "{})", display_comma_separated(constraints))?;
+                } else if query.is_none() && like.is_none() && clone.is_none() {
+                    // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
+                    write!(f, " ()")?;
                 }
-                Statement::Delete {
-                    table_name,
-                    using,
-                    selection,
-                    returning,
-                } => {
-                    write!(f, "DELETE FROM {}", table_name)?;
-                    if let Some(using) = using {
-                        write!(f, " USING {}", using)?;
-                    }
-                    if let Some(selection) = selection {
-                        write!(f, " WHERE {}", selection)?;
-                    }
-                    if let Some(returning) = returning {
-                        write!(f, " RETURNING {}", display_comma_separated(returning))?;
-                    }
-                    Ok(())
+                // Only for SQLite
+                if *without_rowid {
+                    write!(f, " WITHOUT ROWID")?;
                 }
-                Statement::Close { cursor } => {
-                    write!(f, "CLOSE {}", cursor)?;
 
-                    Ok(())
+                // Only for Hive
+                if let Some(l) = like {
+                    write!(f, " LIKE {}", l)?;
                 }
-                Statement::CreateDatabase {
-                    db_name,
-                    if_not_exists,
-                    location,
-                    managed_location,
-                } => {
-                    write!(f, "CREATE DATABASE")?;
-                    if *if_not_exists {
-                        write!(f, " IF NOT EXISTS")?;
-                    }
-                    write!(f, " {}", db_name)?;
-                    if let Some(l) = location {
-                        write!(f, " LOCATION '{}'", l)?;
-                    }
-                    if let Some(ml) = managed_location {
-                        write!(f, " MANAGEDLOCATION '{}'", ml)?;
-                    }
-                    Ok(())
+
+                if let Some(c) = clone {
+                    write!(f, " CLONE {}", c)?;
                 }
-                Statement::CreateFunction {
-                    or_replace,
-                    temporary,
-                    name,
-                    args,
-                    return_type,
-                    params,
-                } => {
-                    write!(
-                        f,
-                        "CREATE {or_replace}{temp}FUNCTION {name}",
-                        temp = if *temporary { "TEMPORARY " } else { "" },
-                        or_replace = if *or_replace { "OR REPLACE " } else { "" },
-                    )?;
-                    if let Some(args) = args {
-                        write!(f, "({})", display_comma_separated(args))?;
+
+                match hive_distribution {
+                    HiveDistributionStyle::PARTITIONED { columns } => {
+                        write!(f, " PARTITIONED BY ({})", display_comma_separated(columns))?;
                     }
-                    if let Some(return_type) = return_type {
-                        write!(f, " RETURNS {}", return_type)?;
+                    HiveDistributionStyle::CLUSTERED {
+                        columns,
+                        sorted_by,
+                        num_buckets,
+                    } => {
+                        write!(f, " CLUSTERED BY ({})", display_comma_separated(columns))?;
+                        if !sorted_by.is_empty() {
+                            write!(f, " SORTED BY ({})", display_comma_separated(sorted_by))?;
+                        }
+                        if *num_buckets > 0 {
+                            write!(f, " INTO {} BUCKETS", num_buckets)?;
+                        }
                     }
-                    write!(f, "{params}")?;
-                    Ok(())
-                }
-                Statement::CreateView {
-                    name,
-                    or_replace,
-                    columns,
-                    query,
-                    materialized,
-                    with_options,
-                    cluster_by,
-                } => {
-                    write!(
-                        f,
-                        "CREATE {or_replace}{materialized}VIEW {name}",
-                        or_replace = if *or_replace { "OR REPLACE " } else { "" },
-                        materialized = if *materialized { "MATERIALIZED " } else { "" },
-                        name = name
-                    )?;
-                    if !with_options.is_empty() {
-                        write!(f, " WITH ({})", display_comma_separated(with_options))?;
-                    }
-                    if !columns.is_empty() {
-                        write!(f, " ({})", display_comma_separated(columns))?;
-                    }
-                    if !cluster_by.is_empty() {
-                        write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
-                    }
-                    write!(f, " AS {}", query)
-                }
-                Statement::CreateTable {
-                    name,
-                    columns,
-                    constraints,
-                    table_properties,
-                    with_options,
-                    or_replace,
-                    if_not_exists,
-                    hive_distribution,
-                    hive_formats,
-                    external,
-                    global,
-                    temporary,
-                    file_format,
-                    location,
-                    query,
-                    without_rowid,
-                    like,
-                    clone,
-                    default_charset,
-                    engine,
-                    collation,
-                    on_commit,
-                    on_cluster,
-                } => {
-                    // We want to allow the following options
-                    // Empty column list, allowed by PostgreSQL:
-                    //   `CREATE TABLE t ()`
-                    // No columns provided for CREATE TABLE AS:
-                    //   `CREATE TABLE t AS SELECT a from t2`
-                    // Columns provided for CREATE TABLE AS:
-                    //   `CREATE TABLE t (a INT) AS SELECT a from t2`
-                    write!(
-                        f,
-                        "CREATE {or_replace}{external}{global}{temporary}TABLE {if_not_exists}{name}",
-                        or_replace = if *or_replace { "OR REPLACE " } else { "" },
-                        external = if *external { "EXTERNAL " } else { "" },
-                        global = global
-                            .map(|global| {
-                                if global {
-                                    "GLOBAL "
-                                } else {
-                                    "LOCAL "
-                                }
-                            })
-                            .unwrap_or(""),
-                        if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                        temporary = if *temporary { "TEMPORARY " } else { "" },
-                        name = name,
-                    )?;
-                    if let Some(on_cluster) = on_cluster {
+                    HiveDistributionStyle::SKEWED {
+                        columns,
+                        on,
+                        stored_as_directories,
+                    } => {
                         write!(
                             f,
-                            " ON CLUSTER {}",
-                            on_cluster.replace('{', "'{").replace('}', "}'")
+                            " SKEWED BY ({})) ON ({})",
+                            display_comma_separated(columns),
+                            display_comma_separated(on)
                         )?;
-                    }
-                    if !columns.is_empty() || !constraints.is_empty() {
-                        write!(f, " ({}", display_comma_separated(columns))?;
-                        if !columns.is_empty() && !constraints.is_empty() {
-                            write!(f, ", ")?;
+                        if *stored_as_directories {
+                            write!(f, " STORED AS DIRECTORIES")?;
                         }
-                        write!(f, "{})", display_comma_separated(constraints))?;
-                    } else if query.is_none() && like.is_none() && clone.is_none() {
-                        // PostgreSQL allows `CREATE TABLE t ();`, but requires empty parens
-                        write!(f, " ()")?;
                     }
-                    // Only for SQLite
-                    if *without_rowid {
-                        write!(f, " WITHOUT ROWID")?;
-                    }
+                    _ => (),
+                }
 
-                    // Only for Hive
-                    if let Some(l) = like {
-                        write!(f, " LIKE {}", l)?;
-                    }
-
-                    if let Some(c) = clone {
-                        write!(f, " CLONE {}", c)?;
-                    }
-
-                    match hive_distribution {
-                        HiveDistributionStyle::PARTITIONED { columns } => {
-                            write!(f, " PARTITIONED BY ({})", display_comma_separated(columns))?;
+                if let Some(HiveFormat {
+                    row_format,
+                    storage,
+                    location,
+                }) = hive_formats
+                {
+                    match row_format {
+                        Some(HiveRowFormat::SERDE { class }) => {
+                            write!(f, " ROW FORMAT SERDE '{}'", class)?
                         }
-                        HiveDistributionStyle::CLUSTERED {
-                            columns,
-                            sorted_by,
-                            num_buckets,
-                        } => {
-                            write!(f, " CLUSTERED BY ({})", display_comma_separated(columns))?;
-                            if !sorted_by.is_empty() {
-                                write!(f, " SORTED BY ({})", display_comma_separated(sorted_by))?;
-                            }
-                            if *num_buckets > 0 {
-                                write!(f, " INTO {} BUCKETS", num_buckets)?;
-                            }
-                        }
-                        HiveDistributionStyle::SKEWED {
-                            columns,
-                            on,
-                            stored_as_directories,
-                        } => {
-                            write!(
-                                f,
-                                " SKEWED BY ({})) ON ({})",
-                                display_comma_separated(columns),
-                                display_comma_separated(on)
-                            )?;
-                            if *stored_as_directories {
-                                write!(f, " STORED AS DIRECTORIES")?;
-                            }
+                        Some(HiveRowFormat::DELIMITED) => write!(f, " ROW FORMAT DELIMITED")?,
+                        None => (),
+                    }
+                    match storage {
+                        Some(HiveIOFormat::IOF {
+                            input_format,
+                            output_format,
+                        }) => write!(
+                            f,
+                            " STORED AS INPUTFORMAT {} OUTPUTFORMAT {}",
+                            input_format, output_format
+                        )?,
+                        Some(HiveIOFormat::FileFormat { format }) if !*external => {
+                            write!(f, " STORED AS {}", format)?
                         }
                         _ => (),
                     }
-
-                    if let Some(HiveFormat {
-                        row_format,
-                        storage,
-                        location,
-                    }) = hive_formats
-                    {
-                        match row_format {
-                            Some(HiveRowFormat::SERDE { class }) => {
-                                write!(f, " ROW FORMAT SERDE '{}'", class)?
-                            }
-                            Some(HiveRowFormat::DELIMITED) => write!(f, " ROW FORMAT DELIMITED")?,
-                            None => (),
-                        }
-                        match storage {
-                            Some(HiveIOFormat::IOF {
-                                input_format,
-                                output_format,
-                            }) => write!(
-                                f,
-                                " STORED AS INPUTFORMAT {} OUTPUTFORMAT {}",
-                                input_format, output_format
-                            )?,
-                            Some(HiveIOFormat::FileFormat { format }) if !*external => {
-                                write!(f, " STORED AS {}", format)?
-                            }
-                            _ => (),
-                        }
-                        if !*external {
-                            if let Some(loc) = location {
-                                write!(f, " LOCATION '{}'", loc)?;
-                            }
+                    if !*external {
+                        if let Some(loc) = location {
+                            write!(f, " LOCATION '{}'", loc)?;
                         }
                     }
-                    if *external {
-                        write!(
-                            f,
-                            " STORED AS {} LOCATION '{}'",
-                            file_format.as_ref().unwrap(),
-                            location.as_ref().unwrap()
-                        )?;
-                    }
-                    if !table_properties.is_empty() {
-                        write!(
-                            f,
-                            " TBLPROPERTIES ({})",
-                            display_comma_separated(table_properties)
-                        )?;
-                    }
-                    if !with_options.is_empty() {
-                        write!(f, " WITH ({})", display_comma_separated(with_options))?;
-                    }
-                    if let Some(query) = query {
-                        write!(f, " AS {}", query)?;
-                    }
-                    if let Some(engine) = engine {
-                        write!(f, " ENGINE={}", engine)?;
-                    }
-                    if let Some(default_charset) = default_charset {
-                        write!(f, " DEFAULT CHARSET={}", default_charset)?;
-                    }
-                    if let Some(collation) = collation {
-                        write!(f, " COLLATE={}", collation)?;
-                    }
-
-                    if on_commit.is_some() {
-                        let on_commit = match on_commit {
-                            Some(OnCommit::DeleteRows) => "ON COMMIT DELETE ROWS",
-                            Some(OnCommit::PreserveRows) => "ON COMMIT PRESERVE ROWS",
-                            Some(OnCommit::Drop) => "ON COMMIT DROP",
-                            None => "",
-                        };
-                        write!(f, " {}", on_commit)?;
-                    }
-
-                    Ok(())
                 }
-                Statement::CreateVirtualTable {
-                    name,
-                    if_not_exists,
-                    module_name,
-                    module_args,
-                } => {
+                if *external {
                     write!(
                         f,
-                        "CREATE VIRTUAL TABLE {if_not_exists}{name} USING {module_name}",
-                        if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                        name = name,
-                        module_name = module_name
+                        " STORED AS {} LOCATION '{}'",
+                        file_format.as_ref().unwrap(),
+                        location.as_ref().unwrap()
                     )?;
-                    if !module_args.is_empty() {
-                        write!(f, " ({})", display_comma_separated(module_args))?;
-                    }
-                    Ok(())
                 }
-                Statement::CreateIndex {
-                    name,
-                    table_name,
-                    using,
-                    columns,
-                    unique,
-                    if_not_exists,
-                } => {
+                if !table_properties.is_empty() {
                     write!(
                         f,
-                        "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}",
-                        unique = if *unique { "UNIQUE " } else { "" },
-                        if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                        name = name,
-                        table_name = table_name
+                        " TBLPROPERTIES ({})",
+                        display_comma_separated(table_properties)
                     )?;
-                    if let Some(value) = using {
-                        write!(f, " USING {} ", value)?;
-                    }
-                    write!(f, "({})", display_separated(columns, ","))
                 }
-                Statement::CreateRole {
-                    names,
-                    if_not_exists,
-                    inherit,
-                    login,
-                    bypassrls,
-                    password,
-                    create_db,
-                    create_role,
-                    superuser,
-                    replication,
-                    connection_limit,
-                    valid_until,
-                    in_role,
-                    in_group,
-                    role,
-                    user,
-                    admin,
-                    authorization_owner,
-                } => {
-                    write!(
-                        f,
-                        "CREATE ROLE {if_not_exists}{names}{superuser}{create_db}{create_role}{inherit}{login}{replication}{bypassrls}",
-                        if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                        names = display_separated(names, ", "),
-                        superuser = match *superuser {
-                            Some(true) => " SUPERUSER",
-                            Some(false) => " NOSUPERUSER",
-                            None => ""
-                        },
-                        create_db = match *create_db {
-                            Some(true) => " CREATEDB",
-                            Some(false) => " NOCREATEDB",
-                            None => ""
-                        },
-                        create_role = match *create_role {
-                            Some(true) => " CREATEROLE",
-                            Some(false) => " NOCREATEROLE",
-                            None => ""
-                        },
-                        inherit = match *inherit {
-                            Some(true) => " INHERIT",
-                            Some(false) => " NOINHERIT",
-                            None => ""
-                        },
-                        login = match *login {
-                            Some(true) => " LOGIN",
-                            Some(false) => " NOLOGIN",
-                            None => ""
-                        },
-                        replication = match *replication {
-                            Some(true) => " REPLICATION",
-                            Some(false) => " NOREPLICATION",
-                            None => ""
-                        },
-                        bypassrls = match *bypassrls {
-                            Some(true) => " BYPASSRLS",
-                            Some(false) => " NOBYPASSRLS",
-                            None => ""
-                        }
-                    )?;
-                    if let Some(limit) = connection_limit {
-                        write!(f, " CONNECTION LIMIT {}", limit)?;
-                    }
-                    match password {
-                        Some(Password::Password(pass)) => write!(f, " PASSWORD {}", pass),
-                        Some(Password::NullPassword) => write!(f, " PASSWORD NULL"),
-                        None => Ok(()),
-                    }?;
-                    if let Some(until) = valid_until {
-                        write!(f, " VALID UNTIL {}", until)?;
-                    }
-                    if !in_role.is_empty() {
-                        write!(f, " IN ROLE {}", display_comma_separated(in_role))?;
-                    }
-                    if !in_group.is_empty() {
-                        write!(f, " IN GROUP {}", display_comma_separated(in_group))?;
-                    }
-                    if !role.is_empty() {
-                        write!(f, " ROLE {}", display_comma_separated(role))?;
-                    }
-                    if !user.is_empty() {
-                        write!(f, " USER {}", display_comma_separated(user))?;
-                    }
-                    if !admin.is_empty() {
-                        write!(f, " ADMIN {}", display_comma_separated(admin))?;
-                    }
-                    if let Some(owner) = authorization_owner {
-                        write!(f, " AUTHORIZATION {}", owner)?;
-                    }
-                    Ok(())
+                if !with_options.is_empty() {
+                    write!(f, " WITH ({})", display_comma_separated(with_options))?;
                 }
-                Statement::AlterTable { name, operation } => {
-                    write!(f, "ALTER TABLE {} {}", name, operation)
+                if let Some(query) = query {
+                    write!(f, " AS {}", query)?;
                 }
-                Statement::Drop {
-                    object_type,
-                    if_exists,
-                    names,
-                    cascade,
-                    restrict,
-                    purge,
-                } => write!(
-                    f,
-                    "DROP {}{} {}{}{}{}",
-                    object_type,
-                    if *if_exists { " IF EXISTS" } else { "" },
-                    display_comma_separated(names),
-                    if *cascade { " CASCADE" } else { "" },
-                    if *restrict { " RESTRICT" } else { "" },
-                    if *purge { " PURGE" } else { "" }
-                ),
-                Statement::Discard { object_type } => {
-                    write!(f, "DISCARD {object_type}", object_type = object_type)?;
-                    Ok(())
+                if let Some(engine) = engine {
+                    write!(f, " ENGINE={}", engine)?;
                 }
-                Self::SetRole {
-                    context_modifier,
-                    role_name,
-                } => {
-                    let role_name = role_name.clone().unwrap_or_else(|| Ident::new("NONE"));
-                    write!(f, "SET{context_modifier} ROLE {role_name}")
+                if let Some(default_charset) = default_charset {
+                    write!(f, " DEFAULT CHARSET={}", default_charset)?;
                 }
-                Statement::SetVariable {
-                    local,
-                    variable,
-                    hivevar,
-                    value,
-                } => {
-                    f.write_str("SET ")?;
-                    if *local {
-                        f.write_str("LOCAL ")?;
-                    }
-                    write!(
-                        f,
-                        "{hivevar}{name} = {value}",
-                        hivevar = if *hivevar { "HIVEVAR:" } else { "" },
-                        name = variable,
-                        value = display_comma_separated(value)
-                    )
+                if let Some(collation) = collation {
+                    write!(f, " COLLATE={}", collation)?;
                 }
-                Statement::SetTimeZone { local, value } => {
-                    f.write_str("SET ")?;
-                    if *local {
-                        f.write_str("LOCAL ")?;
-                    }
-                    write!(f, "TIME ZONE {value}")
-                }
-                Statement::SetNames {
-                    charset_name,
-                    collation_name,
-                } => {
-                    f.write_str("SET NAMES ")?;
-                    f.write_str(charset_name)?;
 
-                    if let Some(collation) = collation_name {
-                        f.write_str(" COLLATE ")?;
-                        f.write_str(collation)?;
+                if on_commit.is_some() {
+                    let on_commit = match on_commit {
+                        Some(OnCommit::DeleteRows) => "ON COMMIT DELETE ROWS",
+                        Some(OnCommit::PreserveRows) => "ON COMMIT PRESERVE ROWS",
+                        Some(OnCommit::Drop) => "ON COMMIT DROP",
+                        None => "",
                     };
+                    write!(f, " {}", on_commit)?;
+                }
 
-                    Ok(())
-                }
-                Statement::SetNamesDefault {} => {
-                    f.write_str("SET NAMES DEFAULT")?;
-
-                    Ok(())
-                }
-                Statement::ShowVariable { variable } => {
-                    write!(f, "SHOW")?;
-                    if !variable.is_empty() {
-                        write!(f, " {}", display_separated(variable, " "))?;
-                    }
-                    Ok(())
-                }
-                Statement::ShowVariables { filter } => {
-                    write!(f, "SHOW VARIABLES")?;
-                    if filter.is_some() {
-                        write!(f, " {}", filter.as_ref().unwrap())?;
-                    }
-                    Ok(())
-                }
-                Statement::ShowCreate { obj_type, obj_name } => {
-                    write!(
-                        f,
-                        "SHOW CREATE {obj_type} {obj_name}",
-                        obj_type = obj_type,
-                        obj_name = obj_name,
-                    )?;
-                    Ok(())
-                }
-                Statement::ShowColumns {
-                    extended,
-                    full,
-                    table_name,
-                    filter,
-                } => {
-                    write!(
-                        f,
-                        "SHOW {extended}{full}COLUMNS FROM {table_name}",
-                        extended = if *extended { "EXTENDED " } else { "" },
-                        full = if *full { "FULL " } else { "" },
-                        table_name = table_name,
-                    )?;
-                    if let Some(filter) = filter {
-                        write!(f, " {}", filter)?;
-                    }
-                    Ok(())
-                }
-                Statement::ShowTables {
-                    extended,
-                    full,
-                    db_name,
-                    filter,
-                } => {
-                    write!(
-                        f,
-                        "SHOW {extended}{full}TABLES",
-                        extended = if *extended { "EXTENDED " } else { "" },
-                        full = if *full { "FULL " } else { "" },
-                    )?;
-                    if let Some(db_name) = db_name {
-                        write!(f, " FROM {}", db_name)?;
-                    }
-                    if let Some(filter) = filter {
-                        write!(f, " {}", filter)?;
-                    }
-                    Ok(())
-                }
-                Statement::ShowFunctions { filter } => {
-                    write!(f, "SHOW FUNCTIONS")?;
-                    if let Some(filter) = filter {
-                        write!(f, " {}", filter)?;
-                    }
-                    Ok(())
-                }
-                Statement::Use { db_name } => {
-                    write!(f, "USE {}", db_name)?;
-                    Ok(())
-                }
-                Statement::ShowCollation { filter } => {
-                    write!(f, "SHOW COLLATION")?;
-                    if let Some(filter) = filter {
-                        write!(f, " {}", filter)?;
-                    }
-                    Ok(())
-                }
-                Statement::StartTransaction { modes } => {
-                    write!(f, "START TRANSACTION")?;
-                    if !modes.is_empty() {
-                        write!(f, " {}", display_comma_separated(modes))?;
-                    }
-                    Ok(())
-                }
-                Statement::SetTransaction {
-                    modes,
-                    snapshot,
-                    session,
-                } => {
-                    if *session {
-                        write!(f, "SET SESSION CHARACTERISTICS AS TRANSACTION")?;
-                    } else {
-                        write!(f, "SET TRANSACTION")?;
-                    }
-                    if !modes.is_empty() {
-                        write!(f, " {}", display_comma_separated(modes))?;
-                    }
-                    if let Some(snapshot_id) = snapshot {
-                        write!(f, " SNAPSHOT {}", snapshot_id)?;
-                    }
-                    Ok(())
-                }
-                Statement::Commit { chain } => {
-                    write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" },)
-                }
-                Statement::Rollback { chain } => {
-                    write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" },)
-                }
-                Statement::CreateSchema {
-                    schema_name,
-                    if_not_exists,
-                } => write!(
+                Ok(())
+            }
+            Statement::CreateVirtualTable {
+                name,
+                if_not_exists,
+                module_name,
+                module_args,
+            } => {
+                write!(
                     f,
-                    "CREATE SCHEMA {if_not_exists}{name}",
+                    "CREATE VIRTUAL TABLE {if_not_exists}{name} USING {module_name}",
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                    name = schema_name
-                ),
-                Statement::Assert { condition, message } => {
-                    write!(f, "ASSERT {}", condition)?;
-                    if let Some(m) = message {
-                        write!(f, " AS {}", m)?;
-                    }
-                    Ok(())
-                }
-                Statement::Grant {
-                    privileges,
-                    objects,
-                    grantees,
-                    with_grant_option,
-                    granted_by,
-                } => {
-                    write!(f, "GRANT {} ", privileges)?;
-                    write!(f, "ON {} ", objects)?;
-                    write!(f, "TO {}", display_comma_separated(grantees))?;
-                    if *with_grant_option {
-                        write!(f, " WITH GRANT OPTION")?;
-                    }
-                    if let Some(grantor) = granted_by {
-                        write!(f, " GRANTED BY {}", grantor)?;
-                    }
-                    Ok(())
-                }
-                Statement::Revoke {
-                    privileges,
-                    objects,
-                    grantees,
-                    granted_by,
-                    cascade,
-                } => {
-                    write!(f, "REVOKE {} ", privileges)?;
-                    write!(f, "ON {} ", objects)?;
-                    write!(f, "FROM {}", display_comma_separated(grantees))?;
-                    if let Some(grantor) = granted_by {
-                        write!(f, " GRANTED BY {}", grantor)?;
-                    }
-                    write!(f, " {}", if *cascade { "CASCADE" } else { "RESTRICT" })?;
-                    Ok(())
-                }
-                Statement::Deallocate { name, prepare } => write!(
-                    f,
-                    "DEALLOCATE {prepare}{name}",
-                    prepare = if *prepare { "PREPARE " } else { "" },
                     name = name,
-                ),
-                Statement::Execute { name, parameters } => {
-                    write!(f, "EXECUTE {}", name)?;
-                    if !parameters.is_empty() {
-                        write!(f, "({})", display_comma_separated(parameters))?;
+                    module_name = module_name
+                )?;
+                if !module_args.is_empty() {
+                    write!(f, " ({})", display_comma_separated(module_args))?;
+                }
+                Ok(())
+            }
+            Statement::CreateIndex {
+                name,
+                table_name,
+                using,
+                columns,
+                unique,
+                if_not_exists,
+            } => {
+                write!(
+                    f,
+                    "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}",
+                    unique = if *unique { "UNIQUE " } else { "" },
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    name = name,
+                    table_name = table_name
+                )?;
+                if let Some(value) = using {
+                    write!(f, " USING {} ", value)?;
+                }
+                write!(f, "({})", display_separated(columns, ","))
+            }
+            Statement::CreateRole {
+                names,
+                if_not_exists,
+                inherit,
+                login,
+                bypassrls,
+                password,
+                create_db,
+                create_role,
+                superuser,
+                replication,
+                connection_limit,
+                valid_until,
+                in_role,
+                in_group,
+                role,
+                user,
+                admin,
+                authorization_owner,
+            } => {
+                write!(
+                    f,
+                    "CREATE ROLE {if_not_exists}{names}{superuser}{create_db}{create_role}{inherit}{login}{replication}{bypassrls}",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    names = display_separated(names, ", "),
+                    superuser = match *superuser {
+                        Some(true) => " SUPERUSER",
+                        Some(false) => " NOSUPERUSER",
+                        None => ""
+                    },
+                    create_db = match *create_db {
+                        Some(true) => " CREATEDB",
+                        Some(false) => " NOCREATEDB",
+                        None => ""
+                    },
+                    create_role = match *create_role {
+                        Some(true) => " CREATEROLE",
+                        Some(false) => " NOCREATEROLE",
+                        None => ""
+                    },
+                    inherit = match *inherit {
+                        Some(true) => " INHERIT",
+                        Some(false) => " NOINHERIT",
+                        None => ""
+                    },
+                    login = match *login {
+                        Some(true) => " LOGIN",
+                        Some(false) => " NOLOGIN",
+                        None => ""
+                    },
+                    replication = match *replication {
+                        Some(true) => " REPLICATION",
+                        Some(false) => " NOREPLICATION",
+                        None => ""
+                    },
+                    bypassrls = match *bypassrls {
+                        Some(true) => " BYPASSRLS",
+                        Some(false) => " NOBYPASSRLS",
+                        None => ""
                     }
-                    Ok(())
+                )?;
+                if let Some(limit) = connection_limit {
+                    write!(f, " CONNECTION LIMIT {}", limit)?;
                 }
-                Statement::Prepare {
-                    name,
-                    data_types,
-                    statement,
-                } => {
-                    write!(f, "PREPARE {} ", name)?;
-                    if !data_types.is_empty() {
-                        write!(f, "({}) ", display_comma_separated(data_types))?;
-                    }
-                    write!(f, "AS {}", statement)
+                match password {
+                    Some(Password::Password(pass)) => write!(f, " PASSWORD {}", pass),
+                    Some(Password::NullPassword) => write!(f, " PASSWORD NULL"),
+                    None => Ok(()),
+                }?;
+                if let Some(until) = valid_until {
+                    write!(f, " VALID UNTIL {}", until)?;
                 }
-                Statement::Comment {
-                    object_type,
-                    object_name,
-                    comment,
-                } => {
-                    write!(f, "COMMENT ON {} {} IS ", object_type, object_name)?;
-                    if let Some(c) = comment {
-                        write!(f, "'{}'", c)
-                    } else {
-                        write!(f, "NULL")
-                    }
+                if !in_role.is_empty() {
+                    write!(f, " IN ROLE {}", display_comma_separated(in_role))?;
                 }
-                Statement::Savepoint { name } => {
-                    write!(f, "SAVEPOINT ")?;
-                    write!(f, "{}", name)
+                if !in_group.is_empty() {
+                    write!(f, " IN GROUP {}", display_comma_separated(in_group))?;
                 }
-                Statement::Merge {
-                    into,
-                    table,
-                    source,
-                    on,
-                    clauses,
-                } => {
-                    write!(
-                        f,
-                        "MERGE{int} {table} USING {source} ",
-                        int = if *into { " INTO" } else { "" }
-                    )?;
-                    write!(f, "ON {} ", on)?;
-                    write!(f, "{}", display_separated(clauses, " "))
+                if !role.is_empty() {
+                    write!(f, " ROLE {}", display_comma_separated(role))?;
                 }
-                Statement::Cache {
-                    table_name,
-                    table_flag,
-                    has_as,
-                    options,
-                    query,
-                } => {
-                    if table_flag.is_some() {
-                        write!(
-                            f,
-                            "CACHE {table_flag} TABLE {table_name}",
-                            table_flag = table_flag.clone().unwrap(),
-                            table_name = table_name,
-                        )?;
-                    } else {
-                        write!(f, "CACHE TABLE {table_name}", table_name = table_name,)?;
-                    }
+                if !user.is_empty() {
+                    write!(f, " USER {}", display_comma_separated(user))?;
+                }
+                if !admin.is_empty() {
+                    write!(f, " ADMIN {}", display_comma_separated(admin))?;
+                }
+                if let Some(owner) = authorization_owner {
+                    write!(f, " AUTHORIZATION {}", owner)?;
+                }
+                Ok(())
+            }
+            Statement::AlterTable { name, operation } => {
+                write!(f, "ALTER TABLE {} {}", name, operation)
+            }
+            Statement::Drop {
+                object_type,
+                if_exists,
+                names,
+                cascade,
+                restrict,
+                purge,
+            } => write!(
+                f,
+                "DROP {}{} {}{}{}{}",
+                object_type,
+                if *if_exists { " IF EXISTS" } else { "" },
+                display_comma_separated(names),
+                if *cascade { " CASCADE" } else { "" },
+                if *restrict { " RESTRICT" } else { "" },
+                if *purge { " PURGE" } else { "" }
+            ),
+            Statement::Discard { object_type } => {
+                write!(f, "DISCARD {object_type}", object_type = object_type)?;
+                Ok(())
+            }
+            Self::SetRole {
+                context_modifier,
+                role_name,
+            } => {
+                let role_name = role_name.clone().unwrap_or_else(|| Ident::new("NONE"));
+                write!(f, "SET{context_modifier} ROLE {role_name}")
+            }
+            Statement::SetVariable {
+                local,
+                variable,
+                hivevar,
+                value,
+            } => {
+                f.write_str("SET ")?;
+                if *local {
+                    f.write_str("LOCAL ")?;
+                }
+                write!(
+                    f,
+                    "{hivevar}{name} = {value}",
+                    hivevar = if *hivevar { "HIVEVAR:" } else { "" },
+                    name = variable,
+                    value = display_comma_separated(value)
+                )
+            }
+            Statement::SetTimeZone { local, value } => {
+                f.write_str("SET ")?;
+                if *local {
+                    f.write_str("LOCAL ")?;
+                }
+                write!(f, "TIME ZONE {value}")
+            }
+            Statement::SetNames {
+                charset_name,
+                collation_name,
+            } => {
+                f.write_str("SET NAMES ")?;
+                f.write_str(charset_name)?;
 
-                    if !options.is_empty() {
-                        write!(f, " OPTIONS({})", display_comma_separated(options))?;
-                    }
+                if let Some(collation) = collation_name {
+                    f.write_str(" COLLATE ")?;
+                    f.write_str(collation)?;
+                };
 
-                    let has_query = query.is_some();
-                    if *has_as && has_query {
-                        write!(f, " AS {query}", query = query.clone().unwrap())
-                    } else if !has_as && has_query {
-                        write!(f, " {query}", query = query.clone().unwrap())
-                    } else if *has_as && !has_query {
-                        write!(f, " AS")
-                    } else {
-                        Ok(())
-                    }
+                Ok(())
+            }
+            Statement::SetNamesDefault {} => {
+                f.write_str("SET NAMES DEFAULT")?;
+
+                Ok(())
+            }
+            Statement::ShowVariable { variable } => {
+                write!(f, "SHOW")?;
+                if !variable.is_empty() {
+                    write!(f, " {}", display_separated(variable, " "))?;
                 }
-                Statement::UNCache {
-                    table_name,
-                    if_exists,
-                } => {
-                    if *if_exists {
-                        write!(
-                            f,
-                            "UNCACHE TABLE IF EXISTS {table_name}",
-                            table_name = table_name
-                        )
-                    } else {
-                        write!(f, "UNCACHE TABLE {table_name}", table_name = table_name)
-                    }
+                Ok(())
+            }
+            Statement::ShowVariables { filter } => {
+                write!(f, "SHOW VARIABLES")?;
+                if filter.is_some() {
+                    write!(f, " {}", filter.as_ref().unwrap())?;
                 }
-                Statement::CreateSequence {
-                    temporary,
-                    if_not_exists,
-                    name,
-                    data_type,
-                    sequence_options,
-                    owned_by,
-                } => {
-                    let as_type: String = if let Some(dt) = data_type.as_ref() {
-                        //Cannot use format!(" AS {}", dt), due to format! is not available in --target thumbv6m-none-eabi
-                        // " AS ".to_owned() + &dt.to_string()
-                        [" AS ", &dt.to_string()].concat()
-                    } else {
-                        "".to_string()
-                    };
-                    write!(
-                        f,
-                        "CREATE {temporary}SEQUENCE {if_not_exists}{name}{as_type}",
-                        if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                        temporary = if *temporary { "TEMPORARY " } else { "" },
-                        name = name,
-                        as_type = as_type
-                    )?;
-                    for sequence_option in sequence_options {
-                        write!(f, "{}", sequence_option)?;
-                    }
-                    if let Some(ob) = owned_by.as_ref() {
-                        write!(f, " OWNED BY {}", ob)?;
-                    }
-                    write!(f, "")
+                Ok(())
+            }
+            Statement::ShowCreate { obj_type, obj_name } => {
+                write!(
+                    f,
+                    "SHOW CREATE {obj_type} {obj_name}",
+                    obj_type = obj_type,
+                    obj_name = obj_name,
+                )?;
+                Ok(())
+            }
+            Statement::ShowColumns {
+                extended,
+                full,
+                table_name,
+                filter,
+            } => {
+                write!(
+                    f,
+                    "SHOW {extended}{full}COLUMNS FROM {table_name}",
+                    extended = if *extended { "EXTENDED " } else { "" },
+                    full = if *full { "FULL " } else { "" },
+                    table_name = table_name,
+                )?;
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
+                }
+                Ok(())
+            }
+            Statement::ShowTables {
+                extended,
+                full,
+                db_name,
+                filter,
+            } => {
+                write!(
+                    f,
+                    "SHOW {extended}{full}TABLES",
+                    extended = if *extended { "EXTENDED " } else { "" },
+                    full = if *full { "FULL " } else { "" },
+                )?;
+                if let Some(db_name) = db_name {
+                    write!(f, " FROM {}", db_name)?;
+                }
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
+                }
+                Ok(())
+            }
+            Statement::ShowFunctions { filter } => {
+                write!(f, "SHOW FUNCTIONS")?;
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
+                }
+                Ok(())
+            }
+            Statement::Use { db_name } => {
+                write!(f, "USE {}", db_name)?;
+                Ok(())
+            }
+            Statement::ShowCollation { filter } => {
+                write!(f, "SHOW COLLATION")?;
+                if let Some(filter) = filter {
+                    write!(f, " {}", filter)?;
+                }
+                Ok(())
+            }
+            Statement::StartTransaction { modes } => {
+                write!(f, "START TRANSACTION")?;
+                if !modes.is_empty() {
+                    write!(f, " {}", display_comma_separated(modes))?;
+                }
+                Ok(())
+            }
+            Statement::SetTransaction {
+                modes,
+                snapshot,
+                session,
+            } => {
+                if *session {
+                    write!(f, "SET SESSION CHARACTERISTICS AS TRANSACTION")?;
+                } else {
+                    write!(f, "SET TRANSACTION")?;
+                }
+                if !modes.is_empty() {
+                    write!(f, " {}", display_comma_separated(modes))?;
+                }
+                if let Some(snapshot_id) = snapshot {
+                    write!(f, " SNAPSHOT {}", snapshot_id)?;
+                }
+                Ok(())
+            }
+            Statement::Commit { chain } => {
+                write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" },)
+            }
+            Statement::Rollback { chain } => {
+                write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" },)
+            }
+            Statement::CreateSchema {
+                schema_name,
+                if_not_exists,
+            } => write!(
+                f,
+                "CREATE SCHEMA {if_not_exists}{name}",
+                if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                name = schema_name
+            ),
+            Statement::Assert { condition, message } => {
+                write!(f, "ASSERT {}", condition)?;
+                if let Some(m) = message {
+                    write!(f, " AS {}", m)?;
+                }
+                Ok(())
+            }
+            Statement::Grant {
+                privileges,
+                objects,
+                grantees,
+                with_grant_option,
+                granted_by,
+            } => {
+                write!(f, "GRANT {} ", privileges)?;
+                write!(f, "ON {} ", objects)?;
+                write!(f, "TO {}", display_comma_separated(grantees))?;
+                if *with_grant_option {
+                    write!(f, " WITH GRANT OPTION")?;
+                }
+                if let Some(grantor) = granted_by {
+                    write!(f, " GRANTED BY {}", grantor)?;
+                }
+                Ok(())
+            }
+            Statement::Revoke {
+                privileges,
+                objects,
+                grantees,
+                granted_by,
+                cascade,
+            } => {
+                write!(f, "REVOKE {} ", privileges)?;
+                write!(f, "ON {} ", objects)?;
+                write!(f, "FROM {}", display_comma_separated(grantees))?;
+                if let Some(grantor) = granted_by {
+                    write!(f, " GRANTED BY {}", grantor)?;
+                }
+                write!(f, " {}", if *cascade { "CASCADE" } else { "RESTRICT" })?;
+                Ok(())
+            }
+            Statement::Deallocate { name, prepare } => write!(
+                f,
+                "DEALLOCATE {prepare}{name}",
+                prepare = if *prepare { "PREPARE " } else { "" },
+                name = name,
+            ),
+            Statement::Execute { name, parameters } => {
+                write!(f, "EXECUTE {}", name)?;
+                if !parameters.is_empty() {
+                    write!(f, "({})", display_comma_separated(parameters))?;
+                }
+                Ok(())
+            }
+            Statement::Prepare {
+                name,
+                data_types,
+                statement,
+            } => {
+                write!(f, "PREPARE {} ", name)?;
+                if !data_types.is_empty() {
+                    write!(f, "({}) ", display_comma_separated(data_types))?;
+                }
+                write!(f, "AS {}", statement)
+            }
+            Statement::Comment {
+                object_type,
+                object_name,
+                comment,
+            } => {
+                write!(f, "COMMENT ON {} {} IS ", object_type, object_name)?;
+                if let Some(c) = comment {
+                    write!(f, "'{}'", c)
+                } else {
+                    write!(f, "NULL")
                 }
             }
-        })
+            Statement::Savepoint { name } => {
+                write!(f, "SAVEPOINT ")?;
+                write!(f, "{}", name)
+            }
+            Statement::Merge {
+                into,
+                table,
+                source,
+                on,
+                clauses,
+            } => {
+                write!(
+                    f,
+                    "MERGE{int} {table} USING {source} ",
+                    int = if *into { " INTO" } else { "" }
+                )?;
+                write!(f, "ON {} ", on)?;
+                write!(f, "{}", display_separated(clauses, " "))
+            }
+            Statement::Cache {
+                table_name,
+                table_flag,
+                has_as,
+                options,
+                query,
+            } => {
+                if table_flag.is_some() {
+                    write!(
+                        f,
+                        "CACHE {table_flag} TABLE {table_name}",
+                        table_flag = table_flag.clone().unwrap(),
+                        table_name = table_name,
+                    )?;
+                } else {
+                    write!(f, "CACHE TABLE {table_name}", table_name = table_name,)?;
+                }
+
+                if !options.is_empty() {
+                    write!(f, " OPTIONS({})", display_comma_separated(options))?;
+                }
+
+                let has_query = query.is_some();
+                if *has_as && has_query {
+                    write!(f, " AS {query}", query = query.clone().unwrap())
+                } else if !has_as && has_query {
+                    write!(f, " {query}", query = query.clone().unwrap())
+                } else if *has_as && !has_query {
+                    write!(f, " AS")
+                } else {
+                    Ok(())
+                }
+            }
+            Statement::UNCache {
+                table_name,
+                if_exists,
+            } => {
+                if *if_exists {
+                    write!(
+                        f,
+                        "UNCACHE TABLE IF EXISTS {table_name}",
+                        table_name = table_name
+                    )
+                } else {
+                    write!(f, "UNCACHE TABLE {table_name}", table_name = table_name)
+                }
+            }
+            Statement::CreateSequence {
+                temporary,
+                if_not_exists,
+                name,
+                data_type,
+                sequence_options,
+                owned_by,
+            } => {
+                let as_type: String = if let Some(dt) = data_type.as_ref() {
+                    //Cannot use format!(" AS {}", dt), due to format! is not available in --target thumbv6m-none-eabi
+                    // " AS ".to_owned() + &dt.to_string()
+                    [" AS ", &dt.to_string()].concat()
+                } else {
+                    "".to_string()
+                };
+                write!(
+                    f,
+                    "CREATE {temporary}SEQUENCE {if_not_exists}{name}{as_type}",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                    temporary = if *temporary { "TEMPORARY " } else { "" },
+                    name = name,
+                    as_type = as_type
+                )?;
+                for sequence_option in sequence_options {
+                    write!(f, "{}", sequence_option)?;
+                }
+                if let Some(ob) = owned_by.as_ref() {
+                    write!(f, " OWNED BY {}", ob)?;
+                }
+                write!(f, "")
+            }
+        }
     }
 }
 

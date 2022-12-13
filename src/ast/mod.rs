@@ -2955,7 +2955,10 @@ impl Visit for Statement {
                 args.visit(visitor)?;
                 params.visit(visitor)
             }
-            Statement::Assert { message, .. } => message.visit(visitor),
+            Statement::Assert { condition,  message, .. } => {
+                condition.visit(visitor)?;
+                message.visit(visitor)
+            },
             Statement::Execute { parameters, .. } => parameters.visit(visitor),
             Statement::Prepare { statement, .. } => statement.visit(visitor),
             Statement::ExplainTable { table_name, .. } => visitor.visit_table(table_name),

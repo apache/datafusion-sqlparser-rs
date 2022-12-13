@@ -16,7 +16,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt;
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

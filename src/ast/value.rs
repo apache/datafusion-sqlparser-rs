@@ -13,7 +13,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
 use core::fmt;
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
 #[cfg(feature = "bigdecimal")]
 use bigdecimal::BigDecimal;

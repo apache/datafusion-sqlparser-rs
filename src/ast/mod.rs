@@ -18,7 +18,7 @@ use alloc::{
     vec::Vec,
 };
 use core::fmt;
-use std::ops::ControlFlow;
+use core::ops::ControlFlow;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -38,6 +38,7 @@ pub use self::query::{
     Values, WildcardAdditionalOptions, With,
 };
 pub use self::value::{escape_quoted_string, DateTimeField, TrimWhereField, Value};
+pub use visitor::*;
 
 mod data_type;
 mod ddl;
@@ -45,48 +46,7 @@ pub mod helpers;
 mod operator;
 mod query;
 mod value;
-
-/// A type that can be visited by a `visitor`
-pub trait Visit {
-    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break>;
-}
-
-impl<T: Visit> Visit for Option<T> {
-    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
-        if let Some(s) = self {
-            s.visit(visitor)?;
-        }
-        ControlFlow::Continue(())
-    }
-}
-
-impl<T: Visit> Visit for Vec<T> {
-    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
-        for v in self {
-            v.visit(visitor)?;
-        }
-        ControlFlow::Continue(())
-    }
-}
-
-impl<T: Visit> Visit for Box<T> {
-    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
-        T::visit(self, visitor)
-    }
-}
-
-/// A visitor that can be used to walk an AST tree
-pub trait Visitor {
-    type Break;
-
-    fn visit_expr(&mut self, _expr: &Expr) -> ControlFlow<Self::Break> {
-        ControlFlow::Continue(())
-    }
-
-    fn visit_statement(&mut self, _statement: &Statement) -> ControlFlow<Self::Break> {
-        ControlFlow::Continue(())
-    }
-}
+mod visitor;
 
 struct DisplaySeparated<'a, T>
 where

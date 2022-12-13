@@ -4505,11 +4505,10 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            let lock = if self.parse_keyword(Keyword::FOR) {
-                Some(self.parse_lock()?)
-            } else {
-                None
-            };
+            let mut locks = Vec::new();
+            while self.parse_keyword(Keyword::FOR) {
+                locks.push(self.parse_lock()?);
+            }
 
             Ok(Query {
                 with,
@@ -4518,7 +4517,7 @@ impl<'a> Parser<'a> {
                 limit,
                 offset,
                 fetch,
-                lock,
+                locks,
             })
         } else {
             let insert = self.parse_insert()?;
@@ -4530,7 +4529,7 @@ impl<'a> Parser<'a> {
                 order_by: vec![],
                 offset: None,
                 fetch: None,
-                lock: None,
+                locks: vec![],
             })
         }
     }
@@ -5945,12 +5944,29 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a FOR UPDATE/FOR SHARE clause
-    pub fn parse_lock(&mut self) -> Result<LockType, ParserError> {
-        match self.expect_one_of_keywords(&[Keyword::UPDATE, Keyword::SHARE])? {
-            Keyword::UPDATE => Ok(LockType::Update),
-            Keyword::SHARE => Ok(LockType::Share),
+    pub fn parse_lock(&mut self) -> Result<LockClause, ParserError> {
+        let lock_type = match self.expect_one_of_keywords(&[Keyword::UPDATE, Keyword::SHARE])? {
+            Keyword::UPDATE => LockType::Update,
+            Keyword::SHARE => LockType::Share,
             _ => unreachable!(),
-        }
+        };
+        let of = if self.parse_keyword(Keyword::OF) {
+            Some(self.parse_object_name()?)
+        } else {
+            None
+        };
+        let nonblock = if self.parse_keyword(Keyword::NOWAIT) {
+            Some(NonBlock::Nowait)
+        } else if self.parse_keywords(&[Keyword::SKIP, Keyword::LOCKED]) {
+            Some(NonBlock::SkipLocked)
+        } else {
+            None
+        };
+        Ok(LockClause {
+            lock_type,
+            of,
+            nonblock,
+        })
     }
 
     pub fn parse_values(&mut self) -> Result<Values, ParserError> {

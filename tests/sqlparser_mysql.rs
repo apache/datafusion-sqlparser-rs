@@ -466,7 +466,7 @@ fn parse_quote_identifiers_2() {
             limit: None,
             offset: None,
             fetch: None,
-            lock: None,
+            locks: vec![],
         }))
     );
 }
@@ -500,7 +500,7 @@ fn parse_quote_identifiers_3() {
             limit: None,
             offset: None,
             fetch: None,
-            lock: None,
+            locks: vec![],
         }))
     );
 }
@@ -683,7 +683,7 @@ fn parse_simple_insert() {
                     limit: None,
                     offset: None,
                     fetch: None,
-                    lock: None,
+                    locks: vec![],
                 }),
                 source
             );
@@ -741,7 +741,7 @@ fn parse_insert_with_on_duplicate_update() {
                     limit: None,
                     offset: None,
                     fetch: None,
-                    lock: None,
+                    locks: vec![],
                 }),
                 source
             );
@@ -983,7 +983,7 @@ fn parse_substring_in_select() {
                     limit: None,
                     offset: None,
                     fetch: None,
-                    lock: None,
+                    locks: vec![],
                 }),
                 query
             );

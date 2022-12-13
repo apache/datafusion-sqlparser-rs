@@ -3683,25 +3683,6 @@ fn parse_unnest() {
             joins: vec![],
         }],
     );
-    // 5. WITH OFFSET and WITH OFFSET Alias
-    chk(
-        true,
-        false,
-        true,
-        &dialects,
-        vec![TableWithJoins {
-            relation: TableFactor::UNNEST {
-                alias: Some(TableAlias {
-                    name: Ident::new("numbers"),
-                    columns: vec![],
-                }),
-                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
-                with_offset: false,
-                with_offset_alias: Some(Ident::new("with_offset_alias")),
-            },
-            joins: vec![],
-        }],
-    );
 }
 
 #[test]

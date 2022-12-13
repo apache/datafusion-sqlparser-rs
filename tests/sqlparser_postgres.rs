@@ -2257,7 +2257,9 @@ fn parse_create_function() {
             params: CreateFunctionBody {
                 language: Some("SQL".into()),
                 behavior: Some(FunctionBehavior::Immutable),
-                as_: Some("select $1 + $2;".into()),
+                as_: Some(FunctionDefinition::SingleQuotedDef(
+                    "select $1 + $2;".into()
+                )),
                 ..Default::default()
             },
         }
@@ -2289,6 +2291,30 @@ fn parse_create_function() {
                     right: Box::new(Expr::Identifier("b".into())),
                 }),
                 ..Default::default()
+            },
+        }
+    );
+
+    let sql = r#"CREATE OR REPLACE FUNCTION increment(i INTEGER) RETURNS INTEGER LANGUAGE plpgsql AS $$ BEGIN RETURN i + 1; END; $$"#;
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::CreateFunction {
+            or_replace: true,
+            temporary: false,
+            name: ObjectName(vec![Ident::new("increment")]),
+            args: Some(vec![CreateFunctionArg::with_name(
+                "i",
+                DataType::Integer(None)
+            )]),
+            return_type: Some(DataType::Integer(None)),
+            params: CreateFunctionBody {
+                language: Some("plpgsql".into()),
+                behavior: None,
+                return_: None,
+                as_: Some(FunctionDefinition::DoubleDollarDef(
+                    " BEGIN RETURN i + 1; END; ".into()
+                )),
+                using: None
             },
         }
     );

@@ -2310,7 +2310,7 @@ impl<'a> Parser<'a> {
         if dialect_of!(self is HiveDialect) {
             let name = self.parse_object_name()?;
             self.expect_keyword(Keyword::AS)?;
-            let class_name = self.parse_literal_string()?;
+            let class_name = self.parse_function_definition()?;
             let params = CreateFunctionBody {
                 as_: Some(class_name),
                 using: self.parse_optional_create_function_using()?,
@@ -2400,7 +2400,7 @@ impl<'a> Parser<'a> {
             }
             if self.parse_keyword(Keyword::AS) {
                 ensure_not_set(&body.as_, "AS")?;
-                body.as_ = Some(self.parse_literal_string()?);
+                body.as_ = Some(self.parse_function_definition()?);
             } else if self.parse_keyword(Keyword::LANGUAGE) {
                 ensure_not_set(&body.language, "LANGUAGE")?;
                 body.language = Some(self.parse_identifier()?);
@@ -3883,6 +3883,33 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_function_definition(&mut self) -> Result<FunctionDefinition, ParserError> {
+        let peek_token = self.peek_token();
+        match peek_token.token {
+            Token::DoubleDollarQuoting if dialect_of!(self is PostgreSqlDialect) => {
+                self.next_token();
+                let mut func_desc = String::new();
+                loop {
+                    if let Some(next_token) = self.next_token_no_skip() {
+                        match &next_token.token {
+                            Token::DoubleDollarQuoting => break,
+                            Token::EOF => {
+                                return self.expected(
+                                    "literal string",
+                                    TokenWithLocation::wrap(Token::EOF),
+                                );
+                            }
+                            token => func_desc.push_str(token.to_string().as_str()),
+                        }
+                    }
+                }
+                Ok(FunctionDefinition::DoubleDollarDef(func_desc))
+            }
+            _ => Ok(FunctionDefinition::SingleQuotedDef(
+                self.parse_literal_string()?,
+            )),
+        }
+    }
     /// Parse a literal string
     pub fn parse_literal_string(&mut self) -> Result<String, ParserError> {
         let next_token = self.next_token();

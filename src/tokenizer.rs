@@ -145,6 +145,8 @@ pub enum Token {
     PGCubeRoot,
     /// `?` or `$` , a prepared statement arg placeholder
     Placeholder(String),
+    /// `$$`, used for PostgreSQL create function definition
+    DoubleDollarQuoting,
     /// ->, used as a operator to extract json field in PostgreSQL
     Arrow,
     /// ->>, used as a operator to extract json field as text in PostgreSQL
@@ -215,6 +217,7 @@ impl fmt::Display for Token {
             Token::LongArrow => write!(f, "->>"),
             Token::HashArrow => write!(f, "#>"),
             Token::HashLongArrow => write!(f, "#>>"),
+            Token::DoubleDollarQuoting => write!(f, "$$"),
         }
     }
 }
@@ -770,8 +773,14 @@ impl<'a> Tokenizer<'a> {
                 }
                 '$' => {
                     chars.next();
-                    let s = peeking_take_while(chars, |ch| ch.is_alphanumeric() || ch == '_');
-                    Ok(Some(Token::Placeholder(String::from("$") + &s)))
+                    match chars.peek() {
+                        Some('$') => self.consume_and_return(chars, Token::DoubleDollarQuoting),
+                        _ => {
+                            let s =
+                                peeking_take_while(chars, |ch| ch.is_alphanumeric() || ch == '_');
+                            Ok(Some(Token::Placeholder(String::from("$") + &s)))
+                        }
+                    }
                 }
                 //whitespace check (including unicode chars) should be last as it covers some of the chars above
                 ch if ch.is_whitespace() => {

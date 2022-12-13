@@ -46,14 +46,17 @@ impl<T: Visit> Visit for Box<T> {
 pub trait Visitor {
     type Break;
 
+    /// Invoked for any tables, virtual or otherwise that appear in the AST
     fn visit_table(&mut self, _table: &ObjectName) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 
+    /// Invoked for any expressions that appear in the AST
     fn visit_expr(&mut self, _expr: &Expr) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 
+    /// Invoked for any statements that appear in the AST
     fn visit_statement(&mut self, _statement: &Statement) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }

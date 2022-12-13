@@ -740,11 +740,12 @@ impl Visit for TableFactor {
     fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
         match self {
             Self::Table {
-                name: _,
+                name,
                 alias,
                 args,
                 with_hints,
             } => {
+                visitor.visit_table(name)?;
                 alias.visit(visitor)?;
                 args.visit(visitor)?;
                 with_hints.visit(visitor)

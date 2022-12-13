@@ -2793,21 +2793,15 @@ impl Visit for Statement {
     fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
         visitor.visit_statement(self)?;
         match self {
-            Statement::Copy { .. }
-            | Statement::Close { .. }
-            | Statement::CreateVirtualTable { .. }
-            | Statement::Drop { .. }
-            | Statement::Fetch { .. }
+            Statement::Close { .. }
             | Statement::Discard { .. }
             | Statement::SetRole { .. }
             | Statement::SetNames { .. }
             | Statement::SetNamesDefault { .. }
             | Statement::ShowVariable { .. }
-            | Statement::ShowCreate { .. }
             | Statement::Use { .. }
             | Statement::StartTransaction { .. }
             | Statement::SetTransaction { .. }
-            | Statement::Comment { .. }
             | Statement::Commit { .. }
             | Statement::Rollback { .. }
             | Statement::CreateSchema { .. }
@@ -2817,24 +2811,41 @@ impl Visit for Statement {
             | Statement::Deallocate { .. }
             | Statement::Kill { .. }
             | Statement::ExplainTable { .. }
-            | Statement::Msck { .. }
-            | Statement::UNCache { .. }
             | Statement::Savepoint { .. } => ControlFlow::Continue(()),
-            Statement::Analyze { partitions, .. } => partitions.visit(visitor),
-            Statement::Truncate { partitions, .. } => partitions.visit(visitor),
+            Statement::Msck { table_name, .. } | Statement::Copy { table_name, .. } => {
+                visitor.visit_table(table_name)
+            }
+            Statement::CreateVirtualTable { name, .. } => visitor.visit_table(name),
+            Statement::Analyze {
+                table_name,
+                partitions,
+                ..
+            } => {
+                visitor.visit_table(table_name)?;
+                partitions.visit(visitor)
+            }
+            Statement::Truncate {
+                table_name,
+                partitions,
+                ..
+            } => {
+                visitor.visit_table(table_name)?;
+                partitions.visit(visitor)
+            }
             Statement::Query(query) => query.visit(visitor),
             Statement::Insert {
+                table_name,
                 partitioned,
                 on,
                 returning,
                 ..
             } => {
+                visitor.visit_table(table_name)?;
                 partitioned.visit(visitor)?;
                 on.visit(visitor)?;
                 returning.visit(visitor)
             }
             Statement::Directory { source, .. } => source.visit(visitor),
-
             Statement::Update {
                 table,
                 assignments,
@@ -2859,8 +2870,12 @@ impl Visit for Statement {
                 selection.visit(visitor)?;
                 returning.visit(visitor)
             }
-            Statement::CreateView { query, .. } => query.visit(visitor),
+            Statement::CreateView { name, query, .. } => {
+                visitor.visit_table(name)?;
+                query.visit(visitor)
+            }
             Statement::CreateTable {
+                name,
                 columns,
                 constraints,
                 hive_distribution,
@@ -2868,25 +2883,75 @@ impl Visit for Statement {
                 query,
                 ..
             } => {
+                visitor.visit_table(name)?;
                 columns.visit(visitor)?;
                 constraints.visit(visitor)?;
                 hive_distribution.visit(visitor)?;
                 hive_formats.visit(visitor)?;
                 query.visit(visitor)
             }
-            Statement::CreateIndex { columns, .. } => columns.visit(visitor),
+            Statement::CreateIndex {
+                table_name,
+                columns,
+                ..
+            } => {
+                visitor.visit_table(table_name)?;
+                columns.visit(visitor)
+            }
             Statement::CreateRole {
                 connection_limit, ..
             } => connection_limit.visit(visitor),
-            Statement::AlterTable { operation, .. } => operation.visit(visitor),
+            Statement::AlterTable {
+                name, operation, ..
+            } => {
+                visitor.visit_table(name)?;
+                operation.visit(visitor)
+            }
+            Statement::Drop {
+                object_type, names, ..
+            } => {
+                if matches!(object_type, ObjectType::Table | ObjectType::View) {
+                    names
+                        .iter()
+                        .try_for_each(|name| visitor.visit_table(name))?
+                }
+                ControlFlow::Continue(())
+            }
             Statement::Declare { query, .. } => query.visit(visitor),
+            Statement::Fetch { into, .. } => {
+                if let Some(into) = into {
+                    visitor.visit_table(into)?
+                }
+                ControlFlow::Continue(())
+            }
             Statement::SetVariable { value, .. } => value.visit(visitor),
             Statement::SetTimeZone { value, .. } => value.visit(visitor),
             Statement::ShowFunctions { filter, .. }
             | Statement::ShowVariables { filter, .. }
-            | Statement::ShowColumns { filter, .. }
             | Statement::ShowTables { filter, .. }
             | Statement::ShowCollation { filter, .. } => filter.visit(visitor),
+            Statement::ShowCreate { obj_type, obj_name } => {
+                if matches!(obj_type, ShowCreateObject::View | ShowCreateObject::Table) {
+                    visitor.visit_table(obj_name)?
+                }
+                ControlFlow::Continue(())
+            }
+            Statement::ShowColumns {
+                table_name, filter, ..
+            } => {
+                visitor.visit_table(table_name)?;
+                filter.visit(visitor)
+            }
+            Statement::Comment {
+                object_type,
+                object_name,
+                ..
+            } => {
+                if matches!(object_type, CommentObject::Table) {
+                    visitor.visit_table(object_name)?;
+                }
+                ControlFlow::Continue(())
+            }
             Statement::CreateFunction { args, params, .. } => {
                 args.visit(visitor)?;
                 params.visit(visitor)
@@ -2907,7 +2972,13 @@ impl Visit for Statement {
                 on.visit(visitor)?;
                 clauses.visit(visitor)
             }
-            Statement::Cache { query, .. } => query.visit(visitor),
+            Statement::Cache {
+                table_name, query, ..
+            } => {
+                visitor.visit_table(table_name)?;
+                query.visit(visitor)
+            }
+            Statement::UNCache { table_name, .. } => visitor.visit_table(table_name),
             Statement::CreateSequence {
                 sequence_options, ..
             } => sequence_options.visit(visitor),

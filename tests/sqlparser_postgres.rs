@@ -1512,7 +1512,7 @@ fn parse_array_subquery_expr() {
             limit: None,
             offset: None,
             fetch: None,
-            lock: None,
+            locks: vec![],
         })),
         expr_from_projection(only(&select.projection)),
     );

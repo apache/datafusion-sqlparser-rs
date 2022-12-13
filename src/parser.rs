@@ -5615,7 +5615,15 @@ impl<'a> Parser<'a> {
             let on = if self.parse_keyword(Keyword::ON) {
                 if self.parse_keyword(Keyword::CONFLICT) {
                     let conflict_target =
-                        self.parse_parenthesized_column_list(IsOptional::Optional)?;
+                        if self.parse_keywords(&[Keyword::ON, Keyword::CONSTRAINT]) {
+                            Some(ConflictTarget::OnConstraint(self.parse_object_name()?))
+                        } else if self.peek_token() == Token::LParen {
+                            Some(ConflictTarget::Columns(
+                                self.parse_parenthesized_column_list(IsOptional::Mandatory)?,
+                            ))
+                        } else {
+                            None
+                        };
 
                     self.expect_keyword(Keyword::DO)?;
                     let action = if self.parse_keyword(Keyword::NOTHING) {

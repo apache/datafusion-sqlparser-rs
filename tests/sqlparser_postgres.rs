@@ -1112,12 +1112,12 @@ fn parse_pg_on_conflict() {
         Statement::Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
-                    conflict_target,
+                    conflict_target: Some(ConflictTarget::Columns(cols)),
                     action,
                 })),
             ..
         } => {
-            assert_eq!(vec![Ident::from("did")], conflict_target);
+            assert_eq!(vec![Ident::from("did")], cols);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
@@ -1142,15 +1142,12 @@ fn parse_pg_on_conflict() {
         Statement::Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
-                    conflict_target,
+                    conflict_target: Some(ConflictTarget::Columns(cols)),
                     action,
                 })),
             ..
         } => {
-            assert_eq!(
-                vec![Ident::from("did"), Ident::from("area"),],
-                conflict_target
-            );
+            assert_eq!(vec![Ident::from("did"), Ident::from("area"),], cols);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![
@@ -1183,12 +1180,11 @@ fn parse_pg_on_conflict() {
         Statement::Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
-                    conflict_target,
+                    conflict_target: None,
                     action,
                 })),
             ..
         } => {
-            assert_eq!(Vec::<Ident>::new(), conflict_target);
             assert_eq!(OnConflictAction::DoNothing, action);
         }
         _ => unreachable!(),
@@ -1204,12 +1200,49 @@ fn parse_pg_on_conflict() {
         Statement::Insert {
             on:
                 Some(OnInsert::OnConflict(OnConflict {
-                    conflict_target,
+                    conflict_target: Some(ConflictTarget::Columns(cols)),
                     action,
                 })),
             ..
         } => {
-            assert_eq!(vec![Ident::from("did")], conflict_target);
+            assert_eq!(vec![Ident::from("did")], cols);
+            assert_eq!(
+                OnConflictAction::DoUpdate(DoUpdate {
+                    assignments: vec![Assignment {
+                        id: vec!["dname".into()],
+                        value: Expr::Value(Value::Placeholder("$1".to_string()))
+                    },],
+                    selection: Some(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident {
+                            value: "dsize".to_string(),
+                            quote_style: None
+                        })),
+                        op: BinaryOperator::Gt,
+                        right: Box::new(Expr::Value(Value::Placeholder("$2".to_string())))
+                    })
+                }),
+                action
+            );
+        }
+        _ => unreachable!(),
+    };
+
+    let stmt = pg_and_generic().verified_stmt(
+        "INSERT INTO distributors (did, dname, dsize) \
+        VALUES (5, 'Gizmo Transglobal', 1000), (6, 'Associated Computing, Inc', 1010)  \
+        ON CONFLICT ON CONSTRAINT distributors_did_pkey \
+        DO UPDATE SET dname = $1 WHERE dsize > $2",
+    );
+    match stmt {
+        Statement::Insert {
+            on:
+                Some(OnInsert::OnConflict(OnConflict {
+                    conflict_target: Some(ConflictTarget::OnConstraint(cname)),
+                    action,
+                })),
+            ..
+        } => {
+            assert_eq!(vec![Ident::from("distributors_did_pkey")], cname.0);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {

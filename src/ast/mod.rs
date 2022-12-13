@@ -2707,8 +2707,14 @@ pub enum OnInsert {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct OnConflict {
-    pub conflict_target: Vec<Ident>,
+    pub conflict_target: Option<ConflictTarget>,
     pub action: OnConflictAction,
+}
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ConflictTarget {
+    Columns(Vec<Ident>),
+    OnConstraint(ObjectName),
 }
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -2741,10 +2747,18 @@ impl fmt::Display for OnInsert {
 impl fmt::Display for OnConflict {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, " ON CONFLICT")?;
-        if !self.conflict_target.is_empty() {
-            write!(f, "({})", display_comma_separated(&self.conflict_target))?;
+        if let Some(target) = &self.conflict_target {
+            write!(f, "{}", target)?;
         }
         write!(f, " {}", self.action)
+    }
+}
+impl fmt::Display for ConflictTarget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ConflictTarget::Columns(cols) => write!(f, "({})", display_comma_separated(cols)),
+            ConflictTarget::OnConstraint(name) => write!(f, " ON CONSTRAINT {}", name),
+        }
     }
 }
 impl fmt::Display for OnConflictAction {

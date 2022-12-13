@@ -18,6 +18,7 @@ use alloc::{
     vec::Vec,
 };
 use core::fmt;
+use std::ops::ControlFlow;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -44,6 +45,48 @@ pub mod helpers;
 mod operator;
 mod query;
 mod value;
+
+/// A type that can be visited by a `visitor`
+pub trait Visit {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break>;
+}
+
+impl<T: Visit> Visit for Option<T> {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        if let Some(s) = self {
+            s.visit(visitor)?;
+        }
+        ControlFlow::Continue(())
+    }
+}
+
+impl<T: Visit> Visit for Vec<T> {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        for v in self {
+            v.visit(visitor)?;
+        }
+        ControlFlow::Continue(())
+    }
+}
+
+impl<T: Visit> Visit for Box<T> {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        T::visit(self, visitor)
+    }
+}
+
+/// A visitor that can be used to walk an AST tree
+pub trait Visitor {
+    type Break;
+
+    fn visit_expr(&mut self, _expr: &Expr) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    fn visit_statement(&mut self, _statement: &Statement) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+}
 
 struct DisplaySeparated<'a, T>
 where
@@ -173,6 +216,12 @@ impl fmt::Display for Array {
             if self.named { "ARRAY" } else { "" },
             display_comma_separated(&self.elem)
         )
+    }
+}
+
+impl Visit for Array {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.elem.visit(visitor)
     }
 }
 
@@ -858,6 +907,147 @@ impl fmt::Display for Expr {
     }
 }
 
+impl Visit for Expr {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        visitor.visit_expr(self)?;
+        match self {
+            Expr::Identifier(_)
+            | Expr::CompoundIdentifier(_)
+            | Expr::TypedString { .. }
+            | Expr::MatchAgainst { .. }
+            | Expr::Value(_) => ControlFlow::Continue(()),
+            Expr::JsonAccess { left, right, .. } => {
+                left.visit(visitor)?;
+                right.visit(visitor)
+            }
+            Expr::CompositeAccess { expr, .. } => expr.visit(visitor),
+            Expr::IsFalse(e)
+            | Expr::IsNotFalse(e)
+            | Expr::IsTrue(e)
+            | Expr::IsNotTrue(e)
+            | Expr::IsNull(e)
+            | Expr::IsNotNull(e)
+            | Expr::IsUnknown(e)
+            | Expr::IsNotUnknown(e) => e.visit(visitor),
+            Expr::IsDistinctFrom(l, r) | Expr::IsNotDistinctFrom(l, r) => {
+                l.visit(visitor)?;
+                r.visit(visitor)
+            }
+            Expr::InList { expr, list, .. } => {
+                expr.visit(visitor)?;
+                list.visit(visitor)
+            }
+            Expr::InSubquery { expr, subquery, .. } => {
+                expr.visit(visitor)?;
+                subquery.visit(visitor)
+            }
+            Expr::InUnnest {
+                expr, array_expr, ..
+            } => {
+                expr.visit(visitor)?;
+                array_expr.visit(visitor)
+            }
+            Expr::Between {
+                expr, low, high, ..
+            } => {
+                expr.visit(visitor)?;
+                low.visit(visitor)?;
+                high.visit(visitor)
+            }
+            Expr::BinaryOp { left, right, .. } => {
+                left.visit(visitor)?;
+                right.visit(visitor)
+            }
+            Expr::Like { expr, pattern, .. }
+            | Expr::ILike { expr, pattern, .. }
+            | Expr::SimilarTo { expr, pattern, .. } => {
+                expr.visit(visitor)?;
+                pattern.visit(visitor)
+            }
+            Expr::AtTimeZone { timestamp, .. } => timestamp.visit(visitor),
+            Expr::AnyOp(expr)
+            | Expr::AllOp(expr)
+            | Expr::UnaryOp { expr, .. }
+            | Expr::Cast { expr, .. }
+            | Expr::TryCast { expr, .. }
+            | Expr::SafeCast { expr, .. }
+            | Expr::Extract { expr, .. }
+            | Expr::Ceil { expr, .. }
+            | Expr::Floor { expr, .. } => expr.visit(visitor),
+            Expr::Position { expr, r#in } => {
+                expr.visit(visitor)?;
+                r#in.visit(visitor)
+            }
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+            } => {
+                expr.visit(visitor)?;
+                substring_from.visit(visitor)?;
+                substring_for.visit(visitor)
+            }
+            Expr::Trim {
+                expr,
+                trim_where,
+                trim_what,
+            } => {
+                expr.visit(visitor)?;
+                trim_where.visit(visitor)?;
+                trim_what.visit(visitor)
+            }
+            Expr::Overlay {
+                expr,
+                overlay_what,
+                overlay_from,
+                overlay_for,
+            } => {
+                expr.visit(visitor)?;
+                overlay_what.visit(visitor)?;
+                overlay_from.visit(visitor)?;
+                overlay_for.visit(visitor)
+            }
+            Expr::Collate { expr, .. } => expr.visit(visitor),
+            Expr::Nested(e) => e.visit(visitor),
+            Expr::MapAccess { column, keys } => {
+                column.visit(visitor)?;
+                keys.visit(visitor)
+            }
+            Expr::Function(f) => f.visit(visitor),
+            Expr::AggregateExpressionWithFilter { expr, filter } => {
+                expr.visit(visitor)?;
+                filter.visit(visitor)
+            }
+            Expr::Case {
+                operand,
+                conditions,
+                results,
+                else_result,
+            } => {
+                operand.visit(visitor)?;
+                conditions.visit(visitor)?;
+                results.visit(visitor)?;
+                else_result.visit(visitor)
+            }
+            Expr::Exists { subquery, .. } => subquery.visit(visitor),
+            Expr::Subquery(query) => query.visit(visitor),
+            Expr::ArraySubquery(query) => query.visit(visitor),
+            Expr::ListAgg(list) => list.visit(visitor),
+            Expr::ArrayAgg(array) => array.visit(visitor),
+            Expr::GroupingSets(exprs) => exprs.visit(visitor),
+            Expr::Cube(exprs) => exprs.visit(visitor),
+            Expr::Rollup(exprs) => exprs.visit(visitor),
+            Expr::Tuple(exprs) => exprs.visit(visitor),
+            Expr::ArrayIndex { obj, indexes } => {
+                obj.visit(visitor)?;
+                indexes.visit(visitor)
+            }
+            Expr::Array(array) => array.visit(visitor),
+            Expr::Interval { value, .. } => value.visit(visitor),
+        }
+    }
+}
+
 /// A window specification (i.e. `OVER (PARTITION BY .. ORDER BY .. etc.)`)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -899,6 +1089,14 @@ impl fmt::Display for WindowSpec {
     }
 }
 
+impl Visit for WindowSpec {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.partition_by.visit(visitor)?;
+        self.order_by.visit(visitor)?;
+        self.window_frame.visit(visitor)
+    }
+}
+
 /// Specifies the data processed by a window function, e.g.
 /// `RANGE UNBOUNDED PRECEDING` or `ROWS BETWEEN 5 PRECEDING AND CURRENT ROW`.
 ///
@@ -926,6 +1124,13 @@ impl Default for WindowFrame {
             start_bound: WindowFrameBound::Preceding(None),
             end_bound: None,
         }
+    }
+}
+
+impl Visit for WindowFrame {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.start_bound.visit(visitor)?;
+        self.end_bound.visit(visitor)
     }
 }
 
@@ -967,6 +1172,15 @@ impl fmt::Display for WindowFrameBound {
             WindowFrameBound::Following(None) => f.write_str("UNBOUNDED FOLLOWING"),
             WindowFrameBound::Preceding(Some(n)) => write!(f, "{} PRECEDING", n),
             WindowFrameBound::Following(Some(n)) => write!(f, "{} FOLLOWING", n),
+        }
+    }
+}
+
+impl Visit for WindowFrameBound {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            WindowFrameBound::CurrentRow => ControlFlow::Continue(()),
+            WindowFrameBound::Preceding(e) | WindowFrameBound::Following(e) => e.visit(visitor),
         }
     }
 }
@@ -2615,6 +2829,132 @@ impl fmt::Display for Statement {
     }
 }
 
+impl Visit for Statement {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        visitor.visit_statement(self)?;
+        match self {
+            Statement::Copy { .. }
+            | Statement::Close { .. }
+            | Statement::CreateVirtualTable { .. }
+            | Statement::Drop { .. }
+            | Statement::Fetch { .. }
+            | Statement::Discard { .. }
+            | Statement::SetRole { .. }
+            | Statement::SetNames { .. }
+            | Statement::SetNamesDefault { .. }
+            | Statement::ShowVariable { .. }
+            | Statement::ShowCreate { .. }
+            | Statement::Use { .. }
+            | Statement::StartTransaction { .. }
+            | Statement::SetTransaction { .. }
+            | Statement::Comment { .. }
+            | Statement::Commit { .. }
+            | Statement::Rollback { .. }
+            | Statement::CreateSchema { .. }
+            | Statement::CreateDatabase { .. }
+            | Statement::Grant { .. }
+            | Statement::Revoke { .. }
+            | Statement::Deallocate { .. }
+            | Statement::Kill { .. }
+            | Statement::ExplainTable { .. }
+            | Statement::Msck { .. }
+            | Statement::UNCache { .. }
+            | Statement::Savepoint { .. } => ControlFlow::Continue(()),
+            Statement::Analyze { partitions, .. } => partitions.visit(visitor),
+            Statement::Truncate { partitions, .. } => partitions.visit(visitor),
+            Statement::Query(query) => query.visit(visitor),
+            Statement::Insert {
+                partitioned,
+                on,
+                returning,
+                ..
+            } => {
+                partitioned.visit(visitor)?;
+                on.visit(visitor)?;
+                returning.visit(visitor)
+            }
+            Statement::Directory { source, .. } => source.visit(visitor),
+
+            Statement::Update {
+                table,
+                assignments,
+                from,
+                selection,
+                returning,
+            } => {
+                table.visit(visitor)?;
+                assignments.visit(visitor)?;
+                from.visit(visitor)?;
+                selection.visit(visitor)?;
+                returning.visit(visitor)
+            }
+            Statement::Delete {
+                table_name,
+                using,
+                selection,
+                returning,
+            } => {
+                table_name.visit(visitor)?;
+                using.visit(visitor)?;
+                selection.visit(visitor)?;
+                returning.visit(visitor)
+            }
+            Statement::CreateView { query, .. } => query.visit(visitor),
+            Statement::CreateTable {
+                columns,
+                constraints,
+                hive_distribution,
+                hive_formats,
+                query,
+                ..
+            } => {
+                columns.visit(visitor)?;
+                constraints.visit(visitor)?;
+                hive_distribution.visit(visitor)?;
+                hive_formats.visit(visitor)?;
+                query.visit(visitor)
+            }
+            Statement::CreateIndex { columns, .. } => columns.visit(visitor),
+            Statement::CreateRole {
+                connection_limit, ..
+            } => connection_limit.visit(visitor),
+            Statement::AlterTable { operation, .. } => operation.visit(visitor),
+            Statement::Declare { query, .. } => query.visit(visitor),
+            Statement::SetVariable { value, .. } => value.visit(visitor),
+            Statement::SetTimeZone { value, .. } => value.visit(visitor),
+            Statement::ShowFunctions { filter, .. }
+            | Statement::ShowVariables { filter, .. }
+            | Statement::ShowColumns { filter, .. }
+            | Statement::ShowTables { filter, .. }
+            | Statement::ShowCollation { filter, .. } => filter.visit(visitor),
+            Statement::CreateFunction { args, params, .. } => {
+                args.visit(visitor)?;
+                params.visit(visitor)
+            }
+            Statement::Assert { message, .. } => message.visit(visitor),
+            Statement::Execute { parameters, .. } => parameters.visit(visitor),
+            Statement::Prepare { statement, .. } => statement.visit(visitor),
+            Statement::Explain { statement, .. } => statement.visit(visitor),
+            Statement::Merge {
+                table,
+                source,
+                on,
+                clauses,
+                ..
+            } => {
+                table.visit(visitor)?;
+                source.visit(visitor)?;
+                on.visit(visitor)?;
+                clauses.visit(visitor)
+            }
+            Statement::Cache { query, .. } => query.visit(visitor),
+            Statement::CreateSequence {
+                sequence_options, ..
+            } => sequence_options.visit(visitor),
+        }
+    }
+}
+
 /// Can use to describe options in create sequence or table column type identity
 /// [ INCREMENT [ BY ] increment ]
 ///     [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
@@ -2681,6 +3021,16 @@ impl fmt::Display for SequenceOptions {
     }
 }
 
+impl Visit for SequenceOptions {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            Self::IncrementBy(e, _) | Self::StartWith(e, _) | Self::Cache(e) => e.visit(visitor),
+            Self::MinValue(e) | Self::MaxValue(e) => e.visit(visitor),
+            Self::Cycle(_) => ControlFlow::Continue(()),
+        }
+    }
+}
+
 /// Can use to describe options in  create sequence or table column type identity
 /// [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -2694,6 +3044,15 @@ pub enum MinMaxValue {
     Some(Expr),
 }
 
+impl Visit for MinMaxValue {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            Self::Empty | Self::None => ControlFlow::Continue(()),
+            MinMaxValue::Some(e) => e.visit(visitor),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[non_exhaustive]
@@ -2702,28 +3061,6 @@ pub enum OnInsert {
     DuplicateKeyUpdate(Vec<Assignment>),
     /// ON CONFLICT is a PostgreSQL and Sqlite extension
     OnConflict(OnConflict),
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct OnConflict {
-    pub conflict_target: Vec<Ident>,
-    pub action: OnConflictAction,
-}
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum OnConflictAction {
-    DoNothing,
-    DoUpdate(DoUpdate),
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DoUpdate {
-    /// Column assignments
-    pub assignments: Vec<Assignment>,
-    /// WHERE
-    pub selection: Option<Expr>,
 }
 
 impl fmt::Display for OnInsert {
@@ -2738,6 +3075,23 @@ impl fmt::Display for OnInsert {
         }
     }
 }
+
+impl Visit for OnInsert {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            OnInsert::DuplicateKeyUpdate(assignment) => assignment.visit(visitor),
+            OnInsert::OnConflict(c) => c.visit(visitor),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct OnConflict {
+    pub conflict_target: Vec<Ident>,
+    pub action: OnConflictAction,
+}
+
 impl fmt::Display for OnConflict {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, " ON CONFLICT")?;
@@ -2747,6 +3101,20 @@ impl fmt::Display for OnConflict {
         write!(f, " {}", self.action)
     }
 }
+
+impl Visit for OnConflict {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.action.visit(visitor)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum OnConflictAction {
+    DoNothing,
+    DoUpdate(DoUpdate),
+}
+
 impl fmt::Display for OnConflictAction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -2766,6 +3134,31 @@ impl fmt::Display for OnConflictAction {
                 Ok(())
             }
         }
+    }
+}
+
+impl Visit for OnConflictAction {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            Self::DoNothing => ControlFlow::Continue(()),
+            Self::DoUpdate(u) => u.visit(visitor),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct DoUpdate {
+    /// Column assignments
+    pub assignments: Vec<Assignment>,
+    /// WHERE
+    pub selection: Option<Expr>,
+}
+
+impl Visit for DoUpdate {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.assignments.visit(visitor)?;
+        self.selection.visit(visitor)
     }
 }
 
@@ -2977,6 +3370,12 @@ impl fmt::Display for Assignment {
     }
 }
 
+impl Visit for Assignment {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.value.visit(visitor)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FunctionArgExpr {
@@ -2997,6 +3396,17 @@ impl fmt::Display for FunctionArgExpr {
     }
 }
 
+impl Visit for FunctionArgExpr {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            FunctionArgExpr::Expr(e) => e.visit(visitor),
+            FunctionArgExpr::QualifiedWildcard(_) | FunctionArgExpr::Wildcard => {
+                ControlFlow::Continue(())
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FunctionArg {
@@ -3009,6 +3419,14 @@ impl fmt::Display for FunctionArg {
         match self {
             FunctionArg::Named { name, arg } => write!(f, "{} => {}", name, arg),
             FunctionArg::Unnamed(unnamed_arg) => write!(f, "{}", unnamed_arg),
+        }
+    }
+}
+
+impl Visit for FunctionArg {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            Self::Unnamed(arg) | Self::Named { arg, .. } => arg.visit(visitor),
         }
     }
 }
@@ -3041,6 +3459,13 @@ pub struct Function {
     // Some functions must be called without trailing parentheses, for example Postgres
     // do it for current_catalog, current_schema, etc. This flags is used for formatting.
     pub special: bool,
+}
+
+impl Visit for Function {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.args.visit(visitor)?;
+        self.over.visit(visitor)
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -3149,6 +3574,15 @@ impl fmt::Display for ListAgg {
     }
 }
 
+impl Visit for ListAgg {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.expr.visit(visitor)?;
+        self.separator.visit(visitor)?;
+        self.on_overflow.visit(visitor)?;
+        self.within_group.visit(visitor)
+    }
+}
+
 /// The `ON OVERFLOW` clause of a LISTAGG invocation
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -3180,6 +3614,15 @@ impl fmt::Display for ListAggOnOverflow {
                 }
                 write!(f, " COUNT")
             }
+        }
+    }
+}
+
+impl Visit for ListAggOnOverflow {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            Self::Truncate { filler, .. } => filler.visit(visitor),
+            Self::Error => ControlFlow::Continue(()),
         }
     }
 }
@@ -3220,6 +3663,14 @@ impl fmt::Display for ArrayAgg {
             }
         }
         Ok(())
+    }
+}
+
+impl Visit for ArrayAgg {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.expr.visit(visitor)?;
+        self.order_by.visit(visitor)?;
+        self.limit.visit(visitor)
     }
 }
 
@@ -3286,6 +3737,20 @@ pub enum HiveDistributionStyle {
     NONE,
 }
 
+impl Visit for HiveDistributionStyle {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            HiveDistributionStyle::PARTITIONED { columns } => columns.visit(visitor),
+            HiveDistributionStyle::CLUSTERED { sorted_by, .. } => sorted_by.visit(visitor),
+            HiveDistributionStyle::SKEWED { columns, on, .. } => {
+                columns.visit(visitor)?;
+                on.visit(visitor)
+            }
+            HiveDistributionStyle::NONE => ControlFlow::Continue(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum HiveRowFormat {
@@ -3307,12 +3772,33 @@ pub enum HiveIOFormat {
     },
 }
 
+impl Visit for HiveIOFormat {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            HiveIOFormat::IOF {
+                input_format,
+                output_format,
+            } => {
+                input_format.visit(visitor)?;
+                output_format.visit(visitor)
+            }
+            HiveIOFormat::FileFormat { .. } => ControlFlow::Continue(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct HiveFormat {
     pub row_format: Option<HiveRowFormat>,
     pub storage: Option<HiveIOFormat>,
     pub location: Option<String>,
+}
+
+impl Visit for HiveFormat {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.storage.visit(visitor)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -3398,6 +3884,17 @@ impl fmt::Display for ShowStatementFilter {
             Like(pattern) => write!(f, "LIKE '{}'", value::escape_single_quote_string(pattern)),
             ILike(pattern) => write!(f, "ILIKE {}", value::escape_single_quote_string(pattern)),
             Where(expr) => write!(f, "WHERE {}", expr),
+        }
+    }
+}
+
+impl Visit for ShowStatementFilter {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            ShowStatementFilter::Like(_) | ShowStatementFilter::ILike(_) => {
+                ControlFlow::Continue(())
+            }
+            ShowStatementFilter::Where(e) => e.visit(visitor),
         }
     }
 }
@@ -3643,6 +4140,27 @@ impl fmt::Display for MergeClause {
     }
 }
 
+impl Visit for MergeClause {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            MergeClause::MatchedUpdate {
+                predicate,
+                assignments,
+            } => {
+                predicate.visit(visitor)?;
+                assignments.visit(visitor)
+            }
+            MergeClause::MatchedDelete(e) => e.visit(visitor),
+            MergeClause::NotMatched {
+                predicate, values, ..
+            } => {
+                predicate.visit(visitor)?;
+                values.visit(visitor)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DiscardObject {
@@ -3739,6 +4257,12 @@ impl fmt::Display for CreateFunctionArg {
     }
 }
 
+impl Visit for CreateFunctionArg {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.default_expr.visit(visitor)
+    }
+}
+
 /// The mode of an argument in CREATE FUNCTION.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -3813,6 +4337,12 @@ impl fmt::Display for CreateFunctionBody {
             write!(f, " {using}")?;
         }
         Ok(())
+    }
+}
+
+impl Visit for CreateFunctionBody {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.return_.visit(visitor)
     }
 }
 

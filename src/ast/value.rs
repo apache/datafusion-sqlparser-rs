@@ -13,11 +13,13 @@
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
 use core::fmt;
+use std::ops::ControlFlow;
 
 #[cfg(feature = "bigdecimal")]
 use bigdecimal::BigDecimal;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use crate::ast::{Visit, Visitor};
 
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -212,5 +214,11 @@ impl fmt::Display for TrimWhereField {
             Leading => "LEADING",
             Trailing => "TRAILING",
         })
+    }
+}
+
+impl Visit for TrimWhereField {
+    fn visit<V: Visitor>(&self, _visitor: &mut V) -> ControlFlow<V::Break> {
+        ControlFlow::Continue(())
     }
 }

@@ -16,12 +16,15 @@
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt;
+use std::ops::ControlFlow;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::ast::value::escape_single_quote_string;
-use crate::ast::{display_comma_separated, display_separated, DataType, Expr, Ident, ObjectName};
+use crate::ast::{
+    display_comma_separated, display_separated, DataType, Expr, Ident, ObjectName, Visit, Visitor,
+};
 use crate::tokenizer::Token;
 
 /// An `ALTER TABLE` (`Statement::AlterTable`) operation
@@ -200,6 +203,35 @@ impl fmt::Display for AlterTableOperation {
     }
 }
 
+impl Visit for AlterTableOperation {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            AlterTableOperation::DropConstraint { .. }
+            | AlterTableOperation::DropColumn { .. }
+            | AlterTableOperation::DropPrimaryKey
+            | AlterTableOperation::RenameColumn { .. }
+            | AlterTableOperation::RenameTable { .. }
+            | AlterTableOperation::RenameConstraint { .. } => ControlFlow::Continue(()),
+            AlterTableOperation::AddConstraint(c) => c.visit(visitor),
+            AlterTableOperation::AddColumn { column_def, .. } => column_def.visit(visitor),
+            AlterTableOperation::RenamePartitions {
+                old_partitions,
+                new_partitions,
+            } => {
+                old_partitions.visit(visitor)?;
+                new_partitions.visit(visitor)
+            }
+            AlterTableOperation::AddPartitions { new_partitions, .. } => {
+                new_partitions.visit(visitor)
+            }
+            AlterTableOperation::DropPartitions { partitions, .. } => partitions.visit(visitor),
+            AlterTableOperation::ChangeColumn { options, .. } => options.visit(visitor),
+
+            AlterTableOperation::AlterColumn { op, .. } => op.visit(visitor),
+        }
+    }
+}
+
 /// An `ALTER COLUMN` (`Statement::AlterTable`) operation
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -238,6 +270,18 @@ impl fmt::Display for AlterColumnOperation {
                     write!(f, "SET DATA TYPE {}", data_type)
                 }
             }
+        }
+    }
+}
+
+impl Visit for AlterColumnOperation {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            AlterColumnOperation::SetNotNull
+            | AlterColumnOperation::DropNotNull
+            | AlterColumnOperation::DropDefault => ControlFlow::Continue(()),
+            AlterColumnOperation::SetDefault { value } => value.visit(visitor),
+            AlterColumnOperation::SetDataType { using, .. } => using.visit(visitor),
         }
     }
 }
@@ -400,6 +444,18 @@ impl fmt::Display for TableConstraint {
     }
 }
 
+impl Visit for TableConstraint {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            TableConstraint::Unique { .. }
+            | TableConstraint::ForeignKey { .. }
+            | TableConstraint::Index { .. }
+            | TableConstraint::FulltextOrSpatial { .. } => ControlFlow::Continue(()),
+            TableConstraint::Check { expr, .. } => expr.visit(visitor),
+        }
+    }
+}
+
 /// Representation whether a definition can can contains the KEY or INDEX keywords with the same
 /// meaning.
 ///
@@ -479,6 +535,12 @@ impl fmt::Display for ColumnDef {
     }
 }
 
+impl Visit for ColumnDef {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.options.visit(visitor)
+    }
+}
+
 /// An optionally-named `ColumnOption`: `[ CONSTRAINT <name> ] <column-option>`.
 ///
 /// Note that implementations are substantially more permissive than the ANSI
@@ -505,6 +567,12 @@ pub struct ColumnOptionDef {
 impl fmt::Display for ColumnOptionDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}{}", display_constraint_name(&self.name), self.option)
+    }
+}
+
+impl Visit for ColumnOptionDef {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.option.visit(visitor)
     }
 }
 
@@ -576,6 +644,21 @@ impl fmt::Display for ColumnOption {
             DialectSpecific(val) => write!(f, "{}", display_separated(val, " ")),
             CharacterSet(n) => write!(f, "CHARACTER SET {}", n),
             Comment(v) => write!(f, "COMMENT '{}'", escape_single_quote_string(v)),
+        }
+    }
+}
+
+impl Visit for ColumnOption {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            ColumnOption::Null
+            | ColumnOption::NotNull
+            | ColumnOption::Unique { .. }
+            | ColumnOption::ForeignKey { .. }
+            | ColumnOption::DialectSpecific(_)
+            | ColumnOption::CharacterSet(_)
+            | ColumnOption::Comment(_) => ControlFlow::Continue(()),
+            ColumnOption::Default(e) | ColumnOption::Check(e) => e.visit(visitor),
         }
     }
 }

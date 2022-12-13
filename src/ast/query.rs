@@ -64,6 +64,18 @@ impl fmt::Display for Query {
     }
 }
 
+impl Visit for Query {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.with.visit(visitor)?;
+        self.body.visit(visitor)?;
+        self.order_by.visit(visitor)?;
+        self.limit.visit(visitor)?;
+        self.offset.visit(visitor)?;
+        self.fetch.visit(visitor)?;
+        self.lock.visit(visitor)
+    }
+}
+
 /// A node in a tree, representing a "query body" expression, roughly:
 /// `SELECT ... [ {UNION|EXCEPT|INTERSECT} SELECT ...]`
 #[allow(clippy::large_enum_variant)]
@@ -115,6 +127,29 @@ impl fmt::Display for SetExpr {
     }
 }
 
+impl Visit for SetExpr {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            SetExpr::Select(s) => s.visit(visitor),
+            SetExpr::Query(q) => q.visit(visitor),
+            SetExpr::SetOperation {
+                op,
+                set_quantifier,
+                left,
+                right,
+            } => {
+                op.visit(visitor)?;
+                set_quantifier.visit(visitor)?;
+                left.visit(visitor)?;
+                right.visit(visitor)
+            }
+            SetExpr::Values(v) => v.visit(visitor),
+            SetExpr::Insert(s) => s.visit(visitor),
+            SetExpr::Table(t) => t.visit(visitor),
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SetOperator {
@@ -130,6 +165,12 @@ impl fmt::Display for SetOperator {
             SetOperator::Except => "EXCEPT",
             SetOperator::Intersect => "INTERSECT",
         })
+    }
+}
+
+impl Visit for SetOperator {
+    fn visit<V: Visitor>(&self, _visitor: &mut V) -> ControlFlow<V::Break> {
+        ControlFlow::Continue(())
     }
 }
 
@@ -154,6 +195,12 @@ impl fmt::Display for SetQuantifier {
     }
 }
 
+impl Visit for SetQuantifier {
+    fn visit<V: Visitor>(&self, _visitor: &mut V) -> ControlFlow<V::Break> {
+        ControlFlow::Continue(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// A [`TABLE` command]( https://www.postgresql.org/docs/current/sql-select.html#SQL-TABLE)
@@ -175,6 +222,12 @@ impl fmt::Display for Table {
             write!(f, "TABLE {}", self.table_name.as_ref().unwrap(),)?;
         }
         Ok(())
+    }
+}
+
+impl Visit for Table {
+    fn visit<V: Visitor>(&self, _visitor: &mut V) -> ControlFlow<V::Break> {
+        ControlFlow::Continue(())
     }
 }
 
@@ -264,6 +317,23 @@ impl fmt::Display for Select {
     }
 }
 
+impl Visit for Select {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.top.visit(visitor)?;
+        self.projection.visit(visitor)?;
+        self.into.visit(visitor)?;
+        self.from.visit(visitor)?;
+        self.lateral_views.visit(visitor)?;
+        self.selection.visit(visitor)?;
+        self.group_by.visit(visitor)?;
+        self.cluster_by.visit(visitor)?;
+        self.distribute_by.visit(visitor)?;
+        self.sort_by.visit(visitor)?;
+        self.having.visit(visitor)?;
+        self.qualify.visit(visitor)
+    }
+}
+
 /// A hive LATERAL VIEW with potential column aliases
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -298,6 +368,12 @@ impl fmt::Display for LateralView {
     }
 }
 
+impl Visit for LateralView {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.lateral_view.visit(visitor)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct With {
@@ -313,6 +389,12 @@ impl fmt::Display for With {
             if self.recursive { "RECURSIVE " } else { "" },
             display_comma_separated(&self.cte_tables)
         )
+    }
+}
+
+impl Visit for With {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.cte_tables.visit(visitor)
     }
 }
 
@@ -338,6 +420,12 @@ impl fmt::Display for Cte {
     }
 }
 
+impl Visit for Cte {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.query.visit(visitor)
+    }
+}
+
 /// One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -350,6 +438,37 @@ pub enum SelectItem {
     QualifiedWildcard(ObjectName, WildcardAdditionalOptions),
     /// An unqualified `*`
     Wildcard(WildcardAdditionalOptions),
+}
+
+impl fmt::Display for SelectItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self {
+            SelectItem::UnnamedExpr(expr) => write!(f, "{}", expr),
+            SelectItem::ExprWithAlias { expr, alias } => write!(f, "{} AS {}", expr, alias),
+            SelectItem::QualifiedWildcard(prefix, additional_options) => {
+                write!(f, "{}.*", prefix)?;
+                write!(f, "{additional_options}")?;
+                Ok(())
+            }
+            SelectItem::Wildcard(additional_options) => {
+                write!(f, "*")?;
+                write!(f, "{additional_options}")?;
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Visit for SelectItem {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            SelectItem::UnnamedExpr(e) => e.visit(visitor),
+            SelectItem::ExprWithAlias { expr, .. } => expr.visit(visitor),
+            SelectItem::QualifiedWildcard(_, options) | SelectItem::Wildcard(options) => {
+                options.visit(visitor)
+            }
+        }
+    }
 }
 
 /// Additional options for wildcards, e.g. Snowflake `EXCLUDE` and Bigquery `EXCEPT`.
@@ -371,6 +490,13 @@ impl fmt::Display for WildcardAdditionalOptions {
             write!(f, " {except}")?;
         }
         Ok(())
+    }
+}
+
+impl Visit for WildcardAdditionalOptions {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.opt_exclude.visit(visitor)?;
+        self.opt_except.visit(visitor)
     }
 }
 
@@ -414,6 +540,12 @@ impl fmt::Display for ExcludeSelectItem {
     }
 }
 
+impl Visit for ExcludeSelectItem {
+    fn visit<V: Visitor>(&self, _visitor: &mut V) -> ControlFlow<V::Break> {
+        ControlFlow::Continue(())
+    }
+}
+
 /// Bigquery `EXCEPT` information, with at least one column.
 ///
 /// # Syntax
@@ -446,22 +578,9 @@ impl fmt::Display for ExceptSelectItem {
     }
 }
 
-impl fmt::Display for SelectItem {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match &self {
-            SelectItem::UnnamedExpr(expr) => write!(f, "{}", expr),
-            SelectItem::ExprWithAlias { expr, alias } => write!(f, "{} AS {}", expr, alias),
-            SelectItem::QualifiedWildcard(prefix, additional_options) => {
-                write!(f, "{}.*", prefix)?;
-                write!(f, "{additional_options}")?;
-                Ok(())
-            }
-            SelectItem::Wildcard(additional_options) => {
-                write!(f, "*")?;
-                write!(f, "{additional_options}")?;
-                Ok(())
-            }
-        }
+impl Visit for ExceptSelectItem {
+    fn visit<V: Visitor>(&self, _visitor: &mut V) -> ControlFlow<V::Break> {
+        ControlFlow::Continue(())
     }
 }
 
@@ -479,6 +598,13 @@ impl fmt::Display for TableWithJoins {
             write!(f, "{}", join)?;
         }
         Ok(())
+    }
+}
+
+impl Visit for TableWithJoins {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.relation.visit(visitor)?;
+        self.joins.visit(visitor)
     }
 }
 
@@ -610,6 +736,51 @@ impl fmt::Display for TableFactor {
     }
 }
 
+impl Visit for TableFactor {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            Self::Table {
+                name: _,
+                alias,
+                args,
+                with_hints,
+            } => {
+                alias.visit(visitor)?;
+                args.visit(visitor)?;
+                with_hints.visit(visitor)
+            }
+            Self::Derived {
+                lateral: _,
+                subquery,
+                alias,
+            } => {
+                subquery.visit(visitor)?;
+                alias.visit(visitor)
+            }
+            Self::TableFunction { expr, alias } => {
+                expr.visit(visitor)?;
+                alias.visit(visitor)
+            }
+            Self::UNNEST {
+                alias,
+                array_expr,
+                with_offset: _,
+                with_offset_alias: _,
+            } => {
+                alias.visit(visitor)?;
+                array_expr.visit(visitor)
+            }
+            Self::NestedJoin {
+                table_with_joins,
+                alias,
+            } => {
+                table_with_joins.visit(visitor)?;
+                alias.visit(visitor)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TableAlias {
@@ -624,6 +795,12 @@ impl fmt::Display for TableAlias {
             write!(f, " ({})", display_comma_separated(&self.columns))?;
         }
         Ok(())
+    }
+}
+
+impl Visit for TableAlias {
+    fn visit<V: Visitor>(&self, _visitor: &mut V) -> ControlFlow<V::Break> {
+        ControlFlow::Continue(())
     }
 }
 
@@ -721,6 +898,13 @@ impl fmt::Display for Join {
     }
 }
 
+impl Visit for Join {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.relation.visit(visitor)?;
+        self.join_operator.visit(visitor)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum JoinOperator {
@@ -743,6 +927,24 @@ pub enum JoinOperator {
     OuterApply,
 }
 
+impl Visit for JoinOperator {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            JoinOperator::Inner(c)
+            | JoinOperator::LeftOuter(c)
+            | JoinOperator::RightOuter(c)
+            | JoinOperator::FullOuter(c)
+            | JoinOperator::LeftSemi(c)
+            | JoinOperator::RightSemi(c)
+            | JoinOperator::LeftAnti(c)
+            | JoinOperator::RightAnti(c) => c.visit(visitor),
+            JoinOperator::CrossJoin | JoinOperator::CrossApply | JoinOperator::OuterApply => {
+                ControlFlow::Continue(())
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum JoinConstraint {
@@ -750,6 +952,17 @@ pub enum JoinConstraint {
     Using(Vec<Ident>),
     Natural,
     None,
+}
+
+impl Visit for JoinConstraint {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        match self {
+            JoinConstraint::On(e) => e.visit(visitor),
+            JoinConstraint::Using(_) | JoinConstraint::Natural | JoinConstraint::None => {
+                ControlFlow::Continue(())
+            }
+        }
+    }
 }
 
 /// An `ORDER BY` expression
@@ -780,6 +993,12 @@ impl fmt::Display for OrderByExpr {
     }
 }
 
+impl Visit for OrderByExpr {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.expr.visit(visitor)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Offset {
@@ -790,6 +1009,13 @@ pub struct Offset {
 impl fmt::Display for Offset {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "OFFSET {}{}", self.value, self.rows)
+    }
+}
+
+impl Visit for Offset {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.value.visit(visitor)?;
+        self.rows.visit(visitor)
     }
 }
 
@@ -813,6 +1039,12 @@ impl fmt::Display for OffsetRows {
     }
 }
 
+impl Visit for OffsetRows {
+    fn visit<V: Visitor>(&self, _visitor: &mut V) -> ControlFlow<V::Break> {
+        ControlFlow::Continue(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Fetch {
@@ -833,6 +1065,12 @@ impl fmt::Display for Fetch {
     }
 }
 
+impl Visit for Fetch {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.quantity.visit(visitor)
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum LockType {
@@ -847,6 +1085,12 @@ impl fmt::Display for LockType {
             LockType::Update => "FOR UPDATE",
         };
         write!(f, "{}", select_lock)
+    }
+}
+
+impl Visit for LockType {
+    fn visit<V: Visitor>(&self, _visitor: &mut V) -> ControlFlow<V::Break> {
+        ControlFlow::Continue(())
     }
 }
 
@@ -868,6 +1112,12 @@ impl fmt::Display for Top {
         } else {
             write!(f, "TOP{}", extension)
         }
+    }
+}
+
+impl Visit for Top {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.quantity.visit(visitor)
     }
 }
 
@@ -894,6 +1144,12 @@ impl fmt::Display for Values {
     }
 }
 
+impl Visit for Values {
+    fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
+        self.rows.visit(visitor)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SelectInto {
@@ -910,5 +1166,11 @@ impl fmt::Display for SelectInto {
         let table = if self.table { " TABLE" } else { "" };
 
         write!(f, "INTO{}{}{} {}", temporary, unlogged, table, self.name)
+    }
+}
+
+impl Visit for SelectInto {
+    fn visit<V: Visitor>(&self, _visitor: &mut V) -> ControlFlow<V::Break> {
+        ControlFlow::Continue(())
     }
 }

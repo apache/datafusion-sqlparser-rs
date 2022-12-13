@@ -2810,7 +2810,6 @@ impl Visit for Statement {
             | Statement::Revoke { .. }
             | Statement::Deallocate { .. }
             | Statement::Kill { .. }
-            | Statement::ExplainTable { .. }
             | Statement::Savepoint { .. } => ControlFlow::Continue(()),
             Statement::Msck { table_name, .. } | Statement::Copy { table_name, .. } => {
                 visitor.visit_table(table_name)
@@ -2959,6 +2958,7 @@ impl Visit for Statement {
             Statement::Assert { message, .. } => message.visit(visitor),
             Statement::Execute { parameters, .. } => parameters.visit(visitor),
             Statement::Prepare { statement, .. } => statement.visit(visitor),
+            Statement::ExplainTable { table_name, .. } => visitor.visit_table(table_name),
             Statement::Explain { statement, .. } => statement.visit(visitor),
             Statement::Merge {
                 table,

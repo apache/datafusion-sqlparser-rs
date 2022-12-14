@@ -6457,3 +6457,91 @@ fn parse_uncache_table() {
         res.unwrap_err()
     );
 }
+
+#[test]
+fn parse_deeply_nested_parens_hits_recursion_limits() {
+    let sql = "(".repeat(1000);
+    let res = parse_sql_statements(&sql);
+    assert_eq!(ParserError::RecursionLimitExceeded, res.unwrap_err());
+}
+
+#[test]
+fn parse_deeply_nested_expr_hits_recursion_limits() {
+    let dialect = GenericDialect {};
+
+    let where_clause = make_where_clause(100);
+    let sql = format!("SELECT id, user_id FROM test WHERE {where_clause}");
+
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+}
+
+#[test]
+fn parse_deeply_nested_subquery_expr_hits_recursion_limits() {
+    let dialect = GenericDialect {};
+
+    let where_clause = make_where_clause(100);
+    let sql = format!("SELECT id, user_id where id IN (select id from t WHERE {where_clause})");
+
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+}
+
+#[test]
+fn parse_with_recursion_limit() {
+    let dialect = GenericDialect {};
+
+    let where_clause = make_where_clause(20);
+    let sql = format!("SELECT id, user_id FROM test WHERE {where_clause}");
+
+    // Expect the statement to parse with default limit
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+
+    assert!(matches!(res, Ok(_)), "{:?}", res);
+
+    // limit recursion to something smaller, expect parsing to fail
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .with_recursion_limit(20)
+        .parse_statements();
+
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+
+    // limit recursion to 50, expect it to succeed
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .with_recursion_limit(50)
+        .parse_statements();
+
+    assert!(matches!(res, Ok(_)), "{:?}", res);
+}
+
+/// Makes a predicate that looks like ((user_id = $id) OR user_id = $2...)
+fn make_where_clause(num: usize) -> String {
+    use std::fmt::Write;
+    let mut output = "(".repeat(num - 1);
+
+    for i in 0..num {
+        if i > 0 {
+            write!(&mut output, " OR ").unwrap();
+        }
+        write!(&mut output, "user_id = {}", i).unwrap();
+        if i < num - 1 {
+            write!(&mut output, ")").unwrap();
+        }
+    }
+    output
+}

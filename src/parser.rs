@@ -1602,12 +1602,22 @@ impl<'a> Parser<'a> {
             || Token::LongArrow == tok
             || Token::HashArrow == tok
             || Token::HashLongArrow == tok
+            || Token::AtArrow == tok
+            || Token::ArrowAt == tok
+            || Token::HashMinus == tok
+            || Token::AtQuestion == tok
+            || Token::AtAt == tok
         {
             let operator = match tok.token {
                 Token::Arrow => JsonOperator::Arrow,
                 Token::LongArrow => JsonOperator::LongArrow,
                 Token::HashArrow => JsonOperator::HashArrow,
                 Token::HashLongArrow => JsonOperator::HashLongArrow,
+                Token::AtArrow => JsonOperator::AtArrow,
+                Token::ArrowAt => JsonOperator::ArrowAt,
+                Token::HashMinus => JsonOperator::HashMinus,
+                Token::AtQuestion => JsonOperator::AtQuestion,
+                Token::AtAt => JsonOperator::AtAt,
                 _ => unreachable!(),
             };
             Ok(Expr::JsonAccess {
@@ -1805,7 +1815,12 @@ impl<'a> Parser<'a> {
             | Token::LongArrow
             | Token::Arrow
             | Token::HashArrow
-            | Token::HashLongArrow => Ok(50),
+            | Token::HashLongArrow
+            | Token::AtArrow
+            | Token::ArrowAt
+            | Token::HashMinus
+            | Token::AtQuestion
+            | Token::AtAt => Ok(50),
             _ => Ok(0),
         }
     }

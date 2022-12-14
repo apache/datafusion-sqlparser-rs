@@ -190,6 +190,20 @@ pub enum JsonOperator {
     HashLongArrow,
     /// : Colon is used by Snowflake (Which is similar to LongArrow)
     Colon,
+    /// jsonb @> jsonb -> boolean: Test whether left json contains the right json
+    AtArrow,
+    /// jsonb <@ jsonb -> boolean: Test whether right json contains the left json
+    ArrowAt,
+    /// jsonb #- text[] -> jsonb: Deletes the field or array element at the specified
+    /// path, where path elements can be either field keys or array indexes.
+    HashMinus,
+    /// jsonb @? jsonpath -> boolean: Does JSON path return any item for the specified
+    /// JSON value?
+    AtQuestion,
+    /// jsonb @@ jsonpath → boolean: Returns the result of a JSON path predicate check
+    /// for the specified JSON value. Only the first item of the result is taken into
+    /// account. If the result is not Boolean, then NULL is returned.
+    AtAt,
 }
 
 impl fmt::Display for JsonOperator {
@@ -210,6 +224,13 @@ impl fmt::Display for JsonOperator {
             JsonOperator::Colon => {
                 write!(f, ":")
             }
+            JsonOperator::AtArrow => {
+                write!(f, "@>")
+            }
+            JsonOperator::ArrowAt => write!(f, "<@"),
+            JsonOperator::HashMinus => write!(f, "#-"),
+            JsonOperator::AtQuestion => write!(f, "@?"),
+            JsonOperator::AtAt => write!(f, "@@"),
         }
     }
 }

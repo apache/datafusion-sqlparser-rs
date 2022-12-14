@@ -1620,6 +1620,71 @@ fn test_json() {
         }),
         select.projection[0]
     );
+
+    let sql = "SELECT info FROM orders WHERE info @> '{\"a\": 1}'";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::new("info"))),
+            operator: JsonOperator::AtArrow,
+            right: Box::new(Expr::Value(Value::SingleQuotedString(
+                "{\"a\": 1}".to_string()
+            ))),
+        },
+        select.selection.unwrap(),
+    );
+
+    let sql = "SELECT info FROM orders WHERE '{\"a\": 1}' <@ info";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        Expr::JsonAccess {
+            left: Box::new(Expr::Value(Value::SingleQuotedString(
+                "{\"a\": 1}".to_string()
+            ))),
+            operator: JsonOperator::ArrowAt,
+            right: Box::new(Expr::Identifier(Ident::new("info"))),
+        },
+        select.selection.unwrap(),
+    );
+
+    let sql = "SELECT info #- ARRAY['a', 'b'] FROM orders";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::from("info"))),
+            operator: JsonOperator::HashMinus,
+            right: Box::new(Expr::Array(Array {
+                elem: vec![
+                    Expr::Value(Value::SingleQuotedString("a".to_string())),
+                    Expr::Value(Value::SingleQuotedString("b".to_string())),
+                ],
+                named: true,
+            })),
+        }),
+        select.projection[0],
+    );
+
+    let sql = "SELECT info FROM orders WHERE info @? '$.a'";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::from("info"))),
+            operator: JsonOperator::AtQuestion,
+            right: Box::new(Expr::Value(Value::SingleQuotedString("$.a".to_string())),),
+        },
+        select.selection.unwrap(),
+    );
+
+    let sql = "SELECT info FROM orders WHERE info @@ '$.a'";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::from("info"))),
+            operator: JsonOperator::AtAt,
+            right: Box::new(Expr::Value(Value::SingleQuotedString("$.a".to_string())),),
+        },
+        select.selection.unwrap(),
+    );
 }
 
 #[test]

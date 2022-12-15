@@ -4,6 +4,9 @@ use alloc::{boxed::Box, format, string::String, vec, vec::Vec};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "visitor")]
+use sqlparser_derive::Visit;
+
 use crate::ast::{
     ColumnDef, FileFormat, HiveDistributionStyle, HiveFormat, ObjectName, OnCommit, Query,
     SqlOption, Statement, TableConstraint,
@@ -40,6 +43,7 @@ use crate::parser::ParserError;
 /// [1]: crate::ast::Statement::CreateTable
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit))]
 pub struct CreateTableBuilder {
     pub or_replace: bool,
     pub temporary: bool,

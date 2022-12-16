@@ -139,3 +139,104 @@ where
     v.visit(&mut visitor)?;
     ControlFlow::Continue(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dialect::GenericDialect;
+    use crate::parser::Parser;
+    use crate::tokenizer::Tokenizer;
+
+    #[derive(Default)]
+    struct TestVisitor {
+        visited: Vec<String>,
+    }
+
+    impl Visitor for TestVisitor {
+        type Break = ();
+
+        fn visit_table(&mut self, table_name: &ObjectName) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("TABLE: {}", table_name));
+            ControlFlow::Continue(())
+        }
+
+        fn visit_expr(&mut self, expr: &Expr) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("EXPR: {}", expr));
+            ControlFlow::Continue(())
+        }
+
+        fn visit_statement(&mut self, statement: &Statement) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("STATEMENT: {}", statement));
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn do_visit(sql: &str) -> Vec<String> {
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, sql);
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(tokens, &dialect);
+        let s = parser.parse_statement().unwrap();
+
+        let mut visitor = TestVisitor::default();
+        s.visit(&mut visitor);
+        visitor.visited
+    }
+
+    #[test]
+    fn test_sql() {
+        let tests = vec![
+            (
+                "SELECT * from table_name",
+                vec!["STATEMENT: SELECT * FROM table_name", "TABLE: table_name"],
+            ),
+            (
+                "SELECT * from t1 join t2 on t1.id = t2.t1_id",
+                vec![
+                    "STATEMENT: SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id",
+                    "TABLE: t1",
+                    "TABLE: t2",
+                    "EXPR: t1.id = t2.t1_id",
+                    "EXPR: t1.id",
+                    "EXPR: t2.t1_id",
+                ],
+            ),
+            (
+                "SELECT * from t1 where EXISTS(SELECT column from t2)",
+                vec![
+                    "STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
+                    "TABLE: t1",
+                    "EXPR: EXISTS (SELECT column FROM t2)",
+                    "EXPR: column",
+                    "TABLE: t2",
+                ],
+            ),
+            (
+                "SELECT * from t1 where EXISTS(SELECT column from t2)",
+                vec![
+                    "STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
+                    "TABLE: t1",
+                    "EXPR: EXISTS (SELECT column FROM t2)",
+                    "EXPR: column",
+                    "TABLE: t2",
+                ],
+            ),
+            (
+                "SELECT * from t1 where EXISTS(SELECT column from t2) UNION SELECT * from t3",
+                vec![
+                    "STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2) UNION SELECT * FROM t3",
+                    "TABLE: t1",
+                    "EXPR: EXISTS (SELECT column FROM t2)",
+                    "EXPR: column",
+                    "TABLE: t2",
+                    "TABLE: t3",
+                ],
+            ),
+        ];
+        for (sql, expected) in tests {
+            let actual = do_visit(sql);
+            let actual: Vec<_> = actual.iter().map(|x| x.as_str()).collect();
+            assert_eq!(actual, expected)
+        }
+    }
+}

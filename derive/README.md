@@ -54,7 +54,7 @@ Additionally certain types may wish to call a corresponding method on visitor be
 #[visit(with = "visit_expr")]
 enum Expr {
     A(),
-    B(String, #[visit(with = "visit_table")] ObjectName, bool),
+    B(String, #[cfg_attr(feature = "visitor", visit(with = "visit_table"))] ObjectName, bool),
 }
 ```
 

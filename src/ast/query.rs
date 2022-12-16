@@ -505,7 +505,7 @@ impl fmt::Display for TableWithJoins {
 #[cfg_attr(feature = "visitor", derive(Visit))]
 pub enum TableFactor {
     Table {
-        #[visit(with = "visit_table")]
+        #[cfg_attr(feature = "visitor", visit(with = "visit_table"))]
         name: ObjectName,
         alias: Option<TableAlias>,
         /// Arguments of a table-valued function, as supported by Postgres

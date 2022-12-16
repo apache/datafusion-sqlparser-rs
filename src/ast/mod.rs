@@ -35,9 +35,9 @@ pub use self::ddl::{
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     Cte, ExceptSelectItem, ExcludeSelectItem, Fetch, Join, JoinConstraint, JoinOperator,
-    LateralView, LockType, Offset, OffsetRows, OrderByExpr, Query, Select, SelectInto, SelectItem,
-    SetExpr, SetOperator, SetQuantifier, Table, TableAlias, TableFactor, TableWithJoins, Top,
-    Values, WildcardAdditionalOptions, With,
+    LateralView, LockClause, LockType, NonBlock, Offset, OffsetRows, OrderByExpr, Query, Select,
+    SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Table, TableAlias, TableFactor,
+    TableWithJoins, Top, Values, WildcardAdditionalOptions, With,
 };
 pub use self::value::{escape_quoted_string, DateTimeField, TrimWhereField, Value};
 
@@ -203,6 +203,20 @@ pub enum JsonOperator {
     HashLongArrow,
     /// : Colon is used by Snowflake (Which is similar to LongArrow)
     Colon,
+    /// jsonb @> jsonb -> boolean: Test whether left json contains the right json
+    AtArrow,
+    /// jsonb <@ jsonb -> boolean: Test whether right json contains the left json
+    ArrowAt,
+    /// jsonb #- text[] -> jsonb: Deletes the field or array element at the specified
+    /// path, where path elements can be either field keys or array indexes.
+    HashMinus,
+    /// jsonb @? jsonpath -> boolean: Does JSON path return any item for the specified
+    /// JSON value?
+    AtQuestion,
+    /// jsonb @@ jsonpath → boolean: Returns the result of a JSON path predicate check
+    /// for the specified JSON value. Only the first item of the result is taken into
+    /// account. If the result is not Boolean, then NULL is returned.
+    AtAt,
 }
 
 impl fmt::Display for JsonOperator {
@@ -223,6 +237,13 @@ impl fmt::Display for JsonOperator {
             JsonOperator::Colon => {
                 write!(f, ":")
             }
+            JsonOperator::AtArrow => {
+                write!(f, "@>")
+            }
+            JsonOperator::ArrowAt => write!(f, "<@"),
+            JsonOperator::HashMinus => write!(f, "#-"),
+            JsonOperator::AtQuestion => write!(f, "@?"),
+            JsonOperator::AtAt => write!(f, "@@"),
         }
     }
 }
@@ -3856,6 +3877,24 @@ impl fmt::Display for FunctionBehavior {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit))]
+pub enum FunctionDefinition {
+    SingleQuotedDef(String),
+    DoubleDollarDef(String),
+}
+
+impl fmt::Display for FunctionDefinition {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FunctionDefinition::SingleQuotedDef(s) => write!(f, "'{s}'")?,
+            FunctionDefinition::DoubleDollarDef(s) => write!(f, "$${s}$$")?,
+        }
+        Ok(())
+    }
+}
+
 /// Postgres: https://www.postgresql.org/docs/15/sql-createfunction.html
 #[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -3868,7 +3907,7 @@ pub struct CreateFunctionBody {
     /// AS 'definition'
     ///
     /// Note that Hive's `AS class_name` is also parsed here.
-    pub as_: Option<String>,
+    pub as_: Option<FunctionDefinition>,
     /// RETURN expression
     pub return_: Option<Expr>,
     /// USING ... (Hive only)
@@ -3884,7 +3923,7 @@ impl fmt::Display for CreateFunctionBody {
             write!(f, " {behavior}")?;
         }
         if let Some(definition) = &self.as_ {
-            write!(f, " AS '{definition}'")?;
+            write!(f, " AS {definition}")?;
         }
         if let Some(expr) = &self.return_ {
             write!(f, " RETURN {expr}")?;

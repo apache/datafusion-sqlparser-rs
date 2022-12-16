@@ -1602,12 +1602,22 @@ impl<'a> Parser<'a> {
             || Token::LongArrow == tok
             || Token::HashArrow == tok
             || Token::HashLongArrow == tok
+            || Token::AtArrow == tok
+            || Token::ArrowAt == tok
+            || Token::HashMinus == tok
+            || Token::AtQuestion == tok
+            || Token::AtAt == tok
         {
             let operator = match tok.token {
                 Token::Arrow => JsonOperator::Arrow,
                 Token::LongArrow => JsonOperator::LongArrow,
                 Token::HashArrow => JsonOperator::HashArrow,
                 Token::HashLongArrow => JsonOperator::HashLongArrow,
+                Token::AtArrow => JsonOperator::AtArrow,
+                Token::ArrowAt => JsonOperator::ArrowAt,
+                Token::HashMinus => JsonOperator::HashMinus,
+                Token::AtQuestion => JsonOperator::AtQuestion,
+                Token::AtAt => JsonOperator::AtAt,
                 _ => unreachable!(),
             };
             Ok(Expr::JsonAccess {
@@ -1805,7 +1815,12 @@ impl<'a> Parser<'a> {
             | Token::LongArrow
             | Token::Arrow
             | Token::HashArrow
-            | Token::HashLongArrow => Ok(50),
+            | Token::HashLongArrow
+            | Token::AtArrow
+            | Token::ArrowAt
+            | Token::HashMinus
+            | Token::AtQuestion
+            | Token::AtAt => Ok(50),
             _ => Ok(0),
         }
     }
@@ -2310,7 +2325,7 @@ impl<'a> Parser<'a> {
         if dialect_of!(self is HiveDialect) {
             let name = self.parse_object_name()?;
             self.expect_keyword(Keyword::AS)?;
-            let class_name = self.parse_literal_string()?;
+            let class_name = self.parse_function_definition()?;
             let params = CreateFunctionBody {
                 as_: Some(class_name),
                 using: self.parse_optional_create_function_using()?,
@@ -2400,7 +2415,7 @@ impl<'a> Parser<'a> {
             }
             if self.parse_keyword(Keyword::AS) {
                 ensure_not_set(&body.as_, "AS")?;
-                body.as_ = Some(self.parse_literal_string()?);
+                body.as_ = Some(self.parse_function_definition()?);
             } else if self.parse_keyword(Keyword::LANGUAGE) {
                 ensure_not_set(&body.language, "LANGUAGE")?;
                 body.language = Some(self.parse_identifier()?);
@@ -3883,6 +3898,33 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_function_definition(&mut self) -> Result<FunctionDefinition, ParserError> {
+        let peek_token = self.peek_token();
+        match peek_token.token {
+            Token::DoubleDollarQuoting if dialect_of!(self is PostgreSqlDialect) => {
+                self.next_token();
+                let mut func_desc = String::new();
+                loop {
+                    if let Some(next_token) = self.next_token_no_skip() {
+                        match &next_token.token {
+                            Token::DoubleDollarQuoting => break,
+                            Token::EOF => {
+                                return self.expected(
+                                    "literal string",
+                                    TokenWithLocation::wrap(Token::EOF),
+                                );
+                            }
+                            token => func_desc.push_str(token.to_string().as_str()),
+                        }
+                    }
+                }
+                Ok(FunctionDefinition::DoubleDollarDef(func_desc))
+            }
+            _ => Ok(FunctionDefinition::SingleQuotedDef(
+                self.parse_literal_string()?,
+            )),
+        }
+    }
     /// Parse a literal string
     pub fn parse_literal_string(&mut self) -> Result<String, ParserError> {
         let next_token = self.next_token();
@@ -4478,11 +4520,10 @@ impl<'a> Parser<'a> {
                 None
             };
 
-            let lock = if self.parse_keyword(Keyword::FOR) {
-                Some(self.parse_lock()?)
-            } else {
-                None
-            };
+            let mut locks = Vec::new();
+            while self.parse_keyword(Keyword::FOR) {
+                locks.push(self.parse_lock()?);
+            }
 
             Ok(Query {
                 with,
@@ -4491,7 +4532,7 @@ impl<'a> Parser<'a> {
                 limit,
                 offset,
                 fetch,
-                lock,
+                locks,
             })
         } else {
             let insert = self.parse_insert()?;
@@ -4503,7 +4544,7 @@ impl<'a> Parser<'a> {
                 order_by: vec![],
                 offset: None,
                 fetch: None,
-                lock: None,
+                locks: vec![],
             })
         }
     }
@@ -5291,12 +5332,15 @@ impl<'a> Parser<'a> {
                 Err(_) => false,
             };
 
-            let with_offset_alias =
+            let with_offset_alias = if with_offset {
                 match self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS) {
                     Ok(Some(alias)) => Some(alias),
                     Ok(None) => None,
                     Err(e) => return Err(e),
-                };
+                }
+            } else {
+                None
+            };
 
             Ok(TableFactor::UNNEST {
                 alias,
@@ -5915,12 +5959,29 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a FOR UPDATE/FOR SHARE clause
-    pub fn parse_lock(&mut self) -> Result<LockType, ParserError> {
-        match self.expect_one_of_keywords(&[Keyword::UPDATE, Keyword::SHARE])? {
-            Keyword::UPDATE => Ok(LockType::Update),
-            Keyword::SHARE => Ok(LockType::Share),
+    pub fn parse_lock(&mut self) -> Result<LockClause, ParserError> {
+        let lock_type = match self.expect_one_of_keywords(&[Keyword::UPDATE, Keyword::SHARE])? {
+            Keyword::UPDATE => LockType::Update,
+            Keyword::SHARE => LockType::Share,
             _ => unreachable!(),
-        }
+        };
+        let of = if self.parse_keyword(Keyword::OF) {
+            Some(self.parse_object_name()?)
+        } else {
+            None
+        };
+        let nonblock = if self.parse_keyword(Keyword::NOWAIT) {
+            Some(NonBlock::Nowait)
+        } else if self.parse_keywords(&[Keyword::SKIP, Keyword::LOCKED]) {
+            Some(NonBlock::SkipLocked)
+        } else {
+            None
+        };
+        Ok(LockClause {
+            lock_type,
+            of,
+            nonblock,
+        })
     }
 
     pub fn parse_values(&mut self) -> Result<Values, ParserError> {

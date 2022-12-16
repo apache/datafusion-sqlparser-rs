@@ -16,8 +16,8 @@
 //! is also tested (on the inputs it can handle).
 
 use sqlparser::ast::{
-    CreateFunctionBody, CreateFunctionUsing, Expr, Function, Ident, ObjectName, SelectItem,
-    Statement, TableFactor, UnaryOperator, Value,
+    CreateFunctionBody, CreateFunctionUsing, Expr, Function, FunctionDefinition, Ident, ObjectName,
+    SelectItem, Statement, TableFactor, UnaryOperator, Value,
 };
 use sqlparser::dialect::{GenericDialect, HiveDialect};
 use sqlparser::parser::ParserError;
@@ -252,7 +252,9 @@ fn parse_create_function() {
             assert_eq!(
                 params,
                 CreateFunctionBody {
-                    as_: Some("org.random.class.Name".to_string()),
+                    as_: Some(FunctionDefinition::SingleQuotedDef(
+                        "org.random.class.Name".to_string()
+                    )),
                     using: Some(CreateFunctionUsing::Jar(
                         "hdfs://somewhere.com:8020/very/far".to_string()
                     )),

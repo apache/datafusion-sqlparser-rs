@@ -1512,7 +1512,7 @@ fn parse_array_subquery_expr() {
             limit: None,
             offset: None,
             fetch: None,
-            lock: None,
+            locks: vec![],
         })),
         expr_from_projection(only(&select.projection)),
     );
@@ -1619,6 +1619,71 @@ fn test_json() {
             ))),
         }),
         select.projection[0]
+    );
+
+    let sql = "SELECT info FROM orders WHERE info @> '{\"a\": 1}'";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::new("info"))),
+            operator: JsonOperator::AtArrow,
+            right: Box::new(Expr::Value(Value::SingleQuotedString(
+                "{\"a\": 1}".to_string()
+            ))),
+        },
+        select.selection.unwrap(),
+    );
+
+    let sql = "SELECT info FROM orders WHERE '{\"a\": 1}' <@ info";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        Expr::JsonAccess {
+            left: Box::new(Expr::Value(Value::SingleQuotedString(
+                "{\"a\": 1}".to_string()
+            ))),
+            operator: JsonOperator::ArrowAt,
+            right: Box::new(Expr::Identifier(Ident::new("info"))),
+        },
+        select.selection.unwrap(),
+    );
+
+    let sql = "SELECT info #- ARRAY['a', 'b'] FROM orders";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        SelectItem::UnnamedExpr(Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::from("info"))),
+            operator: JsonOperator::HashMinus,
+            right: Box::new(Expr::Array(Array {
+                elem: vec![
+                    Expr::Value(Value::SingleQuotedString("a".to_string())),
+                    Expr::Value(Value::SingleQuotedString("b".to_string())),
+                ],
+                named: true,
+            })),
+        }),
+        select.projection[0],
+    );
+
+    let sql = "SELECT info FROM orders WHERE info @? '$.a'";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::from("info"))),
+            operator: JsonOperator::AtQuestion,
+            right: Box::new(Expr::Value(Value::SingleQuotedString("$.a".to_string())),),
+        },
+        select.selection.unwrap(),
+    );
+
+    let sql = "SELECT info FROM orders WHERE info @@ '$.a'";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        Expr::JsonAccess {
+            left: Box::new(Expr::Identifier(Ident::from("info"))),
+            operator: JsonOperator::AtAt,
+            right: Box::new(Expr::Value(Value::SingleQuotedString("$.a".to_string())),),
+        },
+        select.selection.unwrap(),
     );
 }
 
@@ -2257,7 +2322,9 @@ fn parse_create_function() {
             params: CreateFunctionBody {
                 language: Some("SQL".into()),
                 behavior: Some(FunctionBehavior::Immutable),
-                as_: Some("select $1 + $2;".into()),
+                as_: Some(FunctionDefinition::SingleQuotedDef(
+                    "select $1 + $2;".into()
+                )),
                 ..Default::default()
             },
         }
@@ -2289,6 +2356,30 @@ fn parse_create_function() {
                     right: Box::new(Expr::Identifier("b".into())),
                 }),
                 ..Default::default()
+            },
+        }
+    );
+
+    let sql = r#"CREATE OR REPLACE FUNCTION increment(i INTEGER) RETURNS INTEGER LANGUAGE plpgsql AS $$ BEGIN RETURN i + 1; END; $$"#;
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::CreateFunction {
+            or_replace: true,
+            temporary: false,
+            name: ObjectName(vec![Ident::new("increment")]),
+            args: Some(vec![CreateFunctionArg::with_name(
+                "i",
+                DataType::Integer(None)
+            )]),
+            return_type: Some(DataType::Integer(None)),
+            params: CreateFunctionBody {
+                language: Some("plpgsql".into()),
+                behavior: None,
+                return_: None,
+                as_: Some(FunctionDefinition::DoubleDollarDef(
+                    " BEGIN RETURN i + 1; END; ".into()
+                )),
+                using: None
             },
         }
     );

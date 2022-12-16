@@ -149,6 +149,8 @@ pub enum Token {
     PGCubeRoot,
     /// `?` or `$` , a prepared statement arg placeholder
     Placeholder(String),
+    /// `$$`, used for PostgreSQL create function definition
+    DoubleDollarQuoting,
     /// ->, used as a operator to extract json field in PostgreSQL
     Arrow,
     /// ->>, used as a operator to extract json field as text in PostgreSQL
@@ -157,6 +159,20 @@ pub enum Token {
     HashArrow,
     /// #>> Extracts JSON sub-object at the specified path as text
     HashLongArrow,
+    /// jsonb @> jsonb -> boolean: Test whether left json contains the right json
+    AtArrow,
+    /// jsonb <@ jsonb -> boolean: Test whether right json contains the left json
+    ArrowAt,
+    /// jsonb #- text[] -> jsonb: Deletes the field or array element at the specified
+    /// path, where path elements can be either field keys or array indexes.
+    HashMinus,
+    /// jsonb @? jsonpath -> boolean: Does JSON path return any item for the specified
+    /// JSON value?
+    AtQuestion,
+    /// jsonb @@ jsonpath → boolean: Returns the result of a JSON path predicate check
+    /// for the specified JSON value. Only the first item of the result is taken into
+    /// account. If the result is not Boolean, then NULL is returned.
+    AtAt,
 }
 
 impl fmt::Display for Token {
@@ -219,6 +235,12 @@ impl fmt::Display for Token {
             Token::LongArrow => write!(f, "->>"),
             Token::HashArrow => write!(f, "#>"),
             Token::HashLongArrow => write!(f, "#>>"),
+            Token::AtArrow => write!(f, "@>"),
+            Token::DoubleDollarQuoting => write!(f, "$$"),
+            Token::ArrowAt => write!(f, "<@"),
+            Token::HashMinus => write!(f, "#-"),
+            Token::AtQuestion => write!(f, "@?"),
+            Token::AtAt => write!(f, "@@"),
         }
     }
 }
@@ -711,6 +733,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         Some('>') => self.consume_and_return(chars, Token::Neq),
                         Some('<') => self.consume_and_return(chars, Token::ShiftLeft),
+                        Some('@') => self.consume_and_return(chars, Token::ArrowAt),
                         _ => Ok(Some(Token::Lt)),
                     }
                 }
@@ -755,6 +778,7 @@ impl<'a> Tokenizer<'a> {
                 '#' => {
                     chars.next();
                     match chars.peek() {
+                        Some('-') => self.consume_and_return(chars, Token::HashMinus),
                         Some('>') => {
                             chars.next();
                             match chars.peek() {
@@ -768,7 +792,15 @@ impl<'a> Tokenizer<'a> {
                         _ => Ok(Some(Token::Sharp)),
                     }
                 }
-                '@' => self.consume_and_return(chars, Token::AtSign),
+                '@' => {
+                    chars.next();
+                    match chars.peek() {
+                        Some('>') => self.consume_and_return(chars, Token::AtArrow),
+                        Some('?') => self.consume_and_return(chars, Token::AtQuestion),
+                        Some('@') => self.consume_and_return(chars, Token::AtAt),
+                        _ => Ok(Some(Token::AtSign)),
+                    }
+                }
                 '?' => {
                     chars.next();
                     let s = peeking_take_while(chars, |ch| ch.is_numeric());
@@ -776,8 +808,14 @@ impl<'a> Tokenizer<'a> {
                 }
                 '$' => {
                     chars.next();
-                    let s = peeking_take_while(chars, |ch| ch.is_alphanumeric() || ch == '_');
-                    Ok(Some(Token::Placeholder(String::from("$") + &s)))
+                    match chars.peek() {
+                        Some('$') => self.consume_and_return(chars, Token::DoubleDollarQuoting),
+                        _ => {
+                            let s =
+                                peeking_take_while(chars, |ch| ch.is_alphanumeric() || ch == '_');
+                            Ok(Some(Token::Placeholder(String::from("$") + &s)))
+                        }
+                    }
                 }
                 //whitespace check (including unicode chars) should be last as it covers some of the chars above
                 ch if ch.is_whitespace() => {

@@ -3618,10 +3618,10 @@ impl<'a> Parser<'a> {
                         let index_name = self.parse_object_name()?;
                         AlterIndexOperation::RenameIndex { index_name }
                     } else {
-                        todo!()
+                        return self.expected("TO after RENAME", self.peek_token());
                     }
                 } else {
-                    todo!()
+                    return self.expected("RENAME after ALTER INDEX", self.peek_token());
                 };
 
                 Ok(Statement::AlterIndex {

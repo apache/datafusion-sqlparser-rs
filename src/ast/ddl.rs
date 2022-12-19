@@ -94,6 +94,12 @@ pub enum AlterTableOperation {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum AlterIndexOperation {
+    RenameIndex { index_name: ObjectName },
+}
+
 impl fmt::Display for AlterTableOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -195,6 +201,16 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::RenameConstraint { old_name, new_name } => {
                 write!(f, "RENAME CONSTRAINT {} TO {}", old_name, new_name)
+            }
+        }
+    }
+}
+
+impl fmt::Display for AlterIndexOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlterIndexOperation::RenameIndex { index_name } => {
+                write!(f, "RENAME TO {}", index_name)
             }
         }
     }

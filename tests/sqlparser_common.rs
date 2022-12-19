@@ -2641,10 +2641,10 @@ fn parse_alter_index() {
     match verified_stmt(rename_index) {
         Statement::AlterIndex {
             name,
-            operation: AlterindexOperation::RenameIndex { index_name },
+            operation: AlterIndexOperation::RenameIndex { index_name },
         } => {
-            assert_eq!("tab", name.to_string());
-            assert_eq!("new_tab", index_name.to_string())
+            assert_eq!("idx", name.to_string());
+            assert_eq!("new_idx", index_name.to_string())
         }
         _ => unreachable!(),
     };

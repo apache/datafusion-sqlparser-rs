@@ -35,8 +35,8 @@ pub struct Query {
     pub offset: Option<Offset>,
     /// `FETCH { FIRST | NEXT } <N> [ PERCENT ] { ROW | ROWS } | { ONLY | WITH TIES }`
     pub fetch: Option<Fetch>,
-    /// `FOR { UPDATE | SHARE }`
-    pub lock: Option<LockType>,
+    /// `FOR { UPDATE | SHARE } [ OF table_name ] [ SKIP LOCKED | NOWAIT ]`
+    pub locks: Vec<LockClause>,
 }
 
 impl fmt::Display for Query {
@@ -57,8 +57,8 @@ impl fmt::Display for Query {
         if let Some(ref fetch) = self.fetch {
             write!(f, " {}", fetch)?;
         }
-        if let Some(ref lock) = self.lock {
-            write!(f, " {}", lock)?;
+        if !self.locks.is_empty() {
+            write!(f, " {}", display_separated(&self.locks, " "))?;
         }
         Ok(())
     }
@@ -833,6 +833,27 @@ impl fmt::Display for Fetch {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct LockClause {
+    pub lock_type: LockType,
+    pub of: Option<ObjectName>,
+    pub nonblock: Option<NonBlock>,
+}
+
+impl fmt::Display for LockClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "FOR {}", &self.lock_type)?;
+        if let Some(ref of) = self.of {
+            write!(f, " OF {}", of)?;
+        }
+        if let Some(ref nb) = self.nonblock {
+            write!(f, " {}", nb)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum LockType {
@@ -843,10 +864,27 @@ pub enum LockType {
 impl fmt::Display for LockType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let select_lock = match self {
-            LockType::Share => "FOR SHARE",
-            LockType::Update => "FOR UPDATE",
+            LockType::Share => "SHARE",
+            LockType::Update => "UPDATE",
         };
         write!(f, "{}", select_lock)
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum NonBlock {
+    Nowait,
+    SkipLocked,
+}
+
+impl fmt::Display for NonBlock {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let nonblock = match self {
+            NonBlock::Nowait => "NOWAIT",
+            NonBlock::SkipLocked => "SKIP LOCKED",
+        };
+        write!(f, "{}", nonblock)
     }
 }
 

@@ -253,7 +253,7 @@ fn parse_update_set_from() {
                         limit: None,
                         offset: None,
                         fetch: None,
-                        lock: None,
+                        locks: vec![],
                     }),
                     alias: Some(TableAlias {
                         name: Ident::new("t2"),
@@ -2296,7 +2296,7 @@ fn parse_create_table_as_table() {
         limit: None,
         offset: None,
         fetch: None,
-        lock: None,
+        locks: vec![],
     });
 
     match verified_stmt(sql1) {
@@ -2319,7 +2319,7 @@ fn parse_create_table_as_table() {
         limit: None,
         offset: None,
         fetch: None,
-        lock: None,
+        locks: vec![],
     });
 
     match verified_stmt(sql2) {
@@ -3456,7 +3456,7 @@ fn parse_interval_and_or_xor() {
         limit: None,
         offset: None,
         fetch: None,
-        lock: None,
+        locks: vec![],
     }))];
 
     assert_eq!(actual_ast, expected_ast);
@@ -3679,25 +3679,6 @@ fn parse_unnest() {
                 array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
                 with_offset: false,
                 with_offset_alias: None,
-            },
-            joins: vec![],
-        }],
-    );
-    // 5. WITH OFFSET and WITH OFFSET Alias
-    chk(
-        true,
-        false,
-        true,
-        &dialects,
-        vec![TableWithJoins {
-            relation: TableFactor::UNNEST {
-                alias: Some(TableAlias {
-                    name: Ident::new("numbers"),
-                    columns: vec![],
-                }),
-                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
-                with_offset: false,
-                with_offset_alias: Some(Ident::new("with_offset_alias")),
             },
             joins: vec![],
         }],
@@ -5623,7 +5604,7 @@ fn parse_merge() {
                         limit: None,
                         offset: None,
                         fetch: None,
-                        lock: None,
+                        locks: vec![],
                     }),
                     alias: Some(TableAlias {
                         name: Ident {
@@ -5748,12 +5729,106 @@ fn test_merge_with_delimiter() {
 #[test]
 fn test_lock() {
     let sql = "SELECT * FROM student WHERE id = '1' FOR UPDATE";
-    let ast = verified_query(sql);
-    assert_eq!(ast.lock.unwrap(), LockType::Update);
+    let mut ast = verified_query(sql);
+    assert_eq!(ast.locks.len(), 1);
+    let lock = ast.locks.pop().unwrap();
+    assert_eq!(lock.lock_type, LockType::Update);
+    assert!(lock.of.is_none());
+    assert!(lock.nonblock.is_none());
 
     let sql = "SELECT * FROM student WHERE id = '1' FOR SHARE";
-    let ast = verified_query(sql);
-    assert_eq!(ast.lock.unwrap(), LockType::Share);
+    let mut ast = verified_query(sql);
+    assert_eq!(ast.locks.len(), 1);
+    let lock = ast.locks.pop().unwrap();
+    assert_eq!(lock.lock_type, LockType::Share);
+    assert!(lock.of.is_none());
+    assert!(lock.nonblock.is_none());
+}
+
+#[test]
+fn test_lock_table() {
+    let sql = "SELECT * FROM student WHERE id = '1' FOR UPDATE OF school";
+    let mut ast = verified_query(sql);
+    assert_eq!(ast.locks.len(), 1);
+    let lock = ast.locks.pop().unwrap();
+    assert_eq!(lock.lock_type, LockType::Update);
+    assert_eq!(
+        lock.of.unwrap().0,
+        vec![Ident {
+            value: "school".to_string(),
+            quote_style: None
+        }]
+    );
+    assert!(lock.nonblock.is_none());
+
+    let sql = "SELECT * FROM student WHERE id = '1' FOR SHARE OF school";
+    let mut ast = verified_query(sql);
+    assert_eq!(ast.locks.len(), 1);
+    let lock = ast.locks.pop().unwrap();
+    assert_eq!(lock.lock_type, LockType::Share);
+    assert_eq!(
+        lock.of.unwrap().0,
+        vec![Ident {
+            value: "school".to_string(),
+            quote_style: None
+        }]
+    );
+    assert!(lock.nonblock.is_none());
+
+    let sql = "SELECT * FROM student WHERE id = '1' FOR SHARE OF school FOR UPDATE OF student";
+    let mut ast = verified_query(sql);
+    assert_eq!(ast.locks.len(), 2);
+    let lock = ast.locks.remove(0);
+    assert_eq!(lock.lock_type, LockType::Share);
+    assert_eq!(
+        lock.of.unwrap().0,
+        vec![Ident {
+            value: "school".to_string(),
+            quote_style: None
+        }]
+    );
+    assert!(lock.nonblock.is_none());
+    let lock = ast.locks.remove(0);
+    assert_eq!(lock.lock_type, LockType::Update);
+    assert_eq!(
+        lock.of.unwrap().0,
+        vec![Ident {
+            value: "student".to_string(),
+            quote_style: None
+        }]
+    );
+    assert!(lock.nonblock.is_none());
+}
+
+#[test]
+fn test_lock_nonblock() {
+    let sql = "SELECT * FROM student WHERE id = '1' FOR UPDATE OF school SKIP LOCKED";
+    let mut ast = verified_query(sql);
+    assert_eq!(ast.locks.len(), 1);
+    let lock = ast.locks.pop().unwrap();
+    assert_eq!(lock.lock_type, LockType::Update);
+    assert_eq!(
+        lock.of.unwrap().0,
+        vec![Ident {
+            value: "school".to_string(),
+            quote_style: None
+        }]
+    );
+    assert_eq!(lock.nonblock.unwrap(), NonBlock::SkipLocked);
+
+    let sql = "SELECT * FROM student WHERE id = '1' FOR SHARE OF school NOWAIT";
+    let mut ast = verified_query(sql);
+    assert_eq!(ast.locks.len(), 1);
+    let lock = ast.locks.pop().unwrap();
+    assert_eq!(lock.lock_type, LockType::Share);
+    assert_eq!(
+        lock.of.unwrap().0,
+        vec![Ident {
+            value: "school".to_string(),
+            quote_style: None
+        }]
+    );
+    assert_eq!(lock.nonblock.unwrap(), NonBlock::Nowait);
 }
 
 #[test]

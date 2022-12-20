@@ -95,6 +95,34 @@ fn parse_table_identifiers() {
 }
 
 #[test]
+fn parse_join_constraint_unnest_alias() {
+    assert_eq!(
+        only(
+            bigquery()
+                .verified_only_select("SELECT * FROM t1 JOIN UNNEST(t1.a) AS f ON c1 = c2")
+                .from
+        )
+        .joins,
+        vec![Join {
+            relation: TableFactor::UNNEST {
+                alias: table_alias("f"),
+                array_expr: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("t1"),
+                    Ident::new("a")
+                ])),
+                with_offset: false,
+                with_offset_alias: None
+            },
+            join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier("c1".into())),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::Identifier("c2".into())),
+            })),
+        }]
+    );
+}
+
+#[test]
 fn parse_trailing_comma() {
     for (sql, canonical) in [
         ("SELECT a,", "SELECT a"),

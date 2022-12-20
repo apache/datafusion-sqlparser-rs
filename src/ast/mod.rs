@@ -1274,7 +1274,7 @@ pub enum Statement {
         /// One or more function to drop
         func_desc: Vec<DropFunctionDesc>,
         /// `CASCADE` or `RESTRICT`
-        option: Option<DropFunctionOption>,
+        option: Option<ReferentialAction>,
     },
     /// DECLARE - Declaring Cursor Variables
     ///

@@ -2400,7 +2400,7 @@ fn parse_create_function() {
             or_replace: true,
             temporary: false,
             name: ObjectName(vec![Ident::new("increment")]),
-            args: Some(vec![CreateFunctionArg::with_name(
+            args: Some(vec![OperateFunctionArg::with_name(
                 "i",
                 DataType::Integer(None)
             )]),

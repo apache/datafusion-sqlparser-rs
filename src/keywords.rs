@@ -383,6 +383,7 @@ define_keywords!(
     NOSUPERUSER,
     NOT,
     NOTHING,
+    NOW,
     NOWAIT,
     NTH_VALUE,
     NTILE,

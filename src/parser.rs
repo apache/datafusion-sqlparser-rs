@@ -497,9 +497,8 @@ impl<'a> Parser<'a> {
                 | Keyword::CURRENT_TIME
                 | Keyword::CURRENT_DATE
                 | Keyword::LOCALTIME
-                | Keyword::LOCALTIMESTAMP => {
-                    self.parse_time_functions(ObjectName(vec![w.to_ident()]))
-                }
+                | Keyword::LOCALTIMESTAMP
+                | Keyword::NOW => self.parse_time_functions(ObjectName(vec![w.to_ident()])),
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CAST => self.parse_cast_expr(),
                 Keyword::TRY_CAST => self.parse_try_cast_expr(),
@@ -6320,21 +6319,27 @@ impl<'a> Parser<'a> {
     }
 
     fn check_on_update_expr_is_valid(expr: &Expr) -> Result<(), ParserError> {
-        let valid_object_names: [ObjectName; 4] = [
-            ObjectName(vec!["CURRENT_TIMESTAMP".into()]),
-            ObjectName(vec!["LOCALTIME".into()]),
-            ObjectName(vec!["LOCALTIMESTAMP".into()]),
-            ObjectName(vec!["NOW".into()]),
+        const VALID_FN_NAMES: [&str; 4] = [
+            keywords::CURRENT_TIMESTAMP,
+            keywords::LOCALTIME,
+            keywords::LOCALTIMESTAMP,
+            keywords::NOW,
         ];
 
         if let Expr::Function(f) = expr {
-            if valid_object_names.contains(&f.name) {
-                return Ok(());
+            if let Some(fn_name_ident) = f.name.0.first() {
+                if VALID_FN_NAMES
+                    .iter()
+                    .any(|x| x.eq_ignore_ascii_case(&fn_name_ident.value.as_str()))
+                {
+                    return Ok(());
+                }
             }
         }
+
         Err(ParserError::ParserError(format!(
             "Expected one of '{}' after ON UPDATE in column definition",
-            valid_object_names.map(|x| x.to_string()).join("', '")
+            VALID_FN_NAMES.map(|x| x.to_string()).join("', '")
         )))
     }
 }

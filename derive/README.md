@@ -54,7 +54,7 @@ Additionally certain types may wish to call a corresponding method on visitor be
 #[visit(with = "visit_expr")]
 enum Expr {
     A(),
-    B(String, #[cfg_attr(feature = "visitor", visit(with = "visit_table"))] ObjectName, bool),
+    B(String, #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))] ObjectName, bool),
 }
 ```
 
@@ -68,7 +68,7 @@ impl Visit for Bar {
             Self::A() => {}
             Self::B(_1, _2, _3) => {
                 _1.visit(visitor)?;
-                visitor.visit_table(_3)?;
+                visitor.visit_relation(_3)?;
                 _2.visit(visitor)?;
                 _3.visit(visitor)?;
             }

@@ -1087,7 +1087,7 @@ pub enum Password {
 pub enum Statement {
     /// Analyze (Hive)
     Analyze {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table"))]
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         partitions: Option<Vec<Expr>>,
         for_columns: bool,
@@ -1098,13 +1098,13 @@ pub enum Statement {
     },
     /// Truncate (Hive)
     Truncate {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table"))]
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         partitions: Option<Vec<Expr>>,
     },
     /// Msck (Hive)
     Msck {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table"))]
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         repair: bool,
         partition_action: Option<AddDropSync>,
@@ -1118,7 +1118,7 @@ pub enum Statement {
         /// INTO - optional keyword
         into: bool,
         /// TABLE
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table"))]
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         /// COLUMNS
         columns: Vec<Ident>,
@@ -1146,7 +1146,7 @@ pub enum Statement {
     },
     Copy {
         /// TABLE
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table"))]
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         /// COLUMNS
         columns: Vec<Ident>,
@@ -1209,7 +1209,7 @@ pub enum Statement {
         global: Option<bool>,
         if_not_exists: bool,
         /// Table name
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table"))]
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         name: ObjectName,
         /// Optional schema
         columns: Vec<ColumnDef>,
@@ -1234,7 +1234,7 @@ pub enum Statement {
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table"))]
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         name: ObjectName,
         if_not_exists: bool,
         module_name: Ident,
@@ -1244,7 +1244,7 @@ pub enum Statement {
     CreateIndex {
         /// index name
         name: ObjectName,
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table"))]
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         using: Option<Ident>,
         columns: Vec<OrderByExpr>,
@@ -1278,7 +1278,7 @@ pub enum Statement {
     /// ALTER TABLE
     AlterTable {
         /// Table name
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table"))]
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         name: ObjectName,
         operation: AlterTableOperation,
     },
@@ -1403,7 +1403,7 @@ pub enum Statement {
     ShowColumns {
         extended: bool,
         full: bool,
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table"))]
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         filter: Option<ShowStatementFilter>,
     },
@@ -1522,7 +1522,7 @@ pub enum Statement {
         /// If true, query used the MySQL `DESCRIBE` alias for explain
         describe_alias: bool,
         /// Table name
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table"))]
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
     },
     /// EXPLAIN / DESCRIBE for select_statement
@@ -1560,7 +1560,7 @@ pub enum Statement {
         table_flag: Option<ObjectName>,
         /// Table name
 
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table"))]
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         has_as: bool,
         /// Table confs
@@ -1571,7 +1571,7 @@ pub enum Statement {
     /// UNCACHE TABLE [ IF EXISTS ]  <table_name>
     UNCache {
         /// Table name
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table"))]
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         if_exists: bool,
     },

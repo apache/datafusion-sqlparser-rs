@@ -62,7 +62,7 @@ pub trait Visitor {
     type Break;
 
     /// Invoked for any tables, virtual or otherwise that appear in the AST
-    fn visit_table(&mut self, _table: &ObjectName) -> ControlFlow<Self::Break> {
+    fn visit_relation(&mut self, _relation: &ObjectName) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 
@@ -77,23 +77,23 @@ pub trait Visitor {
     }
 }
 
-struct TableVisitor<F>(F);
+struct RelationVisitor<F>(F);
 
-impl<E, F: FnMut(&ObjectName) -> ControlFlow<E>> Visitor for TableVisitor<F> {
+impl<E, F: FnMut(&ObjectName) -> ControlFlow<E>> Visitor for RelationVisitor<F> {
     type Break = E;
 
-    fn visit_table(&mut self, table: &ObjectName) -> ControlFlow<Self::Break> {
-        self.0(table)
+    fn visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<Self::Break> {
+        self.0(relation)
     }
 }
 
-/// Invokes the provided closure on all tables present in v
-pub fn visit_tables<V, E, F>(v: &V, f: F) -> ControlFlow<E>
+/// Invokes the provided closure on all relations present in v
+pub fn visit_relations<V, E, F>(v: &V, f: F) -> ControlFlow<E>
 where
     V: Visit,
     F: FnMut(&ObjectName) -> ControlFlow<E>,
 {
-    let mut visitor = TableVisitor(f);
+    let mut visitor = RelationVisitor(f);
     v.visit(&mut visitor)?;
     ControlFlow::Continue(())
 }
@@ -155,8 +155,8 @@ mod tests {
     impl Visitor for TestVisitor {
         type Break = ();
 
-        fn visit_table(&mut self, table_name: &ObjectName) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("TABLE: {}", table_name));
+        fn visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("RELATION: {}", relation));
             ControlFlow::Continue(())
         }
 
@@ -188,14 +188,14 @@ mod tests {
         let tests = vec![
             (
                 "SELECT * from table_name",
-                vec!["STATEMENT: SELECT * FROM table_name", "TABLE: table_name"],
+                vec!["STATEMENT: SELECT * FROM table_name", "RELATION: table_name"],
             ),
             (
                 "SELECT * from t1 join t2 on t1.id = t2.t1_id",
                 vec![
                     "STATEMENT: SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id",
-                    "TABLE: t1",
-                    "TABLE: t2",
+                    "RELATION: t1",
+                    "RELATION: t2",
                     "EXPR: t1.id = t2.t1_id",
                     "EXPR: t1.id",
                     "EXPR: t2.t1_id",
@@ -205,31 +205,31 @@ mod tests {
                 "SELECT * from t1 where EXISTS(SELECT column from t2)",
                 vec![
                     "STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
-                    "TABLE: t1",
+                    "RELATION: t1",
                     "EXPR: EXISTS (SELECT column FROM t2)",
                     "EXPR: column",
-                    "TABLE: t2",
+                    "RELATION: t2",
                 ],
             ),
             (
                 "SELECT * from t1 where EXISTS(SELECT column from t2)",
                 vec![
                     "STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
-                    "TABLE: t1",
+                    "RELATION: t1",
                     "EXPR: EXISTS (SELECT column FROM t2)",
                     "EXPR: column",
-                    "TABLE: t2",
+                    "RELATION: t2",
                 ],
             ),
             (
                 "SELECT * from t1 where EXISTS(SELECT column from t2) UNION SELECT * from t3",
                 vec![
                     "STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2) UNION SELECT * FROM t3",
-                    "TABLE: t1",
+                    "RELATION: t1",
                     "EXPR: EXISTS (SELECT column FROM t2)",
                     "EXPR: column",
-                    "TABLE: t2",
-                    "TABLE: t3",
+                    "RELATION: t2",
+                    "RELATION: t3",
                 ],
             ),
         ];

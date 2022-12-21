@@ -6,6 +6,7 @@ use syn::{
     Ident, Index, Lit, Meta, MetaNameValue, NestedMeta,
 };
 
+/// Implementation of `[#derive(Visit)]`
 #[proc_macro_derive(Visit, attributes(visit))]
 pub fn derive_visit(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // Parse the input tokens into a syntax tree.

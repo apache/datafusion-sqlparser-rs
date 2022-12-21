@@ -18,15 +18,16 @@ pub fn derive_visit(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let generics = add_trait_bounds(input.generics);
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    let with = attributes.with.map(|m| quote!(visitor.#m(self)?;));
+    let (pre_visit, post_visit) = attributes.visit(quote!(self));
     let children = visit_children(&input.data);
 
     let expanded = quote! {
         // The generated impl.
         impl #impl_generics sqlparser::ast::Visit for #name #ty_generics #where_clause {
             fn visit<V: sqlparser::ast::Visitor>(&self, visitor: &mut V) -> ::std::ops::ControlFlow<V::Break> {
-                #with
+                #pre_visit
                 #children
+                #post_visit
                 ::std::ops::ControlFlow::Continue(())
             }
         }
@@ -75,6 +76,19 @@ impl Attributes {
         }
         panic!("Unrecognised kv attribute {}", v.path.to_token_stream())
     }
+
+    /// Returns the pre and post visit token streams
+    fn visit(&self, s: TokenStream) -> (Option<TokenStream>, Option<TokenStream>) {
+        let pre_visit = self.with.as_ref().map(|m| {
+            let m = format_ident!("pre_{}", m);
+            quote!(visitor.#m(#s)?;)
+        });
+        let post_visit = self.with.as_ref().map(|m| {
+            let m = format_ident!("post_{}", m);
+            quote!(visitor.#m(#s)?;)
+        });
+        (pre_visit, post_visit)
+    }
 }
 
 // Add a bound `T: Visit` to every type parameter T.
@@ -95,8 +109,8 @@ fn visit_children(data: &Data) -> TokenStream {
                 let recurse = fields.named.iter().map(|f| {
                     let name = &f.ident;
                     let attributes = Attributes::parse(&f.attrs);
-                    let with = attributes.with.map(|m| quote!(visitor.#m(&self.#name)?;));
-                    quote_spanned!(f.span() => #with sqlparser::ast::Visit::visit(&self.#name, visitor)?;)
+                    let (pre_visit, post_visit) = attributes.visit(quote!(&self.#name));
+                    quote_spanned!(f.span() => #pre_visit sqlparser::ast::Visit::visit(&self.#name, visitor)?; #post_visit)
                 });
                 quote! {
                     #(#recurse)*
@@ -106,8 +120,8 @@ fn visit_children(data: &Data) -> TokenStream {
                 let recurse = fields.unnamed.iter().enumerate().map(|(i, f)| {
                     let index = Index::from(i);
                     let attributes = Attributes::parse(&f.attrs);
-                    let with = attributes.with.map(|m| quote!(visitor.#m(&self.#index)?;));
-                    quote_spanned!(f.span() => #with sqlparser::ast::Visit::visit(&self.#index, visitor)?;)
+                    let (pre_visit, post_visit) = attributes.visit(quote!(&self.#index));
+                    quote_spanned!(f.span() => #pre_visit sqlparser::ast::Visit::visit(&self.#index, visitor)?; #post_visit)
                 });
                 quote! {
                     #(#recurse)*
@@ -126,13 +140,13 @@ fn visit_children(data: &Data) -> TokenStream {
                         let visit = fields.named.iter().map(|f| {
                             let name = &f.ident;
                             let attributes = Attributes::parse(&f.attrs);
-                            let with = attributes.with.map(|m| quote!(visitor.#m(&#name)?;));
-                            quote_spanned!(f.span() => #with sqlparser::ast::Visit::visit(#name, visitor)?)
+                            let (pre_visit, post_visit) = attributes.visit(quote!(&#name));
+                            quote_spanned!(f.span() => #pre_visit sqlparser::ast::Visit::visit(#name, visitor)?; #post_visit)
                         });
 
                         quote!(
                             Self::#name { #(#names),* } => {
-                                #(#visit);*
+                                #(#visit)*
                             }
                         )
                     }
@@ -141,13 +155,13 @@ fn visit_children(data: &Data) -> TokenStream {
                         let visit = fields.unnamed.iter().enumerate().map(|(i, f)| {
                             let name = format_ident!("_{}", i);
                             let attributes = Attributes::parse(&f.attrs);
-                            let with = attributes.with.map(|m| quote!(visitor.#m(&#name)?;));
-                            quote_spanned!(f.span() => #with sqlparser::ast::Visit::visit(#name, visitor)?)
+                            let (pre_visit, post_visit) = attributes.visit(quote!(&#name));
+                            quote_spanned!(f.span() => #pre_visit sqlparser::ast::Visit::visit(#name, visitor)?; #post_visit)
                         });
 
                         quote! {
                             Self::#name ( #(#names),*) => {
-                                #(#visit);*
+                                #(#visit)*
                             }
                         }
                     }

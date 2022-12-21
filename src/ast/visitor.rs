@@ -61,18 +61,33 @@ visit_noop!(bigdecimal::BigDecimal);
 pub trait Visitor {
     type Break;
 
-    /// Invoked for any tables, virtual or otherwise that appear in the AST
-    fn visit_relation(&mut self, _relation: &ObjectName) -> ControlFlow<Self::Break> {
+    /// Invoked for any relations (e.g. tables) that appear in the AST before visiting children
+    fn pre_visit_relation(&mut self, _relation: &ObjectName) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any relations (e.g. tables) that appear in the AST after visiting children
+    fn post_visit_relation(&mut self, _relation: &ObjectName) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any expressions that appear in the AST before visiting children
+    fn pre_visit_expr(&mut self, _expr: &Expr) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 
     /// Invoked for any expressions that appear in the AST
-    fn visit_expr(&mut self, _expr: &Expr) -> ControlFlow<Self::Break> {
+    fn post_visit_expr(&mut self, _expr: &Expr) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 
-    /// Invoked for any statements that appear in the AST
-    fn visit_statement(&mut self, _statement: &Statement) -> ControlFlow<Self::Break> {
+    /// Invoked for any statements that appear in the AST before visiting children
+    fn pre_visit_statement(&mut self, _statement: &Statement) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any statements that appear in the AST after visiting children
+    fn post_visit_statement(&mut self, _statement: &Statement) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 }
@@ -82,7 +97,7 @@ struct RelationVisitor<F>(F);
 impl<E, F: FnMut(&ObjectName) -> ControlFlow<E>> Visitor for RelationVisitor<F> {
     type Break = E;
 
-    fn visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<Self::Break> {
+    fn pre_visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<Self::Break> {
         self.0(relation)
     }
 }
@@ -103,7 +118,7 @@ struct ExprVisitor<F>(F);
 impl<E, F: FnMut(&Expr) -> ControlFlow<E>> Visitor for ExprVisitor<F> {
     type Break = E;
 
-    fn visit_expr(&mut self, expr: &Expr) -> ControlFlow<Self::Break> {
+    fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<Self::Break> {
         self.0(expr)
     }
 }
@@ -124,7 +139,7 @@ struct StatementVisitor<F>(F);
 impl<E, F: FnMut(&Statement) -> ControlFlow<E>> Visitor for StatementVisitor<F> {
     type Break = E;
 
-    fn visit_statement(&mut self, statement: &Statement) -> ControlFlow<Self::Break> {
+    fn pre_visit_statement(&mut self, statement: &Statement) -> ControlFlow<Self::Break> {
         self.0(statement)
     }
 }
@@ -155,18 +170,33 @@ mod tests {
     impl Visitor for TestVisitor {
         type Break = ();
 
-        fn visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("RELATION: {}", relation));
+        fn pre_visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("PRE: RELATION: {}", relation));
             ControlFlow::Continue(())
         }
 
-        fn visit_expr(&mut self, expr: &Expr) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("EXPR: {}", expr));
+        fn post_visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("POST: RELATION: {}", relation));
             ControlFlow::Continue(())
         }
 
-        fn visit_statement(&mut self, statement: &Statement) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("STATEMENT: {}", statement));
+        fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("PRE: EXPR: {}", expr));
+            ControlFlow::Continue(())
+        }
+
+        fn post_visit_expr(&mut self, expr: &Expr) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("POST: EXPR: {}", expr));
+            ControlFlow::Continue(())
+        }
+
+        fn pre_visit_statement(&mut self, statement: &Statement) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("PRE: STATEMENT: {}", statement));
+            ControlFlow::Continue(())
+        }
+
+        fn post_visit_statement(&mut self, statement: &Statement) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("POST: STATEMENT: {}", statement));
             ControlFlow::Continue(())
         }
     }
@@ -188,48 +218,75 @@ mod tests {
         let tests = vec![
             (
                 "SELECT * from table_name",
-                vec!["STATEMENT: SELECT * FROM table_name", "RELATION: table_name"],
+                vec![
+                    "PRE: STATEMENT: SELECT * FROM table_name",
+                    "PRE: RELATION: table_name",
+                    "POST: RELATION: table_name",
+                    "POST: STATEMENT: SELECT * FROM table_name",
+                ],
             ),
             (
                 "SELECT * from t1 join t2 on t1.id = t2.t1_id",
                 vec![
-                    "STATEMENT: SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id",
-                    "RELATION: t1",
-                    "RELATION: t2",
-                    "EXPR: t1.id = t2.t1_id",
-                    "EXPR: t1.id",
-                    "EXPR: t2.t1_id",
+                    "PRE: STATEMENT: SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id",
+                    "PRE: RELATION: t1",
+                    "POST: RELATION: t1",
+                    "PRE: RELATION: t2",
+                    "POST: RELATION: t2",
+                    "PRE: EXPR: t1.id = t2.t1_id",
+                    "PRE: EXPR: t1.id",
+                    "POST: EXPR: t1.id",
+                    "PRE: EXPR: t2.t1_id",
+                    "POST: EXPR: t2.t1_id",
+                    "POST: EXPR: t1.id = t2.t1_id",
+                    "POST: STATEMENT: SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id",
                 ],
             ),
             (
                 "SELECT * from t1 where EXISTS(SELECT column from t2)",
                 vec![
-                    "STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
-                    "RELATION: t1",
-                    "EXPR: EXISTS (SELECT column FROM t2)",
-                    "EXPR: column",
-                    "RELATION: t2",
+                    "PRE: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
+                    "PRE: RELATION: t1",
+                    "POST: RELATION: t1",
+                    "PRE: EXPR: EXISTS (SELECT column FROM t2)",
+                    "PRE: EXPR: column",
+                    "POST: EXPR: column",
+                    "PRE: RELATION: t2",
+                    "POST: RELATION: t2",
+                    "POST: EXPR: EXISTS (SELECT column FROM t2)",
+                    "POST: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                 ],
             ),
             (
                 "SELECT * from t1 where EXISTS(SELECT column from t2)",
                 vec![
-                    "STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
-                    "RELATION: t1",
-                    "EXPR: EXISTS (SELECT column FROM t2)",
-                    "EXPR: column",
-                    "RELATION: t2",
+                    "PRE: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
+                    "PRE: RELATION: t1",
+                    "POST: RELATION: t1",
+                    "PRE: EXPR: EXISTS (SELECT column FROM t2)",
+                    "PRE: EXPR: column",
+                    "POST: EXPR: column",
+                    "PRE: RELATION: t2",
+                    "POST: RELATION: t2",
+                    "POST: EXPR: EXISTS (SELECT column FROM t2)",
+                    "POST: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                 ],
             ),
             (
                 "SELECT * from t1 where EXISTS(SELECT column from t2) UNION SELECT * from t3",
                 vec![
-                    "STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2) UNION SELECT * FROM t3",
-                    "RELATION: t1",
-                    "EXPR: EXISTS (SELECT column FROM t2)",
-                    "EXPR: column",
-                    "RELATION: t2",
-                    "RELATION: t3",
+                    "PRE: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2) UNION SELECT * FROM t3",
+                    "PRE: RELATION: t1",
+                    "POST: RELATION: t1",
+                    "PRE: EXPR: EXISTS (SELECT column FROM t2)",
+                    "PRE: EXPR: column",
+                    "POST: EXPR: column",
+                    "PRE: RELATION: t2",
+                    "POST: RELATION: t2",
+                    "POST: EXPR: EXISTS (SELECT column FROM t2)",
+                    "PRE: RELATION: t3",
+                    "POST: RELATION: t3",
+                    "POST: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2) UNION SELECT * FROM t3",
                 ],
             ),
         ];

@@ -2343,7 +2343,13 @@ impl<'a> Parser<'a> {
         } else if dialect_of!(self is PostgreSqlDialect) {
             let name = self.parse_object_name()?;
             self.expect_token(&Token::LParen)?;
-            let args = self.parse_comma_separated(Parser::parse_function_arg)?;
+            let args = if self.consume_token(&Token::RParen) {
+                self.prev_token();
+                None
+            }else {
+                Some(self.parse_comma_separated(Parser::parse_function_arg)?)
+            };
+            
             self.expect_token(&Token::RParen)?;
 
             let return_type = if self.parse_keyword(Keyword::RETURNS) {
@@ -2358,7 +2364,7 @@ impl<'a> Parser<'a> {
                 or_replace,
                 temporary,
                 name,
-                args: Some(args),
+                args,
                 return_type,
                 params,
             })

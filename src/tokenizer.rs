@@ -541,6 +541,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume the first char
                     let s = self.tokenize_word(ch, chars);
 
+                    // TODO: implement parsing of exponent here
                     if s.chars().all(|x| ('0'..='9').contains(&x) || x == '.') {
                         let mut inner_state = State {
                             peekable: s.chars().peekable(),
@@ -615,6 +616,36 @@ impl<'a> Tokenizer<'a> {
                     // No number -> Token::Period
                     if s == "." {
                         return Ok(Some(Token::Period));
+                    }
+
+                    // Parse exponent as number
+                    if chars.peek() == Some(&'e') || chars.peek() == Some(&'E') {
+                        let mut char_clone = chars.peekable.clone();
+                        let mut exponent_part = String::new();
+                        exponent_part.push(char_clone.next().unwrap());
+
+                        // Optional sign
+                        match char_clone.peek() {
+                            Some(&c) if matches!(c, '+' | '-') => {
+                                exponent_part.push(c);
+                                char_clone.next();
+                            }
+                            _ => (),
+                        }
+
+                        match char_clone.peek() {
+                            // Definitely an exponent, get original iterator up to speed and use it
+                            Some(&c) if matches!(c, '0'..='9') => {
+                                for _ in 0..exponent_part.len() {
+                                    chars.next();
+                                }
+                                exponent_part +=
+                                    &peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
+                                s += exponent_part.as_str();
+                            }
+                            // Not an exponent, discard the work done
+                            _ => (),
+                        }
                     }
 
                     let long = if chars.peek() == Some(&'L') {
@@ -1086,6 +1117,41 @@ mod tests {
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from(".1"), false),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_select_exponent() {
+        let sql = String::from("SELECT 1e10, 1e-10, 1e+10, 1ea, 1e-10a, 1e-10-10");
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1e10"), false),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1e-10"), false),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1e+10"), false),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1"), false),
+            Token::make_word("ea", None),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1e-10"), false),
+            Token::make_word("a", None),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1e-10"), false),
+            Token::Minus,
+            Token::Number(String::from("10"), false),
         ];
 
         compare(expected, tokens);

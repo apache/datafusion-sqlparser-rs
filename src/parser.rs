@@ -2346,10 +2346,10 @@ impl<'a> Parser<'a> {
             let args = if self.consume_token(&Token::RParen) {
                 self.prev_token();
                 None
-            }else {
+            } else {
                 Some(self.parse_comma_separated(Parser::parse_function_arg)?)
             };
-            
+
             self.expect_token(&Token::RParen)?;
 
             let return_type = if self.parse_keyword(Keyword::RETURNS) {

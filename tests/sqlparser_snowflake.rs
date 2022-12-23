@@ -206,11 +206,13 @@ fn parse_delimited_identifiers() {
             name,
             alias,
             args,
+            columns_definition,
             with_hints,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
             assert!(args.is_none());
+            assert!(columns_definition.is_none());
             assert!(with_hints.is_empty());
         }
         _ => panic!("Expecting TableFactor::Table"),

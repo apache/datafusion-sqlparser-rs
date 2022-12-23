@@ -45,6 +45,7 @@ fn parse_table_identifiers() {
                     name: ObjectName(expected),
                     alias: None,
                     args: None,
+                    columns_definition: None,
                     with_hints: vec![],
                 },
                 joins: vec![]

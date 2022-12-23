@@ -3954,6 +3954,33 @@ impl fmt::Display for SearchModifier {
     }
 }
 
+/// A cols definition (i.e. `cols(view_schema name, view_name name, col_name name, col_type varchar, col_num int)`
+/// when used with redshift pg_get_late_binding_view_cols/pg_get_cols)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ColsDefinition {
+    pub name: Ident,
+    pub args: Vec<IdentPair>,
+}
+
+impl fmt::Display for ColsDefinition {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}({})", self.name, display_comma_separated(&self.args))?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct IdentPair(pub Ident, pub Ident);
+
+impl fmt::Display for IdentPair {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.0, self.1)?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

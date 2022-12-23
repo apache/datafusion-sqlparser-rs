@@ -5356,6 +5356,7 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
+            let columns_definition = self.parse_redshift_columns_definition_list(&name)?;
             let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
             // MSSQL-specific table hints:
             let mut with_hints = vec![];
@@ -5372,9 +5373,55 @@ impl<'a> Parser<'a> {
                 name,
                 alias,
                 args,
+                columns_definition,
                 with_hints,
             })
         }
+    }
+
+    fn parse_redshift_columns_definition_list(
+        &mut self,
+        name: &ObjectName,
+    ) -> Result<Option<ColsDefinition>, ParserError> {
+        if !dialect_of!(self is RedshiftSqlDialect) {
+            return Ok(None);
+        }
+
+        let fname = name
+            .0
+            .last()
+            .ok_or_else(|| {
+                ParserError::ParserError("Empty identifier vector for ObjectName".to_string())
+            })?
+            .value
+            .to_lowercase();
+
+        if fname == "pg_get_late_binding_view_cols"
+            || fname == "pg_get_cols"
+            || fname == "pg_get_grantee_by_iam_role"
+            || fname == "pg_get_iam_role_by_user"
+        {
+            if let Ok(col_definition_list_name) = self.parse_identifier() {
+                self.expect_token(&Token::LParen)?;
+                let names = self.parse_comma_separated(Parser::parse_ident_pair)?;
+                self.expect_token(&Token::RParen)?;
+                Ok(Some(ColsDefinition {
+                    name: col_definition_list_name,
+                    args: names,
+                }))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn parse_ident_pair(&mut self) -> Result<IdentPair, ParserError> {
+        Ok(IdentPair(
+            self.parse_identifier()?,
+            self.parse_identifier()?,
+        ))
     }
 
     pub fn parse_derived_table_factor(

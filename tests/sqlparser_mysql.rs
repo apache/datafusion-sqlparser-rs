@@ -835,6 +835,7 @@ fn parse_update_with_joins() {
                             columns: vec![]
                         }),
                         args: None,
+                        columns_definition: None,
                         with_hints: vec![],
                     },
                     joins: vec![Join {
@@ -845,6 +846,7 @@ fn parse_update_with_joins() {
                                 columns: vec![]
                             }),
                             args: None,
+                            columns_definition: None,
                             with_hints: vec![],
                         },
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
@@ -966,6 +968,7 @@ fn parse_substring_in_select() {
                                 }]),
                                 alias: None,
                                 args: None,
+                                columns_definition: None,
                                 with_hints: vec![]
                             },
                             joins: vec![]

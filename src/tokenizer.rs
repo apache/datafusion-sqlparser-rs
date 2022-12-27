@@ -155,8 +155,6 @@ pub enum Token {
     PGCubeRoot,
     /// `?` or `$` , a prepared statement arg placeholder
     Placeholder(String),
-    // todo: remove
-    /// `$$`, used for PostgreSQL create function definition
     // DoubleDollarQuoting,
     /// ->, used as a operator to extract json field in PostgreSQL
     Arrow,
@@ -244,7 +242,6 @@ impl fmt::Display for Token {
             Token::HashArrow => write!(f, "#>"),
             Token::HashLongArrow => write!(f, "#>>"),
             Token::AtArrow => write!(f, "@>"),
-            // Token::DoubleDollarQuoting => write!(f, "$$"),
             Token::ArrowAt => write!(f, "<@"),
             Token::HashMinus => write!(f, "#-"),
             Token::AtQuestion => write!(f, "@?"),

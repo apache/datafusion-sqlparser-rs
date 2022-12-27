@@ -51,7 +51,6 @@ extern crate alloc;
 #[macro_use]
 #[cfg(test)]
 extern crate pretty_assertions;
-// extern crate core;
 
 pub mod ast;
 #[macro_use]

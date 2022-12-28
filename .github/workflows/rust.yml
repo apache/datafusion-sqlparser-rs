@@ -41,8 +41,8 @@ jobs:
       - name: Set up Rust
         uses: hecrj/setup-rust-action@v1
       - uses: actions/checkout@master
-      env:
-        RUSTDOCFLAGS: "-Dwarnings"
+      - env:
+          RUSTDOCFLAGS: "-Dwarnings"
       - run: cargo doc --document-private-items --no-deps --workspace --all-features
 
   compile-no-std:

@@ -26,8 +26,8 @@ pub use self::data_type::{
     CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
 };
 pub use self::ddl::{
-    AlterColumnOperation, AlterTableOperation, ColumnDef, ColumnOption, ColumnOptionDef, IndexType,
-    KeyOrIndexDisplay, ReferentialAction, TableConstraint,
+    AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
+    ColumnOptionDef, IndexType, KeyOrIndexDisplay, ReferentialAction, TableConstraint,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
@@ -1250,6 +1250,10 @@ pub enum Statement {
         name: ObjectName,
         operation: AlterTableOperation,
     },
+    AlterIndex {
+        name: ObjectName,
+        operation: AlterIndexOperation,
+    },
     /// DROP
     Drop {
         /// The type of the object to drop: TABLE, VIEW, etc.
@@ -2274,6 +2278,9 @@ impl fmt::Display for Statement {
             }
             Statement::AlterTable { name, operation } => {
                 write!(f, "ALTER TABLE {} {}", name, operation)
+            }
+            Statement::AlterIndex { name, operation } => {
+                write!(f, "ALTER INDEX {} {}", name, operation)
             }
             Statement::Drop {
                 object_type,

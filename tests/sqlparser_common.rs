@@ -2687,6 +2687,21 @@ fn parse_alter_table() {
 }
 
 #[test]
+fn parse_alter_index() {
+    let rename_index = "ALTER INDEX idx RENAME TO new_idx";
+    match verified_stmt(rename_index) {
+        Statement::AlterIndex {
+            name,
+            operation: AlterIndexOperation::RenameIndex { index_name },
+        } => {
+            assert_eq!("idx", name.to_string());
+            assert_eq!("new_idx", index_name.to_string())
+        }
+        _ => unreachable!(),
+    };
+}
+
+#[test]
 fn parse_alter_table_add_column() {
     match verified_stmt("ALTER TABLE tab ADD foo TEXT") {
         Statement::AlterTable {

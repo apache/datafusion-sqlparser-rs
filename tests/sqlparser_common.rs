@@ -1513,7 +1513,7 @@ fn parse_select_group_by() {
 #[test]
 fn parse_select_group_by_grouping_sets() {
     let dialects = TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {})],
+        dialects: vec![Box::new(GenericDialect {}), Box::new(PostgreSqlDialect {})],
     };
     let sql =
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, GROUPING SETS ((brand), (size), ())";
@@ -1534,7 +1534,7 @@ fn parse_select_group_by_grouping_sets() {
 #[test]
 fn parse_select_group_by_rollup() {
     let dialects = TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {})],
+        dialects: vec![Box::new(GenericDialect {}), Box::new(PostgreSqlDialect {})],
     };
     let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, ROLLUP (brand, size)";
     let select = dialects.verified_only_select(sql);
@@ -1553,7 +1553,7 @@ fn parse_select_group_by_rollup() {
 #[test]
 fn parse_select_group_by_cube() {
     let dialects = TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {})],
+        dialects: vec![Box::new(GenericDialect {}), Box::new(PostgreSqlDialect {})],
     };
     let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, CUBE (brand, size)";
     let select = dialects.verified_only_select(sql);

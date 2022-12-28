@@ -23,7 +23,7 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "visitor")]
-use sqlparser_derive::Visit;
+use sqlparser_procmacro::Visit;
 
 pub use self::data_type::{
     CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,

@@ -21,7 +21,7 @@ use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "visitor")]
-use sqlparser_derive::Visit;
+use sqlparser_procmacro::Visit;
 
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

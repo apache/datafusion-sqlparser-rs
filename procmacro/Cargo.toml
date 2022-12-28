@@ -1,8 +1,8 @@
 [package]
-name = "sqlparser_derive"
-description = "proc macro for sqlparser"
+name = "sqlparser_procmacro"
+description = "proc macros for sqlparser"
 version = "0.1.0"
-authors = ["Andy Grove <andygrove73@gmail.com>"]
+authors = ["sqlparser authors"]
 homepage = "https://github.com/sqlparser-rs/sqlparser-rs"
 documentation = "https://docs.rs/sqlparser/"
 keywords = ["ansi", "sql", "lexer", "parser"]

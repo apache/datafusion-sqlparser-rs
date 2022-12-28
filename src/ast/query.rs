@@ -17,7 +17,7 @@ use alloc::{boxed::Box, vec::Vec};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "visitor")]
-use sqlparser_derive::Visit;
+use sqlparser_procmacro::Visit;
 
 use crate::ast::*;
 

@@ -21,7 +21,7 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "visitor")]
-use sqlparser_derive::Visit;
+use sqlparser_procmacro::Visit;
 
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{display_comma_separated, display_separated, DataType, Expr, Ident, ObjectName};

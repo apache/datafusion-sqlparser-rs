@@ -28,7 +28,7 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "visitor")]
-use sqlparser_derive::Visit;
+use sqlparser_procmacro::Visit;
 
 /// Defines a string constant for a single keyword: `kw_def!(SELECT);`
 /// expands to `pub const SELECT = "SELECT";`

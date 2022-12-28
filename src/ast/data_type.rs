@@ -18,7 +18,7 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "visitor")]
-use sqlparser_derive::Visit;
+use sqlparser_procmacro::Visit;
 
 use crate::ast::ObjectName;
 

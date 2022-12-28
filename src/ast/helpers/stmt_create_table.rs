@@ -5,7 +5,7 @@ use alloc::{boxed::Box, format, string::String, vec, vec::Vec};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "visitor")]
-use sqlparser_derive::Visit;
+use sqlparser_procmacro::Visit;
 
 use crate::ast::{
     ColumnDef, FileFormat, HiveDistributionStyle, HiveFormat, ObjectName, OnCommit, Query,

@@ -3629,6 +3629,7 @@ impl<'a> Parser<'a> {
                     operation,
                 })
             }
+            // unreachable because expect_one_of_keywords used above
             _ => unreachable!(),
         }
     }

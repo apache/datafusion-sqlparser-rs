@@ -40,6 +40,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![allow(clippy::upper_case_acronyms)]
 
+// Allow proc-macros to find this crate
+extern crate self as sqlparser;
+
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 

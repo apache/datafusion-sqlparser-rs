@@ -17,6 +17,9 @@ use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "visitor")]
+use sqlparser_derive::Visit;
+
 use crate::ast::ObjectName;
 
 use super::value::escape_single_quote_string;
@@ -24,6 +27,7 @@ use super::value::escape_single_quote_string;
 /// SQL data types
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit))]
 pub enum DataType {
     /// Fixed-length character type e.g. CHARACTER(10)
     Character(Option<CharacterLength>),
@@ -337,6 +341,7 @@ fn format_datetime_precision_and_tz(
 /// guarantee compatibility with the input query we must maintain its exact information.
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit))]
 pub enum TimezoneInfo {
     /// No information about time zone. E.g., TIMESTAMP
     None,
@@ -384,6 +389,7 @@ impl fmt::Display for TimezoneInfo {
 /// [standard]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit))]
 pub enum ExactNumberInfo {
     /// No additional information e.g. `DECIMAL`
     None,
@@ -414,6 +420,7 @@ impl fmt::Display for ExactNumberInfo {
 /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-length
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit))]
 pub struct CharacterLength {
     /// Default (if VARYING) or maximum (if not VARYING) length
     pub length: u64,
@@ -436,6 +443,7 @@ impl fmt::Display for CharacterLength {
 /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#char-length-units
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit))]
 pub enum CharLengthUnits {
     /// CHARACTERS unit
     Characters,

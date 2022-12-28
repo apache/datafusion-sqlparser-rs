@@ -2534,7 +2534,7 @@ fn parse_dollar_quoted_string() {
 fn parse_incorrect_dollar_quoted_string() {
     let sql = "SELECT $x$hello$$";
     assert!(pg().parse_sql_statements(sql).is_err());
-    
+
     let sql = "SELECT $hello$$";
     assert!(pg().parse_sql_statements(sql).is_err());
 }

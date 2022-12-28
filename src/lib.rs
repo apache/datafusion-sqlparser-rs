@@ -12,10 +12,14 @@
 
 //! SQL Parser for Rust
 //!
-//! Example code:
-//!
 //! This crate provides an ANSI:SQL 2011 lexer and parser that can parse SQL
 //! into an Abstract Syntax Tree (AST).
+//!
+//! See [`Parser::parse_sql`](crate::parser::Parser::parse_sql) and
+//! [`Parser::new`](crate::parser::Parser::new) for the Parsing API
+//! and the [`ast`](crate::ast) crate for the AST structure.
+//!
+//! Example:
 //!
 //! ```
 //! use sqlparser::dialect::GenericDialect;

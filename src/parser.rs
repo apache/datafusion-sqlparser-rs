@@ -2985,7 +2985,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// ``sql
+    /// ```sql
     /// DROP FUNCTION [ IF EXISTS ] name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ] [, ...]
     /// [ CASCADE | RESTRICT ]
     /// ```

@@ -1180,8 +1180,10 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// TRIM ([WHERE] ['text' FROM] 'text')\
+    /// ```sql
+    /// TRIM ([WHERE] ['text' FROM] 'text')
     /// TRIM ('text')
+    /// ```
     pub fn parse_trim_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let mut trim_where = None;
@@ -3018,8 +3020,10 @@ impl<'a> Parser<'a> {
         Ok(DropFunctionDesc { name, args })
     }
 
+    /// ```sql
     /// DECLARE name [ BINARY ] [ ASENSITIVE | INSENSITIVE ] [ [ NO ] SCROLL ]
-    //     CURSOR [ { WITH | WITHOUT } HOLD ] FOR query
+    ///     CURSOR [ { WITH | WITHOUT } HOLD ] FOR query
+    /// ```
     pub fn parse_declare(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_identifier()?;
 
@@ -4835,7 +4839,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a "query body", which is an expression with roughly the
     /// following grammar:
-    /// ```text
+    /// ```sql
     ///   query_body ::= restricted_select | '(' subquery ')' | set_operation
     ///   restricted_select ::= 'SELECT' [expr_list] [ from ] [ where ] [ groupby_having ]
     ///   subquery ::= query_body [ order_by_limit ]
@@ -6143,7 +6147,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a TOP clause, MSSQL equivalent of LIMIT,
-    /// that follows after SELECT [DISTINCT].
+    /// that follows after `SELECT [DISTINCT]`.
     pub fn parse_top(&mut self) -> Result<Top, ParserError> {
         let quantity = if self.consume_token(&Token::LParen) {
             let quantity = self.parse_expr()?;
@@ -6462,8 +6466,11 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// https://www.postgresql.org/docs/current/sql-createsequence.html
+    /// ```sql
     /// CREATE [ { TEMPORARY | TEMP } ] SEQUENCE [ IF NOT EXISTS ] <sequence_name>
+    /// ```
+    ///
+    /// See [Postgres docs](https://www.postgresql.org/docs/current/sql-createsequence.html) for more details.
     pub fn parse_create_sequence(&mut self, temporary: bool) -> Result<Statement, ParserError> {
         //[ IF NOT EXISTS ]
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);

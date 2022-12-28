@@ -11,9 +11,7 @@
 // limitations under the License.
 
 //! This module defines
-//! 1) a list of constants for every keyword that
-//! can appear in [Word::keyword]:
-//!    pub const KEYWORD = "KEYWORD"
+//! 1) a list of constants for every keyword
 //! 2) an `ALL_KEYWORDS` array with every keyword in it
 //!     This is not a list of *reserved* keywords: some of these can be
 //!     parsed as identifiers if the parser decides so. This means that

@@ -6,24 +6,10 @@
 [![Coverage Status](https://coveralls.io/repos/github/sqlparser-rs/sqlparser-rs/badge.svg?branch=main)](https://coveralls.io/github/sqlparser-rs/sqlparser-rs?branch=main)
 [![Gitter Chat](https://badges.gitter.im/sqlparser-rs/community.svg)](https://gitter.im/sqlparser-rs/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-The goal of this project is to build a SQL lexer and parser capable of parsing
-SQL that conforms with the [ANSI/ISO SQL standard][sql-standard] while also
-making it easy to support custom dialects so that this crate can be used as a
-foundation for vendor-specific parsers.
-
-This parser is currently being used by the [DataFusion] query engine,
-[LocustDB], [Ballista] and [GlueSQL].
-
-This crate provides only a syntax parser, and tries to avoid applying
-any SQL semantics, and accepts queries that specific databases would
-reject, even when using that Database's specific `Dialect`. For
-example, `CREATE TABLE(x int, x int)` is accepted by this crate, even
-though most SQL engines will reject this statement due to the repeated
-column name `x`.
-
-This crate avoids semantic analysis because it varies drastically
-between dialects and implementations. If you want to do semantic
-analysis, feel free to use this project as a base
+This crate contains a lexer and parser for SQL that conforms with the
+[ANSI/ISO SQL standard][sql-standard] and other dialects. This crate
+is used as a foundation for SQL query engines, vendor-specific
+parsers, and various SQL analysis.
 
 ## Example
 
@@ -51,11 +37,27 @@ This outputs
 AST: [Query(Query { ctes: [], body: Select(Select { distinct: false, projection: [UnnamedExpr(Identifier("a")), UnnamedExpr(Identifier("b")), UnnamedExpr(Value(Long(123))), UnnamedExpr(Function(Function { name: ObjectName(["myfunc"]), args: [Identifier("b")], over: None, distinct: false }))], from: [TableWithJoins { relation: Table { name: ObjectName(["table_1"]), alias: None, args: [], with_hints: [] }, joins: [] }], selection: Some(BinaryOp { left: BinaryOp { left: Identifier("a"), op: Gt, right: Identifier("b") }, op: And, right: BinaryOp { left: Identifier("b"), op: Lt, right: Value(Long(100)) } }), group_by: [], having: None }), order_by: [OrderByExpr { expr: Identifier("a"), asc: Some(false) }, OrderByExpr { expr: Identifier("b"), asc: None }], limit: None, offset: None, fetch: None })]
 ```
 
-## Command line
-To parse a file and dump the results as JSON:
-```
-$ cargo run --features json_example --example cli FILENAME.sql [--dialectname]
-```
+
+## Features
+
+The following optional [crate  features](https://doc.rust-lang.org/cargo/reference/features.html) are available:
+
+* `serde`: Adds [Serde](https://serde.rs/) support by implementing  `Serialize` and `Deserialize` for all AST nodes.
+* `visitor`: Adds a `Visitor` capable of recursively walking the AST tree.
+
+
+## Syntax vs Semantics
+
+This crate provides only a syntax parser, and tries to avoid applying
+any SQL semantics, and accepts queries that specific databases would
+reject, even when using that Database's specific `Dialect`. For
+example, `CREATE TABLE(x int, x int)` is accepted by this crate, even
+though most SQL engines will reject this statement due to the repeated
+column name `x`.
+
+This crate avoids semantic analysis because it varies drastically
+between dialects and implementations. If you want to do semantic
+analysis, feel free to use this project as a base.
 
 ## SQL compliance
 
@@ -81,10 +83,21 @@ that are actually used. Note that if you urgently need support for a feature,
 you will likely need to write the implementation yourself. See the
 [Contributing](#Contributing) section for details.
 
-### Supporting custom SQL dialects
+## Command line
 
-This is a work in progress, but we have some notes on [writing a custom SQL
-parser](docs/custom_sql_parser.md).
+This crate contains a CLI program that can parse a file and dump the results as JSON:
+```
+$ cargo run --features json_example --example cli FILENAME.sql [--dialectname]
+```
+
+## Users
+
+This parser is currently being used by the [DataFusion] query engine,
+[LocustDB], [Ballista] and [GlueSQL].
+
+If your project is using sqlparser-rs feel free to make a PR to add it
+to this list.
+
 
 ## Design
 
@@ -102,6 +115,11 @@ reasons:
 - Debugging is much easier with hand-written code
 - It is far easier to extend and make dialect-specific extensions
   compared to using a parser generator
+
+### Supporting custom SQL dialects
+
+This is a work in progress, but we have some notes on [writing a custom SQL
+parser](docs/custom_sql_parser.md).
 
 ## Contributing
 

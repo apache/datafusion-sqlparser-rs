@@ -205,8 +205,10 @@ mod tests {
         let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, sql);
         let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens, &dialect);
-        let s = parser.parse_statement().unwrap();
+        let s = Parser::new(&dialect)
+            .with_tokens(tokens)
+            .parse_statement()
+            .unwrap();
 
         let mut visitor = TestVisitor::default();
         s.visit(&mut visitor);

@@ -29,7 +29,6 @@ use core::fmt::Debug;
 use crate::ast::*;
 use crate::dialect::*;
 use crate::parser::{Parser, ParserError};
-use crate::tokenizer::Tokenizer;
 
 /// Tests use the methods on this struct to invoke the parser on one or
 /// multiple dialects.
@@ -65,9 +64,8 @@ impl TestedDialects {
         F: Fn(&mut Parser) -> T,
     {
         self.one_of_identical_results(|dialect| {
-            let mut tokenizer = Tokenizer::new(dialect, sql);
-            let tokens = tokenizer.tokenize().unwrap();
-            f(&mut Parser::new(tokens, dialect))
+            let mut parser = Parser::new(dialect).try_with_sql(sql).unwrap();
+            f(&mut parser)
         })
     }
 
@@ -144,6 +142,7 @@ pub fn all_dialects() -> TestedDialects {
             Box::new(RedshiftSqlDialect {}),
             Box::new(MySqlDialect {}),
             Box::new(BigQueryDialect {}),
+            Box::new(SQLiteDialect {}),
         ],
     }
 }

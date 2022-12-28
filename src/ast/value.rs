@@ -76,6 +76,7 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit))]
 pub struct DollarQuotedString {
     pub value: String,
     pub tag: Option<String>,

@@ -34,9 +34,6 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::Visit;
 
-#[cfg(feature = "visitor")]
-use sqlparser_derive::Visit;
-
 use crate::ast::DollarQuotedString;
 use crate::dialect::SnowflakeDialect;
 use crate::dialect::{Dialect, MySqlDialect};

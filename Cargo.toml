@@ -45,3 +45,7 @@ pretty_assertions = "1"
 # https://github.com/sunng87/cargo-release/blob/master/docs/reference.md#config-fields
 # See docs/releasing.md for details.
 publish = false
+
+[package.metadata.docs.rs]
+# Document these features on docs.rs
+features = ["serde", "visitor"]

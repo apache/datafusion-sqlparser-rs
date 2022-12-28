@@ -6466,9 +6466,11 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// ```sql
     /// CREATE [ { TEMPORARY | TEMP } ] SEQUENCE [ IF NOT EXISTS ] <sequence_name>
+    /// ```
     ///
-    /// See https://www.postgresql.org/docs/current/sql-createsequence.html for more details
+    /// See [Postgres docs](https://www.postgresql.org/docs/current/sql-createsequence.html) for more details.
     pub fn parse_create_sequence(&mut self, temporary: bool) -> Result<Statement, ParserError> {
         //[ IF NOT EXISTS ]
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);

@@ -1230,7 +1230,7 @@ impl<'a> Parser<'a> {
     /// if `named` is `true`, came from an expression like  `ARRAY[ex1, ex2]`
     pub fn parse_array_expr(&mut self, named: bool) -> Result<Expr, ParserError> {
         if self.peek_token().token == Token::RBracket {
-            let _ = self.next_token();
+            let _ = self.next_token(); // consume ]
             Ok(Expr::Array(Array {
                 elem: vec![],
                 named,
@@ -2723,8 +2723,7 @@ impl<'a> Parser<'a> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let names = self.parse_comma_separated(Parser::parse_object_name)?;
 
-        // Parse optional WITH
-        let _ = self.parse_keyword(Keyword::WITH);
+        let _ = self.parse_keyword(Keyword::WITH); // [ WITH ]
 
         let optional_keywords = if dialect_of!(self is MsSqlDialect) {
             vec![Keyword::AUTHORIZATION]
@@ -3664,7 +3663,7 @@ impl<'a> Parser<'a> {
         let object_type = self.expect_one_of_keywords(&[Keyword::TABLE, Keyword::INDEX])?;
         match object_type {
             Keyword::TABLE => {
-                let _ = self.parse_keyword(Keyword::ONLY);
+                let _ = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
                 let table_name = self.parse_object_name()?;
                 let operation = if self.parse_keyword(Keyword::ADD) {
                     if let Some(constraint) = self.parse_optional_table_constraint()? {
@@ -3711,7 +3710,7 @@ impl<'a> Parser<'a> {
                         let table_name = self.parse_object_name()?;
                         AlterTableOperation::RenameTable { table_name }
                     } else {
-                        let _ = self.parse_keyword(Keyword::COLUMN);
+                        let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
                         let old_column_name = self.parse_identifier()?;
                         self.expect_keyword(Keyword::TO)?;
                         let new_column_name = self.parse_identifier()?;
@@ -3751,7 +3750,7 @@ impl<'a> Parser<'a> {
                     {
                         AlterTableOperation::DropPrimaryKey
                     } else {
-                        let _ = self.parse_keyword(Keyword::COLUMN);
+                        let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
                         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
                         let column_name = self.parse_identifier()?;
                         let cascade = self.parse_keyword(Keyword::CASCADE);
@@ -3775,7 +3774,7 @@ impl<'a> Parser<'a> {
                         new_partitions: renames,
                     }
                 } else if self.parse_keyword(Keyword::CHANGE) {
-                    let _ = self.parse_keyword(Keyword::COLUMN);
+                    let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
                     let old_name = self.parse_identifier()?;
                     let new_name = self.parse_identifier()?;
                     let data_type = self.parse_data_type()?;
@@ -3791,7 +3790,7 @@ impl<'a> Parser<'a> {
                         options,
                     }
                 } else if self.parse_keyword(Keyword::ALTER) {
-                    let _ = self.parse_keyword(Keyword::COLUMN);
+                    let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
                     let column_name = self.parse_identifier()?;
                     let is_postgresql = dialect_of!(self is PostgreSqlDialect);
 
@@ -3834,7 +3833,6 @@ impl<'a> Parser<'a> {
                 })
             }
             Keyword::INDEX => {
-                let _ = self.parse_keyword(Keyword::ONLY);
                 let index_name = self.parse_object_name()?;
                 let operation = if self.parse_keyword(Keyword::RENAME) {
                     if self.parse_keyword(Keyword::TO) {
@@ -3879,7 +3877,7 @@ impl<'a> Parser<'a> {
                 filename: self.parse_literal_string()?,
             }
         };
-        let _ = self.parse_keyword(Keyword::WITH);
+        let _ = self.parse_keyword(Keyword::WITH); // [ WITH ]
         let mut options = vec![];
         if self.consume_token(&Token::LParen) {
             options = self.parse_comma_separated(Parser::parse_copy_option)?;
@@ -5376,12 +5374,12 @@ impl<'a> Parser<'a> {
 
                 let join_operator_type = match peek_keyword {
                     Keyword::INNER | Keyword::JOIN => {
-                        let _ = self.parse_keyword(Keyword::INNER);
+                        let _ = self.parse_keyword(Keyword::INNER); // [ INNER ]
                         self.expect_keyword(Keyword::JOIN)?;
                         JoinOperator::Inner
                     }
                     kw @ Keyword::LEFT | kw @ Keyword::RIGHT => {
-                        let _ = self.next_token();
+                        let _ = self.next_token(); // consume LEFT/RIGHT
                         let is_left = kw == Keyword::LEFT;
                         let join_type = self.parse_one_of_keywords(&[
                             Keyword::OUTER,
@@ -5430,8 +5428,8 @@ impl<'a> Parser<'a> {
                         }
                     }
                     Keyword::FULL => {
-                        let _ = self.next_token();
-                        let _ = self.parse_keyword(Keyword::OUTER);
+                        let _ = self.next_token(); // consume FULL
+                        let _ = self.parse_keyword(Keyword::OUTER); // [ OUTER ]
                         self.expect_keyword(Keyword::JOIN)?;
                         JoinOperator::FullOuter
                     }

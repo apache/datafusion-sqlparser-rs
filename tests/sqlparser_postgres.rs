@@ -2507,3 +2507,34 @@ fn parse_drop_function() {
         }
     );
 }
+
+#[test]
+fn parse_dollar_quoted_string() {
+    let sql = "SELECT $$hello$$, $tag_name$world$tag_name$";
+    let select = pg().verified_only_select(sql);
+
+    assert_eq!(
+        &Expr::Value(Value::DollarQuotedString(DollarQuotedString {
+            tag: None,
+            value: "hello".into()
+        })),
+        expr_from_projection(&select.projection[0])
+    );
+
+    assert_eq!(
+        &Expr::Value(Value::DollarQuotedString(DollarQuotedString {
+            tag: Some("tag_name".into()),
+            value: "world".into()
+        })),
+        expr_from_projection(&select.projection[1])
+    );
+}
+
+#[test]
+fn parse_incorrect_dollar_quoted_string() {
+    let sql = "SELECT $x$hello$$";
+    assert!(pg().parse_sql_statements(sql).is_err());
+    
+    let sql = "SELECT $hello$$";
+    assert!(pg().parse_sql_statements(sql).is_err());
+}

@@ -776,6 +776,57 @@ fn parse_null_in_select() {
 }
 
 #[test]
+fn parse_exponent_in_select() -> Result<(), ParserError> {
+    // all except Hive, as it allows numbers to start an identifier
+    let dialects = TestedDialects {
+        dialects: vec![
+            Box::new(AnsiDialect {}),
+            Box::new(BigQueryDialect {}),
+            Box::new(ClickHouseDialect {}),
+            Box::new(GenericDialect {}),
+            // Box::new(HiveDialect {}),
+            Box::new(MsSqlDialect {}),
+            Box::new(MySqlDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(RedshiftSqlDialect {}),
+            Box::new(SnowflakeDialect {}),
+            Box::new(SQLiteDialect {}),
+        ],
+    };
+    let sql = "SELECT 10e-20, 1e3, 1e+3, 1e3a, 1e, 0.5e2";
+    let mut select = dialects.parse_sql_statements(sql)?;
+
+    let select = match select.pop().unwrap() {
+        Statement::Query(inner) => *inner,
+        _ => panic!("Expected Query"),
+    };
+    let select = match *select.body {
+        SetExpr::Select(inner) => *inner,
+        _ => panic!("Expected SetExpr::Select"),
+    };
+
+    assert_eq!(
+        &vec![
+            SelectItem::UnnamedExpr(Expr::Value(number("10e-20"))),
+            SelectItem::UnnamedExpr(Expr::Value(number("1e3"))),
+            SelectItem::UnnamedExpr(Expr::Value(number("1e+3"))),
+            SelectItem::ExprWithAlias {
+                expr: Expr::Value(number("1e3")),
+                alias: Ident::new("a")
+            },
+            SelectItem::ExprWithAlias {
+                expr: Expr::Value(number("1")),
+                alias: Ident::new("e")
+            },
+            SelectItem::UnnamedExpr(Expr::Value(number("0.5e2"))),
+        ],
+        &select.projection
+    );
+
+    Ok(())
+}
+
+#[test]
 fn parse_select_with_date_column_name() {
     let sql = "SELECT date";
     let select = verified_only_select(sql);

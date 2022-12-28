@@ -13,7 +13,8 @@
 //! SQL Parser for Rust
 //!
 //! This crate provides an ANSI:SQL 2011 lexer and parser that can parse SQL
-//! into an Abstract Syntax Tree (AST).
+//! into an Abstract Syntax Tree (AST). See the [sqlparser crates.io page]
+//! for more information.
 //!
 //! See [`Parser::parse_sql`](crate::parser::Parser::parse_sql) and
 //! [`Parser::new`](crate::parser::Parser::new) for the Parsing API
@@ -36,6 +37,7 @@
 //!
 //! println!("AST: {:?}", ast);
 //! ```
+//! [sqlparser crates.io page]: https://crates.io/crates/sqlparser
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![allow(clippy::upper_case_acronyms)]

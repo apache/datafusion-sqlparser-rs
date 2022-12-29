@@ -4693,21 +4693,24 @@ impl<'a> Parser<'a> {
             format = Some(self.parse_analyze_format()?);
         }
 
-        if let Some(statement) = self.maybe_parse(|parser| parser.parse_statement()) {
-            Ok(Statement::Explain {
+        match self.maybe_parse(|parser| parser.parse_statement()) {
+            Some(Statement::Explain { .. }) | Some(Statement::ExplainTable { .. }) => Err(
+                ParserError::ParserError("Explain must be root of the plan".to_string()),
+            ),
+            Some(statement) => Ok(Statement::Explain {
                 describe_alias,
                 analyze,
                 verbose,
                 statement: Box::new(statement),
                 format,
-            })
-        } else {
-            let table_name = self.parse_object_name()?;
-
-            Ok(Statement::ExplainTable {
-                describe_alias,
-                table_name,
-            })
+            }),
+            _ => {
+                let table_name = self.parse_object_name()?;
+                Ok(Statement::ExplainTable {
+                    describe_alias,
+                    table_name,
+                })
+            }
         }
     }
 
@@ -7135,6 +7138,18 @@ mod tests {
             Err(ParserError::ParserError(
                 "Expected [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a"
                     .to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn test_nested_explain_error() {
+        let sql = "EXPLAIN EXPLAIN SELECT 1";
+        let ast = Parser::parse_sql(&GenericDialect, sql);
+        assert_eq!(
+            ast,
+            Err(ParserError::ParserError(
+                "Explain must be root of the plan".to_string()
             ))
         );
     }

@@ -152,7 +152,6 @@ pub enum Token {
     PGCubeRoot,
     /// `?` or `$` , a prepared statement arg placeholder
     Placeholder(String),
-    // DoubleDollarQuoting,
     /// ->, used as a operator to extract json field in PostgreSQL
     Arrow,
     /// ->>, used as a operator to extract json field as text in PostgreSQL
@@ -860,17 +859,35 @@ impl<'a> Tokenizer<'a> {
 
         if let Some('$') = chars.peek() {
             chars.next();
-            s.push_str(&peeking_take_while(chars, |ch| ch != '$'));
-            chars.next();
 
-            return if let Some('$') = chars.peek() {
+            let mut is_terminated = false;
+            let mut prev: Option<char> = None;
+
+            while let Some(&ch) = chars.peek() {
+                if prev == Some('$') {
+                    if ch == '$' {
+                        chars.next();
+                        is_terminated = true;
+                        break;
+                    } else {
+                        s.push('$');
+                        s.push(ch);
+                    }
+                } else if ch != '$' {
+                    s.push(ch);
+                }
+
+                prev = Some(ch);
                 chars.next();
+            }
+
+            return if chars.peek().is_none() && !is_terminated {
+                self.tokenizer_error(chars.location(), "Unterminated dollar-quoted string")
+            } else {
                 Ok(Token::DollarQuotedString(DollarQuotedString {
                     value: s,
                     tag: None,
                 }))
-            } else {
-                self.tokenizer_error(chars.location(), "Unterminated dollar-quoted string")
             };
         } else {
             value.push_str(&peeking_take_while(chars, |ch| {
@@ -890,7 +907,7 @@ impl<'a> Tokenizer<'a> {
                                 return self.tokenizer_error(
                                     chars.location(),
                                     format!(
-                                        "Unterminated dollar-quoted string, expected ${}$",
+                                        "Unterminated dollar-quoted string at or near \"{}\"",
                                         value
                                     ),
                                 );

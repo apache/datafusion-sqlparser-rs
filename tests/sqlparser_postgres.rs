@@ -2510,15 +2510,24 @@ fn parse_drop_function() {
 
 #[test]
 fn parse_dollar_quoted_string() {
-    let sql = "SELECT $$hello$$, $tag_name$world$tag_name$";
-    let select = pg().verified_only_select(sql);
+    let sql = "SELECT $$hello$$, $tag_name$world$tag_name$, $$Foo$Bar$$, $$Foo$Bar$$col_name, $$$$, $tag_name$$tag_name$";
+
+    let stmt = pg().parse_sql_statements(sql).unwrap();
+
+    let projection = match stmt.get(0).unwrap() {
+        Statement::Query(query) => match &*query.body {
+            SetExpr::Select(select) => &select.projection,
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
 
     assert_eq!(
         &Expr::Value(Value::DollarQuotedString(DollarQuotedString {
             tag: None,
             value: "hello".into()
         })),
-        expr_from_projection(&select.projection[0])
+        expr_from_projection(&projection[0])
     );
 
     assert_eq!(
@@ -2526,7 +2535,45 @@ fn parse_dollar_quoted_string() {
             tag: Some("tag_name".into()),
             value: "world".into()
         })),
-        expr_from_projection(&select.projection[1])
+        expr_from_projection(&projection[1])
+    );
+
+    assert_eq!(
+        &Expr::Value(Value::DollarQuotedString(DollarQuotedString {
+            tag: None,
+            value: "Foo$Bar".into()
+        })),
+        expr_from_projection(&projection[2])
+    );
+
+    assert_eq!(
+        projection[3],
+        SelectItem::ExprWithAlias {
+            expr: Expr::Value(Value::DollarQuotedString(DollarQuotedString {
+                tag: None,
+                value: "Foo$Bar".into(),
+            })),
+            alias: Ident {
+                value: "col_name".into(),
+                quote_style: None,
+            },
+        }
+    );
+
+    assert_eq!(
+        expr_from_projection(&projection[4]),
+        &Expr::Value(Value::DollarQuotedString(DollarQuotedString {
+            tag: None,
+            value: "".into()
+        })),
+    );
+
+    assert_eq!(
+        expr_from_projection(&projection[5]),
+        &Expr::Value(Value::DollarQuotedString(DollarQuotedString {
+            tag: Some("tag_name".into()),
+            value: "".into()
+        })),
     );
 }
 
@@ -2536,5 +2583,8 @@ fn parse_incorrect_dollar_quoted_string() {
     assert!(pg().parse_sql_statements(sql).is_err());
 
     let sql = "SELECT $hello$$";
+    assert!(pg().parse_sql_statements(sql).is_err());
+
+    let sql = "SELECT $$$";
     assert!(pg().parse_sql_statements(sql).is_err());
 }

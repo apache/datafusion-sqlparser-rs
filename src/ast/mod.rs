@@ -39,7 +39,9 @@ pub use self::query::{
     SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Table, TableAlias, TableFactor,
     TableWithJoins, Top, Values, WildcardAdditionalOptions, With,
 };
-pub use self::value::{escape_quoted_string, DateTimeField, TrimWhereField, Value};
+pub use self::value::{
+    escape_quoted_string, DateTimeField, DollarQuotedString, TrimWhereField, Value,
+};
 
 #[cfg(feature = "visitor")]
 pub use visitor::*;

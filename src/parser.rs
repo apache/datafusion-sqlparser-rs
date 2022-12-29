@@ -778,6 +778,7 @@ impl<'a> Parser<'a> {
             Token::Number(_, _)
             | Token::SingleQuotedString(_)
             | Token::DoubleQuotedString(_)
+            | Token::DollarQuotedString(_)
             | Token::NationalStringLiteral(_)
             | Token::HexStringLiteral(_) => {
                 self.prev_token();
@@ -4104,6 +4105,7 @@ impl<'a> Parser<'a> {
             },
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
+            Token::DollarQuotedString(ref s) => Ok(Value::DollarQuotedString(s.clone())),
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
             Token::EscapedStringLiteral(ref s) => Ok(Value::EscapedStringLiteral(s.to_string())),
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
@@ -4148,24 +4150,9 @@ impl<'a> Parser<'a> {
     pub fn parse_function_definition(&mut self) -> Result<FunctionDefinition, ParserError> {
         let peek_token = self.peek_token();
         match peek_token.token {
-            Token::DoubleDollarQuoting if dialect_of!(self is PostgreSqlDialect) => {
+            Token::DollarQuotedString(value) if dialect_of!(self is PostgreSqlDialect) => {
                 self.next_token();
-                let mut func_desc = String::new();
-                loop {
-                    if let Some(next_token) = self.next_token_no_skip() {
-                        match &next_token.token {
-                            Token::DoubleDollarQuoting => break,
-                            Token::EOF => {
-                                return self.expected(
-                                    "literal string",
-                                    TokenWithLocation::wrap(Token::EOF),
-                                );
-                            }
-                            token => func_desc.push_str(token.to_string().as_str()),
-                        }
-                    }
-                }
-                Ok(FunctionDefinition::DoubleDollarDef(func_desc))
+                Ok(FunctionDefinition::DoubleDollarDef(value.value))
             }
             _ => Ok(FunctionDefinition::SingleQuotedDef(
                 self.parse_literal_string()?,
@@ -4712,7 +4699,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a query expression, i.e. a `SELECT` statement optionally
-    /// preceeded with some `WITH` CTE declarations and optionally followed
+    /// preceded with some `WITH` CTE declarations and optionally followed
     /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
     /// expect the initial keyword to be already consumed
     pub fn parse_query(&mut self) -> Result<Query, ParserError> {

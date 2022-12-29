@@ -272,7 +272,7 @@ impl<E, F: FnMut(&Statement) -> ControlFlow<E>> Visitor for StatementVisitor<F> 
     }
 }
 
-/// Invokes the provided closure on all statements (e.g. `SELECT`, `CREATE TABLE`, etc)present in `v`
+/// Invokes the provided closure on all statements (e.g. `SELECT`, `CREATE TABLE`, etc) present in `v`
 ///
 /// # Example
 /// ```

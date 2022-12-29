@@ -72,7 +72,7 @@ visit_noop!(bigdecimal::BigDecimal);
 /// A visitor that can be used to walk an AST tree.
 ///
 /// `previst_` methods are invoked before visiting all children of the
-/// node and `postgisit_` methods are invoked after visiting all
+/// node and `postvisit_` methods are invoked after visiting all
 /// children of the node.
 ///
 /// # See also

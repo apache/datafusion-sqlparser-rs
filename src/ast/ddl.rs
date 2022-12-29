@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! AST types specific to CREATE/ALTER variants of [Statement]
+//! AST types specific to CREATE/ALTER variants of [`Statement`](crate::ast::Statement)
 //! (commonly referred to as Data Definition Language, or DDL)
 
 #[cfg(not(feature = "std"))]
@@ -325,6 +325,7 @@ pub enum TableConstraint {
     /// ```
     ///
     /// [1]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-natural-language.html
+    /// [2]: https://dev.mysql.com/doc/refman/8.0/en/spatial-types.html
     FulltextOrSpatial {
         /// Whether this is a `FULLTEXT` (true) or `SPATIAL` (false) definition.
         fulltext: bool,

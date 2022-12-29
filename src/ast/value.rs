@@ -35,8 +35,11 @@ pub enum Value {
     Number(BigDecimal, bool),
     /// 'string value'
     SingleQuotedString(String),
+    // $<tag_name>$string value$<tag_name>$ (postgres syntax)
+    DollarQuotedString(DollarQuotedString),
     /// e'string value' (postgres extension)
-    /// <https://www.postgresql.org/docs/8.3/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS
+    /// See [Postgres docs](https://www.postgresql.org/docs/8.3/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS)
+    /// for more details.
     EscapedStringLiteral(String),
     /// N'string value'
     NationalStringLiteral(String),
@@ -60,6 +63,7 @@ impl fmt::Display for Value {
             Value::Number(v, l) => write!(f, "{}{long}", v, long = if *l { "L" } else { "" }),
             Value::DoubleQuotedString(v) => write!(f, "\"{}\"", v),
             Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
+            Value::DollarQuotedString(v) => write!(f, "{}", v),
             Value::EscapedStringLiteral(v) => write!(f, "E'{}'", escape_escaped_string(v)),
             Value::NationalStringLiteral(v) => write!(f, "N'{}'", v),
             Value::HexStringLiteral(v) => write!(f, "X'{}'", v),
@@ -67,6 +71,27 @@ impl fmt::Display for Value {
             Value::Null => write!(f, "NULL"),
             Value::Placeholder(v) => write!(f, "{}", v),
             Value::UnQuotedString(v) => write!(f, "{}", v),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit))]
+pub struct DollarQuotedString {
+    pub value: String,
+    pub tag: Option<String>,
+}
+
+impl fmt::Display for DollarQuotedString {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.tag {
+            Some(tag) => {
+                write!(f, "${}${}${}$", tag, self.value, tag)
+            }
+            None => {
+                write!(f, "$${}$$", self.value)
+            }
         }
     }
 }

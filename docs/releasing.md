@@ -31,7 +31,7 @@ $ cargo install cargo-release
     $ cargo release minor --push-remote upstream
     ```
 
-    After verifying, you can rerun with `--execute` if all looks good. 
+    After verifying, you can rerun with `--execute` if all looks good.
     You can add `--no-push` to stop before actually publishing the release.
 
     `cargo release` will then:
@@ -56,3 +56,14 @@ $ cargo install cargo-release
 4. Check that the new version of the crate is available on crates.io:
     https://crates.io/crates/sqlparser
 
+
+## `sqlparser_derive` crate
+
+Currently this crate is manually published via `cargo publish`.
+
+crates.io homepage: https://crates.io/crates/sqlparser_derive
+
+```shell
+cd derive
+cargo publish
+```

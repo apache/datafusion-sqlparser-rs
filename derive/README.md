@@ -2,7 +2,8 @@
 
 ## Visit
 
-This crate contains a procedural macro that can automatically derive implementations of the `Visit` trait
+This crate contains a procedural macro that can automatically derive
+implementations of the `Visit` trait in the [sqlparser](https://crates.io/crates/sqlparser) crate
 
 ```rust
 #[derive(Visit)]

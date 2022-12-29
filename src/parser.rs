@@ -778,6 +778,7 @@ impl<'a> Parser<'a> {
             Token::Number(_, _)
             | Token::SingleQuotedString(_)
             | Token::DoubleQuotedString(_)
+            | Token::DollarQuotedString(_)
             | Token::NationalStringLiteral(_)
             | Token::HexStringLiteral(_) => {
                 self.prev_token();
@@ -1180,8 +1181,10 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// TRIM ([WHERE] ['text' FROM] 'text')\
+    /// ```sql
+    /// TRIM ([WHERE] ['text' FROM] 'text')
     /// TRIM ('text')
+    /// ```
     pub fn parse_trim_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let mut trim_where = None;
@@ -2983,8 +2986,10 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// ```sql
     /// DROP FUNCTION [ IF EXISTS ] name [ ( [ [ argmode ] [ argname ] argtype [, ...] ] ) ] [, ...]
     /// [ CASCADE | RESTRICT ]
+    /// ```
     fn parse_drop_function(&mut self) -> Result<Statement, ParserError> {
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let func_desc = self.parse_comma_separated(Parser::parse_drop_function_desc)?;
@@ -3018,8 +3023,10 @@ impl<'a> Parser<'a> {
         Ok(DropFunctionDesc { name, args })
     }
 
+    /// ```sql
     /// DECLARE name [ BINARY ] [ ASENSITIVE | INSENSITIVE ] [ [ NO ] SCROLL ]
-    //     CURSOR [ { WITH | WITHOUT } HOLD ] FOR query
+    ///     CURSOR [ { WITH | WITHOUT } HOLD ] FOR query
+    /// ```
     pub fn parse_declare(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_identifier()?;
 
@@ -4104,6 +4111,7 @@ impl<'a> Parser<'a> {
             },
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
+            Token::DollarQuotedString(ref s) => Ok(Value::DollarQuotedString(s.clone())),
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
             Token::EscapedStringLiteral(ref s) => Ok(Value::EscapedStringLiteral(s.to_string())),
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
@@ -4148,24 +4156,9 @@ impl<'a> Parser<'a> {
     pub fn parse_function_definition(&mut self) -> Result<FunctionDefinition, ParserError> {
         let peek_token = self.peek_token();
         match peek_token.token {
-            Token::DoubleDollarQuoting if dialect_of!(self is PostgreSqlDialect) => {
+            Token::DollarQuotedString(value) if dialect_of!(self is PostgreSqlDialect) => {
                 self.next_token();
-                let mut func_desc = String::new();
-                loop {
-                    if let Some(next_token) = self.next_token_no_skip() {
-                        match &next_token.token {
-                            Token::DoubleDollarQuoting => break,
-                            Token::EOF => {
-                                return self.expected(
-                                    "literal string",
-                                    TokenWithLocation::wrap(Token::EOF),
-                                );
-                            }
-                            token => func_desc.push_str(token.to_string().as_str()),
-                        }
-                    }
-                }
-                Ok(FunctionDefinition::DoubleDollarDef(func_desc))
+                Ok(FunctionDefinition::DoubleDollarDef(value.value))
             }
             _ => Ok(FunctionDefinition::SingleQuotedDef(
                 self.parse_literal_string()?,
@@ -4693,26 +4686,29 @@ impl<'a> Parser<'a> {
             format = Some(self.parse_analyze_format()?);
         }
 
-        if let Some(statement) = self.maybe_parse(|parser| parser.parse_statement()) {
-            Ok(Statement::Explain {
+        match self.maybe_parse(|parser| parser.parse_statement()) {
+            Some(Statement::Explain { .. }) | Some(Statement::ExplainTable { .. }) => Err(
+                ParserError::ParserError("Explain must be root of the plan".to_string()),
+            ),
+            Some(statement) => Ok(Statement::Explain {
                 describe_alias,
                 analyze,
                 verbose,
                 statement: Box::new(statement),
                 format,
-            })
-        } else {
-            let table_name = self.parse_object_name()?;
-
-            Ok(Statement::ExplainTable {
-                describe_alias,
-                table_name,
-            })
+            }),
+            _ => {
+                let table_name = self.parse_object_name()?;
+                Ok(Statement::ExplainTable {
+                    describe_alias,
+                    table_name,
+                })
+            }
         }
     }
 
     /// Parse a query expression, i.e. a `SELECT` statement optionally
-    /// preceeded with some `WITH` CTE declarations and optionally followed
+    /// preceded with some `WITH` CTE declarations and optionally followed
     /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
     /// expect the initial keyword to be already consumed
     pub fn parse_query(&mut self) -> Result<Query, ParserError> {
@@ -4835,7 +4831,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a "query body", which is an expression with roughly the
     /// following grammar:
-    /// ```text
+    /// ```sql
     ///   query_body ::= restricted_select | '(' subquery ')' | set_operation
     ///   restricted_select ::= 'SELECT' [expr_list] [ from ] [ where ] [ groupby_having ]
     ///   subquery ::= query_body [ order_by_limit ]
@@ -6143,7 +6139,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a TOP clause, MSSQL equivalent of LIMIT,
-    /// that follows after SELECT [DISTINCT].
+    /// that follows after `SELECT [DISTINCT]`.
     pub fn parse_top(&mut self) -> Result<Top, ParserError> {
         let quantity = if self.consume_token(&Token::LParen) {
             let quantity = self.parse_expr()?;
@@ -6462,8 +6458,11 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// https://www.postgresql.org/docs/current/sql-createsequence.html
+    /// ```sql
     /// CREATE [ { TEMPORARY | TEMP } ] SEQUENCE [ IF NOT EXISTS ] <sequence_name>
+    /// ```
+    ///
+    /// See [Postgres docs](https://www.postgresql.org/docs/current/sql-createsequence.html) for more details.
     pub fn parse_create_sequence(&mut self, temporary: bool) -> Result<Statement, ParserError> {
         //[ IF NOT EXISTS ]
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -7135,6 +7134,18 @@ mod tests {
             Err(ParserError::ParserError(
                 "Expected [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a"
                     .to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn test_nested_explain_error() {
+        let sql = "EXPLAIN EXPLAIN SELECT 1";
+        let ast = Parser::parse_sql(&GenericDialect, sql);
+        assert_eq!(
+            ast,
+            Err(ParserError::ParserError(
+                "Explain must be root of the plan".to_string()
             ))
         );
     }

@@ -8,7 +8,7 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
-## [0.29.0] 2022-12-28
+## [0.29.0] 2022-12-29
 
 ### Highlights
 * Partial source location tracking: see #710
@@ -16,6 +16,7 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 * AST visitor: #765
 
 ### Added
+feat: dollar-quoted strings support (#772) - Thanks @vasilev-alex
 * Add derive based AST visitor (#765) - Thanks @tustvold
 * Support `ALTER INDEX {INDEX_NAME} RENAME TO {NEW_INDEX_NAME}` (#767) - Thanks @devgony
 * Support `CREATE TABLE ON UPDATE <expr>` Function (#685) - Thanks @CEOJINSUNG
@@ -28,6 +29,8 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 * Support the type key (#750)- Thanks @yuval-illumex
 
 ### Changed
+* Improve docs and add examples for Visitor (#778) - Thanks @alamb
+* Add a backlink from sqlparse_derive to sqlparser and publishing instructions (#779) - Thanks @alamb
 * Document new features, update authors (#776) - Thanks @alamb
 * Improve Readme (#774) - Thanks @alamb
 * Standardize comments on parsing optional keywords (#773) - Thanks @alamb
@@ -38,8 +41,9 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 * Add `NANOSECOND` keyword (#749)- Thanks @waitingkuo
 
 ### Fixed
+* ParserError if nested explain (#781) - Thanks @Jefffrey
+* Fix cargo docs / warnings and add CI check (#777) - Thanks @alamb
 * unnest join constraint with alias parsing for BigQuery dialect (#732)- Thanks @Ziinc
-
 
 ## [0.28.0] 2022-12-05
 

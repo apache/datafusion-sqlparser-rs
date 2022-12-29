@@ -529,6 +529,7 @@ pub enum TableFactor {
         expr: Expr,
         alias: Option<TableAlias>,
     },
+    /// ```sql
     /// SELECT * FROM UNNEST ([10,20,30]) as numbers WITH OFFSET;
     /// +---------+--------+
     /// | numbers | offset |
@@ -537,6 +538,7 @@ pub enum TableFactor {
     /// | 20      | 1      |
     /// | 30      | 2      |
     /// +---------+--------+
+    /// ```
     UNNEST {
         alias: Option<TableAlias>,
         array_expr: Box<Expr>,

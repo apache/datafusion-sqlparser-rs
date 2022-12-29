@@ -372,39 +372,52 @@ pub enum Expr {
         timestamp: Box<Expr>,
         time_zone: String,
     },
+    /// ```sql
     /// EXTRACT(DateTimeField FROM <expr>)
+    /// ```
     Extract {
         field: DateTimeField,
         expr: Box<Expr>,
     },
+    /// ```sql
     /// CEIL(<expr> [TO DateTimeField])
+    /// ```
     Ceil {
         expr: Box<Expr>,
         field: DateTimeField,
     },
+    /// ```sql
     /// FLOOR(<expr> [TO DateTimeField])
+    /// ```
     Floor {
         expr: Box<Expr>,
         field: DateTimeField,
     },
+    /// ```sql
     /// POSITION(<expr> in <expr>)
+    /// ```
     Position { expr: Box<Expr>, r#in: Box<Expr> },
+    /// ```sql
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
+    /// ```
     Substring {
         expr: Box<Expr>,
         substring_from: Option<Box<Expr>>,
         substring_for: Option<Box<Expr>>,
     },
-    /// TRIM([BOTH | LEADING | TRAILING] [<expr> FROM] <expr>)\
-    /// Or\
+    /// ```sql
+    /// TRIM([BOTH | LEADING | TRAILING] [<expr> FROM] <expr>)
     /// TRIM(<expr>)
+    /// ```
     Trim {
         expr: Box<Expr>,
         // ([BOTH | LEADING | TRAILING]
         trim_where: Option<TrimWhereField>,
         trim_what: Option<Box<Expr>>,
     },
+    /// ```sql
     /// OVERLAY(<expr> PLACING <expr> FROM <expr>[ FOR <expr> ]
+    /// ```
     Overlay {
         expr: Box<Expr>,
         overlay_what: Box<Expr>,
@@ -426,7 +439,7 @@ pub enum Expr {
     TypedString { data_type: DataType, value: String },
     /// Access a map-like object by field (e.g. `column['field']` or `column[4]`
     /// Note that depending on the dialect, struct like accesses may be
-    /// parsed as [`ArrayIndex`] or [`MapAccess`]
+    /// parsed as [`ArrayIndex`](Self::ArrayIndex) or [`MapAccess`](Self::MapAccess)
     /// <https://clickhouse.com/docs/en/sql-reference/data-types/map/>
     MapAccess { column: Box<Expr>, keys: Vec<Expr> },
     /// Scalar function call e.g. `LEFT(foo, 5)`
@@ -490,7 +503,7 @@ pub enum Expr {
     /// `MySQL` specific text search function [(1)].
     ///
     /// Syntax:
-    /// ```text
+    /// ```sql
     /// MARCH (<col>, <col>, ...) AGAINST (<expr> [<search modifier>])
     ///
     /// <col> = CompoundIdentifier
@@ -956,9 +969,9 @@ pub struct WindowFrame {
 }
 
 impl Default for WindowFrame {
-    /// returns default value for window frame
+    /// Returns default value for window frame
     ///
-    /// see https://www.sqlite.org/windowfunctions.html#frame_specifications
+    /// See [this page](https://www.sqlite.org/windowfunctions.html#frame_specifications) for more details.
     fn default() -> Self {
         Self {
             units: WindowFrameUnits::Range,
@@ -1365,7 +1378,9 @@ pub enum Statement {
         /// Role name. If NONE is specified, then the current role name is removed.
         role_name: Option<Ident>,
     },
+    /// ```sql
     /// SET <variable>
+    /// ```
     ///
     /// Note: this is not a standard SQL statement, but it is supported by at
     /// least MySQL and PostgreSQL. Not all MySQL-specific syntatic forms are
@@ -1376,10 +1391,12 @@ pub enum Statement {
         variable: ObjectName,
         value: Vec<Expr>,
     },
+    /// ```sql
     /// SET TIME ZONE <value>
+    /// ```
     ///
     /// Note: this is a PostgreSQL-specific statements
-    /// SET TIME ZONE <value> is an alias for SET timezone TO <value> in PostgreSQL
+    /// `SET TIME ZONE <value>` is an alias for `SET timezone TO <value>` in PostgreSQL
     SetTimeZone { local: bool, value: Expr },
     /// SET NAMES 'charset_name' [COLLATE 'collation_name']
     ///
@@ -1396,7 +1413,9 @@ pub enum Statement {
     ///
     /// Note: this is a Presto-specific statement.
     ShowFunctions { filter: Option<ShowStatementFilter> },
+    /// ```sql
     /// SHOW <variable>
+    /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
     ShowVariable { variable: Vec<Ident> },
@@ -1471,10 +1490,13 @@ pub enum Statement {
         location: Option<String>,
         managed_location: Option<String>,
     },
+    /// ```sql
     /// CREATE FUNCTION
+    /// ```
     ///
-    /// Hive: https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction
-    /// Postgres: https://www.postgresql.org/docs/15/sql-createfunction.html
+    /// Supported variants:
+    /// 1. [Hive](https://cwiki.apache.org/confluence/display/hive/languagemanual+ddl#LanguageManualDDL-Create/Drop/ReloadFunction)
+    /// 2. [Postgres](https://www.postgresql.org/docs/15/sql-createfunction.html)
     CreateFunction {
         or_replace: bool,
         temporary: bool,
@@ -1567,8 +1589,11 @@ pub enum Statement {
         // Specifies the actions to perform when values match or do not match.
         clauses: Vec<MergeClause>,
     },
-    /// CACHE [ FLAG ] TABLE <table_name> [ OPTIONS('K1' = 'V1', 'K2' = V2) ] [ AS ] [ <query> ]
-    /// Based on Spark SQL,see <https://docs.databricks.com/spark/latest/spark-sql/language-manual/sql-ref-syntax-aux-cache-cache-table.html>
+    /// `CACHE [ FLAG ] TABLE <table_name> [ OPTIONS('K1' = 'V1', 'K2' = V2) ] [ AS ] [ <query> ]`.
+    ///
+    /// See [Spark SQL docs] for more details.
+    ///
+    /// [Spark SQL docs]: https://docs.databricks.com/spark/latest/spark-sql/language-manual/sql-ref-syntax-aux-cache-cache-table.html
     Cache {
         /// Table flag
         table_flag: Option<ObjectName>,
@@ -2707,9 +2732,11 @@ impl fmt::Display for Statement {
 }
 
 /// Can use to describe options in create sequence or table column type identity
+/// ```sql
 /// [ INCREMENT [ BY ] increment ]
 ///     [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
 ///     [ START [ WITH ] start ] [ CACHE cache ] [ [ NO ] CYCLE ]
+/// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit))]
@@ -3540,7 +3567,8 @@ impl fmt::Display for ShowStatementFilter {
 
 /// Sqlite specific syntax
 ///
-/// https://sqlite.org/lang_conflict.html
+/// See [Sqlite documentation](https://sqlite.org/lang_conflict.html)
+/// for more details.
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit))]
@@ -3979,7 +4007,10 @@ impl fmt::Display for FunctionDefinition {
     }
 }
 
-/// Postgres: https://www.postgresql.org/docs/15/sql-createfunction.html
+/// Postgres specific feature.
+///
+/// See [Postgresdocs](https://www.postgresql.org/docs/15/sql-createfunction.html)
+/// for more details
 #[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit))]

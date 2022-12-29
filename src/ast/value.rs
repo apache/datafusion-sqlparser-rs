@@ -38,7 +38,8 @@ pub enum Value {
     // $<tag_name>$string value$<tag_name>$ (postgres syntax)
     DollarQuotedString(DollarQuotedString),
     /// e'string value' (postgres extension)
-    /// <https://www.postgresql.org/docs/8.3/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS
+    /// See [Postgres docs](https://www.postgresql.org/docs/8.3/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS)
+    /// for more details.
     EscapedStringLiteral(String),
     /// N'string value'
     NationalStringLiteral(String),

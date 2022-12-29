@@ -35,6 +35,16 @@ jobs:
       - uses: actions/checkout@master
       - run: cargo check --all-targets --all-features
 
+  docs:
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: "-Dwarnings"
+    steps:
+      - name: Set up Rust
+        uses: hecrj/setup-rust-action@v1
+      - uses: actions/checkout@master
+      - run: cargo doc --document-private-items --no-deps --workspace --all-features
+
   compile-no-std:
     runs-on: ubuntu-latest
     steps:

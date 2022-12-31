@@ -24,10 +24,25 @@ use core::ops::ControlFlow;
 /// using the [Visit](sqlparser_derive::Visit) proc macro.
 ///
 /// ```text
-/// #[cfg_attr(feature = "visitor", derive(Visit))]
+/// #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 /// ```
 pub trait Visit {
     fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break>;
+}
+
+/// A type that can be visited by a [`VisitorMut`]. See [`VisitorMut`] for
+/// recursively visiting parsed SQL statements.
+///
+/// # Note
+///
+/// This trait should be automatically derived for sqlparser AST nodes
+/// using the [VisitMut](sqlparser_derive::VisitMut) proc macro.
+///
+/// ```text
+/// #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+/// ```
+pub trait VisitMut {
+    fn visit<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break>;
 }
 
 impl<T: Visit> Visit for Option<T> {
@@ -54,10 +69,39 @@ impl<T: Visit> Visit for Box<T> {
     }
 }
 
+impl<T: VisitMut> VisitMut for Option<T> {
+    fn visit<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break> {
+        if let Some(s) = self {
+            s.visit(visitor)?;
+        }
+        ControlFlow::Continue(())
+    }
+}
+
+impl<T: VisitMut> VisitMut for Vec<T> {
+    fn visit<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break> {
+        for v in self {
+            v.visit(visitor)?;
+        }
+        ControlFlow::Continue(())
+    }
+}
+
+impl<T: VisitMut> VisitMut for Box<T> {
+    fn visit<V: VisitorMut>(&mut self, visitor: &mut V) -> ControlFlow<V::Break> {
+        T::visit(self, visitor)
+    }
+}
+
 macro_rules! visit_noop {
     ($($t:ty),+) => {
         $(impl Visit for $t {
             fn visit<V: Visitor>(&self, _visitor: &mut V) -> ControlFlow<V::Break> {
+               ControlFlow::Continue(())
+            }
+        })+
+        $(impl VisitMut for $t {
+            fn visit<V: VisitorMut>(&mut self, _visitor: &mut V) -> ControlFlow<V::Break> {
                ControlFlow::Continue(())
             }
         })+
@@ -162,6 +206,84 @@ pub trait Visitor {
 
     /// Invoked for any statements that appear in the AST after visiting children
     fn post_visit_statement(&mut self, _statement: &Statement) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+}
+
+/// A visitor that can be used to mutate an AST tree.
+///
+/// `previst_` methods are invoked before visiting all children of the
+/// node and `postvisit_` methods are invoked after visiting all
+/// children of the node.
+///
+/// # See also
+///
+/// These methods provide a more concise way of visiting nodes of a certain type:
+/// * [visit_relations_mut]
+/// * [visit_expressions_mut]
+/// * [visit_statements_mut]
+///
+/// # Example
+/// ```
+/// # use sqlparser::parser::Parser;
+/// # use sqlparser::dialect::GenericDialect;
+/// # use sqlparser::ast::{VisitMut, VisitorMut, ObjectName, Expr, Ident};
+/// # use core::ops::ControlFlow;
+///
+/// // A visitor that replaces "to_replace" with "replaced" in all expressions
+/// struct Replacer;
+///
+/// // Visit each expression after its children have been visited
+/// impl VisitorMut for Replacer {
+///   type Break = ();
+///
+///   fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<Self::Break> {
+///     if let Expr::Identifier(Ident{ value, ..}) = expr {
+///         *value = value.replace("to_replace", "replaced")
+///     }
+///     ControlFlow::Continue(())
+///   }
+/// }
+///
+/// let sql = "SELECT to_replace FROM foo where to_replace IN (SELECT to_replace FROM bar)";
+/// let mut statements = Parser::parse_sql(&GenericDialect{}, sql).unwrap();
+///
+/// // Drive the visitor through the AST
+/// statements.visit(&mut Replacer);
+///
+/// assert_eq!(statements[0].to_string(), "SELECT replaced FROM foo WHERE replaced IN (SELECT replaced FROM bar)");
+/// ```
+pub trait VisitorMut {
+    /// Type returned when the recursion returns early.
+    type Break;
+
+    /// Invoked for any relations (e.g. tables) that appear in the AST before visiting children
+    fn pre_visit_relation(&mut self, _relation: &mut ObjectName) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any relations (e.g. tables) that appear in the AST after visiting children
+    fn post_visit_relation(&mut self, _relation: &mut ObjectName) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any expressions that appear in the AST before visiting children
+    fn pre_visit_expr(&mut self, _expr: &mut Expr) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any expressions that appear in the AST
+    fn post_visit_expr(&mut self, _expr: &mut Expr) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any statements that appear in the AST before visiting children
+    fn pre_visit_statement(&mut self, _statement: &mut Statement) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any statements that appear in the AST after visiting children
+    fn post_visit_statement(&mut self, _statement: &mut Statement) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 }

@@ -23,7 +23,7 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "visitor")]
-use sqlparser_derive::Visit;
+use sqlparser_derive::{Visit, VisitMut};
 
 pub use self::data_type::{
     CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
@@ -96,7 +96,7 @@ where
 /// An identifier, decomposed into its value or character data and the quote style.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Ident {
     /// The value of the identifier without quotes.
     pub value: String,
@@ -157,7 +157,7 @@ impl fmt::Display for Ident {
 /// A name of a table, view, custom type, etc., possibly multi-part, i.e. db.schema.obj
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ObjectName(pub Vec<Ident>);
 
 impl fmt::Display for ObjectName {
@@ -170,7 +170,7 @@ impl fmt::Display for ObjectName {
 /// `ARRAY[..]`, or `[..]`
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Array {
     /// The list of expressions between brackets
     pub elem: Vec<Expr>,
@@ -193,7 +193,7 @@ impl fmt::Display for Array {
 /// JsonOperator
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum JsonOperator {
     /// -> keeps the value as json
     Arrow,
@@ -257,7 +257,11 @@ impl fmt::Display for JsonOperator {
 /// inappropriate type, like `WHERE 1` or `SELECT 1=1`, as necessary.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit), visit(with = "visit_expr"))]
+#[cfg_attr(
+    feature = "visitor",
+    derive(Visit, VisitMut),
+    visit(with = "visit_expr")
+)]
 pub enum Expr {
     /// Identifier e.g. table name or column name
     Identifier(Ident),
@@ -911,7 +915,7 @@ impl fmt::Display for Expr {
 /// A window specification (i.e. `OVER (PARTITION BY .. ORDER BY .. etc.)`)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WindowSpec {
     pub partition_by: Vec<Expr>,
     pub order_by: Vec<OrderByExpr>,
@@ -957,7 +961,7 @@ impl fmt::Display for WindowSpec {
 /// reject invalid bounds like `ROWS UNBOUNDED FOLLOWING` before execution.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WindowFrame {
     pub units: WindowFrameUnits,
     pub start_bound: WindowFrameBound,
@@ -983,7 +987,7 @@ impl Default for WindowFrame {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum WindowFrameUnits {
     Rows,
     Range,
@@ -1003,7 +1007,7 @@ impl fmt::Display for WindowFrameUnits {
 /// Specifies [WindowFrame]'s `start_bound` and `end_bound`
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum WindowFrameBound {
     /// `CURRENT ROW`
     CurrentRow,
@@ -1027,7 +1031,7 @@ impl fmt::Display for WindowFrameBound {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AddDropSync {
     ADD,
     DROP,
@@ -1046,7 +1050,7 @@ impl fmt::Display for AddDropSync {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ShowCreateObject {
     Event,
     Function,
@@ -1071,7 +1075,7 @@ impl fmt::Display for ShowCreateObject {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CommentObject {
     Column,
     Table,
@@ -1088,7 +1092,7 @@ impl fmt::Display for CommentObject {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Password {
     Password(Expr),
     NullPassword,
@@ -1098,7 +1102,11 @@ pub enum Password {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit), visit(with = "visit_statement"))]
+#[cfg_attr(
+    feature = "visitor",
+    derive(Visit, VisitMut),
+    visit(with = "visit_statement")
+)]
 pub enum Statement {
     /// Analyze (Hive)
     Analyze {
@@ -2739,7 +2747,7 @@ impl fmt::Display for Statement {
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SequenceOptions {
     IncrementBy(Expr, bool),
     MinValue(MinMaxValue),
@@ -2804,7 +2812,7 @@ impl fmt::Display for SequenceOptions {
 /// [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum MinMaxValue {
     // clause is not specified
     Empty,
@@ -2816,7 +2824,7 @@ pub enum MinMaxValue {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[non_exhaustive]
 pub enum OnInsert {
     /// ON DUPLICATE KEY UPDATE (MySQL when the key already exists, then execute an update instead)
@@ -2827,21 +2835,21 @@ pub enum OnInsert {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct OnConflict {
     pub conflict_target: Option<ConflictTarget>,
     pub action: OnConflictAction,
 }
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ConflictTarget {
     Columns(Vec<Ident>),
     OnConstraint(ObjectName),
 }
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum OnConflictAction {
     DoNothing,
     DoUpdate(DoUpdate),
@@ -2849,7 +2857,7 @@ pub enum OnConflictAction {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct DoUpdate {
     /// Column assignments
     pub assignments: Vec<Assignment>,
@@ -2911,7 +2919,7 @@ impl fmt::Display for OnConflictAction {
 /// Privileges granted in a GRANT statement or revoked in a REVOKE statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Privileges {
     /// All privileges applicable to the object type
     All {
@@ -2948,7 +2956,7 @@ impl fmt::Display for Privileges {
 /// Specific direction for FETCH statement
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FetchDirection {
     Count { limit: Value },
     Next,
@@ -3012,7 +3020,7 @@ impl fmt::Display for FetchDirection {
 /// A privilege on a database object (table, sequence, etc.).
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Action {
     Connect,
     Create,
@@ -3062,7 +3070,7 @@ impl fmt::Display for Action {
 /// Objects on which privileges are granted in a GRANT statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum GrantObjects {
     /// Grant privileges on `ALL SEQUENCES IN SCHEMA <schema_name> [, ...]`
     AllSequencesInSchema { schemas: Vec<ObjectName> },
@@ -3109,7 +3117,7 @@ impl fmt::Display for GrantObjects {
 /// SQL assignment `foo = expr` as used in SQLUpdate
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Assignment {
     pub id: Vec<Ident>,
     pub value: Expr,
@@ -3123,7 +3131,7 @@ impl fmt::Display for Assignment {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FunctionArgExpr {
     Expr(Expr),
     /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
@@ -3144,7 +3152,7 @@ impl fmt::Display for FunctionArgExpr {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FunctionArg {
     Named { name: Ident, arg: FunctionArgExpr },
     Unnamed(FunctionArgExpr),
@@ -3161,7 +3169,7 @@ impl fmt::Display for FunctionArg {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CloseCursor {
     All,
     Specific { name: Ident },
@@ -3179,7 +3187,7 @@ impl fmt::Display for CloseCursor {
 /// A function call
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Function {
     pub name: ObjectName,
     pub args: Vec<FunctionArg>,
@@ -3193,7 +3201,7 @@ pub struct Function {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AnalyzeFormat {
     TEXT,
     GRAPHVIZ,
@@ -3235,7 +3243,7 @@ impl fmt::Display for Function {
 /// External table's available file format
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FileFormat {
     TEXTFILE,
     SEQUENCEFILE,
@@ -3265,7 +3273,7 @@ impl fmt::Display for FileFormat {
 /// [ WITHIN GROUP (ORDER BY <within_group1>[, ...] ) ]`
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ListAgg {
     pub distinct: bool,
     pub expr: Box<Expr>,
@@ -3303,7 +3311,7 @@ impl fmt::Display for ListAgg {
 /// The `ON OVERFLOW` clause of a LISTAGG invocation
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ListAggOnOverflow {
     /// `ON OVERFLOW ERROR`
     Error,
@@ -3341,7 +3349,7 @@ impl fmt::Display for ListAggOnOverflow {
 /// ORDER BY position is defined differently for BigQuery, Postgres and Snowflake.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ArrayAgg {
     pub distinct: bool,
     pub expr: Box<Expr>,
@@ -3378,7 +3386,7 @@ impl fmt::Display for ArrayAgg {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ObjectType {
     Table,
     View,
@@ -3403,7 +3411,7 @@ impl fmt::Display for ObjectType {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum KillType {
     Connection,
     Query,
@@ -3424,7 +3432,7 @@ impl fmt::Display for KillType {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum HiveDistributionStyle {
     PARTITIONED {
         columns: Vec<ColumnDef>,
@@ -3444,7 +3452,7 @@ pub enum HiveDistributionStyle {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum HiveRowFormat {
     SERDE { class: String },
     DELIMITED,
@@ -3452,7 +3460,7 @@ pub enum HiveRowFormat {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 #[allow(clippy::large_enum_variant)]
 pub enum HiveIOFormat {
     IOF {
@@ -3466,7 +3474,7 @@ pub enum HiveIOFormat {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct HiveFormat {
     pub row_format: Option<HiveRowFormat>,
     pub storage: Option<HiveIOFormat>,
@@ -3475,7 +3483,7 @@ pub struct HiveFormat {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct SqlOption {
     pub name: Ident,
     pub value: Value,
@@ -3489,7 +3497,7 @@ impl fmt::Display for SqlOption {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TransactionMode {
     AccessMode(TransactionAccessMode),
     IsolationLevel(TransactionIsolationLevel),
@@ -3507,7 +3515,7 @@ impl fmt::Display for TransactionMode {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TransactionAccessMode {
     ReadOnly,
     ReadWrite,
@@ -3525,7 +3533,7 @@ impl fmt::Display for TransactionAccessMode {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TransactionIsolationLevel {
     ReadUncommitted,
     ReadCommitted,
@@ -3547,7 +3555,7 @@ impl fmt::Display for TransactionIsolationLevel {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ShowStatementFilter {
     Like(String),
     ILike(String),
@@ -3571,7 +3579,7 @@ impl fmt::Display for ShowStatementFilter {
 /// for more details.
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SqliteOnConflict {
     Rollback,
     Abort,
@@ -3595,7 +3603,7 @@ impl fmt::Display for SqliteOnConflict {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CopyTarget {
     Stdin,
     Stdout,
@@ -3627,7 +3635,7 @@ impl fmt::Display for CopyTarget {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum OnCommit {
     DeleteRows,
     PreserveRows,
@@ -3639,7 +3647,7 @@ pub enum OnCommit {
 /// <https://www.postgresql.org/docs/14/sql-copy.html>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CopyOption {
     /// FORMAT format_name
     Format(Ident),
@@ -3693,7 +3701,7 @@ impl fmt::Display for CopyOption {
 /// <https://www.postgresql.org/docs/8.4/sql-copy.html>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CopyLegacyOption {
     /// BINARY
     Binary,
@@ -3722,7 +3730,7 @@ impl fmt::Display for CopyLegacyOption {
 /// <https://www.postgresql.org/docs/8.4/sql-copy.html>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CopyLegacyCsvOption {
     /// HEADER
     Header,
@@ -3754,7 +3762,7 @@ impl fmt::Display for CopyLegacyCsvOption {
 ///
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum MergeClause {
     MatchedUpdate {
         predicate: Option<Expr>,
@@ -3816,7 +3824,7 @@ impl fmt::Display for MergeClause {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum DiscardObject {
     ALL,
     PLANS,
@@ -3838,7 +3846,7 @@ impl fmt::Display for DiscardObject {
 /// Optional context modifier for statements that can be or `LOCAL`, or `SESSION`.
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ContextModifier {
     /// No context defined. Each dialect defines the default in this scenario.
     None,
@@ -3884,7 +3892,7 @@ impl fmt::Display for DropFunctionOption {
 /// Function describe in DROP FUNCTION.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct DropFunctionDesc {
     pub name: ObjectName,
     pub args: Option<Vec<OperateFunctionArg>>,
@@ -3903,7 +3911,7 @@ impl fmt::Display for DropFunctionDesc {
 /// Function argument in CREATE OR DROP FUNCTION.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct OperateFunctionArg {
     pub mode: Option<ArgMode>,
     pub name: Option<Ident>,
@@ -3952,7 +3960,7 @@ impl fmt::Display for OperateFunctionArg {
 /// The mode of an argument in CREATE FUNCTION.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ArgMode {
     In,
     Out,
@@ -3972,7 +3980,7 @@ impl fmt::Display for ArgMode {
 /// These attributes inform the query optimizer about the behavior of the function.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FunctionBehavior {
     Immutable,
     Stable,
@@ -3991,7 +3999,7 @@ impl fmt::Display for FunctionBehavior {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FunctionDefinition {
     SingleQuotedDef(String),
     DoubleDollarDef(String),
@@ -4013,7 +4021,7 @@ impl fmt::Display for FunctionDefinition {
 /// for more details
 #[derive(Debug, Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct CreateFunctionBody {
     /// LANGUAGE lang_name
     pub language: Option<Ident>,
@@ -4052,7 +4060,7 @@ impl fmt::Display for CreateFunctionBody {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CreateFunctionUsing {
     Jar(String),
     File(String),
@@ -4075,7 +4083,7 @@ impl fmt::Display for CreateFunctionUsing {
 /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#schema-definition
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SchemaName {
     /// Only schema name specified: `<schema name>`.
     Simple(ObjectName),
@@ -4106,7 +4114,7 @@ impl fmt::Display for SchemaName {
 /// [1]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-search.html#function_match
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SearchModifier {
     /// `IN NATURAL LANGUAGE MODE`.
     InNaturalLanguageMode,

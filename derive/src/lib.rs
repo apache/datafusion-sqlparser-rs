@@ -6,25 +6,58 @@ use syn::{
     Ident, Index, Lit, Meta, MetaNameValue, NestedMeta,
 };
 
+
+/// Implementation of `[#derive(Visit)]`
+#[proc_macro_derive(VisitMut, attributes(visit))]
+pub fn derive_visit_mut(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    derive_visit(input, &VisitType {
+        visit_trait: quote!(VisitMut),
+        visitor_trait: quote!(VisitorMut),
+        modifier: Some(quote!(mut)),
+    })
+}
+
 /// Implementation of `[#derive(Visit)]`
 #[proc_macro_derive(Visit, attributes(visit))]
-pub fn derive_visit(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn derive_visit_immutable(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    derive_visit(input, &VisitType {
+        visit_trait: quote!(Visit),
+        visitor_trait: quote!(Visitor),
+        modifier: None,
+    })
+}
+
+struct VisitType {
+    visit_trait: TokenStream,
+    visitor_trait: TokenStream,
+    modifier: Option<TokenStream>,
+}
+
+fn derive_visit(
+    input: proc_macro::TokenStream,
+    visit_type: &VisitType,
+) -> proc_macro::TokenStream {
     // Parse the input tokens into a syntax tree.
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
 
+    let VisitType { visit_trait, visitor_trait, modifier } = visit_type;
+
     let attributes = Attributes::parse(&input.attrs);
-    // Add a bound `T: HeapSize` to every type parameter T.
-    let generics = add_trait_bounds(input.generics);
+    // Add a bound `T: Visit` to every type parameter T.
+    let generics = add_trait_bounds(input.generics, visit_type);
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let (pre_visit, post_visit) = attributes.visit(quote!(self));
-    let children = visit_children(&input.data);
+    let children = visit_children(&input.data, visit_type);
 
     let expanded = quote! {
         // The generated impl.
-        impl #impl_generics sqlparser::ast::Visit for #name #ty_generics #where_clause {
-            fn visit<V: sqlparser::ast::Visitor>(&self, visitor: &mut V) -> ::std::ops::ControlFlow<V::Break> {
+        impl #impl_generics sqlparser::ast::#visit_trait for #name #ty_generics #where_clause {
+            fn visit<V: sqlparser::ast::#visitor_trait>(
+                &#modifier self,
+                visitor: &mut V
+            ) -> ::std::ops::ControlFlow<V::Break> {
                 #pre_visit
                 #children
                 #post_visit
@@ -92,25 +125,25 @@ impl Attributes {
 }
 
 // Add a bound `T: Visit` to every type parameter T.
-fn add_trait_bounds(mut generics: Generics) -> Generics {
+fn add_trait_bounds(mut generics: Generics, VisitType{visit_trait, ..}: &VisitType) -> Generics {
     for param in &mut generics.params {
         if let GenericParam::Type(ref mut type_param) = *param {
-            type_param.bounds.push(parse_quote!(sqlparser::ast::Visit));
+            type_param.bounds.push(parse_quote!(sqlparser::ast::#visit_trait));
         }
     }
     generics
 }
 
 // Generate the body of the visit implementation for the given type
-fn visit_children(data: &Data) -> TokenStream {
+fn visit_children(data: &Data, VisitType{visit_trait, modifier, ..}: &VisitType) -> TokenStream {
     match data {
         Data::Struct(data) => match &data.fields {
             Fields::Named(fields) => {
                 let recurse = fields.named.iter().map(|f| {
                     let name = &f.ident;
                     let attributes = Attributes::parse(&f.attrs);
-                    let (pre_visit, post_visit) = attributes.visit(quote!(&self.#name));
-                    quote_spanned!(f.span() => #pre_visit sqlparser::ast::Visit::visit(&self.#name, visitor)?; #post_visit)
+                    let (pre_visit, post_visit) = attributes.visit(quote!(&#modifier self.#name));
+                    quote_spanned!(f.span() => #pre_visit sqlparser::ast::#visit_trait::visit(&#modifier self.#name, visitor)?; #post_visit)
                 });
                 quote! {
                     #(#recurse)*
@@ -121,7 +154,7 @@ fn visit_children(data: &Data) -> TokenStream {
                     let index = Index::from(i);
                     let attributes = Attributes::parse(&f.attrs);
                     let (pre_visit, post_visit) = attributes.visit(quote!(&self.#index));
-                    quote_spanned!(f.span() => #pre_visit sqlparser::ast::Visit::visit(&self.#index, visitor)?; #post_visit)
+                    quote_spanned!(f.span() => #pre_visit sqlparser::ast::#visit_trait::visit(&#modifier self.#index, visitor)?; #post_visit)
                 });
                 quote! {
                     #(#recurse)*
@@ -140,8 +173,8 @@ fn visit_children(data: &Data) -> TokenStream {
                         let visit = fields.named.iter().map(|f| {
                             let name = &f.ident;
                             let attributes = Attributes::parse(&f.attrs);
-                            let (pre_visit, post_visit) = attributes.visit(quote!(&#name));
-                            quote_spanned!(f.span() => #pre_visit sqlparser::ast::Visit::visit(#name, visitor)?; #post_visit)
+                            let (pre_visit, post_visit) = attributes.visit(name.to_token_stream());
+                            quote_spanned!(f.span() => #pre_visit sqlparser::ast::#visit_trait::visit(#name, visitor)?; #post_visit)
                         });
 
                         quote!(
@@ -155,8 +188,8 @@ fn visit_children(data: &Data) -> TokenStream {
                         let visit = fields.unnamed.iter().enumerate().map(|(i, f)| {
                             let name = format_ident!("_{}", i);
                             let attributes = Attributes::parse(&f.attrs);
-                            let (pre_visit, post_visit) = attributes.visit(quote!(&#name));
-                            quote_spanned!(f.span() => #pre_visit sqlparser::ast::Visit::visit(#name, visitor)?; #post_visit)
+                            let (pre_visit, post_visit) = attributes.visit(name.to_token_stream());
+                            quote_spanned!(f.span() => #pre_visit sqlparser::ast::#visit_trait::visit(#name, visitor)?; #post_visit)
                         });
 
                         quote! {

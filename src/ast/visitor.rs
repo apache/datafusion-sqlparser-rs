@@ -298,6 +298,14 @@ impl<E, F: FnMut(&ObjectName) -> ControlFlow<E>> Visitor for RelationVisitor<F> 
     }
 }
 
+impl<E, F: FnMut(&mut ObjectName) -> ControlFlow<E>> VisitorMut for RelationVisitor<F> {
+    type Break = E;
+
+    fn pre_visit_relation(&mut self, relation: &mut ObjectName) -> ControlFlow<Self::Break> {
+        self.0(relation)
+    }
+}
+
 /// Invokes the provided closure on all relations (e.g. table names) present in `v`
 ///
 /// # Example
@@ -335,12 +343,50 @@ where
     ControlFlow::Continue(())
 }
 
+/// Invokes the provided closure on all relations (e.g. table names) present in `v`
+///
+/// # Example
+/// ```
+/// # use sqlparser::parser::Parser;
+/// # use sqlparser::dialect::GenericDialect;
+/// # use sqlparser::ast::{ObjectName, visit_relations_mut};
+/// # use core::ops::ControlFlow;
+/// let sql = "SELECT a FROM foo";
+/// let mut statements = Parser::parse_sql(&GenericDialect{}, sql)
+///    .unwrap();
+///
+/// // visit statements, renaming table foo to bar
+/// visit_relations_mut(&mut statements, |table| {
+///   table.0[0].value = table.0[0].value.replace("foo", "bar");
+///   ControlFlow::<()>::Continue(())
+/// });
+///
+/// assert_eq!(statements[0].to_string(), "SELECT a FROM bar");
+/// ```
+pub fn visit_relations_mut<V, E, F>(v: &mut V, f: F) -> ControlFlow<E>
+where
+    V: VisitMut,
+    F: FnMut(&mut ObjectName) -> ControlFlow<E>,
+{
+    let mut visitor = RelationVisitor(f);
+    v.visit(&mut visitor)?;
+    ControlFlow::Continue(())
+}
+
 struct ExprVisitor<F>(F);
 
 impl<E, F: FnMut(&Expr) -> ControlFlow<E>> Visitor for ExprVisitor<F> {
     type Break = E;
 
     fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<Self::Break> {
+        self.0(expr)
+    }
+}
+
+impl<E, F: FnMut(&mut Expr) -> ControlFlow<E>> VisitorMut for ExprVisitor<F> {
+    type Break = E;
+
+    fn pre_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<Self::Break> {
         self.0(expr)
     }
 }
@@ -384,12 +430,50 @@ where
     ControlFlow::Continue(())
 }
 
+/// Invokes the provided closure on all expressions present in `v`
+///
+/// # Example
+/// ```
+/// # use sqlparser::parser::Parser;
+/// # use sqlparser::dialect::GenericDialect;
+/// # use sqlparser::ast::{Expr, visit_expressions_mut, visit_statements_mut};
+/// # use core::ops::ControlFlow;
+/// let sql = "SELECT (SELECT y FROM z LIMIT 9) FROM t LIMIT 3";
+/// let mut statements = Parser::parse_sql(&GenericDialect{}, sql).unwrap();
+///
+/// // Remove all select limits in sub-queries
+/// visit_expressions_mut(&mut statements, |expr| {
+///   if let Expr::Subquery(q) = expr {
+///      q.limit = None
+///   }
+///   ControlFlow::<()>::Continue(())
+/// });
+///
+/// assert_eq!(statements[0].to_string(), "SELECT (SELECT y FROM z) FROM t LIMIT 3");
+/// ```
+pub fn visit_expressions_mut<V, E, F>(v: &mut V, f: F) -> ControlFlow<E>
+where
+    V: VisitMut,
+    F: FnMut(&mut Expr) -> ControlFlow<E>,
+{
+    v.visit(&mut ExprVisitor(f))?;
+    ControlFlow::Continue(())
+}
+
 struct StatementVisitor<F>(F);
 
 impl<E, F: FnMut(&Statement) -> ControlFlow<E>> Visitor for StatementVisitor<F> {
     type Break = E;
 
     fn pre_visit_statement(&mut self, statement: &Statement) -> ControlFlow<Self::Break> {
+        self.0(statement)
+    }
+}
+
+impl<E, F: FnMut(&mut Statement) -> ControlFlow<E>> VisitorMut for StatementVisitor<F> {
+    type Break = E;
+
+    fn pre_visit_statement(&mut self, statement: &mut Statement) -> ControlFlow<Self::Break> {
         self.0(statement)
     }
 }
@@ -428,6 +512,37 @@ where
 {
     let mut visitor = StatementVisitor(f);
     v.visit(&mut visitor)?;
+    ControlFlow::Continue(())
+}
+
+/// Invokes the provided closure on all statements (e.g. `SELECT`, `CREATE TABLE`, etc) present in `v`
+///
+/// # Example
+/// ```
+/// # use sqlparser::parser::Parser;
+/// # use sqlparser::dialect::GenericDialect;
+/// # use sqlparser::ast::{Statement, visit_statements_mut};
+/// # use core::ops::ControlFlow;
+/// let sql = "SELECT x FROM foo LIMIT 9+$limit; SELECT * FROM t LIMIT f()";
+/// let mut statements = Parser::parse_sql(&GenericDialect{}, sql).unwrap();
+///
+/// // Remove all select limits in outer statements (not in sub-queries)
+/// visit_statements_mut(&mut statements, |stmt| {
+///   if let Statement::Query(q) = stmt {
+///      q.limit = None
+///   }
+///   ControlFlow::<()>::Continue(())
+/// });
+///
+/// assert_eq!(statements[0].to_string(), "SELECT x FROM foo");
+/// assert_eq!(statements[1].to_string(), "SELECT * FROM t");
+/// ```
+pub fn visit_statements_mut<V, E, F>(v: &mut V, f: F) -> ControlFlow<E>
+where
+    V: VisitMut,
+    F: FnMut(&mut Statement) -> ControlFlow<E>,
+{
+    v.visit(&mut StatementVisitor(f))?;
     ControlFlow::Continue(())
 }
 

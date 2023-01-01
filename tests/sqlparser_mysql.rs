@@ -693,6 +693,41 @@ fn parse_simple_insert() {
 }
 
 #[test]
+fn parse_empty_row_insert() {
+    let sql = "INSERT INTO tb () VALUES (), ()";
+
+    match mysql().one_statement_parses_to(sql, "INSERT INTO tb VALUES (), ()") {
+        Statement::Insert {
+            table_name,
+            columns,
+            source,
+            on,
+            ..
+        } => {
+            assert_eq!(ObjectName(vec![Ident::new("tb")]), table_name);
+            assert!(columns.is_empty());
+            assert!(on.is_none());
+            assert_eq!(
+                Box::new(Query {
+                    with: None,
+                    body: Box::new(SetExpr::Values(Values {
+                        explicit_row: false,
+                        rows: vec![vec![], vec![]]
+                    })),
+                    order_by: vec![],
+                    limit: None,
+                    offset: None,
+                    fetch: None,
+                    locks: vec![],
+                }),
+                source
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_insert_with_on_duplicate_update() {
     let sql = "INSERT INTO permission_groups (name, description, perm_create, perm_read, perm_update, perm_delete) VALUES ('accounting_manager', 'Some description about the group', true, true, true, true) ON DUPLICATE KEY UPDATE description = VALUES(description), perm_create = VALUES(perm_create), perm_read = VALUES(perm_read), perm_update = VALUES(perm_update), perm_delete = VALUES(perm_delete)";
 

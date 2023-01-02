@@ -8,6 +8,18 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.30.0] 2023-01-02
+
+### Added
+* Support `RENAME` for wildcard `SELECTs` (#784) - Thanks @Jefffrey
+* Add a mutable visitor (#782) - Thanks @lovasoa
+
+### Changed
+* Allow parsing of mysql empty row inserts (#783) - Thanks @Jefffrey
+
+### Fixed
+* Fix logical conflict (#785) - Thanks @alamb
+
 ## [0.29.0] 2022-12-29
 
 ### Highlights

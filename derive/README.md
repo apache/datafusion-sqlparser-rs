@@ -6,13 +6,13 @@ This crate contains a procedural macro that can automatically derive
 implementations of the `Visit` trait in the [sqlparser](https://crates.io/crates/sqlparser) crate
 
 ```rust
-#[derive(Visit)]
+#[derive(Visit, VisitMut)]
 struct Foo {
     boolean: bool,
     bar: Bar,
 }
 
-#[derive(Visit)]
+#[derive(Visit, VisitMut)]
 enum Bar {
     A(),
     B(String, bool),
@@ -51,7 +51,7 @@ impl Visit for Bar {
 Additionally certain types may wish to call a corresponding method on visitor before recursing
 
 ```rust
-#[derive(Visit)]
+#[derive(Visit, VisitMut)]
 #[visit(with = "visit_expr")]
 enum Expr {
     A(),

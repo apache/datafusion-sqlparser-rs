@@ -21,12 +21,12 @@ use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "visitor")]
-use sqlparser_derive::Visit;
+use sqlparser_derive::{Visit, VisitMut};
 
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Value {
     /// Numeric literal
     #[cfg(not(feature = "bigdecimal"))]
@@ -77,7 +77,7 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct DollarQuotedString {
     pub value: String,
     pub tag: Option<String>,
@@ -98,7 +98,7 @@ impl fmt::Display for DollarQuotedString {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum DateTimeField {
     Year,
     Month,
@@ -229,7 +229,7 @@ pub fn escape_escaped_string(s: &str) -> EscapeEscapedStringLiteral<'_> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TrimWhereField {
     Both,
     Leading,

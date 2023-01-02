@@ -4401,6 +4401,14 @@ impl<'a> Parser<'a> {
         Ok(values)
     }
 
+    /// Strictly parse `identifier AS identifier`
+    pub fn parse_identifier_with_alias(&mut self) -> Result<IdentWithAlias, ParserError> {
+        let ident = self.parse_identifier()?;
+        self.expect_keyword(Keyword::AS)?;
+        let alias = self.parse_identifier()?;
+        Ok(IdentWithAlias { ident, alias })
+    }
+
     /// Parse `AS identifier` (or simply `identifier` if it's not a reserved keyword)
     /// Some examples with aliases: `SELECT 1 foo`, `SELECT COUNT(*) AS cnt`,
     /// `SELECT ... FROM t1 foo, t2 bar`, `SELECT ... FROM (...) AS bar`
@@ -4432,7 +4440,7 @@ impl<'a> Parser<'a> {
             //    ignore the <separator> and treat the multiple strings as
             //    a single <literal>."
             Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
-            // Support for MySql dialect double qouted string, `AS "HOUR"` for example
+            // Support for MySql dialect double quoted string, `AS "HOUR"` for example
             Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote('\"', s))),
             _ => {
                 if after_as {
@@ -6063,10 +6071,16 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        let opt_rename = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
+            self.parse_optional_select_item_rename()?
+        } else {
+            None
+        };
 
         Ok(WildcardAdditionalOptions {
             opt_exclude,
             opt_except,
+            opt_rename,
         })
     }
 
@@ -6108,7 +6122,7 @@ impl<'a> Parser<'a> {
                     )?;
                 }
                 [first, idents @ ..] => Some(ExceptSelectItem {
-                    fist_elemnt: first.clone(),
+                    first_element: first.clone(),
                     additional_elements: idents.to_vec(),
                 }),
             }
@@ -6117,6 +6131,27 @@ impl<'a> Parser<'a> {
         };
 
         Ok(opt_except)
+    }
+
+    /// Parse a [`Rename`](RenameSelectItem) information for wildcard select items.
+    pub fn parse_optional_select_item_rename(
+        &mut self,
+    ) -> Result<Option<RenameSelectItem>, ParserError> {
+        let opt_rename = if self.parse_keyword(Keyword::RENAME) {
+            if self.consume_token(&Token::LParen) {
+                let idents =
+                    self.parse_comma_separated(|parser| parser.parse_identifier_with_alias())?;
+                self.expect_token(&Token::RParen)?;
+                Some(RenameSelectItem::Multiple(idents))
+            } else {
+                let ident = self.parse_identifier_with_alias()?;
+                Some(RenameSelectItem::Single(ident))
+            }
+        } else {
+            None
+        };
+
+        Ok(opt_rename)
     }
 
     /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)

@@ -373,7 +373,7 @@ pub enum SelectItem {
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct IdentWithAlias {
     pub ident: Ident,
     pub alias: Ident,
@@ -463,7 +463,7 @@ impl fmt::Display for ExcludeSelectItem {
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum RenameSelectItem {
     /// Single column name with alias without parenthesis.
     ///

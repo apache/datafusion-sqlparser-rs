@@ -93,7 +93,7 @@ $ cargo run --features json_example --example cli FILENAME.sql [--dialectname]
 ## Users
 
 This parser is currently being used by the [DataFusion] query engine,
-[LocustDB], [Ballista] and [GlueSQL].
+[LocustDB], [Ballista], [GlueSQL], and [Opteryx].
 
 If your project is using sqlparser-rs feel free to make a PR to add it
 to this list.
@@ -178,6 +178,7 @@ licensed as above, without any additional terms or conditions.
 [LocustDB]: https://github.com/cswinter/LocustDB
 [Ballista]: https://github.com/apache/arrow-ballista
 [GlueSQL]: https://github.com/gluesql/gluesql
+[Opteryx]: https://github.com/mabel-dev/opteryx
 [Pratt Parser]: https://tdop.github.io/
 [sql-2016-grammar]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html
 [sql-standard]: https://en.wikipedia.org/wiki/ISO/IEC_9075

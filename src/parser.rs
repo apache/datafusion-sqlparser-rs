@@ -1433,7 +1433,7 @@ impl<'a> Parser<'a> {
     ///
     /// [(1)]: Expr::MatchAgainst
     pub fn parse_match_against(&mut self) -> Result<Expr, ParserError> {
-        let columns = self.parse_parenthesized_column_list(Mandatory)?;
+        let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
 
         self.expect_keyword(Keyword::AGAINST)?;
 
@@ -2419,7 +2419,7 @@ impl<'a> Parser<'a> {
         // general that the arguments can be made to appear as column
         // definitions in a traditional CREATE TABLE statement", but
         // we don't implement that.
-        let module_args = self.parse_parenthesized_column_list(Optional)?;
+        let module_args = self.parse_parenthesized_column_list(Optional, false)?;
         Ok(Statement::CreateVirtualTable {
             name: table_name,
             if_not_exists,
@@ -2698,12 +2698,12 @@ impl<'a> Parser<'a> {
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let name = self.parse_object_name()?;
-        let columns = self.parse_parenthesized_column_list(Optional)?;
+        let columns = self.parse_parenthesized_column_list(Optional, false)?;
         let with_options = self.parse_options(Keyword::WITH)?;
 
         let cluster_by = if self.parse_keyword(Keyword::CLUSTER) {
             self.expect_keyword(Keyword::BY)?;
-            self.parse_parenthesized_column_list(Optional)?
+            self.parse_parenthesized_column_list(Optional, false)?
         } else {
             vec![]
         };
@@ -3441,7 +3441,7 @@ impl<'a> Parser<'a> {
             let foreign_table = self.parse_object_name()?;
             // PostgreSQL allows omitting the column list and
             // uses the primary key column of the foreign table by default
-            let referred_columns = self.parse_parenthesized_column_list(Optional)?;
+            let referred_columns = self.parse_parenthesized_column_list(Optional, false)?;
             let mut on_delete = None;
             let mut on_update = None;
             loop {
@@ -3525,7 +3525,7 @@ impl<'a> Parser<'a> {
                 if is_primary {
                     self.expect_keyword(Keyword::KEY)?;
                 }
-                let columns = self.parse_parenthesized_column_list(Mandatory)?;
+                let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
                 Ok(Some(TableConstraint::Unique {
                     name,
                     columns,
@@ -3534,10 +3534,10 @@ impl<'a> Parser<'a> {
             }
             Token::Word(w) if w.keyword == Keyword::FOREIGN => {
                 self.expect_keyword(Keyword::KEY)?;
-                let columns = self.parse_parenthesized_column_list(Mandatory)?;
+                let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
                 self.expect_keyword(Keyword::REFERENCES)?;
                 let foreign_table = self.parse_object_name()?;
-                let referred_columns = self.parse_parenthesized_column_list(Mandatory)?;
+                let referred_columns = self.parse_parenthesized_column_list(Mandatory, false)?;
                 let mut on_delete = None;
                 let mut on_update = None;
                 loop {
@@ -3582,7 +3582,7 @@ impl<'a> Parser<'a> {
                 } else {
                     None
                 };
-                let columns = self.parse_parenthesized_column_list(Mandatory)?;
+                let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
 
                 Ok(Some(TableConstraint::Index {
                     display_as_key,
@@ -3617,7 +3617,7 @@ impl<'a> Parser<'a> {
 
                 let opt_index_name = self.maybe_parse(|parser| parser.parse_identifier());
 
-                let columns = self.parse_parenthesized_column_list(Mandatory)?;
+                let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
 
                 Ok(Some(TableConstraint::FulltextOrSpatial {
                     fulltext,
@@ -3864,7 +3864,7 @@ impl<'a> Parser<'a> {
     /// Parse a copy statement
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
         let table_name = self.parse_object_name()?;
-        let columns = self.parse_parenthesized_column_list(Optional)?;
+        let columns = self.parse_parenthesized_column_list(Optional, false)?;
         let to = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::TO]) {
             Some(Keyword::FROM) => false,
             Some(Keyword::TO) => true,
@@ -3950,13 +3950,13 @@ impl<'a> Parser<'a> {
             Some(Keyword::QUOTE) => CopyOption::Quote(self.parse_literal_char()?),
             Some(Keyword::ESCAPE) => CopyOption::Escape(self.parse_literal_char()?),
             Some(Keyword::FORCE_QUOTE) => {
-                CopyOption::ForceQuote(self.parse_parenthesized_column_list(Mandatory)?)
+                CopyOption::ForceQuote(self.parse_parenthesized_column_list(Mandatory, false)?)
             }
             Some(Keyword::FORCE_NOT_NULL) => {
-                CopyOption::ForceNotNull(self.parse_parenthesized_column_list(Mandatory)?)
+                CopyOption::ForceNotNull(self.parse_parenthesized_column_list(Mandatory, false)?)
             }
             Some(Keyword::FORCE_NULL) => {
-                CopyOption::ForceNull(self.parse_parenthesized_column_list(Mandatory)?)
+                CopyOption::ForceNull(self.parse_parenthesized_column_list(Mandatory, false)?)
             }
             Some(Keyword::ENCODING) => CopyOption::Encoding(self.parse_literal_string()?),
             _ => self.expected("option", self.peek_token())?,
@@ -4454,7 +4454,7 @@ impl<'a> Parser<'a> {
     ) -> Result<Option<TableAlias>, ParserError> {
         match self.parse_optional_alias(reserved_kwds)? {
             Some(name) => {
-                let columns = self.parse_parenthesized_column_list(Optional)?;
+                let columns = self.parse_parenthesized_column_list(Optional, false)?;
                 Ok(Some(TableAlias { name, columns }))
             }
             None => Ok(None),
@@ -4505,11 +4505,17 @@ impl<'a> Parser<'a> {
     pub fn parse_parenthesized_column_list(
         &mut self,
         optional: IsOptional,
+        allow_empty: bool,
     ) -> Result<Vec<Ident>, ParserError> {
         if self.consume_token(&Token::LParen) {
-            let cols = self.parse_comma_separated(Parser::parse_identifier)?;
-            self.expect_token(&Token::RParen)?;
-            Ok(cols)
+            if allow_empty && self.peek_token().token == Token::RParen {
+                self.next_token();
+                Ok(vec![])
+            } else {
+                let cols = self.parse_comma_separated(Parser::parse_identifier)?;
+                self.expect_token(&Token::RParen)?;
+                Ok(cols)
+            }
         } else if optional == Optional {
             Ok(vec![])
         } else {
@@ -4811,7 +4817,7 @@ impl<'a> Parser<'a> {
                 from: None,
             }
         } else {
-            let columns = self.parse_parenthesized_column_list(Optional)?;
+            let columns = self.parse_parenthesized_column_list(Optional, false)?;
             self.expect_keyword(Keyword::AS)?;
             self.expect_token(&Token::LParen)?;
             let query = Box::new(self.parse_query()?);
@@ -4848,7 +4854,8 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             SetExpr::Query(Box::new(subquery))
         } else if self.parse_keyword(Keyword::VALUES) {
-            SetExpr::Values(self.parse_values()?)
+            let is_mysql = dialect_of!(self is MySqlDialect);
+            SetExpr::Values(self.parse_values(is_mysql)?)
         } else if self.parse_keyword(Keyword::TABLE) {
             SetExpr::Table(Box::new(self.parse_as_table()?))
         } else {
@@ -5645,7 +5652,7 @@ impl<'a> Parser<'a> {
             let constraint = self.parse_expr()?;
             Ok(JoinConstraint::On(constraint))
         } else if self.parse_keyword(Keyword::USING) {
-            let columns = self.parse_parenthesized_column_list(Mandatory)?;
+            let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
             Ok(JoinConstraint::Using(columns))
         } else {
             Ok(JoinConstraint::None)
@@ -5770,7 +5777,7 @@ impl<'a> Parser<'a> {
         ]) {
             let columns = match kw {
                 Keyword::INSERT | Keyword::REFERENCES | Keyword::SELECT | Keyword::UPDATE => {
-                    let columns = self.parse_parenthesized_column_list(Optional)?;
+                    let columns = self.parse_parenthesized_column_list(Optional, false)?;
                     if columns.is_empty() {
                         None
                     } else {
@@ -5856,7 +5863,8 @@ impl<'a> Parser<'a> {
             // Hive lets you put table here regardless
             let table = self.parse_keyword(Keyword::TABLE);
             let table_name = self.parse_object_name()?;
-            let columns = self.parse_parenthesized_column_list(Optional)?;
+            let is_mysql = dialect_of!(self is MySqlDialect);
+            let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
 
             let partitioned = if self.parse_keyword(Keyword::PARTITION) {
                 self.expect_token(&Token::LParen)?;
@@ -5868,7 +5876,7 @@ impl<'a> Parser<'a> {
             };
 
             // Hive allows you to specify columns after partitions as well if you want.
-            let after_columns = self.parse_parenthesized_column_list(Optional)?;
+            let after_columns = self.parse_parenthesized_column_list(Optional, false)?;
 
             let source = Box::new(self.parse_query()?);
             let on = if self.parse_keyword(Keyword::ON) {
@@ -5878,7 +5886,7 @@ impl<'a> Parser<'a> {
                             Some(ConflictTarget::OnConstraint(self.parse_object_name()?))
                         } else if self.peek_token() == Token::LParen {
                             Some(ConflictTarget::Columns(
-                                self.parse_parenthesized_column_list(IsOptional::Mandatory)?,
+                                self.parse_parenthesized_column_list(IsOptional::Mandatory, false)?,
                             ))
                         } else {
                             None
@@ -6091,7 +6099,7 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<Option<ExceptSelectItem>, ParserError> {
         let opt_except = if self.parse_keyword(Keyword::EXCEPT) {
-            let idents = self.parse_parenthesized_column_list(Mandatory)?;
+            let idents = self.parse_parenthesized_column_list(Mandatory, false)?;
             match &idents[..] {
                 [] => {
                     return self.expected(
@@ -6236,7 +6244,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_values(&mut self) -> Result<Values, ParserError> {
+    pub fn parse_values(&mut self, allow_empty: bool) -> Result<Values, ParserError> {
         let mut explicit_row = false;
 
         let rows = self.parse_comma_separated(|parser| {
@@ -6245,9 +6253,14 @@ impl<'a> Parser<'a> {
             }
 
             parser.expect_token(&Token::LParen)?;
-            let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
-            parser.expect_token(&Token::RParen)?;
-            Ok(exprs)
+            if allow_empty && parser.peek_token().token == Token::RParen {
+                parser.next_token();
+                Ok(vec![])
+            } else {
+                let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
+                parser.expect_token(&Token::RParen)?;
+                Ok(exprs)
+            }
         })?;
         Ok(Values { explicit_row, rows })
     }
@@ -6413,9 +6426,10 @@ impl<'a> Parser<'a> {
                                 "INSERT in MATCHED merge clause".to_string(),
                             ));
                         }
-                        let columns = self.parse_parenthesized_column_list(Optional)?;
+                        let is_mysql = dialect_of!(self is MySqlDialect);
+                        let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
                         self.expect_keyword(Keyword::VALUES)?;
-                        let values = self.parse_values()?;
+                        let values = self.parse_values(is_mysql)?;
                         MergeClause::NotMatched {
                             predicate,
                             columns,

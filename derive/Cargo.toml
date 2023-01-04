@@ -1,0 +1,23 @@
+[package]
+name = "sqlparser_derive"
+description = "proc macro for sqlparser"
+version = "0.1.1"
+authors = ["sqlparser-rs authors"]
+homepage = "https://github.com/sqlparser-rs/sqlparser-rs"
+documentation = "https://docs.rs/sqlparser_derive/"
+keywords = ["ansi", "sql", "lexer", "parser"]
+repository = "https://github.com/sqlparser-rs/sqlparser-rs"
+license = "Apache-2.0"
+include = [
+    "src/**/*.rs",
+    "Cargo.toml",
+]
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1.0"
+proc-macro2 = "1.0"
+quote = "1.0"

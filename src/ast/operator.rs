@@ -14,14 +14,19 @@ use core::fmt;
 
 #[cfg(not(feature = "std"))]
 use alloc::{string::String, vec::Vec};
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "visitor")]
+use sqlparser_derive::{Visit, VisitMut};
 
 use super::display_separated;
 
 /// Unary operators
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum UnaryOperator {
     Plus,
     Minus,
@@ -59,6 +64,7 @@ impl fmt::Display for UnaryOperator {
 /// Binary operators
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum BinaryOperator {
     Plus,
     Minus,

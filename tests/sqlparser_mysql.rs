@@ -693,6 +693,41 @@ fn parse_simple_insert() {
 }
 
 #[test]
+fn parse_empty_row_insert() {
+    let sql = "INSERT INTO tb () VALUES (), ()";
+
+    match mysql().one_statement_parses_to(sql, "INSERT INTO tb VALUES (), ()") {
+        Statement::Insert {
+            table_name,
+            columns,
+            source,
+            on,
+            ..
+        } => {
+            assert_eq!(ObjectName(vec![Ident::new("tb")]), table_name);
+            assert!(columns.is_empty());
+            assert!(on.is_none());
+            assert_eq!(
+                Box::new(Query {
+                    with: None,
+                    body: Box::new(SetExpr::Values(Values {
+                        explicit_row: false,
+                        rows: vec![vec![], vec![]]
+                    })),
+                    order_by: vec![],
+                    limit: None,
+                    offset: None,
+                    fetch: None,
+                    locks: vec![],
+                }),
+                source
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_insert_with_on_duplicate_update() {
     let sql = "INSERT INTO permission_groups (name, description, perm_create, perm_read, perm_update, perm_delete) VALUES ('accounting_manager', 'Some description about the group', true, true, true, true) ON DUPLICATE KEY UPDATE description = VALUES(description), perm_create = VALUES(perm_create), perm_read = VALUES(perm_read), perm_update = VALUES(perm_update), perm_delete = VALUES(perm_delete)";
 
@@ -1031,7 +1066,7 @@ fn parse_kill() {
 
 #[test]
 fn parse_table_colum_option_on_update() {
-    let sql1 = "CREATE TABLE foo (`modification_time` DATETIME ON UPDATE)";
+    let sql1 = "CREATE TABLE foo (`modification_time` DATETIME ON UPDATE CURRENT_TIMESTAMP())";
     match mysql().verified_stmt(sql1) {
         Statement::CreateTable { name, columns, .. } => {
             assert_eq!(name.to_string(), "foo");
@@ -1042,9 +1077,13 @@ fn parse_table_colum_option_on_update() {
                     collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,
-                        option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
-                            "ON UPDATE"
-                        )]),
+                        option: ColumnOption::OnUpdate(Expr::Function(Function {
+                            name: ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]),
+                            args: vec![],
+                            over: None,
+                            distinct: false,
+                            special: false,
+                        })),
                     },],
                 }],
                 columns

@@ -11,9 +11,7 @@
 // limitations under the License.
 
 //! This module defines
-//! 1) a list of constants for every keyword that
-//! can appear in [Word::keyword]:
-//!    pub const KEYWORD = "KEYWORD"
+//! 1) a list of constants for every keyword
 //! 2) an `ALL_KEYWORDS` array with every keyword in it
 //!     This is not a list of *reserved* keywords: some of these can be
 //!     parsed as identifiers if the parser decides so. This means that
@@ -26,6 +24,9 @@
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "visitor")]
+use sqlparser_derive::{Visit, VisitMut};
 
 /// Defines a string constant for a single keyword: `kw_def!(SELECT);`
 /// expands to `pub const SELECT = "SELECT";`
@@ -46,6 +47,7 @@ macro_rules! define_keywords {
     ),*) => {
         #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
         #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+        #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
         #[allow(non_camel_case_types)]
         pub enum Keyword {
             NoKeyword,

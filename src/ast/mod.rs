@@ -437,7 +437,7 @@ pub enum Expr {
     Nested(Box<Expr>),
     /// A literal value, such as string, number, date or NULL
     Value(Value),
-    /// https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
+    /// <https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html>
     IntroducedString { introducer: String, value: Value },
     /// A constant of form `<data_type> 'value'`.
     /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),

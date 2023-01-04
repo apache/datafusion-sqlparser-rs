@@ -65,7 +65,7 @@ pub enum Token {
     /// Hexadecimal string literal: i.e.: X'deadbeef'
     HexStringLiteral(String),
     /// MySQL string introducer: i.e.: _latin1'abc'
-    /// https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
+    /// <https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html>
     StringIntroducer(String),
     /// Comma
     Comma,

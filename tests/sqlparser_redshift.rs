@@ -289,7 +289,7 @@ fn test_parse_pg_get_late_binding_view_cols() {
             name: ObjectName(vec![Ident::new("pg_get_late_binding_view_cols")],),
             args: Some(vec![]),
             alias: None,
-            columns_definition: Some(ColsDefinition {
+            columns_definition: Some(TableAliasDefinition {
                 name: Ident::new("some_name_cols"),
                 args: vec![
                     IdentPair(Ident::new("view_schema"), Ident::new("name")),

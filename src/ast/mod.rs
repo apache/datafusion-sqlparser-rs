@@ -4147,16 +4147,16 @@ impl fmt::Display for SearchModifier {
     }
 }
 
-/// A cols definition (i.e. `cols(view_schema name, view_name name, col_name name, col_type varchar, col_num int)`
+/// A result table definition (i.e. `cols(view_schema name, view_name name, col_name name, col_type varchar, col_num int)`
 /// when used with redshift pg_get_late_binding_view_cols/pg_get_cols)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct ColsDefinition {
+pub struct TableAliasDefinition {
     pub name: Ident,
     pub args: Vec<IdentPair>,
 }
 
-impl fmt::Display for ColsDefinition {
+impl fmt::Display for TableAliasDefinition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}({})", self.name, display_comma_separated(&self.args))?;
         Ok(())

@@ -5641,8 +5641,8 @@ impl<'a> Parser<'a> {
     fn parse_redshift_columns_definition_list(
         &mut self,
         name: &ObjectName,
-    ) -> Result<Option<ColsDefinition>, ParserError> {
-        if !dialect_of!(self is RedshiftSqlDialect) {
+    ) -> Result<Option<TableAliasDefinition>, ParserError> {
+        if !dialect_of!(self is RedshiftSqlDialect | GenericDialect) {
             return Ok(None);
         }
 
@@ -5664,7 +5664,7 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::LParen)?;
                 let names = self.parse_comma_separated(Parser::parse_ident_pair)?;
                 self.expect_token(&Token::RParen)?;
-                Ok(Some(ColsDefinition {
+                Ok(Some(TableAliasDefinition {
                     name: col_definition_list_name,
                     args: names,
                 }))

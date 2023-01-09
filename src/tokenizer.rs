@@ -31,6 +31,10 @@ use core::str::Chars;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "visitor")]
+use sqlparser_derive::{Visit, VisitMut};
+
+use crate::ast::DollarQuotedString;
 use crate::dialect::SnowflakeDialect;
 use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
@@ -38,6 +42,7 @@ use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Token {
     /// An end-of-file marker, not a real token
     EOF,
@@ -51,6 +56,8 @@ pub enum Token {
     SingleQuotedString(String),
     /// Double quoted string: i.e: "string"
     DoubleQuotedString(String),
+    /// Dollar quoted string: i.e: $$string$$ or $tag_name$string$tag_name$
+    DollarQuotedString(DollarQuotedString),
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
     /// "escaped" string literal, which are an extension to the SQL standard: i.e: e'first \n second' or E 'first \n second'
@@ -145,8 +152,6 @@ pub enum Token {
     PGCubeRoot,
     /// `?` or `$` , a prepared statement arg placeholder
     Placeholder(String),
-    /// `$$`, used for PostgreSQL create function definition
-    DoubleDollarQuoting,
     /// ->, used as a operator to extract json field in PostgreSQL
     Arrow,
     /// ->>, used as a operator to extract json field as text in PostgreSQL
@@ -180,6 +185,7 @@ impl fmt::Display for Token {
             Token::Char(ref c) => write!(f, "{}", c),
             Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
             Token::DoubleQuotedString(ref s) => write!(f, "\"{}\"", s),
+            Token::DollarQuotedString(ref s) => write!(f, "{}", s),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
             Token::EscapedStringLiteral(ref s) => write!(f, "E'{}'", s),
             Token::HexStringLiteral(ref s) => write!(f, "X'{}'", s),
@@ -232,7 +238,6 @@ impl fmt::Display for Token {
             Token::HashArrow => write!(f, "#>"),
             Token::HashLongArrow => write!(f, "#>>"),
             Token::AtArrow => write!(f, "@>"),
-            Token::DoubleDollarQuoting => write!(f, "$$"),
             Token::ArrowAt => write!(f, "<@"),
             Token::HashMinus => write!(f, "#-"),
             Token::AtQuestion => write!(f, "@?"),
@@ -264,6 +269,7 @@ impl Token {
 /// A keyword (like SELECT) or an optionally quoted SQL identifier
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Word {
     /// The value of the token, without the enclosing quotes, and with the
     /// escape sequences (if any) processed (TODO: escapes are not handled)
@@ -302,6 +308,7 @@ impl Word {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Whitespace {
     Space,
     Newline,
@@ -541,6 +548,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume the first char
                     let s = self.tokenize_word(ch, chars);
 
+                    // TODO: implement parsing of exponent here
                     if s.chars().all(|x| ('0'..='9').contains(&x) || x == '.') {
                         let mut inner_state = State {
                             peekable: s.chars().peekable(),
@@ -615,6 +623,36 @@ impl<'a> Tokenizer<'a> {
                     // No number -> Token::Period
                     if s == "." {
                         return Ok(Some(Token::Period));
+                    }
+
+                    // Parse exponent as number
+                    if chars.peek() == Some(&'e') || chars.peek() == Some(&'E') {
+                        let mut char_clone = chars.peekable.clone();
+                        let mut exponent_part = String::new();
+                        exponent_part.push(char_clone.next().unwrap());
+
+                        // Optional sign
+                        match char_clone.peek() {
+                            Some(&c) if matches!(c, '+' | '-') => {
+                                exponent_part.push(c);
+                                char_clone.next();
+                            }
+                            _ => (),
+                        }
+
+                        match char_clone.peek() {
+                            // Definitely an exponent, get original iterator up to speed and use it
+                            Some(&c) if matches!(c, '0'..='9') => {
+                                for _ in 0..exponent_part.len() {
+                                    chars.next();
+                                }
+                                exponent_part +=
+                                    &peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
+                                s += exponent_part.as_str();
+                            }
+                            // Not an exponent, discard the work done
+                            _ => (),
+                        }
                     }
 
                     let long = if chars.peek() == Some(&'L') {
@@ -800,17 +838,8 @@ impl<'a> Tokenizer<'a> {
                     let s = peeking_take_while(chars, |ch| ch.is_numeric());
                     Ok(Some(Token::Placeholder(String::from("?") + &s)))
                 }
-                '$' => {
-                    chars.next();
-                    match chars.peek() {
-                        Some('$') => self.consume_and_return(chars, Token::DoubleDollarQuoting),
-                        _ => {
-                            let s =
-                                peeking_take_while(chars, |ch| ch.is_alphanumeric() || ch == '_');
-                            Ok(Some(Token::Placeholder(String::from("$") + &s)))
-                        }
-                    }
-                }
+                '$' => Ok(Some(self.tokenize_dollar_preceded_value(chars)?)),
+
                 //whitespace check (including unicode chars) should be last as it covers some of the chars above
                 ch if ch.is_whitespace() => {
                     self.consume_and_return(chars, Token::Whitespace(Whitespace::Space))
@@ -819,6 +848,97 @@ impl<'a> Tokenizer<'a> {
             },
             None => Ok(None),
         }
+    }
+
+    /// Tokenize dollar preceded value (i.e: a string/placeholder)
+    fn tokenize_dollar_preceded_value(&self, chars: &mut State) -> Result<Token, TokenizerError> {
+        let mut s = String::new();
+        let mut value = String::new();
+
+        chars.next();
+
+        if let Some('$') = chars.peek() {
+            chars.next();
+
+            let mut is_terminated = false;
+            let mut prev: Option<char> = None;
+
+            while let Some(&ch) = chars.peek() {
+                if prev == Some('$') {
+                    if ch == '$' {
+                        chars.next();
+                        is_terminated = true;
+                        break;
+                    } else {
+                        s.push('$');
+                        s.push(ch);
+                    }
+                } else if ch != '$' {
+                    s.push(ch);
+                }
+
+                prev = Some(ch);
+                chars.next();
+            }
+
+            return if chars.peek().is_none() && !is_terminated {
+                self.tokenizer_error(chars.location(), "Unterminated dollar-quoted string")
+            } else {
+                Ok(Token::DollarQuotedString(DollarQuotedString {
+                    value: s,
+                    tag: None,
+                }))
+            };
+        } else {
+            value.push_str(&peeking_take_while(chars, |ch| {
+                ch.is_alphanumeric() || ch == '_'
+            }));
+
+            if let Some('$') = chars.peek() {
+                chars.next();
+                s.push_str(&peeking_take_while(chars, |ch| ch != '$'));
+
+                match chars.peek() {
+                    Some('$') => {
+                        chars.next();
+                        for (_, c) in value.chars().enumerate() {
+                            let next_char = chars.next();
+                            if Some(c) != next_char {
+                                return self.tokenizer_error(
+                                    chars.location(),
+                                    format!(
+                                        "Unterminated dollar-quoted string at or near \"{}\"",
+                                        value
+                                    ),
+                                );
+                            }
+                        }
+
+                        if let Some('$') = chars.peek() {
+                            chars.next();
+                        } else {
+                            return self.tokenizer_error(
+                                chars.location(),
+                                "Unterminated dollar-quoted string, expected $",
+                            );
+                        }
+                    }
+                    _ => {
+                        return self.tokenizer_error(
+                            chars.location(),
+                            "Unterminated dollar-quoted, expected $",
+                        );
+                    }
+                }
+            } else {
+                return Ok(Token::Placeholder(String::from("$") + &value));
+            }
+        }
+
+        Ok(Token::DollarQuotedString(DollarQuotedString {
+            value: s,
+            tag: if value.is_empty() { None } else { Some(value) },
+        }))
     }
 
     fn tokenizer_error<R>(
@@ -1086,6 +1206,41 @@ mod tests {
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from(".1"), false),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_select_exponent() {
+        let sql = String::from("SELECT 1e10, 1e-10, 1e+10, 1ea, 1e-10a, 1e-10-10");
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1e10"), false),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1e-10"), false),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1e+10"), false),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1"), false),
+            Token::make_word("ea", None),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1e-10"), false),
+            Token::make_word("a", None),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from("1e-10"), false),
+            Token::Minus,
+            Token::Number(String::from("10"), false),
         ];
 
         compare(expected, tokens);

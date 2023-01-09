@@ -783,6 +783,57 @@ fn parse_null_in_select() {
 }
 
 #[test]
+fn parse_exponent_in_select() -> Result<(), ParserError> {
+    // all except Hive, as it allows numbers to start an identifier
+    let dialects = TestedDialects {
+        dialects: vec![
+            Box::new(AnsiDialect {}),
+            Box::new(BigQueryDialect {}),
+            Box::new(ClickHouseDialect {}),
+            Box::new(GenericDialect {}),
+            // Box::new(HiveDialect {}),
+            Box::new(MsSqlDialect {}),
+            Box::new(MySqlDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(RedshiftSqlDialect {}),
+            Box::new(SnowflakeDialect {}),
+            Box::new(SQLiteDialect {}),
+        ],
+    };
+    let sql = "SELECT 10e-20, 1e3, 1e+3, 1e3a, 1e, 0.5e2";
+    let mut select = dialects.parse_sql_statements(sql)?;
+
+    let select = match select.pop().unwrap() {
+        Statement::Query(inner) => *inner,
+        _ => panic!("Expected Query"),
+    };
+    let select = match *select.body {
+        SetExpr::Select(inner) => *inner,
+        _ => panic!("Expected SetExpr::Select"),
+    };
+
+    assert_eq!(
+        &vec![
+            SelectItem::UnnamedExpr(Expr::Value(number("10e-20"))),
+            SelectItem::UnnamedExpr(Expr::Value(number("1e3"))),
+            SelectItem::UnnamedExpr(Expr::Value(number("1e+3"))),
+            SelectItem::ExprWithAlias {
+                expr: Expr::Value(number("1e3")),
+                alias: Ident::new("a")
+            },
+            SelectItem::ExprWithAlias {
+                expr: Expr::Value(number("1")),
+                alias: Ident::new("e")
+            },
+            SelectItem::UnnamedExpr(Expr::Value(number("0.5e2"))),
+        ],
+        &select.projection
+    );
+
+    Ok(())
+}
+
+#[test]
 fn parse_select_with_date_column_name() {
     let sql = "SELECT date";
     let select = verified_only_select(sql);
@@ -1469,7 +1520,7 @@ fn parse_select_group_by() {
 #[test]
 fn parse_select_group_by_grouping_sets() {
     let dialects = TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {})],
+        dialects: vec![Box::new(GenericDialect {}), Box::new(PostgreSqlDialect {})],
     };
     let sql =
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, GROUPING SETS ((brand), (size), ())";
@@ -1490,7 +1541,7 @@ fn parse_select_group_by_grouping_sets() {
 #[test]
 fn parse_select_group_by_rollup() {
     let dialects = TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {})],
+        dialects: vec![Box::new(GenericDialect {}), Box::new(PostgreSqlDialect {})],
     };
     let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, ROLLUP (brand, size)";
     let select = dialects.verified_only_select(sql);
@@ -1509,7 +1560,7 @@ fn parse_select_group_by_rollup() {
 #[test]
 fn parse_select_group_by_cube() {
     let dialects = TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {})],
+        dialects: vec![Box::new(GenericDialect {}), Box::new(PostgreSqlDialect {})],
     };
     let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, CUBE (brand, size)";
     let select = dialects.verified_only_select(sql);
@@ -2640,6 +2691,21 @@ fn parse_alter_table() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_alter_index() {
+    let rename_index = "ALTER INDEX idx RENAME TO new_idx";
+    match verified_stmt(rename_index) {
+        Statement::AlterIndex {
+            name,
+            operation: AlterIndexOperation::RenameIndex { index_name },
+        } => {
+            assert_eq!("idx", name.to_string());
+            assert_eq!("new_idx", index_name.to_string())
+        }
+        _ => unreachable!(),
+    };
 }
 
 #[test]
@@ -6477,4 +6543,92 @@ fn parse_uncache_table() {
         ParserError::ParserError("Expected a `TABLE` keyword, found: IF".to_string()),
         res.unwrap_err()
     );
+}
+
+#[test]
+fn parse_deeply_nested_parens_hits_recursion_limits() {
+    let sql = "(".repeat(1000);
+    let res = parse_sql_statements(&sql);
+    assert_eq!(ParserError::RecursionLimitExceeded, res.unwrap_err());
+}
+
+#[test]
+fn parse_deeply_nested_expr_hits_recursion_limits() {
+    let dialect = GenericDialect {};
+
+    let where_clause = make_where_clause(100);
+    let sql = format!("SELECT id, user_id FROM test WHERE {where_clause}");
+
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+}
+
+#[test]
+fn parse_deeply_nested_subquery_expr_hits_recursion_limits() {
+    let dialect = GenericDialect {};
+
+    let where_clause = make_where_clause(100);
+    let sql = format!("SELECT id, user_id where id IN (select id from t WHERE {where_clause})");
+
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+}
+
+#[test]
+fn parse_with_recursion_limit() {
+    let dialect = GenericDialect {};
+
+    let where_clause = make_where_clause(20);
+    let sql = format!("SELECT id, user_id FROM test WHERE {where_clause}");
+
+    // Expect the statement to parse with default limit
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .parse_statements();
+
+    assert!(matches!(res, Ok(_)), "{:?}", res);
+
+    // limit recursion to something smaller, expect parsing to fail
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .with_recursion_limit(20)
+        .parse_statements();
+
+    assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
+
+    // limit recursion to 50, expect it to succeed
+    let res = Parser::new(&dialect)
+        .try_with_sql(&sql)
+        .expect("tokenize to work")
+        .with_recursion_limit(50)
+        .parse_statements();
+
+    assert!(matches!(res, Ok(_)), "{:?}", res);
+}
+
+/// Makes a predicate that looks like ((user_id = $id) OR user_id = $2...)
+fn make_where_clause(num: usize) -> String {
+    use std::fmt::Write;
+    let mut output = "(".repeat(num - 1);
+
+    for i in 0..num {
+        if i > 0 {
+            write!(&mut output, " OR ").unwrap();
+        }
+        write!(&mut output, "user_id = {}", i).unwrap();
+        if i < num - 1 {
+            write!(&mut output, ")").unwrap();
+        }
+    }
+    output
 }

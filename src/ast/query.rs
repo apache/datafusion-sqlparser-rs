@@ -16,12 +16,16 @@ use alloc::{boxed::Box, vec::Vec};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "visitor")]
+use sqlparser_derive::{Visit, VisitMut};
+
 use crate::ast::*;
 
 /// The most complete variant of a `SELECT` query expression, optionally
 /// including `WITH`, `UNION` / other set operations, and `ORDER BY`.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Query {
     /// WITH (common table expressions, or CTEs)
     pub with: Option<With>,
@@ -69,6 +73,7 @@ impl fmt::Display for Query {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SetExpr {
     /// Restricted SELECT .. FROM .. HAVING (no ORDER BY or set operations)
     Select(Box<Select>),
@@ -117,6 +122,7 @@ impl fmt::Display for SetExpr {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SetOperator {
     Union,
     Except,
@@ -138,6 +144,7 @@ impl fmt::Display for SetOperator {
 // For example, BigQuery does not support `DISTINCT` for `EXCEPT` and `INTERSECT`
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SetQuantifier {
     All,
     Distinct,
@@ -157,6 +164,7 @@ impl fmt::Display for SetQuantifier {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// A [`TABLE` command]( https://www.postgresql.org/docs/current/sql-select.html#SQL-TABLE)
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Table {
     pub table_name: Option<String>,
     pub schema_name: Option<String>,
@@ -183,6 +191,7 @@ impl fmt::Display for Table {
 /// to a set operation like `UNION`.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Select {
     pub distinct: bool,
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
@@ -267,6 +276,7 @@ impl fmt::Display for Select {
 /// A hive LATERAL VIEW with potential column aliases
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct LateralView {
     /// LATERAL VIEW
     pub lateral_view: Expr,
@@ -300,6 +310,7 @@ impl fmt::Display for LateralView {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct With {
     pub recursive: bool,
     pub cte_tables: Vec<Cte>,
@@ -322,6 +333,7 @@ impl fmt::Display for With {
 /// number of columns in the query matches the number of columns in the query.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Cte {
     pub alias: TableAlias,
     pub query: Box<Query>,
@@ -341,6 +353,7 @@ impl fmt::Display for Cte {
 /// One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SelectItem {
     /// Any expression, not followed by `[ AS ] alias`
     UnnamedExpr(Expr),
@@ -352,14 +365,37 @@ pub enum SelectItem {
     Wildcard(WildcardAdditionalOptions),
 }
 
-/// Additional options for wildcards, e.g. Snowflake `EXCLUDE` and Bigquery `EXCEPT`.
+/// Single aliased identifier
+///
+/// # Syntax
+/// ```plaintext
+/// <ident> AS <alias>
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IdentWithAlias {
+    pub ident: Ident,
+    pub alias: Ident,
+}
+
+impl fmt::Display for IdentWithAlias {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} AS {}", self.ident, self.alias)
+    }
+}
+
+/// Additional options for wildcards, e.g. Snowflake `EXCLUDE`/`RENAME` and Bigquery `EXCEPT`.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WildcardAdditionalOptions {
     /// `[EXCLUDE...]`.
     pub opt_exclude: Option<ExcludeSelectItem>,
     /// `[EXCEPT...]`.
     pub opt_except: Option<ExceptSelectItem>,
+    /// `[RENAME ...]`.
+    pub opt_rename: Option<RenameSelectItem>,
 }
 
 impl fmt::Display for WildcardAdditionalOptions {
@@ -369,6 +405,9 @@ impl fmt::Display for WildcardAdditionalOptions {
         }
         if let Some(except) = &self.opt_except {
             write!(f, " {except}")?;
+        }
+        if let Some(rename) = &self.opt_rename {
+            write!(f, " {rename}")?;
         }
         Ok(())
     }
@@ -383,6 +422,7 @@ impl fmt::Display for WildcardAdditionalOptions {
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ExcludeSelectItem {
     /// Single column name without parenthesis.
     ///
@@ -414,6 +454,47 @@ impl fmt::Display for ExcludeSelectItem {
     }
 }
 
+/// Snowflake `RENAME` information.
+///
+/// # Syntax
+/// ```plaintext
+/// <col_name> AS <col_alias>
+/// | (<col_name> AS <col_alias>, <col_name> AS <col_alias>, ...)
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum RenameSelectItem {
+    /// Single column name with alias without parenthesis.
+    ///
+    /// # Syntax
+    /// ```plaintext
+    /// <col_name> AS <col_alias>
+    /// ```
+    Single(IdentWithAlias),
+    /// Multiple column names with aliases inside parenthesis.
+    /// # Syntax
+    /// ```plaintext
+    /// (<col_name> AS <col_alias>, <col_name> AS <col_alias>, ...)
+    /// ```
+    Multiple(Vec<IdentWithAlias>),
+}
+
+impl fmt::Display for RenameSelectItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "RENAME")?;
+        match self {
+            Self::Single(column) => {
+                write!(f, " {column}")?;
+            }
+            Self::Multiple(columns) => {
+                write!(f, " ({})", display_comma_separated(columns))?;
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Bigquery `EXCEPT` information, with at least one column.
 ///
 /// # Syntax
@@ -422,9 +503,10 @@ impl fmt::Display for ExcludeSelectItem {
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ExceptSelectItem {
     /// First guaranteed column.
-    pub fist_elemnt: Ident,
+    pub first_element: Ident,
     /// Additional columns. This list can be empty.
     pub additional_elements: Vec<Ident>,
 }
@@ -433,12 +515,12 @@ impl fmt::Display for ExceptSelectItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "EXCEPT ")?;
         if self.additional_elements.is_empty() {
-            write!(f, "({})", self.fist_elemnt)?;
+            write!(f, "({})", self.first_element)?;
         } else {
             write!(
                 f,
                 "({}, {})",
-                self.fist_elemnt,
+                self.first_element,
                 display_comma_separated(&self.additional_elements)
             )?;
         }
@@ -467,6 +549,7 @@ impl fmt::Display for SelectItem {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableWithJoins {
     pub relation: TableFactor,
     pub joins: Vec<Join>,
@@ -485,8 +568,10 @@ impl fmt::Display for TableWithJoins {
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TableFactor {
     Table {
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         name: ObjectName,
         alias: Option<TableAlias>,
         /// Arguments of a table-valued function, as supported by Postgres
@@ -513,6 +598,7 @@ pub enum TableFactor {
         expr: Expr,
         alias: Option<TableAlias>,
     },
+    /// ```sql
     /// SELECT * FROM UNNEST ([10,20,30]) as numbers WITH OFFSET;
     /// +---------+--------+
     /// | numbers | offset |
@@ -521,6 +607,7 @@ pub enum TableFactor {
     /// | 20      | 1      |
     /// | 30      | 2      |
     /// +---------+--------+
+    /// ```
     UNNEST {
         alias: Option<TableAlias>,
         array_expr: Box<Expr>,
@@ -619,6 +706,7 @@ impl fmt::Display for TableFactor {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableAlias {
     pub name: Ident,
     pub columns: Vec<Ident>,
@@ -636,6 +724,7 @@ impl fmt::Display for TableAlias {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Join {
     pub relation: TableFactor,
     pub join_operator: JoinOperator,
@@ -730,6 +819,7 @@ impl fmt::Display for Join {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum JoinOperator {
     Inner(JoinConstraint),
     LeftOuter(JoinConstraint),
@@ -752,6 +842,7 @@ pub enum JoinOperator {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum JoinConstraint {
     On(Expr),
     Using(Vec<Ident>),
@@ -762,6 +853,7 @@ pub enum JoinConstraint {
 /// An `ORDER BY` expression
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct OrderByExpr {
     pub expr: Expr,
     /// Optional `ASC` or `DESC`
@@ -789,6 +881,7 @@ impl fmt::Display for OrderByExpr {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Offset {
     pub value: Expr,
     pub rows: OffsetRows,
@@ -803,6 +896,7 @@ impl fmt::Display for Offset {
 /// Stores the keyword after `OFFSET <number>`
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum OffsetRows {
     /// Omitting ROW/ROWS is non-standard MySQL quirk.
     None,
@@ -822,6 +916,7 @@ impl fmt::Display for OffsetRows {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Fetch {
     pub with_ties: bool,
     pub percent: bool,
@@ -842,6 +937,7 @@ impl fmt::Display for Fetch {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct LockClause {
     pub lock_type: LockType,
     pub of: Option<ObjectName>,
@@ -863,6 +959,7 @@ impl fmt::Display for LockClause {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum LockType {
     Share,
     Update,
@@ -880,6 +977,7 @@ impl fmt::Display for LockType {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum NonBlock {
     Nowait,
     SkipLocked,
@@ -897,6 +995,7 @@ impl fmt::Display for NonBlock {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Top {
     /// SQL semantic equivalent of LIMIT but with same structure as FETCH.
     pub with_ties: bool,
@@ -918,6 +1017,7 @@ impl fmt::Display for Top {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Values {
     /// Was there an explict ROWs keyword (MySQL)?
     /// <https://dev.mysql.com/doc/refman/8.0/en/values.html>
@@ -941,6 +1041,7 @@ impl fmt::Display for Values {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct SelectInto {
     pub temporary: bool,
     pub unlogged: bool,

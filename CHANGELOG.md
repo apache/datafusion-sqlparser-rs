@@ -8,6 +8,55 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.30.0] 2023-01-02
+
+### Added
+* Support `RENAME` for wildcard `SELECTs` (#784) - Thanks @Jefffrey
+* Add a mutable visitor (#782) - Thanks @lovasoa
+
+### Changed
+* Allow parsing of mysql empty row inserts (#783) - Thanks @Jefffrey
+
+### Fixed
+* Fix logical conflict (#785) - Thanks @alamb
+
+## [0.29.0] 2022-12-29
+
+### Highlights
+* Partial source location tracking: see #710
+* Recursion limit to prevent stack overflows: #764
+* AST visitor: #765
+
+### Added
+feat: dollar-quoted strings support (#772) - Thanks @vasilev-alex
+* Add derive based AST visitor (#765) - Thanks @tustvold
+* Support `ALTER INDEX {INDEX_NAME} RENAME TO {NEW_INDEX_NAME}` (#767) - Thanks @devgony
+* Support `CREATE TABLE ON UPDATE <expr>` Function (#685) - Thanks @CEOJINSUNG
+* Support `CREATE FUNCTION` definition with `$$` (#755)- Thanks @zidaye
+* Add location tracking in the tokenizer and parser (#710)  - Thanks @ankrgyl
+* Add configurable recursion limit to parser, to protect against stackoverflows (#764)  - Thanks @alamb
+* Support parsing scientific notation (such as `10e5`) (#768) - Thanks @Jefffrey
+* Support `DROP FUNCTION` syntax (#752) - Thanks @zidaye
+* Support json operators `@>` `<@`, `@?` and `@@` - Thanks @audunska
+* Support the type key (#750)- Thanks @yuval-illumex
+
+### Changed
+* Improve docs and add examples for Visitor (#778) - Thanks @alamb
+* Add a backlink from sqlparse_derive to sqlparser and publishing instructions (#779) - Thanks @alamb
+* Document new features, update authors (#776) - Thanks @alamb
+* Improve Readme (#774) - Thanks @alamb
+* Standardize comments on parsing optional keywords (#773) - Thanks @alamb
+* Enable grouping sets parsing for `GenericDialect` (#771) - Thanks @Jefffrey
+* Generalize conflict target (#762) - Thanks @audunska
+* Generalize locking clause (#759) - Thanks @audunska
+* Add negative test for except clause on wildcards (#746)- Thanks @alamb
+* Add `NANOSECOND` keyword (#749)- Thanks @waitingkuo
+
+### Fixed
+* ParserError if nested explain (#781) - Thanks @Jefffrey
+* Fix cargo docs / warnings and add CI check (#777) - Thanks @alamb
+* unnest join constraint with alias parsing for BigQuery dialect (#732)- Thanks @Ziinc
+
 ## [0.28.0] 2022-12-05
 
 ### Added

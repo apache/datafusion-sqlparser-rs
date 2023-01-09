@@ -266,51 +266,26 @@ fn parse_array_agg_func() {
 
 #[test]
 fn test_select_wildcard_with_except() {
-    match bigquery_and_generic().verified_stmt("SELECT * EXCEPT (col_a) FROM data") {
-        Statement::Query(query) => match *query.body {
-            SetExpr::Select(select) => match &select.projection[0] {
-                SelectItem::Wildcard(WildcardAdditionalOptions {
-                    opt_except: Some(except),
-                    ..
-                }) => {
-                    assert_eq!(
-                        *except,
-                        ExceptSelectItem {
-                            fist_elemnt: Ident::new("col_a"),
-                            additional_elements: vec![]
-                        }
-                    )
-                }
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    };
+    let select = bigquery_and_generic().verified_only_select("SELECT * EXCEPT (col_a) FROM data");
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_except: Some(ExceptSelectItem {
+            first_element: Ident::new("col_a"),
+            additional_elements: vec![],
+        }),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
 
-    match bigquery_and_generic()
-        .verified_stmt("SELECT * EXCEPT (department_id, employee_id) FROM employee_table")
-    {
-        Statement::Query(query) => match *query.body {
-            SetExpr::Select(select) => match &select.projection[0] {
-                SelectItem::Wildcard(WildcardAdditionalOptions {
-                    opt_except: Some(except),
-                    ..
-                }) => {
-                    assert_eq!(
-                        *except,
-                        ExceptSelectItem {
-                            fist_elemnt: Ident::new("department_id"),
-                            additional_elements: vec![Ident::new("employee_id")]
-                        }
-                    )
-                }
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    };
+    let select = bigquery_and_generic()
+        .verified_only_select("SELECT * EXCEPT (department_id, employee_id) FROM employee_table");
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_except: Some(ExceptSelectItem {
+            first_element: Ident::new("department_id"),
+            additional_elements: vec![Ident::new("employee_id")],
+        }),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
 
     assert_eq!(
         bigquery_and_generic()

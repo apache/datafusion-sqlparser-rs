@@ -391,70 +391,91 @@ fn snowflake_and_generic() -> TestedDialects {
 
 #[test]
 fn test_select_wildcard_with_exclude() {
-    match snowflake_and_generic().verified_stmt("SELECT * EXCLUDE (col_a) FROM data") {
-        Statement::Query(query) => match *query.body {
-            SetExpr::Select(select) => match &select.projection[0] {
-                SelectItem::Wildcard(WildcardAdditionalOptions {
-                    opt_exclude: Some(exclude),
-                    ..
-                }) => {
-                    assert_eq!(
-                        *exclude,
-                        ExcludeSelectItem::Multiple(vec![Ident::new("col_a")])
-                    )
-                }
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    };
+    let select = snowflake_and_generic().verified_only_select("SELECT * EXCLUDE (col_a) FROM data");
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_exclude: Some(ExcludeSelectItem::Multiple(vec![Ident::new("col_a")])),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
 
-    match snowflake_and_generic()
-        .verified_stmt("SELECT name.* EXCLUDE department_id FROM employee_table")
-    {
-        Statement::Query(query) => match *query.body {
-            SetExpr::Select(select) => match &select.projection[0] {
-                SelectItem::QualifiedWildcard(
-                    _,
-                    WildcardAdditionalOptions {
-                        opt_exclude: Some(exclude),
-                        ..
-                    },
-                ) => {
-                    assert_eq!(
-                        *exclude,
-                        ExcludeSelectItem::Single(Ident::new("department_id"))
-                    )
-                }
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
+    let select = snowflake_and_generic()
+        .verified_only_select("SELECT name.* EXCLUDE department_id FROM employee_table");
+    let expected = SelectItem::QualifiedWildcard(
+        ObjectName(vec![Ident::new("name")]),
+        WildcardAdditionalOptions {
+            opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("department_id"))),
+            ..Default::default()
         },
-        _ => unreachable!(),
-    };
+    );
+    assert_eq!(expected, select.projection[0]);
 
-    match snowflake_and_generic()
-        .verified_stmt("SELECT * EXCLUDE (department_id, employee_id) FROM employee_table")
-    {
-        Statement::Query(query) => match *query.body {
-            SetExpr::Select(select) => match &select.projection[0] {
-                SelectItem::Wildcard(WildcardAdditionalOptions {
-                    opt_exclude: Some(exclude),
-                    ..
-                }) => {
-                    assert_eq!(
-                        *exclude,
-                        ExcludeSelectItem::Multiple(vec![
-                            Ident::new("department_id"),
-                            Ident::new("employee_id")
-                        ])
-                    )
-                }
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
+    let select = snowflake_and_generic()
+        .verified_only_select("SELECT * EXCLUDE (department_id, employee_id) FROM employee_table");
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_exclude: Some(ExcludeSelectItem::Multiple(vec![
+            Ident::new("department_id"),
+            Ident::new("employee_id"),
+        ])),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
+}
+
+#[test]
+fn test_select_wildcard_with_rename() {
+    let select =
+        snowflake_and_generic().verified_only_select("SELECT * RENAME col_a AS col_b FROM data");
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_rename: Some(RenameSelectItem::Single(IdentWithAlias {
+            ident: Ident::new("col_a"),
+            alias: Ident::new("col_b"),
+        })),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
+
+    let select = snowflake_and_generic().verified_only_select(
+        "SELECT name.* RENAME (department_id AS new_dep, employee_id AS new_emp) FROM employee_table",
+    );
+    let expected = SelectItem::QualifiedWildcard(
+        ObjectName(vec![Ident::new("name")]),
+        WildcardAdditionalOptions {
+            opt_rename: Some(RenameSelectItem::Multiple(vec![
+                IdentWithAlias {
+                    ident: Ident::new("department_id"),
+                    alias: Ident::new("new_dep"),
+                },
+                IdentWithAlias {
+                    ident: Ident::new("employee_id"),
+                    alias: Ident::new("new_emp"),
+                },
+            ])),
+            ..Default::default()
         },
-        _ => unreachable!(),
-    };
+    );
+    assert_eq!(expected, select.projection[0]);
+}
+
+#[test]
+fn test_select_wildcard_with_exclude_and_rename() {
+    let select = snowflake_and_generic()
+        .verified_only_select("SELECT * EXCLUDE col_z RENAME col_a AS col_b FROM data");
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("col_z"))),
+        opt_rename: Some(RenameSelectItem::Single(IdentWithAlias {
+            ident: Ident::new("col_a"),
+            alias: Ident::new("col_b"),
+        })),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
+
+    // rename cannot precede exclude
+    assert_eq!(
+        snowflake_and_generic()
+            .parse_sql_statements("SELECT * RENAME col_a AS col_b EXCLUDE col_z FROM data")
+            .unwrap_err()
+            .to_string(),
+        "sql parser error: Expected end of statement, found: EXCLUDE"
+    );
 }

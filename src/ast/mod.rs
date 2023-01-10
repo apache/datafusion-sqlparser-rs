@@ -4147,10 +4147,11 @@ impl fmt::Display for SearchModifier {
     }
 }
 
-/// A result table definition (i.e. `cols(view_schema name, view_name name, col_name name, col_type varchar, col_num int)`
-/// when used with redshift pg_get_late_binding_view_cols/pg_get_cols)
+/// A result table definition i.e. `cols(view_schema name, view_name name, col_name name, col_type varchar, col_num int)`
+/// used for redshift functions: pg_get_late_binding_view_cols, pg_get_cols, pg_get_grantee_by_iam_role,pg_get_iam_role_by_user
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableAliasDefinition {
     pub name: Ident,
     pub args: Vec<IdentPair>,

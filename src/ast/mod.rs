@@ -4166,6 +4166,7 @@ impl fmt::Display for TableAliasDefinition {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct IdentPair(pub Ident, pub Ident);
 
 impl fmt::Display for IdentPair {

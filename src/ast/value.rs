@@ -27,6 +27,10 @@ pub enum Value {
     Number(BigDecimal),
     /// 'string value'
     SingleQuotedString(String),
+    /// "string value"
+    DoubleQuotedString(String),
+    /// r'string value'
+    RegexLiteral { value: String, quote: char },
     /// N'string value'
     NationalStringLiteral(String),
     /// X'hex value'
@@ -43,6 +47,7 @@ pub enum Value {
     /// so the user will have to reject intervals like `HOUR TO YEAR`.
     Interval {
         value: String,
+        value_quoting: Option<char>,
         leading_field: Option<DateTimeField>,
         leading_precision: Option<u64>,
         last_field: Option<DateTimeField>,
@@ -61,11 +66,14 @@ impl fmt::Display for Value {
         match self {
             Value::Number(v) => write!(f, "{}", v),
             Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
+            Value::DoubleQuotedString(v) => write!(f, "\"{}\"", escape_double_quote_string(v)),
+            Value::RegexLiteral { ref value, quote } => write!(f, "{}{}{}", quote, value, quote),
             Value::NationalStringLiteral(v) => write!(f, "N'{}'", v),
             Value::HexStringLiteral(v) => write!(f, "X'{}'", v),
             Value::Boolean(v) => write!(f, "{}", v),
             Value::Interval {
                 value,
+                value_quoting,
                 leading_field: Some(DateTimeField::Second),
                 leading_precision: Some(leading_precision),
                 last_field,
@@ -74,22 +82,32 @@ impl fmt::Display for Value {
                 // When the leading field is SECOND, the parser guarantees that
                 // the last field is None.
                 assert!(last_field.is_none());
+                write!(f, "INTERVAL ")?;
+                if let Some(ch) = value_quoting {
+                    write!(f, "{}{}{}", ch, escape_single_quote_string(value), ch)?;
+                } else {
+                    write!(f, "{}", value)?;
+                }
                 write!(
                     f,
-                    "INTERVAL '{}' SECOND ({}, {})",
-                    escape_single_quote_string(value),
-                    leading_precision,
-                    fractional_seconds_precision
+                    " SECOND ({}, {})",
+                    leading_precision, fractional_seconds_precision
                 )
             }
             Value::Interval {
                 value,
+                value_quoting,
                 leading_field,
                 leading_precision,
                 last_field,
                 fractional_seconds_precision,
             } => {
-                write!(f, "INTERVAL '{}'", escape_single_quote_string(value))?;
+                write!(f, "INTERVAL ")?;
+                if let Some(ch) = value_quoting {
+                    write!(f, "{}{}{}", ch, escape_single_quote_string(value), ch)?;
+                } else {
+                    write!(f, "{}", value)?;
+                }
                 if let Some(leading_field) = leading_field {
                     write!(f, " {}", leading_field)?;
                 }
@@ -113,22 +131,46 @@ impl fmt::Display for Value {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DateTimeField {
     Year,
+    YearOfWeek,
+    YearOfWeekIso,
+    Quarter,
     Month,
+    Week(Option<String>),
+    WeekIso,
     Day,
+    DayOfWeek,
+    DayOfWeekIso,
+    DayOfYear,
     Hour,
     Minute,
     Second,
+    Epoch,
+    // https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-and-operators#extract_2
+    Other(String),
+    Literal(String),
 }
 
 impl fmt::Display for DateTimeField {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
             DateTimeField::Year => "YEAR",
+            DateTimeField::YearOfWeek => "YEAROFWEEK",
+            DateTimeField::YearOfWeekIso => "YEAROFWEEKISO",
+            DateTimeField::Quarter => "QUARTER",
             DateTimeField::Month => "MONTH",
+            DateTimeField::Week(None) => "WEEK",
+            DateTimeField::Week(Some(ref weekday)) => return write!(f, "WEEK({})", weekday),
+            DateTimeField::WeekIso => "WEEKISO",
             DateTimeField::Day => "DAY",
+            DateTimeField::DayOfWeek => "DAYOFWEEK",
+            DateTimeField::DayOfWeekIso => "DAYOFWEEKISO",
+            DateTimeField::DayOfYear => "DAYOFYEAR",
             DateTimeField::Hour => "HOUR",
             DateTimeField::Minute => "MINUTE",
             DateTimeField::Second => "SECOND",
+            DateTimeField::Epoch => "EPOCH",
+            DateTimeField::Other(ref s) => return write!(f, "{}", s),
+            DateTimeField::Literal(ref s) => return write!(f, "'{}'", s),
         })
     }
 }
@@ -148,6 +190,25 @@ impl<'a> fmt::Display for EscapeSingleQuoteString<'a> {
     }
 }
 
+pub struct EscapeDoubleQuoteString<'a>(&'a str);
+
+impl<'a> fmt::Display for EscapeDoubleQuoteString<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for c in self.0.chars() {
+            if c == '"' {
+                write!(f, "\"\"")?;
+            } else {
+                write!(f, "{}", c)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 pub fn escape_single_quote_string(s: &str) -> EscapeSingleQuoteString<'_> {
     EscapeSingleQuoteString(s)
+}
+
+pub fn escape_double_quote_string(s: &str) -> EscapeDoubleQuoteString<'_> {
+    EscapeDoubleQuoteString(s)
 }

@@ -99,6 +99,7 @@ impl fmt::Display for SetExpr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SetOperator {
     Union,
+    Minus,
     Except,
     Intersect,
 }
@@ -107,6 +108,7 @@ impl fmt::Display for SetOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
             SetOperator::Union => "UNION",
+            SetOperator::Minus => "MINUS",
             SetOperator::Except => "EXCEPT",
             SetOperator::Intersect => "INTERSECT",
         })
@@ -132,6 +134,10 @@ pub struct Select {
     pub group_by: Vec<Expr>,
     /// HAVING
     pub having: Option<Expr>,
+    /// QUALIFY https://docs.snowflake.com/en/sql-reference/constructs/qualify.html
+    pub qualify: Option<Expr>,
+    /// WINDOW https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#window_clause
+    pub windows: Vec<(Ident, WindowSpec)>,
 }
 
 impl fmt::Display for Select {
@@ -152,6 +158,21 @@ impl fmt::Display for Select {
         }
         if let Some(ref having) = self.having {
             write!(f, " HAVING {}", having)?;
+        }
+        if let Some(ref qualify) = self.qualify {
+            write!(f, " QUALIFY {}", qualify)?;
+        }
+        if !self.windows.is_empty() {
+            write!(f, " WINDOW ")?;
+            let mut delim = "";
+            for (ident, spec) in self.windows.iter() {
+                write!(f, "{}{} AS ", delim, ident)?;
+                match spec {
+                    WindowSpec::Inline(inline) => write!(f, "({})", inline)?,
+                    WindowSpec::Named(name) => write!(f, "{}", name)?,
+                }
+                delim = ", ";
+            }
         }
         Ok(())
     }
@@ -200,10 +221,15 @@ pub enum SelectItem {
     UnnamedExpr(Expr),
     /// An expression, followed by `[ AS ] alias`
     ExprWithAlias { expr: Expr, alias: Ident },
-    /// `alias.*` or even `schema.table.*`
-    QualifiedWildcard(ObjectName),
-    /// An unqualified `*`
-    Wildcard,
+    /// if obj.is_some(), `alias.*` or even `schema.table.*`
+    /// else an unqualified `*`
+    /// except and replace are currently expected in bigquery
+    /// https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#modifiers_for_operator
+    Wildcard {
+        prefix: Option<ObjectName>,
+        except: Vec<Ident>,
+        replace: Vec<(Expr, Ident)>,
+    },
 }
 
 impl fmt::Display for SelectItem {
@@ -211,8 +237,36 @@ impl fmt::Display for SelectItem {
         match &self {
             SelectItem::UnnamedExpr(expr) => write!(f, "{}", expr),
             SelectItem::ExprWithAlias { expr, alias } => write!(f, "{} AS {}", expr, alias),
-            SelectItem::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
-            SelectItem::Wildcard => write!(f, "*"),
+            SelectItem::Wildcard {
+                prefix,
+                except,
+                replace,
+            } => {
+                if let Some(pre) = prefix {
+                    write!(f, "{}.*", pre)?;
+                } else {
+                    write!(f, "*")?;
+                }
+                let mut delim = "";
+                if !except.is_empty() {
+                    write!(f, " EXCEPT (")?;
+                    for col in except {
+                        write!(f, "{}{}", delim, col)?;
+                        delim = ", ";
+                    }
+                    write!(f, ")")?;
+                }
+                delim = "";
+                if !replace.is_empty() {
+                    write!(f, " REPLACE (")?;
+                    for &(ref expr, ref alias) in replace.iter() {
+                        write!(f, "{}{} AS {}", delim, expr, alias)?;
+                        delim = ", ";
+                    }
+                    write!(f, ")")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -253,10 +307,28 @@ pub enum TableFactor {
         subquery: Box<Query>,
         alias: Option<TableAlias>,
     },
+    Flatten {
+        args: Vec<FunctionArg>,
+        alias: Option<TableAlias>,
+    },
     /// `TABLE(<expr>)[ AS <alias> ]`
     TableFunction {
         expr: Expr,
         alias: Option<TableAlias>,
+    },
+    /// https://docs.snowflake.com/en/sql-reference/constructs/pivot.html
+    Pivot {
+        expr: Expr,
+        alias: Option<TableAlias>,
+        val: Ident,
+        pivot_vals: Vec<Expr>,
+    },
+    /// https://docs.snowflake.com/en/sql-reference/constructs/unpivot.html
+    Unpivot {
+        expr: Expr,
+        alias: Option<TableAlias>,
+        val: Ident,
+        pivot_vals: Vec<Expr>,
     },
     /// Represents a parenthesized table factor. The SQL spec only allows a
     /// join expression (`(foo <JOIN> bar [ <JOIN> baz ... ])`) to be nested,
@@ -302,8 +374,58 @@ impl fmt::Display for TableFactor {
                 }
                 Ok(())
             }
+            TableFactor::Flatten { args, alias } => {
+                write!(f, "LATERAL FLATTEN (")?;
+                for (idx, arg) in args.iter().enumerate() {
+                    if idx != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", arg)?;
+                }
+                write!(f, ")")?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {}", alias)?;
+                }
+                Ok(())
+            }
             TableFactor::TableFunction { expr, alias } => {
                 write!(f, "TABLE({})", expr)?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {}", alias)?;
+                }
+                Ok(())
+            }
+            TableFactor::Pivot {
+                expr,
+                alias,
+                val,
+                pivot_vals,
+            } => {
+                write!(f, "({} FOR {} IN (", expr, val)?;
+                let mut delim = "";
+                for pivot_val in pivot_vals {
+                    write!(f, "{}{}", delim, pivot_val)?;
+                    delim = ", ";
+                }
+                write!(f, "))")?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {}", alias)?;
+                }
+                Ok(())
+            }
+            TableFactor::Unpivot {
+                expr,
+                alias,
+                val,
+                pivot_vals,
+            } => {
+                write!(f, "({} FOR {} IN (", expr, val)?;
+                let mut delim = "";
+                for pivot_val in pivot_vals {
+                    write!(f, "{}{}", delim, pivot_val)?;
+                    delim = ", ";
+                }
+                write!(f, "))")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {}", alias)?;
                 }
@@ -346,12 +468,15 @@ impl fmt::Display for Join {
                 _ => "",
             }
         }
+
+        #[allow(clippy::needless_lifetimes)]
         fn suffix<'a>(constraint: &'a JoinConstraint) -> impl fmt::Display + 'a {
             struct Suffix<'a>(&'a JoinConstraint);
             impl<'a> fmt::Display for Suffix<'a> {
                 fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                     match self.0 {
                         JoinConstraint::On(expr) => write!(f, " ON {}", expr),
+                        JoinConstraint::Where(expr) => write!(f, " WHERE {}", expr),
                         JoinConstraint::Using(attrs) => {
                             write!(f, " USING({})", display_comma_separated(attrs))
                         }
@@ -390,6 +515,8 @@ impl fmt::Display for Join {
                 self.relation,
                 suffix(constraint)
             ),
+            JoinOperator::Pivot => write!(f, " PIVOT {}", self.relation),
+            JoinOperator::Unpivot => write!(f, " UNPIVOT {}", self.relation),
             JoinOperator::CrossJoin => write!(f, " CROSS JOIN {}", self.relation),
             JoinOperator::CrossApply => write!(f, " CROSS APPLY {}", self.relation),
             JoinOperator::OuterApply => write!(f, " OUTER APPLY {}", self.relation),
@@ -404,6 +531,11 @@ pub enum JoinOperator {
     LeftOuter(JoinConstraint),
     RightOuter(JoinConstraint),
     FullOuter(JoinConstraint),
+    /// [UN]PIVOT not actually a join but it seems to fit here syntactically
+    /// https://docs.snowflake.com/en/sql-reference/constructs/pivot.html
+    Pivot,
+    /// https://docs.snowflake.com/en/sql-reference/constructs/unpivot.html
+    Unpivot,
     CrossJoin,
     /// CROSS APPLY (non-standard)
     CrossApply,
@@ -415,8 +547,11 @@ pub enum JoinOperator {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum JoinConstraint {
     On(Expr),
+    /// snowflake-specific: https://docs.snowflake.com/en/sql-reference/constructs/where.html#joins-in-the-where-clause
+    Where(Expr),
     Using(Vec<Ident>),
     Natural,
+    Empty,
 }
 
 /// An `ORDER BY` expression

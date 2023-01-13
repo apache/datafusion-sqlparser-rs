@@ -64,7 +64,7 @@ impl TestedDialects {
     }
 
     pub fn parse_sql_statements(&self, sql: &str) -> Result<Vec<Statement>, ParserError> {
-        self.one_of_identical_results(|dialect| Parser::parse_sql(dialect, &sql))
+        self.one_of_identical_results(|dialect| Parser::parse_sql(dialect, sql))
         // To fail the `ensure_multiple_dialects_are_tested` test:
         // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)
     }
@@ -75,11 +75,11 @@ impl TestedDialects {
     /// tree as parsing `canonical`, and that serializing it back to string
     /// results in the `canonical` representation.
     pub fn one_statement_parses_to(&self, sql: &str, canonical: &str) -> Statement {
-        let mut statements = self.parse_sql_statements(&sql).unwrap();
+        let mut statements = self.parse_sql_statements(sql).unwrap();
         assert_eq!(statements.len(), 1);
 
         if !canonical.is_empty() && sql != canonical {
-            assert_eq!(self.parse_sql_statements(&canonical).unwrap(), statements);
+            assert_eq!(self.parse_sql_statements(canonical).unwrap(), statements);
         }
 
         let only_statement = statements.pop().unwrap();
@@ -132,6 +132,17 @@ pub fn all_dialects() -> TestedDialects {
             Box::new(MsSqlDialect {}),
             Box::new(AnsiDialect {}),
             Box::new(SnowflakeDialect {}),
+        ],
+    }
+}
+
+pub fn sigma_main_dialects() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![
+            Box::new(SnowflakeDialect {}),
+            Box::new(BigQueryDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(MsSqlDialect {}),
         ],
     }
 }

@@ -20,7 +20,9 @@ use std::iter::Peekable;
 use std::str::Chars;
 
 use super::dialect::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
+use super::dialect::BigQueryDialect;
 use super::dialect::Dialect;
+use super::dialect::PostgreSqlDialect;
 use super::dialect::SnowflakeDialect;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -39,7 +41,19 @@ pub enum Token {
     /// A character that could not be tokenized
     Char(char),
     /// Single quoted string: i.e: 'string'
+    /// This should retains the escaped character sequences so that
+    /// .to_string() of the value will give the value that was in the input
     SingleQuotedString(String),
+    /// Double quoted string: i.e: "string"
+    /// This should retains the escaped character sequences so that
+    /// .to_string() of the value will give the value that was in the input
+    DoubleQuotedString(String),
+    /// Single quoted string: i.e: 'string'
+    BacktickQuotedString(String),
+    BqRegexQuotedString {
+        value: String,
+        quote: char,
+    },
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
     /// Hexadecimal string literal: i.e.: X'deadbeef'
@@ -102,6 +116,31 @@ pub enum Token {
     RBrace,
     /// Right Arrow `=>`
     RArrow,
+    /// https://www.postgresql.org/docs/9.5/functions-json.html
+    /// various PostgreSQL JSON index operators:
+    /// `->`
+    PgJsonGetIndex,
+    /// `->>`
+    PgJsonGetIndexText,
+    /// `#>` Get JSON object at specified path
+    PgJsonGetPath,
+    /// `#>>` Get JSON object at specified path as text
+    PgJsonGetPathText,
+    /// `@>` Does the left JSON value contain the right JSON path/value entries
+    /// at the top level?
+    PgJsonGt,
+    /// <@` Are the left JSON path/value entries contained at the top level
+    /// within the right JSON value?
+    PgJsonLt,
+    /// `?` Does the string exist as a top-level key within the JSON value?
+    PgJsonKeyExists,
+    /// `?|` Do any of these array strings exist as top-level keys?
+    PgJsonAnyKeyExists,
+    /// `?&` Do all of these array strings exist as top-level keys?
+    PgJsonAllKeysExist,
+    /// `#-` Delete the field or element with specified path (for JSON arrays,
+    /// negative integers count from the end)
+    PgJsonMinus,
     /// Sharp `#` used for PostgreSQL Bitwise XOR operator
     Sharp,
     /// Tilde `~` used for PostgreSQL Bitwise NOT operator
@@ -130,7 +169,12 @@ impl fmt::Display for Token {
             Token::Number(ref n) => f.write_str(n),
             Token::Char(ref c) => write!(f, "{}", c),
             Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
+            Token::DoubleQuotedString(ref s) => write!(f, "\"{}\"", s),
+            Token::BacktickQuotedString(ref s) => write!(f, "`{}`", s),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
+            Token::BqRegexQuotedString { ref value, quote } => {
+                write!(f, "r{}{}{}", quote, value, quote)
+            }
             Token::HexStringLiteral(ref s) => write!(f, "X'{}'", s),
             Token::Comma => f.write_str(","),
             Token::Whitespace(ws) => write!(f, "{}", ws),
@@ -161,6 +205,16 @@ impl fmt::Display for Token {
             Token::LBrace => f.write_str("{"),
             Token::RBrace => f.write_str("}"),
             Token::RArrow => f.write_str("=>"),
+            Token::PgJsonGetIndex => f.write_str("->"),
+            Token::PgJsonGetIndexText => f.write_str("->>"),
+            Token::PgJsonGetPath => f.write_str("#>"),
+            Token::PgJsonGetPathText => f.write_str("#>>"),
+            Token::PgJsonGt => f.write_str("@>"),
+            Token::PgJsonLt => f.write_str("@<"),
+            Token::PgJsonKeyExists => f.write_str("?"),
+            Token::PgJsonAnyKeyExists => f.write_str("?|"),
+            Token::PgJsonAllKeysExist => f.write_str("?&"),
+            Token::PgJsonMinus => f.write_str("#-"),
             Token::Sharp => f.write_str("#"),
             Token::ExclamationMark => f.write_str("!"),
             Token::DoubleExclamationMark => f.write_str("!!"),
@@ -237,8 +291,13 @@ pub enum Whitespace {
     Space,
     Newline,
     Tab,
-    SingleLineComment { comment: String, prefix: String },
+    SingleLineComment {
+        comment: String,
+        prefix: String,
+    },
     MultiLineComment(String),
+    /// https://en.wikipedia.org/wiki/Zero-width_space
+    Zwsp,
 }
 
 impl fmt::Display for Whitespace {
@@ -249,6 +308,7 @@ impl fmt::Display for Whitespace {
             Whitespace::Tab => f.write_str("\t"),
             Whitespace::SingleLineComment { prefix, comment } => write!(f, "{}{}", prefix, comment),
             Whitespace::MultiLineComment(s) => write!(f, "/*{}*/", s),
+            Whitespace::Zwsp => write!(f, "\u{feff}"),
         }
     }
 }
@@ -298,6 +358,8 @@ impl<'a> Tokenizer<'a> {
                 Token::Word(w) if w.quote_style != None => self.col += w.value.len() as u64 + 2,
                 Token::Number(s) => self.col += s.len() as u64,
                 Token::SingleQuotedString(s) => self.col += s.len() as u64,
+                Token::DoubleQuotedString(s) => self.col += s.len() as u64,
+                Token::BacktickQuotedString(s) => self.col += s.len() as u64,
                 _ => self.col += 1,
             }
 
@@ -312,6 +374,7 @@ impl<'a> Tokenizer<'a> {
         match chars.peek() {
             Some(&ch) => match ch {
                 ' ' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Space)),
+                '\u{feff}' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Zwsp)),
                 '\t' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Tab)),
                 '\n' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Newline)),
                 '\r' => {
@@ -321,6 +384,26 @@ impl<'a> Tokenizer<'a> {
                         chars.next();
                     }
                     Ok(Some(Token::Whitespace(Whitespace::Newline)))
+                }
+                r @ 'r' | r @ 'R' if dialect_of!(self is BigQueryDialect) => {
+                    chars.next(); // consume, to check the next char
+                    match chars.peek() {
+                        Some('\'') => {
+                            // r'...' - a regex literal
+                            let value = self.tokenize_single_quoted_string(chars)?;
+                            Ok(Some(Token::BqRegexQuotedString { value, quote: '\'' }))
+                        }
+                        Some('"') => {
+                            // r"..." - a regex literal
+                            let value = self.tokenize_double_quoted_string(chars)?;
+                            Ok(Some(Token::BqRegexQuotedString { value, quote: '"' }))
+                        }
+                        _ => {
+                            // regular identifier starting with an "r" or "R"
+                            let s = self.tokenize_word(r, chars);
+                            Ok(Some(Token::make_word(&s, None)))
+                        }
+                    }
                 }
                 'N' => {
                     chars.next(); // consume, to check the next char
@@ -365,6 +448,23 @@ impl<'a> Tokenizer<'a> {
                     let s = self.tokenize_single_quoted_string(chars)?;
                     Ok(Some(Token::SingleQuotedString(s)))
                 }
+                // string
+                '"' if dialect_of!(self is BigQueryDialect) => {
+                    let s = self.tokenize_double_quoted_string(chars)?;
+                    Ok(Some(Token::DoubleQuotedString(s)))
+                }
+                // string
+                '`' if dialect_of!(self is BigQueryDialect) => {
+                    chars.next(); // consume opening backtick
+                    let s = peeking_take_while(chars, |ch| ch != '`');
+                    match chars.peek() {
+                        Some('`') => {
+                            chars.next(); // consume closing backtick
+                            Ok(Some(Token::BacktickQuotedString(s)))
+                        }
+                        _ => self.tokenizer_error("Unterminated backtick literal"),
+                    }
+                }
                 // delimited (quoted) identifier
                 quote_start if self.dialect.is_delimited_identifier_start(quote_start) => {
                     chars.next(); // consume the opening quote
@@ -380,10 +480,9 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 // numbers
-                '0'..='9' => {
+                '0'..='9' | '.' => {
                     // TODO: https://jakewheat.github.io/sql-overview/sql-2011-foundation-grammar.html#unsigned-numeric-literal
-                    let s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
-                    Ok(Some(Token::Number(s)))
+                    Ok(Some(consume_number_literal_or_dot(chars, ch)))
                 }
                 // punctuation
                 '(' => self.consume_and_return(chars, Token::LParen),
@@ -401,6 +500,15 @@ impl<'a> Tokenizer<'a> {
                                 comment,
                             })))
                         }
+                        Some('>') if dialect_of!(self is PostgreSqlDialect) => {
+                            chars.next(); // consume >
+                            if let Some('>') = chars.peek() {
+                                chars.next(); // consume >
+                                Ok(Some(Token::PgJsonGetIndexText))
+                            } else {
+                                Ok(Some(Token::PgJsonGetIndex))
+                            }
+                        }
                         // a regular '-' operator
                         _ => Ok(Some(Token::Minus)),
                     }
@@ -412,7 +520,7 @@ impl<'a> Tokenizer<'a> {
                             chars.next(); // consume the '*', starting a multi-line comment
                             self.tokenize_multiline_comment(chars)
                         }
-                        Some('/') if dialect_of!(self is SnowflakeDialect) => {
+                        Some('/') if dialect_of!(self is SnowflakeDialect | BigQueryDialect) => {
                             chars.next(); // consume the second '/', starting a snowflake single-line comment
                             let comment = self.tokenize_single_line_comment(chars);
                             Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
@@ -449,7 +557,6 @@ impl<'a> Tokenizer<'a> {
                         _ => Ok(Some(Token::Eq)),
                     }
                 }
-                '.' => self.consume_and_return(chars, Token::Period),
                 '!' => {
                     chars.next(); // consume
                     match chars.peek() {
@@ -490,7 +597,7 @@ impl<'a> Tokenizer<'a> {
                 '^' => self.consume_and_return(chars, Token::Caret),
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
-                '#' if dialect_of!(self is SnowflakeDialect) => {
+                '#' if dialect_of!(self is SnowflakeDialect | BigQueryDialect) => {
                     chars.next(); // consume the '#', starting a snowflake single-line comment
                     let comment = self.tokenize_single_line_comment(chars);
                     Ok(Some(Token::Whitespace(Whitespace::SingleLineComment {
@@ -498,9 +605,66 @@ impl<'a> Tokenizer<'a> {
                         comment,
                     })))
                 }
+                '#' => {
+                    chars.next(); // consume #
+                    if dialect_of!(self is PostgreSqlDialect) {
+                        match chars.peek() {
+                            Some('>') => {
+                                chars.next(); // consume >
+                                if let Some('>') = chars.peek() {
+                                    chars.next(); // consume >
+                                    Ok(Some(Token::PgJsonGetPathText))
+                                } else {
+                                    Ok(Some(Token::PgJsonGetPath))
+                                }
+                            }
+                            Some('-') => {
+                                chars.next(); // consume -
+                                Ok(Some(Token::PgJsonMinus))
+                            }
+                            _ => Ok(Some(Token::Sharp)),
+                        }
+                    } else {
+                        Ok(Some(Token::Sharp))
+                    }
+                }
                 '~' => self.consume_and_return(chars, Token::Tilde),
-                '#' => self.consume_and_return(chars, Token::Sharp),
-                '@' => self.consume_and_return(chars, Token::AtSign),
+                '@' => {
+                    chars.next(); // consume @
+                    if dialect_of!(self is PostgreSqlDialect) {
+                        match chars.peek() {
+                            Some('>') => {
+                                chars.next(); // consume >
+                                Ok(Some(Token::PgJsonGt))
+                            }
+                            Some('<') => {
+                                chars.next(); // consume <
+                                Ok(Some(Token::PgJsonLt))
+                            }
+                            _ => Ok(Some(Token::AtSign)),
+                        }
+                    } else {
+                        Ok(Some(Token::AtSign))
+                    }
+                }
+                '?' => {
+                    chars.next(); // consume ?
+                    if dialect_of!(self is PostgreSqlDialect) {
+                        match chars.peek() {
+                            Some('|') => {
+                                chars.next(); // consume |
+                                Ok(Some(Token::PgJsonAnyKeyExists))
+                            }
+                            Some('&') => {
+                                chars.next(); // consume &
+                                Ok(Some(Token::PgJsonAllKeysExist))
+                            }
+                            _ => Ok(Some(Token::PgJsonKeyExists)),
+                        }
+                    } else {
+                        Ok(Some(Token::Char('?')))
+                    }
+                }
                 other => self.consume_and_return(chars, Token::Char(other)),
             },
             None => Ok(None),
@@ -539,24 +703,47 @@ impl<'a> Tokenizer<'a> {
         &self,
         chars: &mut Peekable<Chars<'_>>,
     ) -> Result<String, TokenizerError> {
+        self.tokenize_quoted_string(chars, '\'')
+    }
+
+    /// Read a double quoted string, starting with the opening quote.
+    fn tokenize_double_quoted_string(
+        &self,
+        chars: &mut Peekable<Chars<'_>>,
+    ) -> Result<String, TokenizerError> {
+        self.tokenize_quoted_string(chars, '"')
+    }
+
+    /// Read a quoted string (quoted by any character, typically ' or "),
+    /// starting with the opening quote.
+    fn tokenize_quoted_string(
+        &self,
+        chars: &mut Peekable<Chars<'_>>,
+        quote_ch: char,
+    ) -> Result<String, TokenizerError> {
         let mut s = String::new();
         chars.next(); // consume the opening quote
-        while let Some(&ch) = chars.peek() {
+        while let Some(ch) = chars.next() {
+            let next_char_is_quote = chars.peek().map(|c| *c == quote_ch).unwrap_or(false);
             match ch {
-                '\'' => {
-                    chars.next(); // consume
-                    let escaped_quote = chars.peek().map(|c| *c == '\'').unwrap_or(false);
-                    if escaped_quote {
-                        s.push('\'');
-                        chars.next();
-                    } else {
-                        return Ok(s);
+                // allow backslash to escape the next character, whatever it is
+                '\\' => {
+                    chars.next(); // consume the escape char
+                    if let Some(next_ch) = chars.next() {
+                        s.push(next_ch);
                     }
                 }
-                _ => {
-                    chars.next(); // consume
-                    s.push(ch);
+                // bq allows escaping only with backslash; other warehouses
+                // allow escaping the quote character by repeating it
+                _ if !dialect_of!(self is BigQueryDialect)
+                    && ch == quote_ch
+                    && next_char_is_quote =>
+                {
+                    s.push(quote_ch);
+                    chars.next(); // consume quote_ch
                 }
+                ch if ch == quote_ch => return Ok(s),
+                _ => s.push(ch),
             }
         }
         self.tokenizer_error("Unterminated string literal")
@@ -616,6 +803,59 @@ fn peeking_take_while(
         }
     }
     s
+}
+
+/// handle parsing numbers, including scientific notation
+/// https://docs.snowflake.com/en/sql-reference/data-types-numeric.html
+fn consume_number_literal_or_dot(chars: &mut Peekable<Chars<'_>>, first: char) -> Token {
+    let mut s = String::new();
+    chars.next(); // consume
+    s.push(first);
+    #[derive(PartialEq)]
+    enum NumState {
+        WholeNum,      // we look for digits or . or e
+        Decimal,       // we look for digits or e
+        ExponentStart, // we look for either a +- sign or digits
+        Exponent,      // we only look for digits
+    }
+    let mut num_state = if first == '.' {
+        NumState::Decimal
+    } else {
+        NumState::WholeNum
+    };
+    let mut is_second_char = true;
+    while let Some(&ch) = chars.peek() {
+        if num_state == NumState::Decimal && is_second_char && !matches!(ch, '0'..='9') {
+            return Token::Period;
+        }
+        let add_to_string = match num_state {
+            NumState::WholeNum | NumState::Decimal => match ch {
+                '0'..='9' => true,
+                '.' if num_state == NumState::WholeNum => {
+                    num_state = NumState::Decimal;
+                    true
+                }
+                'e' | 'E' => {
+                    num_state = NumState::ExponentStart;
+                    true
+                }
+                _ => false,
+            },
+            NumState::ExponentStart => {
+                num_state = NumState::Exponent;
+                matches!(ch, '0'..='9' | '-' | '+')
+            }
+            NumState::Exponent => matches!(ch, '0'..='9'),
+        };
+        if add_to_string {
+            chars.next(); // consume
+            s.push(ch);
+        } else {
+            break;
+        }
+        is_second_char = false;
+    }
+    Token::Number(s)
 }
 
 #[cfg(test)]

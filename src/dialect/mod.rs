@@ -12,6 +12,7 @@
 
 mod ansi;
 mod bigquery;
+mod databricks;
 mod generic;
 pub mod keywords;
 mod mssql;
@@ -25,6 +26,7 @@ use std::fmt::Debug;
 
 pub use self::ansi::AnsiDialect;
 pub use self::bigquery::BigQueryDialect;
+pub use self::databricks::DatabricksDialect;
 pub use self::generic::GenericDialect;
 pub use self::mssql::MsSqlDialect;
 pub use self::mysql::MySqlDialect;

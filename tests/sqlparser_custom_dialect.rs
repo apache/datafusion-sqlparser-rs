@@ -69,7 +69,7 @@ fn custom_infix_parser() -> Result<(), ParserError> {
             &self,
             parser: &mut Parser,
             expr: &Expr,
-            _precendence: u8,
+            _precedence: u8,
         ) -> Option<Result<Expr, ParserError>> {
             if parser.consume_token(&Token::Plus) {
                 Some(Ok(Expr::BinaryOp {

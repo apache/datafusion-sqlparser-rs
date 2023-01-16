@@ -64,9 +64,6 @@ pub enum Token {
     EscapedStringLiteral(String),
     /// Hexadecimal string literal: i.e.: X'deadbeef'
     HexStringLiteral(String),
-    /// MySQL string introducer: i.e.: _latin1'abc'
-    /// <https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html>
-    StringIntroducer(String),
     /// Comma
     Comma,
     /// Whitespace (space, tab, etc)
@@ -192,7 +189,6 @@ impl fmt::Display for Token {
             Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
             Token::EscapedStringLiteral(ref s) => write!(f, "E'{}'", s),
             Token::HexStringLiteral(ref s) => write!(f, "X'{}'", s),
-            Token::StringIntroducer(ref s) => write!(f, "{}", s),
             Token::Comma => f.write_str(","),
             Token::Whitespace(ws) => write!(f, "{}", ws),
             Token::DoubleEq => f.write_str("=="),
@@ -565,14 +561,6 @@ impl<'a> Tokenizer<'a> {
                         let s2 = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
                         s += s2.as_str();
                         return Ok(Some(Token::Number(s, false)));
-                    }
-
-                    // https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
-                    if ch == '_' && dialect_of!(self is MySqlDialect) {
-                        const INTRODUCERS: [&str; 4] = ["_latin1", "_binary", "_utf8", "_utf8mb4"];
-                        if INTRODUCERS.contains(&word.as_str()) {
-                            return Ok(Some(Token::StringIntroducer(word)));
-                        }
                     }
 
                     Ok(Some(Token::make_word(&word, None)))

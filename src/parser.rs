@@ -734,6 +734,17 @@ impl<'a> Parser<'a> {
                             Ok(Expr::CompoundIdentifier(id_parts))
                         }
                     }
+                    // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
+                    Token::SingleQuotedString(_)
+                    | Token::DoubleQuotedString(_)
+                    | Token::HexStringLiteral(_)
+                        if w.value.starts_with("_") =>
+                    {
+                        Ok(Expr::IntroducedString {
+                            introducer: w.value,
+                            value: self.parse_introduced_string_value()?,
+                        })
+                    }
                     _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word
@@ -784,10 +795,6 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
-            Token::StringIntroducer(introducer) => Ok(Expr::IntroducedString {
-                introducer,
-                value: self.parse_mysql_introduced_string_value()?,
-            }),
             Token::LParen => {
                 let expr =
                     if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
@@ -4145,7 +4152,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_mysql_introduced_string_value(&mut self) -> Result<Value, ParserError> {
+    fn parse_introduced_string_value(&mut self) -> Result<Value, ParserError> {
         let next_token = self.next_token();
         let location = next_token.location;
         match next_token.token {

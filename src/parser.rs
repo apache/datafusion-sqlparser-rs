@@ -738,7 +738,7 @@ impl<'a> Parser<'a> {
                     Token::SingleQuotedString(_)
                     | Token::DoubleQuotedString(_)
                     | Token::HexStringLiteral(_)
-                        if w.value.starts_with("_") =>
+                        if w.value.starts_with('_') =>
                     {
                         Ok(Expr::IntroducedString {
                             introducer: w.value,

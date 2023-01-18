@@ -313,6 +313,24 @@ fn test_select_wildcard_with_except() {
     );
 }
 
+#[test]
+fn test_select_wildcard_with_replace() {
+    let select = bigquery_and_generic().verified_only_select(r#"WITH orders AS
+    (SELECT 5 as order_id,
+    "sprocket" as item_name,
+    200 as quantity)
+  SELECT * REPLACE ("widget" AS item_name)
+  FROM orders;"#);
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_except: Some(ExceptSelectItem {
+            first_element: Ident::new("col_a"),
+            additional_elements: vec![],
+        }),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
+}
+
 fn bigquery() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(BigQueryDialect {})],

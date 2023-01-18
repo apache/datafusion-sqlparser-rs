@@ -394,6 +394,8 @@ pub struct WildcardAdditionalOptions {
     pub opt_except: Option<ExceptSelectItem>,
     /// `[RENAME ...]`.
     pub opt_rename: Option<RenameSelectItem>,
+    /// `[REPLACE]`
+    pub opt_replace:Option<ReplaceSelectItem>
 }
 
 impl fmt::Display for WildcardAdditionalOptions {
@@ -521,6 +523,46 @@ impl fmt::Display for ExceptSelectItem {
                 self.first_element,
                 display_comma_separated(&self.additional_elements)
             )?;
+        }
+        Ok(())
+    }
+}
+
+/// Bigquery `REPLACE` information.
+///
+/// # Syntax
+/// ```plaintext
+/// REPLACE <new_expr> AS <col_name>
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ReplaceSelectItem {
+    /// Single column name with alias without parenthesis.
+    ///
+    /// # Syntax
+    /// ```plaintext
+    /// <col_name> AS <col_alias>
+    /// ```
+    Single(IdentWithAlias),
+    /// Multiple column names with aliases inside parenthesis.
+    /// # Syntax
+    /// ```plaintext
+    /// (<col_name> AS <col_alias>, <col_name> AS <col_alias>, ...)
+    /// ```
+    Multiple(Vec<IdentWithAlias>),
+}
+
+impl fmt::Display for ReplaceSelectItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "REPLACE")?;
+        match self {
+            Self::Single(column) => {
+                write!(f, " {column}")?;
+            }
+            Self::Multiple(columns) => {
+                write!(f, " ({})", display_comma_separated(columns))?;
+            }
         }
         Ok(())
     }

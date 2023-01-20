@@ -88,7 +88,7 @@ pub trait Dialect: Debug + Any {
         &self,
         _parser: &mut Parser,
         _expr: &Expr,
-        _precendence: u8,
+        _precedence: u8,
     ) -> Option<Result<Expr, ParserError>> {
         // return None to fall back to the default behavior
         None

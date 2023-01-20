@@ -4183,10 +4183,9 @@ impl<'a> Parser<'a> {
     pub fn parse_map_key(&mut self) -> Result<Expr, ParserError> {
         let next_token = self.next_token();
         match next_token.token {
-            // handle bigquery offset()
+            // handle bigquery offset subscript operator which overlaps with OFFSET operator
             Token::Word(Word { value, keyword, .. })
-                if (dialect_of!(self is BigQueryDialect | GenericDialect)
-                    && keyword == Keyword::OFFSET) =>
+                if (dialect_of!(self is BigQueryDialect) && keyword == Keyword::OFFSET) =>
             {
                 return self.parse_function(ObjectName(vec![Ident::new(value)]));
             }

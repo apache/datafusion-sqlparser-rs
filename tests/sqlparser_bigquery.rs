@@ -330,5 +330,14 @@ fn parse_map_access_offset() {
                 special: false,
             })],
         })
-    )
+    );
+
+    // test other operators
+    for sql in [
+        "SELECT d[SAFE_OFFSET(0)]",
+        "SELECT d[ORDINAL(0)]",
+        "SELECT d[SAFE_ORDINAL(0)]",
+    ] {
+        bigquery().verified_only_select(sql);
+    }
 }

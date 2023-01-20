@@ -15,6 +15,8 @@ mod test_utils;
 
 use test_utils::*;
 
+use sqlparser::ast::Expr::{Identifier, MapAccess};
+use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 
@@ -305,4 +307,28 @@ fn bigquery_and_generic() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(BigQueryDialect {}), Box::new(GenericDialect {})],
     }
+}
+
+#[test]
+fn parse_map_access_offset() {
+    let sql = "SELECT d[offset(0)]";
+    let select = bigquery().verified_only_select(sql);
+    assert_eq!(
+        select.projection[0],
+        UnnamedExpr(MapAccess {
+            column: Box::new(Identifier(Ident {
+                value: "d".to_string(),
+                quote_style: None,
+            })),
+            keys: vec![Expr::Function(Function {
+                name: ObjectName(vec!["offset".into()]),
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                    Value::Number("0".to_string(), false)
+                ))),],
+                over: None,
+                distinct: false,
+                special: false,
+            })],
+        })
+    )
 }

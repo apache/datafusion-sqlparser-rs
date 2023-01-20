@@ -4183,7 +4183,14 @@ impl<'a> Parser<'a> {
     pub fn parse_map_key(&mut self) -> Result<Expr, ParserError> {
         let next_token = self.next_token();
         match next_token.token {
-            Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => {
+            // handle bigquery offset()
+            Token::Word(Word { value, keyword, .. })
+                if (dialect_of!(self is BigQueryDialect | GenericDialect)
+                    && keyword == Keyword::OFFSET) =>
+            {
+                return self.parse_function(ObjectName(vec![Ident::new(value)]));
+            }
+            Token::Word(Word { value, keyword, .. }) if (keyword == Keyword::NoKeyword) => {
                 if self.peek_token() == Token::LParen {
                     return self.parse_function(ObjectName(vec![Ident::new(value)]));
                 }

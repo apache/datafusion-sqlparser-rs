@@ -5615,7 +5615,7 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-            let columns_definition = self.parse_redshift_columns_definition_list(&name)?;
+            let columns_definition = self.parse_redshift_columns_definition_list()?;
             let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
             // MSSQL-specific table hints:
             let mut with_hints = vec![];
@@ -5640,28 +5640,14 @@ impl<'a> Parser<'a> {
 
     fn parse_redshift_columns_definition_list(
         &mut self,
-        name: &ObjectName,
     ) -> Result<Option<TableAliasDefinition>, ParserError> {
         if !dialect_of!(self is RedshiftSqlDialect | GenericDialect) {
             return Ok(None);
         }
 
-        let fname = name
-            .0
-            .last()
-            .ok_or_else(|| {
-                ParserError::ParserError("Empty identifier vector for ObjectName".to_string())
-            })?
-            .value
-            .to_lowercase();
-
-        if fname == "pg_get_late_binding_view_cols"
-            || fname == "pg_get_cols"
-            || fname == "pg_get_grantee_by_iam_role"
-            || fname == "pg_get_iam_role_by_user"
+        if let Some(col_definition_list_name) = self.parse_optional_columns_definition_list_alias()
         {
-            if let Ok(col_definition_list_name) = self.parse_identifier() {
-                self.expect_token(&Token::LParen)?;
+            if self.consume_token(&Token::LParen) {
                 let names = self.parse_comma_separated(Parser::parse_ident_pair)?;
                 self.expect_token(&Token::RParen)?;
                 Ok(Some(TableAliasDefinition {
@@ -5669,10 +5655,23 @@ impl<'a> Parser<'a> {
                     args: names,
                 }))
             } else {
+                self.prev_token();
                 Ok(None)
             }
         } else {
             Ok(None)
+        }
+    }
+
+    fn parse_optional_columns_definition_list_alias(&mut self) -> Option<Ident> {
+        match self.next_token().token {
+            Token::Word(w) if !keywords::RESERVED_FOR_TABLE_ALIAS.contains(&w.keyword) => {
+                Some(w.to_ident())
+            }
+            _ => {
+                self.prev_token();
+                None
+            }
         }
     }
 

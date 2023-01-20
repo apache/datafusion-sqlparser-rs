@@ -4187,7 +4187,7 @@ impl<'a> Parser<'a> {
             Token::Word(Word { value, keyword, .. })
                 if (dialect_of!(self is BigQueryDialect) && keyword == Keyword::OFFSET) =>
             {
-                return self.parse_function(ObjectName(vec![Ident::new(value)]));
+                self.parse_function(ObjectName(vec![Ident::new(value)]))
             }
             Token::Word(Word { value, keyword, .. }) if (keyword == Keyword::NoKeyword) => {
                 if self.peek_token() == Token::LParen {

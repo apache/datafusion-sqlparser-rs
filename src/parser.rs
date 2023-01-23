@@ -6248,7 +6248,7 @@ impl<'a> Parser<'a> {
         Ok(opt_rename)
     }
 
-    /// Parse a [`Replace](RepalceSelectItem) information for wildcard select items.
+    /// Parse a [`Replace`](ReplaceSelectItem) information for wildcard select items.
     pub fn parse_optional_select_item_replace(
         &mut self,
     ) -> Result<Option<ReplaceSelectItem>, ParserError> {

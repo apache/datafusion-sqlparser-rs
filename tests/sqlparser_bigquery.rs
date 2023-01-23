@@ -17,6 +17,11 @@ use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 use test_utils::*;
 
+#[cfg(feature = "bigdecimal")]
+use bigdecimal::*;
+#[cfg(feature = "bigdecimal")]
+use std::str::FromStr;
+
 #[test]
 fn parse_literal_string() {
     let sql = r#"SELECT 'single', "double""#;
@@ -336,7 +341,13 @@ fn test_select_wildcard_with_replace() {
                 expr: Expr::BinaryOp {
                     left: Box::new(Expr::Identifier(Ident::new("quantity"))),
                     op: BinaryOperator::Divide,
+                    #[cfg(not(feature = "bigdecimal"))]
                     right: Box::new(Expr::Value(Value::Number("2".to_string(), false))),
+                    #[cfg(feature = "bigdecimal")]
+                    right: Box::new(Expr::Value(Value::Number(
+                        BigDecimal::from_str("2").unwrap(),
+                        false,
+                    ))),
                 },
                 alias: Ident::new("quantity"),
             },

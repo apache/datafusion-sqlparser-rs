@@ -315,17 +315,22 @@ fn test_select_wildcard_with_except() {
 
 #[test]
 fn test_select_wildcard_with_replace() {
-    let select = bigquery_and_generic().verified_only_select(r#"WITH orders AS
-    (SELECT 5 as order_id,
-    "sprocket" as item_name,
-    200 as quantity)
-  SELECT * REPLACE ("widget" AS item_name)
-  FROM orders;"#);
+    let select = bigquery_and_generic()
+        .verified_only_select(r#"SELECT * REPLACE (quantity / 2 AS quantity) FROM orders"#);
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
-        opt_except: Some(ExceptSelectItem {
-            first_element: Ident::new("col_a"),
-            additional_elements: vec![],
-        }),
+        opt_replace: Some(ReplaceSelectItem::Multiple(vec![Box::new(
+            SelectItem::ExprWithAlias {
+                expr: Expr::BinaryOp {
+                    left: Box::new(sqlparser::ast::Expr::Identifier(Ident::new("quantity"))),
+                    op: BinaryOperator::Divide,
+                    right: Box::new(sqlparser::ast::Expr::Value(Value::Number(
+                        "2".to_string(),
+                        false,
+                    ))),
+                },
+                alias: Ident::new("quantity"),
+            },
+        )])),
         ..Default::default()
     });
     assert_eq!(expected, select.projection[0]);

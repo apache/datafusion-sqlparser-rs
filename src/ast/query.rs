@@ -395,7 +395,7 @@ pub struct WildcardAdditionalOptions {
     /// `[RENAME ...]`.
     pub opt_rename: Option<RenameSelectItem>,
     /// `[REPLACE]`
-    pub opt_replace:Option<ReplaceSelectItem>
+    pub opt_replace: Option<ReplaceSelectItem>,
 }
 
 impl fmt::Display for WildcardAdditionalOptions {
@@ -408,6 +408,9 @@ impl fmt::Display for WildcardAdditionalOptions {
         }
         if let Some(rename) = &self.opt_rename {
             write!(f, " {rename}")?;
+        }
+        if let Some(replace) = &self.opt_replace {
+            write!(f, " {replace}")?;
         }
         Ok(())
     }
@@ -544,13 +547,13 @@ pub enum ReplaceSelectItem {
     /// ```plaintext
     /// <col_name> AS <col_alias>
     /// ```
-    Single(IdentWithAlias),
+    Single(Box<SelectItem>),
     /// Multiple column names with aliases inside parenthesis.
     /// # Syntax
     /// ```plaintext
     /// (<col_name> AS <col_alias>, <col_name> AS <col_alias>, ...)
     /// ```
-    Multiple(Vec<IdentWithAlias>),
+    Multiple(Vec<Box<SelectItem>>),
 }
 
 impl fmt::Display for ReplaceSelectItem {

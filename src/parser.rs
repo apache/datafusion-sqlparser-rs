@@ -6164,9 +6164,9 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect){
-    self.parse_optional_select_item_replace()?
-        }else {
+        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect) {
+            self.parse_optional_select_item_replace()?
+        } else {
             None
         };
 
@@ -6174,7 +6174,7 @@ impl<'a> Parser<'a> {
             opt_exclude,
             opt_except,
             opt_rename,
-            opt_replace
+            opt_replace,
         })
     }
 
@@ -6248,26 +6248,26 @@ impl<'a> Parser<'a> {
         Ok(opt_rename)
     }
 
-        /// Parse a [`Replace](RepalceSelectItem) information for wildcard select items.
-        pub fn parse_optional_select_item_replace(
-            &mut self,
-        ) -> Result<Option<ReplaceSelectItem>, ParserError> {
-            let opt_replace = if self.parse_keyword(Keyword::REPLACE) {
-                if self.consume_token(&Token::LParen) {
-                    let idents =
-                        self.parse_comma_separated(|parser| parser.parse_identifier_with_alias())?;
-                    self.expect_token(&Token::RParen)?;
-                    Some(ReplaceSelectItem::Multiple(idents))
-                } else {
-                    let ident = self.parse_identifier_with_alias()?;
-                    Some(ReplaceSelectItem::Single(ident))
-                }
+    /// Parse a [`Replace](RepalceSelectItem) information for wildcard select items.
+    pub fn parse_optional_select_item_replace(
+        &mut self,
+    ) -> Result<Option<ReplaceSelectItem>, ParserError> {
+        let opt_replace = if self.parse_keyword(Keyword::REPLACE) {
+            if self.consume_token(&Token::LParen) {
+                let idents =
+                    self.parse_comma_separated(|parser| Ok(Box::new(parser.parse_select_item()?)))?;
+                self.expect_token(&Token::RParen)?;
+                Some(ReplaceSelectItem::Multiple(idents))
             } else {
-                None
-            };
+                let ident = self.parse_select_item()?;
+                Some(ReplaceSelectItem::Single(Box::new(ident)))
+            }
+        } else {
+            None
+        };
 
-            Ok(opt_replace)
-        }
+        Ok(opt_replace)
+    }
 
     /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)
     pub fn parse_order_by_expr(&mut self) -> Result<OrderByExpr, ParserError> {

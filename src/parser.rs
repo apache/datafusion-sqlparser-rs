@@ -4332,6 +4332,7 @@ impl<'a> Parser<'a> {
                 // qualifier that we don't currently support. See
                 // parse_interval for a taste.
                 Keyword::INTERVAL => Ok(DataType::Interval),
+                Keyword::JSON => Ok(DataType::JSON),
                 Keyword::REGCLASS => Ok(DataType::Regclass),
                 Keyword::STRING => Ok(DataType::String),
                 Keyword::TEXT => Ok(DataType::Text),

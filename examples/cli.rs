@@ -46,7 +46,7 @@ $ cargo run --feature json_example --example cli FILENAME.sql [--dialectname]
         "--hive" => Box::new(HiveDialect {}),
         "--redshift" => Box::new(RedshiftSqlDialect {}),
         "--generic" | "" => Box::new(GenericDialect {}),
-        s => panic!("Unexpected parameter: {}", s),
+        s => panic!("Unexpected parameter: {s}"),
     };
 
     println!("Parsing from file '{}' using {:?}", &filename, dialect);
@@ -78,13 +78,13 @@ $ cargo run --feature json_example --example cli FILENAME.sql [--dialectname]
                     println!("Serialized as JSON:\n{}", serialized);
                 }
             } else {
-                println!("Parse results:\n{:#?}", statements);
+                println!("Parse results:\n{statements:#?}");
             }
 
             std::process::exit(0);
         }
         Err(e) => {
-            println!("Error during parsing: {:?}", e);
+            println!("Error during parsing: {e:?}");
             std::process::exit(1);
         }
     }

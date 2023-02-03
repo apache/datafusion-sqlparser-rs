@@ -117,7 +117,7 @@ impl fmt::Display for AlterTableOperation {
                 display_comma_separated(new_partitions),
                 ine = if *if_not_exists { " IF NOT EXISTS" } else { "" }
             ),
-            AlterTableOperation::AddConstraint(c) => write!(f, "ADD {}", c),
+            AlterTableOperation::AddConstraint(c) => write!(f, "ADD {c}"),
             AlterTableOperation::AddColumn {
                 column_keyword,
                 if_not_exists,
@@ -135,7 +135,7 @@ impl fmt::Display for AlterTableOperation {
                 Ok(())
             }
             AlterTableOperation::AlterColumn { column_name, op } => {
-                write!(f, "ALTER COLUMN {} {}", column_name, op)
+                write!(f, "ALTER COLUMN {column_name} {op}")
             }
             AlterTableOperation::DropPartitions {
                 partitions,
@@ -185,11 +185,10 @@ impl fmt::Display for AlterTableOperation {
                 new_column_name,
             } => write!(
                 f,
-                "RENAME COLUMN {} TO {}",
-                old_column_name, new_column_name
+                "RENAME COLUMN {old_column_name} TO {new_column_name}"
             ),
             AlterTableOperation::RenameTable { table_name } => {
-                write!(f, "RENAME TO {}", table_name)
+                write!(f, "RENAME TO {table_name}")
             }
             AlterTableOperation::ChangeColumn {
                 old_name,
@@ -197,7 +196,7 @@ impl fmt::Display for AlterTableOperation {
                 data_type,
                 options,
             } => {
-                write!(f, "CHANGE COLUMN {} {} {}", old_name, new_name, data_type)?;
+                write!(f, "CHANGE COLUMN {old_name} {new_name} {data_type}")?;
                 if options.is_empty() {
                     Ok(())
                 } else {
@@ -205,7 +204,7 @@ impl fmt::Display for AlterTableOperation {
                 }
             }
             AlterTableOperation::RenameConstraint { old_name, new_name } => {
-                write!(f, "RENAME CONSTRAINT {} TO {}", old_name, new_name)
+                write!(f, "RENAME CONSTRAINT {old_name} TO {new_name}")
             }
         }
     }
@@ -215,7 +214,7 @@ impl fmt::Display for AlterIndexOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             AlterIndexOperation::RenameIndex { index_name } => {
-                write!(f, "RENAME TO {}", index_name)
+                write!(f, "RENAME TO {index_name}")
             }
         }
     }
@@ -248,16 +247,16 @@ impl fmt::Display for AlterColumnOperation {
             AlterColumnOperation::SetNotNull => write!(f, "SET NOT NULL",),
             AlterColumnOperation::DropNotNull => write!(f, "DROP NOT NULL",),
             AlterColumnOperation::SetDefault { value } => {
-                write!(f, "SET DEFAULT {}", value)
+                write!(f, "SET DEFAULT {value}")
             }
             AlterColumnOperation::DropDefault {} => {
                 write!(f, "DROP DEFAULT")
             }
             AlterColumnOperation::SetDataType { data_type, using } => {
                 if let Some(expr) = using {
-                    write!(f, "SET DATA TYPE {} USING {}", data_type, expr)
+                    write!(f, "SET DATA TYPE {data_type} USING {expr}")
                 } else {
-                    write!(f, "SET DATA TYPE {}", data_type)
+                    write!(f, "SET DATA TYPE {data_type}")
                 }
             }
         }
@@ -369,10 +368,10 @@ impl fmt::Display for TableConstraint {
                     display_comma_separated(referred_columns),
                 )?;
                 if let Some(action) = on_delete {
-                    write!(f, " ON DELETE {}", action)?;
+                    write!(f, " ON DELETE {action}")?;
                 }
                 if let Some(action) = on_update {
-                    write!(f, " ON UPDATE {}", action)?;
+                    write!(f, " ON UPDATE {action}")?;
                 }
                 Ok(())
             }
@@ -387,10 +386,10 @@ impl fmt::Display for TableConstraint {
             } => {
                 write!(f, "{}", if *display_as_key { "KEY" } else { "INDEX" })?;
                 if let Some(name) = name {
-                    write!(f, " {}", name)?;
+                    write!(f, " {name}")?;
                 }
                 if let Some(index_type) = index_type {
-                    write!(f, " USING {}", index_type)?;
+                    write!(f, " USING {index_type}")?;
                 }
                 write!(f, " ({})", display_comma_separated(columns))?;
 
@@ -409,11 +408,11 @@ impl fmt::Display for TableConstraint {
                 }
 
                 if !matches!(index_type_display, KeyOrIndexDisplay::None) {
-                    write!(f, " {}", index_type_display)?;
+                    write!(f, " {index_type_display}")?;
                 }
 
                 if let Some(name) = opt_index_name {
-                    write!(f, " {}", name)?;
+                    write!(f, " {name}")?;
                 }
 
                 write!(f, " ({})", display_comma_separated(columns))?;
@@ -500,7 +499,7 @@ impl fmt::Display for ColumnDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {}", self.name, self.data_type)?;
         for option in &self.options {
-            write!(f, " {}", option)?;
+            write!(f, " {option}")?;
         }
         Ok(())
     }
@@ -580,7 +579,7 @@ impl fmt::Display for ColumnOption {
         match self {
             Null => write!(f, "NULL"),
             NotNull => write!(f, "NOT NULL"),
-            Default(expr) => write!(f, "DEFAULT {}", expr),
+            Default(expr) => write!(f, "DEFAULT {expr}"),
             Unique { is_primary } => {
                 write!(f, "{}", if *is_primary { "PRIMARY KEY" } else { "UNIQUE" })
             }
@@ -590,23 +589,23 @@ impl fmt::Display for ColumnOption {
                 on_delete,
                 on_update,
             } => {
-                write!(f, "REFERENCES {}", foreign_table)?;
+                write!(f, "REFERENCES {foreign_table}")?;
                 if !referred_columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(referred_columns))?;
                 }
                 if let Some(action) = on_delete {
-                    write!(f, " ON DELETE {}", action)?;
+                    write!(f, " ON DELETE {action}")?;
                 }
                 if let Some(action) = on_update {
-                    write!(f, " ON UPDATE {}", action)?;
+                    write!(f, " ON UPDATE {action}")?;
                 }
                 Ok(())
             }
-            Check(expr) => write!(f, "CHECK ({})", expr),
+            Check(expr) => write!(f, "CHECK ({expr})"),
             DialectSpecific(val) => write!(f, "{}", display_separated(val, " ")),
-            CharacterSet(n) => write!(f, "CHARACTER SET {}", n),
+            CharacterSet(n) => write!(f, "CHARACTER SET {n}"),
             Comment(v) => write!(f, "COMMENT '{}'", escape_single_quote_string(v)),
-            OnUpdate(expr) => write!(f, "ON UPDATE {}", expr),
+            OnUpdate(expr) => write!(f, "ON UPDATE {expr}"),
         }
     }
 }
@@ -616,7 +615,7 @@ fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
     impl<'a> fmt::Display for ConstraintName<'a> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             if let Some(name) = self.0 {
-                write!(f, "CONSTRAINT {} ", name)?;
+                write!(f, "CONSTRAINT {name} ")?;
             }
             Ok(())
         }

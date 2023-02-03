@@ -186,13 +186,13 @@ impl fmt::Display for DataType {
             }
             DataType::Blob(size) => format_type_with_optional_length(f, "BLOB", size, false),
             DataType::Numeric(info) => {
-                write!(f, "NUMERIC{}", info)
+                write!(f, "NUMERIC{info}")
             }
             DataType::Decimal(info) => {
-                write!(f, "DECIMAL{}", info)
+                write!(f, "DECIMAL{info}")
             }
             DataType::Dec(info) => {
-                write!(f, "DEC{}", info)
+                write!(f, "DEC{info}")
             }
             DataType::Float(size) => format_type_with_optional_length(f, "FLOAT", size, false),
             DataType::TinyInt(zerofill) => {
@@ -250,14 +250,14 @@ impl fmt::Display for DataType {
             DataType::Bytea => write!(f, "BYTEA"),
             DataType::Array(ty) => {
                 if let Some(t) = &ty {
-                    write!(f, "{}[]", t)
+                    write!(f, "{t}[]")
                 } else {
                     write!(f, "ARRAY")
                 }
             }
             DataType::Custom(ty, modifiers) => {
                 if modifiers.is_empty() {
-                    write!(f, "{}", ty)
+                    write!(f, "{ty}")
                 } else {
                     write!(f, "{}({})", ty, modifiers.join(", "))
                 }
@@ -292,9 +292,9 @@ fn format_type_with_optional_length(
     len: &Option<u64>,
     unsigned: bool,
 ) -> fmt::Result {
-    write!(f, "{}", sql_type)?;
+    write!(f, "{sql_type}")?;
     if let Some(len) = len {
-        write!(f, "({})", len)?;
+        write!(f, "({len})")?;
     }
     if unsigned {
         write!(f, " UNSIGNED")?;
@@ -307,9 +307,9 @@ fn format_character_string_type(
     sql_type: &str,
     size: &Option<CharacterLength>,
 ) -> fmt::Result {
-    write!(f, "{}", sql_type)?;
+    write!(f, "{sql_type}")?;
     if let Some(size) = size {
-        write!(f, "({})", size)?;
+        write!(f, "({size})")?;
     }
     Ok(())
 }
@@ -320,7 +320,7 @@ fn format_datetime_precision_and_tz(
     len: &Option<u64>,
     time_zone: &TimezoneInfo,
 ) -> fmt::Result {
-    write!(f, "{}", sql_type)?;
+    write!(f, "{sql_type}")?;
     let len_fmt = len.as_ref().map(|l| format!("({l})")).unwrap_or_default();
 
     match time_zone {
@@ -432,7 +432,7 @@ impl fmt::Display for CharacterLength {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.length)?;
         if let Some(unit) = &self.unit {
-            write!(f, " {}", unit)?;
+            write!(f, " {unit}")?;
         }
         Ok(())
     }

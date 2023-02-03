@@ -46,20 +46,20 @@ pub struct Query {
 impl fmt::Display for Query {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(ref with) = self.with {
-            write!(f, "{} ", with)?;
+            write!(f, "{with} ")?;
         }
         write!(f, "{}", self.body)?;
         if !self.order_by.is_empty() {
             write!(f, " ORDER BY {}", display_comma_separated(&self.order_by))?;
         }
         if let Some(ref limit) = self.limit {
-            write!(f, " LIMIT {}", limit)?;
+            write!(f, " LIMIT {limit}")?;
         }
         if let Some(ref offset) = self.offset {
-            write!(f, " {}", offset)?;
+            write!(f, " {offset}")?;
         }
         if let Some(ref fetch) = self.fetch {
-            write!(f, " {}", fetch)?;
+            write!(f, " {fetch}")?;
         }
         if !self.locks.is_empty() {
             write!(f, " {}", display_separated(&self.locks, " "))?;
@@ -95,25 +95,25 @@ pub enum SetExpr {
 impl fmt::Display for SetExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            SetExpr::Select(s) => write!(f, "{}", s),
-            SetExpr::Query(q) => write!(f, "({})", q),
-            SetExpr::Values(v) => write!(f, "{}", v),
-            SetExpr::Insert(v) => write!(f, "{}", v),
-            SetExpr::Table(t) => write!(f, "{}", t),
+            SetExpr::Select(s) => write!(f, "{s}"),
+            SetExpr::Query(q) => write!(f, "({q})"),
+            SetExpr::Values(v) => write!(f, "{v}"),
+            SetExpr::Insert(v) => write!(f, "{v}"),
+            SetExpr::Table(t) => write!(f, "{t}"),
             SetExpr::SetOperation {
                 left,
                 right,
                 op,
                 set_quantifier,
             } => {
-                write!(f, "{} {}", left, op)?;
+                write!(f, "{left} {op}")?;
                 match set_quantifier {
                     SetQuantifier::All | SetQuantifier::Distinct => {
-                        write!(f, " {}", set_quantifier)?
+                        write!(f, " {set_quantifier}")?
                     }
-                    SetQuantifier::None => write!(f, "{}", set_quantifier)?,
+                    SetQuantifier::None => write!(f, "{set_quantifier}")?,
                 }
-                write!(f, " {}", right)?;
+                write!(f, " {right}")?;
                 Ok(())
             }
         }
@@ -224,12 +224,12 @@ impl fmt::Display for Select {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "SELECT{}", if self.distinct { " DISTINCT" } else { "" })?;
         if let Some(ref top) = self.top {
-            write!(f, " {}", top)?;
+            write!(f, " {top}")?;
         }
         write!(f, " {}", display_comma_separated(&self.projection))?;
 
         if let Some(ref into) = self.into {
-            write!(f, " {}", into)?;
+            write!(f, " {into}")?;
         }
 
         if !self.from.is_empty() {
@@ -237,11 +237,11 @@ impl fmt::Display for Select {
         }
         if !self.lateral_views.is_empty() {
             for lv in &self.lateral_views {
-                write!(f, "{}", lv)?;
+                write!(f, "{lv}")?;
             }
         }
         if let Some(ref selection) = self.selection {
-            write!(f, " WHERE {}", selection)?;
+            write!(f, " WHERE {selection}")?;
         }
         if !self.group_by.is_empty() {
             write!(f, " GROUP BY {}", display_comma_separated(&self.group_by))?;
@@ -264,10 +264,10 @@ impl fmt::Display for Select {
             write!(f, " SORT BY {}", display_comma_separated(&self.sort_by))?;
         }
         if let Some(ref having) = self.having {
-            write!(f, " HAVING {}", having)?;
+            write!(f, " HAVING {having}")?;
         }
         if let Some(ref qualify) = self.qualify {
-            write!(f, " QUALIFY {}", qualify)?;
+            write!(f, " QUALIFY {qualify}")?;
         }
         Ok(())
     }
@@ -344,7 +344,7 @@ impl fmt::Display for Cte {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} AS ({})", self.alias, self.query)?;
         if let Some(ref fr) = self.from {
-            write!(f, " FROM {}", fr)?;
+            write!(f, " FROM {fr}")?;
         }
         Ok(())
     }
@@ -531,10 +531,10 @@ impl fmt::Display for ExceptSelectItem {
 impl fmt::Display for SelectItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self {
-            SelectItem::UnnamedExpr(expr) => write!(f, "{}", expr),
-            SelectItem::ExprWithAlias { expr, alias } => write!(f, "{} AS {}", expr, alias),
+            SelectItem::UnnamedExpr(expr) => write!(f, "{expr}"),
+            SelectItem::ExprWithAlias { expr, alias } => write!(f, "{expr} AS {alias}"),
             SelectItem::QualifiedWildcard(prefix, additional_options) => {
-                write!(f, "{}.*", prefix)?;
+                write!(f, "{prefix}.*")?;
                 write!(f, "{additional_options}")?;
                 Ok(())
             }
@@ -559,7 +559,7 @@ impl fmt::Display for TableWithJoins {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.relation)?;
         for join in &self.joins {
-            write!(f, "{}", join)?;
+            write!(f, "{join}")?;
         }
         Ok(())
     }
@@ -632,12 +632,12 @@ impl fmt::Display for TableFactor {
                 args,
                 with_hints,
             } => {
-                write!(f, "{}", name)?;
+                write!(f, "{name}")?;
                 if let Some(args) = args {
                     write!(f, "({})", display_comma_separated(args))?;
                 }
                 if let Some(alias) = alias {
-                    write!(f, " AS {}", alias)?;
+                    write!(f, " AS {alias}")?;
                 }
                 if !with_hints.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_hints))?;
@@ -652,16 +652,16 @@ impl fmt::Display for TableFactor {
                 if *lateral {
                     write!(f, "LATERAL ")?;
                 }
-                write!(f, "({})", subquery)?;
+                write!(f, "({subquery})")?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {}", alias)?;
+                    write!(f, " AS {alias}")?;
                 }
                 Ok(())
             }
             TableFactor::TableFunction { expr, alias } => {
-                write!(f, "TABLE({})", expr)?;
+                write!(f, "TABLE({expr})")?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {}", alias)?;
+                    write!(f, " AS {alias}")?;
                 }
                 Ok(())
             }
@@ -671,15 +671,15 @@ impl fmt::Display for TableFactor {
                 with_offset,
                 with_offset_alias,
             } => {
-                write!(f, "UNNEST({})", array_expr)?;
+                write!(f, "UNNEST({array_expr})")?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {}", alias)?;
+                    write!(f, " AS {alias}")?;
                 }
                 if *with_offset {
                     write!(f, " WITH OFFSET")?;
                 }
                 if let Some(alias) = with_offset_alias {
-                    write!(f, " AS {}", alias)?;
+                    write!(f, " AS {alias}")?;
                 }
                 Ok(())
             }
@@ -687,9 +687,9 @@ impl fmt::Display for TableFactor {
                 table_with_joins,
                 alias,
             } => {
-                write!(f, "({})", table_with_joins)?;
+                write!(f, "({table_with_joins})")?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {}", alias)?;
+                    write!(f, " AS {alias}")?;
                 }
                 Ok(())
             }
@@ -736,7 +736,7 @@ impl fmt::Display for Join {
             impl<'a> fmt::Display for Suffix<'a> {
                 fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                     match self.0 {
-                        JoinConstraint::On(expr) => write!(f, " ON {}", expr),
+                        JoinConstraint::On(expr) => write!(f, " ON {expr}"),
                         JoinConstraint::Using(attrs) => {
                             write!(f, " USING({})", display_comma_separated(attrs))
                         }
@@ -921,9 +921,9 @@ impl fmt::Display for Fetch {
         let extension = if self.with_ties { "WITH TIES" } else { "ONLY" };
         if let Some(ref quantity) = self.quantity {
             let percent = if self.percent { " PERCENT" } else { "" };
-            write!(f, "FETCH FIRST {}{} ROWS {}", quantity, percent, extension)
+            write!(f, "FETCH FIRST {quantity}{percent} ROWS {extension}")
         } else {
-            write!(f, "FETCH FIRST ROWS {}", extension)
+            write!(f, "FETCH FIRST ROWS {extension}")
         }
     }
 }
@@ -941,10 +941,10 @@ impl fmt::Display for LockClause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "FOR {}", &self.lock_type)?;
         if let Some(ref of) = self.of {
-            write!(f, " OF {}", of)?;
+            write!(f, " OF {of}")?;
         }
         if let Some(ref nb) = self.nonblock {
-            write!(f, " {}", nb)?;
+            write!(f, " {nb}")?;
         }
         Ok(())
     }
@@ -964,7 +964,7 @@ impl fmt::Display for LockType {
             LockType::Share => "SHARE",
             LockType::Update => "UPDATE",
         };
-        write!(f, "{}", select_lock)
+        write!(f, "{select_lock}")
     }
 }
 
@@ -982,7 +982,7 @@ impl fmt::Display for NonBlock {
             NonBlock::Nowait => "NOWAIT",
             NonBlock::SkipLocked => "SKIP LOCKED",
         };
-        write!(f, "{}", nonblock)
+        write!(f, "{nonblock}")
     }
 }
 
@@ -1001,9 +1001,9 @@ impl fmt::Display for Top {
         let extension = if self.with_ties { " WITH TIES" } else { "" };
         if let Some(ref quantity) = self.quantity {
             let percent = if self.percent { " PERCENT" } else { "" };
-            write!(f, "TOP ({}){}{}", quantity, percent, extension)
+            write!(f, "TOP ({quantity}){percent}{extension}")
         } else {
-            write!(f, "TOP{}", extension)
+            write!(f, "TOP{extension}")
         }
     }
 }
@@ -1024,7 +1024,7 @@ impl fmt::Display for Values {
         let prefix = if self.explicit_row { "ROW" } else { "" };
         let mut delim = "";
         for row in &self.rows {
-            write!(f, "{}", delim)?;
+            write!(f, "{delim}")?;
             delim = ", ";
             write!(f, "{prefix}({})", display_comma_separated(row))?;
         }

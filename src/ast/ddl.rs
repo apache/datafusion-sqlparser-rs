@@ -183,10 +183,7 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::RenameColumn {
                 old_column_name,
                 new_column_name,
-            } => write!(
-                f,
-                "RENAME COLUMN {old_column_name} TO {new_column_name}"
-            ),
+            } => write!(f, "RENAME COLUMN {old_column_name} TO {new_column_name}"),
             AlterTableOperation::RenameTable { table_name } => {
                 write!(f, "RENAME TO {table_name}")
             }

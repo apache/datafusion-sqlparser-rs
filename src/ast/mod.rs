@@ -2454,10 +2454,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::ShowCreate { obj_type, obj_name } => {
-                write!(
-                    f,
-                    "SHOW CREATE {obj_type} {obj_name}",
-                )?;
+                write!(f, "SHOW CREATE {obj_type} {obj_name}",)?;
                 Ok(())
             }
             Statement::ShowColumns {
@@ -2690,10 +2687,7 @@ impl fmt::Display for Statement {
                 if_exists,
             } => {
                 if *if_exists {
-                    write!(
-                        f,
-                        "UNCACHE TABLE IF EXISTS {table_name}"
-                    )
+                    write!(f, "UNCACHE TABLE IF EXISTS {table_name}")
                 } else {
                     write!(f, "UNCACHE TABLE {table_name}")
                 }
@@ -4178,10 +4172,7 @@ mod tests {
                 Expr::Identifier(Ident::new("d")),
             ],
         ]);
-        assert_eq!(
-            "GROUPING SETS ((a, b), (c, d))",
-            format!("{grouping_sets}")
-        );
+        assert_eq!("GROUPING SETS ((a, b), (c, d))", format!("{grouping_sets}"));
     }
 
     #[test]

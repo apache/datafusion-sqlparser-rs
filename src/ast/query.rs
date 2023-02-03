@@ -108,9 +108,7 @@ impl fmt::Display for SetExpr {
             } => {
                 write!(f, "{left} {op}")?;
                 match set_quantifier {
-                    SetQuantifier::All | SetQuantifier::Distinct => {
-                        write!(f, " {set_quantifier}")?
-                    }
+                    SetQuantifier::All | SetQuantifier::Distinct => write!(f, " {set_quantifier}")?,
                     SetQuantifier::None => write!(f, "{set_quantifier}")?,
                 }
                 write!(f, " {right}")?;

@@ -2827,9 +2827,7 @@ fn parse_alter_table_drop_column() {
 #[test]
 fn parse_alter_table_alter_column() {
     let alter_stmt = "ALTER TABLE tab";
-    match verified_stmt(&format!(
-        "{alter_stmt} ALTER COLUMN is_active SET NOT NULL"
-    )) {
+    match verified_stmt(&format!("{alter_stmt} ALTER COLUMN is_active SET NOT NULL")) {
         Statement::AlterTable {
             name,
             operation: AlterTableOperation::AlterColumn { column_name, op },
@@ -2865,9 +2863,7 @@ fn parse_alter_table_alter_column() {
         _ => unreachable!(),
     }
 
-    match verified_stmt(&format!(
-        "{alter_stmt} ALTER COLUMN is_active DROP DEFAULT"
-    )) {
+    match verified_stmt(&format!("{alter_stmt} ALTER COLUMN is_active DROP DEFAULT")) {
         Statement::AlterTable {
             name,
             operation: AlterTableOperation::AlterColumn { column_name, op },
@@ -2912,9 +2908,7 @@ fn parse_alter_table_alter_column_type() {
 
     let res = Parser::parse_sql(
         &GenericDialect {},
-        &format!(
-            "{alter_stmt} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'"
-        ),
+        &format!("{alter_stmt} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'"),
     );
     assert_eq!(
         ParserError::ParserError("Expected end of statement, found: USING".to_string()),
@@ -4266,9 +4260,7 @@ fn parse_cte_renamed_columns() {
 #[test]
 fn parse_recursive_cte() {
     let cte_query = "SELECT 1 UNION ALL SELECT val + 1 FROM nums WHERE val < 10".to_owned();
-    let sql = &format!(
-        "WITH RECURSIVE nums (val) AS ({cte_query}) SELECT * FROM nums"
-    );
+    let sql = &format!("WITH RECURSIVE nums (val) AS ({cte_query}) SELECT * FROM nums");
 
     let cte_query = verified_query(&cte_query);
     let query = verified_query(sql);
@@ -6280,9 +6272,7 @@ fn parse_cache_table() {
     let query = all_dialects().verified_query(sql);
 
     assert_eq!(
-        verified_stmt(
-            format!("CACHE TABLE '{cache_table_name}'").as_str()
-        ),
+        verified_stmt(format!("CACHE TABLE '{cache_table_name}'").as_str()),
         Statement::Cache {
             table_flag: None,
             table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
@@ -6293,12 +6283,7 @@ fn parse_cache_table() {
     );
 
     assert_eq!(
-        verified_stmt(
-            format!(
-                "CACHE {table_flag} TABLE '{cache_table_name}'"
-            )
-            .as_str()
-        ),
+        verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}'").as_str()),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
             table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
@@ -6384,12 +6369,7 @@ fn parse_cache_table() {
     );
 
     assert_eq!(
-        verified_stmt(
-            format!(
-                "CACHE {table_flag} TABLE '{cache_table_name}' {sql}"
-            )
-            .as_str()
-        ),
+        verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}' {sql}").as_str()),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
             table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
@@ -6400,12 +6380,7 @@ fn parse_cache_table() {
     );
 
     assert_eq!(
-        verified_stmt(
-            format!(
-                "CACHE {table_flag} TABLE '{cache_table_name}' AS {sql}"
-            )
-            .as_str()
-        ),
+        verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}' AS {sql}").as_str()),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
             table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),

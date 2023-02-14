@@ -50,6 +50,7 @@ pub struct CreateTableBuilder {
     pub external: bool,
     pub global: Option<bool>,
     pub if_not_exists: bool,
+    pub transient: bool,
     pub name: ObjectName,
     pub columns: Vec<ColumnDef>,
     pub constraints: Vec<TableConstraint>,
@@ -78,6 +79,7 @@ impl CreateTableBuilder {
             external: false,
             global: None,
             if_not_exists: false,
+            transient: false,
             name,
             columns: vec![],
             constraints: vec![],
@@ -120,6 +122,11 @@ impl CreateTableBuilder {
 
     pub fn if_not_exists(mut self, if_not_exists: bool) -> Self {
         self.if_not_exists = if_not_exists;
+        self
+    }
+
+    pub fn transient(mut self, transient: bool) -> Self {
+        self.transient = transient;
         self
     }
 
@@ -213,6 +220,7 @@ impl CreateTableBuilder {
             external: self.external,
             global: self.global,
             if_not_exists: self.if_not_exists,
+            transient: self.transient,
             name: self.name,
             columns: self.columns,
             constraints: self.constraints,
@@ -248,6 +256,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 external,
                 global,
                 if_not_exists,
+                transient,
                 name,
                 columns,
                 constraints,
@@ -272,6 +281,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 external,
                 global,
                 if_not_exists,
+                transient,
                 name,
                 columns,
                 constraints,

@@ -1231,6 +1231,7 @@ pub enum Statement {
         external: bool,
         global: Option<bool>,
         if_not_exists: bool,
+        transient: bool,
         /// Table name
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         name: ObjectName,
@@ -2033,6 +2034,7 @@ impl fmt::Display for Statement {
                 with_options,
                 or_replace,
                 if_not_exists,
+                transient,
                 hive_distribution,
                 hive_formats,
                 external,
@@ -2059,7 +2061,7 @@ impl fmt::Display for Statement {
                 //   `CREATE TABLE t (a INT) AS SELECT a from t2`
                 write!(
                     f,
-                    "CREATE {or_replace}{external}{global}{temporary}TABLE {if_not_exists}{name}",
+                    "CREATE {or_replace}{external}{global}{temporary}{transient}TABLE {if_not_exists}{name}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     external = if *external { "EXTERNAL " } else { "" },
                     global = global
@@ -2073,6 +2075,7 @@ impl fmt::Display for Statement {
                         .unwrap_or(""),
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     temporary = if *temporary { "TEMPORARY " } else { "" },
+                    transient = if *transient { "TRANSIENT " } else { "" },
                     name = name,
                 )?;
                 if let Some(on_cluster) = on_cluster {

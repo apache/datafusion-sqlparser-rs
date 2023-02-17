@@ -570,6 +570,7 @@ define_keywords!(
     TOP,
     TRAILING,
     TRANSACTION,
+    TRANSIENT,
     TRANSLATE,
     TRANSLATE_REGEX,
     TRANSLATION,

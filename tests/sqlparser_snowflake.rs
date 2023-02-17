@@ -35,6 +35,20 @@ fn test_snowflake_create_table() {
 }
 
 #[test]
+fn test_snowflake_create_transient_table() {
+    let sql = "CREATE TRANSIENT TABLE CUSTOMER (id INT, name VARCHAR(255))";
+    match snowflake_and_generic().verified_stmt(sql) {
+        Statement::CreateTable {
+            name, transient, ..
+        } => {
+            assert_eq!("CUSTOMER", name.to_string());
+            assert!(transient)
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn test_snowflake_single_line_tokenize() {
     let sql = "CREATE TABLE# this is a comment \ntable_1";
     let dialect = SnowflakeDialect {};

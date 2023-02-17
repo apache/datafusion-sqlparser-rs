@@ -2266,6 +2266,7 @@ impl<'a> Parser<'a> {
         let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
         let local = self.parse_one_of_keywords(&[Keyword::LOCAL]).is_some();
         let global = self.parse_one_of_keywords(&[Keyword::GLOBAL]).is_some();
+        let transient = self.parse_one_of_keywords(&[Keyword::TRANSIENT]).is_some();
         let global: Option<bool> = if global {
             Some(true)
         } else if local {
@@ -2277,7 +2278,7 @@ impl<'a> Parser<'a> {
             .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
             .is_some();
         if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table(or_replace, temporary, global)
+            self.parse_create_table(or_replace, temporary, global, transient)
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
             self.parse_create_view(or_replace)
@@ -3248,6 +3249,7 @@ impl<'a> Parser<'a> {
         or_replace: bool,
         temporary: bool,
         global: Option<bool>,
+        transient: bool,
     ) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name()?;
@@ -3352,6 +3354,7 @@ impl<'a> Parser<'a> {
             .table_properties(table_properties)
             .or_replace(or_replace)
             .if_not_exists(if_not_exists)
+            .transient(transient)
             .hive_distribution(hive_distribution)
             .hive_formats(Some(hive_formats))
             .global(global)

@@ -45,6 +45,9 @@ fn parse_byte_literal() {
         &Expr::Value(Value::DoubleQuotedByteStringLiteral("abc".to_string())),
         expr_from_projection(&select.projection[1])
     );
+
+    let sql = r#"SELECT b'abc', b"abc""#;
+    bigquery().one_statement_parses_to(sql, r#"SELECT B'abc', B"abc""#);
 }
 
 #[test]

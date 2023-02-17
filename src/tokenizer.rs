@@ -35,7 +35,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::DollarQuotedString;
-use crate::dialect::SnowflakeDialect;
+use crate::dialect::{BigQueryDialect, GenericDialect, SnowflakeDialect};
 use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
@@ -507,7 +507,7 @@ impl<'a> Tokenizer<'a> {
                     Ok(Some(Token::Whitespace(Whitespace::Newline)))
                 }
                 // BigQuery uses b or B for byte string literal
-                b @ 'B' | b @ 'b' => {
+                b @ 'B' | b @ 'b' if dialect_of!(self is BigQueryDialect | GenericDialect) => {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('\'') => {

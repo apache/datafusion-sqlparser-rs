@@ -3599,6 +3599,58 @@ fn parse_at_timezone() {
 }
 
 #[test]
+fn parse_json_keyword() {
+    let sql = r#"SELECT JSON '{
+  "id": 10,
+  "type": "fruit",
+  "name": "apple",
+  "on_menu": true,
+  "recipes":
+    {
+      "salads":
+      [
+        { "id": 2001, "type": "Walnut Apple Salad" },
+        { "id": 2002, "type": "Apple Spinach Salad" }
+      ],
+      "desserts":
+      [
+        { "id": 3001, "type": "Apple Pie" },
+        { "id": 3002, "type": "Apple Scones" },
+        { "id": 3003, "type": "Apple Crumble" }
+      ]
+    }
+}'"#;
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::TypedString {
+            data_type: DataType::JSON,
+            value: r#"{
+  "id": 10,
+  "type": "fruit",
+  "name": "apple",
+  "on_menu": true,
+  "recipes":
+    {
+      "salads":
+      [
+        { "id": 2001, "type": "Walnut Apple Salad" },
+        { "id": 2002, "type": "Apple Spinach Salad" }
+      ],
+      "desserts":
+      [
+        { "id": 3001, "type": "Apple Pie" },
+        { "id": 3002, "type": "Apple Scones" },
+        { "id": 3003, "type": "Apple Crumble" }
+      ]
+    }
+}"#
+            .into()
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+}
+
+#[test]
 fn parse_simple_math_expr_plus() {
     let sql = "SELECT a + b, 2 + a, 2.5 + a, a_f + b_f, 2 + a_f, 2.5 + a_f FROM c";
     verified_only_select(sql);

@@ -734,6 +734,17 @@ impl<'a> Parser<'a> {
                             Ok(Expr::CompoundIdentifier(id_parts))
                         }
                     }
+                    // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
+                    Token::SingleQuotedString(_)
+                    | Token::DoubleQuotedString(_)
+                    | Token::HexStringLiteral(_)
+                        if w.value.starts_with('_') =>
+                    {
+                        Ok(Expr::IntroducedString {
+                            introducer: w.value,
+                            value: self.parse_introduced_string_value()?,
+                        })
+                    }
                     _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word
@@ -784,7 +795,6 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
-
             Token::LParen => {
                 let expr =
                     if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
@@ -4139,6 +4149,23 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 self.expected("literal number", self.peek_token())
             }
+        }
+    }
+
+    fn parse_introduced_string_value(&mut self) -> Result<Value, ParserError> {
+        let next_token = self.next_token();
+        let location = next_token.location;
+        match next_token.token {
+            Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
+            Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
+            Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
+            unexpected => self.expected(
+                "a string value",
+                TokenWithLocation {
+                    token: unexpected,
+                    location,
+                },
+            ),
         }
     }
 

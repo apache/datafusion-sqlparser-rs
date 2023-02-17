@@ -1264,3 +1264,44 @@ fn parse_values() {
     mysql().verified_stmt("VALUES ROW(1, true, 'a')");
     mysql().verified_stmt("SELECT a, c FROM (VALUES ROW(1, true, 'a'), ROW(2, false, 'b'), ROW(3, false, 'c')) AS t (a, b, c)");
 }
+
+#[test]
+fn parse_hex_string_introducer() {
+    assert_eq!(
+        mysql().verified_stmt("SELECT _latin1 X'4D7953514C'"),
+        Statement::Query(Box::new(Query {
+            with: None,
+            body: Box::new(SetExpr::Select(Box::new(Select {
+                distinct: false,
+                top: None,
+                projection: vec![SelectItem::UnnamedExpr(Expr::IntroducedString {
+                    introducer: "_latin1".to_string(),
+                    value: Value::HexStringLiteral("4D7953514C".to_string())
+                })],
+                from: vec![],
+                lateral_views: vec![],
+                selection: None,
+                group_by: vec![],
+                cluster_by: vec![],
+                distribute_by: vec![],
+                sort_by: vec![],
+                having: None,
+                qualify: None,
+                into: None
+            }))),
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            fetch: None,
+            locks: vec![],
+        }))
+    )
+}
+
+#[test]
+fn parse_string_introducers() {
+    mysql().verified_stmt("SELECT _binary 'abc'");
+    mysql().one_statement_parses_to("SELECT _utf8'abc'", "SELECT _utf8 'abc'");
+    mysql().one_statement_parses_to("SELECT _utf8mb4'abc'", "SELECT _utf8mb4 'abc'");
+    mysql().verified_stmt("SELECT _binary 'abc', _utf8mb4 'abc'");
+}

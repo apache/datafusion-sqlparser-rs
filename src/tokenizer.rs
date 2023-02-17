@@ -546,12 +546,12 @@ impl<'a> Tokenizer<'a> {
                 // identifier or keyword
                 ch if self.dialect.is_identifier_start(ch) => {
                     chars.next(); // consume the first char
-                    let s = self.tokenize_word(ch, chars);
+                    let word = self.tokenize_word(ch, chars);
 
                     // TODO: implement parsing of exponent here
-                    if s.chars().all(|x| ('0'..='9').contains(&x) || x == '.') {
+                    if word.chars().all(|x| ('0'..='9').contains(&x) || x == '.') {
                         let mut inner_state = State {
-                            peekable: s.chars().peekable(),
+                            peekable: word.chars().peekable(),
                             line: 0,
                             col: 0,
                         };
@@ -562,7 +562,8 @@ impl<'a> Tokenizer<'a> {
                         s += s2.as_str();
                         return Ok(Some(Token::Number(s, false)));
                     }
-                    Ok(Some(Token::make_word(&s, None)))
+
+                    Ok(Some(Token::make_word(&word, None)))
                 }
                 // single quoted string
                 '\'' => {

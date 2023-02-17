@@ -642,7 +642,7 @@ impl fmt::Display for TableFactor {
                     write!(f, " AS {alias}")?;
                 }
                 if let Some(columns_definition) = columns_definition {
-                    write!(f, " {}", columns_definition)?;
+                    write!(f, " {columns_definition}")?;
                 }
                 if !with_hints.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_hints))?;

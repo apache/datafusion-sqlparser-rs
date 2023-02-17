@@ -180,17 +180,17 @@ impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Token::EOF => f.write_str("EOF"),
-            Token::Word(ref w) => write!(f, "{}", w),
+            Token::Word(ref w) => write!(f, "{w}"),
             Token::Number(ref n, l) => write!(f, "{}{long}", n, long = if *l { "L" } else { "" }),
-            Token::Char(ref c) => write!(f, "{}", c),
-            Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
-            Token::DoubleQuotedString(ref s) => write!(f, "\"{}\"", s),
-            Token::DollarQuotedString(ref s) => write!(f, "{}", s),
-            Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
-            Token::EscapedStringLiteral(ref s) => write!(f, "E'{}'", s),
-            Token::HexStringLiteral(ref s) => write!(f, "X'{}'", s),
+            Token::Char(ref c) => write!(f, "{c}"),
+            Token::SingleQuotedString(ref s) => write!(f, "'{s}'"),
+            Token::DoubleQuotedString(ref s) => write!(f, "\"{s}\""),
+            Token::DollarQuotedString(ref s) => write!(f, "{s}"),
+            Token::NationalStringLiteral(ref s) => write!(f, "N'{s}'"),
+            Token::EscapedStringLiteral(ref s) => write!(f, "E'{s}'"),
+            Token::HexStringLiteral(ref s) => write!(f, "X'{s}'"),
             Token::Comma => f.write_str(","),
-            Token::Whitespace(ws) => write!(f, "{}", ws),
+            Token::Whitespace(ws) => write!(f, "{ws}"),
             Token::DoubleEq => f.write_str("=="),
             Token::Spaceship => f.write_str("<=>"),
             Token::Eq => f.write_str("="),
@@ -232,7 +232,7 @@ impl fmt::Display for Token {
             Token::ShiftRight => f.write_str(">>"),
             Token::PGSquareRoot => f.write_str("|/"),
             Token::PGCubeRoot => f.write_str("||/"),
-            Token::Placeholder(ref s) => write!(f, "{}", s),
+            Token::Placeholder(ref s) => write!(f, "{s}"),
             Token::Arrow => write!(f, "->"),
             Token::LongArrow => write!(f, "->>"),
             Token::HashArrow => write!(f, "#>"),
@@ -323,8 +323,8 @@ impl fmt::Display for Whitespace {
             Whitespace::Space => f.write_str(" "),
             Whitespace::Newline => f.write_str("\n"),
             Whitespace::Tab => f.write_str("\t"),
-            Whitespace::SingleLineComment { prefix, comment } => write!(f, "{}{}", prefix, comment),
-            Whitespace::MultiLineComment(s) => write!(f, "/*{}*/", s),
+            Whitespace::SingleLineComment { prefix, comment } => write!(f, "{prefix}{comment}"),
+            Whitespace::MultiLineComment(s) => write!(f, "/*{s}*/"),
         }
     }
 }
@@ -546,12 +546,12 @@ impl<'a> Tokenizer<'a> {
                 // identifier or keyword
                 ch if self.dialect.is_identifier_start(ch) => {
                     chars.next(); // consume the first char
-                    let s = self.tokenize_word(ch, chars);
+                    let word = self.tokenize_word(ch, chars);
 
                     // TODO: implement parsing of exponent here
-                    if s.chars().all(|x| ('0'..='9').contains(&x) || x == '.') {
+                    if word.chars().all(|x| ('0'..='9').contains(&x) || x == '.') {
                         let mut inner_state = State {
-                            peekable: s.chars().peekable(),
+                            peekable: word.chars().peekable(),
                             line: 0,
                             col: 0,
                         };
@@ -562,7 +562,8 @@ impl<'a> Tokenizer<'a> {
                         s += s2.as_str();
                         return Ok(Some(Token::Number(s, false)));
                     }
-                    Ok(Some(Token::make_word(&s, None)))
+
+                    Ok(Some(Token::make_word(&word, None)))
                 }
                 // single quoted string
                 '\'' => {
@@ -595,13 +596,13 @@ impl<'a> Tokenizer<'a> {
                     } else {
                         self.tokenizer_error(
                             error_loc,
-                            format!("Expected close delimiter '{}' before EOF.", quote_end),
+                            format!("Expected close delimiter '{quote_end}' before EOF."),
                         )
                     }
                 }
                 // numbers and period
                 '0'..='9' | '.' => {
-                    let mut s = peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
+                    let mut s = peeking_take_while(chars, |ch| ch.is_ascii_digit());
 
                     // match binary literal that starts with 0x
                     if s == "0" && chars.peek() == Some(&'x') {
@@ -618,7 +619,7 @@ impl<'a> Tokenizer<'a> {
                         s.push('.');
                         chars.next();
                     }
-                    s += &peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
+                    s += &peeking_take_while(chars, |ch| ch.is_ascii_digit());
 
                     // No number -> Token::Period
                     if s == "." {
@@ -642,12 +643,12 @@ impl<'a> Tokenizer<'a> {
 
                         match char_clone.peek() {
                             // Definitely an exponent, get original iterator up to speed and use it
-                            Some(&c) if matches!(c, '0'..='9') => {
+                            Some(&c) if c.is_ascii_digit() => {
                                 for _ in 0..exponent_part.len() {
                                     chars.next();
                                 }
                                 exponent_part +=
-                                    &peeking_take_while(chars, |ch| matches!(ch, '0'..='9'));
+                                    &peeking_take_while(chars, |ch| ch.is_ascii_digit());
                                 s += exponent_part.as_str();
                             }
                             // Not an exponent, discard the work done
@@ -907,8 +908,7 @@ impl<'a> Tokenizer<'a> {
                                 return self.tokenizer_error(
                                     chars.location(),
                                     format!(
-                                        "Unterminated dollar-quoted string at or near \"{}\"",
-                                        value
+                                        "Unterminated dollar-quoted string at or near \"{value}\""
                                     ),
                                 );
                             }

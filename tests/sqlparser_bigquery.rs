@@ -35,7 +35,7 @@ fn parse_literal_string() {
 #[test]
 fn parse_table_identifiers() {
     fn test_table_ident(ident: &str, expected: Vec<Ident>) {
-        let sql = format!("SELECT 1 FROM {}", ident);
+        let sql = format!("SELECT 1 FROM {ident}");
         let select = bigquery().verified_only_select(&sql);
         assert_eq!(
             select.from,
@@ -51,7 +51,7 @@ fn parse_table_identifiers() {
         );
     }
     fn test_table_ident_err(ident: &str) {
-        let sql = format!("SELECT 1 FROM {}", ident);
+        let sql = format!("SELECT 1 FROM {ident}");
         assert!(bigquery().parse_sql_statements(&sql).is_err());
     }
 

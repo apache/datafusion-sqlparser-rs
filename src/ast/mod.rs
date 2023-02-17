@@ -698,7 +698,7 @@ impl fmt::Display for Expr {
             Expr::Collate { expr, collation } => write!(f, "{expr} COLLATE {collation}"),
             Expr::Nested(ast) => write!(f, "({ast})"),
             Expr::Value(v) => write!(f, "{v}"),
-            Expr::IntroducedString { introducer, value } => write!(f, "{} {}", introducer, value),
+            Expr::IntroducedString { introducer, value } => write!(f, "{introducer} {value}"),
             Expr::TypedString { data_type, value } => {
                 write!(f, "{data_type}")?;
                 write!(f, " '{}'", &value::escape_single_quote_string(value))

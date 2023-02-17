@@ -734,6 +734,17 @@ impl<'a> Parser<'a> {
                             Ok(Expr::CompoundIdentifier(id_parts))
                         }
                     }
+                    // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html
+                    Token::SingleQuotedString(_)
+                    | Token::DoubleQuotedString(_)
+                    | Token::HexStringLiteral(_)
+                        if w.value.starts_with('_') =>
+                    {
+                        Ok(Expr::IntroducedString {
+                            introducer: w.value,
+                            value: self.parse_introduced_string_value()?,
+                        })
+                    }
                     _ => Ok(Expr::Identifier(w.to_ident())),
                 },
             }, // End of Token::Word
@@ -784,7 +795,6 @@ impl<'a> Parser<'a> {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
-
             Token::LParen => {
                 let expr =
                     if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
@@ -805,7 +815,7 @@ impl<'a> Parser<'a> {
                     let tok = self.next_token();
                     let key = match tok.token {
                         Token::Word(word) => word.to_ident(),
-                        _ => return parser_err!(format!("Expected identifier, found: {}", tok)),
+                        _ => return parser_err!(format!("Expected identifier, found: {tok}")),
                     };
                     Ok(Expr::CompositeAccess {
                         expr: Box::new(expr),
@@ -2083,7 +2093,7 @@ impl<'a> Parser<'a> {
 
     /// Report unexpected token
     pub fn expected<T>(&self, expected: &str, found: TokenWithLocation) -> Result<T, ParserError> {
-        parser_err!(format!("Expected {}, found: {}", expected, found))
+        parser_err!(format!("Expected {expected}, found: {found}"))
     }
 
     /// Look for an expected keyword and consume it if it exists
@@ -2135,7 +2145,7 @@ impl<'a> Parser<'a> {
         if let Some(keyword) = self.parse_one_of_keywords(keywords) {
             Ok(keyword)
         } else {
-            let keywords: Vec<String> = keywords.iter().map(|x| format!("{:?}", x)).collect();
+            let keywords: Vec<String> = keywords.iter().map(|x| format!("{x:?}")).collect();
             self.expected(
                 &format!("one of {}", keywords.join(" or ")),
                 self.peek_token(),
@@ -2256,6 +2266,7 @@ impl<'a> Parser<'a> {
         let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
         let local = self.parse_one_of_keywords(&[Keyword::LOCAL]).is_some();
         let global = self.parse_one_of_keywords(&[Keyword::GLOBAL]).is_some();
+        let transient = self.parse_one_of_keywords(&[Keyword::TRANSIENT]).is_some();
         let global: Option<bool> = if global {
             Some(true)
         } else if local {
@@ -2267,7 +2278,7 @@ impl<'a> Parser<'a> {
             .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
             .is_some();
         if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table(or_replace, temporary, global)
+            self.parse_create_table(or_replace, temporary, global, transient)
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
             self.parse_create_view(or_replace)
@@ -2495,7 +2506,7 @@ impl<'a> Parser<'a> {
             Keyword::ARCHIVE => Ok(Some(CreateFunctionUsing::Archive(uri))),
             _ => self.expected(
                 "JAR, FILE or ARCHIVE, got {:?}",
-                TokenWithLocation::wrap(Token::make_keyword(format!("{:?}", keyword).as_str())),
+                TokenWithLocation::wrap(Token::make_keyword(format!("{keyword:?}").as_str())),
             ),
         }
     }
@@ -3238,6 +3249,7 @@ impl<'a> Parser<'a> {
         or_replace: bool,
         temporary: bool,
         global: Option<bool>,
+        transient: bool,
     ) -> Result<Statement, ParserError> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name()?;
@@ -3342,6 +3354,7 @@ impl<'a> Parser<'a> {
             .table_properties(table_properties)
             .or_replace(or_replace)
             .if_not_exists(if_not_exists)
+            .transient(transient)
             .hive_distribution(hive_distribution)
             .hive_formats(Some(hive_formats))
             .global(global)
@@ -4028,7 +4041,7 @@ impl<'a> Parser<'a> {
     fn parse_literal_char(&mut self) -> Result<char, ParserError> {
         let s = self.parse_literal_string()?;
         if s.len() != 1 {
-            return parser_err!(format!("Expect a char, found {:?}", s));
+            return parser_err!(format!("Expect a char, found {s:?}"));
         }
         Ok(s.chars().next().unwrap())
     }
@@ -4107,7 +4120,7 @@ impl<'a> Parser<'a> {
             // (i.e., it returns the input string).
             Token::Number(ref n, l) => match n.parse() {
                 Ok(n) => Ok(Value::Number(n, l)),
-                Err(e) => parser_err!(format!("Could not parse '{}' as number: {}", n, e)),
+                Err(e) => parser_err!(format!("Could not parse '{n}' as number: {e}")),
             },
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
@@ -4142,12 +4155,29 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_introduced_string_value(&mut self) -> Result<Value, ParserError> {
+        let next_token = self.next_token();
+        let location = next_token.location;
+        match next_token.token {
+            Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
+            Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
+            Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
+            unexpected => self.expected(
+                "a string value",
+                TokenWithLocation {
+                    token: unexpected,
+                    location,
+                },
+            ),
+        }
+    }
+
     /// Parse an unsigned literal integer/long
     pub fn parse_literal_uint(&mut self) -> Result<u64, ParserError> {
         let next_token = self.next_token();
         match next_token.token {
             Token::Number(s, _) => s.parse::<u64>().map_err(|e| {
-                ParserError::ParserError(format!("Could not parse '{}' as u64: {}", s, e))
+                ParserError::ParserError(format!("Could not parse '{s}' as u64: {e}"))
             }),
             _ => self.expected("literal int", next_token),
         }
@@ -4183,7 +4213,13 @@ impl<'a> Parser<'a> {
     pub fn parse_map_key(&mut self) -> Result<Expr, ParserError> {
         let next_token = self.next_token();
         match next_token.token {
-            Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => {
+            // handle bigquery offset subscript operator which overlaps with OFFSET operator
+            Token::Word(Word { value, keyword, .. })
+                if (dialect_of!(self is BigQueryDialect) && keyword == Keyword::OFFSET) =>
+            {
+                self.parse_function(ObjectName(vec![Ident::new(value)]))
+            }
+            Token::Word(Word { value, keyword, .. }) if (keyword == Keyword::NoKeyword) => {
                 if self.peek_token() == Token::LParen {
                     return self.parse_function(ObjectName(vec![Ident::new(value)]));
                 }
@@ -4332,6 +4368,7 @@ impl<'a> Parser<'a> {
                 // qualifier that we don't currently support. See
                 // parse_interval for a taste.
                 Keyword::INTERVAL => Ok(DataType::Interval),
+                Keyword::JSON => Ok(DataType::JSON),
                 Keyword::REGCLASS => Ok(DataType::Regclass),
                 Keyword::STRING => Ok(DataType::String),
                 Keyword::TEXT => Ok(DataType::Text),
@@ -5261,8 +5298,7 @@ impl<'a> Parser<'a> {
             Keyword::EVENT => Ok(ShowCreateObject::Event),
             Keyword::VIEW => Ok(ShowCreateObject::View),
             keyword => Err(ParserError::ParserError(format!(
-                "Unable to map keyword to ShowCreateObject: {:?}",
-                keyword
+                "Unable to map keyword to ShowCreateObject: {keyword:?}"
             ))),
         }?;
 
@@ -5431,8 +5467,7 @@ impl<'a> Parser<'a> {
                             }
                             _ => {
                                 return Err(ParserError::ParserError(format!(
-                                    "expected OUTER, SEMI, ANTI or JOIN after {:?}",
-                                    kw
+                                    "expected OUTER, SEMI, ANTI or JOIN after {kw:?}"
                                 )))
                             }
                         }
@@ -5555,8 +5590,7 @@ impl<'a> Parser<'a> {
                             // but not `FROM (mytable AS alias1) AS alias2`.
                             if let Some(inner_alias) = alias {
                                 return Err(ParserError::ParserError(format!(
-                                    "duplicate alias {}",
-                                    inner_alias
+                                    "duplicate alias {inner_alias}"
                                 )));
                             }
                             // Act as if the alias was specified normally next
@@ -5771,8 +5805,7 @@ impl<'a> Parser<'a> {
             if !err.is_empty() {
                 let errors: Vec<Keyword> = err.into_iter().filter_map(|x| x.err()).collect();
                 return Err(ParserError::ParserError(format!(
-                    "INTERNAL ERROR: GRANT/REVOKE unexpected keyword(s) - {:?}",
-                    errors
+                    "INTERNAL ERROR: GRANT/REVOKE unexpected keyword(s) - {errors:?}"
                 )));
             }
             let act = actions.into_iter().filter_map(|x| x.ok()).collect();

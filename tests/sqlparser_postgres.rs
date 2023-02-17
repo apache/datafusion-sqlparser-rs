@@ -485,7 +485,7 @@ PHP	₱ USD $
 \N  Some other value
 \\."#;
     let ast = pg_and_generic().one_statement_parses_to(sql, "");
-    println!("{:#?}", ast);
+    println!("{ast:#?}");
     //assert_eq!(sql, ast.to_string());
 }
 
@@ -2069,7 +2069,7 @@ fn parse_create_role() {
             assert_eq!(*login, Some(true));
             assert_eq!(*password, Some(Password::NullPassword));
         }
-        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err),
+        err => panic!("Failed to parse CREATE ROLE test case: {err:?}"),
     }
 
     let sql = "CREATE ROLE abc WITH LOGIN PASSWORD NULL";
@@ -2086,7 +2086,7 @@ fn parse_create_role() {
             assert_eq!(*login, Some(true));
             assert_eq!(*password, Some(Password::NullPassword));
         }
-        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err),
+        err => panic!("Failed to parse CREATE ROLE test case: {err:?}"),
     }
 
     let sql = "CREATE ROLE magician WITH SUPERUSER CREATEROLE NOCREATEDB BYPASSRLS INHERIT PASSWORD 'abcdef' LOGIN VALID UNTIL '2025-01-01' IN ROLE role1, role2 ROLE role3 ADMIN role4, role5 REPLICATION";
@@ -2141,7 +2141,7 @@ fn parse_create_role() {
             assert_eq_vec(&["role4", "role5"], admin);
             assert_eq!(*authorization_owner, None);
         }
-        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err),
+        err => panic!("Failed to parse CREATE ROLE test case: {err:?}"),
     }
 
     let sql = "CREATE ROLE abc WITH USER foo, bar ROLE baz ";
@@ -2155,7 +2155,7 @@ fn parse_create_role() {
             assert_eq_vec(&["foo", "bar"], user);
             assert_eq_vec(&["baz"], role);
         }
-        err => panic!("Failed to parse CREATE ROLE test case: {:?}", err),
+        err => panic!("Failed to parse CREATE ROLE test case: {err:?}"),
     }
 
     let negatables = vec![
@@ -2169,9 +2169,9 @@ fn parse_create_role() {
     ];
 
     for negatable_kw in negatables.iter() {
-        let sql = format!("CREATE ROLE abc {kw} NO{kw}", kw = negatable_kw);
+        let sql = format!("CREATE ROLE abc {negatable_kw} NO{negatable_kw}");
         if pg().parse_sql_statements(&sql).is_ok() {
-            panic!("Should not be able to parse CREATE ROLE containing both negated and non-negated versions of the same keyword: {}", negatable_kw)
+            panic!("Should not be able to parse CREATE ROLE containing both negated and non-negated versions of the same keyword: {negatable_kw}")
         }
     }
 }

@@ -2442,7 +2442,7 @@ fn parse_create_or_replace_table() {
 #[test]
 fn parse_create_table_with_on_delete_on_update_2in_any_order() -> Result<(), ParserError> {
     let sql = |options: &str| -> String {
-        format!("create table X (y_id int references Y (id) {})", options)
+        format!("create table X (y_id int references Y (id) {options})")
     };
 
     parse_sql_statements(&sql("on update cascade on delete no action"))?;
@@ -2784,7 +2784,7 @@ fn parse_alter_table_constraints() {
     check_one("CHECK (end_date > start_date OR end_date IS NULL)");
 
     fn check_one(constraint_text: &str) {
-        match verified_stmt(&format!("ALTER TABLE tab ADD {}", constraint_text)) {
+        match verified_stmt(&format!("ALTER TABLE tab ADD {constraint_text}")) {
             Statement::AlterTable {
                 name,
                 operation: AlterTableOperation::AddConstraint(constraint),
@@ -2794,7 +2794,7 @@ fn parse_alter_table_constraints() {
             }
             _ => unreachable!(),
         }
-        verified_stmt(&format!("CREATE TABLE foo (id INT, {})", constraint_text));
+        verified_stmt(&format!("CREATE TABLE foo (id INT, {constraint_text})"));
     }
 }
 
@@ -2811,7 +2811,7 @@ fn parse_alter_table_drop_column() {
     );
 
     fn check_one(constraint_text: &str) {
-        match verified_stmt(&format!("ALTER TABLE tab {}", constraint_text)) {
+        match verified_stmt(&format!("ALTER TABLE tab {constraint_text}")) {
             Statement::AlterTable {
                 name,
                 operation:
@@ -2834,10 +2834,7 @@ fn parse_alter_table_drop_column() {
 #[test]
 fn parse_alter_table_alter_column() {
     let alter_stmt = "ALTER TABLE tab";
-    match verified_stmt(&format!(
-        "{} ALTER COLUMN is_active SET NOT NULL",
-        alter_stmt
-    )) {
+    match verified_stmt(&format!("{alter_stmt} ALTER COLUMN is_active SET NOT NULL")) {
         Statement::AlterTable {
             name,
             operation: AlterTableOperation::AlterColumn { column_name, op },
@@ -2855,8 +2852,7 @@ fn parse_alter_table_alter_column() {
     );
 
     match verified_stmt(&format!(
-        "{} ALTER COLUMN is_active SET DEFAULT false",
-        alter_stmt
+        "{alter_stmt} ALTER COLUMN is_active SET DEFAULT false"
     )) {
         Statement::AlterTable {
             name,
@@ -2874,10 +2870,7 @@ fn parse_alter_table_alter_column() {
         _ => unreachable!(),
     }
 
-    match verified_stmt(&format!(
-        "{} ALTER COLUMN is_active DROP DEFAULT",
-        alter_stmt
-    )) {
+    match verified_stmt(&format!("{alter_stmt} ALTER COLUMN is_active DROP DEFAULT")) {
         Statement::AlterTable {
             name,
             operation: AlterTableOperation::AlterColumn { column_name, op },
@@ -2913,7 +2906,7 @@ fn parse_alter_table_alter_column_type() {
 
     let res = Parser::parse_sql(
         &GenericDialect {},
-        &format!("{} ALTER COLUMN is_active TYPE TEXT", alter_stmt),
+        &format!("{alter_stmt} ALTER COLUMN is_active TYPE TEXT"),
     );
     assert_eq!(
         ParserError::ParserError("Expected SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN, found: TYPE".to_string()),
@@ -2922,10 +2915,7 @@ fn parse_alter_table_alter_column_type() {
 
     let res = Parser::parse_sql(
         &GenericDialect {},
-        &format!(
-            "{} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'",
-            alter_stmt
-        ),
+        &format!("{alter_stmt} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'"),
     );
     assert_eq!(
         ParserError::ParserError("Expected end of statement, found: USING".to_string()),
@@ -2973,7 +2963,7 @@ fn parse_alter_table_drop_constraint() {
 
     let res = Parser::parse_sql(
         &GenericDialect {},
-        &format!("{} DROP CONSTRAINT is_active TEXT", alter_stmt),
+        &format!("{alter_stmt} DROP CONSTRAINT is_active TEXT"),
     );
     assert_eq!(
         ParserError::ParserError("Expected end of statement, found: TEXT".to_string()),
@@ -3004,7 +2994,7 @@ fn parse_scalar_function_in_projection() {
 
     for function_name in names {
         // like SELECT sqrt(id) FROM foo
-        let sql = dbg!(format!("SELECT {}(id) FROM foo", function_name));
+        let sql = dbg!(format!("SELECT {function_name}(id) FROM foo"));
         let select = verified_only_select(&sql);
         assert_eq!(
             &Expr::Function(Function {
@@ -3613,6 +3603,58 @@ fn parse_at_timezone() {
             },
         },
         only(&select.projection),
+    );
+}
+
+#[test]
+fn parse_json_keyword() {
+    let sql = r#"SELECT JSON '{
+  "id": 10,
+  "type": "fruit",
+  "name": "apple",
+  "on_menu": true,
+  "recipes":
+    {
+      "salads":
+      [
+        { "id": 2001, "type": "Walnut Apple Salad" },
+        { "id": 2002, "type": "Apple Spinach Salad" }
+      ],
+      "desserts":
+      [
+        { "id": 3001, "type": "Apple Pie" },
+        { "id": 3002, "type": "Apple Scones" },
+        { "id": 3003, "type": "Apple Crumble" }
+      ]
+    }
+}'"#;
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::TypedString {
+            data_type: DataType::JSON,
+            value: r#"{
+  "id": 10,
+  "type": "fruit",
+  "name": "apple",
+  "on_menu": true,
+  "recipes":
+    {
+      "salads":
+      [
+        { "id": 2001, "type": "Walnut Apple Salad" },
+        { "id": 2002, "type": "Apple Spinach Salad" }
+      ],
+      "desserts":
+      [
+        { "id": 3001, "type": "Apple Pie" },
+        { "id": 3002, "type": "Apple Scones" },
+        { "id": 3003, "type": "Apple Crumble" }
+      ]
+    }
+}"#
+            .into()
+        },
+        expr_from_projection(only(&select.projection)),
     );
 }
 
@@ -4239,7 +4281,7 @@ fn parse_ctes() {
     // Top-level CTE
     assert_ctes_in_select(&cte_sqls, &verified_query(with));
     // CTE in a subquery
-    let sql = &format!("SELECT ({})", with);
+    let sql = &format!("SELECT ({with})");
     let select = verified_only_select(sql);
     match expr_from_projection(only(&select.projection)) {
         Expr::Subquery(ref subquery) => {
@@ -4248,7 +4290,7 @@ fn parse_ctes() {
         _ => panic!("Expected subquery"),
     }
     // CTE in a derived table
-    let sql = &format!("SELECT * FROM ({})", with);
+    let sql = &format!("SELECT * FROM ({with})");
     let select = verified_only_select(sql);
     match only(select.from).relation {
         TableFactor::Derived { subquery, .. } => {
@@ -4257,13 +4299,13 @@ fn parse_ctes() {
         _ => panic!("Expected derived table"),
     }
     // CTE in a view
-    let sql = &format!("CREATE VIEW v AS {}", with);
+    let sql = &format!("CREATE VIEW v AS {with}");
     match verified_stmt(sql) {
         Statement::CreateView { query, .. } => assert_ctes_in_select(&cte_sqls, &query),
         _ => panic!("Expected CREATE VIEW"),
     }
     // CTE in a CTE...
-    let sql = &format!("WITH outer_cte AS ({}) SELECT * FROM outer_cte", with);
+    let sql = &format!("WITH outer_cte AS ({with}) SELECT * FROM outer_cte");
     let select = verified_query(sql);
     assert_ctes_in_select(&cte_sqls, &only(&select.with.unwrap().cte_tables).query);
 }
@@ -4288,10 +4330,7 @@ fn parse_cte_renamed_columns() {
 #[test]
 fn parse_recursive_cte() {
     let cte_query = "SELECT 1 UNION ALL SELECT val + 1 FROM nums WHERE val < 10".to_owned();
-    let sql = &format!(
-        "WITH RECURSIVE nums (val) AS ({}) SELECT * FROM nums",
-        cte_query
-    );
+    let sql = &format!("WITH RECURSIVE nums (val) AS ({cte_query}) SELECT * FROM nums");
 
     let cte_query = verified_query(&cte_query);
     let query = verified_query(sql);
@@ -5048,9 +5087,8 @@ fn lateral_derived() {
     fn chk(lateral_in: bool) {
         let lateral_str = if lateral_in { "LATERAL " } else { "" };
         let sql = format!(
-            "SELECT * FROM customer LEFT JOIN {}\
-             (SELECT * FROM order WHERE order.customer = customer.id LIMIT 3) AS order ON true",
-            lateral_str
+            "SELECT * FROM customer LEFT JOIN {lateral_str}\
+             (SELECT * FROM order WHERE order.customer = customer.id LIMIT 3) AS order ON true"
         );
         let select = verified_only_select(&sql);
         let from = only(select.from);
@@ -6307,9 +6345,7 @@ fn parse_cache_table() {
     let query = all_dialects().verified_query(sql);
 
     assert_eq!(
-        verified_stmt(
-            format!("CACHE TABLE '{table_name}'", table_name = cache_table_name).as_str()
-        ),
+        verified_stmt(format!("CACHE TABLE '{cache_table_name}'").as_str()),
         Statement::Cache {
             table_flag: None,
             table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
@@ -6320,14 +6356,7 @@ fn parse_cache_table() {
     );
 
     assert_eq!(
-        verified_stmt(
-            format!(
-                "CACHE {flag} TABLE '{table_name}'",
-                flag = table_flag,
-                table_name = cache_table_name
-            )
-            .as_str()
-        ),
+        verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}'").as_str()),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
             table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
@@ -6340,9 +6369,7 @@ fn parse_cache_table() {
     assert_eq!(
         verified_stmt(
             format!(
-                "CACHE {flag} TABLE '{table_name}' OPTIONS('K1' = 'V1', 'K2' = 0.88)",
-                flag = table_flag,
-                table_name = cache_table_name,
+                "CACHE {table_flag} TABLE '{cache_table_name}' OPTIONS('K1' = 'V1', 'K2' = 0.88)",
             )
             .as_str()
         ),
@@ -6367,10 +6394,7 @@ fn parse_cache_table() {
     assert_eq!(
         verified_stmt(
             format!(
-                "CACHE {flag} TABLE '{table_name}' OPTIONS('K1' = 'V1', 'K2' = 0.88) {sql}",
-                flag = table_flag,
-                table_name = cache_table_name,
-                sql = sql,
+                "CACHE {table_flag} TABLE '{cache_table_name}' OPTIONS('K1' = 'V1', 'K2' = 0.88) {sql}",
             )
             .as_str()
         ),
@@ -6395,10 +6419,7 @@ fn parse_cache_table() {
     assert_eq!(
         verified_stmt(
             format!(
-                "CACHE {flag} TABLE '{table_name}' OPTIONS('K1' = 'V1', 'K2' = 0.88) AS {sql}",
-                flag = table_flag,
-                table_name = cache_table_name,
-                sql = sql,
+                "CACHE {table_flag} TABLE '{cache_table_name}' OPTIONS('K1' = 'V1', 'K2' = 0.88) AS {sql}",
             )
             .as_str()
         ),
@@ -6421,15 +6442,7 @@ fn parse_cache_table() {
     );
 
     assert_eq!(
-        verified_stmt(
-            format!(
-                "CACHE {flag} TABLE '{table_name}' {sql}",
-                flag = table_flag,
-                table_name = cache_table_name,
-                sql = sql
-            )
-            .as_str()
-        ),
+        verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}' {sql}").as_str()),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
             table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
@@ -6440,14 +6453,7 @@ fn parse_cache_table() {
     );
 
     assert_eq!(
-        verified_stmt(
-            format!(
-                "CACHE {flag} TABLE '{table_name}' AS {sql}",
-                flag = table_flag,
-                table_name = cache_table_name
-            )
-            .as_str()
-        ),
+        verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}' AS {sql}").as_str()),
         Statement::Cache {
             table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
             table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
@@ -6595,7 +6601,7 @@ fn parse_with_recursion_limit() {
         .expect("tokenize to work")
         .parse_statements();
 
-    assert!(matches!(res, Ok(_)), "{:?}", res);
+    assert!(matches!(res, Ok(_)), "{res:?}");
 
     // limit recursion to something smaller, expect parsing to fail
     let res = Parser::new(&dialect)
@@ -6613,7 +6619,7 @@ fn parse_with_recursion_limit() {
         .with_recursion_limit(50)
         .parse_statements();
 
-    assert!(matches!(res, Ok(_)), "{:?}", res);
+    assert!(matches!(res, Ok(_)), "{res:?}");
 }
 
 /// Makes a predicate that looks like ((user_id = $id) OR user_id = $2...)
@@ -6625,7 +6631,7 @@ fn make_where_clause(num: usize) -> String {
         if i > 0 {
             write!(&mut output, " OR ").unwrap();
         }
-        write!(&mut output, "user_id = {}", i).unwrap();
+        write!(&mut output, "user_id = {i}").unwrap();
         if i < num - 1 {
             write!(&mut output, ")").unwrap();
         }

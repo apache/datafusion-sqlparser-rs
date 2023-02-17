@@ -47,7 +47,7 @@ fn custom_prefix_parser() -> Result<(), ParserError> {
     let sql = "SELECT 1 + 2";
     let ast = Parser::parse_sql(&dialect, sql)?;
     let query = &ast[0];
-    assert_eq!("SELECT NULL + 2", &format!("{}", query));
+    assert_eq!("SELECT NULL + 2", &format!("{query}"));
     Ok(())
 }
 
@@ -87,7 +87,7 @@ fn custom_infix_parser() -> Result<(), ParserError> {
     let sql = "SELECT 1 + 2";
     let ast = Parser::parse_sql(&dialect, sql)?;
     let query = &ast[0];
-    assert_eq!("SELECT 1 * 2", &format!("{}", query));
+    assert_eq!("SELECT 1 * 2", &format!("{query}"));
     Ok(())
 }
 
@@ -121,7 +121,7 @@ fn custom_statement_parser() -> Result<(), ParserError> {
     let sql = "SELECT 1 + 2";
     let ast = Parser::parse_sql(&dialect, sql)?;
     let query = &ast[0];
-    assert_eq!("COMMIT", &format!("{}", query));
+    assert_eq!("COMMIT", &format!("{query}"));
     Ok(())
 }
 

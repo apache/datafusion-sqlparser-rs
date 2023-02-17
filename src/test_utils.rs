@@ -49,8 +49,7 @@ impl TestedDialects {
                 if let Some((prev_dialect, prev_parsed)) = s {
                     assert_eq!(
                         prev_parsed, parsed,
-                        "Parse results with {:?} are different from {:?}",
-                        prev_dialect, dialect
+                        "Parse results with {prev_dialect:?} are different from {dialect:?}"
                     );
                 }
                 Some((dialect, parsed))

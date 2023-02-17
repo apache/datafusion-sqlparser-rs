@@ -600,32 +600,32 @@ mod tests {
         type Break = ();
 
         fn pre_visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("PRE: RELATION: {}", relation));
+            self.visited.push(format!("PRE: RELATION: {relation}"));
             ControlFlow::Continue(())
         }
 
         fn post_visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("POST: RELATION: {}", relation));
+            self.visited.push(format!("POST: RELATION: {relation}"));
             ControlFlow::Continue(())
         }
 
         fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("PRE: EXPR: {}", expr));
+            self.visited.push(format!("PRE: EXPR: {expr}"));
             ControlFlow::Continue(())
         }
 
         fn post_visit_expr(&mut self, expr: &Expr) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("POST: EXPR: {}", expr));
+            self.visited.push(format!("POST: EXPR: {expr}"));
             ControlFlow::Continue(())
         }
 
         fn pre_visit_statement(&mut self, statement: &Statement) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("PRE: STATEMENT: {}", statement));
+            self.visited.push(format!("PRE: STATEMENT: {statement}"));
             ControlFlow::Continue(())
         }
 
         fn post_visit_statement(&mut self, statement: &Statement) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("POST: STATEMENT: {}", statement));
+            self.visited.push(format!("POST: STATEMENT: {statement}"));
             ControlFlow::Continue(())
         }
     }

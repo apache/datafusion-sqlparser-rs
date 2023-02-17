@@ -61,16 +61,16 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Number(v, l) => write!(f, "{}{long}", v, long = if *l { "L" } else { "" }),
-            Value::DoubleQuotedString(v) => write!(f, "\"{}\"", v),
+            Value::DoubleQuotedString(v) => write!(f, "\"{v}\""),
             Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
-            Value::DollarQuotedString(v) => write!(f, "{}", v),
+            Value::DollarQuotedString(v) => write!(f, "{v}"),
             Value::EscapedStringLiteral(v) => write!(f, "E'{}'", escape_escaped_string(v)),
-            Value::NationalStringLiteral(v) => write!(f, "N'{}'", v),
-            Value::HexStringLiteral(v) => write!(f, "X'{}'", v),
-            Value::Boolean(v) => write!(f, "{}", v),
+            Value::NationalStringLiteral(v) => write!(f, "N'{v}'"),
+            Value::HexStringLiteral(v) => write!(f, "X'{v}'"),
+            Value::Boolean(v) => write!(f, "{v}"),
             Value::Null => write!(f, "NULL"),
-            Value::Placeholder(v) => write!(f, "{}", v),
-            Value::UnQuotedString(v) => write!(f, "{}", v),
+            Value::Placeholder(v) => write!(f, "{v}"),
+            Value::UnQuotedString(v) => write!(f, "{v}"),
         }
     }
 }
@@ -178,7 +178,7 @@ impl<'a> fmt::Display for EscapeQuotedString<'a> {
             if c == self.quote {
                 write!(f, "{q}{q}", q = self.quote)?;
             } else {
-                write!(f, "{}", c)?;
+                write!(f, "{c}")?;
             }
         }
         Ok(())
@@ -215,7 +215,7 @@ impl<'a> fmt::Display for EscapeEscapedStringLiteral<'a> {
                     write!(f, r#"\r"#)?;
                 }
                 _ => {
-                    write!(f, "{}", c)?;
+                    write!(f, "{c}")?;
                 }
             }
         }

@@ -42,7 +42,7 @@ fn test_snowflake_create_transient_table() {
             name, transient, ..
         } => {
             assert_eq!("CUSTOMER", name.to_string());
-            assert_eq!(true, transient)
+            assert!(transient)
         }
         _ => unreachable!(),
     }

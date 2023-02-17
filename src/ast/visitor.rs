@@ -301,7 +301,7 @@ impl<E, F: FnMut(&ObjectName) -> ControlFlow<E>> Visitor for RelationVisitor<F> 
 impl<E, F: FnMut(&mut ObjectName) -> ControlFlow<E>> VisitorMut for RelationVisitor<F> {
     type Break = E;
 
-    fn pre_visit_relation(&mut self, relation: &mut ObjectName) -> ControlFlow<Self::Break> {
+    fn post_visit_relation(&mut self, relation: &mut ObjectName) -> ControlFlow<Self::Break> {
         self.0(relation)
     }
 }
@@ -343,7 +343,10 @@ where
     ControlFlow::Continue(())
 }
 
-/// Invokes the provided closure on all relations (e.g. table names) present in `v`
+/// Invokes the provided closure with a mutable reference to all relations (e.g. table names)
+/// present in `v`.
+///
+/// When the closure mutates its argument, the new mutated relation will not be visited again.
 ///
 /// # Example
 /// ```
@@ -386,7 +389,7 @@ impl<E, F: FnMut(&Expr) -> ControlFlow<E>> Visitor for ExprVisitor<F> {
 impl<E, F: FnMut(&mut Expr) -> ControlFlow<E>> VisitorMut for ExprVisitor<F> {
     type Break = E;
 
-    fn pre_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<Self::Break> {
+    fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<Self::Break> {
         self.0(expr)
     }
 }
@@ -430,9 +433,14 @@ where
     ControlFlow::Continue(())
 }
 
-/// Invokes the provided closure on all expressions present in `v`
+/// Invokes the provided closure iteratively with a mutable reference to all expressions
+/// present in `v`.
+///
+/// This performs a depth-first search, so if the closure mutates the expression
 ///
 /// # Example
+///
+/// ## Remove all select limits in sub-queries
 /// ```
 /// # use sqlparser::parser::Parser;
 /// # use sqlparser::dialect::GenericDialect;
@@ -450,6 +458,35 @@ where
 /// });
 ///
 /// assert_eq!(statements[0].to_string(), "SELECT (SELECT y FROM z) FROM t LIMIT 3");
+/// ```
+///
+/// ## Wrap column name in function call
+///
+/// This demonstrates how to effectively replace an expression with another more complicated one
+/// that references the original. This example avoids unnecessary allocations by using the
+/// [`std::mem`](std::mem) family of functions.
+///
+/// ```
+/// # use sqlparser::parser::Parser;
+/// # use sqlparser::dialect::GenericDialect;
+/// # use sqlparser::ast::{Expr, Function, FunctionArg, FunctionArgExpr, Ident, ObjectName, Value, visit_expressions_mut, visit_statements_mut};
+/// # use core::ops::ControlFlow;
+/// let sql = "SELECT x, y FROM t";
+/// let mut statements = Parser::parse_sql(&GenericDialect{}, sql).unwrap();
+///
+/// visit_expressions_mut(&mut statements, |expr| {
+///   if matches!(expr, Expr::Identifier(col_name) if col_name.value == "x") {
+///     let old_expr = std::mem::replace(expr, Expr::Value(Value::Null));
+///     *expr = Expr::Function(Function {
+///           name: ObjectName(vec![Ident::new("f")]),
+///           args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(old_expr))],
+///           over: None, distinct: false, special: false,
+///      });
+///   }
+///   ControlFlow::<()>::Continue(())
+/// });
+///
+/// assert_eq!(statements[0].to_string(), "SELECT f(x), y FROM t");
 /// ```
 pub fn visit_expressions_mut<V, E, F>(v: &mut V, f: F) -> ControlFlow<E>
 where
@@ -473,12 +510,13 @@ impl<E, F: FnMut(&Statement) -> ControlFlow<E>> Visitor for StatementVisitor<F> 
 impl<E, F: FnMut(&mut Statement) -> ControlFlow<E>> VisitorMut for StatementVisitor<F> {
     type Break = E;
 
-    fn pre_visit_statement(&mut self, statement: &mut Statement) -> ControlFlow<Self::Break> {
+    fn post_visit_statement(&mut self, statement: &mut Statement) -> ControlFlow<Self::Break> {
         self.0(statement)
     }
 }
 
-/// Invokes the provided closure on all statements (e.g. `SELECT`, `CREATE TABLE`, etc) present in `v`
+/// Invokes the provided closure iteratively with a mutable reference to all statements
+/// present in `v` (e.g. `SELECT`, `CREATE TABLE`, etc).
 ///
 /// # Example
 /// ```
@@ -562,32 +600,32 @@ mod tests {
         type Break = ();
 
         fn pre_visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("PRE: RELATION: {}", relation));
+            self.visited.push(format!("PRE: RELATION: {relation}"));
             ControlFlow::Continue(())
         }
 
         fn post_visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("POST: RELATION: {}", relation));
+            self.visited.push(format!("POST: RELATION: {relation}"));
             ControlFlow::Continue(())
         }
 
         fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("PRE: EXPR: {}", expr));
+            self.visited.push(format!("PRE: EXPR: {expr}"));
             ControlFlow::Continue(())
         }
 
         fn post_visit_expr(&mut self, expr: &Expr) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("POST: EXPR: {}", expr));
+            self.visited.push(format!("POST: EXPR: {expr}"));
             ControlFlow::Continue(())
         }
 
         fn pre_visit_statement(&mut self, statement: &Statement) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("PRE: STATEMENT: {}", statement));
+            self.visited.push(format!("PRE: STATEMENT: {statement}"));
             ControlFlow::Continue(())
         }
 
         fn post_visit_statement(&mut self, statement: &Statement) -> ControlFlow<Self::Break> {
-            self.visited.push(format!("POST: STATEMENT: {}", statement));
+            self.visited.push(format!("POST: STATEMENT: {statement}"));
             ControlFlow::Continue(())
         }
     }

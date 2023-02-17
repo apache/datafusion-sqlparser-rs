@@ -71,9 +71,9 @@ where
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut delim = "";
         for t in self.slice {
-            write!(f, "{}", delim)?;
+            write!(f, "{delim}")?;
             delim = self.sep;
-            write!(f, "{}", t)?;
+            write!(f, "{t}")?;
         }
         Ok(())
     }
@@ -145,7 +145,7 @@ impl fmt::Display for Ident {
         match self.quote_style {
             Some(q) if q == '"' || q == '\'' || q == '`' => {
                 let escaped = value::escape_quoted_string(&self.value, q);
-                write!(f, "{}{}{}", q, escaped, q)
+                write!(f, "{q}{escaped}{q}")
             }
             Some(q) if q == '[' => write!(f, "[{}]", self.value),
             None => f.write_str(&self.value),
@@ -529,27 +529,27 @@ pub enum Expr {
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expr::Identifier(s) => write!(f, "{}", s),
+            Expr::Identifier(s) => write!(f, "{s}"),
             Expr::MapAccess { column, keys } => {
-                write!(f, "{}", column)?;
+                write!(f, "{column}")?;
                 for k in keys {
                     match k {
-                        k @ Expr::Value(Value::Number(_, _)) => write!(f, "[{}]", k)?,
-                        Expr::Value(Value::SingleQuotedString(s)) => write!(f, "[\"{}\"]", s)?,
-                        _ => write!(f, "[{}]", k)?,
+                        k @ Expr::Value(Value::Number(_, _)) => write!(f, "[{k}]")?,
+                        Expr::Value(Value::SingleQuotedString(s)) => write!(f, "[\"{s}\"]")?,
+                        _ => write!(f, "[{k}]")?,
                     }
                 }
                 Ok(())
             }
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
-            Expr::IsTrue(ast) => write!(f, "{} IS TRUE", ast),
-            Expr::IsNotTrue(ast) => write!(f, "{} IS NOT TRUE", ast),
-            Expr::IsFalse(ast) => write!(f, "{} IS FALSE", ast),
-            Expr::IsNotFalse(ast) => write!(f, "{} IS NOT FALSE", ast),
-            Expr::IsNull(ast) => write!(f, "{} IS NULL", ast),
-            Expr::IsNotNull(ast) => write!(f, "{} IS NOT NULL", ast),
-            Expr::IsUnknown(ast) => write!(f, "{} IS UNKNOWN", ast),
-            Expr::IsNotUnknown(ast) => write!(f, "{} IS NOT UNKNOWN", ast),
+            Expr::IsTrue(ast) => write!(f, "{ast} IS TRUE"),
+            Expr::IsNotTrue(ast) => write!(f, "{ast} IS NOT TRUE"),
+            Expr::IsFalse(ast) => write!(f, "{ast} IS FALSE"),
+            Expr::IsNotFalse(ast) => write!(f, "{ast} IS NOT FALSE"),
+            Expr::IsNull(ast) => write!(f, "{ast} IS NULL"),
+            Expr::IsNotNull(ast) => write!(f, "{ast} IS NOT NULL"),
+            Expr::IsUnknown(ast) => write!(f, "{ast} IS UNKNOWN"),
+            Expr::IsNotUnknown(ast) => write!(f, "{ast} IS NOT UNKNOWN"),
             Expr::InList {
                 expr,
                 list,
@@ -596,7 +596,7 @@ impl fmt::Display for Expr {
                 low,
                 high
             ),
-            Expr::BinaryOp { left, op, right } => write!(f, "{} {} {}", left, op, right),
+            Expr::BinaryOp { left, op, right } => write!(f, "{left} {op} {right}"),
             Expr::Like {
                 negated,
                 expr,
@@ -663,46 +663,46 @@ impl fmt::Display for Expr {
                     pattern
                 ),
             },
-            Expr::AnyOp(expr) => write!(f, "ANY({})", expr),
-            Expr::AllOp(expr) => write!(f, "ALL({})", expr),
+            Expr::AnyOp(expr) => write!(f, "ANY({expr})"),
+            Expr::AllOp(expr) => write!(f, "ALL({expr})"),
             Expr::UnaryOp { op, expr } => {
                 if op == &UnaryOperator::PGPostfixFactorial {
-                    write!(f, "{}{}", expr, op)
+                    write!(f, "{expr}{op}")
                 } else if op == &UnaryOperator::Not {
-                    write!(f, "{} {}", op, expr)
+                    write!(f, "{op} {expr}")
                 } else {
-                    write!(f, "{}{}", op, expr)
+                    write!(f, "{op}{expr}")
                 }
             }
-            Expr::Cast { expr, data_type } => write!(f, "CAST({} AS {})", expr, data_type),
-            Expr::TryCast { expr, data_type } => write!(f, "TRY_CAST({} AS {})", expr, data_type),
-            Expr::SafeCast { expr, data_type } => write!(f, "SAFE_CAST({} AS {})", expr, data_type),
-            Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
+            Expr::Cast { expr, data_type } => write!(f, "CAST({expr} AS {data_type})"),
+            Expr::TryCast { expr, data_type } => write!(f, "TRY_CAST({expr} AS {data_type})"),
+            Expr::SafeCast { expr, data_type } => write!(f, "SAFE_CAST({expr} AS {data_type})"),
+            Expr::Extract { field, expr } => write!(f, "EXTRACT({field} FROM {expr})"),
             Expr::Ceil { expr, field } => {
                 if field == &DateTimeField::NoDateTime {
-                    write!(f, "CEIL({})", expr)
+                    write!(f, "CEIL({expr})")
                 } else {
-                    write!(f, "CEIL({} TO {})", expr, field)
+                    write!(f, "CEIL({expr} TO {field})")
                 }
             }
             Expr::Floor { expr, field } => {
                 if field == &DateTimeField::NoDateTime {
-                    write!(f, "FLOOR({})", expr)
+                    write!(f, "FLOOR({expr})")
                 } else {
-                    write!(f, "FLOOR({} TO {})", expr, field)
+                    write!(f, "FLOOR({expr} TO {field})")
                 }
             }
-            Expr::Position { expr, r#in } => write!(f, "POSITION({} IN {})", expr, r#in),
-            Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),
-            Expr::Nested(ast) => write!(f, "({})", ast),
-            Expr::Value(v) => write!(f, "{}", v),
+            Expr::Position { expr, r#in } => write!(f, "POSITION({expr} IN {in})"),
+            Expr::Collate { expr, collation } => write!(f, "{expr} COLLATE {collation}"),
+            Expr::Nested(ast) => write!(f, "({ast})"),
+            Expr::Value(v) => write!(f, "{v}"),
             Expr::TypedString { data_type, value } => {
-                write!(f, "{}", data_type)?;
+                write!(f, "{data_type}")?;
                 write!(f, " '{}'", &value::escape_single_quote_string(value))
             }
-            Expr::Function(fun) => write!(f, "{}", fun),
+            Expr::Function(fun) => write!(f, "{fun}"),
             Expr::AggregateExpressionWithFilter { expr, filter } => {
-                write!(f, "{} FILTER (WHERE {})", expr, filter)
+                write!(f, "{expr} FILTER (WHERE {filter})")
             }
             Expr::Case {
                 operand,
@@ -712,14 +712,14 @@ impl fmt::Display for Expr {
             } => {
                 write!(f, "CASE")?;
                 if let Some(operand) = operand {
-                    write!(f, " {}", operand)?;
+                    write!(f, " {operand}")?;
                 }
                 for (c, r) in conditions.iter().zip(results) {
-                    write!(f, " WHEN {} THEN {}", c, r)?;
+                    write!(f, " WHEN {c} THEN {r}")?;
                 }
 
                 if let Some(else_result) = else_result {
-                    write!(f, " ELSE {}", else_result)?;
+                    write!(f, " ELSE {else_result}")?;
                 }
                 write!(f, " END")
             }
@@ -729,15 +729,15 @@ impl fmt::Display for Expr {
                 if *negated { "NOT " } else { "" },
                 subquery
             ),
-            Expr::Subquery(s) => write!(f, "({})", s),
-            Expr::ArraySubquery(s) => write!(f, "ARRAY({})", s),
-            Expr::ListAgg(listagg) => write!(f, "{}", listagg),
-            Expr::ArrayAgg(arrayagg) => write!(f, "{}", arrayagg),
+            Expr::Subquery(s) => write!(f, "({s})"),
+            Expr::ArraySubquery(s) => write!(f, "ARRAY({s})"),
+            Expr::ListAgg(listagg) => write!(f, "{listagg}"),
+            Expr::ArrayAgg(arrayagg) => write!(f, "{arrayagg}"),
             Expr::GroupingSets(sets) => {
                 write!(f, "GROUPING SETS (")?;
                 let mut sep = "";
                 for set in sets {
-                    write!(f, "{}", sep)?;
+                    write!(f, "{sep}")?;
                     sep = ", ";
                     write!(f, "({})", display_comma_separated(set))?;
                 }
@@ -747,7 +747,7 @@ impl fmt::Display for Expr {
                 write!(f, "CUBE (")?;
                 let mut sep = "";
                 for set in sets {
-                    write!(f, "{}", sep)?;
+                    write!(f, "{sep}")?;
                     sep = ", ";
                     if set.len() == 1 {
                         write!(f, "{}", set[0])?;
@@ -761,7 +761,7 @@ impl fmt::Display for Expr {
                 write!(f, "ROLLUP (")?;
                 let mut sep = "";
                 for set in sets {
-                    write!(f, "{}", sep)?;
+                    write!(f, "{sep}")?;
                     sep = ", ";
                     if set.len() == 1 {
                         write!(f, "{}", set[0])?;
@@ -776,12 +776,12 @@ impl fmt::Display for Expr {
                 substring_from,
                 substring_for,
             } => {
-                write!(f, "SUBSTRING({}", expr)?;
+                write!(f, "SUBSTRING({expr}")?;
                 if let Some(from_part) = substring_from {
-                    write!(f, " FROM {}", from_part)?;
+                    write!(f, " FROM {from_part}")?;
                 }
                 if let Some(for_part) = substring_for {
-                    write!(f, " FOR {}", for_part)?;
+                    write!(f, " FOR {for_part}")?;
                 }
 
                 write!(f, ")")
@@ -794,17 +794,16 @@ impl fmt::Display for Expr {
             } => {
                 write!(
                     f,
-                    "OVERLAY({} PLACING {} FROM {}",
-                    expr, overlay_what, overlay_from
+                    "OVERLAY({expr} PLACING {overlay_what} FROM {overlay_from}"
                 )?;
                 if let Some(for_part) = overlay_for {
-                    write!(f, " FOR {}", for_part)?;
+                    write!(f, " FOR {for_part}")?;
                 }
 
                 write!(f, ")")
             }
-            Expr::IsDistinctFrom(a, b) => write!(f, "{} IS DISTINCT FROM {}", a, b),
-            Expr::IsNotDistinctFrom(a, b) => write!(f, "{} IS NOT DISTINCT FROM {}", a, b),
+            Expr::IsDistinctFrom(a, b) => write!(f, "{a} IS DISTINCT FROM {b}"),
+            Expr::IsNotDistinctFrom(a, b) => write!(f, "{a} IS NOT DISTINCT FROM {b}"),
             Expr::Trim {
                 expr,
                 trim_where,
@@ -812,12 +811,12 @@ impl fmt::Display for Expr {
             } => {
                 write!(f, "TRIM(")?;
                 if let Some(ident) = trim_where {
-                    write!(f, "{} ", ident)?;
+                    write!(f, "{ident} ")?;
                 }
                 if let Some(trim_char) = trim_what {
-                    write!(f, "{} FROM {}", trim_char, expr)?;
+                    write!(f, "{trim_char} FROM {expr}")?;
                 } else {
-                    write!(f, "{}", expr)?;
+                    write!(f, "{expr}")?;
                 }
 
                 write!(f, ")")
@@ -826,14 +825,14 @@ impl fmt::Display for Expr {
                 write!(f, "({})", display_comma_separated(exprs))
             }
             Expr::ArrayIndex { obj, indexes } => {
-                write!(f, "{}", obj)?;
+                write!(f, "{obj}")?;
                 for i in indexes {
-                    write!(f, "[{}]", i)?;
+                    write!(f, "[{i}]")?;
                 }
                 Ok(())
             }
             Expr::Array(set) => {
-                write!(f, "{}", set)
+                write!(f, "{set}")
             }
             Expr::JsonAccess {
                 left,
@@ -841,19 +840,19 @@ impl fmt::Display for Expr {
                 right,
             } => {
                 if operator == &JsonOperator::Colon {
-                    write!(f, "{}{}{}", left, operator, right)
+                    write!(f, "{left}{operator}{right}")
                 } else {
-                    write!(f, "{} {} {}", left, operator, right)
+                    write!(f, "{left} {operator} {right}")
                 }
             }
             Expr::CompositeAccess { expr, key } => {
-                write!(f, "{}.{}", expr, key)
+                write!(f, "{expr}.{key}")
             }
             Expr::AtTimeZone {
                 timestamp,
                 time_zone,
             } => {
-                write!(f, "{} AT TIME ZONE '{}'", timestamp, time_zone)
+                write!(f, "{timestamp} AT TIME ZONE '{time_zone}'")
             }
             Expr::Interval {
                 value,
@@ -867,8 +866,7 @@ impl fmt::Display for Expr {
                 assert!(last_field.is_none());
                 write!(
                     f,
-                    "INTERVAL {} SECOND ({}, {})",
-                    value, leading_precision, fractional_seconds_precision
+                    "INTERVAL {value} SECOND ({leading_precision}, {fractional_seconds_precision})"
                 )
             }
             Expr::Interval {
@@ -878,18 +876,18 @@ impl fmt::Display for Expr {
                 last_field,
                 fractional_seconds_precision,
             } => {
-                write!(f, "INTERVAL {}", value)?;
+                write!(f, "INTERVAL {value}")?;
                 if let Some(leading_field) = leading_field {
-                    write!(f, " {}", leading_field)?;
+                    write!(f, " {leading_field}")?;
                 }
                 if let Some(leading_precision) = leading_precision {
-                    write!(f, " ({})", leading_precision)?;
+                    write!(f, " ({leading_precision})")?;
                 }
                 if let Some(last_field) = last_field {
-                    write!(f, " TO {}", last_field)?;
+                    write!(f, " TO {last_field}")?;
                 }
                 if let Some(fractional_seconds_precision) = fractional_seconds_precision {
-                    write!(f, " ({})", fractional_seconds_precision)?;
+                    write!(f, " ({fractional_seconds_precision})")?;
                 }
                 Ok(())
             }
@@ -1023,8 +1021,8 @@ impl fmt::Display for WindowFrameBound {
             WindowFrameBound::CurrentRow => f.write_str("CURRENT ROW"),
             WindowFrameBound::Preceding(None) => f.write_str("UNBOUNDED PRECEDING"),
             WindowFrameBound::Following(None) => f.write_str("UNBOUNDED FOLLOWING"),
-            WindowFrameBound::Preceding(Some(n)) => write!(f, "{} PRECEDING", n),
-            WindowFrameBound::Following(Some(n)) => write!(f, "{} FOLLOWING", n),
+            WindowFrameBound::Preceding(Some(n)) => write!(f, "{n} PRECEDING"),
+            WindowFrameBound::Following(Some(n)) => write!(f, "{n} FOLLOWING"),
         }
     }
 }
@@ -1644,10 +1642,10 @@ impl fmt::Display for Statement {
                 write!(f, "KILL ")?;
 
                 if let Some(m) = modifier {
-                    write!(f, "{} ", m)?;
+                    write!(f, "{m} ")?;
                 }
 
-                write!(f, "{}", id)
+                write!(f, "{id}")
             }
             Statement::ExplainTable {
                 describe_alias,
@@ -1659,7 +1657,7 @@ impl fmt::Display for Statement {
                     write!(f, "EXPLAIN ")?;
                 }
 
-                write!(f, "{}", table_name)
+                write!(f, "{table_name}")
             }
             Statement::Explain {
                 describe_alias,
@@ -1683,12 +1681,12 @@ impl fmt::Display for Statement {
                 }
 
                 if let Some(format) = format {
-                    write!(f, "FORMAT {} ", format)?;
+                    write!(f, "FORMAT {format} ")?;
                 }
 
-                write!(f, "{}", statement)
+                write!(f, "{statement}")
             }
-            Statement::Query(s) => write!(f, "{}", s),
+            Statement::Query(s) => write!(f, "{s}"),
             Statement::Declare {
                 name,
                 binary,
@@ -1697,7 +1695,7 @@ impl fmt::Display for Statement {
                 hold,
                 query,
             } => {
-                write!(f, "DECLARE {} ", name)?;
+                write!(f, "DECLARE {name} ")?;
 
                 if *binary {
                     write!(f, "BINARY ")?;
@@ -1729,19 +1727,19 @@ impl fmt::Display for Statement {
                     }
                 }
 
-                write!(f, "FOR {}", query)
+                write!(f, "FOR {query}")
             }
             Statement::Fetch {
                 name,
                 direction,
                 into,
             } => {
-                write!(f, "FETCH {} ", direction)?;
+                write!(f, "FETCH {direction} ")?;
 
-                write!(f, "IN {}", name)?;
+                write!(f, "IN {name}")?;
 
                 if let Some(into) = into {
-                    write!(f, " INTO {}", into)?;
+                    write!(f, " INTO {into}")?;
                 }
 
                 Ok(())
@@ -1761,9 +1759,9 @@ impl fmt::Display for Statement {
                     path = path
                 )?;
                 if let Some(ref ff) = file_format {
-                    write!(f, " STORED AS {}", ff)?
+                    write!(f, " STORED AS {ff}")?
                 }
-                write!(f, " {}", source)
+                write!(f, " {source}")
             }
             Statement::Msck {
                 table_name,
@@ -1777,7 +1775,7 @@ impl fmt::Display for Statement {
                     table = table_name
                 )?;
                 if let Some(pa) = partition_action {
-                    write!(f, " {}", pa)?;
+                    write!(f, " {pa}")?;
                 }
                 Ok(())
             }
@@ -1785,7 +1783,7 @@ impl fmt::Display for Statement {
                 table_name,
                 partitions,
             } => {
-                write!(f, "TRUNCATE TABLE {}", table_name)?;
+                write!(f, "TRUNCATE TABLE {table_name}")?;
                 if let Some(ref parts) = partitions {
                     if !parts.is_empty() {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;
@@ -1802,7 +1800,7 @@ impl fmt::Display for Statement {
                 noscan,
                 compute_statistics,
             } => {
-                write!(f, "ANALYZE TABLE {}", table_name)?;
+                write!(f, "ANALYZE TABLE {table_name}")?;
                 if let Some(ref parts) = partitions {
                     if !parts.is_empty() {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;
@@ -1840,7 +1838,7 @@ impl fmt::Display for Statement {
                 returning,
             } => {
                 if let Some(action) = or {
-                    write!(f, "INSERT OR {} INTO {} ", action, table_name)?;
+                    write!(f, "INSERT OR {action} INTO {table_name} ")?;
                 } else {
                     write!(
                         f,
@@ -1862,10 +1860,10 @@ impl fmt::Display for Statement {
                 if !after_columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(after_columns))?;
                 }
-                write!(f, "{}", source)?;
+                write!(f, "{source}")?;
 
                 if let Some(on) = on {
-                    write!(f, "{}", on)?;
+                    write!(f, "{on}")?;
                 }
 
                 if let Some(returning) = returning {
@@ -1884,7 +1882,7 @@ impl fmt::Display for Statement {
                 legacy_options,
                 values,
             } => {
-                write!(f, "COPY {}", table_name)?;
+                write!(f, "COPY {table_name}")?;
                 if !columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(columns))?;
                 }
@@ -1899,10 +1897,10 @@ impl fmt::Display for Statement {
                     writeln!(f, ";")?;
                     let mut delim = "";
                     for v in values {
-                        write!(f, "{}", delim)?;
+                        write!(f, "{delim}")?;
                         delim = "\t";
                         if let Some(v) = v {
-                            write!(f, "{}", v)?;
+                            write!(f, "{v}")?;
                         } else {
                             write!(f, "\\N")?;
                         }
@@ -1918,15 +1916,15 @@ impl fmt::Display for Statement {
                 selection,
                 returning,
             } => {
-                write!(f, "UPDATE {}", table)?;
+                write!(f, "UPDATE {table}")?;
                 if !assignments.is_empty() {
                     write!(f, " SET {}", display_comma_separated(assignments))?;
                 }
                 if let Some(from) = from {
-                    write!(f, " FROM {}", from)?;
+                    write!(f, " FROM {from}")?;
                 }
                 if let Some(selection) = selection {
-                    write!(f, " WHERE {}", selection)?;
+                    write!(f, " WHERE {selection}")?;
                 }
                 if let Some(returning) = returning {
                     write!(f, " RETURNING {}", display_comma_separated(returning))?;
@@ -1939,12 +1937,12 @@ impl fmt::Display for Statement {
                 selection,
                 returning,
             } => {
-                write!(f, "DELETE FROM {}", table_name)?;
+                write!(f, "DELETE FROM {table_name}")?;
                 if let Some(using) = using {
-                    write!(f, " USING {}", using)?;
+                    write!(f, " USING {using}")?;
                 }
                 if let Some(selection) = selection {
-                    write!(f, " WHERE {}", selection)?;
+                    write!(f, " WHERE {selection}")?;
                 }
                 if let Some(returning) = returning {
                     write!(f, " RETURNING {}", display_comma_separated(returning))?;
@@ -1952,7 +1950,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Close { cursor } => {
-                write!(f, "CLOSE {}", cursor)?;
+                write!(f, "CLOSE {cursor}")?;
 
                 Ok(())
             }
@@ -1966,12 +1964,12 @@ impl fmt::Display for Statement {
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
-                write!(f, " {}", db_name)?;
+                write!(f, " {db_name}")?;
                 if let Some(l) = location {
-                    write!(f, " LOCATION '{}'", l)?;
+                    write!(f, " LOCATION '{l}'")?;
                 }
                 if let Some(ml) = managed_location {
-                    write!(f, " MANAGEDLOCATION '{}'", ml)?;
+                    write!(f, " MANAGEDLOCATION '{ml}'")?;
                 }
                 Ok(())
             }
@@ -1993,7 +1991,7 @@ impl fmt::Display for Statement {
                     write!(f, "({})", display_comma_separated(args))?;
                 }
                 if let Some(return_type) = return_type {
-                    write!(f, " RETURNS {}", return_type)?;
+                    write!(f, " RETURNS {return_type}")?;
                 }
                 write!(f, "{params}")?;
                 Ok(())
@@ -2023,7 +2021,7 @@ impl fmt::Display for Statement {
                 if !cluster_by.is_empty() {
                     write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
                 }
-                write!(f, " AS {}", query)
+                write!(f, " AS {query}")
             }
             Statement::CreateTable {
                 name,
@@ -2099,11 +2097,11 @@ impl fmt::Display for Statement {
 
                 // Only for Hive
                 if let Some(l) = like {
-                    write!(f, " LIKE {}", l)?;
+                    write!(f, " LIKE {l}")?;
                 }
 
                 if let Some(c) = clone {
-                    write!(f, " CLONE {}", c)?;
+                    write!(f, " CLONE {c}")?;
                 }
 
                 match hive_distribution {
@@ -2120,7 +2118,7 @@ impl fmt::Display for Statement {
                             write!(f, " SORTED BY ({})", display_comma_separated(sorted_by))?;
                         }
                         if *num_buckets > 0 {
-                            write!(f, " INTO {} BUCKETS", num_buckets)?;
+                            write!(f, " INTO {num_buckets} BUCKETS")?;
                         }
                     }
                     HiveDistributionStyle::SKEWED {
@@ -2149,7 +2147,7 @@ impl fmt::Display for Statement {
                 {
                     match row_format {
                         Some(HiveRowFormat::SERDE { class }) => {
-                            write!(f, " ROW FORMAT SERDE '{}'", class)?
+                            write!(f, " ROW FORMAT SERDE '{class}'")?
                         }
                         Some(HiveRowFormat::DELIMITED) => write!(f, " ROW FORMAT DELIMITED")?,
                         None => (),
@@ -2160,17 +2158,16 @@ impl fmt::Display for Statement {
                             output_format,
                         }) => write!(
                             f,
-                            " STORED AS INPUTFORMAT {} OUTPUTFORMAT {}",
-                            input_format, output_format
+                            " STORED AS INPUTFORMAT {input_format} OUTPUTFORMAT {output_format}"
                         )?,
                         Some(HiveIOFormat::FileFormat { format }) if !*external => {
-                            write!(f, " STORED AS {}", format)?
+                            write!(f, " STORED AS {format}")?
                         }
                         _ => (),
                     }
                     if !*external {
                         if let Some(loc) = location {
-                            write!(f, " LOCATION '{}'", loc)?;
+                            write!(f, " LOCATION '{loc}'")?;
                         }
                     }
                 }
@@ -2193,16 +2190,16 @@ impl fmt::Display for Statement {
                     write!(f, " WITH ({})", display_comma_separated(with_options))?;
                 }
                 if let Some(query) = query {
-                    write!(f, " AS {}", query)?;
+                    write!(f, " AS {query}")?;
                 }
                 if let Some(engine) = engine {
-                    write!(f, " ENGINE={}", engine)?;
+                    write!(f, " ENGINE={engine}")?;
                 }
                 if let Some(default_charset) = default_charset {
-                    write!(f, " DEFAULT CHARSET={}", default_charset)?;
+                    write!(f, " DEFAULT CHARSET={default_charset}")?;
                 }
                 if let Some(collation) = collation {
-                    write!(f, " COLLATE={}", collation)?;
+                    write!(f, " COLLATE={collation}")?;
                 }
 
                 if on_commit.is_some() {
@@ -2212,7 +2209,7 @@ impl fmt::Display for Statement {
                         Some(OnCommit::Drop) => "ON COMMIT DROP",
                         None => "",
                     };
-                    write!(f, " {}", on_commit)?;
+                    write!(f, " {on_commit}")?;
                 }
 
                 Ok(())
@@ -2252,7 +2249,7 @@ impl fmt::Display for Statement {
                     table_name = table_name
                 )?;
                 if let Some(value) = using {
-                    write!(f, " USING {} ", value)?;
+                    write!(f, " USING {value} ")?;
                 }
                 write!(f, "({})", display_separated(columns, ","))
             }
@@ -2318,15 +2315,15 @@ impl fmt::Display for Statement {
                     }
                 )?;
                 if let Some(limit) = connection_limit {
-                    write!(f, " CONNECTION LIMIT {}", limit)?;
+                    write!(f, " CONNECTION LIMIT {limit}")?;
                 }
                 match password {
-                    Some(Password::Password(pass)) => write!(f, " PASSWORD {}", pass),
+                    Some(Password::Password(pass)) => write!(f, " PASSWORD {pass}"),
                     Some(Password::NullPassword) => write!(f, " PASSWORD NULL"),
                     None => Ok(()),
                 }?;
                 if let Some(until) = valid_until {
-                    write!(f, " VALID UNTIL {}", until)?;
+                    write!(f, " VALID UNTIL {until}")?;
                 }
                 if !in_role.is_empty() {
                     write!(f, " IN ROLE {}", display_comma_separated(in_role))?;
@@ -2344,15 +2341,15 @@ impl fmt::Display for Statement {
                     write!(f, " ADMIN {}", display_comma_separated(admin))?;
                 }
                 if let Some(owner) = authorization_owner {
-                    write!(f, " AUTHORIZATION {}", owner)?;
+                    write!(f, " AUTHORIZATION {owner}")?;
                 }
                 Ok(())
             }
             Statement::AlterTable { name, operation } => {
-                write!(f, "ALTER TABLE {} {}", name, operation)
+                write!(f, "ALTER TABLE {name} {operation}")
             }
             Statement::AlterIndex { name, operation } => {
-                write!(f, "ALTER INDEX {} {}", name, operation)
+                write!(f, "ALTER INDEX {name} {operation}")
             }
             Statement::Drop {
                 object_type,
@@ -2383,12 +2380,12 @@ impl fmt::Display for Statement {
                     display_comma_separated(func_desc),
                 )?;
                 if let Some(op) = option {
-                    write!(f, " {}", op)?;
+                    write!(f, " {op}")?;
                 }
                 Ok(())
             }
             Statement::Discard { object_type } => {
-                write!(f, "DISCARD {object_type}", object_type = object_type)?;
+                write!(f, "DISCARD {object_type}")?;
                 Ok(())
             }
             Self::SetRole {
@@ -2457,12 +2454,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::ShowCreate { obj_type, obj_name } => {
-                write!(
-                    f,
-                    "SHOW CREATE {obj_type} {obj_name}",
-                    obj_type = obj_type,
-                    obj_name = obj_name,
-                )?;
+                write!(f, "SHOW CREATE {obj_type} {obj_name}",)?;
                 Ok(())
             }
             Statement::ShowColumns {
@@ -2479,7 +2471,7 @@ impl fmt::Display for Statement {
                     table_name = table_name,
                 )?;
                 if let Some(filter) = filter {
-                    write!(f, " {}", filter)?;
+                    write!(f, " {filter}")?;
                 }
                 Ok(())
             }
@@ -2496,28 +2488,28 @@ impl fmt::Display for Statement {
                     full = if *full { "FULL " } else { "" },
                 )?;
                 if let Some(db_name) = db_name {
-                    write!(f, " FROM {}", db_name)?;
+                    write!(f, " FROM {db_name}")?;
                 }
                 if let Some(filter) = filter {
-                    write!(f, " {}", filter)?;
+                    write!(f, " {filter}")?;
                 }
                 Ok(())
             }
             Statement::ShowFunctions { filter } => {
                 write!(f, "SHOW FUNCTIONS")?;
                 if let Some(filter) = filter {
-                    write!(f, " {}", filter)?;
+                    write!(f, " {filter}")?;
                 }
                 Ok(())
             }
             Statement::Use { db_name } => {
-                write!(f, "USE {}", db_name)?;
+                write!(f, "USE {db_name}")?;
                 Ok(())
             }
             Statement::ShowCollation { filter } => {
                 write!(f, "SHOW COLLATION")?;
                 if let Some(filter) = filter {
-                    write!(f, " {}", filter)?;
+                    write!(f, " {filter}")?;
                 }
                 Ok(())
             }
@@ -2542,7 +2534,7 @@ impl fmt::Display for Statement {
                     write!(f, " {}", display_comma_separated(modes))?;
                 }
                 if let Some(snapshot_id) = snapshot {
-                    write!(f, " SNAPSHOT {}", snapshot_id)?;
+                    write!(f, " SNAPSHOT {snapshot_id}")?;
                 }
                 Ok(())
             }
@@ -2562,9 +2554,9 @@ impl fmt::Display for Statement {
                 name = schema_name
             ),
             Statement::Assert { condition, message } => {
-                write!(f, "ASSERT {}", condition)?;
+                write!(f, "ASSERT {condition}")?;
                 if let Some(m) = message {
-                    write!(f, " AS {}", m)?;
+                    write!(f, " AS {m}")?;
                 }
                 Ok(())
             }
@@ -2575,14 +2567,14 @@ impl fmt::Display for Statement {
                 with_grant_option,
                 granted_by,
             } => {
-                write!(f, "GRANT {} ", privileges)?;
-                write!(f, "ON {} ", objects)?;
+                write!(f, "GRANT {privileges} ")?;
+                write!(f, "ON {objects} ")?;
                 write!(f, "TO {}", display_comma_separated(grantees))?;
                 if *with_grant_option {
                     write!(f, " WITH GRANT OPTION")?;
                 }
                 if let Some(grantor) = granted_by {
-                    write!(f, " GRANTED BY {}", grantor)?;
+                    write!(f, " GRANTED BY {grantor}")?;
                 }
                 Ok(())
             }
@@ -2593,11 +2585,11 @@ impl fmt::Display for Statement {
                 granted_by,
                 cascade,
             } => {
-                write!(f, "REVOKE {} ", privileges)?;
-                write!(f, "ON {} ", objects)?;
+                write!(f, "REVOKE {privileges} ")?;
+                write!(f, "ON {objects} ")?;
                 write!(f, "FROM {}", display_comma_separated(grantees))?;
                 if let Some(grantor) = granted_by {
-                    write!(f, " GRANTED BY {}", grantor)?;
+                    write!(f, " GRANTED BY {grantor}")?;
                 }
                 write!(f, " {}", if *cascade { "CASCADE" } else { "RESTRICT" })?;
                 Ok(())
@@ -2609,7 +2601,7 @@ impl fmt::Display for Statement {
                 name = name,
             ),
             Statement::Execute { name, parameters } => {
-                write!(f, "EXECUTE {}", name)?;
+                write!(f, "EXECUTE {name}")?;
                 if !parameters.is_empty() {
                     write!(f, "({})", display_comma_separated(parameters))?;
                 }
@@ -2620,27 +2612,27 @@ impl fmt::Display for Statement {
                 data_types,
                 statement,
             } => {
-                write!(f, "PREPARE {} ", name)?;
+                write!(f, "PREPARE {name} ")?;
                 if !data_types.is_empty() {
                     write!(f, "({}) ", display_comma_separated(data_types))?;
                 }
-                write!(f, "AS {}", statement)
+                write!(f, "AS {statement}")
             }
             Statement::Comment {
                 object_type,
                 object_name,
                 comment,
             } => {
-                write!(f, "COMMENT ON {} {} IS ", object_type, object_name)?;
+                write!(f, "COMMENT ON {object_type} {object_name} IS ")?;
                 if let Some(c) = comment {
-                    write!(f, "'{}'", c)
+                    write!(f, "'{c}'")
                 } else {
                     write!(f, "NULL")
                 }
             }
             Statement::Savepoint { name } => {
                 write!(f, "SAVEPOINT ")?;
-                write!(f, "{}", name)
+                write!(f, "{name}")
             }
             Statement::Merge {
                 into,
@@ -2654,7 +2646,7 @@ impl fmt::Display for Statement {
                     "MERGE{int} {table} USING {source} ",
                     int = if *into { " INTO" } else { "" }
                 )?;
-                write!(f, "ON {} ", on)?;
+                write!(f, "ON {on} ")?;
                 write!(f, "{}", display_separated(clauses, " "))
             }
             Statement::Cache {
@@ -2672,7 +2664,7 @@ impl fmt::Display for Statement {
                         table_name = table_name,
                     )?;
                 } else {
-                    write!(f, "CACHE TABLE {table_name}", table_name = table_name,)?;
+                    write!(f, "CACHE TABLE {table_name}",)?;
                 }
 
                 if !options.is_empty() {
@@ -2695,13 +2687,9 @@ impl fmt::Display for Statement {
                 if_exists,
             } => {
                 if *if_exists {
-                    write!(
-                        f,
-                        "UNCACHE TABLE IF EXISTS {table_name}",
-                        table_name = table_name
-                    )
+                    write!(f, "UNCACHE TABLE IF EXISTS {table_name}")
                 } else {
-                    write!(f, "UNCACHE TABLE {table_name}", table_name = table_name)
+                    write!(f, "UNCACHE TABLE {table_name}")
                 }
             }
             Statement::CreateSequence {
@@ -2728,10 +2716,10 @@ impl fmt::Display for Statement {
                     as_type = as_type
                 )?;
                 for sequence_option in sequence_options {
-                    write!(f, "{}", sequence_option)?;
+                    write!(f, "{sequence_option}")?;
                 }
                 if let Some(ob) = owned_by.as_ref() {
-                    write!(f, " OWNED BY {}", ob)?;
+                    write!(f, " OWNED BY {ob}")?;
                 }
                 write!(f, "")
             }
@@ -2776,7 +2764,7 @@ impl fmt::Display for SequenceOptions {
                     write!(f, " NO MINVALUE")
                 }
                 MinMaxValue::Some(minvalue) => {
-                    write!(f, " MINVALUE {minvalue}", minvalue = minvalue)
+                    write!(f, " MINVALUE {minvalue}")
                 }
             },
             SequenceOptions::MaxValue(value) => match value {
@@ -2787,7 +2775,7 @@ impl fmt::Display for SequenceOptions {
                     write!(f, " NO MAXVALUE")
                 }
                 MinMaxValue::Some(maxvalue) => {
-                    write!(f, " MAXVALUE {maxvalue}", maxvalue = maxvalue)
+                    write!(f, " MAXVALUE {maxvalue}")
                 }
             },
             SequenceOptions::StartWith(start, with) => {
@@ -2881,7 +2869,7 @@ impl fmt::Display for OnConflict {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, " ON CONFLICT")?;
         if let Some(target) = &self.conflict_target {
-            write!(f, "{}", target)?;
+            write!(f, "{target}")?;
         }
         write!(f, " {}", self.action)
     }
@@ -2890,7 +2878,7 @@ impl fmt::Display for ConflictTarget {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ConflictTarget::Columns(cols) => write!(f, "({})", display_comma_separated(cols)),
-            ConflictTarget::OnConstraint(name) => write!(f, " ON CONSTRAINT {}", name),
+            ConflictTarget::OnConstraint(name) => write!(f, " ON CONSTRAINT {name}"),
         }
     }
 }
@@ -2908,7 +2896,7 @@ impl fmt::Display for OnConflictAction {
                     )?;
                 }
                 if let Some(selection) = &do_update.selection {
-                    write!(f, " WHERE {}", selection)?;
+                    write!(f, " WHERE {selection}")?;
                 }
                 Ok(())
             }
@@ -3143,8 +3131,8 @@ pub enum FunctionArgExpr {
 impl fmt::Display for FunctionArgExpr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            FunctionArgExpr::Expr(expr) => write!(f, "{}", expr),
-            FunctionArgExpr::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
+            FunctionArgExpr::Expr(expr) => write!(f, "{expr}"),
+            FunctionArgExpr::QualifiedWildcard(prefix) => write!(f, "{prefix}.*"),
             FunctionArgExpr::Wildcard => f.write_str("*"),
         }
     }
@@ -3161,8 +3149,8 @@ pub enum FunctionArg {
 impl fmt::Display for FunctionArg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            FunctionArg::Named { name, arg } => write!(f, "{} => {}", name, arg),
-            FunctionArg::Unnamed(unnamed_arg) => write!(f, "{}", unnamed_arg),
+            FunctionArg::Named { name, arg } => write!(f, "{name} => {arg}"),
+            FunctionArg::Unnamed(unnamed_arg) => write!(f, "{unnamed_arg}"),
         }
     }
 }
@@ -3179,7 +3167,7 @@ impl fmt::Display for CloseCursor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             CloseCursor::All => write!(f, "ALL"),
-            CloseCursor::Specific { name } => write!(f, "{}", name),
+            CloseCursor::Specific { name } => write!(f, "{name}"),
         }
     }
 }
@@ -3232,7 +3220,7 @@ impl fmt::Display for Function {
             )?;
 
             if let Some(o) = &self.over {
-                write!(f, " OVER ({})", o)?;
+                write!(f, " OVER ({o})")?;
             }
         }
 
@@ -3291,10 +3279,10 @@ impl fmt::Display for ListAgg {
             self.expr
         )?;
         if let Some(separator) = &self.separator {
-            write!(f, ", {}", separator)?;
+            write!(f, ", {separator}")?;
         }
         if let Some(on_overflow) = &self.on_overflow {
-            write!(f, "{}", on_overflow)?;
+            write!(f, "{on_overflow}")?;
         }
         write!(f, ")")?;
         if !self.within_group.is_empty() {
@@ -3331,7 +3319,7 @@ impl fmt::Display for ListAggOnOverflow {
             ListAggOnOverflow::Truncate { filler, with_count } => {
                 write!(f, " TRUNCATE")?;
                 if let Some(filler) = filler {
-                    write!(f, " {}", filler)?;
+                    write!(f, " {filler}")?;
                 }
                 if *with_count {
                     write!(f, " WITH")?;
@@ -3368,16 +3356,16 @@ impl fmt::Display for ArrayAgg {
         )?;
         if !self.within_group {
             if let Some(order_by) = &self.order_by {
-                write!(f, " ORDER BY {}", order_by)?;
+                write!(f, " ORDER BY {order_by}")?;
             }
             if let Some(limit) = &self.limit {
-                write!(f, " LIMIT {}", limit)?;
+                write!(f, " LIMIT {limit}")?;
             }
         }
         write!(f, ")")?;
         if self.within_group {
             if let Some(order_by) = &self.order_by {
-                write!(f, " WITHIN GROUP (ORDER BY {})", order_by)?;
+                write!(f, " WITHIN GROUP (ORDER BY {order_by})")?;
             }
         }
         Ok(())
@@ -3507,8 +3495,8 @@ impl fmt::Display for TransactionMode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use TransactionMode::*;
         match self {
-            AccessMode(access_mode) => write!(f, "{}", access_mode),
-            IsolationLevel(iso_level) => write!(f, "ISOLATION LEVEL {}", iso_level),
+            AccessMode(access_mode) => write!(f, "{access_mode}"),
+            IsolationLevel(iso_level) => write!(f, "ISOLATION LEVEL {iso_level}"),
         }
     }
 }
@@ -3568,7 +3556,7 @@ impl fmt::Display for ShowStatementFilter {
         match self {
             Like(pattern) => write!(f, "LIKE '{}'", value::escape_single_quote_string(pattern)),
             ILike(pattern) => write!(f, "ILIKE {}", value::escape_single_quote_string(pattern)),
-            Where(expr) => write!(f, "WHERE {}", expr),
+            Where(expr) => write!(f, "WHERE {expr}"),
         }
     }
 }
@@ -3677,15 +3665,15 @@ impl fmt::Display for CopyOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use CopyOption::*;
         match self {
-            Format(name) => write!(f, "FORMAT {}", name),
+            Format(name) => write!(f, "FORMAT {name}"),
             Freeze(true) => write!(f, "FREEZE"),
             Freeze(false) => write!(f, "FREEZE FALSE"),
-            Delimiter(char) => write!(f, "DELIMITER '{}'", char),
+            Delimiter(char) => write!(f, "DELIMITER '{char}'"),
             Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),
             Header(true) => write!(f, "HEADER"),
             Header(false) => write!(f, "HEADER FALSE"),
-            Quote(char) => write!(f, "QUOTE '{}'", char),
-            Escape(char) => write!(f, "ESCAPE '{}'", char),
+            Quote(char) => write!(f, "QUOTE '{char}'"),
+            Escape(char) => write!(f, "ESCAPE '{char}'"),
             ForceQuote(columns) => write!(f, "FORCE_QUOTE ({})", display_comma_separated(columns)),
             ForceNotNull(columns) => {
                 write!(f, "FORCE_NOT_NULL ({})", display_comma_separated(columns))
@@ -3718,7 +3706,7 @@ impl fmt::Display for CopyLegacyOption {
         use CopyLegacyOption::*;
         match self {
             Binary => write!(f, "BINARY"),
-            Delimiter(char) => write!(f, "DELIMITER '{}'", char),
+            Delimiter(char) => write!(f, "DELIMITER '{char}'"),
             Null(string) => write!(f, "NULL '{}'", value::escape_single_quote_string(string)),
             Csv(opts) => write!(f, "CSV {}", display_separated(opts, " ")),
         }
@@ -3749,8 +3737,8 @@ impl fmt::Display for CopyLegacyCsvOption {
         use CopyLegacyCsvOption::*;
         match self {
             Header => write!(f, "HEADER"),
-            Quote(char) => write!(f, "QUOTE '{}'", char),
-            Escape(char) => write!(f, "ESCAPE '{}'", char),
+            Quote(char) => write!(f, "QUOTE '{char}'"),
+            Escape(char) => write!(f, "ESCAPE '{char}'"),
             ForceQuote(columns) => write!(f, "FORCE QUOTE {}", display_comma_separated(columns)),
             ForceNotNull(columns) => {
                 write!(f, "FORCE NOT NULL {}", display_comma_separated(columns))
@@ -3787,7 +3775,7 @@ impl fmt::Display for MergeClause {
             } => {
                 write!(f, " MATCHED")?;
                 if let Some(pred) = predicate {
-                    write!(f, " AND {}", pred)?;
+                    write!(f, " AND {pred}")?;
                 }
                 write!(
                     f,
@@ -3798,7 +3786,7 @@ impl fmt::Display for MergeClause {
             MatchedDelete(predicate) => {
                 write!(f, " MATCHED")?;
                 if let Some(pred) = predicate {
-                    write!(f, " AND {}", pred)?;
+                    write!(f, " AND {pred}")?;
                 }
                 write!(f, " THEN DELETE")
             }
@@ -3809,7 +3797,7 @@ impl fmt::Display for MergeClause {
             } => {
                 write!(f, " NOT MATCHED")?;
                 if let Some(pred) = predicate {
-                    write!(f, " AND {}", pred)?;
+                    write!(f, " AND {pred}")?;
                 }
                 write!(
                     f,
@@ -3944,14 +3932,14 @@ impl OperateFunctionArg {
 impl fmt::Display for OperateFunctionArg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(mode) = &self.mode {
-            write!(f, "{} ", mode)?;
+            write!(f, "{mode} ")?;
         }
         if let Some(name) = &self.name {
-            write!(f, "{} ", name)?;
+            write!(f, "{name} ")?;
         }
         write!(f, "{}", self.data_type)?;
         if let Some(default_expr) = &self.default_expr {
-            write!(f, " = {}", default_expr)?;
+            write!(f, " = {default_expr}")?;
         }
         Ok(())
     }
@@ -4164,14 +4152,14 @@ mod tests {
             vec![Expr::Identifier(Ident::new("a"))],
             vec![Expr::Identifier(Ident::new("b"))],
         ]);
-        assert_eq!("GROUPING SETS ((a), (b))", format!("{}", grouping_sets));
+        assert_eq!("GROUPING SETS ((a), (b))", format!("{grouping_sets}"));
 
         // a and b in the same group
         let grouping_sets = Expr::GroupingSets(vec![vec![
             Expr::Identifier(Ident::new("a")),
             Expr::Identifier(Ident::new("b")),
         ]]);
-        assert_eq!("GROUPING SETS ((a, b))", format!("{}", grouping_sets));
+        assert_eq!("GROUPING SETS ((a, b))", format!("{grouping_sets}"));
 
         // (a, b) and (c, d) in different group
         let grouping_sets = Expr::GroupingSets(vec![
@@ -4184,28 +4172,25 @@ mod tests {
                 Expr::Identifier(Ident::new("d")),
             ],
         ]);
-        assert_eq!(
-            "GROUPING SETS ((a, b), (c, d))",
-            format!("{}", grouping_sets)
-        );
+        assert_eq!("GROUPING SETS ((a, b), (c, d))", format!("{grouping_sets}"));
     }
 
     #[test]
     fn test_rollup_display() {
         let rollup = Expr::Rollup(vec![vec![Expr::Identifier(Ident::new("a"))]]);
-        assert_eq!("ROLLUP (a)", format!("{}", rollup));
+        assert_eq!("ROLLUP (a)", format!("{rollup}"));
 
         let rollup = Expr::Rollup(vec![vec![
             Expr::Identifier(Ident::new("a")),
             Expr::Identifier(Ident::new("b")),
         ]]);
-        assert_eq!("ROLLUP ((a, b))", format!("{}", rollup));
+        assert_eq!("ROLLUP ((a, b))", format!("{rollup}"));
 
         let rollup = Expr::Rollup(vec![
             vec![Expr::Identifier(Ident::new("a"))],
             vec![Expr::Identifier(Ident::new("b"))],
         ]);
-        assert_eq!("ROLLUP (a, b)", format!("{}", rollup));
+        assert_eq!("ROLLUP (a, b)", format!("{rollup}"));
 
         let rollup = Expr::Rollup(vec![
             vec![Expr::Identifier(Ident::new("a"))],
@@ -4215,25 +4200,25 @@ mod tests {
             ],
             vec![Expr::Identifier(Ident::new("d"))],
         ]);
-        assert_eq!("ROLLUP (a, (b, c), d)", format!("{}", rollup));
+        assert_eq!("ROLLUP (a, (b, c), d)", format!("{rollup}"));
     }
 
     #[test]
     fn test_cube_display() {
         let cube = Expr::Cube(vec![vec![Expr::Identifier(Ident::new("a"))]]);
-        assert_eq!("CUBE (a)", format!("{}", cube));
+        assert_eq!("CUBE (a)", format!("{cube}"));
 
         let cube = Expr::Cube(vec![vec![
             Expr::Identifier(Ident::new("a")),
             Expr::Identifier(Ident::new("b")),
         ]]);
-        assert_eq!("CUBE ((a, b))", format!("{}", cube));
+        assert_eq!("CUBE ((a, b))", format!("{cube}"));
 
         let cube = Expr::Cube(vec![
             vec![Expr::Identifier(Ident::new("a"))],
             vec![Expr::Identifier(Ident::new("b"))],
         ]);
-        assert_eq!("CUBE (a, b)", format!("{}", cube));
+        assert_eq!("CUBE (a, b)", format!("{cube}"));
 
         let cube = Expr::Cube(vec![
             vec![Expr::Identifier(Ident::new("a"))],
@@ -4243,6 +4228,6 @@ mod tests {
             ],
             vec![Expr::Identifier(Ident::new("d"))],
         ]);
-        assert_eq!("CUBE (a, (b, c), d)", format!("{}", cube));
+        assert_eq!("CUBE (a, (b, c), d)", format!("{cube}"));
     }
 }

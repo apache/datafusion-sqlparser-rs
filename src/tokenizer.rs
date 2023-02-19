@@ -58,6 +58,10 @@ pub enum Token {
     DoubleQuotedString(String),
     /// Dollar quoted string: i.e: $$string$$ or $tag_name$string$tag_name$
     DollarQuotedString(DollarQuotedString),
+    /// Byte string literal: i.e: b'string' or B'string'
+    SingleQuotedByteStringLiteral(String),
+    /// Byte string literal: i.e: b"string" or B"string"
+    DoubleQuotedByteStringLiteral(String),
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
     /// "escaped" string literal, which are an extension to the SQL standard: i.e: e'first \n second' or E 'first \n second'
@@ -189,6 +193,15 @@ impl fmt::Display for Token {
             Token::NationalStringLiteral(ref s) => write!(f, "N'{s}'"),
             Token::EscapedStringLiteral(ref s) => write!(f, "E'{s}'"),
             Token::HexStringLiteral(ref s) => write!(f, "X'{s}'"),
+            Token::Char(ref c) => write!(f, "{}", c),
+            Token::SingleQuotedString(ref s) => write!(f, "'{}'", s),
+            Token::DoubleQuotedString(ref s) => write!(f, "\"{}\"", s),
+            Token::DollarQuotedString(ref s) => write!(f, "{}", s),
+            Token::SingleQuotedByteStringLiteral(ref s) => write!(f, "B'{}'", s),
+            Token::DoubleQuotedByteStringLiteral(ref s) => write!(f, "B\"{}\"", s),
+            Token::NationalStringLiteral(ref s) => write!(f, "N'{}'", s),
+            Token::EscapedStringLiteral(ref s) => write!(f, "E'{}'", s),
+            Token::HexStringLiteral(ref s) => write!(f, "X'{}'", s),
             Token::Comma => f.write_str(","),
             Token::Whitespace(ws) => write!(f, "{ws}"),
             Token::DoubleEq => f.write_str("=="),
@@ -492,6 +505,25 @@ impl<'a> Tokenizer<'a> {
                         chars.next();
                     }
                     Ok(Some(Token::Whitespace(Whitespace::Newline)))
+                }
+                // BigQuery uses b or B for byte string literal
+                b @ 'B' | b @ 'b' => {
+                    chars.next(); // consume
+                    match chars.peek() {
+                        Some('\'') => {
+                            let s = self.tokenize_quoted_string(chars, '\'')?;
+                            Ok(Some(Token::SingleQuotedByteStringLiteral(s)))
+                        }
+                        Some('\"') => {
+                            let s = self.tokenize_quoted_string(chars, '\"')?;
+                            Ok(Some(Token::DoubleQuotedByteStringLiteral(s)))
+                        }
+                        _ => {
+                            // regular identifier starting with an "b" or "B"
+                            let s = self.tokenize_word(b, chars);
+                            Ok(Some(Token::make_word(&s, None)))
+                        }
+                    }
                 }
                 // Redshift uses lower case n for national string literal
                 n @ 'N' | n @ 'n' => {

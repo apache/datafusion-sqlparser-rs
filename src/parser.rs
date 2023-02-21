@@ -195,12 +195,20 @@ impl std::error::Error for ParserError {}
 // By default, allow expressions up to this deep before erroring
 const DEFAULT_REMAINING_DEPTH: usize = 50;
 
+#[derive(Default)]
+pub struct ParserOptions {
+    pub trailing_commas: bool,
+}
+
 pub struct Parser<'a> {
     tokens: Vec<TokenWithLocation>,
     /// The index of the first unprocessed token in `self.tokens`
     index: usize,
     /// The current dialect to use
     dialect: &'a dyn Dialect,
+    /// Additional options that allow you to mix & match behavior otherwise
+    /// constrained to certain dialects (e.g. trailing commas)
+    options: ParserOptions,
     /// ensure the stack does not overflow by limiting recusion depth
     recursion_counter: RecursionCounter,
 }
@@ -222,11 +230,16 @@ impl<'a> Parser<'a> {
     /// # }
     /// ```
     pub fn new(dialect: &'a dyn Dialect) -> Self {
+        Self::new_with_options(dialect, ParserOptions::default())
+    }
+
+    pub fn new_with_options(dialect: &'a dyn Dialect, options: ParserOptions) -> Self {
         Self {
             tokens: vec![],
             index: 0,
             dialect,
             recursion_counter: RecursionCounter::new(DEFAULT_REMAINING_DEPTH),
+            options,
         }
     }
 
@@ -2196,29 +2209,19 @@ impl<'a> Parser<'a> {
 
     /// Parse a comma-separated list of 1+ SelectItem
     pub fn parse_projection(&mut self) -> Result<Vec<SelectItem>, ParserError> {
-        let mut values = vec![];
-        loop {
-            values.push(self.parse_select_item()?);
-            if !self.consume_token(&Token::Comma) {
-                break;
-            } else if dialect_of!(self is BigQueryDialect) {
-                // BigQuery allows trailing commas.
-                // e.g. `SELECT 1, 2, FROM t`
-                // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#trailing_commas
-                match self.peek_token().token {
-                    Token::Word(kw)
-                        if keywords::RESERVED_FOR_COLUMN_ALIAS
-                            .iter()
-                            .any(|d| kw.keyword == *d) =>
-                    {
-                        break;
-                    }
-                    Token::RParen | Token::EOF => break,
-                    _ => continue,
-                }
-            }
-        }
-        Ok(values)
+        // BigQuery allows trailing commas, but only in project lists
+        // e.g. `SELECT 1, 2, FROM t`
+        // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#trailing_commas
+        //
+        // This pattern could be captured better with RAII type semantics, but it's quite a bit of
+        // code to add for just one case, so we'll just do it manually here.
+        let old_value = self.options.trailing_commas;
+        self.options.trailing_commas |= dialect_of!(self is BigQueryDialect);
+
+        let ret = self.parse_comma_separated(|p| p.parse_select_item());
+        self.options.trailing_commas = old_value;
+
+        ret
     }
 
     /// Parse a comma-separated list of 1+ items accepted by `F`
@@ -2231,6 +2234,18 @@ impl<'a> Parser<'a> {
             values.push(f(self)?);
             if !self.consume_token(&Token::Comma) {
                 break;
+            } else if self.options.trailing_commas {
+                match self.peek_token().token {
+                    Token::Word(kw)
+                        if keywords::RESERVED_FOR_COLUMN_ALIAS
+                            .iter()
+                            .any(|d| kw.keyword == *d) =>
+                    {
+                        break;
+                    }
+                    Token::RParen | Token::SemiColon | Token::EOF => break,
+                    _ => continue,
+                }
             }
         }
         Ok(values)

@@ -535,7 +535,7 @@ impl fmt::Display for ExceptSelectItem {
 ///
 /// # Syntax
 /// ```plaintext
-/// REPLACE <new_expr> AS <col_name>
+/// REPLACE <new_expr> [AS] <col_name>
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -545,15 +545,15 @@ pub enum ReplaceSelectItem {
     ///
     /// # Syntax
     /// ```plaintext
-    /// <col_name> AS <col_alias>
+    /// <col_name> [AS] <col_alias>
     /// ```
-    Single(Box<SelectItem>),
+    Single(Box<ReplaceSelectElement>),
     /// Multiple column names with aliases inside parenthesis.
     /// # Syntax
     /// ```plaintext
-    /// (<col_name> AS <col_alias>, <col_name> AS <col_alias>, ...)
+    /// (<col_name> [AS] <col_alias>, <col_name> [AS] <col_alias>, ...)
     /// ```
-    Multiple(Vec<Box<SelectItem>>),
+    Multiple(Vec<Box<ReplaceSelectElement>>),
 }
 
 impl fmt::Display for ReplaceSelectItem {
@@ -568,6 +568,27 @@ impl fmt::Display for ReplaceSelectItem {
             }
         }
         Ok(())
+    }
+}
+
+/// # Syntax
+/// ```plaintext
+/// <expr> [AS] <column_name>
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+pub struct ReplaceSelectElement {
+    pub expr: Expr,
+    pub colum_name: Ident,
+    pub as_keyword: bool,
+}
+
+impl fmt::Display for ReplaceSelectElement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.as_keyword {
+            write!(f, "{} AS {}", self.expr, self.colum_name)
+        } else {
+            write!(f, "{} {}", self.expr, self.colum_name)
+        }
     }
 }
 

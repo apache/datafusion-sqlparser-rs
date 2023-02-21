@@ -6254,19 +6254,30 @@ impl<'a> Parser<'a> {
     ) -> Result<Option<ReplaceSelectItem>, ParserError> {
         let opt_replace = if self.parse_keyword(Keyword::REPLACE) {
             if self.consume_token(&Token::LParen) {
-                let idents =
-                    self.parse_comma_separated(|parser| Ok(Box::new(parser.parse_select_item()?)))?;
+                let items = self.parse_comma_separated(|parser| {
+                    Ok(Box::new(parser.parse_replace_elements()?))
+                })?;
                 self.expect_token(&Token::RParen)?;
-                Some(ReplaceSelectItem::Multiple(idents))
+                Some(ReplaceSelectItem { items })
             } else {
-                let ident = self.parse_select_item()?;
-                Some(ReplaceSelectItem::Single(Box::new(ident)))
+                let tok = self.next_token();
+                return self.expected("( after REPLACE but", tok);
             }
         } else {
             None
         };
 
         Ok(opt_replace)
+    }
+    pub fn parse_replace_elements(&mut self) -> Result<ReplaceSelectElement, ParserError> {
+        let expr = self.parse_expr()?;
+        let as_keyword = self.parse_keyword(Keyword::AS);
+        let ident = self.parse_identifier()?;
+        Ok(ReplaceSelectElement {
+            expr,
+            colum_name: ident,
+            as_keyword,
+        })
     }
 
     /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)

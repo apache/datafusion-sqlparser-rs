@@ -540,33 +540,21 @@ impl fmt::Display for ExceptSelectItem {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum ReplaceSelectItem {
-    /// Single column name with alias without parenthesis.
-    ///
+pub struct ReplaceSelectItem {
     /// # Syntax
     /// ```plaintext
-    /// <col_name> [AS] <col_alias>
+    /// (<col_name> [AS] <col_alias>)
     /// ```
-    Single(Box<ReplaceSelectElement>),
-    /// Multiple column names with aliases inside parenthesis.
-    /// # Syntax
     /// ```plaintext
     /// (<col_name> [AS] <col_alias>, <col_name> [AS] <col_alias>, ...)
     /// ```
-    Multiple(Vec<Box<ReplaceSelectElement>>),
+    pub items: Vec<Box<ReplaceSelectElement>>,
 }
 
 impl fmt::Display for ReplaceSelectItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "REPLACE")?;
-        match self {
-            Self::Single(column) => {
-                write!(f, " {column}")?;
-            }
-            Self::Multiple(columns) => {
-                write!(f, " ({})", display_comma_separated(columns))?;
-            }
-        }
+        write!(f, " ({})", display_comma_separated(&self.items))?;
         Ok(())
     }
 }

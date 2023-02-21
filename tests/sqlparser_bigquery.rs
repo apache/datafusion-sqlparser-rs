@@ -356,7 +356,10 @@ fn test_select_wildcard_with_replace() {
                     as_keyword: true,
                 }),
                 Box::new(ReplaceSelectElement {
+                    #[cfg(not(feature = "bigdecimal"))]
                     expr: Expr::Value(Value::Number("3".to_string(), false)),
+                    #[cfg(feature = "bigdecimal")]
+                    expr: Expr::Value(Value::Number(BigDecimal::from_str("3").unwrap(), false)),
                     colum_name: Ident::new("order_id"),
                     as_keyword: true,
                 }),

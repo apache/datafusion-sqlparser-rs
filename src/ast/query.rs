@@ -535,19 +535,13 @@ impl fmt::Display for ExceptSelectItem {
 ///
 /// # Syntax
 /// ```plaintext
-/// REPLACE <new_expr> [AS] <col_name>
+/// REPLACE (<new_expr> [AS] <col_name>)
+/// REPLACE (<col_name> [AS] <col_alias>, <col_name> [AS] <col_alias>, ...)
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ReplaceSelectItem {
-    /// # Syntax
-    /// ```plaintext
-    /// (<col_name> [AS] <col_alias>)
-    /// ```
-    /// ```plaintext
-    /// (<col_name> [AS] <col_alias>, <col_name> [AS] <col_alias>, ...)
-    /// ```
     pub items: Vec<Box<ReplaceSelectElement>>,
 }
 
@@ -564,6 +558,8 @@ impl fmt::Display for ReplaceSelectItem {
 /// <expr> [AS] <column_name>
 /// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ReplaceSelectElement {
     pub expr: Expr,
     pub colum_name: Ident,

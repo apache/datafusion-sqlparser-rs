@@ -45,6 +45,10 @@ pub enum Value {
     SingleQuotedByteStringLiteral(String),
     /// B"string value"
     DoubleQuotedByteStringLiteral(String),
+    /// R'string value' or r'string value'
+    SingleQuotedRawStringLiteral(String),
+    /// R"string value" or r"string value"
+    DoubleQuotedRawStringLiteral(String),
     /// N'string value'
     NationalStringLiteral(String),
     /// X'hex value'
@@ -74,6 +78,8 @@ impl fmt::Display for Value {
             Value::Boolean(v) => write!(f, "{v}"),
             Value::SingleQuotedByteStringLiteral(v) => write!(f, "B'{v}'"),
             Value::DoubleQuotedByteStringLiteral(v) => write!(f, "B\"{v}\""),
+            Value::SingleQuotedRawStringLiteral(v) => write!(f, "R'{v}'"),
+            Value::DoubleQuotedRawStringLiteral(v) => write!(f, "R\"{v}\""),
             Value::Null => write!(f, "NULL"),
             Value::Placeholder(v) => write!(f, "{v}"),
             Value::UnQuotedString(v) => write!(f, "{v}"),

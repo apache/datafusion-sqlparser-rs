@@ -4392,6 +4392,8 @@ impl<'a> Parser<'a> {
                 Keyword::DEC => Ok(DataType::Dec(
                     self.parse_exact_number_optional_precision_scale()?,
                 )),
+                Keyword::BIGNUMERIC => Ok(DataType::BigNumeric),
+                Keyword::BIGDECIMAL => Ok(DataType::BigDecimal),
                 Keyword::ENUM => Ok(DataType::Enum(self.parse_string_values()?)),
                 Keyword::SET => Ok(DataType::Set(self.parse_string_values()?)),
                 Keyword::ARRAY => {

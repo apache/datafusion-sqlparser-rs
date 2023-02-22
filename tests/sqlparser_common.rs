@@ -3664,8 +3664,8 @@ fn parse_bignumeric_keyword() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::BIGNUMERIC,
-            value: r#""#.into()
+            data_type: DataType::BigNumeric,
+            value: r#"0"#.into()
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -3674,8 +3674,8 @@ fn parse_bignumeric_keyword() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::BIGNUMERIC,
-            value: r#""#.into()
+            data_type: DataType::BigNumeric,
+            value: r#"123456"#.into()
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -3684,8 +3684,8 @@ fn parse_bignumeric_keyword() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::BIGNUMERIC,
-            value: r#""#.into()
+            data_type: DataType::BigNumeric,
+            value: r#"-3.14"#.into()
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -3694,8 +3694,8 @@ fn parse_bignumeric_keyword() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::BIGNUMERIC,
-            value: r#""#.into()
+            data_type: DataType::BigNumeric,
+            value: r#"-0.54321"#.into()
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -3704,8 +3704,8 @@ fn parse_bignumeric_keyword() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::BIGNUMERIC,
-            value: r#""#.into()
+            data_type: DataType::BigNumeric,
+            value: r#"1.23456e05"#.into()
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -3714,8 +3714,8 @@ fn parse_bignumeric_keyword() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::TypedString {
-            data_type: DataType::BIGNUMERIC,
-            value: r#""#.into()
+            data_type: DataType::BigNumeric,
+            value: r#"-9.876e-3"#.into()
         },
         expr_from_projection(only(&select.projection)),
     );

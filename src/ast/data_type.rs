@@ -79,6 +79,16 @@ pub enum DataType {
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
     Decimal(ExactNumberInfo),
+
+    /// BigNumeric type used in BigQuery
+    ///
+    /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#bignumeric_literals
+    BigNumeric,
+
+    /// This is alias for BigNumeric type used in BigQuery
+    ///
+    /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#bignumeric_literals
+    BigDecimal,
     /// Dec type with optional precision and scale e.g. DEC(10,2), [standard][1]
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type
@@ -196,6 +206,8 @@ impl fmt::Display for DataType {
             DataType::Dec(info) => {
                 write!(f, "DEC{info}")
             }
+            DataType::BigNumeric => write!(f, "BIGNUMERIC"),
+            DataType::BigDecimal => write!(f, "BIGDECIMAL"),
             DataType::Float(size) => format_type_with_optional_length(f, "FLOAT", size, false),
             DataType::TinyInt(zerofill) => {
                 format_type_with_optional_length(f, "TINYINT", zerofill, false)

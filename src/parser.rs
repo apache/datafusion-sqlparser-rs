@@ -1613,11 +1613,13 @@ impl<'a> Parser<'a> {
             Token::Mod => Some(BinaryOperator::Modulo),
             Token::StringConcat => Some(BinaryOperator::StringConcat),
             Token::Pipe => Some(BinaryOperator::BitwiseOr),
-            Token::Caret => if dialect_of!(self is PostgreSqlDialect) {
-                Some(BinaryOperator::PGExp)
-            } else {
-                Some(BinaryOperator::BitwiseXor)
-            },
+            Token::Caret => {
+                if dialect_of!(self is PostgreSqlDialect) {
+                    Some(BinaryOperator::PGExp)
+                } else {
+                    Some(BinaryOperator::BitwiseXor)
+                }
+            }
             Token::Ampersand => Some(BinaryOperator::BitwiseAnd),
             Token::Div => Some(BinaryOperator::Divide),
             Token::ShiftLeft if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {

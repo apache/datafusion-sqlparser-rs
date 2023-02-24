@@ -29,8 +29,8 @@ use sqlparser::dialect::{
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
 use test_utils::{
-    all_dialects, all_dialects_but_pg, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
-    TestedDialects,
+    all_dialects, all_dialects_but_pg, assert_eq_vec, expr_from_projection, join, number, only,
+    table, table_alias, TestedDialects,
 };
 
 #[macro_use]

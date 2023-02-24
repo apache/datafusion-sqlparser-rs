@@ -146,6 +146,23 @@ pub fn all_dialects() -> TestedDialects {
     }
 }
 
+/// selects all dialects but PostgreSQL
+pub fn all_dialects_but_pg() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(MsSqlDialect {}),
+            Box::new(AnsiDialect {}),
+            Box::new(SnowflakeDialect {}),
+            Box::new(HiveDialect {}),
+            Box::new(RedshiftSqlDialect {}),
+            Box::new(MySqlDialect {}),
+            Box::new(BigQueryDialect {}),
+            Box::new(SQLiteDialect {}),
+        ],
+    }
+}
+
 pub fn assert_eq_vec<T: ToString>(expected: &[&str], actual: &[T]) {
     assert_eq!(
         expected,

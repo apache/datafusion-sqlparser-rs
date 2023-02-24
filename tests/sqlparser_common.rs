@@ -29,7 +29,7 @@ use sqlparser::dialect::{
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
 use test_utils::{
-    all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
+    all_dialects, all_dialects_but_pg, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
     TestedDialects,
 };
 
@@ -1231,13 +1231,13 @@ fn parse_string_agg() {
 #[test]
 fn parse_bitwise_ops() {
     let bitwise_ops = &[
-        ("^", BinaryOperator::BitwiseXor),
-        ("|", BinaryOperator::BitwiseOr),
-        ("&", BinaryOperator::BitwiseAnd),
+        ("^", BinaryOperator::BitwiseXor, all_dialects_but_pg()),
+        ("|", BinaryOperator::BitwiseOr, all_dialects()),
+        ("&", BinaryOperator::BitwiseAnd, all_dialects()),
     ];
 
-    for (str_op, op) in bitwise_ops {
-        let select = verified_only_select(&format!("SELECT a {} b", &str_op));
+    for (str_op, op, dialects) in bitwise_ops {
+        let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("a"))),

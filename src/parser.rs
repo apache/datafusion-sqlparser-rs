@@ -745,7 +745,7 @@ impl<'a> Parser<'a> {
                 Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
                     self.parse_match_against()
                 }
-                Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
+                Keyword::STRUCT if dialect_of!(self is BigQueryDialect) => {
                     self.parse_struct_literal()
                 }
                 // Here `w` is a word, check if it's a part of a multi-part
@@ -845,10 +845,6 @@ impl<'a> Parser<'a> {
                         match exprs.len() {
                             0 => unreachable!(), // parse_comma_separated ensures 1 or more
                             1 => Expr::Nested(Box::new(exprs.into_iter().next().unwrap())),
-                            _ if dialect_of!(self is BigQueryDialect) => Expr::Struct {
-                                expr: Box::new(StructExpr::Tuple(exprs)),
-                                type_ann: None,
-                            },
                             _ => Expr::Tuple(exprs),
                         }
                     };
@@ -1642,7 +1638,7 @@ impl<'a> Parser<'a> {
                 let exprs = self.parse_comma_separated(Parser::parse_struct_field_name)?;
                 self.next_token();
                 Ok(Expr::Struct {
-                    expr: Box::new(StructExpr::StructFiled(exprs)),
+                    expr: Box::new(StructExpr(exprs)),
                     type_ann: Some(ann),
                 })
             }
@@ -1652,7 +1648,7 @@ impl<'a> Parser<'a> {
                 let exprs = self.parse_comma_separated(Parser::parse_struct_field_name)?;
                 self.expect_token(&Token::RParen)?;
                 Ok(Expr::Struct {
-                    expr: Box::new(StructExpr::StructFiled(exprs)),
+                    expr: Box::new(StructExpr(exprs)),
                     type_ann: None,
                 })
             }
@@ -1678,7 +1674,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_struct_type_ann(&mut self) -> Result<StructTypeAnn, ParserError> {
         match self.peek_token().token {
-            Token::Word(kw) => match Parser::lookup_struct_type_kw(kw) {
+            Token::Word(kw) => match Parser::lookup_struct_type_kw(&kw) {
                 Some(ty) => {
                     self.next_token();
                     Ok(StructTypeAnn {
@@ -1686,20 +1682,20 @@ impl<'a> Parser<'a> {
                         field_type: ty,
                     })
                 }
-                None => Err(ParserError::ParserError(
-                    "unexpected keyword: {kw}".to_owned(),
-                )),
+                None => Err(ParserError::ParserError(format!(
+                    "unexpected keyword: {kw}"
+                ))),
             },
             _ => {
                 let field_name = self.parse_identifier()?;
                 let ty = match self.peek_token().token {
                     Token::Word(kw) => {
-                        if let Some(ty) = Parser::lookup_struct_type_kw(kw) {
+                        if let Some(ty) = Parser::lookup_struct_type_kw(&kw) {
                             ty
                         } else {
-                            return Err(ParserError::ParserError(
-                                "unexpected keyword: {kw}".to_owned(),
-                            ));
+                            return Err(ParserError::ParserError(format!(
+                                "unexpected keyword: {kw}"
+                            )));
                         }
                     }
                     tok => return Err(ParserError::ParserError(format!("invalid token: {tok}"))),
@@ -1712,17 +1708,26 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn lookup_struct_type_kw(kw: Word) -> Option<StructFieldType> {
-        let keywords = [Keyword::STRING, Keyword::NUMERIC];
-        for k in keywords.iter() {
-            if kw.keyword == *k {
-                match k {
-                    Keyword::STRING => return Some(StructFieldType::String),
-                    _ => todo!(),
-                }
-            }
+    pub fn lookup_struct_type_kw(kw: &Word) -> Option<StructFieldType> {
+        match kw.keyword {
+            // Keyword::Array => return Some(StructFieldType::Array(_)),
+            Keyword::BIGNUMERIC => Some(StructFieldType::BigNumeric),
+            Keyword::BOOL => Some(StructFieldType::Bool),
+            Keyword::BYTES => Some(StructFieldType::Bytes),
+            Keyword::DATE => Some(StructFieldType::Date),
+            Keyword::DATETIME => Some(StructFieldType::DateTime),
+            Keyword::FLOAT64 => Some(StructFieldType::Float64),
+            Keyword::GEOGRAPHY => Some(StructFieldType::Geography),
+            Keyword::INT64 => Some(StructFieldType::Int64),
+            Keyword::INTERVAL => Some(StructFieldType::Interval),
+            Keyword::JSON => Some(StructFieldType::Json),
+            Keyword::NUMERIC => Some(StructFieldType::Numeric),
+            Keyword::STRING => Some(StructFieldType::String),
+            // Keyword::STRUCT => return Some(StructFieldType::Struct(_)),
+            Keyword::TIME => Some(StructFieldType::Time),
+            Keyword::TIMESTAMP => Some(StructFieldType::Timestamp),
+            _ => None,
         }
-        None
     }
     /// Parse an operator following an expression
     pub fn parse_infix(&mut self, expr: Expr, precedence: u8) -> Result<Expr, ParserError> {

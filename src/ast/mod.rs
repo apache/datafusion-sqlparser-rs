@@ -254,21 +254,11 @@ impl fmt::Display for JsonOperator {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum StructExpr {
-    Tuple(Vec<Expr>),
-    StructFiled(Vec<ExprWithFieldName>),
-}
+pub struct StructExpr(pub Vec<ExprWithFieldName>);
 
 impl fmt::Display for StructExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            StructExpr::Tuple(exprs) => {
-                write!(f, "({})", display_comma_separated(exprs))
-            }
-            StructExpr::StructFiled(exprs) => {
-                write!(f, "({})", display_comma_separated(exprs))
-            }
-        }
+        write!(f, "({})", display_comma_separated(&self.0))
     }
 }
 
@@ -940,10 +930,7 @@ impl fmt::Display for Expr {
                 if let Some(ann) = type_ann {
                     write!(f, "STRUCT<{}>{expr}", display_comma_separated(ann))
                 } else {
-                    match &**expr {
-                        StructExpr::Tuple(_) => write!(f, "{expr}"),
-                        StructExpr::StructFiled(_) => write!(f, "STRUCT{expr}"),
-                    }
+                    write!(f, "STRUCT{expr}")
                 }
             }
             Expr::ArrayIndex { obj, indexes } => {

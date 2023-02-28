@@ -53,35 +53,33 @@ fn parse_byte_literal() {
 #[test]
 fn parse_raw_literal() {
     let sql = r#"SELECT R'abc', R"abc", R'f\(abc,(.*),def\)', R"f\(abc,(.*),def\)""#;
-
-    let select = bigquery().verified_only_select(sql);
-    assert_eq!(4, select.projection.len());
-    assert_eq!(
-        &Expr::Value(Value::SingleQuotedRawStringLiteral("abc".to_string())),
-        expr_from_projection(&select.projection[0])
-    );
-    assert_eq!(
-        &Expr::Value(Value::DoubleQuotedRawStringLiteral("abc".to_string())),
-        expr_from_projection(&select.projection[1])
-    );
-    assert_eq!(
-        &Expr::Value(Value::SingleQuotedRawStringLiteral(
-            r#"f\(abc,(.*),def\)"#.to_string()
-        )),
-        expr_from_projection(&select.projection[2])
-    );
-    assert_eq!(
-        &Expr::Value(Value::DoubleQuotedRawStringLiteral(
-            r#"f\(abc,(.*),def\)"#.to_string()
-        )),
-        expr_from_projection(&select.projection[3])
-    );
-
-    let sql = r#"SELECT r'abc', r"abc", r'f\(abc,(.*),def\)', r"f\(abc,(.*),def\)""#;
-    bigquery().one_statement_parses_to(
+    let stmt = bigquery().one_statement_parses_to(
         sql,
-        r#"SELECT R'abc', R"abc", R'f\(abc,(.*),def\)', R"f\(abc,(.*),def\)""#,
+        r#"SELECT R'abc', R'abc', R'f\(abc,(.*),def\)', R'f\(abc,(.*),def\)'"#,
     );
+    if let Statement::Query(query) = stmt {
+        if let SetExpr::Select(select) = *query.body {
+            assert_eq!(4, select.projection.len());
+            assert_eq!(
+                &Expr::Value(Value::RawStringLiteral("abc".to_string())),
+                expr_from_projection(&select.projection[0])
+            );
+            assert_eq!(
+                &Expr::Value(Value::RawStringLiteral("abc".to_string())),
+                expr_from_projection(&select.projection[1])
+            );
+            assert_eq!(
+                &Expr::Value(Value::RawStringLiteral(r#"f\(abc,(.*),def\)"#.to_string())),
+                expr_from_projection(&select.projection[2])
+            );
+            assert_eq!(
+                &Expr::Value(Value::RawStringLiteral(r#"f\(abc,(.*),def\)"#.to_string())),
+                expr_from_projection(&select.projection[3])
+            );
+            return;
+        }
+    }
+    panic!("invalid query")
 }
 
 #[test]

@@ -792,8 +792,7 @@ impl<'a> Parser<'a> {
             | Token::DollarQuotedString(_)
             | Token::SingleQuotedByteStringLiteral(_)
             | Token::DoubleQuotedByteStringLiteral(_)
-            | Token::SingleQuotedRawStringLiteral(_)
-            | Token::DoubleQuotedRawStringLiteral(_)
+            | Token::RawStringLiteral(_)
             | Token::NationalStringLiteral(_)
             | Token::HexStringLiteral(_) => {
                 self.prev_token();
@@ -4135,12 +4134,7 @@ impl<'a> Parser<'a> {
             Token::DoubleQuotedByteStringLiteral(ref s) => {
                 Ok(Value::DoubleQuotedByteStringLiteral(s.clone()))
             }
-            Token::SingleQuotedRawStringLiteral(ref s) => {
-                Ok(Value::SingleQuotedRawStringLiteral(s.clone()))
-            }
-            Token::DoubleQuotedRawStringLiteral(ref s) => {
-                Ok(Value::DoubleQuotedRawStringLiteral(s.clone()))
-            }
+            Token::RawStringLiteral(ref s) => Ok(Value::RawStringLiteral(s.clone())),
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
             Token::EscapedStringLiteral(ref s) => Ok(Value::EscapedStringLiteral(s.to_string())),
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),

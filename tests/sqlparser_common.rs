@@ -24,13 +24,13 @@ use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, GenericDialect, HiveDialect, MsSqlDialect,
-    MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect
+    MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError};
 use test_utils::{
-    all_dialects, assert_eq_vec, expr_from_projection, join, number, only,
-    table, table_alias, TestedDialects,
+    all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
+    TestedDialects,
 };
 
 #[macro_use]
@@ -1237,7 +1237,11 @@ macro_rules! dialect_is {
 /// selects all dialects but PostgreSQL
 pub fn all_dialects_but_pg() -> TestedDialects {
     TestedDialects {
-        dialects: all_dialects().dialects.into_iter().filter(|x| !dialect_is!(x is PostgreSqlDialect)).collect(),
+        dialects: all_dialects()
+            .dialects
+            .into_iter()
+            .filter(|x| !dialect_is!(x is PostgreSqlDialect))
+            .collect(),
     }
 }
 

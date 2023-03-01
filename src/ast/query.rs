@@ -395,6 +395,7 @@ pub struct WildcardAdditionalOptions {
     /// `[RENAME ...]`.
     pub opt_rename: Option<RenameSelectItem>,
     /// `[REPLACE]`
+    ///  BigQuery syntax: <https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_replace>
     pub opt_replace: Option<ReplaceSelectItem>,
 }
 

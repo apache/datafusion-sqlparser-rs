@@ -8,6 +8,29 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+
+## [0.31.0] 2023-03-1
+
+### Added
+* Support raw string literals for BigQuery dialect (#812) - Thanks @togami2864
+* Support `SELECT * REPLACE <Expr> AS <Identifier>` in BigQuery dialect (#798) - Thanks @togami2864
+* Support byte string literals for BigQuery dialect (#802) - Thanks @togami2864
+* Support  columns definition list for system information functions in RedShift dialect (#769) - Thanks @mskrzypkows
+* Support `TRANSIENT` keyword in Snowflake dialect (#807) - Thanks @mobuchowski
+* Support `JSON` keyword (#799) - Thanks @togami2864
+* Support MySQL Character Set Introducers (#788) - Thanks @mskrzypkows
+
+### Fixed
+
+Fix clippy error in ci (#803) - Thanks @togami2864
+Handle  offset in map key in BigQuery dialect  (#797) - Thanks @Ziinc
+Fix a typo (precendence -> precedence) (#794) - Thanks @SARDONYX-sard
+use post_* visitors for mutable visits (#789) - Thanks @lovasoa
+
+### Changed
+Add another known user (#787) - Thanks @joocer
+
+
 ## [0.30.0] 2023-01-02
 
 ### Added

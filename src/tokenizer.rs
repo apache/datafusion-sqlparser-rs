@@ -62,6 +62,8 @@ pub enum Token {
     SingleQuotedByteStringLiteral(String),
     /// Byte string literal: i.e: b"string" or B"string"
     DoubleQuotedByteStringLiteral(String),
+    /// Raw string literal: i.e: r'string' or R'string' or r"string" or R"string"
+    RawStringLiteral(String),
     /// "National" string literal: i.e: N'string'
     NationalStringLiteral(String),
     /// "escaped" string literal, which are an extension to the SQL standard: i.e: e'first \n second' or E 'first \n second'
@@ -195,6 +197,7 @@ impl fmt::Display for Token {
             Token::HexStringLiteral(ref s) => write!(f, "X'{s}'"),
             Token::SingleQuotedByteStringLiteral(ref s) => write!(f, "B'{s}'"),
             Token::DoubleQuotedByteStringLiteral(ref s) => write!(f, "B\"{s}\""),
+            Token::RawStringLiteral(ref s) => write!(f, "R'{s}'"),
             Token::Comma => f.write_str(","),
             Token::Whitespace(ws) => write!(f, "{ws}"),
             Token::DoubleEq => f.write_str("=="),
@@ -513,6 +516,25 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "b" or "B"
+                            let s = self.tokenize_word(b, chars);
+                            Ok(Some(Token::make_word(&s, None)))
+                        }
+                    }
+                }
+                // BigQuery uses r or R for raw string literal
+                b @ 'R' | b @ 'r' if dialect_of!(self is BigQueryDialect | GenericDialect) => {
+                    chars.next(); // consume
+                    match chars.peek() {
+                        Some('\'') => {
+                            let s = self.tokenize_quoted_string(chars, '\'')?;
+                            Ok(Some(Token::RawStringLiteral(s)))
+                        }
+                        Some('\"') => {
+                            let s = self.tokenize_quoted_string(chars, '\"')?;
+                            Ok(Some(Token::RawStringLiteral(s)))
+                        }
+                        _ => {
+                            // regular identifier starting with an "r" or "R"
                             let s = self.tokenize_word(b, chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }

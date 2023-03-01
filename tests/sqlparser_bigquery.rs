@@ -17,6 +17,11 @@ use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 use test_utils::*;
 
+#[cfg(feature = "bigdecimal")]
+use bigdecimal::*;
+#[cfg(feature = "bigdecimal")]
+use std::str::FromStr;
+
 #[test]
 fn parse_literal_string() {
     let sql = r#"SELECT 'single', "double""#;
@@ -311,6 +316,58 @@ fn test_select_wildcard_with_except() {
             .to_string(),
         "sql parser error: Expected identifier, found: )"
     );
+}
+
+#[test]
+fn test_select_wildcard_with_replace() {
+    let select = bigquery_and_generic()
+        .verified_only_select(r#"SELECT * REPLACE ('widget' AS item_name) FROM orders"#);
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_replace: Some(ReplaceSelectItem {
+            items: vec![Box::new(ReplaceSelectElement {
+                expr: Expr::Value(Value::SingleQuotedString("widget".to_owned())),
+                colum_name: Ident::new("item_name"),
+                as_keyword: true,
+            })],
+        }),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
+
+    let select = bigquery_and_generic().verified_only_select(
+        r#"SELECT * REPLACE (quantity / 2 AS quantity, 3 AS order_id) FROM orders"#,
+    );
+    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
+        opt_replace: Some(ReplaceSelectItem {
+            items: vec![
+                Box::new(ReplaceSelectElement {
+                    expr: Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("quantity"))),
+                        op: BinaryOperator::Divide,
+                        #[cfg(not(feature = "bigdecimal"))]
+                        right: Box::new(Expr::Value(Value::Number("2".to_string(), false))),
+                        #[cfg(feature = "bigdecimal")]
+                        right: Box::new(Expr::Value(Value::Number(
+                            BigDecimal::from_str("2").unwrap(),
+                            false,
+                        ))),
+                    },
+                    colum_name: Ident::new("quantity"),
+                    as_keyword: true,
+                }),
+                Box::new(ReplaceSelectElement {
+                    #[cfg(not(feature = "bigdecimal"))]
+                    expr: Expr::Value(Value::Number("3".to_string(), false)),
+                    #[cfg(feature = "bigdecimal")]
+                    expr: Expr::Value(Value::Number(BigDecimal::from_str("3").unwrap(), false)),
+                    colum_name: Ident::new("order_id"),
+                    as_keyword: true,
+                }),
+            ],
+        }),
+        ..Default::default()
+    });
+    assert_eq!(expected, select.projection[0]);
 }
 
 fn bigquery() -> TestedDialects {

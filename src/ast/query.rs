@@ -394,6 +394,9 @@ pub struct WildcardAdditionalOptions {
     pub opt_except: Option<ExceptSelectItem>,
     /// `[RENAME ...]`.
     pub opt_rename: Option<RenameSelectItem>,
+    /// `[REPLACE]`
+    ///  BigQuery syntax: <https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_replace>
+    pub opt_replace: Option<ReplaceSelectItem>,
 }
 
 impl fmt::Display for WildcardAdditionalOptions {
@@ -406,6 +409,9 @@ impl fmt::Display for WildcardAdditionalOptions {
         }
         if let Some(rename) = &self.opt_rename {
             write!(f, " {rename}")?;
+        }
+        if let Some(replace) = &self.opt_replace {
+            write!(f, " {replace}")?;
         }
         Ok(())
     }
@@ -523,6 +529,51 @@ impl fmt::Display for ExceptSelectItem {
             )?;
         }
         Ok(())
+    }
+}
+
+/// Bigquery `REPLACE` information.
+///
+/// # Syntax
+/// ```plaintext
+/// REPLACE (<new_expr> [AS] <col_name>)
+/// REPLACE (<col_name> [AS] <col_alias>, <col_name> [AS] <col_alias>, ...)
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ReplaceSelectItem {
+    pub items: Vec<Box<ReplaceSelectElement>>,
+}
+
+impl fmt::Display for ReplaceSelectItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "REPLACE")?;
+        write!(f, " ({})", display_comma_separated(&self.items))?;
+        Ok(())
+    }
+}
+
+/// # Syntax
+/// ```plaintext
+/// <expr> [AS] <column_name>
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ReplaceSelectElement {
+    pub expr: Expr,
+    pub colum_name: Ident,
+    pub as_keyword: bool,
+}
+
+impl fmt::Display for ReplaceSelectElement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.as_keyword {
+            write!(f, "{} AS {}", self.expr, self.colum_name)
+        } else {
+            write!(f, "{} {}", self.expr, self.colum_name)
+        }
     }
 }
 

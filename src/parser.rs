@@ -6164,10 +6164,17 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect) {
+            self.parse_optional_select_item_replace()?
+        } else {
+            None
+        };
+
         Ok(WildcardAdditionalOptions {
             opt_exclude,
             opt_except,
             opt_rename,
+            opt_replace,
         })
     }
 
@@ -6239,6 +6246,38 @@ impl<'a> Parser<'a> {
         };
 
         Ok(opt_rename)
+    }
+
+    /// Parse a [`Replace`](ReplaceSelectItem) information for wildcard select items.
+    pub fn parse_optional_select_item_replace(
+        &mut self,
+    ) -> Result<Option<ReplaceSelectItem>, ParserError> {
+        let opt_replace = if self.parse_keyword(Keyword::REPLACE) {
+            if self.consume_token(&Token::LParen) {
+                let items = self.parse_comma_separated(|parser| {
+                    Ok(Box::new(parser.parse_replace_elements()?))
+                })?;
+                self.expect_token(&Token::RParen)?;
+                Some(ReplaceSelectItem { items })
+            } else {
+                let tok = self.next_token();
+                return self.expected("( after REPLACE but", tok);
+            }
+        } else {
+            None
+        };
+
+        Ok(opt_replace)
+    }
+    pub fn parse_replace_elements(&mut self) -> Result<ReplaceSelectElement, ParserError> {
+        let expr = self.parse_expr()?;
+        let as_keyword = self.parse_keyword(Keyword::AS);
+        let ident = self.parse_identifier()?;
+        Ok(ReplaceSelectElement {
+            expr,
+            colum_name: ident,
+            as_keyword,
+        })
     }
 
     /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)

@@ -46,6 +46,7 @@ pub enum Value {
     /// B"string value"
     DoubleQuotedByteStringLiteral(String),
     /// R'string value' or r'string value' or r"string value"
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals>
     RawStringLiteral(String),
     /// N'string value'
     NationalStringLiteral(String),

@@ -181,6 +181,8 @@ fn parse_join_constraint_unnest_alias() {
 fn parse_trailing_comma() {
     for (sql, canonical) in [
         ("SELECT a,", "SELECT a"),
+        ("SELECT 1,", "SELECT 1"),
+        ("SELECT 1,2,", "SELECT 1, 2"),
         ("SELECT a, b,", "SELECT a, b"),
         ("SELECT a, b AS c,", "SELECT a, b AS c"),
         ("SELECT a, b AS c, FROM t", "SELECT a, b AS c FROM t"),

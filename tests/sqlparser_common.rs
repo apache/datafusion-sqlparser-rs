@@ -3669,6 +3669,7 @@ fn parse_bignumeric_keyword() {
         },
         expr_from_projection(only(&select.projection)),
     );
+    verified_stmt("SELECT BIGNUMERIC '0'");
 
     let sql = r#"SELECT BIGNUMERIC '123456'"#;
     let select = verified_only_select(sql);
@@ -3679,6 +3680,7 @@ fn parse_bignumeric_keyword() {
         },
         expr_from_projection(only(&select.projection)),
     );
+    verified_stmt("SELECT BIGNUMERIC '123456'");
 
     let sql = r#"SELECT BIGNUMERIC '-3.14'"#;
     let select = verified_only_select(sql);
@@ -3689,6 +3691,7 @@ fn parse_bignumeric_keyword() {
         },
         expr_from_projection(only(&select.projection)),
     );
+    verified_stmt("SELECT BIGNUMERIC '-3.14'");
 
     let sql = r#"SELECT BIGNUMERIC '-0.54321'"#;
     let select = verified_only_select(sql);
@@ -3699,6 +3702,7 @@ fn parse_bignumeric_keyword() {
         },
         expr_from_projection(only(&select.projection)),
     );
+    verified_stmt("SELECT BIGNUMERIC '-0.54321'");
 
     let sql = r#"SELECT BIGNUMERIC '1.23456e05'"#;
     let select = verified_only_select(sql);
@@ -3709,6 +3713,7 @@ fn parse_bignumeric_keyword() {
         },
         expr_from_projection(only(&select.projection)),
     );
+    verified_stmt("SELECT BIGNUMERIC '1.23456e05'");
 
     let sql = r#"SELECT BIGNUMERIC '-9.876e-3'"#;
     let select = verified_only_select(sql);
@@ -3719,6 +3724,7 @@ fn parse_bignumeric_keyword() {
         },
         expr_from_projection(only(&select.projection)),
     );
+    verified_stmt("SELECT BIGNUMERIC '-9.876e-3'");
 }
 
 #[test]

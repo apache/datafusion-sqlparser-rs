@@ -83,7 +83,7 @@ pub enum DataType {
     ///
     /// [BigNumeric]: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#bignumeric_literals
     BigNumeric(ExactNumberInfo),
-    /// This is alias for [BigNumeric] type used in BigQuery
+    /// This is alias for `BigNumeric` type used in BigQuery
     ///
     /// [BigDecimal]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#decimal_types
     BigDecimal(ExactNumberInfo),

@@ -6277,7 +6277,7 @@ impl<'a> Parser<'a> {
         let ident = self.parse_identifier()?;
         Ok(ReplaceSelectElement {
             expr,
-            colum_name: ident,
+            column_name: ident,
             as_keyword,
         })
     }

@@ -358,7 +358,7 @@ fn test_select_wildcard_with_replace() {
         opt_replace: Some(ReplaceSelectItem {
             items: vec![Box::new(ReplaceSelectElement {
                 expr: Expr::Value(Value::SingleQuotedString("widget".to_owned())),
-                colum_name: Ident::new("item_name"),
+                column_name: Ident::new("item_name"),
                 as_keyword: true,
             })],
         }),
@@ -384,7 +384,7 @@ fn test_select_wildcard_with_replace() {
                             false,
                         ))),
                     },
-                    colum_name: Ident::new("quantity"),
+                    column_name: Ident::new("quantity"),
                     as_keyword: true,
                 }),
                 Box::new(ReplaceSelectElement {
@@ -392,7 +392,7 @@ fn test_select_wildcard_with_replace() {
                     expr: Expr::Value(Value::Number("3".to_string(), false)),
                     #[cfg(feature = "bigdecimal")]
                     expr: Expr::Value(Value::Number(BigDecimal::from_str("3").unwrap(), false)),
-                    colum_name: Ident::new("order_id"),
+                    column_name: Ident::new("order_id"),
                     as_keyword: true,
                 }),
             ],

@@ -563,16 +563,16 @@ impl fmt::Display for ReplaceSelectItem {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ReplaceSelectElement {
     pub expr: Expr,
-    pub colum_name: Ident,
+    pub column_name: Ident,
     pub as_keyword: bool,
 }
 
 impl fmt::Display for ReplaceSelectElement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.as_keyword {
-            write!(f, "{} AS {}", self.expr, self.colum_name)
+            write!(f, "{} AS {}", self.expr, self.column_name)
         } else {
-            write!(f, "{} {}", self.expr, self.colum_name)
+            write!(f, "{} {}", self.expr, self.column_name)
         }
     }
 }

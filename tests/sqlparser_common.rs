@@ -3659,6 +3659,75 @@ fn parse_json_keyword() {
 }
 
 #[test]
+fn parse_bignumeric_keyword() {
+    let sql = r#"SELECT BIGNUMERIC '0'"#;
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::TypedString {
+            data_type: DataType::BigNumeric(ExactNumberInfo::None),
+            value: r#"0"#.into()
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+    verified_stmt("SELECT BIGNUMERIC '0'");
+
+    let sql = r#"SELECT BIGNUMERIC '123456'"#;
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::TypedString {
+            data_type: DataType::BigNumeric(ExactNumberInfo::None),
+            value: r#"123456"#.into()
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+    verified_stmt("SELECT BIGNUMERIC '123456'");
+
+    let sql = r#"SELECT BIGNUMERIC '-3.14'"#;
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::TypedString {
+            data_type: DataType::BigNumeric(ExactNumberInfo::None),
+            value: r#"-3.14"#.into()
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+    verified_stmt("SELECT BIGNUMERIC '-3.14'");
+
+    let sql = r#"SELECT BIGNUMERIC '-0.54321'"#;
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::TypedString {
+            data_type: DataType::BigNumeric(ExactNumberInfo::None),
+            value: r#"-0.54321"#.into()
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+    verified_stmt("SELECT BIGNUMERIC '-0.54321'");
+
+    let sql = r#"SELECT BIGNUMERIC '1.23456e05'"#;
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::TypedString {
+            data_type: DataType::BigNumeric(ExactNumberInfo::None),
+            value: r#"1.23456e05"#.into()
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+    verified_stmt("SELECT BIGNUMERIC '1.23456e05'");
+
+    let sql = r#"SELECT BIGNUMERIC '-9.876e-3'"#;
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::TypedString {
+            data_type: DataType::BigNumeric(ExactNumberInfo::None),
+            value: r#"-9.876e-3"#.into()
+        },
+        expr_from_projection(only(&select.projection)),
+    );
+    verified_stmt("SELECT BIGNUMERIC '-9.876e-3'");
+}
+
+#[test]
 fn parse_simple_math_expr_plus() {
     let sql = "SELECT a + b, 2 + a, 2.5 + a, a_f + b_f, 2 + a_f, 2.5 + a_f FROM c";
     verified_only_select(sql);

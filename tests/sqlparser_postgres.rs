@@ -1322,15 +1322,16 @@ fn parse_pg_returning() {
 }
 
 #[test]
-fn parse_pg_bitwise_binary_ops() {
-    let bitwise_ops = &[
-        // Sharp char cannot be used with Generic Dialect, it conflicts with identifiers
+fn parse_pg_binary_ops() {
+    let binary_ops = &[
+        // Sharp char and Caret cannot be used with Generic Dialect, it conflicts with identifiers
         ("#", BinaryOperator::PGBitwiseXor, pg()),
+        ("^", BinaryOperator::PGExp, pg()),
         (">>", BinaryOperator::PGBitwiseShiftRight, pg_and_generic()),
         ("<<", BinaryOperator::PGBitwiseShiftLeft, pg_and_generic()),
     ];
 
-    for (str_op, op, dialects) in bitwise_ops {
+    for (str_op, op, dialects) in binary_ops {
         let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {

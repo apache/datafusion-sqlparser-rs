@@ -1228,19 +1228,13 @@ fn parse_string_agg() {
     );
 }
 
-macro_rules! dialect_is {
-    ( $dialect: ident is $($dialect_type: ty)|+ ) => {
-        ($($dialect.is::<$dialect_type>())||+)
-    };
-}
-
 /// selects all dialects but PostgreSQL
 pub fn all_dialects_but_pg() -> TestedDialects {
     TestedDialects {
         dialects: all_dialects()
             .dialects
             .into_iter()
-            .filter(|x| !dialect_is!(x is PostgreSqlDialect))
+            .filter(|x| !x.is::<PostgreSqlDialect>())
             .collect(),
     }
 }

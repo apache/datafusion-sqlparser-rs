@@ -1614,6 +1614,8 @@ impl<'a> Parser<'a> {
             Token::StringConcat => Some(BinaryOperator::StringConcat),
             Token::Pipe => Some(BinaryOperator::BitwiseOr),
             Token::Caret => {
+                // In PostgreSQL, ^ stands for the exponentiation operation,
+                // and # stands for XOR. See https://www.postgresql.org/docs/current/functions-math.html
                 if dialect_of!(self is PostgreSqlDialect) {
                     Some(BinaryOperator::PGExp)
                 } else {

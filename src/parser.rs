@@ -230,16 +230,12 @@ impl<'a> Parser<'a> {
     /// # }
     /// ```
     pub fn new(dialect: &'a dyn Dialect) -> Self {
-        Self::new_with_options(dialect, ParserOptions::default())
-    }
-
-    pub fn new_with_options(dialect: &'a dyn Dialect, options: ParserOptions) -> Self {
         Self {
             tokens: vec![],
             index: 0,
             dialect,
             recursion_counter: RecursionCounter::new(DEFAULT_REMAINING_DEPTH),
-            options,
+            options: ParserOptions::default(),
         }
     }
 
@@ -265,6 +261,31 @@ impl<'a> Parser<'a> {
     /// ```
     pub fn with_recursion_limit(mut self, recursion_limit: usize) -> Self {
         self.recursion_counter = RecursionCounter::new(recursion_limit);
+        self
+    }
+
+    /// Specify additional parser options
+    ///
+    ///
+    /// [`Parser`] supports additional options ([`ParserOptions`]) that allow you to
+    /// mix & match behavior otherwise constrained to certain dialects (e.g. trailing
+    /// commas).
+    ///
+    /// Example:
+    /// ```
+    /// # use sqlparser::{parser::{Parser, ParserError, ParserOptions}, dialect::GenericDialect};
+    /// # fn main() -> Result<(), ParserError> {
+    /// let dialect = GenericDialect{};
+    /// let result = Parser::new(&dialect)
+    ///   .with_options(ParserOptions { trailing_commas: true })
+    ///   .try_with_sql("SELECT a, b, COUNT(*), FROM foo GROUP BY a, b,")?
+    ///   .parse_statements();
+    ///   assert!(matches!(result, Ok(_)));
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn with_options(mut self, options: ParserOptions) -> Self {
+        self.options = options;
         self
     }
 

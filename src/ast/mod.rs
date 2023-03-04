@@ -1254,9 +1254,13 @@ pub enum Statement {
         default_charset: Option<String>,
         collation: Option<String>,
         on_commit: Option<OnCommit>,
-        /// Click house "ON CLUSTER" clause:
+        /// ClickHouse "ON CLUSTER" clause:
         /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
         on_cluster: Option<String>,
+        /// ClickHouse "ORDER BY " clause. Note that omitted ORDER BY is different
+        /// than empty (represented as ()), the latter meaning "no sorting".
+        /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
+        order_by: Option<Vec<Ident>>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -2053,6 +2057,7 @@ impl fmt::Display for Statement {
                 collation,
                 on_commit,
                 on_cluster,
+                order_by,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -2196,11 +2201,14 @@ impl fmt::Display for Statement {
                 if !with_options.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_options))?;
                 }
-                if let Some(query) = query {
-                    write!(f, " AS {query}")?;
-                }
                 if let Some(engine) = engine {
                     write!(f, " ENGINE={engine}")?;
+                }
+                if let Some(order_by) = order_by {
+                    write!(f, " ORDER BY ({})", display_comma_separated(order_by))?;
+                }
+                if let Some(query) = query {
+                    write!(f, " AS {query}")?;
                 }
                 if let Some(default_charset) = default_charset {
                     write!(f, " DEFAULT CHARSET={default_charset}")?;

@@ -3340,12 +3340,6 @@ impl<'a> Parser<'a> {
         // PostgreSQL supports `WITH ( options )`, before `AS`
         let with_options = self.parse_options(Keyword::WITH)?;
         let table_properties = self.parse_options(Keyword::TBLPROPERTIES)?;
-        // Parse optional `AS ( query )`
-        let query = if self.parse_keyword(Keyword::AS) {
-            Some(Box::new(self.parse_query()?))
-        } else {
-            None
-        };
 
         let engine = if self.parse_keyword(Keyword::ENGINE) {
             self.expect_token(&Token::Eq)?;
@@ -3354,6 +3348,29 @@ impl<'a> Parser<'a> {
                 Token::Word(w) => Some(w.value),
                 _ => self.expected("identifier", next_token)?,
             }
+        } else {
+            None
+        };
+
+        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+            if self.consume_token(&Token::LParen) {
+                let columns = if self.peek_token() != Token::RParen {
+                    self.parse_comma_separated(Parser::parse_identifier)?
+                } else {
+                    vec![]
+                };
+                self.expect_token(&Token::RParen)?;
+                Some(columns)
+            } else {
+                Some(vec![self.parse_identifier()?])
+            }
+        } else {
+            None
+        };
+
+        // Parse optional `AS ( query )`
+        let query = if self.parse_keyword(Keyword::AS) {
+            Some(Box::new(self.parse_query()?))
         } else {
             None
         };
@@ -3414,6 +3431,7 @@ impl<'a> Parser<'a> {
             .like(like)
             .clone_clause(clone)
             .engine(engine)
+            .order_by(order_by)
             .default_charset(default_charset)
             .collation(collation)
             .on_commit(on_commit)

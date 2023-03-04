@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::{
-    ColumnDef, FileFormat, HiveDistributionStyle, HiveFormat, ObjectName, OnCommit, Query,
+    ColumnDef, FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit, Query,
     SqlOption, Statement, TableConstraint,
 };
 use crate::parser::ParserError;
@@ -69,6 +69,7 @@ pub struct CreateTableBuilder {
     pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
     pub on_cluster: Option<String>,
+    pub order_by: Option<Vec<Ident>>,
 }
 
 impl CreateTableBuilder {
@@ -98,6 +99,7 @@ impl CreateTableBuilder {
             collation: None,
             on_commit: None,
             on_cluster: None,
+            order_by: None,
         }
     }
     pub fn or_replace(mut self, or_replace: bool) -> Self {
@@ -213,6 +215,11 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn order_by(mut self, order_by: Option<Vec<Ident>>) -> Self {
+        self.order_by = order_by;
+        self
+    }
+
     pub fn build(self) -> Statement {
         Statement::CreateTable {
             or_replace: self.or_replace,
@@ -239,6 +246,7 @@ impl CreateTableBuilder {
             collation: self.collation,
             on_commit: self.on_commit,
             on_cluster: self.on_cluster,
+            order_by: self.order_by,
         }
     }
 }
@@ -275,6 +283,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 collation,
                 on_commit,
                 on_cluster,
+                order_by,
             } => Ok(Self {
                 or_replace,
                 temporary,
@@ -300,6 +309,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 collation,
                 on_commit,
                 on_cluster,
+                order_by,
             }),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"

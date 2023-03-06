@@ -1667,7 +1667,7 @@ impl<'a> Parser<'a> {
             if have_type_ann {
                 return Err(ParserError::ParserError(
                 "STRUCT constructors cannot specify both an explicit type and field names with AS"
-                    .to_owned(),
+                    .to_string(),
             ));
             }
             let field_name = self.parse_identifier()?;

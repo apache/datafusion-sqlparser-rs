@@ -210,7 +210,6 @@ fn parse_update_set_from() {
                     name: ObjectName(vec![Ident::new("t1")]),
                     alias: None,
                     args: None,
-                    columns_definition: None,
                     with_hints: vec![],
                 },
                 joins: vec![],
@@ -237,7 +236,6 @@ fn parse_update_set_from() {
                                     name: ObjectName(vec![Ident::new("t1")]),
                                     alias: None,
                                     args: None,
-                                    columns_definition: None,
                                     with_hints: vec![],
                                 },
                                 joins: vec![],
@@ -300,7 +298,6 @@ fn parse_update_with_table_alias() {
                             columns: vec![],
                         }),
                         args: None,
-                        columns_definition: None,
                         with_hints: vec![],
                     },
                     joins: vec![],
@@ -334,6 +331,43 @@ fn parse_update_with_table_alias() {
 }
 
 #[test]
+fn parse_select_with_table_alias_as() {
+    // AS is optional
+    one_statement_parses_to(
+        "SELECT a, b, c FROM lineitem l (A, B, C)",
+        "SELECT a, b, c FROM lineitem AS l (A, B, C)",
+    );
+}
+
+#[test]
+fn parse_select_with_table_alias() {
+    let select = verified_only_select("SELECT a, b, c FROM lineitem AS l (A, B, C)");
+    assert_eq!(
+        select.projection,
+        vec![
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("a")),),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("b")),),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("c")),),
+        ]
+    );
+    assert_eq!(
+        select.from,
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident::new("lineitem")]),
+                alias: Some(TableAlias {
+                    name: Ident::new("l"),
+                    columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C"),],
+                }),
+                args: None,
+                with_hints: vec![],
+            },
+            joins: vec![],
+        }]
+    );
+}
+
+#[test]
 fn parse_invalid_table_name() {
     let ast = all_dialects()
         .run_parser_method("db.public..customer", |parser| parser.parse_object_name());
@@ -356,7 +390,6 @@ fn parse_delete_statement() {
                     name: ObjectName(vec![Ident::with_quote('"', "table")]),
                     alias: None,
                     args: None,
-                    columns_definition: None,
                     with_hints: vec![],
                 },
                 table_name
@@ -383,7 +416,6 @@ fn parse_where_delete_statement() {
                     name: ObjectName(vec![Ident::new("foo")]),
                     alias: None,
                     args: None,
-                    columns_definition: None,
                     with_hints: vec![],
                 },
                 table_name,
@@ -424,7 +456,6 @@ fn parse_where_delete_with_alias_statement() {
                         columns: vec![],
                     }),
                     args: None,
-                    columns_definition: None,
                     with_hints: vec![],
                 },
                 table_name,
@@ -438,7 +469,6 @@ fn parse_where_delete_with_alias_statement() {
                         columns: vec![],
                     }),
                     args: None,
-                    columns_definition: None,
                     with_hints: vec![],
                 }),
                 using
@@ -3465,7 +3495,6 @@ fn parse_interval_and_or_xor() {
                     }]),
                     alias: None,
                     args: None,
-                    columns_definition: None,
                     with_hints: vec![],
                 },
                 joins: vec![],
@@ -3981,7 +4010,6 @@ fn parse_implicit_join() {
                     name: ObjectName(vec!["t1".into()]),
                     alias: None,
                     args: None,
-                    columns_definition: None,
                     with_hints: vec![],
                 },
                 joins: vec![],
@@ -3991,7 +4019,6 @@ fn parse_implicit_join() {
                     name: ObjectName(vec!["t2".into()]),
                     alias: None,
                     args: None,
-                    columns_definition: None,
                     with_hints: vec![],
                 },
                 joins: vec![],
@@ -4009,7 +4036,6 @@ fn parse_implicit_join() {
                     name: ObjectName(vec!["t1a".into()]),
                     alias: None,
                     args: None,
-                    columns_definition: None,
                     with_hints: vec![],
                 },
                 joins: vec![Join {
@@ -4017,7 +4043,6 @@ fn parse_implicit_join() {
                         name: ObjectName(vec!["t1b".into()]),
                         alias: None,
                         args: None,
-                        columns_definition: None,
                         with_hints: vec![],
                     },
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
@@ -4028,7 +4053,6 @@ fn parse_implicit_join() {
                     name: ObjectName(vec!["t2a".into()]),
                     alias: None,
                     args: None,
-                    columns_definition: None,
                     with_hints: vec![],
                 },
                 joins: vec![Join {
@@ -4036,7 +4060,6 @@ fn parse_implicit_join() {
                         name: ObjectName(vec!["t2b".into()]),
                         alias: None,
                         args: None,
-                        columns_definition: None,
                         with_hints: vec![],
                     },
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
@@ -4057,7 +4080,6 @@ fn parse_cross_join() {
                 name: ObjectName(vec![Ident::new("t2")]),
                 alias: None,
                 args: None,
-                columns_definition: None,
                 with_hints: vec![],
             },
             join_operator: JoinOperator::CrossJoin,
@@ -4078,7 +4100,6 @@ fn parse_joins_on() {
                 name: ObjectName(vec![Ident::new(relation.into())]),
                 alias,
                 args: None,
-                columns_definition: None,
                 with_hints: vec![],
             },
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
@@ -4148,7 +4169,6 @@ fn parse_joins_using() {
                 name: ObjectName(vec![Ident::new(relation.into())]),
                 alias,
                 args: None,
-                columns_definition: None,
                 with_hints: vec![],
             },
             join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
@@ -4210,7 +4230,6 @@ fn parse_natural_join() {
                 name: ObjectName(vec![Ident::new("t2")]),
                 alias,
                 args: None,
-                columns_definition: None,
                 with_hints: vec![],
             },
             join_operator: f(JoinConstraint::Natural),
@@ -4475,7 +4494,6 @@ fn parse_derived_tables() {
                         name: ObjectName(vec!["t2".into()]),
                         alias: None,
                         args: None,
-                        columns_definition: None,
                         with_hints: vec![],
                     },
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
@@ -5767,7 +5785,6 @@ fn parse_merge() {
                         columns: vec![],
                     }),
                     args: None,
-                    columns_definition: None,
                     with_hints: vec![],
                 }
             );
@@ -5791,7 +5808,6 @@ fn parse_merge() {
                                     name: ObjectName(vec![Ident::new("s"), Ident::new("foo")]),
                                     alias: None,
                                     args: None,
-                                    columns_definition: None,
                                     with_hints: vec![],
                                 },
                                 joins: vec![],

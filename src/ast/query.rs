@@ -631,9 +631,6 @@ pub enum TableFactor {
         /// vector of arguments, in the case of a table-valued function call,
         /// whereas it's `None` in the case of a regular table name.
         args: Option<Vec<FunctionArg>>,
-        /// A table alias definition i.e. `cols(view_schema name, view_name name, col_name name, col_type varchar, col_num int)`
-        /// used for redshift functions: pg_get_late_binding_view_cols, pg_get_cols, pg_get_grantee_by_iam_role,pg_get_iam_role_by_user)
-        columns_definition: Option<TableAliasDefinition>,
         /// MSSQL-specific `WITH (...)` hints such as NOLOCK.
         with_hints: Vec<Expr>,
     },
@@ -682,7 +679,6 @@ impl fmt::Display for TableFactor {
                 name,
                 alias,
                 args,
-                columns_definition,
                 with_hints,
             } => {
                 write!(f, "{name}")?;
@@ -691,9 +687,6 @@ impl fmt::Display for TableFactor {
                 }
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
-                }
-                if let Some(columns_definition) = columns_definition {
-                    write!(f, " {columns_definition}")?;
                 }
                 if !with_hints.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_hints))?;

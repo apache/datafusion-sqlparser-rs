@@ -1635,7 +1635,8 @@ impl<'a> Parser<'a> {
                 let ann = self.parse_comma_separated(Parser::parse_struct_type_ann)?;
                 self.expect_token(&Token::Gt)?;
                 self.expect_token(&Token::LParen)?;
-                let exprs = self.parse_comma_separated(Parser::parse_struct_field_name)?;
+                let exprs =
+                    self.parse_comma_separated(|parser| parser.parse_struct_field_name(true))?;
                 self.next_token();
                 Ok(Expr::Struct {
                     expr: Box::new(StructExpr(exprs)),
@@ -1645,7 +1646,8 @@ impl<'a> Parser<'a> {
             Token::LParen => {
                 // STRUCT( expr1 [AS field_name] [, ... ])
                 self.next_token();
-                let exprs = self.parse_comma_separated(Parser::parse_struct_field_name)?;
+                let exprs =
+                    self.parse_comma_separated(|parser| parser.parse_struct_field_name(false))?;
                 self.expect_token(&Token::RParen)?;
                 Ok(Expr::Struct {
                     expr: Box::new(StructExpr(exprs)),
@@ -1656,9 +1658,18 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_struct_field_name(&mut self) -> Result<ExprWithFieldName, ParserError> {
+    pub fn parse_struct_field_name(
+        &mut self,
+        have_type_ann: bool,
+    ) -> Result<ExprWithFieldName, ParserError> {
         let expr = self.parse_expr()?;
         if self.parse_keyword(Keyword::AS) {
+            if have_type_ann {
+                return Err(ParserError::ParserError(
+                "STRUCT constructors cannot specify both an explicit type and field names with AS"
+                    .to_owned(),
+            ));
+            }
             let field_name = self.parse_identifier()?;
             Ok(ExprWithFieldName {
                 expr,
@@ -1674,7 +1685,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_struct_type_ann(&mut self) -> Result<StructTypeAnn, ParserError> {
         match self.peek_token().token {
-            Token::Word(kw) => match Parser::lookup_struct_type_kw(&kw) {
+            Token::Word(kw) => match self.lookup_struct_type_kw(&kw) {
                 Some(ty) => {
                     self.next_token();
                     Ok(StructTypeAnn {
@@ -1682,33 +1693,36 @@ impl<'a> Parser<'a> {
                         field_type: ty,
                     })
                 }
-                None => Err(ParserError::ParserError(format!(
-                    "unexpected keyword: {kw}"
-                ))),
-            },
-            _ => {
-                let field_name = self.parse_identifier()?;
-                let ty = match self.peek_token().token {
-                    Token::Word(kw) => {
-                        if let Some(ty) = Parser::lookup_struct_type_kw(&kw) {
-                            ty
-                        } else {
-                            return Err(ParserError::ParserError(format!(
-                                "unexpected keyword: {kw}"
-                            )));
+                None => {
+                    let field_name = self.parse_identifier()?;
+                    let ty = match self.peek_token().token {
+                        Token::Word(kw) => {
+                            if let Some(ty) = self.lookup_struct_type_kw(&kw) {
+                                ty
+                            } else {
+                                return Err(ParserError::ParserError(format!(
+                                    "unexpected keyword: {kw}"
+                                )));
+                            }
                         }
-                    }
-                    tok => return Err(ParserError::ParserError(format!("invalid token: {tok}"))),
-                };
-                Ok(StructTypeAnn {
-                    field_name: Some(field_name),
-                    field_type: ty,
-                })
-            }
+                        tok => {
+                            return Err(ParserError::ParserError(format!("invalid token: {tok}")))
+                        }
+                    };
+                    self.next_token();
+                    Ok(StructTypeAnn {
+                        field_name: Some(field_name),
+                        field_type: ty,
+                    })
+                }
+            },
+            kw => Err(ParserError::ParserError(format!(
+                "unexpected keyword: {kw}"
+            ))),
         }
     }
 
-    pub fn lookup_struct_type_kw(kw: &Word) -> Option<StructFieldType> {
+    pub fn lookup_struct_type_kw(&mut self, kw: &Word) -> Option<StructFieldType> {
         match kw.keyword {
             // Keyword::Array => return Some(StructFieldType::Array(_)),
             Keyword::BIGNUMERIC => Some(StructFieldType::BigNumeric),
@@ -1723,7 +1737,7 @@ impl<'a> Parser<'a> {
             Keyword::JSON => Some(StructFieldType::Json),
             Keyword::NUMERIC => Some(StructFieldType::Numeric),
             Keyword::STRING => Some(StructFieldType::String),
-            // Keyword::STRUCT => return Some(StructFieldType::Struct(_)),
+            // Keyword::STRUCT => return Some(StructFieldType::STRUCT(_)),
             Keyword::TIME => Some(StructFieldType::Time),
             Keyword::TIMESTAMP => Some(StructFieldType::Timestamp),
             _ => None,

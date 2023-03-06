@@ -430,8 +430,7 @@ fn parse_typed_struct_syntax() {
         expr_from_projection(&select.projection[1])
     );
 
-    // TODO: support
-
+    // TODO: support "ARRAY in STRUCT", "STRUCT in STRUCT"
     // let sql = r#"SELECT STRUCT<STRUCT<STRING>>(STRUCT("foo"))"#;
     // let select = bigquery().verified_only_select(sql);
     // assert_eq!(1, select.projection.len());
@@ -439,10 +438,71 @@ fn parse_typed_struct_syntax() {
     // let sql = r#"SELECT STRUCT<ARRAY<STRING>>(["foo"])"#;
     // let select = bigquery().verified_only_select(sql);
     // assert_eq!(1, select.projection.len());
+}
 
-    // // should return error
-    // let sql = r#"SELECT STRUCT<x int64>(5 AS x)"#;
-    // let sql = r#"SELECT STRUCT()"#;
+#[test]
+fn parse_typed_struct_with_field_name() {
+    let sql = r#"SELECT STRUCT<x INT64>(5), STRUCT<y STRING>("foo")"#;
+    let select = bigquery().verified_only_select(sql);
+    assert_eq!(2, select.projection.len());
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::Value(number("5")),
+                field_name: None
+            }])),
+            type_ann: Some(vec![StructTypeAnn {
+                field_name: Some(Ident::from("x")),
+                field_type: StructFieldType::Int64
+            }])
+        },
+        expr_from_projection(&select.projection[0])
+    );
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::Value(Value::DoubleQuotedString("foo".to_string())),
+                field_name: None
+            }])),
+            type_ann: Some(vec![StructTypeAnn {
+                field_name: Some(Ident::from("y")),
+                field_type: StructFieldType::String
+            }])
+        },
+        expr_from_projection(&select.projection[1])
+    );
+
+    let sql = r#"SELECT STRUCT<x INT64, y INT64>(5, 5)"#;
+    let select = bigquery().verified_only_select(sql);
+    assert_eq!(1, select.projection.len());
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![
+                ExprWithFieldName {
+                    expr: Expr::Value(number("5")),
+                    field_name: None
+                },
+                ExprWithFieldName {
+                    expr: Expr::Value(number("5")),
+                    field_name: None
+                }
+            ])),
+            type_ann: Some(vec![
+                StructTypeAnn {
+                    field_name: Some(Ident::from("x")),
+                    field_type: StructFieldType::Int64
+                },
+                StructTypeAnn {
+                    field_name: Some(Ident::from("y")),
+                    field_type: StructFieldType::Int64
+                }
+            ])
+        },
+        expr_from_projection(&select.projection[0])
+    );
 }
 
 #[test]

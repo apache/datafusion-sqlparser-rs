@@ -291,7 +291,7 @@ pub struct StructTypeAnn {
 impl fmt::Display for StructTypeAnn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(name) = &self.field_name {
-            write!(f, "{} AS {name}", self.field_type)
+            write!(f, "{name} {}", self.field_type)
         } else {
             write!(f, "{}", self.field_type)
         }

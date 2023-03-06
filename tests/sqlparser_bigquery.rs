@@ -238,18 +238,199 @@ fn parse_typed_struct_syntax() {
     let select = bigquery().verified_only_select(sql);
     assert_eq!(4, select.projection.len());
 
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::Value(Value::DoubleQuotedString("2011-05-05".to_string())),
+                field_name: None
+            }])),
+            type_ann: Some(vec![StructTypeAnn {
+                field_name: None,
+                field_type: StructFieldType::Date
+            }])
+        },
+        expr_from_projection(&select.projection[0])
+    );
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::TypedString {
+                    data_type: DataType::Datetime(None),
+                    value: "1999-01-01 01:23:34.45".to_string()
+                },
+                field_name: None
+            }])),
+            type_ann: Some(vec![StructTypeAnn {
+                field_name: None,
+                field_type: StructFieldType::DateTime
+            }])
+        },
+        expr_from_projection(&select.projection[1])
+    );
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::Value(number("5.0")),
+                field_name: None
+            }])),
+            type_ann: Some(vec![StructTypeAnn {
+                field_name: None,
+                field_type: StructFieldType::Float64
+            }])
+        },
+        expr_from_projection(&select.projection[2])
+    );
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::Value(number("1")),
+                field_name: None
+            }])),
+            type_ann: Some(vec![StructTypeAnn {
+                field_name: None,
+                field_type: StructFieldType::Int64
+            }])
+        },
+        expr_from_projection(&select.projection[3])
+    );
+
     let sql = r#"SELECT STRUCT<INTERVAL>(INTERVAL '1-2 3 4:5:6.789999'), STRUCT<JSON>(JSON '{"class" : {"students" : [{"name" : "Jane"}]}}')"#;
     let select = bigquery().verified_only_select(sql);
     assert_eq!(2, select.projection.len());
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::Interval {
+                    value: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "1-2 3 4:5:6.789999".to_string()
+                    ))),
+                    leading_field: None,
+                    leading_precision: None,
+                    last_field: None,
+                    fractional_seconds_precision: None
+                },
+                field_name: None
+            }])),
+            type_ann: Some(vec![StructTypeAnn {
+                field_name: None,
+                field_type: StructFieldType::Interval
+            }])
+        },
+        expr_from_projection(&select.projection[0])
+    );
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::TypedString {
+                    data_type: DataType::JSON,
+                    value: r#"{"class" : {"students" : [{"name" : "Jane"}]}}"#.to_string()
+                },
+                field_name: None
+            }])),
+            type_ann: Some(vec![StructTypeAnn {
+                field_name: None,
+                field_type: StructFieldType::Json
+            }])
+        },
+        expr_from_projection(&select.projection[1])
+    );
 
     let sql = r#"SELECT STRUCT<STRING>("foo"), STRUCT<TIMESTAMP>(TIMESTAMP '2008-12-25 15:30:00 America/Los_Angeles'), STRUCT<TIME>(TIME '15:30:00')"#;
     let select = bigquery().verified_only_select(sql);
     assert_eq!(3, select.projection.len());
 
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::Value(Value::DoubleQuotedString("foo".to_string())),
+                field_name: None
+            }])),
+            type_ann: Some(vec![StructTypeAnn {
+                field_name: None,
+                field_type: StructFieldType::String
+            }])
+        },
+        expr_from_projection(&select.projection[0])
+    );
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::TypedString {
+                    data_type: DataType::Timestamp(None, TimezoneInfo::None),
+                    value: "2008-12-25 15:30:00 America/Los_Angeles".to_string()
+                },
+                field_name: None
+            }])),
+            type_ann: Some(vec![StructTypeAnn {
+                field_name: None,
+                field_type: StructFieldType::Timestamp
+            }])
+        },
+        expr_from_projection(&select.projection[1])
+    );
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::TypedString {
+                    data_type: DataType::Time(None, TimezoneInfo::None),
+                    value: "15:30:00".to_string()
+                },
+                field_name: None
+            }])),
+            type_ann: Some(vec![StructTypeAnn {
+                field_name: None,
+                field_type: StructFieldType::Time
+            }])
+        },
+        expr_from_projection(&select.projection[2])
+    );
+
+    let sql = r#"SELECT STRUCT<NUMERIC>(NUMERIC '1'), STRUCT<BIGNUMERIC>(BIGNUMERIC '1')"#;
+    let select = bigquery().verified_only_select(sql);
+    assert_eq!(2, select.projection.len());
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::TypedString {
+                    data_type: DataType::Numeric(ExactNumberInfo::None),
+                    value: "1".to_string()
+                },
+                field_name: None
+            }])),
+            type_ann: Some(vec![StructTypeAnn {
+                field_name: None,
+                field_type: StructFieldType::Numeric
+            }])
+        },
+        expr_from_projection(&select.projection[0])
+    );
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::TypedString {
+                    data_type: DataType::BigNumeric(ExactNumberInfo::None),
+                    value: "1".to_string()
+                },
+                field_name: None
+            }])),
+            type_ann: Some(vec![StructTypeAnn {
+                field_name: None,
+                field_type: StructFieldType::BigNumeric
+            }])
+        },
+        expr_from_projection(&select.projection[1])
+    );
+
     // TODO: support
-    // let sql = r#"SELECT STRUCT<NUMERIC>(NUMERIC '1'), STRUCT<BIGNUMERIC>(BIGNUMERIC '1')"#;
-    // let select = bigquery().verified_only_select(sql);
-    // assert_eq!(1, select.projection.len());
 
     // let sql = r#"SELECT STRUCT<STRUCT<STRING>>(STRUCT("foo"))"#;
     // let select = bigquery().verified_only_select(sql);

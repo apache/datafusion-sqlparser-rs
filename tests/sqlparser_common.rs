@@ -334,6 +334,43 @@ fn parse_update_with_table_alias() {
 }
 
 #[test]
+fn parse_select_with_table_alias_as() {
+    // AS is optional
+    one_statement_parses_to(
+        "SELECT a, b, c FROM lineitem l (A, B, C)",
+        "SELECT a, b, c FROM lineitem AS l (A, B, C)",
+    );
+}
+
+#[test]
+fn parse_select_with_table_alias() {
+    let select = verified_only_select("SELECT a, b, c FROM lineitem AS l (A, B, C)");
+    assert_eq!(
+        select.projection,
+        vec![
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("a")),),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("b")),),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("c")),),
+        ]
+    );
+    assert_eq!(
+        select.from,
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident::new("lineitem")]),
+                alias: Some(TableAlias {
+                    name: Ident::new("l"),
+                    columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C"),],
+                }),
+                args: None,
+                with_hints: vec![],
+            },
+            joins: vec![],
+        }]
+    );
+}
+
+#[test]
 fn parse_invalid_table_name() {
     let ast = all_dialects()
         .run_parser_method("db.public..customer", |parser| parser.parse_object_name());

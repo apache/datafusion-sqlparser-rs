@@ -3891,9 +3891,13 @@ impl<'a> Parser<'a> {
                         );
                     };
                     AlterTableOperation::AlterColumn { column_name, op }
+                } else if self.parse_keyword(Keyword::SWAP) {
+                    self.expect_keyword(Keyword::WITH)?;
+                    let table_name = self.parse_object_name()?;
+                    AlterTableOperation::SwapWith { table_name }
                 } else {
                     return self.expected(
-                        "ADD, RENAME, PARTITION or DROP after ALTER TABLE",
+                        "ADD, RENAME, PARTITION, SWAP or DROP after ALTER TABLE",
                         self.peek_token(),
                     );
                 };

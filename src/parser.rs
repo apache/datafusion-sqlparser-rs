@@ -5713,7 +5713,6 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-            let columns_definition = self.parse_redshift_columns_definition_list()?;
             let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
             // MSSQL-specific table hints:
             let mut with_hints = vec![];
@@ -5730,54 +5729,9 @@ impl<'a> Parser<'a> {
                 name,
                 alias,
                 args,
-                columns_definition,
                 with_hints,
             })
         }
-    }
-
-    fn parse_redshift_columns_definition_list(
-        &mut self,
-    ) -> Result<Option<TableAliasDefinition>, ParserError> {
-        if !dialect_of!(self is RedshiftSqlDialect | GenericDialect) {
-            return Ok(None);
-        }
-
-        if let Some(col_definition_list_name) = self.parse_optional_columns_definition_list_alias()
-        {
-            if self.consume_token(&Token::LParen) {
-                let names = self.parse_comma_separated(Parser::parse_ident_pair)?;
-                self.expect_token(&Token::RParen)?;
-                Ok(Some(TableAliasDefinition {
-                    name: col_definition_list_name,
-                    args: names,
-                }))
-            } else {
-                self.prev_token();
-                Ok(None)
-            }
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn parse_optional_columns_definition_list_alias(&mut self) -> Option<Ident> {
-        match self.next_token().token {
-            Token::Word(w) if !keywords::RESERVED_FOR_TABLE_ALIAS.contains(&w.keyword) => {
-                Some(w.to_ident())
-            }
-            _ => {
-                self.prev_token();
-                None
-            }
-        }
-    }
-
-    fn parse_ident_pair(&mut self) -> Result<IdentPair, ParserError> {
-        Ok(IdentPair(
-            self.parse_identifier()?,
-            self.parse_identifier()?,
-        ))
     }
 
     pub fn parse_derived_table_factor(

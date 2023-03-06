@@ -538,6 +538,7 @@ define_keywords!(
     STDOUT,
     STORED,
     STRING,
+    STRUCT,
     SUBMULTISET,
     SUBSTRING,
     SUBSTRING_REGEX,

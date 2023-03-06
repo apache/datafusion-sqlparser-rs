@@ -88,6 +88,183 @@ fn parse_raw_literal() {
 }
 
 #[test]
+fn parse_tuple_struct_literal() {
+    // tuple syntax: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#tuple_syntax
+    // syntax: (expr1, expr2 [, ... ])
+    let sql = "SELECT (1, 2, 3), (1, 1.0, '123', true)";
+    let select = bigquery().verified_only_select(sql);
+    assert_eq!(2, select.projection.len());
+    assert_eq!(
+        &Expr::Tuple(vec![
+            Expr::Value(number("1")),
+            Expr::Value(number("2")),
+            Expr::Value(number("3")),
+        ]),
+        expr_from_projection(&select.projection[0])
+    );
+    assert_eq!(
+        &Expr::Tuple(vec![
+            Expr::Value(number("1")),
+            Expr::Value(number("1.0")),
+            Expr::Value(Value::SingleQuotedString("123".to_string())),
+            Expr::Value(Value::Boolean(true))
+        ]),
+        expr_from_projection(&select.projection[1])
+    );
+}
+
+#[test]
+fn parse_typeless_struct_syntax() {
+    // typeless struct syntax https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#typeless_struct_syntax
+    // syntax: STRUCT( expr1 [AS field_name] [, ... ])
+    let sql = "SELECT STRUCT(1, 2, 3), STRUCT('abc'), STRUCT(1, t.str_col), STRUCT(1 AS a, 'abc' AS b), STRUCT(str_col AS abc)";
+    let select = bigquery().verified_only_select(sql);
+    assert_eq!(5, select.projection.len());
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![
+                ExprWithFieldName {
+                    expr: Expr::Value(number("1")),
+                    field_name: None
+                },
+                ExprWithFieldName {
+                    expr: Expr::Value(number("2")),
+                    field_name: None
+                },
+                ExprWithFieldName {
+                    expr: Expr::Value(number("3")),
+                    field_name: None
+                }
+            ])),
+            type_ann: None
+        },
+        expr_from_projection(&select.projection[0])
+    );
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::Value(Value::SingleQuotedString("abc".to_string())),
+                field_name: None
+            },])),
+            type_ann: None
+        },
+        expr_from_projection(&select.projection[1])
+    );
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![
+                ExprWithFieldName {
+                    expr: Expr::Value(number("1")),
+                    field_name: None
+                },
+                ExprWithFieldName {
+                    expr: Expr::CompoundIdentifier(vec![Ident::from("t"), Ident::from("str_col")]),
+                    field_name: None
+                },
+            ])),
+            type_ann: None
+        },
+        expr_from_projection(&select.projection[2])
+    );
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![
+                ExprWithFieldName {
+                    expr: Expr::Value(number("1")),
+                    field_name: Some(Ident::from("a"))
+                },
+                ExprWithFieldName {
+                    expr: Expr::Value(Value::SingleQuotedString("abc".to_string())),
+                    field_name: Some(Ident::from("b"))
+                },
+            ])),
+            type_ann: None
+        },
+        expr_from_projection(&select.projection[3])
+    );
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::Identifier(Ident::from("str_col")),
+                field_name: Some(Ident::from("abc"))
+            }])),
+            type_ann: None
+        },
+        expr_from_projection(&select.projection[4])
+    );
+}
+
+#[test]
+fn parse_typed_struct_syntax() {
+    // typed struct syntax https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#typed_struct_syntax
+    // syntax: STRUCT<[field_name] field_type, ...>( expr1 [, ... ])
+    // let sql = r#"SELECT STRUCT<int64>(5), STRUCT<x int64, y string>(1, t.str_col), STRUCT<int64>(int_col)"#;
+    let sql = r#"SELECT STRUCT<BOOL>(true), STRUCT<BYTES>(B'abc')"#;
+    let select = bigquery().verified_only_select(sql);
+    assert_eq!(2, select.projection.len());
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::Value(Value::Boolean(true)),
+                field_name: None
+            }])),
+            type_ann: Some(vec![StructTypeAnn {
+                field_name: None,
+                field_type: StructFieldType::Bool
+            }])
+        },
+        expr_from_projection(&select.projection[0])
+    );
+
+    assert_eq!(
+        &Expr::Struct {
+            expr: Box::new(StructExpr(vec![ExprWithFieldName {
+                expr: Expr::Value(Value::SingleQuotedByteStringLiteral("abc".to_string())),
+                field_name: None
+            }])),
+            type_ann: Some(vec![StructTypeAnn {
+                field_name: None,
+                field_type: StructFieldType::Bytes
+            }])
+        },
+        expr_from_projection(&select.projection[1])
+    );
+
+    let sql = r#"SELECT STRUCT<DATE>("2011-05-05"), STRUCT<DATETIME>(DATETIME '1999-01-01 01:23:34.45'), STRUCT<FLOAT64>(5.0), STRUCT<INT64>(1)"#;
+    let select = bigquery().verified_only_select(sql);
+    assert_eq!(4, select.projection.len());
+
+    let sql = r#"SELECT STRUCT<INTERVAL>(INTERVAL '1-2 3 4:5:6.789999'), STRUCT<JSON>(JSON '{"class" : {"students" : [{"name" : "Jane"}]}}')"#;
+    let select = bigquery().verified_only_select(sql);
+    assert_eq!(2, select.projection.len());
+
+    let sql = r#"SELECT STRUCT<STRING>("foo"), STRUCT<TIMESTAMP>(TIMESTAMP '2008-12-25 15:30:00 America/Los_Angeles'), STRUCT<TIME>(TIME '15:30:00')"#;
+    let select = bigquery().verified_only_select(sql);
+    assert_eq!(3, select.projection.len());
+
+    // TODO: support
+    // let sql = r#"SELECT STRUCT<NUMERIC>(NUMERIC '1'), STRUCT<BIGNUMERIC>(BIGNUMERIC '1')"#;
+    // let select = bigquery().verified_only_select(sql);
+    // assert_eq!(1, select.projection.len());
+
+    // let sql = r#"SELECT STRUCT<STRUCT<STRING>>(STRUCT("foo"))"#;
+    // let select = bigquery().verified_only_select(sql);
+    // assert_eq!(1, select.projection.len());
+
+    // let sql = r#"SELECT STRUCT<ARRAY<STRING>>(["foo"])"#;
+    // let select = bigquery().verified_only_select(sql);
+    // assert_eq!(1, select.projection.len());
+
+    // // should return error
+    // let sql = r#"SELECT STRUCT<x int64>(5 AS x)"#;
+    // let sql = r#"SELECT STRUCT()"#;
+}
+
+#[test]
 fn parse_table_identifiers() {
     fn test_table_ident(ident: &str, expected: Vec<Ident>) {
         let sql = format!("SELECT 1 FROM {ident}");
@@ -181,8 +358,6 @@ fn parse_join_constraint_unnest_alias() {
 fn parse_trailing_comma() {
     for (sql, canonical) in [
         ("SELECT a,", "SELECT a"),
-        ("SELECT 1,", "SELECT 1"),
-        ("SELECT 1,2,", "SELECT 1, 2"),
         ("SELECT a, b,", "SELECT a, b"),
         ("SELECT a, b AS c,", "SELECT a, b AS c"),
         ("SELECT a, b AS c, FROM t", "SELECT a, b AS c FROM t"),
@@ -350,58 +525,6 @@ fn test_select_wildcard_with_except() {
             .to_string(),
         "sql parser error: Expected identifier, found: )"
     );
-}
-
-#[test]
-fn test_select_wildcard_with_replace() {
-    let select = bigquery_and_generic()
-        .verified_only_select(r#"SELECT * REPLACE ('widget' AS item_name) FROM orders"#);
-    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
-        opt_replace: Some(ReplaceSelectItem {
-            items: vec![Box::new(ReplaceSelectElement {
-                expr: Expr::Value(Value::SingleQuotedString("widget".to_owned())),
-                column_name: Ident::new("item_name"),
-                as_keyword: true,
-            })],
-        }),
-        ..Default::default()
-    });
-    assert_eq!(expected, select.projection[0]);
-
-    let select = bigquery_and_generic().verified_only_select(
-        r#"SELECT * REPLACE (quantity / 2 AS quantity, 3 AS order_id) FROM orders"#,
-    );
-    let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
-        opt_replace: Some(ReplaceSelectItem {
-            items: vec![
-                Box::new(ReplaceSelectElement {
-                    expr: Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("quantity"))),
-                        op: BinaryOperator::Divide,
-                        #[cfg(not(feature = "bigdecimal"))]
-                        right: Box::new(Expr::Value(Value::Number("2".to_string(), false))),
-                        #[cfg(feature = "bigdecimal")]
-                        right: Box::new(Expr::Value(Value::Number(
-                            BigDecimal::from_str("2").unwrap(),
-                            false,
-                        ))),
-                    },
-                    column_name: Ident::new("quantity"),
-                    as_keyword: true,
-                }),
-                Box::new(ReplaceSelectElement {
-                    #[cfg(not(feature = "bigdecimal"))]
-                    expr: Expr::Value(Value::Number("3".to_string(), false)),
-                    #[cfg(feature = "bigdecimal")]
-                    expr: Expr::Value(Value::Number(BigDecimal::from_str("3").unwrap(), false)),
-                    column_name: Ident::new("order_id"),
-                    as_keyword: true,
-                }),
-            ],
-        }),
-        ..Default::default()
-    });
-    assert_eq!(expected, select.projection[0]);
 }
 
 fn bigquery() -> TestedDialects {

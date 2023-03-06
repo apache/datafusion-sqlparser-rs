@@ -251,6 +251,109 @@ impl fmt::Display for JsonOperator {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum StructExpr {
+    Tuple(Vec<Expr>),
+    StructFiled(Vec<ExprWithFieldName>),
+}
+
+impl fmt::Display for StructExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StructExpr::Tuple(exprs) => {
+                write!(f, "({})", display_comma_separated(exprs))
+            }
+            StructExpr::StructFiled(exprs) => {
+                write!(f, "({})", display_comma_separated(exprs))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ExprWithFieldName {
+    pub expr: Expr,
+    pub field_name: Option<Ident>,
+}
+
+impl fmt::Display for ExprWithFieldName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(name) = &self.field_name {
+            write!(f, "{} AS {name}", self.expr)
+        } else {
+            write!(f, "{}", self.expr)
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct StructTypeAnn {
+    pub field_name: Option<Ident>,
+    pub field_type: StructFieldType,
+}
+
+impl fmt::Display for StructTypeAnn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(name) = &self.field_name {
+            write!(f, "{} AS {name}", self.field_type)
+        } else {
+            write!(f, "{}", self.field_type)
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+// https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#data_type_sizes
+pub enum StructFieldType {
+    Array(Box<StructFieldType>),
+    BigNumeric,
+    Bool,
+    Bytes,
+    Date,
+    DateTime,
+    Float64,
+    Geography,
+    Int64,
+    Interval,
+    Json,
+    Numeric,
+    String,
+    Struct(Box<StructFieldType>),
+    Time,
+    Timestamp,
+}
+
+impl fmt::Display for StructFieldType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StructFieldType::Array(ty) => write!(f, "ARRAY{ty}"),
+            StructFieldType::BigNumeric => write!(f, "BIGNUMERIC"),
+            StructFieldType::Bool => write!(f, "BOOL"),
+            StructFieldType::Bytes => write!(f, "BYTES"),
+            StructFieldType::Date => write!(f, "DATE"),
+            StructFieldType::DateTime => write!(f, "DATETIME"),
+            StructFieldType::Float64 => write!(f, "FLOAT64"),
+            StructFieldType::Geography => write!(f, "GEOGRAPHY"),
+            StructFieldType::Int64 => write!(f, "INT64"),
+            StructFieldType::Interval => write!(f, "INTERVAL"),
+            StructFieldType::Json => write!(f, "JSON"),
+            StructFieldType::Numeric => write!(f, "NUMERIC"),
+            StructFieldType::String => write!(f, "STRING"),
+            StructFieldType::Struct(ty) => write!(f, "STRUCT<{ty}>"),
+            StructFieldType::Time => write!(f, "TIME"),
+            StructFieldType::Timestamp => write!(f, "TIMESTAMP"),
+        }
+    }
+}
+
 /// An SQL expression of any type.
 ///
 /// The parser does not distinguish between expressions of different types
@@ -484,6 +587,11 @@ pub enum Expr {
     Rollup(Vec<Vec<Expr>>),
     /// ROW / TUPLE a single value, such as `SELECT (1, 2)`
     Tuple(Vec<Expr>),
+    /// The `Struct` expr used in BigQuery
+    Struct {
+        expr: Box<StructExpr>,
+        type_ann: Option<Vec<StructTypeAnn>>,
+    },
     /// An array index expression e.g. `(ARRAY[1, 2])[1]` or `(current_schemas(FALSE))[1]`
     ArrayIndex { obj: Box<Expr>, indexes: Vec<Expr> },
     /// An array expression e.g. `ARRAY[1, 2]`
@@ -827,6 +935,16 @@ impl fmt::Display for Expr {
             }
             Expr::Tuple(exprs) => {
                 write!(f, "({})", display_comma_separated(exprs))
+            }
+            Expr::Struct { expr, type_ann } => {
+                if let Some(ann) = type_ann {
+                    write!(f, "STRUCT<{}>{expr}", display_comma_separated(ann))
+                } else {
+                    match &**expr {
+                        StructExpr::Tuple(_) => write!(f, "{expr}"),
+                        StructExpr::StructFiled(_) => write!(f, "STRUCT{expr}"),
+                    }
+                }
             }
             Expr::ArrayIndex { obj, indexes } => {
                 write!(f, "{obj}")?;

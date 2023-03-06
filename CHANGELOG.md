@@ -9,6 +9,18 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
 
+## [0.32.0] 2023-03-6
+
+### Added
+* Support ClickHouse `CREATE TABLE` with `ORDER BY` (#824) - Thanks @ankrgyl
+* Support PostgreSQL exponentiation `^` operator (#813) - Thanks @michael-2956
+* Support `BIGNUMERIC` type in BigQuery (#811) - Thanks @togami2864
+* Support for optional trailing commas (#810) - Thanks @ankrgyl
+
+### Fixed
+* Fix table alias parsing regression by backing out redshift column definition list (#827) - Thanks @alamb
+* Fix typo in `ReplaceSelectElement`  `colum_name` --> `column_name` (#822) - Thanks @togami2864
+
 ## [0.31.0] 2023-03-1
 
 ### Added
@@ -21,15 +33,13 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 * Support MySQL Character Set Introducers (#788) - Thanks @mskrzypkows
 
 ### Fixed
-
-Fix clippy error in ci (#803) - Thanks @togami2864
-Handle  offset in map key in BigQuery dialect  (#797) - Thanks @Ziinc
-Fix a typo (precendence -> precedence) (#794) - Thanks @SARDONYX-sard
-use post_* visitors for mutable visits (#789) - Thanks @lovasoa
+* Fix clippy error in ci (#803) - Thanks @togami2864
+* Handle  offset in map key in BigQuery dialect  (#797) - Thanks @Ziinc
+* Fix a typo (precendence -> precedence) (#794) - Thanks @SARDONYX-sard
+* use post_* visitors for mutable visits (#789) - Thanks @lovasoa
 
 ### Changed
-Add another known user (#787) - Thanks @joocer
-
+* Add another known user (#787) - Thanks @joocer
 
 ## [0.30.0] 2023-01-02
 

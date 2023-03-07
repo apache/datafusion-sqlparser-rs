@@ -68,17 +68,25 @@ impl TestedDialects {
         })
     }
 
+    /// Parses a single SQL string into multiple statements, ensuring
+    /// the result is the same for all tested dialects.
     pub fn parse_sql_statements(&self, sql: &str) -> Result<Vec<Statement>, ParserError> {
         self.one_of_identical_results(|dialect| Parser::parse_sql(dialect, sql))
         // To fail the `ensure_multiple_dialects_are_tested` test:
         // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)
     }
 
-    /// Ensures that `sql` parses as a single statement and returns it.
-    /// If non-empty `canonical` SQL representation is provided,
-    /// additionally asserts that parsing `sql` results in the same parse
-    /// tree as parsing `canonical`, and that serializing it back to string
-    /// results in the `canonical` representation.
+    /// Ensures that `sql` parses as a single [Statement] for all tested
+    /// dialects.
+    ///
+    /// If `canonical` is non empty,this function additionally asserts
+    /// that:
+    ///
+    /// 1. parsing `sql` results in the same [`Statement`] as parsing
+    /// `canonical`.
+    ///
+    /// 2. re-serializing the result of parsing `sql` produces the same
+    /// `canonical` sql string
     pub fn one_statement_parses_to(&self, sql: &str, canonical: &str) -> Statement {
         let mut statements = self.parse_sql_statements(sql).unwrap();
         assert_eq!(statements.len(), 1);
@@ -94,14 +102,16 @@ impl TestedDialects {
         only_statement
     }
 
-    /// Ensures that `sql` parses as a single [Statement], and is not modified
-    /// after a serialization round-trip.
-    pub fn verified_stmt(&self, query: &str) -> Statement {
-        self.one_statement_parses_to(query, query)
+    /// Ensures that `sql` parses as a single [Statement], and that
+    /// re-serializing the parse result produces the same `sql`
+    /// string (is not modified after a serialization round-trip).
+    pub fn verified_stmt(&self, sql: &str) -> Statement {
+        self.one_statement_parses_to(sql, sql)
     }
 
-    /// Ensures that `sql` parses as a single [Query], and is not modified
-    /// after a serialization round-trip.
+    /// Ensures that `sql` parses as a single [Query], and that
+    /// re-serializing the parse result produces the same `sql`
+    /// string (is not modified after a serialization round-trip).
     pub fn verified_query(&self, sql: &str) -> Query {
         match self.verified_stmt(sql) {
             Statement::Query(query) => *query,
@@ -109,8 +119,9 @@ impl TestedDialects {
         }
     }
 
-    /// Ensures that `sql` parses as a single [Select], and is not modified
-    /// after a serialization round-trip.
+    /// Ensures that `sql` parses as a single [Select], and that
+    /// re-serializing the parse result produces the same `sql`
+    /// string (is not modified after a serialization round-trip).
     pub fn verified_only_select(&self, query: &str) -> Select {
         match *self.verified_query(query).body {
             SetExpr::Select(s) => *s,
@@ -118,8 +129,9 @@ impl TestedDialects {
         }
     }
 
-    /// Ensures that `sql` parses as an expression, and is not modified
-    /// after a serialization round-trip.
+    /// Ensures that `sql` parses as an [`Expr`], and that
+    /// re-serializing the parse result produces the same `sql`
+    /// string (is not modified after a serialization round-trip).
     pub fn verified_expr(&self, sql: &str) -> Expr {
         let ast = self
             .run_parser_method(sql, |parser| parser.parse_expr())

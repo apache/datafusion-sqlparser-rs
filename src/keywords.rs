@@ -545,6 +545,7 @@ define_keywords!(
     SUM,
     SUPER,
     SUPERUSER,
+    SWAP,
     SYMMETRIC,
     SYNC,
     SYSTEM,

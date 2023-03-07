@@ -96,6 +96,10 @@ pub enum AlterTableOperation {
         column_name: Ident,
         op: AlterColumnOperation,
     },
+    /// 'SWAP WITH <table_name>'
+    ///
+    /// Note: this is Snowflake specific <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
+    SwapWith { table_name: ObjectName },
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -202,6 +206,9 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::RenameConstraint { old_name, new_name } => {
                 write!(f, "RENAME CONSTRAINT {old_name} TO {new_name}")
+            }
+            AlterTableOperation::SwapWith { table_name } => {
+                write!(f, "SWAP WITH {table_name}")
             }
         }
     }

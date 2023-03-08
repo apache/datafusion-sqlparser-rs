@@ -1487,6 +1487,8 @@ pub enum Statement {
         object_type: CommentObject,
         object_name: ObjectName,
         comment: Option<String>,
+        /// An optional `IF EXISTS` clause. (Non-standard.)
+        if_exists: bool,
     },
     /// `COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
     Commit { chain: bool },
@@ -2637,8 +2639,13 @@ impl fmt::Display for Statement {
                 object_type,
                 object_name,
                 comment,
+                if_exists,
             } => {
-                write!(f, "COMMENT ON {object_type} {object_name} IS ")?;
+                write!(f, "COMMENT ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?
+                };
+                write!(f, "ON {object_type} {object_name} IS ")?;
                 if let Some(c) = comment {
                     write!(f, "'{c}'")
                 } else {

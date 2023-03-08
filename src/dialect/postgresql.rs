@@ -49,6 +49,8 @@ impl Dialect for PostgreSqlDialect {
 }
 
 pub fn parse_comment(parser: &mut Parser) -> Result<Statement, ParserError> {
+    let if_exists = parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+
     parser.expect_keyword(Keyword::ON)?;
     let token = parser.next_token();
 
@@ -74,5 +76,6 @@ pub fn parse_comment(parser: &mut Parser) -> Result<Statement, ParserError> {
         object_type,
         object_name,
         comment,
+        if_exists,
     })
 }

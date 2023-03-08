@@ -1790,10 +1790,12 @@ fn parse_comments() {
             object_type,
             object_name,
             comment: Some(comment),
+            if_exists,
         } => {
             assert_eq!("comment", comment);
             assert_eq!("tab.name", object_name.to_string());
             assert_eq!(CommentObject::Column, object_type);
+            assert!(!if_exists);
         }
         _ => unreachable!(),
     }
@@ -1803,22 +1805,26 @@ fn parse_comments() {
             object_type,
             object_name,
             comment: Some(comment),
+            if_exists,
         } => {
             assert_eq!("comment", comment);
             assert_eq!("public.tab", object_name.to_string());
             assert_eq!(CommentObject::Table, object_type);
+            assert!(!if_exists);
         }
         _ => unreachable!(),
     }
 
-    match pg().verified_stmt("COMMENT ON TABLE public.tab IS NULL") {
+    match pg().verified_stmt("COMMENT IF EXISTS ON TABLE public.tab IS NULL") {
         Statement::Comment {
             object_type,
             object_name,
             comment: None,
+            if_exists,
         } => {
             assert_eq!("public.tab", object_name.to_string());
             assert_eq!(CommentObject::Table, object_type);
+            assert!(if_exists);
         }
         _ => unreachable!(),
     }

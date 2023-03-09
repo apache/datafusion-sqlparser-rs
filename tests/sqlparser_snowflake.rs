@@ -14,6 +14,7 @@
 //! Test SQL syntax specific to Snowflake. The parser based on the
 //! generic dialect is also tested (on the inputs it can handle).
 
+use sqlparser::ast::helpers::stmt_data_loading::{DataLoadingOption, DataLoadingOptionType};
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SnowflakeDialect};
 use sqlparser::parser::ParserError;
@@ -505,4 +506,231 @@ fn test_alter_table_swap_with() {
         }
         _ => unreachable!(),
     };
+}
+
+#[test]
+fn test_drop_stage() {
+    match snowflake_and_generic().verified_stmt("DROP STAGE s1") {
+        Statement::Drop {
+            names, if_exists, ..
+        } => {
+            assert!(!if_exists);
+            assert_eq!("s1", names[0].to_string());
+        }
+        _ => unreachable!(),
+    };
+    match snowflake_and_generic().verified_stmt("DROP STAGE IF EXISTS s1") {
+        Statement::Drop {
+            names, if_exists, ..
+        } => {
+            assert!(if_exists);
+            assert_eq!("s1", names[0].to_string());
+        }
+        _ => unreachable!(),
+    };
+
+    snowflake_and_generic().one_statement_parses_to("DROP STAGE s1", "DROP STAGE s1");
+
+    snowflake_and_generic()
+        .one_statement_parses_to("DROP STAGE IF EXISTS s1", "DROP STAGE IF EXISTS s1");
+}
+
+#[test]
+fn test_create_stage() {
+    let sql = "CREATE STAGE s1.s2";
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateStage {
+            or_replace,
+            temporary,
+            if_not_exists,
+            name,
+            comment,
+            ..
+        } => {
+            assert!(!or_replace);
+            assert!(!temporary);
+            assert!(!if_not_exists);
+            assert_eq!("s1.s2", name.to_string());
+            assert!(comment.is_none());
+        }
+        _ => unreachable!(),
+    };
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+
+    let extended_sql = concat!(
+        "CREATE OR REPLACE TEMPORARY STAGE IF NOT EXISTS s1.s2 ",
+        "COMMENT='some-comment'"
+    );
+    match snowflake().verified_stmt(extended_sql) {
+        Statement::CreateStage {
+            or_replace,
+            temporary,
+            if_not_exists,
+            name,
+            stage_params,
+            comment,
+            ..
+        } => {
+            assert!(or_replace);
+            assert!(temporary);
+            assert!(if_not_exists);
+            assert!(stage_params.url.is_none());
+            assert!(stage_params.endpoint.is_none());
+            assert_eq!("s1.s2", name.to_string());
+            assert_eq!("some-comment", comment.unwrap());
+        }
+        _ => unreachable!(),
+    };
+    assert_eq!(
+        snowflake().verified_stmt(extended_sql).to_string(),
+        extended_sql
+    );
+}
+
+#[test]
+fn test_create_stage_with_stage_params() {
+    let sql = concat!(
+        "CREATE OR REPLACE STAGE my_ext_stage ",
+        "URL='s3://load/files/' ",
+        "STORAGE_INTEGRATION=myint ",
+        "ENDPOINT='<s3_api_compatible_endpoint>' ",
+        "CREDENTIALS=(AWS_KEY_ID='1a2b3c' AWS_SECRET_KEY='4x5y6z') ",
+        "ENCRYPTION=(MASTER_KEY='key' TYPE='AWS_SSE_KMS')"
+    );
+
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateStage { stage_params, .. } => {
+            assert_eq!("s3://load/files/", stage_params.url.unwrap());
+            assert_eq!("myint", stage_params.storage_integration.unwrap());
+            assert_eq!(
+                "<s3_api_compatible_endpoint>",
+                stage_params.endpoint.unwrap()
+            );
+            assert!(stage_params
+                .credentials
+                .options
+                .contains(&DataLoadingOption {
+                    option_name: "AWS_KEY_ID".to_string(),
+                    option_type: DataLoadingOptionType::STRING,
+                    value: "1a2b3c".to_string()
+                }));
+            assert!(stage_params
+                .credentials
+                .options
+                .contains(&DataLoadingOption {
+                    option_name: "AWS_SECRET_KEY".to_string(),
+                    option_type: DataLoadingOptionType::STRING,
+                    value: "4x5y6z".to_string()
+                }));
+            assert!(stage_params
+                .encryption
+                .options
+                .contains(&DataLoadingOption {
+                    option_name: "MASTER_KEY".to_string(),
+                    option_type: DataLoadingOptionType::STRING,
+                    value: "key".to_string()
+                }));
+            assert!(stage_params
+                .encryption
+                .options
+                .contains(&DataLoadingOption {
+                    option_name: "TYPE".to_string(),
+                    option_type: DataLoadingOptionType::STRING,
+                    value: "AWS_SSE_KMS".to_string()
+                }));
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+}
+
+#[test]
+fn test_create_stage_with_directory_table_params() {
+    let sql = concat!(
+        "CREATE OR REPLACE STAGE my_ext_stage ",
+        "URL='s3://load/files/' ",
+        "DIRECTORY=(ENABLE=TRUE REFRESH_ON_CREATE=FALSE NOTIFICATION_INTEGRATION='some-string')"
+    );
+
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateStage {
+            directory_table_params,
+            ..
+        } => {
+            assert!(directory_table_params.options.contains(&DataLoadingOption {
+                option_name: "ENABLE".to_string(),
+                option_type: DataLoadingOptionType::BOOLEAN,
+                value: "TRUE".to_string()
+            }));
+            assert!(directory_table_params.options.contains(&DataLoadingOption {
+                option_name: "REFRESH_ON_CREATE".to_string(),
+                option_type: DataLoadingOptionType::BOOLEAN,
+                value: "FALSE".to_string()
+            }));
+            assert!(directory_table_params.options.contains(&DataLoadingOption {
+                option_name: "NOTIFICATION_INTEGRATION".to_string(),
+                option_type: DataLoadingOptionType::STRING,
+                value: "some-string".to_string()
+            }));
+        }
+        _ => unreachable!(),
+    };
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+}
+
+#[test]
+fn test_create_stage_with_file_format() {
+    let sql = concat!(
+        "CREATE OR REPLACE STAGE my_ext_stage ",
+        "URL='s3://load/files/' ",
+        "FILE_FORMAT=(COMPRESSION=AUTO BINARY_FORMAT=HEX ESCAPE='\\')"
+    );
+
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateStage { file_format, .. } => {
+            assert!(file_format.options.contains(&DataLoadingOption {
+                option_name: "COMPRESSION".to_string(),
+                option_type: DataLoadingOptionType::ENUM,
+                value: "AUTO".to_string()
+            }));
+            assert!(file_format.options.contains(&DataLoadingOption {
+                option_name: "BINARY_FORMAT".to_string(),
+                option_type: DataLoadingOptionType::ENUM,
+                value: "HEX".to_string()
+            }));
+            assert!(file_format.options.contains(&DataLoadingOption {
+                option_name: "ESCAPE".to_string(),
+                option_type: DataLoadingOptionType::STRING,
+                value: "\\".to_string()
+            }));
+        }
+        _ => unreachable!(),
+    };
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+}
+
+#[test]
+fn test_create_stage_with_copy_options() {
+    let sql = concat!(
+        "CREATE OR REPLACE STAGE my_ext_stage ",
+        "URL='s3://load/files/' ",
+        "COPY_OPTIONS=(ON_ERROR=CONTINUE FORCE=TRUE)"
+    );
+    match snowflake().verified_stmt(sql) {
+        Statement::CreateStage { copy_options, .. } => {
+            assert!(copy_options.options.contains(&DataLoadingOption {
+                option_name: "ON_ERROR".to_string(),
+                option_type: DataLoadingOptionType::ENUM,
+                value: "CONTINUE".to_string()
+            }));
+            assert!(copy_options.options.contains(&DataLoadingOption {
+                option_name: "FORCE".to_string(),
+                option_type: DataLoadingOptionType::BOOLEAN,
+                value: "TRUE".to_string()
+            }));
+        }
+        _ => unreachable!(),
+    };
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
 }

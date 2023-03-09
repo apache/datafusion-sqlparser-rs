@@ -3567,6 +3567,53 @@ impl<'a> Parser<'a> {
         {
             let expr = self.parse_expr()?;
             Ok(Some(ColumnOption::OnUpdate(expr)))
+        } else if self.parse_keyword(Keyword::GENERATED) {
+            self.parse_optional_column_option_generated()
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn parse_optional_column_option_generated(
+        &mut self,
+    ) -> Result<Option<ColumnOption>, ParserError> {
+        if self.parse_keywords(&[Keyword::ALWAYS, Keyword::AS, Keyword::IDENTITY]) {
+            println!("self.parse_keywords(&[Keyword::ALWAYS, Keyword::AS, Keyword::IDENTITY]) ");
+                let mut sequence_options = vec![];
+                if self.expect_token(&Token::LParen).is_ok() {
+                    sequence_options = self.parse_create_sequence_options()?;
+                    self.expect_token(&Token::RParen)?;
+                }
+                Ok(Some(ColumnOption::Generated {
+                    generated_as: GeneratedAs::Always,
+                    sequence_options: Some(sequence_options),
+                    generation_expr: None,
+                }))
+        } else if self.parse_keywords(&[Keyword::BY, Keyword::DEFAULT, Keyword::AS, Keyword::IDENTITY]) {
+            println!("self.parse_keywords(&[Keyword::BY, Keyword::DEFAULT, Keyword::AS, Keyword::IDENTITY])");
+                let mut sequence_options = vec![];
+                if self.expect_token(&Token::LParen).is_ok() {
+                    sequence_options = self.parse_create_sequence_options()?;
+                    self.expect_token(&Token::RParen)?;
+                }
+                Ok(Some(ColumnOption::Generated {
+                    generated_as: GeneratedAs::ByDefault,
+                    sequence_options: Some(sequence_options),
+                    generation_expr: None,
+                }))
+        } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::AS]) {
+            if self.expect_token(&Token::LParen).is_ok() {
+                let expr = self.parse_expr()?;
+                self.expect_token(&Token::RParen)?;
+                let _ = self.parse_keywords(&[Keyword::STORED, ]);
+                Ok(Some(ColumnOption::Generated {
+                    generated_as: GeneratedAs::Always,
+                    sequence_options: None,
+                    generation_expr: Some(expr),
+                }))
+            }else {
+                Ok(None)
+            }
         } else {
             Ok(None)
         }

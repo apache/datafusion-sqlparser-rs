@@ -3573,45 +3573,47 @@ impl<'a> Parser<'a> {
             Ok(None)
         }
     }
-
     fn parse_optional_column_option_generated(
         &mut self,
     ) -> Result<Option<ColumnOption>, ParserError> {
         if self.parse_keywords(&[Keyword::ALWAYS, Keyword::AS, Keyword::IDENTITY]) {
-            println!("self.parse_keywords(&[Keyword::ALWAYS, Keyword::AS, Keyword::IDENTITY]) ");
-                let mut sequence_options = vec![];
-                if self.expect_token(&Token::LParen).is_ok() {
-                    sequence_options = self.parse_create_sequence_options()?;
-                    self.expect_token(&Token::RParen)?;
-                }
-                Ok(Some(ColumnOption::Generated {
-                    generated_as: GeneratedAs::Always,
-                    sequence_options: Some(sequence_options),
-                    generation_expr: None,
-                }))
-        } else if self.parse_keywords(&[Keyword::BY, Keyword::DEFAULT, Keyword::AS, Keyword::IDENTITY]) {
-            println!("self.parse_keywords(&[Keyword::BY, Keyword::DEFAULT, Keyword::AS, Keyword::IDENTITY])");
-                let mut sequence_options = vec![];
-                if self.expect_token(&Token::LParen).is_ok() {
-                    sequence_options = self.parse_create_sequence_options()?;
-                    self.expect_token(&Token::RParen)?;
-                }
-                Ok(Some(ColumnOption::Generated {
-                    generated_as: GeneratedAs::ByDefault,
-                    sequence_options: Some(sequence_options),
-                    generation_expr: None,
-                }))
+            let mut sequence_options = vec![];
+            if self.expect_token(&Token::LParen).is_ok() {
+                sequence_options = self.parse_create_sequence_options()?;
+                self.expect_token(&Token::RParen)?;
+            }
+            Ok(Some(ColumnOption::Generated {
+                generated_as: GeneratedAs::Always,
+                sequence_options: Some(sequence_options),
+                generation_expr: None,
+            }))
+        } else if self.parse_keywords(&[
+            Keyword::BY,
+            Keyword::DEFAULT,
+            Keyword::AS,
+            Keyword::IDENTITY,
+        ]) {
+            let mut sequence_options = vec![];
+            if self.expect_token(&Token::LParen).is_ok() {
+                sequence_options = self.parse_create_sequence_options()?;
+                self.expect_token(&Token::RParen)?;
+            }
+            Ok(Some(ColumnOption::Generated {
+                generated_as: GeneratedAs::ByDefault,
+                sequence_options: Some(sequence_options),
+                generation_expr: None,
+            }))
         } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::AS]) {
             if self.expect_token(&Token::LParen).is_ok() {
                 let expr = self.parse_expr()?;
                 self.expect_token(&Token::RParen)?;
-                let _ = self.parse_keywords(&[Keyword::STORED, ]);
+                let _ = self.parse_keywords(&[Keyword::STORED]);
                 Ok(Some(ColumnOption::Generated {
-                    generated_as: GeneratedAs::Always,
+                    generated_as: GeneratedAs::ExpStored,
                     sequence_options: None,
                     generation_expr: Some(expr),
                 }))
-            }else {
+            } else {
                 Ok(None)
             }
         } else {

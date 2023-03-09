@@ -1488,6 +1488,7 @@ pub enum Statement {
         object_name: ObjectName,
         comment: Option<String>,
         /// An optional `IF EXISTS` clause. (Non-standard.)
+        /// See <https://docs.snowflake.com/en/sql-reference/sql/comment>
         if_exists: bool,
     },
     /// `COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`

@@ -41,10 +41,8 @@ pub enum Value {
     /// See [Postgres docs](https://www.postgresql.org/docs/8.3/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS)
     /// for more details.
     EscapedStringLiteral(String),
-    /// B'string value'
-    SingleQuotedByteStringLiteral(String),
-    /// B"string value"
-    DoubleQuotedByteStringLiteral(String),
+    /// B'string value' or B"string value"
+    ByteStringLiteral(String),
     /// R'string value' or r'string value' or r"string value"
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_literals>
     RawStringLiteral(String),
@@ -75,8 +73,7 @@ impl fmt::Display for Value {
             Value::NationalStringLiteral(v) => write!(f, "N'{v}'"),
             Value::HexStringLiteral(v) => write!(f, "X'{v}'"),
             Value::Boolean(v) => write!(f, "{v}"),
-            Value::SingleQuotedByteStringLiteral(v) => write!(f, "B'{v}'"),
-            Value::DoubleQuotedByteStringLiteral(v) => write!(f, "B\"{v}\""),
+            Value::ByteStringLiteral(v) => write!(f, "B'{v}'"),
             Value::RawStringLiteral(v) => write!(f, "R'{v}'"),
             Value::Null => write!(f, "NULL"),
             Value::Placeholder(v) => write!(f, "{v}"),

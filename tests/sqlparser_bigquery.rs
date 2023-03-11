@@ -43,11 +43,11 @@ fn parse_byte_literal() {
     let select = bigquery().verified_only_select(sql);
     assert_eq!(2, select.projection.len());
     assert_eq!(
-        &Expr::Value(Value::SingleQuotedByteStringLiteral("abc".to_string())),
+        &Expr::Value(Value::ByteStringLiteral("abc".to_string())),
         expr_from_projection(&select.projection[0])
     );
     assert_eq!(
-        &Expr::Value(Value::DoubleQuotedByteStringLiteral("abc".to_string())),
+        &Expr::Value(Value::ByteStringLiteral("abc".to_string())),
         expr_from_projection(&select.projection[1])
     );
 

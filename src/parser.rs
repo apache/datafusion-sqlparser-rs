@@ -824,8 +824,7 @@ impl<'a> Parser<'a> {
             | Token::SingleQuotedString(_)
             | Token::DoubleQuotedString(_)
             | Token::DollarQuotedString(_)
-            | Token::SingleQuotedByteStringLiteral(_)
-            | Token::DoubleQuotedByteStringLiteral(_)
+            | Token::ByteStringLiteral(_)
             | Token::RawStringLiteral(_)
             | Token::NationalStringLiteral(_)
             | Token::HexStringLiteral(_) => {
@@ -4194,12 +4193,7 @@ impl<'a> Parser<'a> {
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
             Token::DollarQuotedString(ref s) => Ok(Value::DollarQuotedString(s.clone())),
-            Token::SingleQuotedByteStringLiteral(ref s) => {
-                Ok(Value::SingleQuotedByteStringLiteral(s.clone()))
-            }
-            Token::DoubleQuotedByteStringLiteral(ref s) => {
-                Ok(Value::DoubleQuotedByteStringLiteral(s.clone()))
-            }
+            Token::ByteStringLiteral(ref s) => Ok(Value::ByteStringLiteral(s.clone())),
             Token::RawStringLiteral(ref s) => Ok(Value::RawStringLiteral(s.clone())),
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
             Token::EscapedStringLiteral(ref s) => Ok(Value::EscapedStringLiteral(s.to_string())),

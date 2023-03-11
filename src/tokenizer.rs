@@ -58,10 +58,8 @@ pub enum Token {
     DoubleQuotedString(String),
     /// Dollar quoted string: i.e: $$string$$ or $tag_name$string$tag_name$
     DollarQuotedString(DollarQuotedString),
-    /// Byte string literal: i.e: b'string' or B'string'
-    SingleQuotedByteStringLiteral(String),
-    /// Byte string literal: i.e: b"string" or B"string"
-    DoubleQuotedByteStringLiteral(String),
+    /// Byte string literal: i.e: b"string", B"string", b'string' or B'string'
+    ByteStringLiteral(String),
     /// Raw string literal: i.e: r'string' or R'string' or r"string" or R"string"
     RawStringLiteral(String),
     /// "National" string literal: i.e: N'string'
@@ -195,8 +193,7 @@ impl fmt::Display for Token {
             Token::NationalStringLiteral(ref s) => write!(f, "N'{s}'"),
             Token::EscapedStringLiteral(ref s) => write!(f, "E'{s}'"),
             Token::HexStringLiteral(ref s) => write!(f, "X'{s}'"),
-            Token::SingleQuotedByteStringLiteral(ref s) => write!(f, "B'{s}'"),
-            Token::DoubleQuotedByteStringLiteral(ref s) => write!(f, "B\"{s}\""),
+            Token::ByteStringLiteral(ref s) => write!(f, "B'{s}'"),
             Token::RawStringLiteral(ref s) => write!(f, "R'{s}'"),
             Token::Comma => f.write_str(","),
             Token::Whitespace(ws) => write!(f, "{ws}"),
@@ -508,11 +505,11 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('\'') => {
                             let s = self.tokenize_quoted_string(chars, '\'')?;
-                            Ok(Some(Token::SingleQuotedByteStringLiteral(s)))
+                            Ok(Some(Token::ByteStringLiteral(s)))
                         }
                         Some('\"') => {
                             let s = self.tokenize_quoted_string(chars, '\"')?;
-                            Ok(Some(Token::DoubleQuotedByteStringLiteral(s)))
+                            Ok(Some(Token::ByteStringLiteral(s)))
                         }
                         _ => {
                             // regular identifier starting with an "b" or "B"

@@ -39,20 +39,31 @@ fn parse_literal_string() {
 
 #[test]
 fn parse_byte_literal() {
-    let sql = r#"SELECT B'abc', B"abc""#;
-    let select = bigquery().verified_only_select(sql);
-    assert_eq!(2, select.projection.len());
-    assert_eq!(
-        &Expr::Value(Value::ByteStringLiteral("abc".to_string())),
-        expr_from_projection(&select.projection[0])
-    );
-    assert_eq!(
-        &Expr::Value(Value::ByteStringLiteral("abc".to_string())),
-        expr_from_projection(&select.projection[1])
-    );
-
-    let sql = r#"SELECT b'abc', b"abc""#;
-    bigquery().one_statement_parses_to(sql, r#"SELECT B'abc', B"abc""#);
+    let sql = r#"SELECT B'abc', B"abc", b'abc', b"abc""#;
+    let stmt = bigquery().one_statement_parses_to(sql, r#"SELECT B'abc', B'abc', B'abc', B'abc'"#);
+    if let Statement::Query(query) = stmt {
+        if let SetExpr::Select(select) = *query.body {
+            assert_eq!(4, select.projection.len());
+            assert_eq!(
+                &Expr::Value(Value::ByteStringLiteral("abc".to_string())),
+                expr_from_projection(&select.projection[0])
+            );
+            assert_eq!(
+                &Expr::Value(Value::ByteStringLiteral("abc".to_string())),
+                expr_from_projection(&select.projection[1])
+            );
+            assert_eq!(
+                &Expr::Value(Value::ByteStringLiteral("abc".to_string())),
+                expr_from_projection(&select.projection[2])
+            );
+            assert_eq!(
+                &Expr::Value(Value::ByteStringLiteral("abc".to_string())),
+                expr_from_projection(&select.projection[3])
+            );
+            return;
+        }
+    }
+    panic!("stmt isn't Statement::Query")
 }
 
 #[test]

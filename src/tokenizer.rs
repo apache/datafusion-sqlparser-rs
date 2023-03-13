@@ -596,7 +596,7 @@ impl<'a> Tokenizer<'a> {
                     let word = self.tokenize_word(ch, chars);
 
                     // TODO: implement parsing of exponent here
-                    if word.chars().all(|x| ('0'..='9').contains(&x) || x == '.') {
+                    if word.chars().all(|x| x.is_ascii_digit() || x == '.') {
                         let mut inner_state = State {
                             peekable: word.chars().peekable(),
                             line: 0,

@@ -670,6 +670,18 @@ pub enum TableFactor {
         table_with_joins: Box<TableWithJoins>,
         alias: Option<TableAlias>,
     },
+    /// Represents PIVOT operation on a table.
+    /// For example `FROM monthly_sales PIVOT(sum(amount) FOR MONTH IN ('JAN', 'FEB'))`
+    /// See <https://docs.snowflake.com/en/sql-reference/constructs/pivot>
+    Pivot {
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+        name: ObjectName,
+        table_alias: Option<TableAlias>,
+        aggregate_function: Expr, // Function expression
+        value_column: Vec<Ident>,
+        pivot_values: Vec<Value>,
+        pivot_alias: Option<TableAlias>,
+    },
 }
 
 impl fmt::Display for TableFactor {
@@ -739,6 +751,36 @@ impl fmt::Display for TableFactor {
                 write!(f, "({table_with_joins})")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
+                }
+                Ok(())
+            }
+            TableFactor::Pivot {
+                name,
+                table_alias,
+                aggregate_function,
+                value_column,
+                pivot_values,
+                pivot_alias,
+            } => {
+                write!(f, "{}", name)?;
+                if table_alias.is_some() {
+                    write!(f, " AS {}", table_alias.as_ref().unwrap())?;
+                }
+                write!(
+                    f,
+                    " PIVOT({} FOR {} IN (",
+                    aggregate_function,
+                    Expr::CompoundIdentifier(value_column.to_vec())
+                )?;
+                for value in pivot_values {
+                    write!(f, "{}", value)?;
+                    if !value.eq(pivot_values.last().unwrap()) {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, "))")?;
+                if pivot_alias.is_some() {
+                    write!(f, " AS {}", pivot_alias.as_ref().unwrap())?;
                 }
                 Ok(())
             }

@@ -1,4 +1,4 @@
-| :caution: :-- This is a fork of [sqlparser-rs/sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs)      |
+| :warning: This is a fork of [sqlparser-rs/sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs) :warning: |
 | --------------------------------------------------------------------------------------------------------- |
 | This is not the official parser maintained by the sqlparser-rs community. This fork is used by [OpenLineage](https://github.com/OpenLineage/OpenLineage) project integrations. | 
 

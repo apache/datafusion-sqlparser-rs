@@ -30,7 +30,7 @@ pub use self::data_type::{
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
-    ColumnOptionDef, IndexType, KeyOrIndexDisplay, ReferentialAction, TableConstraint,
+    ColumnOptionDef, GeneratedAs, IndexType, KeyOrIndexDisplay, ReferentialAction, TableConstraint,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{

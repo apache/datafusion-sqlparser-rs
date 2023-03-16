@@ -17,17 +17,13 @@ pub struct GenericDialect;
 
 impl Dialect for GenericDialect {
     fn is_identifier_start(&self, ch: char) -> bool {
-        ('a'..='z').contains(&ch)
-            || ('A'..='Z').contains(&ch)
-            || ch == '_'
-            || ch == '#'
-            || ch == '@'
+        ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_' || ch == '#' || ch == '@'
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        ('a'..='z').contains(&ch)
-            || ('A'..='Z').contains(&ch)
-            || ('0'..='9').contains(&ch)
+        ch.is_ascii_lowercase()
+            || ch.is_ascii_uppercase()
+            || ch.is_ascii_digit()
             || ch == '@'
             || ch == '$'
             || ch == '#'

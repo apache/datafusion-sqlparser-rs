@@ -1519,7 +1519,7 @@ mod tests {
 
     #[test]
     fn tokenize_invalid_string() {
-        let sql = String::from("\nمصطفىh");
+        let sql = String::from("\n💝مصطفىh");
 
         let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
@@ -1527,12 +1527,8 @@ mod tests {
         // println!("tokens: {:#?}", tokens);
         let expected = vec![
             Token::Whitespace(Whitespace::Newline),
-            Token::Char('م'),
-            Token::Char('ص'),
-            Token::Char('ط'),
-            Token::Char('ف'),
-            Token::Char('ى'),
-            Token::make_word("h", None),
+            Token::Char('💝'),
+            Token::make_word("مصطفىh", None),
         ];
         compare(expected, tokens);
     }
@@ -1582,7 +1578,7 @@ mod tests {
 
     #[test]
     fn tokenize_invalid_string_cols() {
-        let sql = String::from("\n\nSELECT * FROM table\tمصطفىh");
+        let sql = String::from("\n\nSELECT * FROM table\t💝مصطفىh");
 
         let dialect = GenericDialect {};
         let mut tokenizer = Tokenizer::new(&dialect, &sql);
@@ -1599,12 +1595,8 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_keyword("table"),
             Token::Whitespace(Whitespace::Tab),
-            Token::Char('م'),
-            Token::Char('ص'),
-            Token::Char('ط'),
-            Token::Char('ف'),
-            Token::Char('ى'),
-            Token::make_word("h", None),
+            Token::Char('💝'),
+            Token::make_word("مصطفىh", None),
         ];
         compare(expected, tokens);
     }

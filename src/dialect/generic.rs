@@ -17,12 +17,11 @@ pub struct GenericDialect;
 
 impl Dialect for GenericDialect {
     fn is_identifier_start(&self, ch: char) -> bool {
-        ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_' || ch == '#' || ch == '@'
+        ch.is_alphabetic() || ch == '_' || ch == '#' || ch == '@'
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        ch.is_ascii_lowercase()
-            || ch.is_ascii_uppercase()
+        ch.is_alphabetic()
             || ch.is_ascii_digit()
             || ch == '@'
             || ch == '$'

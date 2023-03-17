@@ -1,6 +1,6 @@
-| :warning: This is a fork of [sqlparser-rs/sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs) :warning: |
+| Forked from [sqlparser-rs/sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs) |
 | --------------------------------------------------------------------------------------------------------- |
-| This is not the official parser maintained by the sqlparser-rs community. Rather, it is a fork of that project used by [OpenLineage](https://github.com/OpenLineage/OpenLineage) integrations. | 
+| This is an unofficial fork of sqlparser-rs used by [OpenLineage](https://github.com/OpenLineage/OpenLineage) integrations. | 
 
 # Extensible SQL Lexer and Parser for Rust
 

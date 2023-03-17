@@ -1,13 +1,5 @@
-<style>
-  .forkNotice th {
-    background: grey
-  }
-</style>
-
-<div class='forkNotice'>
 | This is an unofficial fork of [sqlparser-rs/sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs) for use by [OpenLineage](https://github.com/OpenLineage/OpenLineage) integrations. |
 | --------------------------------------------------------------------------------------------------------- |
-</div>
 
 # Extensible SQL Lexer and Parser for Rust
 

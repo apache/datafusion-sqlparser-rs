@@ -57,7 +57,7 @@ macro_rules! return_ok_if_some {
 }
 
 #[cfg(feature = "std")]
-/// Implemenation [`RecursionCounter`] if std is available
+/// Implementation [`RecursionCounter`] if std is available
 mod recursion {
     use core::sync::atomic::{AtomicUsize, Ordering};
     use std::rc::Rc;
@@ -121,7 +121,7 @@ mod recursion {
 
 #[cfg(not(feature = "std"))]
 mod recursion {
-    /// Implemenation [`RecursionCounter`] if std is NOT available (and does not
+    /// Implementation [`RecursionCounter`] if std is NOT available (and does not
     /// guard against stack overflow).
     ///
     /// Has the same API as the std RecursionCounter implementation
@@ -209,7 +209,7 @@ pub struct Parser<'a> {
     /// Additional options that allow you to mix & match behavior otherwise
     /// constrained to certain dialects (e.g. trailing commas)
     options: ParserOptions,
-    /// ensure the stack does not overflow by limiting recusion depth
+    /// ensure the stack does not overflow by limiting recursion depth
     recursion_counter: RecursionCounter,
 }
 
@@ -360,7 +360,7 @@ impl<'a> Parser<'a> {
         Ok(stmts)
     }
 
-    /// Convience method to parse a string with one or more SQL
+    /// Convenience method to parse a string with one or more SQL
     /// statements into produce an Abstract Syntax Tree (AST).
     ///
     /// Example

@@ -447,10 +447,13 @@ fn parse_quote_identifiers_2() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: false,
                 top: None,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "quoted ` identifier".into(),
-                    quote_style: Some('`'),
-                }))],
+                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(
+                    Ident {
+                        value: "quoted ` identifier".into(),
+                        quote_style: Some('`'),
+                    }
+                    .empty_span()
+                ))],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -481,10 +484,13 @@ fn parse_quote_identifiers_3() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: false,
                 top: None,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "`quoted identifier`".into(),
-                    quote_style: Some('`'),
-                }))],
+                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(
+                    Ident {
+                        value: "`quoted identifier`".into(),
+                        quote_style: Some('`'),
+                    }
+                    .empty_span()
+                ))],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -787,7 +793,7 @@ fn parse_insert_with_on_duplicate_update() {
                         value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("description"))
+                                Expr::Identifier(Ident::new("description").empty_span())
                             ))],
                             over: None,
                             distinct: false,
@@ -799,7 +805,7 @@ fn parse_insert_with_on_duplicate_update() {
                         value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("perm_create"))
+                                Expr::Identifier(Ident::new("perm_create").empty_span())
                             ))],
                             over: None,
                             distinct: false,
@@ -811,7 +817,7 @@ fn parse_insert_with_on_duplicate_update() {
                         value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("perm_read"))
+                                Expr::Identifier(Ident::new("perm_read").empty_span())
                             ))],
                             over: None,
                             distinct: false,
@@ -823,7 +829,7 @@ fn parse_insert_with_on_duplicate_update() {
                         value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("perm_update"))
+                                Expr::Identifier(Ident::new("perm_update").empty_span())
                             ))],
                             over: None,
                             distinct: false,
@@ -835,7 +841,7 @@ fn parse_insert_with_on_duplicate_update() {
                         value: Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("VALUES".to_string()),]),
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("perm_delete"))
+                                Expr::Identifier(Ident::new("perm_delete").empty_span())
                             ))],
                             over: None,
                             distinct: false,
@@ -979,10 +985,13 @@ fn parse_substring_in_select() {
                         distinct: true,
                         top: None,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
-                            expr: Box::new(Expr::Identifier(Ident {
-                                value: "description".to_string(),
-                                quote_style: None
-                            })),
+                            expr: Box::new(Expr::Identifier(
+                                Ident {
+                                    value: "description".to_string(),
+                                    quote_style: None
+                                }
+                                .empty_span()
+                            )),
                             substring_from: Some(Box::new(Expr::Value(Value::Number(
                                 "0".to_string(),
                                 false

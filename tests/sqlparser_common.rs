@@ -6743,6 +6743,7 @@ fn parse_non_latin_identifiers() {
             Box::new(PostgreSqlDialect {}),
             Box::new(MsSqlDialect {}),
             Box::new(RedshiftSqlDialect {}),
+            Box::new(MySqlDialect {}),
         ],
     };
 

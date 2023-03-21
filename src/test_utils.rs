@@ -165,18 +165,6 @@ pub fn assert_eq_vec<T: ToString>(expected: &[&str], actual: &[T]) {
     );
 }
 
-pub fn only_ms_mysql_psql_redshift() -> TestedDialects {
-    TestedDialects {
-        dialects: vec![
-            Box::new(PostgreSqlDialect {}),
-            Box::new(MsSqlDialect {}),
-            Box::new(RedshiftSqlDialect {}),
-            Box::new(MySqlDialect {}),
-            Box::new(GenericDialect {}),
-        ],
-    }
-}
-
 pub fn only<T>(v: impl IntoIterator<Item = T>) -> T {
     let mut iter = v.into_iter();
     if let (Some(item), None) = (iter.next(), iter.next()) {

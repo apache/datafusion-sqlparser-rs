@@ -20,8 +20,7 @@ impl Dialect for MySqlDialect {
         // See https://dev.mysql.com/doc/refman/8.0/en/identifiers.html.
         // We don't yet support identifiers beginning with numbers, as that
         // makes it hard to distinguish numeric literals.
-        ch.is_ascii_lowercase()
-            || ch.is_ascii_uppercase()
+        ch.is_alphabetic()
             || ch == '_'
             || ch == '$'
             || ch == '@'

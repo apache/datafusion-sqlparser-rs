@@ -6734,3 +6734,23 @@ fn make_where_clause(num: usize) -> String {
     }
     output
 }
+
+#[test]
+fn parse_non_latin_identifiers() {
+    let supported_dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(MsSqlDialect {}),
+            Box::new(RedshiftSqlDialect {}),
+            Box::new(MySqlDialect {}),
+        ],
+    };
+
+    supported_dialects.verified_stmt("SELECT a.説明 FROM test.public.inter01 AS a");
+    supported_dialects.verified_stmt("SELECT a.説明 FROM inter01 AS a, inter01_transactions AS b WHERE a.説明 = b.取引 GROUP BY a.説明");
+    supported_dialects.verified_stmt("SELECT 説明, hühnervögel, garçon, Москва, 東京 FROM inter01");
+    assert!(supported_dialects
+        .parse_sql_statements("SELECT 💝 FROM table1")
+        .is_err());
+}

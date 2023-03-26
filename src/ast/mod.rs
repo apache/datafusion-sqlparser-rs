@@ -44,6 +44,7 @@ pub use self::value::{
     escape_quoted_string, DateTimeField, DollarQuotedString, TrimWhereField, Value,
 };
 
+use crate::ast::helpers::stmt_data_loading::{DataLoadingOptions, StageParamsObject};
 #[cfg(feature = "visitor")]
 pub use visitor::*;
 
@@ -1524,6 +1525,21 @@ pub enum Statement {
         /// Optional parameters.
         params: CreateFunctionBody,
     },
+    /// ```sql
+    /// CREATE STAGE
+    /// ```
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/create-stage>
+    CreateStage {
+        or_replace: bool,
+        temporary: bool,
+        if_not_exists: bool,
+        name: ObjectName,
+        stage_params: StageParamsObject,
+        directory_table_params: DataLoadingOptions,
+        file_format: DataLoadingOptions,
+        copy_options: DataLoadingOptions,
+        comment: Option<String>,
+    },
     /// `ASSERT <condition> [AS <message>]`
     Assert {
         condition: Expr,
@@ -2746,6 +2762,39 @@ impl fmt::Display for Statement {
                 }
                 write!(f, "")
             }
+            Statement::CreateStage {
+                or_replace,
+                temporary,
+                if_not_exists,
+                name,
+                stage_params,
+                directory_table_params,
+                file_format,
+                copy_options,
+                comment,
+                ..
+            } => {
+                write!(
+                    f,
+                    "CREATE {or_replace}{temp}STAGE {if_not_exists}{name}{stage_params}",
+                    temp = if *temporary { "TEMPORARY " } else { "" },
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
+                )?;
+                if !directory_table_params.options.is_empty() {
+                    write!(f, " DIRECTORY=({})", directory_table_params)?;
+                }
+                if !file_format.options.is_empty() {
+                    write!(f, " FILE_FORMAT=({})", file_format)?;
+                }
+                if !copy_options.options.is_empty() {
+                    write!(f, " COPY_OPTIONS=({})", copy_options)?;
+                }
+                if comment.is_some() {
+                    write!(f, " COMMENT='{}'", comment.as_ref().unwrap())?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -3405,6 +3454,7 @@ pub enum ObjectType {
     Schema,
     Role,
     Sequence,
+    Stage,
 }
 
 impl fmt::Display for ObjectType {
@@ -3416,6 +3466,7 @@ impl fmt::Display for ObjectType {
             ObjectType::Schema => "SCHEMA",
             ObjectType::Role => "ROLE",
             ObjectType::Sequence => "SEQUENCE",
+            ObjectType::Stage => "STAGE",
         })
     }
 }

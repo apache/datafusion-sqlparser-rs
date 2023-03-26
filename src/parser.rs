@@ -3017,11 +3017,13 @@ impl<'a> Parser<'a> {
             ObjectType::Schema
         } else if self.parse_keyword(Keyword::SEQUENCE) {
             ObjectType::Sequence
+        } else if self.parse_keyword(Keyword::STAGE) {
+            ObjectType::Stage
         } else if self.parse_keyword(Keyword::FUNCTION) {
             return self.parse_drop_function();
         } else {
             return self.expected(
-                "TABLE, VIEW, INDEX, ROLE, SCHEMA, FUNCTION or SEQUENCE after DROP",
+                "TABLE, VIEW, INDEX, ROLE, SCHEMA, FUNCTION, STAGE or SEQUENCE after DROP",
                 self.peek_token(),
             );
         };

@@ -5723,6 +5723,9 @@ impl<'a> Parser<'a> {
                         | TableFactor::Table { alias, .. }
                         | TableFactor::UNNEST { alias, .. }
                         | TableFactor::TableFunction { alias, .. }
+                        | TableFactor::Pivot {
+                            pivot_alias: alias, ..
+                        }
                         | TableFactor::NestedJoin { alias, .. } => {
                             // but not `FROM (mytable AS alias1) AS alias2`.
                             if let Some(inner_alias) = alias {
@@ -5780,13 +5783,21 @@ impl<'a> Parser<'a> {
             })
         } else {
             let name = self.parse_object_name()?;
+
             // Postgres, MSSQL: table-valued functions:
             let args = if self.consume_token(&Token::LParen) {
                 Some(self.parse_optional_args()?)
             } else {
                 None
             };
+
             let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+
+            // Pivot
+            if self.parse_keyword(Keyword::PIVOT) {
+                return self.parse_pivot_table_factor(name, alias);
+            }
+
             // MSSQL-specific table hints:
             let mut with_hints = vec![];
             if self.parse_keyword(Keyword::WITH) {
@@ -5821,6 +5832,35 @@ impl<'a> Parser<'a> {
             },
             subquery,
             alias,
+        })
+    }
+
+    pub fn parse_pivot_table_factor(
+        &mut self,
+        name: ObjectName,
+        table_alias: Option<TableAlias>,
+    ) -> Result<TableFactor, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let function_name = match self.next_token().token {
+            Token::Word(w) => Ok(w.value),
+            _ => self.expected("an aggregate function name", self.peek_token()),
+        }?;
+        let function = self.parse_function(ObjectName(vec![Ident::new(function_name)]))?;
+        self.expect_keyword(Keyword::FOR)?;
+        let value_column = self.parse_object_name()?.0;
+        self.expect_keyword(Keyword::IN)?;
+        self.expect_token(&Token::LParen)?;
+        let pivot_values = self.parse_comma_separated(Parser::parse_value)?;
+        self.expect_token(&Token::RParen)?;
+        self.expect_token(&Token::RParen)?;
+        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        Ok(TableFactor::Pivot {
+            name,
+            table_alias,
+            aggregate_function: function,
+            value_column,
+            pivot_values,
+            pivot_alias: alias,
         })
     }
 

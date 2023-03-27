@@ -4910,7 +4910,30 @@ impl<'a> Parser<'a> {
             None
         };
 
-        if !self.parse_keyword(Keyword::INSERT) {
+        if self.parse_keyword(Keyword::INSERT) {
+            let insert = self.parse_insert()?;
+
+            Ok(Query {
+                with,
+                body: Box::new(SetExpr::Insert(insert)),
+                limit: None,
+                order_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+            })
+        } else if self.parse_keyword(Keyword::UPDATE) {
+            let update = self.parse_update()?;
+            Ok(Query {
+                with,
+                body: Box::new(SetExpr::Update(update)),
+                limit: None,
+                order_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+            })
+        } else {
             let body = Box::new(self.parse_query_body(0)?);
 
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
@@ -4965,18 +4988,6 @@ impl<'a> Parser<'a> {
                 offset,
                 fetch,
                 locks,
-            })
-        } else {
-            let insert = self.parse_insert()?;
-
-            Ok(Query {
-                with,
-                body: Box::new(SetExpr::Insert(insert)),
-                limit: None,
-                order_by: vec![],
-                offset: None,
-                fetch: None,
-                locks: vec![],
             })
         }
     }

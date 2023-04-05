@@ -644,6 +644,13 @@ pub enum TableFactor {
         expr: Expr,
         alias: Option<TableAlias>,
     },
+    /// `e.g. LATERAL FLATTEN(<args>)[ AS <alias> ]`
+    Function {
+        lateral: bool,
+        name: ObjectName,
+        args: Vec<FunctionArg>,
+        alias: Option<TableAlias>,
+    },
     /// ```sql
     /// SELECT * FROM UNNEST ([10,20,30]) as numbers WITH OFFSET;
     /// +---------+--------+
@@ -714,6 +721,22 @@ impl fmt::Display for TableFactor {
                     write!(f, "LATERAL ")?;
                 }
                 write!(f, "({subquery})")?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {alias}")?;
+                }
+                Ok(())
+            }
+            TableFactor::Function {
+                lateral,
+                name,
+                args,
+                alias,
+            } => {
+                if *lateral {
+                    write!(f, "LATERAL ")?;
+                }
+                write!(f, "{name}")?;
+                write!(f, "({})", display_comma_separated(args))?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }

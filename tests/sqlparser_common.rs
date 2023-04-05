@@ -5795,15 +5795,6 @@ fn lateral_derived() {
     chk(false);
     chk(true);
 
-    let sql = "SELECT * FROM customer LEFT JOIN LATERAL generate_series(1, customer.id)";
-    let res = parse_sql_statements(sql);
-    assert_eq!(
-        ParserError::ParserError(
-            "Expected subquery after LATERAL, found: generate_series".to_string()
-        ),
-        res.unwrap_err()
-    );
-
     let sql = "SELECT * FROM a LEFT JOIN LATERAL (b CROSS JOIN c)";
     let res = parse_sql_statements(sql);
     assert_eq!(

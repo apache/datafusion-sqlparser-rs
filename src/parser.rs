@@ -5873,11 +5873,16 @@ impl<'a> Parser<'a> {
     /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
     pub fn parse_table_factor(&mut self) -> Result<TableFactor, ParserError> {
         if self.parse_keyword(Keyword::LATERAL) {
-            // LATERAL must always be followed by a subquery.
-            if !self.consume_token(&Token::LParen) {
-                self.expected("subquery after LATERAL", self.peek_token())?;
+            // LATERAL must always be followed by a subquery or table function.
+            if self.consume_token(&Token::LParen) {
+                self.parse_derived_table_factor(Lateral)
+            } else {
+                let name = self.parse_object_name()?;
+                self.expect_token(&Token::LParen)?;
+                let args = self.parse_optional_args()?;
+                let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+                Ok(TableFactor::Function { lateral: true, name, args, alias })
             }
-            self.parse_derived_table_factor(Lateral)
         } else if self.parse_keyword(Keyword::TABLE) {
             // parse table function (SELECT * FROM TABLE (<expr>) [ AS <alias> ])
             self.expect_token(&Token::LParen)?;
@@ -5956,6 +5961,7 @@ impl<'a> Parser<'a> {
                     match &mut table_and_joins.relation {
                         TableFactor::Derived { alias, .. }
                         | TableFactor::Table { alias, .. }
+                        | TableFactor::Function { alias, .. }
                         | TableFactor::UNNEST { alias, .. }
                         | TableFactor::TableFunction { alias, .. }
                         | TableFactor::FieldAccessor { alias, ..}

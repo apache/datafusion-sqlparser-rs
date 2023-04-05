@@ -175,6 +175,12 @@ fn parse_array() {
 }
 
 #[test]
+fn parse_lateral_flatten() {
+    snowflake().verified_only_select(r#"SELECT * FROM TABLE(FLATTEN(input => parse_json('{"a":1, "b":[77,88]}'), outer => true)) AS f"#);
+    snowflake().verified_only_select(r#"SELECT emp.employee_ID, emp.last_name, index, value AS project_name FROM employees AS emp, LATERAL FLATTEN(INPUT => emp.project_names) AS proj_names"#);
+}
+
+#[test]
 fn parse_json_using_colon() {
     let sql = "SELECT a:b FROM t";
     let select = snowflake().verified_only_select(sql);

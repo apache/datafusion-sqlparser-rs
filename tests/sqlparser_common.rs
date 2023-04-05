@@ -18,6 +18,8 @@
 //! sqlparser regardless of the chosen dialect (i.e. it doesn't conflict with
 //! dialect-specific parsing rules).
 
+extern crate core;
+
 use matches::assert_matches;
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::{Pivot, Unpivot};
@@ -36,6 +38,9 @@ use test_utils::{
 
 #[macro_use]
 mod test_utils;
+
+#[cfg(test)]
+use pretty_assertions::assert_eq;
 
 #[test]
 fn parse_insert_values() {
@@ -5976,12 +5981,10 @@ fn lateral_derived() {
     chk(false);
     chk(true);
 
-    let sql = "SELECT * FROM customer LEFT JOIN LATERAL generate_series(1, customer.id)";
+    let sql = "SELECT * FROM LATERAL UNNEST ([10,20,30]) as numbers WITH OFFSET;";
     let res = parse_sql_statements(sql);
     assert_eq!(
-        ParserError::ParserError(
-            "Expected subquery after LATERAL, found: generate_series".to_string()
-        ),
+        ParserError::ParserError("Expected end of statement, found: WITH".to_string()),
         res.unwrap_err()
     );
 
@@ -5993,6 +5996,60 @@ fn lateral_derived() {
         ),
         res.unwrap_err()
     );
+}
+
+#[test]
+fn lateral_function() {
+    let sql = "SELECT * FROM customer LEFT JOIN LATERAL generate_series(1, customer.id)";
+    let actual_select_only = verified_only_select(sql);
+    let expected = Select {
+        distinct: None,
+        top: None,
+        projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions {
+            opt_exclude: None,
+            opt_except: None,
+            opt_rename: None,
+            opt_replace: None,
+        })],
+        into: None,
+        from: vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "customer".to_string(),
+                    quote_style: None,
+                }]),
+                alias: None,
+                args: None,
+                with_hints: vec![],
+                version: None,
+                partitions: vec![],
+            },
+            joins: vec![Join {
+                relation: TableFactor::Function {
+                    lateral: true,
+                    name: ObjectName(vec!["generate_series".into()]),
+                    args: vec![
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(
+                            vec![Ident::new("customer"), Ident::new("id")],
+                        ))),
+                    ],
+                    alias: None,
+                },
+                join_operator: JoinOperator::LeftOuter(JoinConstraint::None),
+            }],
+        }],
+        lateral_views: vec![],
+        selection: None,
+        group_by: GroupByExpr::Expressions(vec![]),
+        cluster_by: vec![],
+        distribute_by: vec![],
+        sort_by: vec![],
+        having: None,
+        named_window: vec![],
+        qualify: None,
+    };
+    assert_eq!(actual_select_only, expected);
 }
 
 #[test]

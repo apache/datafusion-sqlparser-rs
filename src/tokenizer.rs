@@ -1094,16 +1094,11 @@ impl<'a> Tokenizer<'a> {
 
         chars.next(); // consume the opening quote
 
-        // slash escaping is specific to MySQL dialect
-        let mut is_escaped = false;
         while let Some(&ch) = chars.peek() {
             match ch {
                 char if char == quote_style => {
                     chars.next(); // consume
-                    if is_escaped {
-                        s.push(ch);
-                        is_escaped = false;
-                    } else if chars.peek().map(|c| *c == quote_style).unwrap_or(false) {
+                    if chars.peek().map(|c| *c == quote_style).unwrap_or(false) {
                         s.push(ch);
                         chars.next();
                     } else {
@@ -1111,12 +1106,28 @@ impl<'a> Tokenizer<'a> {
                     }
                 }
                 '\\' => {
+                    // consume
+                    chars.next();
+                    // slash escaping is specific to MySQL dialect
                     if dialect_of!(self is MySqlDialect) {
-                        is_escaped = !is_escaped;
+                        if let Some(next) = chars.peek() {
+                            // See https://dev.mysql.com/doc/refman/8.0/en/string-literals.html#character-escape-sequences
+                            let n = match next {
+                                '\'' | '\"' | '\\' | '%' | '_' => *next,
+                                '0' => '\0',
+                                'b' => '\u{8}',
+                                'n' => '\n',
+                                'r' => '\r',
+                                't' => '\t',
+                                'Z' => '\u{1a}',
+                                _ => *next,
+                            };
+                            s.push(n);
+                            chars.next(); // consume next
+                        }
                     } else {
                         s.push(ch);
                     }
-                    chars.next();
                 }
                 _ => {
                     chars.next(); // consume

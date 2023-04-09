@@ -7406,11 +7406,4 @@ mod tests {
             ))
         );
     }
-
-    #[test]
-    fn test_update_in_with_subquery() {
-        let sql = r#"WITH "result" AS (UPDATE "Hero" SET "name" = 'Captain America', "number_of_movies" = "number_of_movies" + 1 WHERE "secret_identity" = 'Sam Wilson' RETURNING "id", "name", "secret_identity", "number_of_movies") SELECT * FROM "result""#;
-        let ast = Parser::parse_sql(&GenericDialect, sql).unwrap();
-        assert_eq!(ast[0].to_string(), sql);
-    }
 }

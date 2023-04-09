@@ -2446,6 +2446,11 @@ fn parse_update_has_keyword() {
 }
 
 #[test]
+fn parse_update_in_with_subquery() {
+    pg_and_generic().verified_stmt(r#"WITH "result" AS (UPDATE "Hero" SET "name" = 'Captain America', "number_of_movies" = "number_of_movies" + 1 WHERE "secret_identity" = 'Sam Wilson' RETURNING "id", "name", "secret_identity", "number_of_movies") SELECT * FROM "result""#);
+}
+
+#[test]
 fn parse_like() {
     fn chk(negated: bool) {
         let sql = &format!(

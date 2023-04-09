@@ -2809,3 +2809,55 @@ fn parse_incorrect_dollar_quoted_string() {
     let sql = "SELECT $$$";
     assert!(pg().parse_sql_statements(sql).is_err());
 }
+
+#[test]
+fn parse_select_group_by_grouping_sets() {
+    let select = pg_and_generic().verified_only_select(
+        "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, GROUPING SETS ((brand), (size), ())"
+    );
+    assert_eq!(
+        vec![
+            Expr::Identifier(Ident::new("size")),
+            Expr::GroupingSets(vec![
+                vec![Expr::Identifier(Ident::new("brand"))],
+                vec![Expr::Identifier(Ident::new("size"))],
+                vec![],
+            ]),
+        ],
+        select.group_by
+    );
+}
+
+#[test]
+fn parse_select_group_by_rollup() {
+    let select = pg_and_generic().verified_only_select(
+        "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, ROLLUP (brand, size)",
+    );
+    assert_eq!(
+        vec![
+            Expr::Identifier(Ident::new("size")),
+            Expr::Rollup(vec![
+                vec![Expr::Identifier(Ident::new("brand"))],
+                vec![Expr::Identifier(Ident::new("size"))],
+            ]),
+        ],
+        select.group_by
+    );
+}
+
+#[test]
+fn parse_select_group_by_cube() {
+    let select = pg_and_generic().verified_only_select(
+        "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, CUBE (brand, size)",
+    );
+    assert_eq!(
+        vec![
+            Expr::Identifier(Ident::new("size")),
+            Expr::Cube(vec![
+                vec![Expr::Identifier(Ident::new("brand"))],
+                vec![Expr::Identifier(Ident::new("size"))],
+            ]),
+        ],
+        select.group_by
+    );
+}

@@ -4910,7 +4910,30 @@ impl<'a> Parser<'a> {
             None
         };
 
-        if !self.parse_keyword(Keyword::INSERT) {
+        if self.parse_keyword(Keyword::INSERT) {
+            let insert = self.parse_insert()?;
+
+            Ok(Query {
+                with,
+                body: Box::new(SetExpr::Insert(insert)),
+                limit: None,
+                order_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+            })
+        } else if self.parse_keyword(Keyword::UPDATE) {
+            let update = self.parse_update()?;
+            Ok(Query {
+                with,
+                body: Box::new(SetExpr::Update(update)),
+                limit: None,
+                order_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+            })
+        } else {
             let body = Box::new(self.parse_query_body(0)?);
 
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
@@ -4965,18 +4988,6 @@ impl<'a> Parser<'a> {
                 offset,
                 fetch,
                 locks,
-            })
-        } else {
-            let insert = self.parse_insert()?;
-
-            Ok(Query {
-                with,
-                body: Box::new(SetExpr::Insert(insert)),
-                limit: None,
-                order_by: vec![],
-                offset: None,
-                fetch: None,
-                locks: vec![],
             })
         }
     }
@@ -7446,5 +7457,12 @@ mod tests {
                 "Explain must be root of the plan".to_string()
             ))
         );
+    }
+
+    #[test]
+    fn test_update_in_with_subquery() {
+        let sql = r#"WITH "result" AS (UPDATE "Hero" SET "name" = 'Captain America', "number_of_movies" = "number_of_movies" + 1 WHERE "secret_identity" = 'Sam Wilson' RETURNING "id", "name", "secret_identity", "number_of_movies") SELECT * FROM "result""#;
+        let ast = Parser::parse_sql(&GenericDialect, sql).unwrap();
+        assert_eq!(ast[0].to_string(), sql);
     }
 }

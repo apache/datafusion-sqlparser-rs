@@ -514,6 +514,11 @@ fn parse_simple_select() {
 }
 
 #[test]
+fn parse_limit() {
+    verified_stmt("SELECT * FROM user LIMIT 1");
+}
+
+#[test]
 fn parse_limit_is_not_an_alias() {
     // In dialects supporting LIMIT it shouldn't be parsed as a table alias
     let ast = verified_query("SELECT id FROM customer LIMIT 1");

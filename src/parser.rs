@@ -6912,40 +6912,6 @@ mod tests {
         });
     }
 
-    #[test]
-    fn test_parse_limit() {
-        let sql = "SELECT * FROM user LIMIT 1";
-        all_dialects().run_parser_method(sql, |parser| {
-            let ast = parser.parse_query().unwrap();
-            assert_eq!(ast.to_string(), sql.to_string());
-        });
-
-        let sql = "SELECT * FROM user LIMIT $1 OFFSET $2";
-        let dialects = TestedDialects {
-            dialects: vec![
-                Box::new(PostgreSqlDialect {}),
-                Box::new(ClickHouseDialect {}),
-                Box::new(GenericDialect {}),
-                Box::new(MsSqlDialect {}),
-                Box::new(SnowflakeDialect {}),
-            ],
-        };
-
-        dialects.run_parser_method(sql, |parser| {
-            let ast = parser.parse_query().unwrap();
-            assert_eq!(ast.to_string(), sql.to_string());
-        });
-
-        let sql = "SELECT * FROM user LIMIT ? OFFSET ?";
-        let dialects = TestedDialects {
-            dialects: vec![Box::new(MySqlDialect {})],
-        };
-        dialects.run_parser_method(sql, |parser| {
-            let ast = parser.parse_query().unwrap();
-            assert_eq!(ast.to_string(), sql.to_string());
-        });
-    }
-
     #[cfg(test)]
     mod test_parse_data_type {
         use crate::ast::{
@@ -7399,24 +7365,6 @@ mod tests {
                 index_type: Some(IndexType::Hash),
                 columns: vec![Ident::new("c1")],
             }
-        );
-    }
-
-    #[test]
-    fn test_update_has_keyword() {
-        let sql = r#"UPDATE test SET name=$1,
-                value=$2,
-                where=$3,
-                create=$4,
-                is_default=$5,
-                classification=$6,
-                sort=$7
-                WHERE id=$8"#;
-        let pg_dialect = PostgreSqlDialect {};
-        let ast = Parser::parse_sql(&pg_dialect, sql).unwrap();
-        assert_eq!(
-            ast[0].to_string(),
-            r#"UPDATE test SET name = $1, value = $2, where = $3, create = $4, is_default = $5, classification = $6, sort = $7 WHERE id = $8"#
         );
     }
 

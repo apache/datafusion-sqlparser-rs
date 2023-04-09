@@ -2427,7 +2427,22 @@ fn parse_delimited_identifiers() {
 
     pg().verified_stmt(r#"CREATE TABLE "foo" ("bar" "int")"#);
     pg().verified_stmt(r#"ALTER TABLE foo ADD CONSTRAINT "bar" PRIMARY KEY (baz)"#);
-    //TODO verified_stmt(r#"UPDATE foo SET "bar" = 5"#);
+    pg().verified_stmt(r#"UPDATE foo SET "bar" = 5"#);
+}
+
+#[test]
+fn parse_update_has_keyword() {
+    pg().one_statement_parses_to(
+        r#"UPDATE test SET name=$1,
+                value=$2,
+                where=$3,
+                create=$4,
+                is_default=$5,
+                classification=$6,
+                sort=$7
+                WHERE id=$8"#,
+        r#"UPDATE test SET name = $1, value = $2, where = $3, create = $4, is_default = $5, classification = $6, sort = $7 WHERE id = $8"#
+    );
 }
 
 #[test]

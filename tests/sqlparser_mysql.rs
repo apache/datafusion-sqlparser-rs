@@ -1134,6 +1134,7 @@ fn parse_limit_my_sql_syntax() {
         "SELECT id, fname, lname FROM customer LIMIT 5, 10",
         "SELECT id, fname, lname FROM customer LIMIT 10 OFFSET 5",
     );
+    mysql_and_generic().verified_stmt("SELECT * FROM user LIMIT ? OFFSET ?");
 }
 
 #[test]

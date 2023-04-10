@@ -21,7 +21,7 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 * Support snowflake alter table swap with (#825) - Thanks @pawel-big-lebowski
 
 ### Changed
-* Move tests from parser.rs to appropriate parse_XX tests (#845) - Thanks@alamb
+* Move tests from parser.rs to appropriate parse_XX tests (#845) - Thanks @alamb
 * Correct typos in parser.rs (#838) - Thanks @felixonmars
 * Improve documentation on verified_* methods (#828) - Thanks @alamb
 

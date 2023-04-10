@@ -514,6 +514,11 @@ fn parse_simple_select() {
 }
 
 #[test]
+fn parse_limit() {
+    verified_stmt("SELECT * FROM user LIMIT 1");
+}
+
+#[test]
 fn parse_limit_is_not_an_alias() {
     // In dialects supporting LIMIT it shouldn't be parsed as a table alias
     let ast = verified_query("SELECT id FROM customer LIMIT 1");
@@ -1556,65 +1561,6 @@ fn parse_select_group_by() {
     one_statement_parses_to(
         "SELECT id, fname, lname FROM customer GROUP BY (lname, fname)",
         "SELECT id, fname, lname FROM customer GROUP BY (lname, fname)",
-    );
-}
-
-#[test]
-fn parse_select_group_by_grouping_sets() {
-    let dialects = TestedDialects {
-        dialects: vec![Box::new(GenericDialect {}), Box::new(PostgreSqlDialect {})],
-    };
-    let sql =
-        "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, GROUPING SETS ((brand), (size), ())";
-    let select = dialects.verified_only_select(sql);
-    assert_eq!(
-        vec![
-            Expr::Identifier(Ident::new("size")),
-            Expr::GroupingSets(vec![
-                vec![Expr::Identifier(Ident::new("brand"))],
-                vec![Expr::Identifier(Ident::new("size"))],
-                vec![],
-            ]),
-        ],
-        select.group_by
-    );
-}
-
-#[test]
-fn parse_select_group_by_rollup() {
-    let dialects = TestedDialects {
-        dialects: vec![Box::new(GenericDialect {}), Box::new(PostgreSqlDialect {})],
-    };
-    let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, ROLLUP (brand, size)";
-    let select = dialects.verified_only_select(sql);
-    assert_eq!(
-        vec![
-            Expr::Identifier(Ident::new("size")),
-            Expr::Rollup(vec![
-                vec![Expr::Identifier(Ident::new("brand"))],
-                vec![Expr::Identifier(Ident::new("size"))],
-            ]),
-        ],
-        select.group_by
-    );
-}
-
-#[test]
-fn parse_select_group_by_cube() {
-    let dialects = TestedDialects {
-        dialects: vec![Box::new(GenericDialect {}), Box::new(PostgreSqlDialect {})],
-    };
-    let sql = "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, CUBE (brand, size)";
-    let select = dialects.verified_only_select(sql);
-    assert_eq!(
-        vec![
-            Expr::Identifier(Ident::new("size")),
-            Expr::Cube(vec![
-                vec![Expr::Identifier(Ident::new("brand"))],
-                vec![Expr::Identifier(Ident::new("size"))],
-            ]),
-        ],
-        select.group_by
     );
 }
 

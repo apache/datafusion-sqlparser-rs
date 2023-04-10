@@ -42,6 +42,9 @@ pub use self::sqlite::SQLiteDialect;
 pub use crate::keywords;
 use crate::parser::{Parser, ParserError};
 
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+
 /// Convenience check if a [`Parser`] uses a certain dialect.
 ///
 /// `dialect_of!(parser Is SQLiteDialect |  GenericDialect)` evaluates

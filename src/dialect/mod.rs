@@ -42,10 +42,10 @@ pub use self::sqlite::SQLiteDialect;
 pub use crate::keywords;
 use crate::parser::{Parser, ParserError};
 
+/// Convenience check if a [`Parser`] uses a certain dialect.
+///
 /// `dialect_of!(parser Is SQLiteDialect |  GenericDialect)` evaluates
 /// to `true` if `parser.dialect` is one of the [`Dialect`]s specified.
-///
-///
 macro_rules! dialect_of {
     ( $parsed_dialect: ident is $($dialect_type: ty)|+ ) => {
         ($($parsed_dialect.dialect.is::<$dialect_type>())||+)

@@ -8,6 +8,22 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.33.0] 2023-04-10
+
+### Added
+* Support for Mysql Backslash escapes (enabled by default) (#844) - Thanks @cobyge
+* Support "UPDATE" statement in "WITH" subquery (#842) - Thanks @nicksrandall
+* Support PIVOT table syntax (#836) - Thanks @pawel-big-lebowski
+* Support CREATE/DROP STAGE for Snowflake (#833) - Thanks @pawel-big-lebowski
+* Support Non-Latin characters (#840) - Thanks @mskrzypkows
+* Support PostgreSQL: GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY and GENERATED  - Thanks @sam-mmm
+* Support IF EXISTS in COMMENT statements (#831) - Thanks @pawel-big-lebowski
+* Support snowflake alter table swap with (#825) - Thanks @pawel-big-lebowski
+
+### Changed
+* Move tests from parser.rs to appropriate parse_XX tests (#845) - Thanks @alamb
+* Correct typos in parser.rs (#838) - Thanks @felixonmars
+* Improve documentation on verified_* methods (#828) - Thanks @alamb
 
 ## [0.32.0] 2023-03-6
 

@@ -42,14 +42,44 @@ pub use self::sqlite::SQLiteDialect;
 pub use crate::keywords;
 use crate::parser::{Parser, ParserError};
 
-/// `dialect_of!(parser is SQLiteDialect |  GenericDialect)` evaluates
-/// to `true` if `parser.dialect` is one of the `Dialect`s specified.
+/// `dialect_of!(parser Is SQLiteDialect |  GenericDialect)` evaluates
+/// to `true` if `parser.dialect` is one of the [`Dialect`]s specified.
+///
+///
 macro_rules! dialect_of {
     ( $parsed_dialect: ident is $($dialect_type: ty)|+ ) => {
         ($($parsed_dialect.dialect.is::<$dialect_type>())||+)
     };
 }
 
+/// Encapsulates the differences between SQL implementations.
+///
+/// # SQL Dialects
+/// SQL implementations deviatiate from one another, either due to
+/// custom extensions or various historical reasons. This trait
+/// encapsulates the parsing differences between dialects.
+///
+/// # Examples
+/// Most users create a [`Dialect`] directly, as shown on the [module
+/// level documentation]:
+///
+/// ```
+/// # use sqlparser::dialect::AnsiDialect;
+/// let dialect = AnsiDialect {};
+/// ```
+///
+/// It is also possible to dynamically create a [`Dialect`] from its
+/// name. For example:
+///
+/// ```
+/// # use sqlparser::dialect::{AnsiDialect, dialect_from_str};
+/// let dialect = dialect_from_str("ansi").unwrap();
+///
+/// // Parsed dialect is an instance of `AnsiDialect`:
+/// assert!(dialect.is::<AnsiDialect>());
+/// ```
+///
+/// [module level documentation]: crate
 pub trait Dialect: Debug + Any {
     /// Determine if a character starts a quoted identifier. The default
     /// implementation, accepting "double quoted" ids is both ANSI-compliant
@@ -113,6 +143,27 @@ impl dyn Dialect {
     }
 }
 
+/// Returns the built in [`Dialect`] corresponding to `dialect_name`.
+///
+/// See [`Dialect`] documentation for an example.
+pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect>> {
+    let dialect_name = dialect_name.as_ref();
+    match dialect_name.to_lowercase().as_str() {
+        "generic" => Some(Box::new(GenericDialect)),
+        "mysql" => Some(Box::new(MySqlDialect {})),
+        "postgresql" | "postgres" => Some(Box::new(PostgreSqlDialect {})),
+        "hive" => Some(Box::new(HiveDialect {})),
+        "sqlite" => Some(Box::new(SQLiteDialect {})),
+        "snowflake" => Some(Box::new(SnowflakeDialect)),
+        "redshift" => Some(Box::new(RedshiftSqlDialect {})),
+        "mssql" => Some(Box::new(MsSqlDialect {})),
+        "clickhouse" => Some(Box::new(ClickHouseDialect {})),
+        "bigquery" => Some(Box::new(BigQueryDialect)),
+        "ansi" => Some(Box::new(AnsiDialect {})),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::ansi::AnsiDialect;
@@ -140,5 +191,33 @@ mod tests {
         assert!(dialect_of!(ansi_holder is AnsiDialect));
         assert!(dialect_of!(ansi_holder is GenericDialect | AnsiDialect));
         assert!(!dialect_of!(ansi_holder is GenericDialect | MsSqlDialect));
+    }
+
+    #[test]
+    fn test_dialect_from_str() {
+        assert!(parse_dialect("generic").is::<GenericDialect>());
+        assert!(parse_dialect("mysql").is::<MySqlDialect>());
+        assert!(parse_dialect("MySql").is::<MySqlDialect>());
+        assert!(parse_dialect("postgresql").is::<PostgreSqlDialect>());
+        assert!(parse_dialect("postgres").is::<PostgreSqlDialect>());
+        assert!(parse_dialect("hive").is::<HiveDialect>());
+        assert!(parse_dialect("sqlite").is::<SQLiteDialect>());
+        assert!(parse_dialect("snowflake").is::<SnowflakeDialect>());
+        assert!(parse_dialect("SnowFlake").is::<SnowflakeDialect>());
+        assert!(parse_dialect("MsSql").is::<MsSqlDialect>());
+        assert!(parse_dialect("clickhouse").is::<ClickHouseDialect>());
+        assert!(parse_dialect("ClickHouse").is::<ClickHouseDialect>());
+        assert!(parse_dialect("bigquery").is::<BigQueryDialect>());
+        assert!(parse_dialect("BigQuery").is::<BigQueryDialect>());
+        assert!(parse_dialect("ansi").is::<AnsiDialect>());
+        assert!(parse_dialect("ANSI").is::<AnsiDialect>());
+
+        // error cases
+        assert!(dialect_from_str("Unknown").is_none());
+        assert!(dialect_from_str("").is_none());
+    }
+
+    fn parse_dialect(v: &str) -> Box<dyn Dialect> {
+        dialect_from_str(v).unwrap()
     }
 }

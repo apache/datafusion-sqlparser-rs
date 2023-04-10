@@ -128,8 +128,16 @@ pub enum Token {
     Caret,
     /// Left brace `{`
     LBrace,
+    /// Double left brace `{{`
+    DoubleLBrace,
     /// Right brace `}`
     RBrace,
+    /// Double right brace `}}`
+    DoubleRBrace,
+    /// Left jinja iterator `{%`
+    LJinjaIterator,
+    /// Right jinja iterator `%}`
+    RJinjaIterator,
     /// Right Arrow `=>`
     RArrow,
     /// Sharp `#` used for PostgreSQL Bitwise XOR operator
@@ -227,7 +235,11 @@ impl fmt::Display for Token {
             Token::Caret => f.write_str("^"),
             Token::Pipe => f.write_str("|"),
             Token::LBrace => f.write_str("{"),
+            Token::DoubleLBrace => f.write_str("{{"),
             Token::RBrace => f.write_str("}"),
+            Token::DoubleRBrace => f.write_str("}}"),
+            Token::LJinjaIterator => f.write_str("%}"),
+            Token::RJinjaIterator => f.write_str("{%"),
             Token::RArrow => f.write_str("=>"),
             Token::Sharp => f.write_str("#"),
             Token::ExclamationMark => f.write_str("!"),
@@ -762,7 +774,15 @@ impl<'a> Tokenizer<'a> {
                 }
                 '+' => self.consume_and_return(chars, Token::Plus),
                 '*' => self.consume_and_return(chars, Token::Mul),
-                '%' => self.consume_and_return(chars, Token::Mod),
+                '%' => {  // This is new logic for dbt
+                    chars.next();
+                    match chars.peek() {
+                        Some('}') => {
+                            self.consume_and_return(chars, Token::RJinjaIterator)
+                        }
+                        _ => Ok(Some(Token::Mod)),
+                    }
+                },
                 '|' => {
                     chars.next(); // consume the '|'
                     match chars.peek() {
@@ -838,8 +858,27 @@ impl<'a> Tokenizer<'a> {
                 ']' => self.consume_and_return(chars, Token::RBracket),
                 '&' => self.consume_and_return(chars, Token::Ampersand),
                 '^' => self.consume_and_return(chars, Token::Caret),
-                '{' => self.consume_and_return(chars, Token::LBrace),
-                '}' => self.consume_and_return(chars, Token::RBrace),
+                '{' => {  // This is new logic for dbt
+                    chars.next(); // consume
+                    match chars.peek() {
+                        Some('%') => {
+                            self.consume_and_return(chars, Token::LJinjaIterator)
+                        }
+                        Some('{') => {
+                            self.consume_and_return(chars, Token::DoubleLBrace)
+                        }
+                        _ => Ok(Some(Token::LBrace)),
+                    }
+                }
+                '}' => { // This is new logic for dbt
+                    chars.next(); // consume
+                    match chars.peek() {
+                        Some('}') => {
+                            self.consume_and_return(chars, Token::DoubleRBrace)
+                        }
+                        _ => Ok(Some(Token::RBrace)),
+                    }
+                },
                 '#' if dialect_of!(self is SnowflakeDialect) => {
                     chars.next(); // consume the '#', starting a snowflake single-line comment
                     let comment = self.tokenize_single_line_comment(chars);
@@ -1253,6 +1292,42 @@ mod tests {
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from(".1"), false),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_jinja_double_brace() {
+        let sql = String::from("SELECT {{ }}");
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::DoubleLBrace,
+            Token::Whitespace(Whitespace::Space),
+            Token::DoubleRBrace,
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_jinja_iterator() {
+        let sql = String::from("SELECT {% %}");
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::LJinjaIterator,
+            Token::Whitespace(Whitespace::Space),
+            Token::RJinjaIterator,
         ];
 
         compare(expected, tokens);

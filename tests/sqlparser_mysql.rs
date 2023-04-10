@@ -518,35 +518,34 @@ fn parse_unterminated_escape() {
 
 #[test]
 fn parse_escaped_string() {
-    let sql = r#"SELECT 'I\'m fine'"#;
+    fn assert_mysql_query_value(sql: &str, quoted: &str) {
+        let stmt = mysql().one_statement_parses_to(sql, "");
 
-    let stmt = mysql().one_statement_parses_to(sql, "");
-
-    match stmt {
-        Statement::Query(query) => match *query.body {
-            SetExpr::Select(value) => {
-                let expr = expr_from_projection(only(&value.projection));
-                assert_eq!(
-                    *expr,
-                    Expr::Value(Value::SingleQuotedString("I'm fine".to_string()))
-                );
-            }
+        match stmt {
+            Statement::Query(query) => match *query.body {
+                SetExpr::Select(value) => {
+                    let expr = expr_from_projection(only(&value.projection));
+                    assert_eq!(
+                        *expr,
+                        Expr::Value(Value::SingleQuotedString(quoted.to_string()))
+                    );
+                }
+                _ => unreachable!(),
+            },
             _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    };
+        };
+    }
+    let sql = r#"SELECT 'I\'m fine'"#;
+    assert_mysql_query_value(sql, "I'm fine");
 
     let sql = r#"SELECT 'I''m fine'"#;
+    assert_mysql_query_value(sql, "I'm fine");
 
-    let projection = mysql().verified_only_select(sql).projection;
-    let item = projection.get(0).unwrap();
+    let sql = r#"SELECT 'I\"m fine'"#;
+    assert_mysql_query_value(sql, "I\"m fine");
 
-    match &item {
-        SelectItem::UnnamedExpr(Expr::Value(value)) => {
-            assert_eq!(*value, Value::SingleQuotedString("I'm fine".to_string()));
-        }
-        _ => unreachable!(),
-    }
+    let sql = r#"SELECT 'Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ '"#;
+    assert_mysql_query_value(sql, "Testing: \0 \\ % _ \u{8} \n \r \t \u{1a} a  ");
 }
 
 #[test]

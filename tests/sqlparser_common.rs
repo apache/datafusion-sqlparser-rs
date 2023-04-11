@@ -6862,3 +6862,19 @@ fn parse_jinja_source() {
     );
     assert_eq!(verified_stmt(sql).to_string(), sql);
 }
+
+#[test]
+fn parse_jinja_source_as() {
+    let sql = "SELECT 1 FROM {{ source('source_name', 'table_name') AS my_source }}";
+
+    let stmt = verified_only_select(sql);
+    assert_eq!(
+        stmt.from[0].relation,
+        TableFactor::DbtSource{
+            source_name: Ident::with_quote('\'', "source_name"),
+            table_name: Ident::with_quote('\'', "table_name"),
+            alias: Some(TableAlias { name: Ident { value: "my_source".to_string(), quote_style: None }, columns: vec![] })
+        }
+    );
+    assert_eq!(verified_stmt(sql).to_string(), sql);
+}

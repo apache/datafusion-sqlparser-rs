@@ -709,7 +709,7 @@ impl<'a> Parser<'a> {
 
         let next_token = self.next_token();
         let expr = match next_token.token {
-            Token::DoubleLBrace => self.parse_jinja_function(),
+            // Token::DoubleLBrace => self.parse_jinja_function(),
             Token::Word(w) => match w.keyword {
                 Keyword::TRUE | Keyword::FALSE | Keyword::NULL => {
                     self.prev_token();
@@ -899,30 +899,30 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_jinja_function(&mut self) -> Result<Expr, ParserError> {
-        self.expect_token(&Token::DoubleLBrace)?;
-        let name = self.parse_identifier()?;
+    // pub fn parse_jinja_function(&mut self) -> Result<Expr, ParserError> {
+    //     self.expect_token(&Token::DoubleLBrace)?;
+    //     let name = self.parse_identifier()?;
     
-        let mut args = vec![];
+    //     let mut args = vec![];
 
-        if name.value.to_lowercase() == "ref" {
-            self.expect_token(&Token::LParen)?;
+    //     if name.value.to_lowercase() == "ref" {
+    //         self.expect_token(&Token::LParen)?;
     
-            let model_name = self.parse_expr()?;
-            args.push(JinjaFunctionArg::Unnamed(model_name));
+    //         let model_name = self.parse_expr()?;
+    //         args.push(JinjaFunctionArg::Unnamed(model_name));
     
-            self.expect_token(&Token::RParen)?;
-        } else {
-            return Err(ParserError::ParserError(format!(
-                "Unsupported Jinja function: {}",
-                name
-            )));
-        }
+    //         self.expect_token(&Token::RParen)?;
+    //     } else {
+    //         return Err(ParserError::ParserError(format!(
+    //             "Unsupported Jinja function: {}",
+    //             name
+    //         )));
+    //     }
     
-        self.expect_token(&Token::DoubleRBrace)?;
+    //     self.expect_token(&Token::DoubleRBrace)?;
     
-        Ok(Expr::JinjaFunction(JinjaFunction { name, args }))
-    }
+    //     Ok(Expr::JinjaFunction(JinjaFunction { name, args }))
+    // }
 
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;

@@ -6831,3 +6831,34 @@ fn parse_jinja_ref() {
     );
     assert_eq!(verified_stmt(sql).to_string(), sql);
 }
+
+#[test]
+fn parse_jinja_ref_as() {
+    let sql = "SELECT 1 FROM {{ ref('model') }} AS my_model";
+
+    let stmt = verified_only_select(sql);
+    assert_eq!(
+        stmt.from[0].relation,
+        TableFactor::DbtRef{
+            model_name: Ident::with_quote('\'', "model"),
+            alias: Some(TableAlias { name: Ident { value: "my_model".to_string(), quote_style: None }, columns: vec![] })
+        }
+    );
+    assert_eq!(verified_stmt(sql).to_string(), sql);
+}
+
+#[test]
+fn parse_jinja_source() {
+    let sql = "SELECT 1 FROM {{ source('source_name', 'table_name') }}";
+
+    let stmt = verified_only_select(sql);
+    assert_eq!(
+        stmt.from[0].relation,
+        TableFactor::DbtSource{
+            source_name: Ident::with_quote('\'', "source_name"),
+            table_name: Ident::with_quote('\'', "table_name"),
+            alias: None
+        }
+    );
+    assert_eq!(verified_stmt(sql).to_string(), sql);
+}

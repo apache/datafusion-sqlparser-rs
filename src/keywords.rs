@@ -192,7 +192,6 @@ define_keywords!(
     DATE,
     DATETIME,
     DAY,
-    DBTREF,
     DEALLOCATE,
     DEC,
     DECADE,

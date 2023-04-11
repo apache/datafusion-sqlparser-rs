@@ -402,7 +402,6 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     Ok(Statement::Query(Box::new(self.parse_query()?)))
                 }
-                // Keyword::REF => Ok(self.parse_ref()?),
                 Keyword::TRUNCATE => Ok(self.parse_truncate()?),
                 Keyword::MSCK => Ok(self.parse_msck()?),
                 Keyword::CREATE => Ok(self.parse_create()?),
@@ -650,20 +649,19 @@ impl<'a> Parser<'a> {
 
     /// Parse a ref function
     fn parse_ref(&mut self) -> Result<Ident, ParserError> {
-        let next_token = self.next_token();
-        match &next_token.token {
-            Token::Word(w) if w.value.to_lowercase() == "ref" => {
-                self.expect_token(&Token::LParen)?;
-                let model_name = self.parse_identifier()?;
-                self.expect_token(&Token::RParen)?;
-                self.expect_token(&Token::DoubleRBrace)?;
-                Ok(model_name)
-            }
-            _ => Err(ParserError::ParserError(format!(
-                "Expected `ref` keyword after '{{', found: {}",
-                next_token.token
-            ))),
-        }
+        let model_name = self.parse_identifier()?;
+        self.expect_token(&Token::RParen)?;
+        Ok(model_name)
+    }
+
+        // Add a new method parse_source
+    fn parse_source(&mut self) -> Result<(Ident, Ident), ParserError> {
+        let source_name = self.parse_identifier()?;
+        self.expect_token(&Token::Comma)?;
+        let table_name = self.parse_identifier()?;
+        self.expect_token(&Token::RParen)?;
+    
+        Ok((source_name, table_name))
     }
 
     /// Parse an expression prefix
@@ -5700,12 +5698,39 @@ impl<'a> Parser<'a> {
             let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
             Ok(TableFactor::TableFunction { expr, alias })
         } else if self.consume_token(&Token::DoubleLBrace) {
-            // parse dbt ref function (SELECT * FROM {{ ref('model') }} [ AS <alias> ])
+            // parse dbt functions like (SELECT * FROM {{ ref('model') }} [ AS <alias> ])
             // I think I need to add some parse_ref function?
-            let model_name = self.parse_ref()?;
-    
-            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
-            return Ok(TableFactor::DbtRef { model_name, alias });
+            let next_token = self.peek_token();
+            match &next_token.token {
+                Token::Word(w) if w.value.to_lowercase() == "ref" => {
+                    self.next_token(); // Consume the "ref" keyword
+                    self.expect_token(&Token::LParen)?;
+                    let model_name = self.parse_ref()?;
+                    self.expect_token(&Token::DoubleRBrace)?;
+                    let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+                    return Ok(TableFactor::DbtRef { model_name, alias });
+                }
+                Token::Word(w) if w.value.to_lowercase() == "source" => {
+                    self.next_token(); // Consume the "source" keyword
+                    self.expect_token(&Token::LParen)?;
+                    let (source_name, table_name) = self.parse_source()?;
+                    self.expect_token(&Token::DoubleRBrace)?;
+                    let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+
+                    return Ok(TableFactor::DbtSource {
+                        source_name,
+                        table_name,
+                        alias,
+                    });
+                }
+                _ => return Err(ParserError::ParserError(format!(
+                    "Expected `ref` or `source` keyword after '{{', found: {}",
+                    next_token.token
+                ))),
+            }
+            // let model_name = self.parse_ref()?;
+            // let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+            // return Ok(TableFactor::DbtRef { model_name, alias });
         } else if self.consume_token(&Token::LParen) {
             // A left paren introduces either a derived table (i.e., a subquery)
             // or a nested join. It's nearly impossible to determine ahead of
@@ -5778,6 +5803,7 @@ impl<'a> Parser<'a> {
                         TableFactor::Derived { alias, .. }
                         | TableFactor::Table { alias, .. }
                         | TableFactor::DbtRef { alias, .. }
+                        | TableFactor::DbtSource { alias, .. }
                         | TableFactor::UNNEST { alias, .. }
                         | TableFactor::TableFunction { alias, .. }
                         | TableFactor::Pivot {

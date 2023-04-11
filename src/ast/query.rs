@@ -643,6 +643,11 @@ pub enum TableFactor {
         model_name: Ident,
         alias: Option<TableAlias>,
     },
+    DbtSource {
+        source_name: Ident,
+        table_name: Ident,
+        alias: Option<TableAlias>,
+    },
     /// `TABLE(<expr>)[ AS <alias> ]`
     TableFunction {
         expr: Expr,
@@ -713,6 +718,16 @@ impl fmt::Display for TableFactor {
             // To include literal curly braces in a formatted string, you need to escape them by doubling them.
             TableFactor::DbtRef { model_name, alias } => {
                 write!(f, "{{{{ ref({}) }}}}", model_name)?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {alias}")?;
+                }
+                Ok(())
+            }
+
+            // This is for dbt source. Why are there 4 curlies?
+            // To include literal curly braces in a formatted string, you need to escape them by doubling them.
+            TableFactor::DbtSource { source_name, table_name, alias } => {
+                write!(f, "{{{{ source({}, {}) }}}}", source_name, table_name)?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }

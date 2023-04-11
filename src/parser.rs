@@ -389,6 +389,8 @@ impl<'a> Parser<'a> {
             return statement;
         }
 
+        // This is where we need to add dbt parsing.
+        // Lets begin with REF
         let next_token = self.next_token();
         match &next_token.token {
             Token::Word(w) => match w.keyword {
@@ -400,6 +402,7 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                     Ok(Statement::Query(Box::new(self.parse_query()?)))
                 }
+                // Keyword::REF => Ok(self.parse_ref()?),
                 Keyword::TRUNCATE => Ok(self.parse_truncate()?),
                 Keyword::MSCK => Ok(self.parse_msck()?),
                 Keyword::CREATE => Ok(self.parse_create()?),
@@ -645,6 +648,24 @@ impl<'a> Parser<'a> {
         Ok(Statement::Savepoint { name })
     }
 
+    /// Parse a ref function
+    fn parse_ref(&mut self) -> Result<Ident, ParserError> {
+        let next_token = self.next_token();
+        match &next_token.token {
+            Token::Word(w) if w.value.to_lowercase() == "ref" => {
+                self.expect_token(&Token::LParen)?;
+                let model_name = self.parse_identifier()?;
+                self.expect_token(&Token::RParen)?;
+                self.expect_token(&Token::DoubleRBrace)?;
+                Ok(model_name)
+            }
+            _ => Err(ParserError::ParserError(format!(
+                "Expected `ref` keyword after '{{', found: {}",
+                next_token.token
+            ))),
+        }
+    }
+
     /// Parse an expression prefix
     pub fn parse_prefix(&mut self) -> Result<Expr, ParserError> {
         // allow the dialect to override prefix parsing
@@ -688,6 +709,7 @@ impl<'a> Parser<'a> {
 
         let next_token = self.next_token();
         let expr = match next_token.token {
+            Token::DoubleLBrace => self.parse_jinja_function(),
             Token::Word(w) => match w.keyword {
                 Keyword::TRUE | Keyword::FALSE | Keyword::NULL => {
                     self.prev_token();
@@ -875,6 +897,31 @@ impl<'a> Parser<'a> {
         } else {
             Ok(expr)
         }
+    }
+
+    pub fn parse_jinja_function(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::DoubleLBrace)?;
+        let name = self.parse_identifier()?;
+    
+        let mut args = vec![];
+
+        if name.value.to_lowercase() == "ref" {
+            self.expect_token(&Token::LParen)?;
+    
+            let model_name = self.parse_expr()?;
+            args.push(JinjaFunctionArg::Unnamed(model_name));
+    
+            self.expect_token(&Token::RParen)?;
+        } else {
+            return Err(ParserError::ParserError(format!(
+                "Unsupported Jinja function: {}",
+                name
+            )));
+        }
+    
+        self.expect_token(&Token::DoubleRBrace)?;
+    
+        Ok(Expr::JinjaFunction(JinjaFunction { name, args }))
     }
 
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
@@ -5520,6 +5567,8 @@ impl<'a> Parser<'a> {
         Ok(Statement::Use { db_name })
     }
 
+    //TODO: Add support for REFS and SOURCES
+    // Callum come back here.
     pub fn parse_table_and_joins(&mut self) -> Result<TableWithJoins, ParserError> {
         let relation = self.parse_table_factor()?;
         // Note that for keywords to be properly handled here, they need to be
@@ -5650,6 +5699,13 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
             Ok(TableFactor::TableFunction { expr, alias })
+        } else if self.consume_token(&Token::DoubleLBrace) {
+            // parse dbt ref function (SELECT * FROM {{ ref('model') }} [ AS <alias> ])
+            // I think I need to add some parse_ref function?
+            let model_name = self.parse_ref()?;
+    
+            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+            return Ok(TableFactor::DbtRef { model_name, alias });
         } else if self.consume_token(&Token::LParen) {
             // A left paren introduces either a derived table (i.e., a subquery)
             // or a nested join. It's nearly impossible to determine ahead of
@@ -5721,6 +5777,7 @@ impl<'a> Parser<'a> {
                     match &mut table_and_joins.relation {
                         TableFactor::Derived { alias, .. }
                         | TableFactor::Table { alias, .. }
+                        | TableFactor::DbtRef { alias, .. }
                         | TableFactor::UNNEST { alias, .. }
                         | TableFactor::TableFunction { alias, .. }
                         | TableFactor::Pivot {
@@ -7447,4 +7504,29 @@ mod tests {
             ))
         );
     }
+
+    #[test]
+    fn parse_simple_jinja_ref() {
+        let sql = "SELECT 1 FROM {{ ref('model') }}";
+    
+        let ast = Parser::parse_sql(&GenericDialect, sql).unwrap();
+        let is_dbt_ref_present = match &ast[0] {
+            Statement::Query(query) => match &*query.body {
+                SetExpr::Select(select) => select.from.iter().any(|table_with_joins| {
+                    matches!(
+                        &table_with_joins.relation,
+                        TableFactor::DbtRef {
+                            model_name,
+                            alias: None
+                        } if model_name.value == "model" && model_name.quote_style == Some('\'')
+                    )
+                }),
+                _ => false,
+            },
+            _ => false,
+        };
+    
+        assert!(is_dbt_ref_present, "DbtRef with model_name 'model' not found");
+    }
+
 }

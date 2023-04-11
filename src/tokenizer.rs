@@ -1334,6 +1334,44 @@ mod tests {
     }
 
     #[test]
+    fn tokenize_long_jinja_query() {
+        let sql = String::from("SELECT {% if type in type_list %} {{ type }} {% endif %}");
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::LJinjaIterator,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("if"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("type"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("in"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("type_list"),
+            Token::Whitespace(Whitespace::Space),
+            Token::RJinjaIterator,
+            Token::Whitespace(Whitespace::Space),
+            Token::DoubleLBrace,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("type"),
+            Token::Whitespace(Whitespace::Space),
+            Token::DoubleRBrace,
+            Token::Whitespace(Whitespace::Space),
+            Token::LJinjaIterator,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_keyword("endif"),
+            Token::Whitespace(Whitespace::Space),
+            Token::RJinjaIterator,
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
     fn tokenize_select_exponent() {
         let sql = String::from("SELECT 1e10, 1e-10, 1e+10, 1ea, 1e-10a, 1e-10-10");
         let dialect = GenericDialect {};

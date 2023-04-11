@@ -6816,3 +6816,18 @@ fn parse_non_latin_identifiers() {
         .parse_sql_statements("SELECT 💝 FROM table1")
         .is_err());
 }
+
+#[test]
+fn parse_jinja_ref() {
+    let sql = "SELECT 1 FROM {{ ref('model') }}";
+
+    let stmt = verified_only_select(sql);
+    assert_eq!(
+        stmt.from[0].relation,
+        TableFactor::DbtRef{
+            model_name: Ident::with_quote('\'', "model"),
+            alias: None
+        }
+    );
+    assert_eq!(verified_stmt(sql).to_string(), sql);
+}

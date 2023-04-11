@@ -452,6 +452,8 @@ pub enum Expr {
     MapAccess { column: Box<Expr>, keys: Vec<Expr> },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
+    /// dbt Ref Function
+    JinjaFunction(JinjaFunction),
     /// Aggregate function with filter
     AggregateExpressionWithFilter { expr: Box<Expr>, filter: Box<Expr> },
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
@@ -706,6 +708,7 @@ impl fmt::Display for Expr {
                 write!(f, " '{}'", &value::escape_single_quote_string(value))
             }
             Expr::Function(fun) => write!(f, "{fun}"),
+            Expr::JinjaFunction(jinja_fun) => write!(f, "{jinja_fun}"),
             Expr::AggregateExpressionWithFilter { expr, filter } => {
                 write!(f, "{expr} FILTER (WHERE {filter})")
             }
@@ -1035,6 +1038,15 @@ impl fmt::Display for WindowFrameBound {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum Ref {
+    Rows,
+    Range,
+    Groups,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AddDropSync {
     ADD,
     DROP,
@@ -1110,6 +1122,8 @@ pub enum Password {
     derive(Visit, VisitMut),
     visit(with = "visit_statement")
 )]
+//TODO: This is where I need to add the dbt Statements for Ref, Source, Var, Config?
+// TODO: Add Config as Keyword
 pub enum Statement {
     /// Analyze (Hive)
     Analyze {
@@ -3240,6 +3254,42 @@ impl fmt::Display for CloseCursor {
         match self {
             CloseCursor::All => write!(f, "ALL"),
             CloseCursor::Specific { name } => write!(f, "{name}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct JinjaFunction {
+    pub name: Ident,
+    pub args: Vec<JinjaFunctionArg>,
+}
+
+impl fmt::Display for JinjaFunction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{{{{ {}({}) }}}}",
+            self.name,
+            display_comma_separated(&self.args)
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum JinjaFunctionArg {
+    Named { name: Ident, arg: Expr },
+    Unnamed(Expr),
+}
+
+impl fmt::Display for JinjaFunctionArg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            JinjaFunctionArg::Named { name, arg } => write!(f, "{}={}", name, arg),
+            JinjaFunctionArg::Unnamed(unnamed_arg) => write!(f, "{}", unnamed_arg),
         }
     }
 }

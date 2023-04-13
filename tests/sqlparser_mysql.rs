@@ -445,7 +445,7 @@ fn parse_quote_identifiers_2() {
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
-                distinct: false,
+                distinct: None,
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "quoted ` identifier".into(),
@@ -479,7 +479,7 @@ fn parse_quote_identifiers_3() {
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
-                distinct: false,
+                distinct: None,
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "`quoted identifier`".into(),
@@ -975,7 +975,7 @@ fn parse_substring_in_select() {
                 Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Select(Box::new(Select {
-                        distinct: true,
+                        distinct: Some(Distinct::Distinct),
                         top: None,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
                             expr: Box::new(Expr::Identifier(Ident {
@@ -1272,7 +1272,7 @@ fn parse_hex_string_introducer() {
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
-                distinct: false,
+                distinct: None,
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::IntroducedString {
                     introducer: "_latin1".to_string(),

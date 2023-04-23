@@ -35,8 +35,8 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::DollarQuotedString;
+use crate::dialect::Dialect;
 use crate::dialect::{BigQueryDialect, GenericDialect, SnowflakeDialect};
-use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
 /// SQL Token enumeration
@@ -1101,34 +1101,38 @@ impl<'a> Tokenizer<'a> {
                     if chars.peek().map(|c| *c == quote_style).unwrap_or(false) {
                         s.push(ch);
                         chars.next();
+                        s.push(ch); // added for non-escape mode
                     } else {
                         return Ok(s);
                     }
                 }
-                '\\' => {
-                    // consume
-                    chars.next();
-                    // slash escaping is specific to MySQL dialect
-                    if dialect_of!(self is MySqlDialect) {
-                        if let Some(next) = chars.peek() {
-                            // See https://dev.mysql.com/doc/refman/8.0/en/string-literals.html#character-escape-sequences
-                            let n = match next {
-                                '\'' | '\"' | '\\' | '%' | '_' => *next,
-                                '0' => '\0',
-                                'b' => '\u{8}',
-                                'n' => '\n',
-                                'r' => '\r',
-                                't' => '\t',
-                                'Z' => '\u{1a}',
-                                _ => *next,
-                            };
-                            s.push(n);
-                            chars.next(); // consume next
-                        }
-                    } else {
-                        s.push(ch);
-                    }
-                }
+                // The below escape-process should be skipped in non-escape mode.
+                // '\\' => {
+                //     // consume
+                //     chars.next();
+                //     // slash escaping is specific to MySQL dialect
+                //     if dialect_of!(self is MySqlDialect) {
+                //         if let Some(next) = chars.peek() {
+                //             // See https://dev.mysql.com/doc/refman/8.0/en/string-literals.html#character-escape-sequences
+                //             // let n = match next {
+                //             //     '\'' | '\"' | '\\' | '%' | '_' => *next,
+                //             //     '0' => '\0',
+                //             //     'b' => '\u{8}',
+                //             //     'n' => '\n',
+                //             //     'r' => '\r',
+                //             //     't' => '\t',
+                //             //     'Z' => '\u{1a}',
+                //             //     _ => *next,
+                //             // };
+                //             s.push('\\');
+                //             s.push(*next);
+                //             //s.push(n);
+                //             chars.next(); // consume next
+                //         }
+                //     } else {
+                //         s.push(ch);
+                //     }
+                // }
                 _ => {
                     chars.next(); // consume
                     s.push(ch);
@@ -1206,6 +1210,7 @@ fn parse_quoted_ident(chars: &mut State, quote_end: char) -> (String, Option<cha
             if chars.peek() == Some(&quote_end) {
                 chars.next();
                 s.push(ch);
+                s.push(ch); // added for non-escape mode
             } else {
                 last_char = Some(quote_end);
                 break;
@@ -1848,11 +1853,11 @@ mod tests {
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"a " b"#, Some('"')),
+            Token::make_word(r#"a "" b"#, Some('"')),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"a ""#, Some('"')),
+            Token::make_word(r#"a """#, Some('"')),
             Token::Whitespace(Whitespace::Space),
-            Token::make_word(r#"c """#, Some('"')),
+            Token::make_word(r#"c """""#, Some('"')),
             Token::Whitespace(Whitespace::Space),
         ];
         compare(expected, tokens);

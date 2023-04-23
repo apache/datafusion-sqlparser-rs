@@ -893,7 +893,7 @@ fn parse_escaped_single_quote_string_predicate() {
             left: Box::new(Expr::Identifier(Ident::new("salary"))),
             op: NotEq,
             right: Box::new(Expr::Value(Value::SingleQuotedString(
-                "Jim's salary".to_string()
+                "Jim''s salary".to_string()
             ))),
         }),
         ast.selection,

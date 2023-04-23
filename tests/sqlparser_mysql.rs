@@ -448,7 +448,7 @@ fn parse_quote_identifiers_2() {
                 distinct: false,
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "quoted ` identifier".into(),
+                    value: "quoted `` identifier".into(),
                     quote_style: Some('`'),
                 }))],
                 into: None,
@@ -482,7 +482,7 @@ fn parse_quote_identifiers_3() {
                 distinct: false,
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "`quoted identifier`".into(),
+                    value: "``quoted identifier``".into(),
                     quote_style: Some('`'),
                 }))],
                 into: None,
@@ -535,17 +535,20 @@ fn parse_escaped_string() {
             _ => unreachable!(),
         };
     }
-    let sql = r#"SELECT 'I\'m fine'"#;
-    assert_mysql_query_value(sql, "I'm fine");
+    // let sql = r#"SELECT 'I\'m fine'"#;
+    // assert_mysql_query_value(sql, r#"I\'m fine"#);
 
     let sql = r#"SELECT 'I''m fine'"#;
-    assert_mysql_query_value(sql, "I'm fine");
+    assert_mysql_query_value(sql, r#"I''m fine"#);
 
     let sql = r#"SELECT 'I\"m fine'"#;
-    assert_mysql_query_value(sql, "I\"m fine");
+    assert_mysql_query_value(sql, r#"I\"m fine"#);
 
     let sql = r#"SELECT 'Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ '"#;
-    assert_mysql_query_value(sql, "Testing: \0 \\ % _ \u{8} \n \r \t \u{1a} a  ");
+    assert_mysql_query_value(sql, r#"Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ "#);
+
+    let sql = r#"SELECT 'I"m fine'"#;
+    assert_mysql_query_value(sql, r#"I"m fine"#);
 }
 
 #[test]

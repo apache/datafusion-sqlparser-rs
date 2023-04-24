@@ -673,10 +673,10 @@ impl<'a> Tokenizer<'a> {
                         return Ok(Some(Token::Period));
                     }
 
+                    let mut exponent_part = String::new();
                     // Parse exponent as number
                     if chars.peek() == Some(&'e') || chars.peek() == Some(&'E') {
                         let mut char_clone = chars.peekable.clone();
-                        let mut exponent_part = String::new();
                         exponent_part.push(char_clone.next().unwrap());
 
                         // Optional sign
@@ -700,6 +700,18 @@ impl<'a> Tokenizer<'a> {
                             }
                             // Not an exponent, discard the work done
                             _ => (),
+                        }
+                    }
+
+                    // mysql dialect supports identifiers that start with a numeric prefix,
+                    // as long as they aren't an exponent number.
+                    if dialect_of!(self is MySqlDialect) && exponent_part.is_empty() {
+                        let word =
+                            peeking_take_while(chars, |ch| self.dialect.is_identifier_part(ch));
+
+                        if !word.is_empty() {
+                            s += word.as_str();
+                            return Ok(Some(Token::make_word(s.as_str(), None)));
                         }
                     }
 

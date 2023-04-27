@@ -4021,11 +4021,9 @@ impl<'a> Parser<'a> {
             // Use a separate if statement to prevent Rust compiler from complaining about
             // "if statement in this position is unstable: https://github.com/rust-lang/rust/issues/53667"
             if let CopySource::Query(_) = source {
-                return Err(
-                    ParserError::ParserError(
-                        "COPY ... FROM does not support query as a source".to_string()
-                    )
-                );
+                return Err(ParserError::ParserError(
+                    "COPY ... FROM does not support query as a source".to_string(),
+                ));
             }
         }
         let target = if self.parse_keyword(Keyword::STDIN) {

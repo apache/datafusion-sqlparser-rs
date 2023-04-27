@@ -935,11 +935,17 @@ fn parse_copy_to() {
                     projection: vec![
                         SelectItem::ExprWithAlias {
                             expr: Expr::Value(number("42")),
-                            alias: Ident { value: "a".into(), quote_style: None },
+                            alias: Ident {
+                                value: "a".into(),
+                                quote_style: None,
+                            },
                         },
                         SelectItem::ExprWithAlias {
                             expr: Expr::Value(Value::SingleQuotedString("hello".into())),
-                            alias: Ident { value: "b".into(), quote_style: None },
+                            alias: Ident {
+                                value: "b".into(),
+                                quote_style: None,
+                            },
                         }
                     ],
                     into: None,

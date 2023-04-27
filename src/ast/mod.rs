@@ -1171,8 +1171,6 @@ pub enum Statement {
         source: Box<Query>,
     },
     Copy {
-        /// TABLE
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         /// The source of 'COPY TO', or the target of 'COPY FROM'
         source: CopySource,
         /// If true, is a 'COPY TO' statement. If false is a 'COPY FROM'
@@ -1911,7 +1909,10 @@ impl fmt::Display for Statement {
                 write!(f, "COPY")?;
                 match source {
                     CopySource::Query(query) => write!(f, " ({query})")?,
-                    CopySource::Table { table_name, columns } => {
+                    CopySource::Table {
+                        table_name,
+                        columns,
+                    } => {
                         write!(f, " {table_name}")?;
                         if !columns.is_empty() {
                             write!(f, " ({})", display_comma_separated(columns))?;

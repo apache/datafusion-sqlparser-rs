@@ -1229,10 +1229,12 @@ pub enum Statement {
     },
     /// DELETE
     Delete {
+        /// Multi tables delete are supported in mysql
+        tables: Vec<ObjectName>,
         /// FROM
-        table_name: TableFactor,
-        /// USING (Snowflake, Postgres)
-        using: Option<TableFactor>,
+        from: Vec<TableWithJoins>,
+        /// USING (Snowflake, Postgres, MySQL)
+        using: Option<Vec<TableWithJoins>>,
         /// WHERE
         selection: Option<Expr>,
         /// RETURNING
@@ -1982,14 +1984,19 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Delete {
-                table_name,
+                tables,
+                from,
                 using,
                 selection,
                 returning,
             } => {
-                write!(f, "DELETE FROM {table_name}")?;
+                write!(f, "DELETE ")?;
+                if !tables.is_empty() {
+                    write!(f, "{} ", display_comma_separated(tables))?;
+                }
+                write!(f, "FROM {}", display_comma_separated(from))?;
                 if let Some(using) = using {
-                    write!(f, " USING {using}")?;
+                    write!(f, " USING {}", display_comma_separated(using))?;
                 }
                 if let Some(selection) = selection {
                     write!(f, " WHERE {selection}")?;

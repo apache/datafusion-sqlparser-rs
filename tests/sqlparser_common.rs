@@ -571,9 +571,22 @@ fn parse_select_distinct_tuple() {
 fn parse_select_distinct_on() {
     let sql = "SELECT DISTINCT ON (album_id) name FROM track ORDER BY album_id, milliseconds";
     let select = verified_only_select(sql);
-
     assert_eq!(
         &Some(Distinct::On(vec![Expr::Identifier(Ident::new("album_id"))])),
+        &select.distinct
+    );
+
+    let sql = "SELECT DISTINCT ON () name FROM track ORDER BY milliseconds";
+    let select = verified_only_select(sql);
+    assert_eq!(&Some(Distinct::On(vec![])), &select.distinct);
+
+    let sql = "SELECT DISTINCT ON (album_id, milliseconds) name FROM track";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Some(Distinct::On(vec![
+            Expr::Identifier(Ident::new("album_id")),
+            Expr::Identifier(Ident::new("milliseconds")),
+        ])),
         &select.distinct
     );
 }

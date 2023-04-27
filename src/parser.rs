@@ -4828,10 +4828,17 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_delete(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::FROM)?;
-        let table_name = self.parse_table_factor()?;
+        let tables = if !self.parse_keyword(Keyword::FROM) {
+            let tables = self.parse_comma_separated(Parser::parse_object_name)?;
+            self.expect_keyword(Keyword::FROM)?;
+            tables
+        } else {
+            vec![]
+        };
+
+        let from = self.parse_comma_separated(Parser::parse_table_and_joins)?;
         let using = if self.parse_keyword(Keyword::USING) {
-            Some(self.parse_table_factor()?)
+            Some(self.parse_comma_separated(Parser::parse_table_and_joins)?)
         } else {
             None
         };
@@ -4848,7 +4855,8 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Statement::Delete {
-            table_name,
+            tables,
+            from,
             using,
             selection,
             returning,

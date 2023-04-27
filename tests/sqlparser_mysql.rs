@@ -850,6 +850,106 @@ fn parse_insert_with_on_duplicate_update() {
 }
 
 #[test]
+fn parse_select_with_numeric_prefix_column_name() {
+    let sql = "SELECT 123col_$@123abc FROM \"table\"";
+    match mysql().verified_stmt(sql) {
+        Statement::Query(q) => {
+            assert_eq!(
+                q.body,
+                Box::new(SetExpr::Select(Box::new(Select {
+                    distinct: false,
+                    top: None,
+                    projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
+                        "123col_$@123abc"
+                    )))],
+                    into: None,
+                    from: vec![TableWithJoins {
+                        relation: TableFactor::Table {
+                            name: ObjectName(vec![Ident::with_quote('"', "table")]),
+                            alias: None,
+                            args: None,
+                            with_hints: vec![],
+                        },
+                        joins: vec![]
+                    }],
+                    lateral_views: vec![],
+                    selection: None,
+                    group_by: vec![],
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    qualify: None,
+                })))
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[cfg(not(feature = "bigdecimal"))]
+#[test]
+fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
+    let sql = "SELECT 123e4, 123col_$@123abc FROM \"table\"";
+    match mysql().verified_stmt(sql) {
+        Statement::Query(q) => {
+            assert_eq!(
+                q.body,
+                Box::new(SetExpr::Select(Box::new(Select {
+                    distinct: false,
+                    top: None,
+                    projection: vec![
+                        SelectItem::UnnamedExpr(Expr::Value(Value::Number(
+                            "123e4".to_string(),
+                            false
+                        ))),
+                        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("123col_$@123abc")))
+                    ],
+                    into: None,
+                    from: vec![TableWithJoins {
+                        relation: TableFactor::Table {
+                            name: ObjectName(vec![Ident::with_quote('"', "table")]),
+                            alias: None,
+                            args: None,
+                            with_hints: vec![],
+                        },
+                        joins: vec![]
+                    }],
+                    lateral_views: vec![],
+                    selection: None,
+                    group_by: vec![],
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    qualify: None,
+                })))
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_insert_with_numeric_prefix_column_name() {
+    let sql = "INSERT INTO s1.t1 (123col_$@length123) VALUES (67.654)";
+    match mysql().verified_stmt(sql) {
+        Statement::Insert {
+            table_name,
+            columns,
+            ..
+        } => {
+            assert_eq!(
+                ObjectName(vec![Ident::new("s1"), Ident::new("t1")]),
+                table_name
+            );
+            assert_eq!(vec![Ident::new("123col_$@length123")], columns);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_update_with_joins() {
     let sql = "UPDATE orders AS o JOIN customers AS c ON o.customer_id = c.id SET o.completed = true WHERE c.firstname = 'Peter'";
     match mysql().verified_stmt(sql) {

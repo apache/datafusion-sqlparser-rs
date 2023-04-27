@@ -385,7 +385,7 @@ fn parse_no_table_name() {
 fn parse_delete_statement() {
     let sql = "DELETE FROM \"table\"";
     match verified_stmt(sql) {
-        Statement::Delete { table_name, .. } => {
+        Statement::Delete { from, .. } => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::with_quote('"', "table")]),
@@ -393,7 +393,93 @@ fn parse_delete_statement() {
                     args: None,
                     with_hints: vec![],
                 },
-                table_name
+                from[0].relation
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_delete_statement_for_multi_tables() {
+    let sql = "DELETE schema1.table1, schema2.table2 FROM schema1.table1 JOIN schema2.table2 ON schema2.table2.col1 = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
+    match verified_stmt(sql) {
+        Statement::Delete { tables, from, .. } => {
+            assert_eq!(
+                ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                tables[0]
+            );
+            assert_eq!(
+                ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                tables[1]
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                from[0].relation
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                from[0].joins[0].relation
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_delete_statement_for_multi_tables_with_using() {
+    let sql = "DELETE FROM schema1.table1, schema2.table2 USING schema1.table1 JOIN schema2.table2 ON schema2.table2.pk = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
+    match verified_stmt(sql) {
+        Statement::Delete {
+            from,
+            using: Some(using),
+            ..
+        } => {
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                from[0].relation
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                from[1].relation
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                using[0].relation
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                using[0].joins[0].relation
             );
         }
         _ => unreachable!(),
@@ -407,7 +493,8 @@ fn parse_where_delete_statement() {
     let sql = "DELETE FROM foo WHERE name = 5";
     match verified_stmt(sql) {
         Statement::Delete {
-            table_name,
+            tables: _,
+            from,
             using,
             selection,
             returning,
@@ -419,7 +506,7 @@ fn parse_where_delete_statement() {
                     args: None,
                     with_hints: vec![],
                 },
-                table_name,
+                from[0].relation,
             );
 
             assert_eq!(None, using);
@@ -444,7 +531,8 @@ fn parse_where_delete_with_alias_statement() {
     let sql = "DELETE FROM basket AS a USING basket AS b WHERE a.id < b.id";
     match verified_stmt(sql) {
         Statement::Delete {
-            table_name,
+            tables: _,
+            from,
             using,
             selection,
             returning,
@@ -459,19 +547,21 @@ fn parse_where_delete_with_alias_statement() {
                     args: None,
                     with_hints: vec![],
                 },
-                table_name,
+                from[0].relation,
             );
-
             assert_eq!(
-                Some(TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("basket")]),
-                    alias: Some(TableAlias {
-                        name: Ident::new("b"),
-                        columns: vec![],
-                    }),
-                    args: None,
-                    with_hints: vec![],
-                }),
+                Some(vec![TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName(vec![Ident::new("basket")]),
+                        alias: Some(TableAlias {
+                            name: Ident::new("b"),
+                            columns: vec![],
+                        }),
+                        args: None,
+                        with_hints: vec![],
+                    },
+                    joins: vec![],
+                }]),
                 using
             );
             assert_eq!(

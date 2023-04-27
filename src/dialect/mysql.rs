@@ -12,14 +12,15 @@
 
 use crate::dialect::Dialect;
 
+/// [MySQL](https://www.mysql.com/)
 #[derive(Debug)]
 pub struct MySqlDialect {}
 
 impl Dialect for MySqlDialect {
     fn is_identifier_start(&self, ch: char) -> bool {
         // See https://dev.mysql.com/doc/refman/8.0/en/identifiers.html.
-        // We don't yet support identifiers beginning with numbers, as that
-        // makes it hard to distinguish numeric literals.
+        // Identifiers which begin with a digit are recognized while tokenizing numbers,
+        // so they can be distinguished from exponent numeric literals.
         ch.is_alphabetic()
             || ch == '_'
             || ch == '$'

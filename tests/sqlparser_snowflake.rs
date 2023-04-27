@@ -14,7 +14,9 @@
 //! Test SQL syntax specific to Snowflake. The parser based on the
 //! generic dialect is also tested (on the inputs it can handle).
 
-use sqlparser::ast::helpers::stmt_data_loading::{DataLoadingOption, DataLoadingOptionType};
+use sqlparser::ast::helpers::stmt_data_loading::{
+    DataLoadingOption, DataLoadingOptionType, StageLoadSelectItem,
+};
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SnowflakeDialect};
 use sqlparser::parser::ParserError;
@@ -69,7 +71,7 @@ fn test_snowflake_single_line_tokenize() {
 
     assert_eq!(expected, tokens);
 
-    let sql = "CREATE TABLE// this is a comment \ntable_1";
+    let sql = "CREATE TABLE // this is a comment \ntable_1";
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let tokens = tokenizer.tokenize().unwrap();
 
@@ -77,6 +79,7 @@ fn test_snowflake_single_line_tokenize() {
         Token::make_keyword("CREATE"),
         Token::Whitespace(Whitespace::Space),
         Token::make_keyword("TABLE"),
+        Token::Whitespace(Whitespace::Space),
         Token::Whitespace(Whitespace::SingleLineComment {
             prefix: "//".to_string(),
             comment: " this is a comment \n".to_string(),
@@ -733,4 +736,306 @@ fn test_create_stage_with_copy_options() {
         _ => unreachable!(),
     };
     assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+}
+
+#[test]
+fn test_copy_into() {
+    let sql = concat!(
+        "COPY INTO my_company.emp_basic ",
+        "FROM 'gcs://mybucket/./../a.csv'"
+    );
+    match snowflake().verified_stmt(sql) {
+        Statement::CopyIntoSnowflake {
+            into,
+            from_stage,
+            files,
+            pattern,
+            validation_mode,
+            ..
+        } => {
+            assert_eq!(
+                into,
+                ObjectName(vec![Ident::new("my_company"), Ident::new("emp_basic")])
+            );
+            assert_eq!(
+                from_stage,
+                ObjectName(vec![Ident::with_quote('\'', "gcs://mybucket/./../a.csv")])
+            );
+            assert!(files.is_none());
+            assert!(pattern.is_none());
+            assert!(validation_mode.is_none());
+        }
+        _ => unreachable!(),
+    };
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+}
+
+#[test]
+fn test_copy_into_with_stage_params() {
+    let sql = concat!(
+        "COPY INTO my_company.emp_basic ",
+        "FROM 's3://load/files/' ",
+        "STORAGE_INTEGRATION=myint ",
+        "ENDPOINT='<s3_api_compatible_endpoint>' ",
+        "CREDENTIALS=(AWS_KEY_ID='1a2b3c' AWS_SECRET_KEY='4x5y6z') ",
+        "ENCRYPTION=(MASTER_KEY='key' TYPE='AWS_SSE_KMS')"
+    );
+
+    match snowflake().verified_stmt(sql) {
+        Statement::CopyIntoSnowflake {
+            from_stage,
+            stage_params,
+            ..
+        } => {
+            //assert_eq!("s3://load/files/", stage_params.url.unwrap());
+            assert_eq!(
+                from_stage,
+                ObjectName(vec![Ident::with_quote('\'', "s3://load/files/")])
+            );
+            assert_eq!("myint", stage_params.storage_integration.unwrap());
+            assert_eq!(
+                "<s3_api_compatible_endpoint>",
+                stage_params.endpoint.unwrap()
+            );
+            assert!(stage_params
+                .credentials
+                .options
+                .contains(&DataLoadingOption {
+                    option_name: "AWS_KEY_ID".to_string(),
+                    option_type: DataLoadingOptionType::STRING,
+                    value: "1a2b3c".to_string()
+                }));
+            assert!(stage_params
+                .credentials
+                .options
+                .contains(&DataLoadingOption {
+                    option_name: "AWS_SECRET_KEY".to_string(),
+                    option_type: DataLoadingOptionType::STRING,
+                    value: "4x5y6z".to_string()
+                }));
+            assert!(stage_params
+                .encryption
+                .options
+                .contains(&DataLoadingOption {
+                    option_name: "MASTER_KEY".to_string(),
+                    option_type: DataLoadingOptionType::STRING,
+                    value: "key".to_string()
+                }));
+            assert!(stage_params
+                .encryption
+                .options
+                .contains(&DataLoadingOption {
+                    option_name: "TYPE".to_string(),
+                    option_type: DataLoadingOptionType::STRING,
+                    value: "AWS_SSE_KMS".to_string()
+                }));
+        }
+        _ => unreachable!(),
+    };
+
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+
+    // stage params within copy into with transformations
+    let sql = concat!(
+        "COPY INTO my_company.emp_basic FROM ",
+        "(SELECT t1.$1 FROM 's3://load/files/' STORAGE_INTEGRATION=myint)",
+    );
+
+    match snowflake().verified_stmt(sql) {
+        Statement::CopyIntoSnowflake {
+            from_stage,
+            stage_params,
+            ..
+        } => {
+            assert_eq!(
+                from_stage,
+                ObjectName(vec![Ident::with_quote('\'', "s3://load/files/")])
+            );
+            assert_eq!("myint", stage_params.storage_integration.unwrap());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_copy_into_with_files_and_pattern_and_verification() {
+    let sql = concat!(
+        "COPY INTO my_company.emp_basic ",
+        "FROM 'gcs://mybucket/./../a.csv' AS some_alias ",
+        "FILES = ('file1.json', 'file2.json') ",
+        "PATTERN = '.*employees0[1-5].csv.gz' ",
+        "VALIDATION_MODE = RETURN_7_ROWS"
+    );
+
+    match snowflake().verified_stmt(sql) {
+        Statement::CopyIntoSnowflake {
+            files,
+            pattern,
+            validation_mode,
+            from_stage_alias,
+            ..
+        } => {
+            assert_eq!(files.unwrap(), vec!["file1.json", "file2.json"]);
+            assert_eq!(pattern.unwrap(), ".*employees0[1-5].csv.gz");
+            assert_eq!(validation_mode.unwrap(), "RETURN_7_ROWS");
+            assert_eq!(from_stage_alias.unwrap(), Ident::new("some_alias"));
+        }
+        _ => unreachable!(),
+    }
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+}
+
+#[test]
+fn test_copy_into_with_transformations() {
+    let sql = concat!(
+        "COPY INTO my_company.emp_basic FROM ",
+        "(SELECT t1.$1:st AS st, $1:index, t2.$1 FROM @schema.general_finished AS T) ",
+        "FILES = ('file1.json', 'file2.json') ",
+        "PATTERN = '.*employees0[1-5].csv.gz' ",
+        "VALIDATION_MODE = RETURN_7_ROWS"
+    );
+
+    match snowflake().verified_stmt(sql) {
+        Statement::CopyIntoSnowflake {
+            from_stage,
+            from_transformations,
+            ..
+        } => {
+            assert_eq!(
+                from_stage,
+                ObjectName(vec![Ident::new("@schema"), Ident::new("general_finished")])
+            );
+            assert_eq!(
+                from_transformations.as_ref().unwrap()[0],
+                StageLoadSelectItem {
+                    alias: Some(Ident::new("t1")),
+                    file_col_num: 1,
+                    element: Some(Ident::new("st")),
+                    item_as: Some(Ident::new("st"))
+                }
+            );
+            assert_eq!(
+                from_transformations.as_ref().unwrap()[1],
+                StageLoadSelectItem {
+                    alias: None,
+                    file_col_num: 1,
+                    element: Some(Ident::new("index")),
+                    item_as: None
+                }
+            );
+            assert_eq!(
+                from_transformations.as_ref().unwrap()[2],
+                StageLoadSelectItem {
+                    alias: Some(Ident::new("t2")),
+                    file_col_num: 1,
+                    element: None,
+                    item_as: None
+                }
+            );
+        }
+        _ => unreachable!(),
+    }
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+}
+
+#[test]
+fn test_copy_into_file_format() {
+    let sql = concat!(
+        "COPY INTO my_company.emp_basic ",
+        "FROM 'gcs://mybucket/./../a.csv' ",
+        "FILES = ('file1.json', 'file2.json') ",
+        "PATTERN = '.*employees0[1-5].csv.gz' ",
+        "FILE_FORMAT=(COMPRESSION=AUTO BINARY_FORMAT=HEX ESCAPE='\\')"
+    );
+
+    match snowflake().verified_stmt(sql) {
+        Statement::CopyIntoSnowflake { file_format, .. } => {
+            assert!(file_format.options.contains(&DataLoadingOption {
+                option_name: "COMPRESSION".to_string(),
+                option_type: DataLoadingOptionType::ENUM,
+                value: "AUTO".to_string()
+            }));
+            assert!(file_format.options.contains(&DataLoadingOption {
+                option_name: "BINARY_FORMAT".to_string(),
+                option_type: DataLoadingOptionType::ENUM,
+                value: "HEX".to_string()
+            }));
+            assert!(file_format.options.contains(&DataLoadingOption {
+                option_name: "ESCAPE".to_string(),
+                option_type: DataLoadingOptionType::STRING,
+                value: "\\".to_string()
+            }));
+        }
+        _ => unreachable!(),
+    }
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+}
+
+#[test]
+fn test_copy_into_copy_options() {
+    let sql = concat!(
+        "COPY INTO my_company.emp_basic ",
+        "FROM 'gcs://mybucket/./../a.csv' ",
+        "FILES = ('file1.json', 'file2.json') ",
+        "PATTERN = '.*employees0[1-5].csv.gz' ",
+        "COPY_OPTIONS=(ON_ERROR=CONTINUE FORCE=TRUE)"
+    );
+
+    match snowflake().verified_stmt(sql) {
+        Statement::CopyIntoSnowflake { copy_options, .. } => {
+            assert!(copy_options.options.contains(&DataLoadingOption {
+                option_name: "ON_ERROR".to_string(),
+                option_type: DataLoadingOptionType::ENUM,
+                value: "CONTINUE".to_string()
+            }));
+            assert!(copy_options.options.contains(&DataLoadingOption {
+                option_name: "FORCE".to_string(),
+                option_type: DataLoadingOptionType::BOOLEAN,
+                value: "TRUE".to_string()
+            }));
+        }
+        _ => unreachable!(),
+    };
+    assert_eq!(snowflake().verified_stmt(sql).to_string(), sql);
+}
+
+#[test]
+fn test_snowflake_stage_object_names() {
+    let allowed_formatted_names = vec![
+        "my_company.emp_basic",
+        "@namespace.%table_name",
+        "@namespace.%table_name/path",
+        "@namespace.stage_name/path",
+        "@~/path",
+    ];
+    let mut allowed_object_names = vec![
+        ObjectName(vec![Ident::new("my_company"), Ident::new("emp_basic")]),
+        ObjectName(vec![Ident::new("@namespace"), Ident::new("%table_name")]),
+        ObjectName(vec![
+            Ident::new("@namespace"),
+            Ident::new("%table_name/path"),
+        ]),
+        ObjectName(vec![
+            Ident::new("@namespace"),
+            Ident::new("stage_name/path"),
+        ]),
+        ObjectName(vec![Ident::new("@~/path")]),
+    ];
+
+    for it in allowed_formatted_names
+        .iter()
+        .zip(allowed_object_names.iter_mut())
+    {
+        let (formatted_name, object_name) = it;
+        let sql = format!(
+            "COPY INTO {} FROM 'gcs://mybucket/./../a.csv'",
+            formatted_name
+        );
+        match snowflake().verified_stmt(&sql) {
+            Statement::CopyIntoSnowflake { into, .. } => {
+                assert_eq!(into.0, object_name.0)
+            }
+            _ => unreachable!(),
+        }
+    }
 }

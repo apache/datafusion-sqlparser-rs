@@ -28,7 +28,7 @@ use sqlparser::dialect::{
     MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
-use sqlparser::parser::{Parser, ParserError};
+use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use test_utils::{
     all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
     TestedDialects,
@@ -201,6 +201,7 @@ fn parse_update_set_from() {
             Box::new(RedshiftSqlDialect {}),
             Box::new(MsSqlDialect {}),
         ],
+        options: None,
     };
     let stmt = dialects.verified_stmt(sql);
     assert_eq!(
@@ -949,6 +950,7 @@ fn parse_exponent_in_select() -> Result<(), ParserError> {
             Box::new(SnowflakeDialect {}),
             Box::new(SQLiteDialect {}),
         ],
+        options: None,
     };
     let sql = "SELECT 10e-20, 1e3, 1e+3, 1e3a, 1e, 0.5e2";
     let mut select = dialects.parse_sql_statements(sql)?;
@@ -1386,6 +1388,7 @@ pub fn all_dialects_but_pg() -> TestedDialects {
             .into_iter()
             .filter(|x| !x.is::<PostgreSqlDialect>())
             .collect(),
+        options: None,
     }
 }
 
@@ -2055,6 +2058,7 @@ fn parse_array_agg_func() {
             Box::new(AnsiDialect {}),
             Box::new(HiveDialect {}),
         ],
+        options: None,
     };
 
     for sql in [
@@ -2254,6 +2258,7 @@ fn parse_create_table_hive_array() {
     // Parsing [] type arrays does not work in MsSql since [ is used in is_delimited_identifier_start
     let dialects = TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(HiveDialect {})],
+        options: None,
     };
     let sql = "CREATE TABLE IF NOT EXISTS something (name int, val array<int>)";
     match dialects.one_statement_parses_to(
@@ -2296,6 +2301,7 @@ fn parse_create_table_hive_array() {
             Box::new(HiveDialect {}),
             Box::new(MySqlDialect {}),
         ],
+        options: None,
     };
     let sql = "CREATE TABLE IF NOT EXISTS something (name int, val array<int)";
 
@@ -2841,6 +2847,7 @@ fn parse_alter_table_add_column_if_not_exists() {
             Box::new(BigQueryDialect {}),
             Box::new(GenericDialect {}),
         ],
+        options: None,
     };
 
     match dialects.verified_stmt("ALTER TABLE tab ADD IF NOT EXISTS foo TEXT") {
@@ -3898,6 +3905,7 @@ fn parse_unnest() {
     }
     let dialects = TestedDialects {
         dialects: vec![Box::new(BigQueryDialect {}), Box::new(GenericDialect {})],
+        options: None,
     };
     // 1. both Alias and WITH OFFSET clauses.
     chk(
@@ -6137,6 +6145,7 @@ fn test_placeholder() {
             // Note: `$` is the starting word for the HiveDialect identifier
             // Box::new(sqlparser::dialect::HiveDialect {}),
         ],
+        options: None,
     };
     let sql = "SELECT * FROM student WHERE id = $Id1";
     let ast = dialects.verified_only_select(sql);
@@ -6867,6 +6876,7 @@ fn parse_non_latin_identifiers() {
             Box::new(RedshiftSqlDialect {}),
             Box::new(MySqlDialect {}),
         ],
+        options: None,
     };
 
     supported_dialects.verified_stmt("SELECT a.説明 FROM test.public.inter01 AS a");
@@ -6875,4 +6885,33 @@ fn parse_non_latin_identifiers() {
     assert!(supported_dialects
         .parse_sql_statements("SELECT 💝 FROM table1")
         .is_err());
+}
+
+#[test]
+fn parse_trailing_comma() {
+    let trailing_commas = TestedDialects {
+        dialects: vec![Box::new(GenericDialect {})],
+        options: Some(ParserOptions {
+            trailing_commas: true,
+        }),
+    };
+
+    // We shouldn't verify, because trailing commas will not get generated back
+    trailing_commas
+        .parse_sql_statements("SELECT album_id, name, FROM track")
+        .unwrap();
+
+    trailing_commas
+        .parse_sql_statements("SELECT * FROM track ORDER BY milliseconds,")
+        .unwrap();
+
+    trailing_commas
+        .parse_sql_statements("SELECT DISTINCT ON (album_id,) name FROM track")
+        .unwrap();
+
+    trailing_commas.verified_stmt("SELECT album_id, name FROM track");
+
+    trailing_commas.verified_stmt("SELECT * FROM track ORDER BY milliseconds");
+
+    trailing_commas.verified_stmt("SELECT DISTINCT ON (album_id) name FROM track");
 }

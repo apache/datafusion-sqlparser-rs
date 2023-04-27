@@ -857,7 +857,7 @@ fn parse_select_with_numeric_prefix_column_name() {
             assert_eq!(
                 q.body,
                 Box::new(SetExpr::Select(Box::new(Select {
-                    distinct: false,
+                    distinct: None,
                     top: None,
                     projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
                         "123col_$@123abc"
@@ -896,7 +896,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
             assert_eq!(
                 q.body,
                 Box::new(SetExpr::Select(Box::new(Select {
-                    distinct: false,
+                    distinct: None,
                     top: None,
                     projection: vec![
                         SelectItem::UnnamedExpr(Expr::Value(Value::Number(

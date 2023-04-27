@@ -12,6 +12,7 @@
 
 use crate::dialect::Dialect;
 
+/// [MySQL](https://www.mysql.com/)
 #[derive(Debug)]
 pub struct MySqlDialect {}
 

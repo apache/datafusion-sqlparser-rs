@@ -225,7 +225,7 @@ fn parse_update_set_from() {
                     subquery: Box::new(Query {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
-                            distinct: false,
+                            distinct: None,
                             top: None,
                             projection: vec![
                                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
@@ -597,7 +597,7 @@ fn parse_top_level() {
 fn parse_simple_select() {
     let sql = "SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5";
     let select = verified_only_select(sql);
-    assert!(!select.distinct);
+    assert!(select.distinct.is_none());
     assert_eq!(3, select.projection.len());
     let select = verified_query(sql);
     assert_eq!(Some(Expr::Value(number("5"))), select.limit);
@@ -622,7 +622,7 @@ fn parse_limit_is_not_an_alias() {
 fn parse_select_distinct() {
     let sql = "SELECT DISTINCT name FROM customer";
     let select = verified_only_select(sql);
-    assert!(select.distinct);
+    assert!(select.distinct.is_some());
     assert_eq!(
         &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
         only(&select.projection)
@@ -633,7 +633,7 @@ fn parse_select_distinct() {
 fn parse_select_distinct_two_fields() {
     let sql = "SELECT DISTINCT name, id FROM customer";
     let select = verified_only_select(sql);
-    assert!(select.distinct);
+    assert!(select.distinct.is_some());
     assert_eq!(
         &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
         &select.projection[0]
@@ -654,6 +654,30 @@ fn parse_select_distinct_tuple() {
             Expr::Identifier(Ident::new("id")),
         ]))],
         &select.projection
+    );
+}
+
+#[test]
+fn parse_select_distinct_on() {
+    let sql = "SELECT DISTINCT ON (album_id) name FROM track ORDER BY album_id, milliseconds";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Some(Distinct::On(vec![Expr::Identifier(Ident::new("album_id"))])),
+        &select.distinct
+    );
+
+    let sql = "SELECT DISTINCT ON () name FROM track ORDER BY milliseconds";
+    let select = verified_only_select(sql);
+    assert_eq!(&Some(Distinct::On(vec![])), &select.distinct);
+
+    let sql = "SELECT DISTINCT ON (album_id, milliseconds) name FROM track";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Some(Distinct::On(vec![
+            Expr::Identifier(Ident::new("album_id")),
+            Expr::Identifier(Ident::new("milliseconds")),
+        ])),
+        &select.distinct
     );
 }
 
@@ -3517,7 +3541,7 @@ fn parse_interval_and_or_xor() {
     let expected_ast = vec![Statement::Query(Box::new(Query {
         with: None,
         body: Box::new(SetExpr::Select(Box::new(Select {
-            distinct: false,
+            distinct: None,
             top: None,
             projection: vec![UnnamedExpr(Expr::Identifier(Ident {
                 value: "col".to_string(),
@@ -5834,7 +5858,7 @@ fn parse_merge() {
                     subquery: Box::new(Query {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
-                            distinct: false,
+                            distinct: None,
                             top: None,
                             projection: vec![SelectItem::Wildcard(
                                 WildcardAdditionalOptions::default()

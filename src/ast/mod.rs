@@ -34,10 +34,10 @@ pub use self::ddl::{
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    Cte, ExceptSelectItem, ExcludeSelectItem, Fetch, IdentWithAlias, Join, JoinConstraint,
-    JoinOperator, LateralView, LockClause, LockType, NonBlock, Offset, OffsetRows, OrderByExpr,
-    Query, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto,
-    SelectItem, SetExpr, SetOperator, SetQuantifier, Table, TableAlias, TableFactor,
+    Cte, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, IdentWithAlias, Join,
+    JoinConstraint, JoinOperator, LateralView, LockClause, LockType, NonBlock, Offset, OffsetRows,
+    OrderByExpr, Query, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
+    SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Table, TableAlias, TableFactor,
     TableWithJoins, Top, Values, WildcardAdditionalOptions, With,
 };
 pub use self::value::{

@@ -1173,12 +1173,11 @@ pub enum Statement {
     Copy {
         /// TABLE
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
-        /// COLUMNS
-        columns: Vec<Ident>,
+        /// The source of 'COPY TO', or the target of 'COPY FROM'
+        source: CopySource,
         /// If true, is a 'COPY TO' statement. If false is a 'COPY FROM'
         to: bool,
-        /// The source of 'COPY FROM', or the target of 'COPY TO'
+        /// The target of 'COPY TO', or the source of 'COPY FROM'
         target: CopyTarget,
         /// WITH options (from PostgreSQL version 9.0)
         options: Vec<CopyOption>,
@@ -1902,17 +1901,22 @@ impl fmt::Display for Statement {
             }
 
             Statement::Copy {
-                table_name,
-                columns,
+                source,
                 to,
                 target,
                 options,
                 legacy_options,
                 values,
             } => {
-                write!(f, "COPY {table_name}")?;
-                if !columns.is_empty() {
-                    write!(f, " ({})", display_comma_separated(columns))?;
+                write!(f, "COPY")?;
+                match source {
+                    CopySource::Query(query) => write!(f, " ({query})")?,
+                    CopySource::Table { table_name, columns } => {
+                        write!(f, " {table_name}")?;
+                        if !columns.is_empty() {
+                            write!(f, " ({})", display_comma_separated(columns))?;
+                        }
+                    }
                 }
                 write!(f, " {} {}", if *to { "TO" } else { "FROM" }, target)?;
                 if !options.is_empty() {
@@ -3661,6 +3665,20 @@ impl fmt::Display for SqliteOnConflict {
             Replace => write!(f, "REPLACE"),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CopySource {
+    Table {
+        /// The name of the table to copy from.
+        table_name: ObjectName,
+        /// A list of column names to copy. Empty list means that all columns
+        /// are copied.
+        columns: Vec<Ident>,
+    },
+    Query(Box<Query>),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

@@ -879,7 +879,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let distinct = self.parse_all_or_distinct()?;
+        let distinct = self.parse_all_or_distinct()?.is_some();
         let args = self.parse_optional_args()?;
         let over = if self.parse_keyword(Keyword::OVER) {
             // TBD: support window names (`OVER mywin`) in place of inline specification
@@ -1302,7 +1302,7 @@ impl<'a> Parser<'a> {
     /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.
     pub fn parse_listagg_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let distinct = self.parse_all_or_distinct()?;
+        let distinct = self.parse_all_or_distinct()?.is_some();
         let expr = Box::new(self.parse_expr()?);
         // While ANSI SQL would would require the separator, Redshift makes this optional. Here we
         // choose to make the separator optional as this provides the more general implementation.
@@ -2300,16 +2300,31 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse either `ALL` or `DISTINCT`. Returns `true` if `DISTINCT` is parsed and results in a
-    /// `ParserError` if both `ALL` and `DISTINCT` are fround.
-    pub fn parse_all_or_distinct(&mut self) -> Result<bool, ParserError> {
+    /// Parse either `ALL`, `DISTINCT` or `DISTINCT ON (...)`. Returns `None` if `ALL` is parsed
+    /// and results in a `ParserError` if both `ALL` and `DISTINCT` are found.
+    pub fn parse_all_or_distinct(&mut self) -> Result<Option<Distinct>, ParserError> {
         let all = self.parse_keyword(Keyword::ALL);
         let distinct = self.parse_keyword(Keyword::DISTINCT);
-        if all && distinct {
-            parser_err!("Cannot specify both ALL and DISTINCT".to_string())
-        } else {
-            Ok(distinct)
+        if !distinct {
+            return Ok(None);
         }
+        if all {
+            return parser_err!("Cannot specify both ALL and DISTINCT".to_string());
+        }
+        let on = self.parse_keyword(Keyword::ON);
+        if !on {
+            return Ok(Some(Distinct::Distinct));
+        }
+
+        self.expect_token(&Token::LParen)?;
+        let col_names = if self.consume_token(&Token::RParen) {
+            self.prev_token();
+            Vec::new()
+        } else {
+            self.parse_comma_separated(Parser::parse_expr)?
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(Some(Distinct::On(col_names)))
     }
 
     /// Parse a SQL CREATE statement
@@ -4813,10 +4828,17 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_delete(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::FROM)?;
-        let table_name = self.parse_table_factor()?;
+        let tables = if !self.parse_keyword(Keyword::FROM) {
+            let tables = self.parse_comma_separated(Parser::parse_object_name)?;
+            self.expect_keyword(Keyword::FROM)?;
+            tables
+        } else {
+            vec![]
+        };
+
+        let from = self.parse_comma_separated(Parser::parse_table_and_joins)?;
         let using = if self.parse_keyword(Keyword::USING) {
-            Some(self.parse_table_factor()?)
+            Some(self.parse_comma_separated(Parser::parse_table_and_joins)?)
         } else {
             None
         };
@@ -4833,7 +4855,8 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Statement::Delete {
-            table_name,
+            tables,
+            from,
             using,
             selection,
             returning,

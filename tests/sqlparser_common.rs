@@ -225,7 +225,7 @@ fn parse_update_set_from() {
                     subquery: Box::new(Query {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
-                            distinct: false,
+                            distinct: None,
                             top: None,
                             projection: vec![
                                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
@@ -385,7 +385,7 @@ fn parse_no_table_name() {
 fn parse_delete_statement() {
     let sql = "DELETE FROM \"table\"";
     match verified_stmt(sql) {
-        Statement::Delete { table_name, .. } => {
+        Statement::Delete { from, .. } => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::with_quote('"', "table")]),
@@ -393,7 +393,93 @@ fn parse_delete_statement() {
                     args: None,
                     with_hints: vec![],
                 },
-                table_name
+                from[0].relation
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_delete_statement_for_multi_tables() {
+    let sql = "DELETE schema1.table1, schema2.table2 FROM schema1.table1 JOIN schema2.table2 ON schema2.table2.col1 = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
+    match verified_stmt(sql) {
+        Statement::Delete { tables, from, .. } => {
+            assert_eq!(
+                ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                tables[0]
+            );
+            assert_eq!(
+                ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                tables[1]
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                from[0].relation
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                from[0].joins[0].relation
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_delete_statement_for_multi_tables_with_using() {
+    let sql = "DELETE FROM schema1.table1, schema2.table2 USING schema1.table1 JOIN schema2.table2 ON schema2.table2.pk = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
+    match verified_stmt(sql) {
+        Statement::Delete {
+            from,
+            using: Some(using),
+            ..
+        } => {
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                from[0].relation
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                from[1].relation
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                using[0].relation
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                using[0].joins[0].relation
             );
         }
         _ => unreachable!(),
@@ -407,7 +493,8 @@ fn parse_where_delete_statement() {
     let sql = "DELETE FROM foo WHERE name = 5";
     match verified_stmt(sql) {
         Statement::Delete {
-            table_name,
+            tables: _,
+            from,
             using,
             selection,
             returning,
@@ -419,7 +506,7 @@ fn parse_where_delete_statement() {
                     args: None,
                     with_hints: vec![],
                 },
-                table_name,
+                from[0].relation,
             );
 
             assert_eq!(None, using);
@@ -444,7 +531,8 @@ fn parse_where_delete_with_alias_statement() {
     let sql = "DELETE FROM basket AS a USING basket AS b WHERE a.id < b.id";
     match verified_stmt(sql) {
         Statement::Delete {
-            table_name,
+            tables: _,
+            from,
             using,
             selection,
             returning,
@@ -459,19 +547,21 @@ fn parse_where_delete_with_alias_statement() {
                     args: None,
                     with_hints: vec![],
                 },
-                table_name,
+                from[0].relation,
             );
-
             assert_eq!(
-                Some(TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("basket")]),
-                    alias: Some(TableAlias {
-                        name: Ident::new("b"),
-                        columns: vec![],
-                    }),
-                    args: None,
-                    with_hints: vec![],
-                }),
+                Some(vec![TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName(vec![Ident::new("basket")]),
+                        alias: Some(TableAlias {
+                            name: Ident::new("b"),
+                            columns: vec![],
+                        }),
+                        args: None,
+                        with_hints: vec![],
+                    },
+                    joins: vec![],
+                }]),
                 using
             );
             assert_eq!(
@@ -507,7 +597,7 @@ fn parse_top_level() {
 fn parse_simple_select() {
     let sql = "SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5";
     let select = verified_only_select(sql);
-    assert!(!select.distinct);
+    assert!(select.distinct.is_none());
     assert_eq!(3, select.projection.len());
     let select = verified_query(sql);
     assert_eq!(Some(Expr::Value(number("5"))), select.limit);
@@ -532,7 +622,7 @@ fn parse_limit_is_not_an_alias() {
 fn parse_select_distinct() {
     let sql = "SELECT DISTINCT name FROM customer";
     let select = verified_only_select(sql);
-    assert!(select.distinct);
+    assert!(select.distinct.is_some());
     assert_eq!(
         &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
         only(&select.projection)
@@ -543,7 +633,7 @@ fn parse_select_distinct() {
 fn parse_select_distinct_two_fields() {
     let sql = "SELECT DISTINCT name, id FROM customer";
     let select = verified_only_select(sql);
-    assert!(select.distinct);
+    assert!(select.distinct.is_some());
     assert_eq!(
         &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
         &select.projection[0]
@@ -564,6 +654,30 @@ fn parse_select_distinct_tuple() {
             Expr::Identifier(Ident::new("id")),
         ]))],
         &select.projection
+    );
+}
+
+#[test]
+fn parse_select_distinct_on() {
+    let sql = "SELECT DISTINCT ON (album_id) name FROM track ORDER BY album_id, milliseconds";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Some(Distinct::On(vec![Expr::Identifier(Ident::new("album_id"))])),
+        &select.distinct
+    );
+
+    let sql = "SELECT DISTINCT ON () name FROM track ORDER BY milliseconds";
+    let select = verified_only_select(sql);
+    assert_eq!(&Some(Distinct::On(vec![])), &select.distinct);
+
+    let sql = "SELECT DISTINCT ON (album_id, milliseconds) name FROM track";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Some(Distinct::On(vec![
+            Expr::Identifier(Ident::new("album_id")),
+            Expr::Identifier(Ident::new("milliseconds")),
+        ])),
+        &select.distinct
     );
 }
 
@@ -3427,7 +3541,7 @@ fn parse_interval_and_or_xor() {
     let expected_ast = vec![Statement::Query(Box::new(Query {
         with: None,
         body: Box::new(SetExpr::Select(Box::new(Select {
-            distinct: false,
+            distinct: None,
             top: None,
             projection: vec![UnnamedExpr(Expr::Identifier(Ident {
                 value: "col".to_string(),
@@ -5744,7 +5858,7 @@ fn parse_merge() {
                     subquery: Box::new(Query {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
-                            distinct: false,
+                            distinct: None,
                             top: None,
                             projection: vec![SelectItem::Wildcard(
                                 WildcardAdditionalOptions::default()

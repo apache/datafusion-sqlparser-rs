@@ -24,6 +24,7 @@ use core::fmt::Formatter;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::ast::Ident;
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -61,6 +62,16 @@ pub struct DataLoadingOption {
     pub option_name: String,
     pub option_type: DataLoadingOptionType,
     pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct StageLoadSelectItem {
+    pub alias: Option<Ident>,
+    pub file_col_num: i32,
+    pub element: Option<Ident>,
+    pub item_as: Option<Ident>,
 }
 
 impl fmt::Display for StageParamsObject {
@@ -117,6 +128,22 @@ impl fmt::Display for DataLoadingOption {
                 // single quote is omitted
                 write!(f, "{}={}", self.option_name, self.value)?;
             }
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for StageLoadSelectItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.alias.is_some() {
+            write!(f, "{}.", self.alias.as_ref().unwrap())?;
+        }
+        write!(f, "${}", self.file_col_num)?;
+        if self.element.is_some() {
+            write!(f, ":{}", self.element.as_ref().unwrap())?;
+        }
+        if self.item_as.is_some() {
+            write!(f, " AS {}", self.item_as.as_ref().unwrap())?;
         }
         Ok(())
     }

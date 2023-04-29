@@ -34,17 +34,19 @@ pub use self::ddl::{
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    Cte, ExceptSelectItem, ExcludeSelectItem, Fetch, IdentWithAlias, Join, JoinConstraint,
-    JoinOperator, LateralView, LockClause, LockType, NonBlock, Offset, OffsetRows, OrderByExpr,
-    Query, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto,
-    SelectItem, SetExpr, SetOperator, SetQuantifier, Table, TableAlias, TableFactor,
+    Cte, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, IdentWithAlias, Join,
+    JoinConstraint, JoinOperator, LateralView, LockClause, LockType, NonBlock, Offset, OffsetRows,
+    OrderByExpr, Query, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
+    SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Table, TableAlias, TableFactor,
     TableWithJoins, Top, Values, WildcardAdditionalOptions, With,
 };
 pub use self::value::{
     escape_quoted_string, DateTimeField, DollarQuotedString, TrimWhereField, Value,
 };
 
-use crate::ast::helpers::stmt_data_loading::{DataLoadingOptions, StageParamsObject};
+use crate::ast::helpers::stmt_data_loading::{
+    DataLoadingOptions, StageLoadSelectItem, StageParamsObject,
+};
 #[cfg(feature = "visitor")]
 pub use visitor::*;
 
@@ -1187,6 +1189,26 @@ pub enum Statement {
         /// VALUES a vector of values to be copied
         values: Vec<Option<String>>,
     },
+    /// ```sql
+    /// COPY INTO
+    /// ```
+    /// See <https://docs.snowflake.com/en/sql-reference/sql/copy-into-table>
+    /// Copy Into syntax available for Snowflake is different than the one implemented in
+    /// Postgres. Although they share common prefix, it is reasonable to implement them
+    /// in different enums. This can be refactored later once custom dialects
+    /// are allowed to have custom Statements.
+    CopyIntoSnowflake {
+        into: ObjectName,
+        from_stage: ObjectName,
+        from_stage_alias: Option<Ident>,
+        stage_params: StageParamsObject,
+        from_transformations: Option<Vec<StageLoadSelectItem>>,
+        files: Option<Vec<String>>,
+        pattern: Option<String>,
+        file_format: DataLoadingOptions,
+        copy_options: DataLoadingOptions,
+        validation_mode: Option<String>,
+    },
     /// Close - closes the portal underlying an open cursor.
     Close {
         /// Cursor name
@@ -1207,10 +1229,12 @@ pub enum Statement {
     },
     /// DELETE
     Delete {
+        /// Multi tables delete are supported in mysql
+        tables: Vec<ObjectName>,
         /// FROM
-        table_name: TableFactor,
-        /// USING (Snowflake, Postgres)
-        using: Option<TableFactor>,
+        from: Vec<TableWithJoins>,
+        /// USING (Snowflake, Postgres, MySQL)
+        using: Option<Vec<TableWithJoins>>,
         /// WHERE
         selection: Option<Expr>,
         /// RETURNING
@@ -1960,14 +1984,19 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Delete {
-                table_name,
+                tables,
+                from,
                 using,
                 selection,
                 returning,
             } => {
-                write!(f, "DELETE FROM {table_name}")?;
+                write!(f, "DELETE ")?;
+                if !tables.is_empty() {
+                    write!(f, "{} ", display_comma_separated(tables))?;
+                }
+                write!(f, "FROM {}", display_comma_separated(from))?;
                 if let Some(using) = using {
-                    write!(f, " USING {using}")?;
+                    write!(f, " USING {}", display_comma_separated(using))?;
                 }
                 if let Some(selection) = selection {
                     write!(f, " WHERE {selection}")?;
@@ -2792,6 +2821,64 @@ impl fmt::Display for Statement {
                 }
                 if comment.is_some() {
                     write!(f, " COMMENT='{}'", comment.as_ref().unwrap())?;
+                }
+                Ok(())
+            }
+            Statement::CopyIntoSnowflake {
+                into,
+                from_stage,
+                from_stage_alias,
+                stage_params,
+                from_transformations,
+                files,
+                pattern,
+                file_format,
+                copy_options,
+                validation_mode,
+            } => {
+                write!(f, "COPY INTO {}", into)?;
+                if from_transformations.is_none() {
+                    // Standard data load
+                    write!(f, " FROM {}{}", from_stage, stage_params)?;
+                    if from_stage_alias.as_ref().is_some() {
+                        write!(f, " AS {}", from_stage_alias.as_ref().unwrap())?;
+                    }
+                } else {
+                    // Data load with transformation
+                    write!(
+                        f,
+                        " FROM (SELECT {} FROM {}{}",
+                        display_separated(from_transformations.as_ref().unwrap(), ", "),
+                        from_stage,
+                        stage_params,
+                    )?;
+                    if from_stage_alias.as_ref().is_some() {
+                        write!(f, " AS {}", from_stage_alias.as_ref().unwrap())?;
+                    }
+                    write!(f, ")")?;
+                }
+                if files.is_some() {
+                    write!(
+                        f,
+                        " FILES = ('{}')",
+                        display_separated(files.as_ref().unwrap(), "', '")
+                    )?;
+                }
+                if pattern.is_some() {
+                    write!(f, " PATTERN = '{}'", pattern.as_ref().unwrap())?;
+                }
+                if !file_format.options.is_empty() {
+                    write!(f, " FILE_FORMAT=({})", file_format)?;
+                }
+                if !copy_options.options.is_empty() {
+                    write!(f, " COPY_OPTIONS=({})", copy_options)?;
+                }
+                if validation_mode.is_some() {
+                    write!(
+                        f,
+                        " VALIDATION_MODE = {}",
+                        validation_mode.as_ref().unwrap()
+                    )?;
                 }
                 Ok(())
             }

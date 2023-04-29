@@ -1694,7 +1694,7 @@ fn parse_array_subquery_expr() {
                 op: SetOperator::Union,
                 set_quantifier: SetQuantifier::None,
                 left: Box::new(SetExpr::Select(Box::new(Select {
-                    distinct: false,
+                    distinct: None,
                     top: None,
                     projection: vec![SelectItem::UnnamedExpr(Expr::Value(Value::Number(
                         #[cfg(not(feature = "bigdecimal"))]
@@ -1715,7 +1715,7 @@ fn parse_array_subquery_expr() {
                     qualify: None,
                 }))),
                 right: Box::new(SetExpr::Select(Box::new(Select {
-                    distinct: false,
+                    distinct: None,
                     top: None,
                     projection: vec![SelectItem::UnnamedExpr(Expr::Value(Value::Number(
                         #[cfg(not(feature = "bigdecimal"))]

@@ -6896,18 +6896,20 @@ fn parse_trailing_comma() {
         }),
     };
 
-    // We shouldn't verify, because trailing commas will not get generated back
-    trailing_commas
-        .parse_sql_statements("SELECT album_id, name, FROM track")
-        .unwrap();
+    trailing_commas.one_statement_parses_to(
+        "SELECT album_id, name, FROM track",
+        "SELECT album_id, name FROM track",
+    );
 
-    trailing_commas
-        .parse_sql_statements("SELECT * FROM track ORDER BY milliseconds,")
-        .unwrap();
+    trailing_commas.one_statement_parses_to(
+        "SELECT * FROM track ORDER BY milliseconds,",
+        "SELECT * FROM track ORDER BY milliseconds",
+    );
 
-    trailing_commas
-        .parse_sql_statements("SELECT DISTINCT ON (album_id,) name FROM track")
-        .unwrap();
+    trailing_commas.one_statement_parses_to(
+        "SELECT DISTINCT ON (album_id,) name FROM track",
+        "SELECT DISTINCT ON (album_id) name FROM track",
+    );
 
     trailing_commas.verified_stmt("SELECT album_id, name FROM track");
 

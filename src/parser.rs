@@ -4015,13 +4015,32 @@ impl<'a> Parser<'a> {
 
     /// Parse a copy statement
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
-        let table_name = self.parse_object_name()?;
-        let columns = self.parse_parenthesized_column_list(Optional, false)?;
+        let source;
+        if self.consume_token(&Token::LParen) {
+            source = CopySource::Query(Box::new(self.parse_query()?));
+            self.expect_token(&Token::RParen)?;
+        } else {
+            let table_name = self.parse_object_name()?;
+            let columns = self.parse_parenthesized_column_list(Optional, false)?;
+            source = CopySource::Table {
+                table_name,
+                columns,
+            };
+        }
         let to = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::TO]) {
             Some(Keyword::FROM) => false,
             Some(Keyword::TO) => true,
             _ => self.expected("FROM or TO", self.peek_token())?,
         };
+        if !to {
+            // Use a separate if statement to prevent Rust compiler from complaining about
+            // "if statement in this position is unstable: https://github.com/rust-lang/rust/issues/53667"
+            if let CopySource::Query(_) = source {
+                return Err(ParserError::ParserError(
+                    "COPY ... FROM does not support query as a source".to_string(),
+                ));
+            }
+        }
         let target = if self.parse_keyword(Keyword::STDIN) {
             CopyTarget::Stdin
         } else if self.parse_keyword(Keyword::STDOUT) {
@@ -4052,8 +4071,7 @@ impl<'a> Parser<'a> {
             vec![]
         };
         Ok(Statement::Copy {
-            table_name,
-            columns,
+            source,
             to,
             target,
             options,

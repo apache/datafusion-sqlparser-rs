@@ -396,12 +396,14 @@ fn test_array_agg_func() {
 fn snowflake() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SnowflakeDialect {})],
+        options: None,
     }
 }
 
 fn snowflake_and_generic() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SnowflakeDialect {}), Box::new(GenericDialect {})],
+        options: None,
     }
 }
 

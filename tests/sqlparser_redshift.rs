@@ -260,6 +260,7 @@ fn parse_similar_to() {
 fn redshift() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(RedshiftSqlDialect {})],
+        options: None,
     }
 }
 

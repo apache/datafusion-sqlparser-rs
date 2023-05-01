@@ -1350,12 +1350,14 @@ fn parse_create_table_with_fulltext_definition_should_not_accept_constraint_name
 fn mysql() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],
+        options: None,
     }
 }
 
 fn mysql_and_generic() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {}), Box::new(GenericDialect {})],
+        options: None,
     }
 }
 

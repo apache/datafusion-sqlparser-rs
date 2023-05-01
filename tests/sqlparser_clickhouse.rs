@@ -329,5 +329,6 @@ fn parse_create_table() {
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],
+        options: None,
     }
 }

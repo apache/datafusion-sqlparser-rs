@@ -195,7 +195,7 @@ impl std::error::Error for ParserError {}
 // By default, allow expressions up to this deep before erroring
 const DEFAULT_REMAINING_DEPTH: usize = 50;
 
-#[derive(Default)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ParserOptions {
     pub trailing_commas: bool,
 }
@@ -6958,6 +6958,7 @@ mod tests {
             // Character string types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-string-type>
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                options: None,
             };
 
             test_parse_data_type!(dialect, "CHARACTER", DataType::Character(None));
@@ -7087,6 +7088,7 @@ mod tests {
             // Character large object types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-length>
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                options: None,
             };
 
             test_parse_data_type!(
@@ -7119,6 +7121,7 @@ mod tests {
         fn test_parse_custom_types() {
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                options: None,
             };
             test_parse_data_type!(
                 dialect,
@@ -7150,6 +7153,7 @@ mod tests {
             // Exact numeric types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type>
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                options: None,
             };
 
             test_parse_data_type!(dialect, "NUMERIC", DataType::Numeric(ExactNumberInfo::None));
@@ -7200,6 +7204,7 @@ mod tests {
             // Datetime types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type>
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                options: None,
             };
 
             test_parse_data_type!(dialect, "DATE", DataType::Date);
@@ -7311,6 +7316,7 @@ mod tests {
 
         let dialect = TestedDialects {
             dialects: vec![Box::new(GenericDialect {}), Box::new(MySqlDialect {})],
+            options: None,
         };
 
         test_parse_table_constraint!(

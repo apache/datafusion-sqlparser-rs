@@ -930,7 +930,7 @@ fn parse_copy_to() {
             source: CopySource::Query(Box::new(Query {
                 with: None,
                 body: Box::new(SetExpr::Select(Box::new(Select {
-                    distinct: false,
+                    distinct: None,
                     top: None,
                     projection: vec![
                         SelectItem::ExprWithAlias {

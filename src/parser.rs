@@ -742,7 +742,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::ARRAY_AGG => self.parse_array_agg_expr(),
                 Keyword::NOT => self.parse_not(),
-                Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
+                Keyword::MATCH if dialect_of!(self is MySqlDialect | MySqlNoEscapeDialect | GenericDialect) => {
                     self.parse_match_against()
                 }
                 // Here `w` is a word, check if it's a part of a multi-part
@@ -3566,7 +3566,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             Ok(Some(ColumnOption::Check(expr)))
         } else if self.parse_keyword(Keyword::AUTO_INCREMENT)
-            && dialect_of!(self is MySqlDialect |  GenericDialect)
+            && dialect_of!(self is MySqlDialect | MySqlNoEscapeDialect | GenericDialect)
         {
             // Support AUTO_INCREMENT for MySQL
             Ok(Some(ColumnOption::DialectSpecific(vec![
@@ -3580,7 +3580,7 @@ impl<'a> Parser<'a> {
                 Token::make_keyword("AUTOINCREMENT"),
             ])))
         } else if self.parse_keywords(&[Keyword::ON, Keyword::UPDATE])
-            && dialect_of!(self is MySqlDialect | GenericDialect)
+            && dialect_of!(self is MySqlDialect | MySqlNoEscapeDialect | GenericDialect)
         {
             let expr = self.parse_expr()?;
             Ok(Some(ColumnOption::OnUpdate(expr)))
@@ -3716,7 +3716,7 @@ impl<'a> Parser<'a> {
             }
             Token::Word(w)
                 if (w.keyword == Keyword::INDEX || w.keyword == Keyword::KEY)
-                    && dialect_of!(self is GenericDialect | MySqlDialect) =>
+                    && dialect_of!(self is GenericDialect | MySqlDialect | MySqlNoEscapeDialect) =>
             {
                 let display_as_key = w.keyword == Keyword::KEY;
 
@@ -3741,7 +3741,7 @@ impl<'a> Parser<'a> {
             }
             Token::Word(w)
                 if (w.keyword == Keyword::FULLTEXT || w.keyword == Keyword::SPATIAL)
-                    && dialect_of!(self is GenericDialect | MySqlDialect) =>
+                    && dialect_of!(self is GenericDialect | MySqlDialect | MySqlNoEscapeDialect) =>
             {
                 if let Some(name) = name {
                     return self.expected(
@@ -3900,7 +3900,7 @@ impl<'a> Parser<'a> {
                             cascade,
                         }
                     } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY])
-                        && dialect_of!(self is MySqlDialect | GenericDialect)
+                        && dialect_of!(self is MySqlDialect | MySqlNoEscapeDialect | GenericDialect)
                     {
                         AlterTableOperation::DropPrimaryKey
                     } else {
@@ -4995,7 +4995,7 @@ impl<'a> Parser<'a> {
                     offset = Some(self.parse_offset()?)
                 }
 
-                if dialect_of!(self is GenericDialect | MySqlDialect)
+                if dialect_of!(self is GenericDialect | MySqlDialect | MySqlNoEscapeDialect)
                     && limit.is_some()
                     && offset.is_none()
                     && self.consume_token(&Token::Comma)
@@ -5088,7 +5088,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             SetExpr::Query(Box::new(subquery))
         } else if self.parse_keyword(Keyword::VALUES) {
-            let is_mysql = dialect_of!(self is MySqlDialect);
+            let is_mysql = dialect_of!(self is MySqlDialect | MySqlNoEscapeDialect);
             SetExpr::Values(self.parse_values(is_mysql)?)
         } else if self.parse_keyword(Keyword::TABLE) {
             SetExpr::Table(Box::new(self.parse_as_table()?))
@@ -5365,7 +5365,7 @@ impl<'a> Parser<'a> {
         };
 
         if variable.to_string().eq_ignore_ascii_case("NAMES")
-            && dialect_of!(self is MySqlDialect | GenericDialect)
+            && dialect_of!(self is MySqlDialect | MySqlNoEscapeDialect | GenericDialect)
         {
             if self.parse_keyword(Keyword::DEFAULT) {
                 return Ok(Statement::SetNamesDefault {});
@@ -5458,7 +5458,7 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::COLLATION) {
             Ok(self.parse_show_collation()?)
         } else if self.parse_keyword(Keyword::VARIABLES)
-            && dialect_of!(self is MySqlDialect | GenericDialect)
+            && dialect_of!(self is MySqlDialect | MySqlNoEscapeDialect | GenericDialect)
         {
             // TODO: Support GLOBAL|SESSION
             Ok(Statement::ShowVariables {
@@ -6133,7 +6133,7 @@ impl<'a> Parser<'a> {
             // Hive lets you put table here regardless
             let table = self.parse_keyword(Keyword::TABLE);
             let table_name = self.parse_object_name()?;
-            let is_mysql = dialect_of!(self is MySqlDialect);
+            let is_mysql = dialect_of!(self is MySqlDialect | MySqlNoEscapeDialect);
             let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
 
             let partitioned = if self.parse_keyword(Keyword::PARTITION) {
@@ -6762,7 +6762,7 @@ impl<'a> Parser<'a> {
                                 "INSERT in MATCHED merge clause".to_string(),
                             ));
                         }
-                        let is_mysql = dialect_of!(self is MySqlDialect);
+                        let is_mysql = dialect_of!(self is MySqlDialect | MySqlNoEscapeDialect);
                         let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
                         self.expect_keyword(Keyword::VALUES)?;
                         let values = self.parse_values(is_mysql)?;
@@ -7333,7 +7333,11 @@ mod tests {
         }
 
         let dialect = TestedDialects {
-            dialects: vec![Box::new(GenericDialect {}), Box::new(MySqlDialect {})],
+            dialects: vec![
+                Box::new(GenericDialect {}),
+                Box::new(MySqlDialect {}),
+                Box::new(MySqlNoEscapeDialect {}),
+            ],
             options: None,
         };
 

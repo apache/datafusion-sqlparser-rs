@@ -35,6 +35,7 @@ pub use self::generic::GenericDialect;
 pub use self::hive::HiveDialect;
 pub use self::mssql::MsSqlDialect;
 pub use self::mysql::MySqlDialect;
+pub use self::mysql::MySqlNoEscapeDialect;
 pub use self::postgresql::PostgreSqlDialect;
 pub use self::redshift::RedshiftSqlDialect;
 pub use self::snowflake::SnowflakeDialect;

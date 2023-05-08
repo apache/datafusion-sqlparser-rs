@@ -166,11 +166,23 @@ pub fn all_dialects() -> TestedDialects {
             Box::new(HiveDialect {}),
             Box::new(RedshiftSqlDialect {}),
             Box::new(MySqlDialect {}),
+            Box::new(MySqlNoEscapeDialect {}),
             Box::new(BigQueryDialect {}),
             Box::new(SQLiteDialect {}),
         ],
         options: None,
     }
+}
+
+pub fn all_dialects_other_than_MySqlNoEscape() -> TestedDialects {
+    let mut all_dialects = all_dialects();
+    let index_of_MySqlNoEscape = all_dialects
+        .dialects
+        .iter()
+        .position(|dialect| dialect.is::<MySqlNoEscapeDialect>())
+        .unwrap();
+    all_dialects.dialects.remove(index_of_MySqlNoEscape);
+    return all_dialects;
 }
 
 pub fn assert_eq_vec<T: ToString>(expected: &[&str], actual: &[T]) {

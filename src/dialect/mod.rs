@@ -155,6 +155,7 @@ pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect
     match dialect_name.to_lowercase().as_str() {
         "generic" => Some(Box::new(GenericDialect)),
         "mysql" => Some(Box::new(MySqlDialect {})),
+        "mysql-no-escape" => Some(Box::new(MySqlNoEscapeDialect {})),
         "postgresql" | "postgres" => Some(Box::new(PostgreSqlDialect {})),
         "hive" => Some(Box::new(HiveDialect {})),
         "sqlite" => Some(Box::new(SQLiteDialect {})),
@@ -202,6 +203,8 @@ mod tests {
         assert!(parse_dialect("generic").is::<GenericDialect>());
         assert!(parse_dialect("mysql").is::<MySqlDialect>());
         assert!(parse_dialect("MySql").is::<MySqlDialect>());
+        assert!(parse_dialect("mysql-no-escape").is::<MySqlNoEscapeDialect>());
+        assert!(parse_dialect("MySql-No-Escape").is::<MySqlNoEscapeDialect>());
         assert!(parse_dialect("postgresql").is::<PostgreSqlDialect>());
         assert!(parse_dialect("postgres").is::<PostgreSqlDialect>());
         assert!(parse_dialect("hive").is::<HiveDialect>());

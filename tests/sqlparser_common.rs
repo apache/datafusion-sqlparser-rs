@@ -1953,6 +1953,31 @@ fn parse_array_agg_func() {
 }
 
 #[test]
+fn parse_first_last_func() {
+    let supported_dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(MsSqlDialect {}),
+            Box::new(AnsiDialect {}),
+            Box::new(HiveDialect {}),
+        ],
+    };
+
+    for sql in [
+        "SELECT FIRST(x ORDER BY x) AS a FROM T",
+        "SELECT FIRST(x ORDER BY x LIMIT 2) FROM tbl",
+        "SELECT FIRST(DISTINCT x ORDER BY x LIMIT 2) FROM tbl",
+        "SELECT LAST(x ORDER BY x) AS a FROM T",
+        "SELECT LAST(x ORDER BY x LIMIT 2) FROM tbl",
+        "SELECT LAST(DISTINCT x ORDER BY x LIMIT 2) FROM tbl",
+    ] {
+        supported_dialects.verified_stmt(sql);
+    }
+}
+
+
+#[test]
 fn parse_create_table() {
     let sql = "CREATE TABLE uk_cities (\
                name VARCHAR(100) NOT NULL,\

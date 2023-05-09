@@ -477,6 +477,10 @@ pub enum Expr {
     ListAgg(ListAgg),
     /// The `ARRAY_AGG` function `SELECT ARRAY_AGG(... ORDER BY ...)`
     ArrayAgg(ArrayAgg),
+    /// The `FIRST` function `SELECT FIRST(... ORDER BY ...)`
+    FIRST(FirstAgg),
+    /// The `LAST` function `SELECT LAST(... ORDER BY ...)`
+    LAST(LastAgg),
     /// The `GROUPING SETS` expr.
     GroupingSets(Vec<Vec<Expr>>),
     /// The `CUBE` expr.
@@ -738,6 +742,8 @@ impl fmt::Display for Expr {
             Expr::ArraySubquery(s) => write!(f, "ARRAY({s})"),
             Expr::ListAgg(listagg) => write!(f, "{listagg}"),
             Expr::ArrayAgg(arrayagg) => write!(f, "{arrayagg}"),
+            Expr::FIRST(first) => write!(f, "{first}"),
+            Expr::LAST(last) => write!(f, "{last}"),
             Expr::GroupingSets(sets) => {
                 write!(f, "GROUPING SETS (")?;
                 let mut sep = "";
@@ -3423,6 +3429,86 @@ impl fmt::Display for ArrayAgg {
         write!(
             f,
             "ARRAY_AGG({}{}",
+            if self.distinct { "DISTINCT " } else { "" },
+            self.expr
+        )?;
+        if !self.within_group {
+            if let Some(order_by) = &self.order_by {
+                write!(f, " ORDER BY {order_by}")?;
+            }
+            if let Some(limit) = &self.limit {
+                write!(f, " LIMIT {limit}")?;
+            }
+        }
+        write!(f, ")")?;
+        if self.within_group {
+            if let Some(order_by) = &self.order_by {
+                write!(f, " WITHIN GROUP (ORDER BY {order_by})")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// An `FIRST` invocation `FIRST( [ DISTINCT ] <expr> [ORDER BY <expr>] [LIMIT <n>] )`
+/// Or `FIRST( [ DISTINCT ] <expr> ) [ WITHIN GROUP ( ORDER BY <expr> ) ]`
+/// ORDER BY position is defined differently for BigQuery, Postgres and Snowflake.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct FirstAgg {
+    pub distinct: bool,
+    pub expr: Box<Expr>,
+    pub order_by: Option<Box<OrderByExpr>>,
+    pub limit: Option<Box<Expr>>,
+    pub within_group: bool, // order by is used inside a within group or not
+}
+
+impl fmt::Display for FirstAgg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "FIRST({}{}",
+            if self.distinct { "DISTINCT " } else { "" },
+            self.expr
+        )?;
+        if !self.within_group {
+            if let Some(order_by) = &self.order_by {
+                write!(f, " ORDER BY {order_by}")?;
+            }
+            if let Some(limit) = &self.limit {
+                write!(f, " LIMIT {limit}")?;
+            }
+        }
+        write!(f, ")")?;
+        if self.within_group {
+            if let Some(order_by) = &self.order_by {
+                write!(f, " WITHIN GROUP (ORDER BY {order_by})")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// An `LAST` invocation `LAST( [ DISTINCT ] <expr> [ORDER BY <expr>] [LIMIT <n>] )`
+/// Or `LAST( [ DISTINCT ] <expr> ) [ WITHIN GROUP ( ORDER BY <expr> ) ]`
+/// ORDER BY position is defined differently for BigQuery, Postgres and Snowflake.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct LastAgg {
+    pub distinct: bool,
+    pub expr: Box<Expr>,
+    pub order_by: Option<Box<OrderByExpr>>,
+    pub limit: Option<Box<Expr>>,
+    pub within_group: bool, // order by is used inside a within group or not
+}
+
+impl fmt::Display for LastAgg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "LAST({}{}",
             if self.distinct { "DISTINCT " } else { "" },
             self.expr
         )?;

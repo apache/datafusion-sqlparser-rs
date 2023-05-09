@@ -4317,4 +4317,25 @@ mod tests {
         ]);
         assert_eq!("CUBE (a, (b, c), d)", format!("{cube}"));
     }
+
+    #[test]
+    fn test_interval_display() {
+        let interval = Expr::Interval(Interval {
+            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("123:45.67")))),
+            leading_field: Some(DateTimeField::Minute),
+            leading_precision: Some(10),
+            last_field: Some(DateTimeField::Second),
+            fractional_seconds_precision: Some(9),
+        });
+        assert_eq!("INTERVAL '123:45.67' MINUTE (10) TO SECOND (9)", format!("{interval}"));
+
+        let interval = Expr::Interval(Interval {
+            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("5")))),
+            leading_field: Some(DateTimeField::Second),
+            leading_precision: Some(1),
+            last_field: None,
+            fractional_seconds_precision: Some(3),
+        });
+        assert_eq!("INTERVAL '5' SECOND (1, 3)", format!("{interval}"));
+    }
 }

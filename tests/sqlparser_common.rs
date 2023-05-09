@@ -31,7 +31,7 @@ use sqlparser::dialect::{
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use test_utils::{
-    all_dialects, all_dialects_other_than_MySqlNoEscape, assert_eq_vec, expr_from_projection, join,
+    all_dialects, all_dialects_other_than_mysqlnoescape, assert_eq_vec, expr_from_projection, join,
     number, only, table, table_alias, TestedDialects,
 };
 
@@ -1006,7 +1006,7 @@ fn parse_escaped_single_quote_string_predicate_with_escape() {
     let sql = "SELECT id, fname, lname FROM customer \
                WHERE salary <> 'Jim''s salary'";
 
-    let ast = verified_only_select_with_dialects_other_than_MySqlNoEscape(sql);
+    let ast = verified_only_select_with_dialects_other_than_mysqlnoescape(sql);
 
     assert_eq!(
         Some(Expr::BinaryOp {
@@ -6241,8 +6241,8 @@ fn verified_only_select(query: &str) -> Select {
     all_dialects().verified_only_select(query)
 }
 
-fn verified_only_select_with_dialects_other_than_MySqlNoEscape(query: &str) -> Select {
-    all_dialects_other_than_MySqlNoEscape().verified_only_select(query)
+fn verified_only_select_with_dialects_other_than_mysqlnoescape(query: &str) -> Select {
+    all_dialects_other_than_mysqlnoescape().verified_only_select(query)
 }
 
 fn verified_expr(query: &str) -> Expr {

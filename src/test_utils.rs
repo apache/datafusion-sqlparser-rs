@@ -174,14 +174,14 @@ pub fn all_dialects() -> TestedDialects {
     }
 }
 
-pub fn all_dialects_other_than_MySqlNoEscape() -> TestedDialects {
+pub fn all_dialects_other_than_mysqlnoescape() -> TestedDialects {
     let mut all_dialects = all_dialects();
-    let index_of_MySqlNoEscape = all_dialects
+    let index_of_mysqlnoescape = all_dialects
         .dialects
         .iter()
         .position(|dialect| dialect.is::<MySqlNoEscapeDialect>())
         .unwrap();
-    all_dialects.dialects.remove(index_of_MySqlNoEscape);
+    all_dialects.dialects.remove(index_of_mysqlnoescape);
     return all_dialects;
 }
 

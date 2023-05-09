@@ -217,10 +217,15 @@ pub struct Select {
     /// HAVING
     pub having: Option<Expr>,
     /// WINDOW AS
-    pub named_window: Option<(Ident, WindowSpec)>,
+    pub named_window: Option<IdentWindow>,
     /// QUALIFY (Snowflake)
     pub qualify: Option<Expr>,
 }
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IdentWindow(pub Ident, pub WindowSpec);
 
 impl fmt::Display for Select {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

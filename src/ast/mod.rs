@@ -34,7 +34,7 @@ pub use self::ddl::{
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    Cte, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, IdentWithAlias, Join,
+    Cte, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, IdentWindow, IdentWithAlias, Join,
     JoinConstraint, JoinOperator, LateralView, LockClause, LockType, NonBlock, Offset, OffsetRows,
     OrderByExpr, Query, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
     SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Table, TableAlias, TableFactor,
@@ -918,6 +918,8 @@ impl fmt::Display for Expr {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum WindowType {
     WindowSpec(WindowSpec),
     NamedWindow(Ident),

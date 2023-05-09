@@ -1716,7 +1716,7 @@ fn parse_select_qualify() {
             left: Box::new(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("ROW_NUMBER")]),
                 args: vec![],
-                over: Some(WindowSpec {
+                over: Some(WindowType::WindowSpec(WindowSpec {
                     partition_by: vec![Expr::Identifier(Ident::new("p"))],
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("o")),
@@ -1724,7 +1724,7 @@ fn parse_select_qualify() {
                         nulls_first: None,
                     }],
                     window_frame: None,
-                }),
+                })),
                 distinct: false,
                 special: false,
             })),

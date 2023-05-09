@@ -5294,7 +5294,7 @@ impl<'a> Parser<'a> {
                 order_by,
                 window_frame,
             };
-            Some((ident, over))
+            Some(IdentWindow(ident, over))
         } else {
             None
         };

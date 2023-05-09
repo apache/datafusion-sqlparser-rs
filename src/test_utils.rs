@@ -182,7 +182,7 @@ pub fn all_dialects_other_than_mysqlnoescape() -> TestedDialects {
         .position(|dialect| dialect.is::<MySqlNoEscapeDialect>())
         .unwrap();
     all_dialects.dialects.remove(index_of_mysqlnoescape);
-    return all_dialects;
+    all_dialects
 }
 
 pub fn assert_eq_vec<T: ToString>(expected: &[&str], actual: &[T]) {

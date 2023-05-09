@@ -473,6 +473,7 @@ define_keywords!(
     REFERENCES,
     REFERENCING,
     REGCLASS,
+    REGEXP,
     REGR_AVGX,
     REGR_AVGY,
     REGR_COUNT,

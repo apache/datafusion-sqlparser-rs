@@ -85,6 +85,8 @@ pub enum BinaryOperator {
     BitwiseOr,
     BitwiseAnd,
     BitwiseXor,
+    // MySQL & Sqlite use `REGEXP` as an infix operator
+    Regexp,
     PGBitwiseXor,
     PGBitwiseShiftLeft,
     PGBitwiseShiftRight,
@@ -122,6 +124,7 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::BitwiseOr => f.write_str("|"),
             BinaryOperator::BitwiseAnd => f.write_str("&"),
             BinaryOperator::BitwiseXor => f.write_str("^"),
+            BinaryOperator::Regexp => f.write_str("REGEXP"),
             BinaryOperator::PGBitwiseXor => f.write_str("#"),
             BinaryOperator::PGBitwiseShiftLeft => f.write_str("<<"),
             BinaryOperator::PGBitwiseShiftRight => f.write_str(">>"),

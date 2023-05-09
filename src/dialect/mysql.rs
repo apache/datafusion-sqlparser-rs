@@ -10,7 +10,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::Dialect;
+use crate::{
+    ast::{BinaryOperator, Expr},
+    dialect::Dialect,
+    keywords::Keyword,
+};
 
 /// [MySQL](https://www.mysql.com/)
 #[derive(Debug)]
@@ -34,5 +38,23 @@ impl Dialect for MySqlDialect {
 
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '`'
+    }
+
+    fn parse_infix(
+        &self,
+        _parser: &mut crate::parser::Parser,
+        _expr: &crate::ast::Expr,
+        _precedence: u8,
+    ) -> Option<Result<crate::ast::Expr, crate::parser::ParserError>> {
+        // Parse REGEXP as an operator
+        if _parser.parse_keyword(Keyword::REGEXP) {
+            Some(Ok(Expr::BinaryOp {
+                left: Box::new(_expr.clone()),
+                op: BinaryOperator::Regexp,
+                right: Box::new(_parser.parse_expr().unwrap()),
+            }))
+        } else {
+            None
+        }
     }
 }

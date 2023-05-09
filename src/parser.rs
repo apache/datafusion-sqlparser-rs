@@ -882,32 +882,33 @@ impl<'a> Parser<'a> {
         let distinct = self.parse_all_or_distinct()?.is_some();
         let args = self.parse_optional_args()?;
         let over = if self.parse_keyword(Keyword::OVER) {
-            // TBD: support window names (`OVER mywin`) in place of inline specification
-            self.expect_token(&Token::LParen)?;
-            let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
-                // a list of possibly-qualified column names
-                self.parse_comma_separated(Parser::parse_expr)?
-            } else {
-                vec![]
-            };
-            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                self.parse_comma_separated(Parser::parse_order_by_expr)?
-            } else {
-                vec![]
-            };
-            let window_frame = if !self.consume_token(&Token::RParen) {
-                let window_frame = self.parse_window_frame()?;
-                self.expect_token(&Token::RParen)?;
-                Some(window_frame)
-            } else {
-                None
-            };
+            if self.consume_token(&Token::LParen) {
+                let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
+                    self.parse_comma_separated(Parser::parse_expr)?
+                } else {
+                    vec![]
+                };
+                let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                    self.parse_comma_separated(Parser::parse_order_by_expr)?
+                } else {
+                    vec![]
+                };
+                let window_frame = if !self.consume_token(&Token::RParen) {
+                    let window_frame = self.parse_window_frame()?;
+                    self.expect_token(&Token::RParen)?;
+                    Some(window_frame)
+                } else {
+                    None
+                };
 
-            Some(WindowSpec {
-                partition_by,
-                order_by,
-                window_frame,
-            })
+                Some(WindowType::WindowSpec(WindowSpec {
+                    partition_by,
+                    order_by,
+                    window_frame,
+                }))
+            } else {
+                Some(WindowType::NamedWindow(self.parse_identifier()?))
+            }
         } else {
             None
         };
@@ -5267,6 +5268,37 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let named_window = if self.parse_keyword(Keyword::WINDOW) {
+            let ident = self.parse_identifier()?;
+            self.expect_keyword(Keyword::AS)?;
+            self.expect_token(&Token::LParen)?;
+            let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
+                self.parse_comma_separated(Parser::parse_expr)?
+            } else {
+                vec![]
+            };
+            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                self.parse_comma_separated(Parser::parse_order_by_expr)?
+            } else {
+                vec![]
+            };
+            let window_frame = if !self.consume_token(&Token::RParen) {
+                let window_frame = self.parse_window_frame()?;
+                self.expect_token(&Token::RParen)?;
+                Some(window_frame)
+            } else {
+                None
+            };
+            let over = WindowSpec {
+                partition_by,
+                order_by,
+                window_frame,
+            };
+            Some((ident, over))
+        } else {
+            None
+        };
+
         let qualify = if self.parse_keyword(Keyword::QUALIFY) {
             Some(self.parse_expr()?)
         } else {
@@ -5286,6 +5318,7 @@ impl<'a> Parser<'a> {
             distribute_by,
             sort_by,
             having,
+            named_window,
             qualify,
         })
     }

@@ -216,6 +216,8 @@ pub struct Select {
     pub sort_by: Vec<Expr>,
     /// HAVING
     pub having: Option<Expr>,
+    /// WINDOW AS
+    pub named_window: Option<(Ident, WindowSpec)>,
     /// QUALIFY (Snowflake)
     pub qualify: Option<Expr>,
 }

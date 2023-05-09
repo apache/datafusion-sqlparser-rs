@@ -249,6 +249,7 @@ fn parse_update_set_from() {
                             distribute_by: vec![],
                             sort_by: vec![],
                             having: None,
+                            named_window: None,
                             qualify: None
                         }))),
                         order_by: vec![],
@@ -3259,7 +3260,7 @@ fn parse_window_functions() {
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("row_number")]),
             args: vec![],
-            over: Some(WindowSpec {
+            over: Some(WindowType::WindowSpec(WindowSpec {
                 partition_by: vec![],
                 order_by: vec![OrderByExpr {
                     expr: Expr::Identifier(Ident::new("dt")),
@@ -3267,7 +3268,7 @@ fn parse_window_functions() {
                     nulls_first: None,
                 }],
                 window_frame: None,
-            }),
+            })),
             distinct: false,
             special: false,
         }),
@@ -3622,6 +3623,7 @@ fn parse_interval_and_or_xor() {
             distribute_by: vec![],
             sort_by: vec![],
             having: None,
+            named_window: None,
             qualify: None,
         }))),
         order_by: vec![],
@@ -5888,6 +5890,7 @@ fn parse_merge() {
                             distribute_by: vec![],
                             sort_by: vec![],
                             having: None,
+                            named_window: None,
                             qualify: None,
                         }))),
                         order_by: vec![],

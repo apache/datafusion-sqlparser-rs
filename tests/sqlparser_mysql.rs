@@ -460,6 +460,7 @@ fn parse_quote_identifiers_2() {
                 distribute_by: vec![],
                 sort_by: vec![],
                 having: None,
+                named_window: None,
                 qualify: None
             }))),
             order_by: vec![],
@@ -494,6 +495,7 @@ fn parse_quote_identifiers_3() {
                 distribute_by: vec![],
                 sort_by: vec![],
                 having: None,
+                named_window: None,
                 qualify: None
             }))),
             order_by: vec![],
@@ -879,6 +881,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     distribute_by: vec![],
                     sort_by: vec![],
                     having: None,
+                    named_window: None,
                     qualify: None,
                 })))
             );
@@ -922,6 +925,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     distribute_by: vec![],
                     sort_by: vec![],
                     having: None,
+                    named_window: None,
                     qualify: None,
                 })))
             );
@@ -1111,6 +1115,7 @@ fn parse_substring_in_select() {
                         distribute_by: vec![],
                         sort_by: vec![],
                         having: None,
+                        named_window: None,
                         qualify: None
                     }))),
                     order_by: vec![],
@@ -1388,6 +1393,7 @@ fn parse_hex_string_introducer() {
                 distribute_by: vec![],
                 sort_by: vec![],
                 having: None,
+                named_window: None,
                 qualify: None,
                 into: None
             }))),

@@ -99,6 +99,7 @@ fn parse_map_access_expr() {
             distribute_by: vec![],
             sort_by: vec![],
             having: None,
+            named_window: None,
             qualify: None
         },
         select

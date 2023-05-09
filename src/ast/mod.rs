@@ -17,7 +17,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::fmt;
+use core::fmt::{self, Display};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -913,6 +913,21 @@ impl fmt::Display for Expr {
 
                 Ok(())
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+pub enum WindowType {
+    WindowSpec(WindowSpec),
+    NamedWindow(Ident),
+}
+
+impl Display for WindowType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WindowType::WindowSpec(spec) => write!(f, "{}", spec),
+            WindowType::NamedWindow(name) => write!(f, "{}", name),
         }
     }
 }
@@ -3343,7 +3358,7 @@ impl fmt::Display for CloseCursor {
 pub struct Function {
     pub name: ObjectName,
     pub args: Vec<FunctionArg>,
-    pub over: Option<WindowSpec>,
+    pub over: Option<WindowType>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
     // Some functions must be called without trailing parentheses, for example Postgres

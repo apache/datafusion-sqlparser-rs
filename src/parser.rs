@@ -883,7 +883,7 @@ impl<'a> Parser<'a> {
         let args = self.parse_optional_args()?;
         let over = if self.parse_keyword(Keyword::OVER) {
             if self.consume_token(&Token::LParen) {
-                let window_spec = self.parse_window_args()?;
+                let window_spec = self.parse_window_spec()?;
                 Some(WindowType::WindowSpec(window_spec))
             } else {
                 Some(WindowType::NamedWindow(self.parse_identifier()?))
@@ -6927,11 +6927,11 @@ impl<'a> Parser<'a> {
         let ident = self.parse_identifier()?;
         self.expect_keyword(Keyword::AS)?;
         self.expect_token(&Token::LParen)?;
-        let window_spec = self.parse_window_args()?;
+        let window_spec = self.parse_window_spec()?;
         Ok(IdentWindow(ident, window_spec))
     }
 
-    pub fn parse_window_args(&mut self) -> Result<WindowSpec, ParserError> {
+    pub fn parse_window_spec(&mut self) -> Result<WindowSpec, ParserError> {
         let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
             self.parse_comma_separated(Parser::parse_expr)?
         } else {

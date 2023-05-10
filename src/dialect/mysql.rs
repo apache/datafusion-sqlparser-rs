@@ -11,21 +11,42 @@
 // limitations under the License.
 
 use crate::dialect::Dialect;
-use duplicate::duplicate_item;
 
 /// [MySQL](https://www.mysql.com/)
 #[derive(Debug)]
 pub struct MySqlDialect {}
 
+impl Dialect for MySqlDialect {
+    fn is_identifier_start(&self, ch: char) -> bool {
+        // See https://dev.mysql.com/doc/refman/8.0/en/identifiers.html.
+        // Identifiers which begin with a digit are recognized while tokenizing numbers,
+        // so they can be distinguished from exponent numeric literals.
+        ch.is_alphabetic()
+            || ch == '_'
+            || ch == '$'
+            || ch == '@'
+            || ('\u{0080}'..='\u{ffff}').contains(&ch)
+    }
+
+    fn is_identifier_part(&self, ch: char) -> bool {
+        self.is_identifier_start(ch) || ch.is_ascii_digit()
+    }
+
+    fn is_delimited_identifier_start(&self, ch: char) -> bool {
+        ch == '`'
+    }
+}
+
+/// [MySQL](https://www.mysql.com/)
+/// You should use it if you don't want to escape queries when both parsing and serializing them.
 #[derive(Debug)]
 pub struct MySqlNoEscapeDialect {}
 
-#[duplicate_item(name; [MySqlDialect]; [MySqlNoEscapeDialect])]
-impl Dialect for name {
+impl Dialect for MySqlNoEscapeDialect {
     fn is_identifier_start(&self, ch: char) -> bool {
         // See https://dev.mysql.com/doc/refman/8.0/en/identifiers.html.
-        // We don't yet support identifiers beginning with numbers, as that
-        // makes it hard to distinguish numeric literals.
+        // Identifiers which begin with a digit are recognized while tokenizing numbers,
+        // so they can be distinguished from exponent numeric literals.
         ch.is_alphabetic()
             || ch == '_'
             || ch == '$'

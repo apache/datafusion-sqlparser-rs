@@ -259,5 +259,5 @@ fn sqlite_and_generic() -> TestedDialects {
 
 #[test]
 fn parse_regexp_infix() {
-    mysql().verified_stmt(r#"SELECT 'Michael!' REGEXP '.*'"#);
+    sqlite().verified_stmt(r#"SELECT 'Michael!' REGEXP '.*'"#);
 }

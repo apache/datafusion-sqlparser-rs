@@ -991,7 +991,7 @@ impl<'a> Parser<'a> {
     /// parse a group by expr. a group by expr can be one of group sets, roll up, cube, or simple
     /// expr.
     fn parse_group_by_expr(&mut self) -> Result<Expr, ParserError> {
-        if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+        if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) {
             if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
                 self.expect_token(&Token::LParen)?;
                 let result = self.parse_comma_separated(|p| p.parse_tuple(false, true))?;
@@ -1659,10 +1659,13 @@ impl<'a> Parser<'a> {
             }
             Token::Ampersand => Some(BinaryOperator::BitwiseAnd),
             Token::Div => Some(BinaryOperator::Divide),
-            Token::ShiftLeft if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
+            Token::DuckIntDiv if dialect_of!(self is DuckDbDialect) => {
+                Some(BinaryOperator::DuckIntegerDivide)
+            }
+            Token::ShiftLeft if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) => {
                 Some(BinaryOperator::PGBitwiseShiftLeft)
             }
-            Token::ShiftRight if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
+            Token::ShiftRight if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) => {
                 Some(BinaryOperator::PGBitwiseShiftRight)
             }
             Token::Sharp if dialect_of!(self is PostgreSqlDialect) => {
@@ -2045,7 +2048,7 @@ impl<'a> Parser<'a> {
             Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(22),
             Token::Ampersand => Ok(23),
             Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
-            Token::Mul | Token::Div | Token::Mod | Token::StringConcat => Ok(40),
+            Token::Mul | Token::Div | Token::DuckIntDiv | Token::Mod | Token::StringConcat => Ok(40),
             Token::DoubleColon => Ok(50),
             Token::Colon => Ok(50),
             Token::ExclamationMark => Ok(50),
@@ -3836,7 +3839,7 @@ impl<'a> Parser<'a> {
                         } else {
                             let column_keyword = self.parse_keyword(Keyword::COLUMN);
 
-                            let if_not_exists = if dialect_of!(self is PostgreSqlDialect | BigQueryDialect | GenericDialect)
+                            let if_not_exists = if dialect_of!(self is PostgreSqlDialect | BigQueryDialect | DuckDbDialect | GenericDialect)
                             {
                                 self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS])
                                     || if_not_exists
@@ -6223,7 +6226,7 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::SET)?;
         let assignments = self.parse_comma_separated(Parser::parse_assignment)?;
         let from = if self.parse_keyword(Keyword::FROM)
-            && dialect_of!(self is GenericDialect | PostgreSqlDialect | BigQueryDialect | SnowflakeDialect | RedshiftSqlDialect | MsSqlDialect)
+            && dialect_of!(self is GenericDialect | PostgreSqlDialect | DuckDbDialect | BigQueryDialect | SnowflakeDialect | RedshiftSqlDialect | MsSqlDialect)
         {
             Some(self.parse_table_and_joins()?)
         } else {
@@ -6323,7 +6326,8 @@ impl<'a> Parser<'a> {
     pub fn parse_wildcard_additional_options(
         &mut self,
     ) -> Result<WildcardAdditionalOptions, ParserError> {
-        let opt_exclude = if dialect_of!(self is GenericDialect | SnowflakeDialect) {
+        let opt_exclude = if dialect_of!(self is GenericDialect | DuckDbDialect | SnowflakeDialect)
+        {
             self.parse_optional_select_item_exclude()?
         } else {
             None

@@ -217,7 +217,7 @@ pub struct Select {
     /// HAVING
     pub having: Option<Expr>,
     /// WINDOW AS
-    pub named_window: Option<IdentWindow>,
+    pub named_window: Vec<IdentWindow>,
     /// QUALIFY (Snowflake)
     pub qualify: Option<Expr>,
 }

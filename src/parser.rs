@@ -5269,35 +5269,30 @@ impl<'a> Parser<'a> {
         };
 
         let named_window = if self.parse_keyword(Keyword::WINDOW) {
-            let ident = self.parse_identifier()?;
-            self.expect_keyword(Keyword::AS)?;
-            self.expect_token(&Token::LParen)?;
-            let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
-                self.parse_comma_separated(Parser::parse_expr)?
-            } else {
-                vec![]
-            };
-            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                self.parse_comma_separated(Parser::parse_order_by_expr)?
-            } else {
-                vec![]
-            };
-            let window_frame = if !self.consume_token(&Token::RParen) {
-                let window_frame = self.parse_window_frame()?;
-                self.expect_token(&Token::RParen)?;
-                Some(window_frame)
-            } else {
-                None
-            };
-            let over = WindowSpec {
-                partition_by,
-                order_by,
-                window_frame,
-            };
-            Some(IdentWindow(ident, over))
+            self.parse_comma_separated(Parser::parse_named_window)?
         } else {
-            None
+            vec![]
         };
+        for proj in &projection {
+            if let SelectItem::ExprWithAlias {
+                expr: Expr::Function(f),
+                alias: _,
+            } = proj
+            {
+                if let Some(WindowType::NamedWindow(ident)) = &f.over {
+                    for (i, window) in named_window.clone().iter().enumerate() {
+                        if *ident == window.0 {
+                            break;
+                        } else if i == named_window.len() - 1 {
+                            return Err(ParserError::ParserError(format!(
+                                "Window {} is not defined",
+                                ident.value
+                            )));
+                        }
+                    }
+                }
+            }
+        }
 
         let qualify = if self.parse_keyword(Keyword::QUALIFY) {
             Some(self.parse_expr()?)
@@ -6947,6 +6942,35 @@ impl<'a> Parser<'a> {
     /// The index of the first unprocessed token.
     pub fn index(&self) -> usize {
         self.index
+    }
+
+    pub fn parse_named_window(&mut self) -> Result<IdentWindow, ParserError> {
+        let ident = self.parse_identifier()?;
+        self.expect_keyword(Keyword::AS)?;
+        self.expect_token(&Token::LParen)?;
+        let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_expr)?
+        } else {
+            vec![]
+        };
+        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_order_by_expr)?
+        } else {
+            vec![]
+        };
+        let window_frame = if !self.consume_token(&Token::RParen) {
+            let window_frame = self.parse_window_frame()?;
+            self.expect_token(&Token::RParen)?;
+            Some(window_frame)
+        } else {
+            None
+        };
+        let over = WindowSpec {
+            partition_by,
+            order_by,
+            window_frame,
+        };
+        Ok(IdentWindow(ident, over))
     }
 }
 

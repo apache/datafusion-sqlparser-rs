@@ -1407,3 +1407,8 @@ fn parse_string_introducers() {
     mysql().one_statement_parses_to("SELECT _utf8mb4'abc'", "SELECT _utf8mb4 'abc'");
     mysql().verified_stmt("SELECT _binary 'abc', _utf8mb4 'abc'");
 }
+
+#[test]
+fn parse_div_infix() {
+    mysql().verified_stmt(r#"SELECT 5 DIV 2"#);
+}

@@ -1980,6 +1980,8 @@ impl<'a> Parser<'a> {
     const AND_PREC: u8 = 10;
     const OR_PREC: u8 = 5;
 
+    const REGEXP_OP_PREC: u8 = 17;
+
     /// Get the precedence of the next token
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
         // allow the dialect to override precedence logic
@@ -2029,6 +2031,7 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(Self::BETWEEN_PREC),
+            Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(Self::REGEXP_OP_PREC),
             Token::Eq
             | Token::Lt
             | Token::LtEq

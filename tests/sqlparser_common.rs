@@ -2080,6 +2080,7 @@ fn parse_first_last_func() {
             Box::new(AnsiDialect {}),
             Box::new(HiveDialect {}),
         ],
+        options: None,
     };
 
     for sql in [

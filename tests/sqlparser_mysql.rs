@@ -1411,5 +1411,5 @@ fn parse_string_introducers() {
 #[test]
 fn parse_regexp_infix() {
     // TODO: what's the correct test here? (Is there a test which snapshots the AST?)
-    mysql().verified_stmt(r#"SELECT "foobar" REGEXP "^foo""#);
+    mysql().verified_stmt(r#"SELECT 'Michael!' REGEXP '.*';"#);
 }

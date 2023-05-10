@@ -1966,16 +1966,11 @@ fn parse_first_last_func() {
 
     for sql in [
         "SELECT FIRST(x ORDER BY x) AS a FROM T",
-        "SELECT FIRST(x ORDER BY x LIMIT 2) FROM tbl",
-        "SELECT FIRST(DISTINCT x ORDER BY x LIMIT 2) FROM tbl",
         "SELECT LAST(x ORDER BY x) AS a FROM T",
-        "SELECT LAST(x ORDER BY x LIMIT 2) FROM tbl",
-        "SELECT LAST(DISTINCT x ORDER BY x LIMIT 2) FROM tbl",
     ] {
         supported_dialects.verified_stmt(sql);
     }
 }
-
 
 #[test]
 fn parse_create_table() {

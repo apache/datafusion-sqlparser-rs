@@ -1414,7 +1414,6 @@ impl<'a> Parser<'a> {
 
     pub fn parse_first_agg_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let distinct = self.parse_keyword(Keyword::DISTINCT);
         let expr = Box::new(self.parse_expr()?);
         // ANSI SQL and BigQuery define ORDER BY inside function.
         if !self.dialect.supports_within_after_array_aggregation() {
@@ -1424,17 +1423,10 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-            let limit = if self.parse_keyword(Keyword::LIMIT) {
-                self.parse_limit()?.map(Box::new)
-            } else {
-                None
-            };
             self.expect_token(&Token::RParen)?;
             return Ok(Expr::FIRST(FirstAgg {
-                distinct,
                 expr,
                 order_by,
-                limit,
                 within_group: false,
             }));
         }
@@ -1452,17 +1444,14 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Expr::FIRST(FirstAgg {
-            distinct,
             expr,
             order_by: within_group,
-            limit: None,
             within_group: true,
         }))
     }
 
     pub fn parse_last_agg_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let distinct = self.parse_keyword(Keyword::DISTINCT);
         let expr = Box::new(self.parse_expr()?);
         // ANSI SQL and BigQuery define ORDER BY inside function.
         if !self.dialect.supports_within_after_array_aggregation() {
@@ -1472,17 +1461,10 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-            let limit = if self.parse_keyword(Keyword::LIMIT) {
-                self.parse_limit()?.map(Box::new)
-            } else {
-                None
-            };
             self.expect_token(&Token::RParen)?;
             return Ok(Expr::LAST(LastAgg {
-                distinct,
                 expr,
                 order_by,
-                limit,
                 within_group: false,
             }));
         }
@@ -1500,10 +1482,8 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Expr::LAST(LastAgg {
-            distinct,
             expr,
             order_by: within_group,
-            limit: None,
             within_group: true,
         }))
     }

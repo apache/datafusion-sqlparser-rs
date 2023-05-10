@@ -3457,27 +3457,17 @@ impl fmt::Display for ArrayAgg {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct FirstAgg {
-    pub distinct: bool,
     pub expr: Box<Expr>,
     pub order_by: Option<Box<OrderByExpr>>,
-    pub limit: Option<Box<Expr>>,
     pub within_group: bool, // order by is used inside a within group or not
 }
 
 impl fmt::Display for FirstAgg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "FIRST({}{}",
-            if self.distinct { "DISTINCT " } else { "" },
-            self.expr
-        )?;
+        write!(f, "FIRST({}", self.expr)?;
         if !self.within_group {
             if let Some(order_by) = &self.order_by {
                 write!(f, " ORDER BY {order_by}")?;
-            }
-            if let Some(limit) = &self.limit {
-                write!(f, " LIMIT {limit}")?;
             }
         }
         write!(f, ")")?;
@@ -3497,27 +3487,17 @@ impl fmt::Display for FirstAgg {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct LastAgg {
-    pub distinct: bool,
     pub expr: Box<Expr>,
     pub order_by: Option<Box<OrderByExpr>>,
-    pub limit: Option<Box<Expr>>,
     pub within_group: bool, // order by is used inside a within group or not
 }
 
 impl fmt::Display for LastAgg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "LAST({}{}",
-            if self.distinct { "DISTINCT " } else { "" },
-            self.expr
-        )?;
+        write!(f, "LAST({}", self.expr)?;
         if !self.within_group {
             if let Some(order_by) = &self.order_by {
                 write!(f, " ORDER BY {order_by}")?;
-            }
-            if let Some(limit) = &self.limit {
-                write!(f, " LIMIT {limit}")?;
             }
         }
         write!(f, ")")?;

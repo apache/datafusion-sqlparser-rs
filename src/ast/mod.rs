@@ -3529,7 +3529,11 @@ impl fmt::Display for ArrayAgg {
         write!(f, ")")?;
         if self.within_group {
             if let Some(order_by) = &self.order_by {
-                write!(f, " WITHIN GROUP (ORDER BY {})", display_comma_separated(&order_by))?;
+                write!(
+                    f,
+                    " WITHIN GROUP (ORDER BY {})",
+                    display_comma_separated(&order_by)
+                )?;
             }
         }
         Ok(())

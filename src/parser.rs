@@ -883,29 +883,8 @@ impl<'a> Parser<'a> {
         let args = self.parse_optional_args()?;
         let over = if self.parse_keyword(Keyword::OVER) {
             if self.consume_token(&Token::LParen) {
-                let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
-                    self.parse_comma_separated(Parser::parse_expr)?
-                } else {
-                    vec![]
-                };
-                let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                    self.parse_comma_separated(Parser::parse_order_by_expr)?
-                } else {
-                    vec![]
-                };
-                let window_frame = if !self.consume_token(&Token::RParen) {
-                    let window_frame = self.parse_window_frame()?;
-                    self.expect_token(&Token::RParen)?;
-                    Some(window_frame)
-                } else {
-                    None
-                };
-
-                Some(WindowType::WindowSpec(WindowSpec {
-                    partition_by,
-                    order_by,
-                    window_frame,
-                }))
+                let window_spec = self.parse_window_args()?;
+                Some(WindowType::WindowSpec(window_spec))
             } else {
                 Some(WindowType::NamedWindow(self.parse_identifier()?))
             }
@@ -6948,6 +6927,11 @@ impl<'a> Parser<'a> {
         let ident = self.parse_identifier()?;
         self.expect_keyword(Keyword::AS)?;
         self.expect_token(&Token::LParen)?;
+        let window_spec = self.parse_window_args()?;
+        Ok(IdentWindow(ident, window_spec))
+    }
+
+    pub fn parse_window_args(&mut self) -> Result<WindowSpec, ParserError> {
         let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
             self.parse_comma_separated(Parser::parse_expr)?
         } else {
@@ -6965,12 +6949,11 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let over = WindowSpec {
+        Ok(WindowSpec {
             partition_by,
             order_by,
             window_frame,
-        };
-        Ok(IdentWindow(ident, over))
+        })
     }
 }
 

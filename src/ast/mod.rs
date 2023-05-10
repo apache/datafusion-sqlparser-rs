@@ -3505,7 +3505,7 @@ impl fmt::Display for ListAggOnOverflow {
 pub struct ArrayAgg {
     pub distinct: bool,
     pub expr: Box<Expr>,
-    pub order_by: Option<Box<OrderByExpr>>,
+    pub order_by: Option<Vec<OrderByExpr>>,
     pub limit: Option<Box<Expr>>,
     pub within_group: bool, // order by is used inside a within group or not
 }
@@ -3520,7 +3520,7 @@ impl fmt::Display for ArrayAgg {
         )?;
         if !self.within_group {
             if let Some(order_by) = &self.order_by {
-                write!(f, " ORDER BY {order_by}")?;
+                write!(f, " ORDER BY {}", display_comma_separated(&order_by))?;
             }
             if let Some(limit) = &self.limit {
                 write!(f, " LIMIT {limit}")?;
@@ -3529,7 +3529,7 @@ impl fmt::Display for ArrayAgg {
         write!(f, ")")?;
         if self.within_group {
             if let Some(order_by) = &self.order_by {
-                write!(f, " WITHIN GROUP (ORDER BY {order_by})")?;
+                write!(f, " WITHIN GROUP (ORDER BY {})", display_comma_separated(&order_by))?;
             }
         }
         Ok(())

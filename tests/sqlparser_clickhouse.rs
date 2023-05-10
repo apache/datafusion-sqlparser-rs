@@ -32,7 +32,7 @@ fn parse_map_access_expr() {
     let select = clickhouse().verified_only_select(sql);
     assert_eq!(
         Select {
-            distinct: false,
+            distinct: None,
             top: None,
             projection: vec![UnnamedExpr(MapAccess {
                 column: Box::new(Identifier(Ident {
@@ -329,5 +329,6 @@ fn parse_create_table() {
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],
+        options: None,
     }
 }

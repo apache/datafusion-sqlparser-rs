@@ -245,6 +245,7 @@ fn parse_similar_to() {
 fn sqlite() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SQLiteDialect {})],
+        options: None,
     }
 }
 
@@ -252,5 +253,6 @@ fn sqlite_and_generic() -> TestedDialects {
     TestedDialects {
         // we don't have a separate SQLite dialect, so test only the generic dialect for now
         dialects: vec![Box::new(SQLiteDialect {}), Box::new(GenericDialect {})],
+        options: None,
     }
 }

@@ -406,12 +406,14 @@ fn test_select_wildcard_with_replace() {
 fn bigquery() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(BigQueryDialect {})],
+        options: None,
     }
 }
 
 fn bigquery_and_generic() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(BigQueryDialect {}), Box::new(GenericDialect {})],
+        options: None,
     }
 }
 

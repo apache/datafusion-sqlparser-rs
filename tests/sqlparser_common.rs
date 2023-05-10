@@ -28,7 +28,7 @@ use sqlparser::dialect::{
     MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
-use sqlparser::parser::{Parser, ParserError};
+use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use test_utils::{
     all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
     TestedDialects,
@@ -201,6 +201,7 @@ fn parse_update_set_from() {
             Box::new(RedshiftSqlDialect {}),
             Box::new(MsSqlDialect {}),
         ],
+        options: None,
     };
     let stmt = dialects.verified_stmt(sql);
     assert_eq!(
@@ -225,7 +226,7 @@ fn parse_update_set_from() {
                     subquery: Box::new(Query {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
-                            distinct: false,
+                            distinct: None,
                             top: None,
                             projection: vec![
                                 SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
@@ -385,7 +386,7 @@ fn parse_no_table_name() {
 fn parse_delete_statement() {
     let sql = "DELETE FROM \"table\"";
     match verified_stmt(sql) {
-        Statement::Delete { table_name, .. } => {
+        Statement::Delete { from, .. } => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::with_quote('"', "table")]),
@@ -393,7 +394,93 @@ fn parse_delete_statement() {
                     args: None,
                     with_hints: vec![],
                 },
-                table_name
+                from[0].relation
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_delete_statement_for_multi_tables() {
+    let sql = "DELETE schema1.table1, schema2.table2 FROM schema1.table1 JOIN schema2.table2 ON schema2.table2.col1 = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
+    match verified_stmt(sql) {
+        Statement::Delete { tables, from, .. } => {
+            assert_eq!(
+                ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                tables[0]
+            );
+            assert_eq!(
+                ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                tables[1]
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                from[0].relation
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                from[0].joins[0].relation
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_delete_statement_for_multi_tables_with_using() {
+    let sql = "DELETE FROM schema1.table1, schema2.table2 USING schema1.table1 JOIN schema2.table2 ON schema2.table2.pk = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
+    match verified_stmt(sql) {
+        Statement::Delete {
+            from,
+            using: Some(using),
+            ..
+        } => {
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                from[0].relation
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                from[1].relation
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                using[0].relation
+            );
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                using[0].joins[0].relation
             );
         }
         _ => unreachable!(),
@@ -407,7 +494,8 @@ fn parse_where_delete_statement() {
     let sql = "DELETE FROM foo WHERE name = 5";
     match verified_stmt(sql) {
         Statement::Delete {
-            table_name,
+            tables: _,
+            from,
             using,
             selection,
             returning,
@@ -419,7 +507,7 @@ fn parse_where_delete_statement() {
                     args: None,
                     with_hints: vec![],
                 },
-                table_name,
+                from[0].relation,
             );
 
             assert_eq!(None, using);
@@ -444,7 +532,8 @@ fn parse_where_delete_with_alias_statement() {
     let sql = "DELETE FROM basket AS a USING basket AS b WHERE a.id < b.id";
     match verified_stmt(sql) {
         Statement::Delete {
-            table_name,
+            tables: _,
+            from,
             using,
             selection,
             returning,
@@ -459,19 +548,21 @@ fn parse_where_delete_with_alias_statement() {
                     args: None,
                     with_hints: vec![],
                 },
-                table_name,
+                from[0].relation,
             );
-
             assert_eq!(
-                Some(TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("basket")]),
-                    alias: Some(TableAlias {
-                        name: Ident::new("b"),
-                        columns: vec![],
-                    }),
-                    args: None,
-                    with_hints: vec![],
-                }),
+                Some(vec![TableWithJoins {
+                    relation: TableFactor::Table {
+                        name: ObjectName(vec![Ident::new("basket")]),
+                        alias: Some(TableAlias {
+                            name: Ident::new("b"),
+                            columns: vec![],
+                        }),
+                        args: None,
+                        with_hints: vec![],
+                    },
+                    joins: vec![],
+                }]),
                 using
             );
             assert_eq!(
@@ -507,7 +598,7 @@ fn parse_top_level() {
 fn parse_simple_select() {
     let sql = "SELECT id, fname, lname FROM customer WHERE id = 1 LIMIT 5";
     let select = verified_only_select(sql);
-    assert!(!select.distinct);
+    assert!(select.distinct.is_none());
     assert_eq!(3, select.projection.len());
     let select = verified_query(sql);
     assert_eq!(Some(Expr::Value(number("5"))), select.limit);
@@ -532,7 +623,7 @@ fn parse_limit_is_not_an_alias() {
 fn parse_select_distinct() {
     let sql = "SELECT DISTINCT name FROM customer";
     let select = verified_only_select(sql);
-    assert!(select.distinct);
+    assert!(select.distinct.is_some());
     assert_eq!(
         &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
         only(&select.projection)
@@ -543,7 +634,7 @@ fn parse_select_distinct() {
 fn parse_select_distinct_two_fields() {
     let sql = "SELECT DISTINCT name, id FROM customer";
     let select = verified_only_select(sql);
-    assert!(select.distinct);
+    assert!(select.distinct.is_some());
     assert_eq!(
         &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
         &select.projection[0]
@@ -564,6 +655,30 @@ fn parse_select_distinct_tuple() {
             Expr::Identifier(Ident::new("id")),
         ]))],
         &select.projection
+    );
+}
+
+#[test]
+fn parse_select_distinct_on() {
+    let sql = "SELECT DISTINCT ON (album_id) name FROM track ORDER BY album_id, milliseconds";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Some(Distinct::On(vec![Expr::Identifier(Ident::new("album_id"))])),
+        &select.distinct
+    );
+
+    let sql = "SELECT DISTINCT ON () name FROM track ORDER BY milliseconds";
+    let select = verified_only_select(sql);
+    assert_eq!(&Some(Distinct::On(vec![])), &select.distinct);
+
+    let sql = "SELECT DISTINCT ON (album_id, milliseconds) name FROM track";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Some(Distinct::On(vec![
+            Expr::Identifier(Ident::new("album_id")),
+            Expr::Identifier(Ident::new("milliseconds")),
+        ])),
+        &select.distinct
     );
 }
 
@@ -835,6 +950,7 @@ fn parse_exponent_in_select() -> Result<(), ParserError> {
             Box::new(SnowflakeDialect {}),
             Box::new(SQLiteDialect {}),
         ],
+        options: None,
     };
     let sql = "SELECT 10e-20, 1e3, 1e+3, 1e3a, 1e, 0.5e2";
     let mut select = dialects.parse_sql_statements(sql)?;
@@ -1272,6 +1388,7 @@ pub fn all_dialects_but_pg() -> TestedDialects {
             .into_iter()
             .filter(|x| !x.is::<PostgreSqlDialect>())
             .collect(),
+        options: None,
     }
 }
 
@@ -1941,6 +2058,7 @@ fn parse_array_agg_func() {
             Box::new(AnsiDialect {}),
             Box::new(HiveDialect {}),
         ],
+        options: None,
     };
 
     for sql in [
@@ -2160,6 +2278,7 @@ fn parse_create_table_hive_array() {
     // Parsing [] type arrays does not work in MsSql since [ is used in is_delimited_identifier_start
     let dialects = TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(HiveDialect {})],
+        options: None,
     };
     let sql = "CREATE TABLE IF NOT EXISTS something (name int, val array<int>)";
     match dialects.one_statement_parses_to(
@@ -2202,6 +2321,7 @@ fn parse_create_table_hive_array() {
             Box::new(HiveDialect {}),
             Box::new(MySqlDialect {}),
         ],
+        options: None,
     };
     let sql = "CREATE TABLE IF NOT EXISTS something (name int, val array<int)";
 
@@ -2747,6 +2867,7 @@ fn parse_alter_table_add_column_if_not_exists() {
             Box::new(BigQueryDialect {}),
             Box::new(GenericDialect {}),
         ],
+        options: None,
     };
 
     match dialects.verified_stmt("ALTER TABLE tab ADD IF NOT EXISTS foo TEXT") {
@@ -3294,20 +3415,20 @@ fn parse_interval() {
     let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1-1")))),
             leading_field: Some(DateTimeField::Year),
             leading_precision: None,
             last_field: Some(DateTimeField::Month),
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '01:01.01' MINUTE (5) TO SECOND (5)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "01:01.01"
             )))),
@@ -3315,53 +3436,53 @@ fn parse_interval() {
             leading_precision: Some(5),
             last_field: Some(DateTimeField::Second),
             fractional_seconds_precision: Some(5),
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '1' SECOND (5, 4)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1")))),
             leading_field: Some(DateTimeField::Second),
             leading_precision: Some(5),
             last_field: None,
             fractional_seconds_precision: Some(4),
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '10' HOUR";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL 5 DAY";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(number("5"))),
             leading_field: Some(DateTimeField::Day),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL 1 + 1 DAY";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Value(number("1"))),
                 op: BinaryOperator::Plus,
@@ -3371,27 +3492,27 @@ fn parse_interval() {
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '10' HOUR (1)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: Some(1),
             last_field: None,
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '1 DAY'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "1 DAY"
             )))),
@@ -3399,7 +3520,7 @@ fn parse_interval() {
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -3447,7 +3568,7 @@ fn parse_interval_and_or_xor() {
     let expected_ast = vec![Statement::Query(Box::new(Query {
         with: None,
         body: Box::new(SetExpr::Select(Box::new(Select {
-            distinct: false,
+            distinct: None,
             top: None,
             projection: vec![UnnamedExpr(Expr::Identifier(Ident {
                 value: "col".to_string(),
@@ -3480,7 +3601,7 @@ fn parse_interval_and_or_xor() {
                             quote_style: None,
                         })),
                         op: BinaryOperator::Plus,
-                        right: Box::new(Expr::Interval {
+                        right: Box::new(Expr::Interval(Interval {
                             value: Box::new(Expr::Value(Value::SingleQuotedString(
                                 "5 days".to_string(),
                             ))),
@@ -3488,7 +3609,7 @@ fn parse_interval_and_or_xor() {
                             leading_precision: None,
                             last_field: None,
                             fractional_seconds_precision: None,
-                        }),
+                        })),
                     }),
                 }),
                 op: BinaryOperator::And,
@@ -3504,7 +3625,7 @@ fn parse_interval_and_or_xor() {
                             quote_style: None,
                         })),
                         op: BinaryOperator::Plus,
-                        right: Box::new(Expr::Interval {
+                        right: Box::new(Expr::Interval(Interval {
                             value: Box::new(Expr::Value(Value::SingleQuotedString(
                                 "3 days".to_string(),
                             ))),
@@ -3512,7 +3633,7 @@ fn parse_interval_and_or_xor() {
                             leading_precision: None,
                             last_field: None,
                             fractional_seconds_precision: None,
-                        }),
+                        })),
                     }),
                 }),
             }),
@@ -3804,6 +3925,7 @@ fn parse_unnest() {
     }
     let dialects = TestedDialects {
         dialects: vec![Box::new(BigQueryDialect {}), Box::new(GenericDialect {})],
+        options: None,
     };
     // 1. both Alias and WITH OFFSET clauses.
     chk(
@@ -5764,7 +5886,7 @@ fn parse_merge() {
                     subquery: Box::new(Query {
                         with: None,
                         body: Box::new(SetExpr::Select(Box::new(Select {
-                            distinct: false,
+                            distinct: None,
                             top: None,
                             projection: vec![SelectItem::Wildcard(
                                 WildcardAdditionalOptions::default()
@@ -6043,6 +6165,7 @@ fn test_placeholder() {
             // Note: `$` is the starting word for the HiveDialect identifier
             // Box::new(sqlparser::dialect::HiveDialect {}),
         ],
+        options: None,
     };
     let sql = "SELECT * FROM student WHERE id = $Id1";
     let ast = dialects.verified_only_select(sql);
@@ -6773,6 +6896,7 @@ fn parse_non_latin_identifiers() {
             Box::new(RedshiftSqlDialect {}),
             Box::new(MySqlDialect {}),
         ],
+        options: None,
     };
 
     supported_dialects.verified_stmt("SELECT a.説明 FROM test.public.inter01 AS a");
@@ -6781,4 +6905,35 @@ fn parse_non_latin_identifiers() {
     assert!(supported_dialects
         .parse_sql_statements("SELECT 💝 FROM table1")
         .is_err());
+}
+
+#[test]
+fn parse_trailing_comma() {
+    let trailing_commas = TestedDialects {
+        dialects: vec![Box::new(GenericDialect {})],
+        options: Some(ParserOptions {
+            trailing_commas: true,
+        }),
+    };
+
+    trailing_commas.one_statement_parses_to(
+        "SELECT album_id, name, FROM track",
+        "SELECT album_id, name FROM track",
+    );
+
+    trailing_commas.one_statement_parses_to(
+        "SELECT * FROM track ORDER BY milliseconds,",
+        "SELECT * FROM track ORDER BY milliseconds",
+    );
+
+    trailing_commas.one_statement_parses_to(
+        "SELECT DISTINCT ON (album_id,) name FROM track",
+        "SELECT DISTINCT ON (album_id) name FROM track",
+    );
+
+    trailing_commas.verified_stmt("SELECT album_id, name FROM track");
+
+    trailing_commas.verified_stmt("SELECT * FROM track ORDER BY milliseconds");
+
+    trailing_commas.verified_stmt("SELECT DISTINCT ON (album_id) name FROM track");
 }

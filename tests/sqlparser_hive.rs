@@ -267,6 +267,7 @@ fn parse_create_function() {
 
     let generic = TestedDialects {
         dialects: vec![Box::new(GenericDialect {})],
+        options: None,
     };
 
     assert_eq!(
@@ -473,5 +474,6 @@ fn parse_similar_to() {
 fn hive() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(HiveDialect {})],
+        options: None,
     }
 }

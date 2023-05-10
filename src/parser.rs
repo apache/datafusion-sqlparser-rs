@@ -195,7 +195,7 @@ impl std::error::Error for ParserError {}
 // By default, allow expressions up to this deep before erroring
 const DEFAULT_REMAINING_DEPTH: usize = 50;
 
-#[derive(Default)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ParserOptions {
     pub trailing_commas: bool,
 }
@@ -881,7 +881,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let distinct = self.parse_all_or_distinct()?;
+        let distinct = self.parse_all_or_distinct()?.is_some();
         let args = self.parse_optional_args()?;
         let over = if self.parse_keyword(Keyword::OVER) {
             // TBD: support window names (`OVER mywin`) in place of inline specification
@@ -1304,7 +1304,7 @@ impl<'a> Parser<'a> {
     /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.
     pub fn parse_listagg_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let distinct = self.parse_all_or_distinct()?;
+        let distinct = self.parse_all_or_distinct()?.is_some();
         let expr = Box::new(self.parse_expr()?);
         // While ANSI SQL would would require the separator, Redshift makes this optional. Here we
         // choose to make the separator optional as this provides the more general implementation.
@@ -1693,13 +1693,13 @@ impl<'a> Parser<'a> {
                 }
             };
 
-        Ok(Expr::Interval {
+        Ok(Expr::Interval(Interval {
             value: Box::new(value),
             leading_field,
             leading_precision,
             last_field,
             fractional_seconds_precision: fsec_precision,
-        })
+        }))
     }
 
     /// Parse an operator following an expression
@@ -2378,16 +2378,31 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse either `ALL` or `DISTINCT`. Returns `true` if `DISTINCT` is parsed and results in a
-    /// `ParserError` if both `ALL` and `DISTINCT` are fround.
-    pub fn parse_all_or_distinct(&mut self) -> Result<bool, ParserError> {
+    /// Parse either `ALL`, `DISTINCT` or `DISTINCT ON (...)`. Returns `None` if `ALL` is parsed
+    /// and results in a `ParserError` if both `ALL` and `DISTINCT` are found.
+    pub fn parse_all_or_distinct(&mut self) -> Result<Option<Distinct>, ParserError> {
         let all = self.parse_keyword(Keyword::ALL);
         let distinct = self.parse_keyword(Keyword::DISTINCT);
-        if all && distinct {
-            parser_err!("Cannot specify both ALL and DISTINCT".to_string())
-        } else {
-            Ok(distinct)
+        if !distinct {
+            return Ok(None);
         }
+        if all {
+            return parser_err!("Cannot specify both ALL and DISTINCT".to_string());
+        }
+        let on = self.parse_keyword(Keyword::ON);
+        if !on {
+            return Ok(Some(Distinct::Distinct));
+        }
+
+        self.expect_token(&Token::LParen)?;
+        let col_names = if self.consume_token(&Token::RParen) {
+            self.prev_token();
+            Vec::new()
+        } else {
+            self.parse_comma_separated(Parser::parse_expr)?
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(Some(Distinct::On(col_names)))
     }
 
     /// Parse a SQL CREATE statement
@@ -4078,13 +4093,32 @@ impl<'a> Parser<'a> {
 
     /// Parse a copy statement
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
-        let table_name = self.parse_object_name()?;
-        let columns = self.parse_parenthesized_column_list(Optional, false)?;
+        let source;
+        if self.consume_token(&Token::LParen) {
+            source = CopySource::Query(Box::new(self.parse_query()?));
+            self.expect_token(&Token::RParen)?;
+        } else {
+            let table_name = self.parse_object_name()?;
+            let columns = self.parse_parenthesized_column_list(Optional, false)?;
+            source = CopySource::Table {
+                table_name,
+                columns,
+            };
+        }
         let to = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::TO]) {
             Some(Keyword::FROM) => false,
             Some(Keyword::TO) => true,
             _ => self.expected("FROM or TO", self.peek_token())?,
         };
+        if !to {
+            // Use a separate if statement to prevent Rust compiler from complaining about
+            // "if statement in this position is unstable: https://github.com/rust-lang/rust/issues/53667"
+            if let CopySource::Query(_) = source {
+                return Err(ParserError::ParserError(
+                    "COPY ... FROM does not support query as a source".to_string(),
+                ));
+            }
+        }
         let target = if self.parse_keyword(Keyword::STDIN) {
             CopyTarget::Stdin
         } else if self.parse_keyword(Keyword::STDOUT) {
@@ -4115,8 +4149,7 @@ impl<'a> Parser<'a> {
             vec![]
         };
         Ok(Statement::Copy {
-            table_name,
-            columns,
+            source,
             to,
             target,
             options,
@@ -4891,10 +4924,17 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_delete(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::FROM)?;
-        let table_name = self.parse_table_factor()?;
+        let tables = if !self.parse_keyword(Keyword::FROM) {
+            let tables = self.parse_comma_separated(Parser::parse_object_name)?;
+            self.expect_keyword(Keyword::FROM)?;
+            tables
+        } else {
+            vec![]
+        };
+
+        let from = self.parse_comma_separated(Parser::parse_table_and_joins)?;
         let using = if self.parse_keyword(Keyword::USING) {
-            Some(self.parse_table_factor()?)
+            Some(self.parse_comma_separated(Parser::parse_table_and_joins)?)
         } else {
             None
         };
@@ -4911,7 +4951,8 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Statement::Delete {
-            table_name,
+            tables,
+            from,
             using,
             selection,
             returning,
@@ -7013,6 +7054,7 @@ mod tests {
             // Character string types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-string-type>
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                options: None,
             };
 
             test_parse_data_type!(dialect, "CHARACTER", DataType::Character(None));
@@ -7142,6 +7184,7 @@ mod tests {
             // Character large object types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-length>
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                options: None,
             };
 
             test_parse_data_type!(
@@ -7174,6 +7217,7 @@ mod tests {
         fn test_parse_custom_types() {
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                options: None,
             };
             test_parse_data_type!(
                 dialect,
@@ -7205,6 +7249,7 @@ mod tests {
             // Exact numeric types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type>
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                options: None,
             };
 
             test_parse_data_type!(dialect, "NUMERIC", DataType::Numeric(ExactNumberInfo::None));
@@ -7255,6 +7300,7 @@ mod tests {
             // Datetime types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type>
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                options: None,
             };
 
             test_parse_data_type!(dialect, "DATE", DataType::Date);
@@ -7366,6 +7412,7 @@ mod tests {
 
         let dialect = TestedDialects {
             dialects: vec![Box::new(GenericDialect {}), Box::new(MySqlDialect {})],
+            options: None,
         };
 
         test_parse_table_constraint!(

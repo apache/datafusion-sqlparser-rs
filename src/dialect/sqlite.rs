@@ -10,7 +10,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::ast::Statement;
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+
+use crate::ast::{BinaryOperator, Expr, Statement};
 use crate::dialect::Dialect;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
@@ -43,6 +46,24 @@ impl Dialect for SQLiteDialect {
         if parser.parse_keyword(Keyword::REPLACE) {
             parser.prev_token();
             Some(parser.parse_insert())
+        } else {
+            None
+        }
+    }
+
+    fn parse_infix(
+        &self,
+        _parser: &mut crate::parser::Parser,
+        _expr: &crate::ast::Expr,
+        _precedence: u8,
+    ) -> Option<Result<crate::ast::Expr, crate::parser::ParserError>> {
+        // Parse REGEXP as an operator
+        if _parser.parse_keyword(Keyword::REGEXP) {
+            Some(Ok(Expr::BinaryOp {
+                left: Box::new(_expr.clone()),
+                op: BinaryOperator::Regexp,
+                right: Box::new(_parser.parse_expr().unwrap()),
+            }))
         } else {
             None
         }

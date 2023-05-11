@@ -5247,7 +5247,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let named_window = if self.parse_keyword(Keyword::WINDOW) {
+        let named_windows = if self.parse_keyword(Keyword::WINDOW) {
             self.parse_comma_separated(Parser::parse_named_window)?
         } else {
             vec![]
@@ -5259,16 +5259,15 @@ impl<'a> Parser<'a> {
             } = proj
             {
                 if let Some(WindowType::NamedWindow(ident)) = &f.over {
-                    for (i, window) in named_window.clone().iter().enumerate() {
-                        if *ident == window.0 {
-                            break;
-                        } else if i == named_window.len() - 1 {
-                            return Err(ParserError::ParserError(format!(
+                    named_windows
+                        .iter()
+                        .find(|IdentWindow(name, _)| ident == name)
+                        .ok_or_else(|| {
+                            ParserError::ParserError(format!(
                                 "Window {} is not defined",
                                 ident.value
-                            )));
-                        }
-                    }
+                            ))
+                        })?;
                 }
             }
         }
@@ -5292,7 +5291,7 @@ impl<'a> Parser<'a> {
             distribute_by,
             sort_by,
             having,
-            named_window,
+            named_window: named_windows,
             qualify,
         })
     }

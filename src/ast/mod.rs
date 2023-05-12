@@ -928,7 +928,7 @@ pub enum WindowType {
 impl Display for WindowType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WindowType::WindowSpec(spec) => write!(f, "{}", spec),
+            WindowType::WindowSpec(spec) => write!(f, "({})", spec),
             WindowType::NamedWindow(name) => write!(f, "{}", name),
         }
     }
@@ -3401,7 +3401,7 @@ impl fmt::Display for Function {
             )?;
 
             if let Some(o) = &self.over {
-                write!(f, " OVER ({o})")?;
+                write!(f, " OVER {o}")?;
             }
         }
 

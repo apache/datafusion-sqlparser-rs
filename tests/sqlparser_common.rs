@@ -19,7 +19,6 @@
 //! dialect-specific parsing rules).
 
 use matches::assert_matches;
-
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::Pivot;
 use sqlparser::ast::*;
@@ -3274,6 +3273,143 @@ fn parse_window_functions() {
         }),
         expr_from_projection(&select.projection[0])
     );
+}
+
+#[test]
+fn test_parse_named_window() {
+    let sql = "SELECT \
+    MIN(c12) OVER window1 AS min1, \
+    MAX(c12) OVER window2 AS max1 \
+    FROM aggregate_test_100 \
+    WINDOW window1 AS (ORDER BY C12), \
+    window2 AS (PARTITION BY C11) \
+    ORDER BY C3";
+    let actual = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
+    let expected = vec![Statement::Query(Box::new(Query {
+        with: None,
+        body: Box::new(SetExpr::Select(Box::new(Select {
+            distinct: None,
+            top: None,
+            projection: vec![
+                SelectItem::ExprWithAlias {
+                    expr: Expr::Function(Function {
+                        name: ObjectName(vec![Ident {
+                            value: "MIN".to_string(),
+                            quote_style: None,
+                        }]),
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                            Expr::Identifier(Ident {
+                                value: "c12".to_string(),
+                                quote_style: None,
+                            }),
+                        ))],
+                        over: Some(WindowType::NamedWindow(Ident {
+                            value: "window1".to_string(),
+                            quote_style: None,
+                        })),
+                        distinct: false,
+                        special: false,
+                    }),
+                    alias: Ident {
+                        value: "min1".to_string(),
+                        quote_style: None,
+                    },
+                },
+                SelectItem::ExprWithAlias {
+                    expr: Expr::Function(Function {
+                        name: ObjectName(vec![Ident {
+                            value: "MAX".to_string(),
+                            quote_style: None,
+                        }]),
+                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                            Expr::Identifier(Ident {
+                                value: "c12".to_string(),
+                                quote_style: None,
+                            }),
+                        ))],
+                        over: Some(WindowType::NamedWindow(Ident {
+                            value: "window2".to_string(),
+                            quote_style: None,
+                        })),
+                        distinct: false,
+                        special: false,
+                    }),
+                    alias: Ident {
+                        value: "max1".to_string(),
+                        quote_style: None,
+                    },
+                },
+            ],
+            into: None,
+            from: vec![TableWithJoins {
+                relation: TableFactor::Table {
+                    name: ObjectName(vec![Ident {
+                        value: "aggregate_test_100".to_string(),
+                        quote_style: None,
+                    }]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                },
+                joins: vec![],
+            }],
+            lateral_views: vec![],
+            selection: None,
+            group_by: vec![],
+            cluster_by: vec![],
+            distribute_by: vec![],
+            sort_by: vec![],
+            having: None,
+            named_window: vec![
+                IdentWindow(
+                    Ident {
+                        value: "window1".to_string(),
+                        quote_style: None,
+                    },
+                    WindowSpec {
+                        partition_by: vec![],
+                        order_by: vec![OrderByExpr {
+                            expr: Expr::Identifier(Ident {
+                                value: "C12".to_string(),
+                                quote_style: None,
+                            }),
+                            asc: None,
+                            nulls_first: None,
+                        }],
+                        window_frame: None,
+                    },
+                ),
+                IdentWindow(
+                    Ident {
+                        value: "window2".to_string(),
+                        quote_style: None,
+                    },
+                    WindowSpec {
+                        partition_by: vec![Expr::Identifier(Ident {
+                            value: "C11".to_string(),
+                            quote_style: None,
+                        })],
+                        order_by: vec![],
+                        window_frame: None,
+                    },
+                ),
+            ],
+            qualify: None,
+        }))),
+        order_by: vec![OrderByExpr {
+            expr: Expr::Identifier(Ident {
+                value: "C3".to_string(),
+                quote_style: None,
+            }),
+            asc: None,
+            nulls_first: None,
+        }],
+        limit: None,
+        offset: None,
+        fetch: None,
+        locks: vec![],
+    }))];
+    assert_eq!(actual, expected);
 }
 
 #[test]

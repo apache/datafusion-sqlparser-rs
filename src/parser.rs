@@ -5252,6 +5252,8 @@ impl<'a> Parser<'a> {
         } else {
             vec![]
         };
+        // If the projection is done over a named window, that window
+        // name must be defined. Otherwise, it gives an error.
         for proj in &projection {
             if let SelectItem::ExprWithAlias {
                 expr: Expr::Function(f),

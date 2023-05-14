@@ -691,8 +691,10 @@ fn test_copy_from() {
     assert_eq!(
         stmt,
         Statement::Copy {
-            table_name: ObjectName(vec!["users".into()]),
-            columns: vec![],
+            source: CopySource::Table {
+                table_name: ObjectName(vec!["users".into()]),
+                columns: vec![],
+            },
             to: false,
             target: CopyTarget::File {
                 filename: "data.csv".to_string(),
@@ -707,8 +709,10 @@ fn test_copy_from() {
     assert_eq!(
         stmt,
         Statement::Copy {
-            table_name: ObjectName(vec!["users".into()]),
-            columns: vec![],
+            source: CopySource::Table {
+                table_name: ObjectName(vec!["users".into()]),
+                columns: vec![],
+            },
             to: false,
             target: CopyTarget::File {
                 filename: "data.csv".to_string(),
@@ -723,8 +727,10 @@ fn test_copy_from() {
     assert_eq!(
         stmt,
         Statement::Copy {
-            table_name: ObjectName(vec!["users".into()]),
-            columns: vec![],
+            source: CopySource::Table {
+                table_name: ObjectName(vec!["users".into()]),
+                columns: vec![],
+            },
             to: false,
             target: CopyTarget::File {
                 filename: "data.csv".to_string(),
@@ -745,8 +751,10 @@ fn test_copy_to() {
     assert_eq!(
         stmt,
         Statement::Copy {
-            table_name: ObjectName(vec!["users".into()]),
-            columns: vec![],
+            source: CopySource::Table {
+                table_name: ObjectName(vec!["users".into()]),
+                columns: vec![],
+            },
             to: true,
             target: CopyTarget::File {
                 filename: "data.csv".to_string(),
@@ -761,8 +769,10 @@ fn test_copy_to() {
     assert_eq!(
         stmt,
         Statement::Copy {
-            table_name: ObjectName(vec!["users".into()]),
-            columns: vec![],
+            source: CopySource::Table {
+                table_name: ObjectName(vec!["users".into()]),
+                columns: vec![],
+            },
             to: true,
             target: CopyTarget::File {
                 filename: "data.csv".to_string(),
@@ -777,8 +787,10 @@ fn test_copy_to() {
     assert_eq!(
         stmt,
         Statement::Copy {
-            table_name: ObjectName(vec!["users".into()]),
-            columns: vec![],
+            source: CopySource::Table {
+                table_name: ObjectName(vec!["users".into()]),
+                columns: vec![],
+            },
             to: true,
             target: CopyTarget::File {
                 filename: "data.csv".to_string(),
@@ -816,8 +828,10 @@ fn parse_copy_from() {
     assert_eq!(
         pg_and_generic().one_statement_parses_to(sql, ""),
         Statement::Copy {
-            table_name: ObjectName(vec!["table".into()]),
-            columns: vec!["a".into(), "b".into()],
+            source: CopySource::Table {
+                table_name: ObjectName(vec!["table".into()]),
+                columns: vec!["a".into(), "b".into()],
+            },
             to: false,
             target: CopyTarget::File {
                 filename: "file.csv".into()
@@ -846,13 +860,24 @@ fn parse_copy_from() {
 }
 
 #[test]
+fn parse_copy_from_error() {
+    let res = pg().parse_sql_statements("COPY (SELECT 42 AS a, 'hello' AS b) FROM 'query.csv'");
+    assert_eq!(
+        ParserError::ParserError("COPY ... FROM does not support query as a source".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_copy_to() {
     let stmt = pg().verified_stmt("COPY users TO 'data.csv'");
     assert_eq!(
         stmt,
         Statement::Copy {
-            table_name: ObjectName(vec!["users".into()]),
-            columns: vec![],
+            source: CopySource::Table {
+                table_name: ObjectName(vec!["users".into()]),
+                columns: vec![],
+            },
             to: true,
             target: CopyTarget::File {
                 filename: "data.csv".to_string(),
@@ -867,8 +892,10 @@ fn parse_copy_to() {
     assert_eq!(
         stmt,
         Statement::Copy {
-            table_name: ObjectName(vec!["country".into()]),
-            columns: vec![],
+            source: CopySource::Table {
+                table_name: ObjectName(vec!["country".into()]),
+                columns: vec![],
+            },
             to: true,
             target: CopyTarget::Stdout,
             options: vec![CopyOption::Delimiter('|')],
@@ -882,8 +909,10 @@ fn parse_copy_to() {
     assert_eq!(
         stmt,
         Statement::Copy {
-            table_name: ObjectName(vec!["country".into()]),
-            columns: vec![],
+            source: CopySource::Table {
+                table_name: ObjectName(vec!["country".into()]),
+                columns: vec![],
+            },
             to: true,
             target: CopyTarget::Program {
                 command: "gzip > /usr1/proj/bray/sql/country_data.gz".into(),
@@ -893,6 +922,58 @@ fn parse_copy_to() {
             values: vec![],
         }
     );
+
+    let stmt = pg().verified_stmt("COPY (SELECT 42 AS a, 'hello' AS b) TO 'query.csv'");
+    assert_eq!(
+        stmt,
+        Statement::Copy {
+            source: CopySource::Query(Box::new(Query {
+                with: None,
+                body: Box::new(SetExpr::Select(Box::new(Select {
+                    distinct: None,
+                    top: None,
+                    projection: vec![
+                        SelectItem::ExprWithAlias {
+                            expr: Expr::Value(number("42")),
+                            alias: Ident {
+                                value: "a".into(),
+                                quote_style: None,
+                            },
+                        },
+                        SelectItem::ExprWithAlias {
+                            expr: Expr::Value(Value::SingleQuotedString("hello".into())),
+                            alias: Ident {
+                                value: "b".into(),
+                                quote_style: None,
+                            },
+                        }
+                    ],
+                    into: None,
+                    from: vec![],
+                    lateral_views: vec![],
+                    selection: None,
+                    group_by: vec![],
+                    having: None,
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    qualify: None,
+                }))),
+                order_by: vec![],
+                limit: None,
+                offset: None,
+                fetch: None,
+                locks: vec![],
+            })),
+            to: true,
+            target: CopyTarget::File {
+                filename: "query.csv".into(),
+            },
+            options: vec![],
+            legacy_options: vec![],
+            values: vec![],
+        }
+    )
 }
 
 #[test]
@@ -901,8 +982,10 @@ fn parse_copy_from_before_v9_0() {
     assert_eq!(
         stmt,
         Statement::Copy {
-            table_name: ObjectName(vec!["users".into()]),
-            columns: vec![],
+            source: CopySource::Table {
+                table_name: ObjectName(vec!["users".into()]),
+                columns: vec![],
+            },
             to: false,
             target: CopyTarget::File {
                 filename: "data.csv".to_string(),
@@ -928,8 +1011,10 @@ fn parse_copy_from_before_v9_0() {
     assert_eq!(
         pg_and_generic().one_statement_parses_to(sql, ""),
         Statement::Copy {
-            table_name: ObjectName(vec!["users".into()]),
-            columns: vec![],
+            source: CopySource::Table {
+                table_name: ObjectName(vec!["users".into()]),
+                columns: vec![],
+            },
             to: false,
             target: CopyTarget::File {
                 filename: "data.csv".to_string(),
@@ -954,8 +1039,10 @@ fn parse_copy_to_before_v9_0() {
     assert_eq!(
         stmt,
         Statement::Copy {
-            table_name: ObjectName(vec!["users".into()]),
-            columns: vec![],
+            source: CopySource::Table {
+                table_name: ObjectName(vec!["users".into()]),
+                columns: vec![],
+            },
             to: true,
             target: CopyTarget::File {
                 filename: "data.csv".to_string(),
@@ -2052,12 +2139,14 @@ fn parse_on_commit() {
 fn pg() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {})],
+        options: None,
     }
 }
 
 fn pg_and_generic() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(GenericDialect {})],
+        options: None,
     }
 }
 

@@ -26,17 +26,27 @@ use alloc::{
 };
 use core::fmt::Debug;
 
-use crate::ast::*;
 use crate::dialect::*;
 use crate::parser::{Parser, ParserError};
+use crate::{ast::*, parser::ParserOptions};
 
 /// Tests use the methods on this struct to invoke the parser on one or
 /// multiple dialects.
 pub struct TestedDialects {
     pub dialects: Vec<Box<dyn Dialect>>,
+    pub options: Option<ParserOptions>,
 }
 
 impl TestedDialects {
+    fn new_parser<'a>(&self, dialect: &'a dyn Dialect) -> Parser<'a> {
+        let parser = Parser::new(dialect);
+        if let Some(options) = &self.options {
+            parser.with_options(options.clone())
+        } else {
+            parser
+        }
+    }
+
     /// Run the given function for all of `self.dialects`, assert that they
     /// return the same result, and return that result.
     pub fn one_of_identical_results<F, T: Debug + PartialEq>(&self, f: F) -> T
@@ -63,7 +73,7 @@ impl TestedDialects {
         F: Fn(&mut Parser) -> T,
     {
         self.one_of_identical_results(|dialect| {
-            let mut parser = Parser::new(dialect).try_with_sql(sql).unwrap();
+            let mut parser = self.new_parser(dialect).try_with_sql(sql).unwrap();
             f(&mut parser)
         })
     }
@@ -71,7 +81,11 @@ impl TestedDialects {
     /// Parses a single SQL string into multiple statements, ensuring
     /// the result is the same for all tested dialects.
     pub fn parse_sql_statements(&self, sql: &str) -> Result<Vec<Statement>, ParserError> {
-        self.one_of_identical_results(|dialect| Parser::parse_sql(dialect, sql))
+        self.one_of_identical_results(|dialect| {
+            self.new_parser(dialect)
+                .try_with_sql(sql)?
+                .parse_statements()
+        })
         // To fail the `ensure_multiple_dialects_are_tested` test:
         // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)
     }
@@ -155,6 +169,7 @@ pub fn all_dialects() -> TestedDialects {
             Box::new(BigQueryDialect {}),
             Box::new(SQLiteDialect {}),
         ],
+        options: None,
     }
 }
 

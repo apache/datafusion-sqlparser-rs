@@ -195,7 +195,7 @@ impl std::error::Error for ParserError {}
 // By default, allow expressions up to this deep before erroring
 const DEFAULT_REMAINING_DEPTH: usize = 50;
 
-#[derive(Default)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ParserOptions {
     pub trailing_commas: bool,
 }
@@ -1615,13 +1615,13 @@ impl<'a> Parser<'a> {
                 }
             };
 
-        Ok(Expr::Interval {
+        Ok(Expr::Interval(Interval {
             value: Box::new(value),
             leading_field,
             leading_precision,
             last_field,
             fractional_seconds_precision: fsec_precision,
-        })
+        }))
     }
 
     /// Parse an operator following an expression
@@ -4015,13 +4015,32 @@ impl<'a> Parser<'a> {
 
     /// Parse a copy statement
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
-        let table_name = self.parse_object_name()?;
-        let columns = self.parse_parenthesized_column_list(Optional, false)?;
+        let source;
+        if self.consume_token(&Token::LParen) {
+            source = CopySource::Query(Box::new(self.parse_query()?));
+            self.expect_token(&Token::RParen)?;
+        } else {
+            let table_name = self.parse_object_name()?;
+            let columns = self.parse_parenthesized_column_list(Optional, false)?;
+            source = CopySource::Table {
+                table_name,
+                columns,
+            };
+        }
         let to = match self.parse_one_of_keywords(&[Keyword::FROM, Keyword::TO]) {
             Some(Keyword::FROM) => false,
             Some(Keyword::TO) => true,
             _ => self.expected("FROM or TO", self.peek_token())?,
         };
+        if !to {
+            // Use a separate if statement to prevent Rust compiler from complaining about
+            // "if statement in this position is unstable: https://github.com/rust-lang/rust/issues/53667"
+            if let CopySource::Query(_) = source {
+                return Err(ParserError::ParserError(
+                    "COPY ... FROM does not support query as a source".to_string(),
+                ));
+            }
+        }
         let target = if self.parse_keyword(Keyword::STDIN) {
             CopyTarget::Stdin
         } else if self.parse_keyword(Keyword::STDOUT) {
@@ -4052,8 +4071,7 @@ impl<'a> Parser<'a> {
             vec![]
         };
         Ok(Statement::Copy {
-            table_name,
-            columns,
+            source,
             to,
             target,
             options,
@@ -7044,6 +7062,7 @@ mod tests {
             // Character string types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-string-type>
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                options: None,
             };
 
             test_parse_data_type!(dialect, "CHARACTER", DataType::Character(None));
@@ -7173,6 +7192,7 @@ mod tests {
             // Character large object types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#character-large-object-length>
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                options: None,
             };
 
             test_parse_data_type!(
@@ -7205,6 +7225,7 @@ mod tests {
         fn test_parse_custom_types() {
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                options: None,
             };
             test_parse_data_type!(
                 dialect,
@@ -7236,6 +7257,7 @@ mod tests {
             // Exact numeric types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#exact-numeric-type>
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                options: None,
             };
 
             test_parse_data_type!(dialect, "NUMERIC", DataType::Numeric(ExactNumberInfo::None));
@@ -7286,6 +7308,7 @@ mod tests {
             // Datetime types: <https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#datetime-type>
             let dialect = TestedDialects {
                 dialects: vec![Box::new(GenericDialect {}), Box::new(AnsiDialect {})],
+                options: None,
             };
 
             test_parse_data_type!(dialect, "DATE", DataType::Date);
@@ -7397,6 +7420,7 @@ mod tests {
 
         let dialect = TestedDialects {
             dialects: vec![Box::new(GenericDialect {}), Box::new(MySqlDialect {})],
+            options: None,
         };
 
         test_parse_table_constraint!(

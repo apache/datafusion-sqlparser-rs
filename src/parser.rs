@@ -7544,6 +7544,7 @@ mod tests {
     fn test_parse_multipart_identifier_positive() {
         let dialect = TestedDialects {
             dialects: vec![Box::new(GenericDialect {})],
+            options: None,
         };
 
         // parse multipart with quotes

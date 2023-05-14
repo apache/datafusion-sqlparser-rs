@@ -4688,6 +4688,44 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse identifiers of form ident1[.identN]*
+    ///
+    /// Similar in functionality to [parse_identifiers], with difference
+    /// being this function is much more strict about parsing a valid multipart identifier, not
+    /// allowing extraneous tokens to be parsed, otherwise it fails.
+    ///
+    /// For example:
+    ///
+    /// ```rust
+    /// use sqlparser::ast::Ident;
+    /// use sqlparser::dialect::GenericDialect;
+    /// use sqlparser::parser::Parser;
+    ///
+    /// let dialect = GenericDialect {};
+    /// let expected = vec![Ident::new("one"), Ident::new("two")];
+    ///
+    /// // expected usage
+    /// let sql = "one.two";
+    /// let mut parser = Parser::new(&dialect).try_with_sql(sql).unwrap();
+    /// let actual = parser.parse_multipart_identifier().unwrap();
+    /// assert_eq!(&actual, &expected);
+    ///
+    /// // parse_identifiers is more loose on what it allows, parsing successfully
+    /// let sql = "one + two";
+    /// let mut parser = Parser::new(&dialect).try_with_sql(sql).unwrap();
+    /// let actual = parser.parse_identifiers().unwrap();
+    /// assert_eq!(&actual, &expected);
+    ///
+    /// // expected to strictly fail due to + separator
+    /// let sql = "one + two";
+    /// let mut parser = Parser::new(&dialect).try_with_sql(sql).unwrap();
+    /// let actual = parser.parse_multipart_identifier().unwrap_err();
+    /// assert_eq!(
+    ///     actual.to_string(),
+    ///     "sql parser error: Unexpected token in identifier: +"
+    /// );
+    /// ```
+    ///
+    /// [parse_identifiers]: Parser::parse_identifiers
     pub fn parse_multipart_identifier(&mut self) -> Result<Vec<Ident>, ParserError> {
         let mut idents = vec![];
 

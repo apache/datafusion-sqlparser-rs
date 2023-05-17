@@ -45,16 +45,16 @@ impl Dialect for MySqlDialect {
 
     fn parse_infix(
         &self,
-        _parser: &mut crate::parser::Parser,
-        _expr: &crate::ast::Expr,
+        parser: &mut crate::parser::Parser,
+        expr: &crate::ast::Expr,
         _precedence: u8,
     ) -> Option<Result<crate::ast::Expr, crate::parser::ParserError>> {
         // Parse DIV as an operator
-        if _parser.parse_keyword(Keyword::DIV) {
+        if parser.parse_keyword(Keyword::DIV) {
             Some(Ok(Expr::BinaryOp {
-                left: Box::new(_expr.clone()),
+                left: Box::new(expr.clone()),
                 op: BinaryOperator::MyIntegerDivide,
-                right: Box::new(_parser.parse_expr().unwrap()),
+                right: Box::new(parser.parse_expr().unwrap()),
             }))
         } else {
             None

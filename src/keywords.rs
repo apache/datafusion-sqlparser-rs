@@ -211,6 +211,7 @@ define_keywords!(
     DISCONNECT,
     DISTINCT,
     DISTRIBUTE,
+    DIV,
     DO,
     DOUBLE,
     DOW,

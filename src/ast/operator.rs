@@ -85,6 +85,7 @@ pub enum BinaryOperator {
     BitwiseOr,
     BitwiseAnd,
     BitwiseXor,
+    /// Support for custom operators (built by parsers outside this crate)
     Custom(String),
     PGBitwiseXor,
     PGBitwiseShiftLeft,

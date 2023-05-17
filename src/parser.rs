@@ -1369,8 +1369,7 @@ impl<'a> Parser<'a> {
         // ANSI SQL and BigQuery define ORDER BY inside function.
         if !self.dialect.supports_within_after_array_aggregation() {
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                let order_by_expr = self.parse_order_by_expr()?;
-                Some(Box::new(order_by_expr))
+                Some(self.parse_comma_separated(Parser::parse_order_by_expr)?)
             } else {
                 None
             };
@@ -1393,10 +1392,13 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::RParen)?;
         let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
             self.expect_token(&Token::LParen)?;
-            self.expect_keywords(&[Keyword::ORDER, Keyword::BY])?;
-            let order_by_expr = self.parse_order_by_expr()?;
+            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                Some(self.parse_comma_separated(Parser::parse_order_by_expr)?)
+            } else {
+                None
+            };
             self.expect_token(&Token::RParen)?;
-            Some(Box::new(order_by_expr))
+            order_by
         } else {
             None
         };

@@ -771,7 +771,7 @@ impl<'a> Tokenizer<'a> {
                                 comment,
                             })))
                         }
-                        Some('/') if dialect_of!(self is DuckDbDialect) => {
+                        Some('/') if dialect_of!(self is DuckDbDialect | GenericDialect) => {
                             self.consume_and_return(chars, Token::DuckIntDiv)
                         }
                         // a regular '/' operator

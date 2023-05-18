@@ -437,6 +437,7 @@ fn parse_map_access_offset() {
                 over: None,
                 distinct: false,
                 special: false,
+                order_by: vec![],
             })],
         })
     );

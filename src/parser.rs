@@ -706,6 +706,7 @@ impl<'a> Parser<'a> {
                         over: None,
                         distinct: false,
                         special: true,
+                        order_by: vec![],
                     }))
                 }
                 Keyword::CURRENT_TIMESTAMP
@@ -881,7 +882,7 @@ impl<'a> Parser<'a> {
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let distinct = self.parse_all_or_distinct()?.is_some();
-        let args = self.parse_optional_args()?;
+        let (args, order_by) = self.parse_optional_args_with_orderby()?;
         let over = if self.parse_keyword(Keyword::OVER) {
             // TBD: support window names (`OVER mywin`) in place of inline specification
             self.expect_token(&Token::LParen)?;
@@ -918,14 +919,15 @@ impl<'a> Parser<'a> {
             over,
             distinct,
             special: false,
+            order_by,
         }))
     }
 
     pub fn parse_time_functions(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
-        let args = if self.consume_token(&Token::LParen) {
-            self.parse_optional_args()?
+        let (args, order_by) = if self.consume_token(&Token::LParen) {
+            self.parse_optional_args_with_orderby()?
         } else {
-            vec![]
+            (vec![], vec![])
         };
         Ok(Expr::Function(Function {
             name,
@@ -933,6 +935,7 @@ impl<'a> Parser<'a> {
             over: None,
             distinct: false,
             special: false,
+            order_by,
         }))
     }
 
@@ -6373,6 +6376,23 @@ impl<'a> Parser<'a> {
             let args = self.parse_comma_separated(Parser::parse_function_args)?;
             self.expect_token(&Token::RParen)?;
             Ok(args)
+        }
+    }
+
+    pub fn parse_optional_args_with_orderby(
+        &mut self,
+    ) -> Result<(Vec<FunctionArg>, Vec<OrderByExpr>), ParserError> {
+        if self.consume_token(&Token::RParen) {
+            Ok((vec![], vec![]))
+        } else {
+            let args = self.parse_comma_separated(Parser::parse_function_args)?;
+            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                self.parse_comma_separated(Parser::parse_order_by_expr)?
+            } else {
+                vec![]
+            };
+            self.expect_token(&Token::RParen)?;
+            Ok((args, order_by))
         }
     }
 

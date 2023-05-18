@@ -52,6 +52,7 @@ fn parse_map_access_expr() {
                     over: None,
                     distinct: false,
                     special: false,
+                    order_by: vec![],
                 })],
             })],
             into: None,
@@ -88,6 +89,7 @@ fn parse_map_access_expr() {
                             over: None,
                             distinct: false,
                             special: false,
+                            order_by: vec![],
                         })]
                     }),
                     op: BinaryOperator::NotEq,
@@ -135,6 +137,7 @@ fn parse_array_fn() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -189,6 +192,7 @@ fn parse_delimited_identifiers() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[1]),
     );

@@ -3366,6 +3366,8 @@ pub struct Function {
     // Some functions must be called without trailing parentheses, for example Postgres
     // do it for current_catalog, current_schema, etc. This flags is used for formatting.
     pub special: bool,
+    // Required ordering for the function (if empty, there is no requirement).
+    pub order_by: Vec<OrderByExpr>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -3392,12 +3394,18 @@ impl fmt::Display for Function {
         if self.special {
             write!(f, "{}", self.name)?;
         } else {
+            let order_by = if !self.order_by.is_empty() {
+                " ORDER BY "
+            } else {
+                ""
+            };
             write!(
                 f,
-                "{}({}{})",
+                "{}({}{}{order_by}{})",
                 self.name,
                 if self.distinct { "DISTINCT " } else { "" },
                 display_comma_separated(&self.args),
+                display_comma_separated(&self.order_by),
             )?;
 
             if let Some(o) = &self.over {

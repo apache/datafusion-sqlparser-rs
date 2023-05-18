@@ -16,11 +16,18 @@ mod test_utils;
 use test_utils::*;
 
 use sqlparser::ast::*;
-use sqlparser::dialect::DuckDbDialect;
+use sqlparser::dialect::{DuckDbDialect, GenericDialect};
 
 fn duckdb() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(DuckDbDialect {})],
+        options: None,
+    }
+}
+
+fn duckdb_and_generic() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(DuckDbDialect {}), Box::new(GenericDialect {})],
         options: None,
     }
 }
@@ -59,5 +66,5 @@ fn test_select_wildcard_with_exclude() {
 
 #[test]
 fn parse_div_infix() {
-    duckdb().verified_stmt(r#"SELECT 5 // 2"#);
+    duckdb_and_generic().verified_stmt(r#"SELECT 5 // 2"#);
 }

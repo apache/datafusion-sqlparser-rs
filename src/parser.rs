@@ -2053,7 +2053,9 @@ impl<'a> Parser<'a> {
             Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(22),
             Token::Ampersand => Ok(23),
             Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
-            Token::Mul | Token::Div | Token::DuckIntDiv | Token::Mod | Token::StringConcat => Ok(40),
+            Token::Mul | Token::Div | Token::DuckIntDiv | Token::Mod | Token::StringConcat => {
+                Ok(40)
+            }
             Token::DoubleColon => Ok(50),
             Token::Colon => Ok(50),
             Token::ExclamationMark => Ok(50),

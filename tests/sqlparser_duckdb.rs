@@ -34,8 +34,8 @@ fn test_select_wildcard_with_exclude() {
     });
     assert_eq!(expected, select.projection[0]);
 
-    let select = duckdb()
-        .verified_only_select("SELECT name.* EXCLUDE department_id FROM employee_table");
+    let select =
+        duckdb().verified_only_select("SELECT name.* EXCLUDE department_id FROM employee_table");
     let expected = SelectItem::QualifiedWildcard(
         ObjectName(vec![Ident::new("name")]),
         WildcardAdditionalOptions {

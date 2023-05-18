@@ -3362,7 +3362,7 @@ pub struct Function {
     // Some functions must be called without trailing parentheses, for example Postgres
     // do it for current_catalog, current_schema, etc. This flags is used for formatting.
     pub special: bool,
-    // Some aggregate functions run with ORDER BY, e.g FIRST_VALUE(a, ORDER BY ts DESC)
+    // Required ordering for the function (if empty, there is no requirement).
     pub order_by: Vec<OrderByExpr>,
 }
 

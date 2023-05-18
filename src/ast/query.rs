@@ -217,7 +217,7 @@ pub struct Select {
     /// HAVING
     pub having: Option<Expr>,
     /// WINDOW AS
-    pub named_window: Vec<IdentWindow>,
+    pub named_window: Vec<NamedWindowDefinition>,
     /// QUALIFY (Snowflake)
     pub qualify: Option<Expr>,
 }
@@ -319,9 +319,9 @@ impl fmt::Display for LateralView {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct IdentWindow(pub Ident, pub WindowSpec);
+pub struct NamedWindowDefinition(pub Ident, pub WindowSpec);
 
-impl fmt::Display for IdentWindow {
+impl fmt::Display for NamedWindowDefinition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} AS ({})", self.0, self.1)
     }

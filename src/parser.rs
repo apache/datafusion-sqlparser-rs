@@ -5252,27 +5252,6 @@ impl<'a> Parser<'a> {
         } else {
             vec![]
         };
-        // If the projection is done over a named window, that window
-        // name must be defined. Otherwise, it gives an error.
-        for proj in &projection {
-            if let SelectItem::ExprWithAlias {
-                expr: Expr::Function(f),
-                alias: _,
-            } = proj
-            {
-                if let Some(WindowType::NamedWindow(ident)) = &f.over {
-                    named_windows
-                        .iter()
-                        .find(|IdentWindow(name, _)| ident == name)
-                        .ok_or_else(|| {
-                            ParserError::ParserError(format!(
-                                "Window {} is not defined",
-                                ident.value
-                            ))
-                        })?;
-                }
-            }
-        }
 
         let qualify = if self.parse_keyword(Keyword::QUALIFY) {
             Some(self.parse_expr()?)
@@ -6924,12 +6903,12 @@ impl<'a> Parser<'a> {
         self.index
     }
 
-    pub fn parse_named_window(&mut self) -> Result<IdentWindow, ParserError> {
+    pub fn parse_named_window(&mut self) -> Result<NamedWindowDefinition, ParserError> {
         let ident = self.parse_identifier()?;
         self.expect_keyword(Keyword::AS)?;
         self.expect_token(&Token::LParen)?;
         let window_spec = self.parse_window_spec()?;
-        Ok(IdentWindow(ident, window_spec))
+        Ok(NamedWindowDefinition(ident, window_spec))
     }
 
     pub fn parse_window_spec(&mut self) -> Result<WindowSpec, ParserError> {

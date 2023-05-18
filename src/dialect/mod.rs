@@ -13,6 +13,7 @@
 mod ansi;
 mod bigquery;
 mod clickhouse;
+mod duckdb;
 mod generic;
 mod hive;
 mod mssql;
@@ -31,6 +32,7 @@ use core::str::Chars;
 pub use self::ansi::AnsiDialect;
 pub use self::bigquery::BigQueryDialect;
 pub use self::clickhouse::ClickHouseDialect;
+pub use self::duckdb::DuckDbDialect;
 pub use self::generic::GenericDialect;
 pub use self::hive::HiveDialect;
 pub use self::mssql::MsSqlDialect;
@@ -163,6 +165,7 @@ pub fn dialect_from_str(dialect_name: impl AsRef<str>) -> Option<Box<dyn Dialect
         "clickhouse" => Some(Box::new(ClickHouseDialect {})),
         "bigquery" => Some(Box::new(BigQueryDialect)),
         "ansi" => Some(Box::new(AnsiDialect {})),
+        "duckdb" => Some(Box::new(DuckDbDialect {})),
         _ => None,
     }
 }
@@ -214,6 +217,8 @@ mod tests {
         assert!(parse_dialect("BigQuery").is::<BigQueryDialect>());
         assert!(parse_dialect("ansi").is::<AnsiDialect>());
         assert!(parse_dialect("ANSI").is::<AnsiDialect>());
+        assert!(parse_dialect("duckdb").is::<DuckDbDialect>());
+        assert!(parse_dialect("DuckDb").is::<DuckDbDialect>());
 
         // error cases
         assert!(dialect_from_str("Unknown").is_none());

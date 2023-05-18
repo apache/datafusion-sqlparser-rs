@@ -35,7 +35,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::DollarQuotedString;
-use crate::dialect::{BigQueryDialect, GenericDialect, SnowflakeDialect};
+use crate::dialect::{BigQueryDialect, DuckDbDialect, GenericDialect, SnowflakeDialect};
 use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
@@ -98,6 +98,8 @@ pub enum Token {
     Mul,
     /// Division operator `/`
     Div,
+    /// Integer division operator `//` in DuckDB
+    DuckIntDiv,
     /// Modulo Operator `%`
     Mod,
     /// String concatenation `||`
@@ -212,6 +214,7 @@ impl fmt::Display for Token {
             Token::Minus => f.write_str("-"),
             Token::Mul => f.write_str("*"),
             Token::Div => f.write_str("/"),
+            Token::DuckIntDiv => f.write_str("//"),
             Token::StringConcat => f.write_str("||"),
             Token::Mod => f.write_str("%"),
             Token::LParen => f.write_str("("),
@@ -767,6 +770,9 @@ impl<'a> Tokenizer<'a> {
                                 prefix: "//".to_owned(),
                                 comment,
                             })))
+                        }
+                        Some('/') if dialect_of!(self is DuckDbDialect | GenericDialect) => {
+                            self.consume_and_return(chars, Token::DuckIntDiv)
                         }
                         // a regular '/' operator
                         _ => Ok(Some(Token::Div)),

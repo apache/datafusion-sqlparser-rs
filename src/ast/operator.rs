@@ -85,6 +85,8 @@ pub enum BinaryOperator {
     BitwiseOr,
     BitwiseAnd,
     BitwiseXor,
+    /// Integer division operator `//` in DuckDB
+    DuckIntegerDivide,
     /// MySQL [`DIV`](https://dev.mysql.com/doc/refman/8.0/en/arithmetic-functions.html) integer division
     MyIntegerDivide,
     /// Support for custom operators (built by parsers outside this crate)
@@ -126,6 +128,7 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::BitwiseOr => f.write_str("|"),
             BinaryOperator::BitwiseAnd => f.write_str("&"),
             BinaryOperator::BitwiseXor => f.write_str("^"),
+            BinaryOperator::DuckIntegerDivide => f.write_str("//"),
             BinaryOperator::MyIntegerDivide => f.write_str("DIV"),
             BinaryOperator::Custom(s) => f.write_str(s),
             BinaryOperator::PGBitwiseXor => f.write_str("#"),

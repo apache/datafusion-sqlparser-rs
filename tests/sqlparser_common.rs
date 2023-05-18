@@ -24,8 +24,9 @@ use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::Pivot;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
-    AnsiDialect, BigQueryDialect, ClickHouseDialect, GenericDialect, HiveDialect, MsSqlDialect,
-    MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect,
+    AnsiDialect, BigQueryDialect, ClickHouseDialect, DuckDbDialect, GenericDialect, HiveDialect,
+    MsSqlDialect, MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect,
+    SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
@@ -195,6 +196,7 @@ fn parse_update_set_from() {
     let dialects = TestedDialects {
         dialects: vec![
             Box::new(GenericDialect {}),
+            Box::new(DuckDbDialect {}),
             Box::new(PostgreSqlDialect {}),
             Box::new(BigQueryDialect {}),
             Box::new(SnowflakeDialect {}),
@@ -941,6 +943,7 @@ fn parse_exponent_in_select() -> Result<(), ParserError> {
             Box::new(AnsiDialect {}),
             Box::new(BigQueryDialect {}),
             Box::new(ClickHouseDialect {}),
+            Box::new(DuckDbDialect {}),
             Box::new(GenericDialect {}),
             // Box::new(HiveDialect {}),
             Box::new(MsSqlDialect {}),
@@ -2053,6 +2056,7 @@ fn parse_array_agg_func() {
     let supported_dialects = TestedDialects {
         dialects: vec![
             Box::new(GenericDialect {}),
+            Box::new(DuckDbDialect {}),
             Box::new(PostgreSqlDialect {}),
             Box::new(MsSqlDialect {}),
             Box::new(AnsiDialect {}),
@@ -2848,6 +2852,7 @@ fn parse_alter_table_add_column_if_not_exists() {
             Box::new(PostgreSqlDialect {}),
             Box::new(BigQueryDialect {}),
             Box::new(GenericDialect {}),
+            Box::new(DuckDbDialect {}),
         ],
         options: None,
     };
@@ -6139,6 +6144,7 @@ fn test_placeholder() {
     let dialects = TestedDialects {
         dialects: vec![
             Box::new(GenericDialect {}),
+            Box::new(DuckDbDialect {}),
             Box::new(PostgreSqlDialect {}),
             Box::new(MsSqlDialect {}),
             Box::new(AnsiDialect {}),
@@ -6873,6 +6879,7 @@ fn parse_non_latin_identifiers() {
     let supported_dialects = TestedDialects {
         dialects: vec![
             Box::new(GenericDialect {}),
+            Box::new(DuckDbDialect {}),
             Box::new(PostgreSqlDialect {}),
             Box::new(MsSqlDialect {}),
             Box::new(RedshiftSqlDialect {}),

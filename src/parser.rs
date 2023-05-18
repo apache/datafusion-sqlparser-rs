@@ -473,7 +473,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_truncate(&mut self) -> Result<Statement, ParserError> {
-        self.expect_keyword(Keyword::TABLE)?;
+        let table = self.parse_keyword(Keyword::TABLE);
         let table_name = self.parse_object_name()?;
         let mut partitions = None;
         if self.parse_keyword(Keyword::PARTITION) {
@@ -484,6 +484,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Truncate {
             table_name,
             partitions,
+            table,
         })
     }
 

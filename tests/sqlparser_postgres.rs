@@ -2950,3 +2950,16 @@ fn parse_select_group_by_cube() {
         select.group_by
     );
 }
+
+#[test]
+fn parse_truncate() {
+    let truncate = pg_and_generic().verified_stmt("TRUNCATE db.table_name");
+    assert_eq!(
+        Statement::Truncate {
+            table_name: ObjectName(vec![Ident::new("db"), Ident::new("table_name")]),
+            partitions: None,
+            table: false
+        },
+        truncate
+    );
+}

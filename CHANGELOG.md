@@ -8,6 +8,36 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.34.0] 2023-05-19
+
+### Added
+
+* Support named window frames (#881)  - Thanks @berkaysynnada, @mustafasrepo, and @ozankabak
+* Support for `ORDER BY` clauses in aggregate functions (#882)  - Thanks @mustafasrepo
+* Support `DuckDB` dialect (#878) - Thanks @eitsupi
+* Support optional `TABLE` keyword for `TRUNCATE TABLE` (#883) - Thanks @mobuchowski
+* Support MySQL's `DIV` operator (#876) - Thanks @eitsupi
+* Support Custom operators (#868) - Thanks @max-sixty
+* Add `Parser::parse_multipart_identifier`  (#860) - Thanks @Jefffrey
+* Support for multiple expressions, order by in `ARRAY_AGG` (#879) - Thanks @mustafasrepo
+* Support for query source in `COPY .. TO` statement (#858) - Thanks @aprimadi
+* Support `DISTINCT ON (...)` (#852) - Thanks @aljazerzen
+* Support multiple-table `DELETE` syntax (#855) - Thanks @AviRaboah
+* Support `COPY INTO` in `SnowflakeDialect` (#841) - Thanks @pawel-big-lebowski
+* Support identifiers beginning with digits in MySQL (#856) - Thanks @AviRaboah
+
+### Changed
+* Include license file in published crate (#871) - Thanks @ankane
+* Make `Expr::Interval` its own struct (#872) - Thanks @aprimadi
+* Add dialect_from_str and improve Dialect documentation (#848) - Thanks @alamb
+* Add clickhouse to example (#849) - Thanks @anglinb
+
+### Fixed
+* Fix tiny typo in custom_sql_parser.md (#864) - Thanks @okue
+* Fix logical merge conflict (#865) - Thanks @alamb
+* Test trailing commas (#859) - Thanks @aljazerzen
+
+
 ## [0.33.0] 2023-04-10
 
 ### Added

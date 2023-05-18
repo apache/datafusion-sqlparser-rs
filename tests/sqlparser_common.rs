@@ -723,6 +723,7 @@ fn parse_select_count_wildcard() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -742,6 +743,7 @@ fn parse_select_count_distinct() {
             over: None,
             distinct: true,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -1576,6 +1578,7 @@ fn parse_select_having() {
                 over: None,
                 distinct: false,
                 special: false,
+                order_by: vec![],
             })),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Value(number("1"))),
@@ -1609,6 +1612,7 @@ fn parse_select_qualify() {
                 }),
                 distinct: false,
                 special: false,
+                order_by: vec![],
             })),
             op: BinaryOperator::Eq,
             right: Box::new(Expr::Value(number("1"))),
@@ -1947,6 +1951,28 @@ fn parse_array_agg_func() {
         "SELECT ARRAY_AGG(x ORDER BY x) AS a FROM T",
         "SELECT ARRAY_AGG(x ORDER BY x LIMIT 2) FROM tbl",
         "SELECT ARRAY_AGG(DISTINCT x ORDER BY x LIMIT 2) FROM tbl",
+    ] {
+        supported_dialects.verified_stmt(sql);
+    }
+}
+
+#[test]
+fn parse_agg_with_order_by() {
+    let supported_dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(MsSqlDialect {}),
+            Box::new(AnsiDialect {}),
+            Box::new(HiveDialect {}),
+        ],
+    };
+
+    for sql in [
+        "SELECT FIRST_VALUE(x ORDER BY x) AS a FROM T",
+        "SELECT FIRST_VALUE(x ORDER BY x) FROM tbl",
+        "SELECT LAST_VALUE(x ORDER BY x, y) AS a FROM T",
+        "SELECT LAST_VALUE(x ORDER BY x ASC, y DESC) AS a FROM T",
     ] {
         supported_dialects.verified_stmt(sql);
     }
@@ -2993,6 +3019,7 @@ fn parse_scalar_function_in_projection() {
                 over: None,
                 distinct: false,
                 special: false,
+                order_by: vec![],
             }),
             expr_from_projection(only(&select.projection))
         );
@@ -3111,6 +3138,7 @@ fn parse_named_argument_function() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -3149,6 +3177,7 @@ fn parse_window_functions() {
             }),
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -3547,6 +3576,7 @@ fn parse_at_timezone() {
                 over: None,
                 distinct: false,
                 special: false,
+                order_by: vec![],
             })),
             time_zone: "UTC-06:00".to_string(),
         },
@@ -3573,6 +3603,7 @@ fn parse_at_timezone() {
                             over: None,
                             distinct: false,
                             special: false,
+                            order_by: vec![],
                         },)),
                         time_zone: "UTC-06:00".to_string(),
                     },),),
@@ -3583,6 +3614,7 @@ fn parse_at_timezone() {
                 over: None,
                 distinct: false,
                 special: false,
+                order_by: vec![],
             },),
             alias: Ident {
                 value: "hour".to_string(),
@@ -3740,6 +3772,7 @@ fn parse_table_function() {
                 over: None,
                 distinct: false,
                 special: false,
+                order_by: vec![],
             });
             assert_eq!(expr, expected_expr);
             assert_eq!(alias, table_alias("a"))
@@ -6161,6 +6194,7 @@ fn parse_time_functions() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -6177,6 +6211,7 @@ fn parse_time_functions() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -6193,6 +6228,7 @@ fn parse_time_functions() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -6209,6 +6245,7 @@ fn parse_time_functions() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -6225,6 +6262,7 @@ fn parse_time_functions() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -6689,6 +6727,7 @@ fn parse_pivot_table() {
                 over: None,
                 distinct: false,
                 special: false,
+                order_by: vec![],
             }),
             value_column: vec![Ident::new("a"), Ident::new("MONTH")],
             pivot_values: vec![

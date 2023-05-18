@@ -2069,6 +2069,8 @@ fn parse_array_agg_func() {
         "SELECT ARRAY_AGG(x ORDER BY x) AS a FROM T",
         "SELECT ARRAY_AGG(x ORDER BY x LIMIT 2) FROM tbl",
         "SELECT ARRAY_AGG(DISTINCT x ORDER BY x LIMIT 2) FROM tbl",
+        "SELECT ARRAY_AGG(x ORDER BY x, y) AS a FROM T",
+        "SELECT ARRAY_AGG(x ORDER BY x ASC, y DESC) AS a FROM T",
     ] {
         supported_dialects.verified_stmt(sql);
     }

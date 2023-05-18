@@ -1369,8 +1369,7 @@ impl<'a> Parser<'a> {
         // ANSI SQL and BigQuery define ORDER BY inside function.
         if !self.dialect.supports_within_after_array_aggregation() {
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                let order_by_expr = self.parse_order_by_expr()?;
-                Some(Box::new(order_by_expr))
+                Some(self.parse_comma_separated(Parser::parse_order_by_expr)?)
             } else {
                 None
             };
@@ -1393,10 +1392,13 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::RParen)?;
         let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
             self.expect_token(&Token::LParen)?;
-            self.expect_keywords(&[Keyword::ORDER, Keyword::BY])?;
-            let order_by_expr = self.parse_order_by_expr()?;
+            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+                Some(self.parse_comma_separated(Parser::parse_order_by_expr)?)
+            } else {
+                None
+            };
             self.expect_token(&Token::RParen)?;
-            Some(Box::new(order_by_expr))
+            order_by
         } else {
             None
         };
@@ -1983,6 +1985,8 @@ impl<'a> Parser<'a> {
     const AND_PREC: u8 = 10;
     const OR_PREC: u8 = 5;
 
+    const DIV_OP_PREC: u8 = 40;
+
     /// Get the precedence of the next token
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
         // allow the dialect to override precedence logic
@@ -2032,6 +2036,7 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(Self::BETWEEN_PREC),
+            Token::Word(w) if w.keyword == Keyword::DIV => Ok(Self::DIV_OP_PREC),
             Token::Eq
             | Token::Lt
             | Token::LtEq
@@ -4705,6 +4710,92 @@ impl<'a> Parser<'a> {
             }
             self.next_token();
         }
+        Ok(idents)
+    }
+
+    /// Parse identifiers of form ident1[.identN]*
+    ///
+    /// Similar in functionality to [parse_identifiers], with difference
+    /// being this function is much more strict about parsing a valid multipart identifier, not
+    /// allowing extraneous tokens to be parsed, otherwise it fails.
+    ///
+    /// For example:
+    ///
+    /// ```rust
+    /// use sqlparser::ast::Ident;
+    /// use sqlparser::dialect::GenericDialect;
+    /// use sqlparser::parser::Parser;
+    ///
+    /// let dialect = GenericDialect {};
+    /// let expected = vec![Ident::new("one"), Ident::new("two")];
+    ///
+    /// // expected usage
+    /// let sql = "one.two";
+    /// let mut parser = Parser::new(&dialect).try_with_sql(sql).unwrap();
+    /// let actual = parser.parse_multipart_identifier().unwrap();
+    /// assert_eq!(&actual, &expected);
+    ///
+    /// // parse_identifiers is more loose on what it allows, parsing successfully
+    /// let sql = "one + two";
+    /// let mut parser = Parser::new(&dialect).try_with_sql(sql).unwrap();
+    /// let actual = parser.parse_identifiers().unwrap();
+    /// assert_eq!(&actual, &expected);
+    ///
+    /// // expected to strictly fail due to + separator
+    /// let sql = "one + two";
+    /// let mut parser = Parser::new(&dialect).try_with_sql(sql).unwrap();
+    /// let actual = parser.parse_multipart_identifier().unwrap_err();
+    /// assert_eq!(
+    ///     actual.to_string(),
+    ///     "sql parser error: Unexpected token in identifier: +"
+    /// );
+    /// ```
+    ///
+    /// [parse_identifiers]: Parser::parse_identifiers
+    pub fn parse_multipart_identifier(&mut self) -> Result<Vec<Ident>, ParserError> {
+        let mut idents = vec![];
+
+        // expecting at least one word for identifier
+        match self.next_token().token {
+            Token::Word(w) => idents.push(w.to_ident()),
+            Token::EOF => {
+                return Err(ParserError::ParserError(
+                    "Empty input when parsing identifier".to_string(),
+                ))?
+            }
+            token => {
+                return Err(ParserError::ParserError(format!(
+                    "Unexpected token in identifier: {token}"
+                )))?
+            }
+        };
+
+        // parse optional next parts if exist
+        loop {
+            match self.next_token().token {
+                // ensure that optional period is succeeded by another identifier
+                Token::Period => match self.next_token().token {
+                    Token::Word(w) => idents.push(w.to_ident()),
+                    Token::EOF => {
+                        return Err(ParserError::ParserError(
+                            "Trailing period in identifier".to_string(),
+                        ))?
+                    }
+                    token => {
+                        return Err(ParserError::ParserError(format!(
+                            "Unexpected token following period in identifier: {token}"
+                        )))?
+                    }
+                },
+                Token::EOF => break,
+                token => {
+                    return Err(ParserError::ParserError(format!(
+                        "Unexpected token in identifier: {token}"
+                    )))?
+                }
+            }
+        }
+
         Ok(idents)
     }
 
@@ -7455,6 +7546,87 @@ mod tests {
             Err(ParserError::ParserError(
                 "Explain must be root of the plan".to_string()
             ))
+        );
+    }
+
+    #[test]
+    fn test_parse_multipart_identifier_positive() {
+        let dialect = TestedDialects {
+            dialects: vec![Box::new(GenericDialect {})],
+            options: None,
+        };
+
+        // parse multipart with quotes
+        let expected = vec![
+            Ident {
+                value: "CATALOG".to_string(),
+                quote_style: None,
+            },
+            Ident {
+                value: "F(o)o. \"bar".to_string(),
+                quote_style: Some('"'),
+            },
+            Ident {
+                value: "table".to_string(),
+                quote_style: None,
+            },
+        ];
+        dialect.run_parser_method(r#"CATALOG."F(o)o. ""bar".table"#, |parser| {
+            let actual = parser.parse_multipart_identifier().unwrap();
+            assert_eq!(expected, actual);
+        });
+
+        // allow whitespace between ident parts
+        let expected = vec![
+            Ident {
+                value: "CATALOG".to_string(),
+                quote_style: None,
+            },
+            Ident {
+                value: "table".to_string(),
+                quote_style: None,
+            },
+        ];
+        dialect.run_parser_method("CATALOG . table", |parser| {
+            let actual = parser.parse_multipart_identifier().unwrap();
+            assert_eq!(expected, actual);
+        });
+    }
+
+    #[test]
+    fn test_parse_multipart_identifier_negative() {
+        macro_rules! test_parse_multipart_identifier_error {
+            ($input:expr, $expected_err:expr $(,)?) => {{
+                all_dialects().run_parser_method(&*$input, |parser| {
+                    let actual_err = parser.parse_multipart_identifier().unwrap_err();
+                    assert_eq!(actual_err.to_string(), $expected_err);
+                });
+            }};
+        }
+
+        test_parse_multipart_identifier_error!(
+            "",
+            "sql parser error: Empty input when parsing identifier",
+        );
+
+        test_parse_multipart_identifier_error!(
+            "*schema.table",
+            "sql parser error: Unexpected token in identifier: *",
+        );
+
+        test_parse_multipart_identifier_error!(
+            "schema.table*",
+            "sql parser error: Unexpected token in identifier: *",
+        );
+
+        test_parse_multipart_identifier_error!(
+            "schema.table.",
+            "sql parser error: Trailing period in identifier",
+        );
+
+        test_parse_multipart_identifier_error!(
+            "schema.*",
+            "sql parser error: Unexpected token following period in identifier: *",
         );
     }
 }

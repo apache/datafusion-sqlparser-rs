@@ -85,6 +85,7 @@ pub enum BinaryOperator {
     BitwiseOr,
     BitwiseAnd,
     BitwiseXor,
+    /// Integer division operator `//` in DuckDB
     DuckIntegerDivide,
     /// MySQL [`DIV`](https://dev.mysql.com/doc/refman/8.0/en/arithmetic-functions.html) integer division
     MyIntegerDivide,

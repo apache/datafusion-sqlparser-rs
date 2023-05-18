@@ -1142,6 +1142,8 @@ pub enum Statement {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         partitions: Option<Vec<Expr>>,
+        /// TABLE - optional keyword;
+        table: bool,
     },
     /// Msck (Hive)
     Msck {
@@ -1844,8 +1846,10 @@ impl fmt::Display for Statement {
             Statement::Truncate {
                 table_name,
                 partitions,
+                table,
             } => {
-                write!(f, "TRUNCATE TABLE {table_name}")?;
+                let table = if *table { "TABLE " } else { "" };
+                write!(f, "TRUNCATE {table}{table_name}")?;
                 if let Some(ref parts) = partitions {
                     if !parts.is_empty() {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;

@@ -33,6 +33,7 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 * Add clickhouse to example (#849) - Thanks @anglinb
 
 ### Fixed
+* Fix merge conflict (#885) - Thanks @alamb
 * Fix tiny typo in custom_sql_parser.md (#864) - Thanks @okue
 * Fix logical merge conflict (#865) - Thanks @alamb
 * Test trailing commas (#859) - Thanks @aljazerzen

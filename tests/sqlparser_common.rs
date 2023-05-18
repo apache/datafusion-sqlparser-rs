@@ -3344,6 +3344,7 @@ fn test_parse_named_window() {
                     })),
                     distinct: false,
                     special: false,
+                    order_by: vec![],
                 }),
                 alias: Ident {
                     value: "min1".to_string(),
@@ -3368,6 +3369,7 @@ fn test_parse_named_window() {
                     })),
                     distinct: false,
                     special: false,
+                    order_by: vec![],
                 }),
                 alias: Ident {
                     value: "max1".to_string(),

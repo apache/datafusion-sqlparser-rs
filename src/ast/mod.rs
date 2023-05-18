@@ -17,7 +17,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::fmt;
+use core::fmt::{self, Display};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -35,10 +35,10 @@ pub use self::ddl::{
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     Cte, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, IdentWithAlias, Join,
-    JoinConstraint, JoinOperator, LateralView, LockClause, LockType, NonBlock, Offset, OffsetRows,
-    OrderByExpr, Query, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
-    SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Table, TableAlias, TableFactor,
-    TableWithJoins, Top, Values, WildcardAdditionalOptions, With,
+    JoinConstraint, JoinOperator, LateralView, LockClause, LockType, NamedWindowDefinition,
+    NonBlock, Offset, OffsetRows, OrderByExpr, Query, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Table,
+    TableAlias, TableFactor, TableWithJoins, Top, Values, WildcardAdditionalOptions, With,
 };
 pub use self::value::{
     escape_quoted_string, DateTimeField, DollarQuotedString, TrimWhereField, Value,
@@ -926,6 +926,23 @@ impl fmt::Display for Expr {
 
                 Ok(())
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum WindowType {
+    WindowSpec(WindowSpec),
+    NamedWindow(Ident),
+}
+
+impl Display for WindowType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WindowType::WindowSpec(spec) => write!(f, "({})", spec),
+            WindowType::NamedWindow(name) => write!(f, "{}", name),
         }
     }
 }
@@ -3360,7 +3377,7 @@ impl fmt::Display for CloseCursor {
 pub struct Function {
     pub name: ObjectName,
     pub args: Vec<FunctionArg>,
-    pub over: Option<WindowSpec>,
+    pub over: Option<WindowType>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
     // Some functions must be called without trailing parentheses, for example Postgres
@@ -3409,7 +3426,7 @@ impl fmt::Display for Function {
             )?;
 
             if let Some(o) = &self.over {
-                write!(f, " OVER ({o})")?;
+                write!(f, " OVER {o}")?;
             }
         }
 

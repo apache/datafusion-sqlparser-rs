@@ -85,14 +85,11 @@ pub enum BinaryOperator {
     BitwiseOr,
     BitwiseAnd,
     BitwiseXor,
-<<<<<<< HEAD
     DuckIntegerDivide,
-=======
     /// MySQL [`DIV`](https://dev.mysql.com/doc/refman/8.0/en/arithmetic-functions.html) integer division
     MyIntegerDivide,
     /// Support for custom operators (built by parsers outside this crate)
     Custom(String),
->>>>>>> upstream/main
     PGBitwiseXor,
     PGBitwiseShiftLeft,
     PGBitwiseShiftRight,

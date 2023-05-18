@@ -445,7 +445,7 @@ fn parse_quote_identifiers_2() {
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
-                distinct: false,
+                distinct: None,
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "quoted ` identifier".into(),
@@ -479,7 +479,7 @@ fn parse_quote_identifiers_3() {
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
-                distinct: false,
+                distinct: None,
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "`quoted identifier`".into(),
@@ -855,6 +855,106 @@ fn parse_insert_with_on_duplicate_update() {
 }
 
 #[test]
+fn parse_select_with_numeric_prefix_column_name() {
+    let sql = "SELECT 123col_$@123abc FROM \"table\"";
+    match mysql().verified_stmt(sql) {
+        Statement::Query(q) => {
+            assert_eq!(
+                q.body,
+                Box::new(SetExpr::Select(Box::new(Select {
+                    distinct: None,
+                    top: None,
+                    projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
+                        "123col_$@123abc"
+                    )))],
+                    into: None,
+                    from: vec![TableWithJoins {
+                        relation: TableFactor::Table {
+                            name: ObjectName(vec![Ident::with_quote('"', "table")]),
+                            alias: None,
+                            args: None,
+                            with_hints: vec![],
+                        },
+                        joins: vec![]
+                    }],
+                    lateral_views: vec![],
+                    selection: None,
+                    group_by: vec![],
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    qualify: None,
+                })))
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[cfg(not(feature = "bigdecimal"))]
+#[test]
+fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
+    let sql = "SELECT 123e4, 123col_$@123abc FROM \"table\"";
+    match mysql().verified_stmt(sql) {
+        Statement::Query(q) => {
+            assert_eq!(
+                q.body,
+                Box::new(SetExpr::Select(Box::new(Select {
+                    distinct: None,
+                    top: None,
+                    projection: vec![
+                        SelectItem::UnnamedExpr(Expr::Value(Value::Number(
+                            "123e4".to_string(),
+                            false
+                        ))),
+                        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("123col_$@123abc")))
+                    ],
+                    into: None,
+                    from: vec![TableWithJoins {
+                        relation: TableFactor::Table {
+                            name: ObjectName(vec![Ident::with_quote('"', "table")]),
+                            alias: None,
+                            args: None,
+                            with_hints: vec![],
+                        },
+                        joins: vec![]
+                    }],
+                    lateral_views: vec![],
+                    selection: None,
+                    group_by: vec![],
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    qualify: None,
+                })))
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_insert_with_numeric_prefix_column_name() {
+    let sql = "INSERT INTO s1.t1 (123col_$@length123) VALUES (67.654)";
+    match mysql().verified_stmt(sql) {
+        Statement::Insert {
+            table_name,
+            columns,
+            ..
+        } => {
+            assert_eq!(
+                ObjectName(vec![Ident::new("s1"), Ident::new("t1")]),
+                table_name
+            );
+            assert_eq!(vec![Ident::new("123col_$@length123")], columns);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_update_with_joins() {
     let sql = "UPDATE orders AS o JOIN customers AS c ON o.customer_id = c.id SET o.completed = true WHERE c.firstname = 'Peter'";
     match mysql().verified_stmt(sql) {
@@ -980,7 +1080,7 @@ fn parse_substring_in_select() {
                 Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Select(Box::new(Select {
-                        distinct: true,
+                        distinct: Some(Distinct::Distinct),
                         top: None,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
                             expr: Box::new(Expr::Identifier(Ident {
@@ -1256,12 +1356,14 @@ fn parse_create_table_with_fulltext_definition_should_not_accept_constraint_name
 fn mysql() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],
+        options: None,
     }
 }
 
 fn mysql_and_generic() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {}), Box::new(GenericDialect {})],
+        options: None,
     }
 }
 
@@ -1278,7 +1380,7 @@ fn parse_hex_string_introducer() {
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
-                distinct: false,
+                distinct: None,
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::IntroducedString {
                     introducer: "_latin1".to_string(),
@@ -1310,4 +1412,9 @@ fn parse_string_introducers() {
     mysql().one_statement_parses_to("SELECT _utf8'abc'", "SELECT _utf8 'abc'");
     mysql().one_statement_parses_to("SELECT _utf8mb4'abc'", "SELECT _utf8mb4 'abc'");
     mysql().verified_stmt("SELECT _binary 'abc', _utf8mb4 'abc'");
+}
+
+#[test]
+fn parse_div_infix() {
+    mysql().verified_stmt(r#"SELECT 5 DIV 2"#);
 }

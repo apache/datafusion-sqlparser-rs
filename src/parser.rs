@@ -7062,7 +7062,10 @@ impl<'a> Parser<'a> {
 
         let mut attributes = vec![];
         if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
-            return Ok(Statement::CreateType { name, attributes });
+            return Ok(Statement::CreateType {
+                name,
+                representation: UserDefinedTypeRepresentation::Composite { attributes },
+            });
         }
 
         loop {
@@ -7073,7 +7076,7 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-            attributes.push(CreateTypeAttrDef {
+            attributes.push(UserDefinedTypeCompositeAttributeDef {
                 name: attr_name,
                 data_type: attr_data_type,
                 collation: attr_collation,
@@ -7087,7 +7090,10 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok(Statement::CreateType { name, attributes })
+        Ok(Statement::CreateType {
+            name,
+            representation: UserDefinedTypeRepresentation::Composite { attributes },
+        })
     }
 }
 

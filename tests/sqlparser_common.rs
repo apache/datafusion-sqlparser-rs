@@ -7092,3 +7092,29 @@ fn parse_trailing_comma() {
 
     trailing_commas.verified_stmt("SELECT DISTINCT ON (album_id) name FROM track");
 }
+
+#[test]
+fn parse_create_type() {
+    let create_type =
+        verified_stmt("CREATE TYPE db.type_name AS (foo INT, bar TEXT COLLATE \"de_DE\")");
+    assert_eq!(
+        Statement::CreateType {
+            name: ObjectName(vec![Ident::new("db"), Ident::new("type_name")]),
+            representation: UserDefinedTypeRepresentation::Composite {
+                attributes: vec![
+                    UserDefinedTypeCompositeAttributeDef {
+                        name: Ident::new("foo"),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                    },
+                    UserDefinedTypeCompositeAttributeDef {
+                        name: Ident::new("bar"),
+                        data_type: DataType::Text,
+                        collation: Some(ObjectName(vec![Ident::with_quote('\"', "de_DE")])),
+                    }
+                ]
+            }
+        },
+        create_type
+    );
+}

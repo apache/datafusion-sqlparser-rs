@@ -2972,27 +2972,3 @@ fn parse_truncate() {
         truncate
     );
 }
-
-#[test]
-fn parse_create_type() {
-    let create_type = pg_and_generic()
-        .verified_stmt("CREATE TYPE db.type_name AS (foo INT, bar TEXT COLLATE \"de_DE\")");
-    assert_eq!(
-        Statement::CreateType {
-            name: ObjectName(vec![Ident::new("db"), Ident::new("type_name")]),
-            attributes: vec![
-                CreateTypeAttrDef {
-                    name: Ident::new("foo"),
-                    data_type: DataType::Int(None),
-                    collation: None,
-                },
-                CreateTypeAttrDef {
-                    name: Ident::new("bar"),
-                    data_type: DataType::Text,
-                    collation: Some(ObjectName(vec![Ident::with_quote('\"', "de_DE")])),
-                }
-            ]
-        },
-        create_type
-    );
-}

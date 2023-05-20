@@ -715,3 +715,23 @@ impl fmt::Display for ReferentialAction {
         })
     }
 }
+
+/// SQL composite type attribute definition
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct CreateTypeAttrDef {
+    pub name: Ident,
+    pub data_type: DataType,
+    pub collation: Option<ObjectName>,
+}
+
+impl fmt::Display for CreateTypeAttrDef {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.name, self.data_type)?;
+        if let Some(collation) = &self.collation {
+            write!(f, " COLLATE {collation}")?;
+        }
+        Ok(())
+    }
+}

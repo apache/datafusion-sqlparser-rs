@@ -2365,6 +2365,8 @@ impl<'a> Parser<'a> {
             self.parse_create_role()
         } else if self.parse_keyword(Keyword::SEQUENCE) {
             self.parse_create_sequence(temporary)
+        } else if self.parse_keyword(Keyword::TYPE) {
+            self.parse_create_type()
         } else {
             self.expected("an object type after CREATE", self.peek_token())
         }
@@ -7052,6 +7054,40 @@ impl<'a> Parser<'a> {
             order_by,
             window_frame,
         })
+    }
+
+    pub fn parse_create_type(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name()?;
+        self.expect_keyword(Keyword::AS)?;
+
+        let mut attributes = vec![];
+        if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
+            return Ok(Statement::CreateType { name, attributes });
+        }
+
+        loop {
+            let attr_name = self.parse_identifier()?;
+            let attr_data_type = self.parse_data_type()?;
+            let attr_collation = if self.parse_keyword(Keyword::COLLATE) {
+                Some(self.parse_object_name()?)
+            } else {
+                None
+            };
+            attributes.push(CreateTypeAttrDef {
+                name: attr_name,
+                data_type: attr_data_type,
+                collation: attr_collation,
+            });
+            let comma = self.consume_token(&Token::Comma);
+            if self.consume_token(&Token::RParen) {
+                // allow a trailing comma
+                break;
+            } else if !comma {
+                return self.expected("',' or ')' after attribute definition", self.peek_token());
+            }
+        }
+
+        Ok(Statement::CreateType { name, attributes })
     }
 }
 

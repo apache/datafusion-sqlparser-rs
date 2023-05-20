@@ -30,7 +30,8 @@ pub use self::data_type::{
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
-    ColumnOptionDef, GeneratedAs, IndexType, KeyOrIndexDisplay, ReferentialAction, TableConstraint,
+    ColumnOptionDef, CreateTypeAttrDef, GeneratedAs, IndexType, KeyOrIndexDisplay,
+    ReferentialAction, TableConstraint,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
@@ -1711,6 +1712,11 @@ pub enum Statement {
         sequence_options: Vec<SequenceOptions>,
         owned_by: Option<ObjectName>,
     },
+    /// CREATE TYPE <name>
+    CreateType {
+        name: ObjectName,
+        attributes: Vec<CreateTypeAttrDef>,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -2920,6 +2926,13 @@ impl fmt::Display for Statement {
                     )?;
                 }
                 Ok(())
+            }
+            Statement::CreateType { name, attributes } => {
+                write!(
+                    f,
+                    "CREATE TYPE {name} AS ({})",
+                    display_comma_separated(attributes)
+                )
             }
         }
     }

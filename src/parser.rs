@@ -4396,6 +4396,17 @@ impl<'a> Parser<'a> {
 
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)
     pub fn parse_data_type(&mut self) -> Result<DataType, ParserError> {
+        if dialect_of!(self is ClickHouseDialect) {
+            // ClickHouse allows to specify data type as Nullable(DateTime64(8))
+            let type_name = self.parse_object_name()?;
+            return if let Some(modifiers) = self.parse_clickhouse_type_modifiers()? {
+                Ok(DataType::Custom(type_name, modifiers))
+            } else {
+                Ok(DataType::Custom(type_name, vec![]))
+            }
+        }
+
+
         let next_token = self.next_token();
         let mut data = match next_token.token {
             Token::Word(w) => match w.keyword {
@@ -4928,6 +4939,38 @@ impl<'a> Parser<'a> {
             }
 
             Ok(Some(modifiers))
+        } else {
+            Ok(None)
+        }
+    }
+    pub fn parse_clickhouse_type_modifiers(&mut self) -> Result<Option<Vec<String>>, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            let mut depth = 1;
+            let mut modifier = std::string::String::new();
+            loop {
+                let next_token = self.next_token();
+                match next_token.token {
+                    Token::EOF => {
+                        return parser_err!(format!("unbalanced parens: {}", modifier))
+                    }
+                    Token::LParen => {
+                        modifier.push_str(&next_token.to_string());
+                        depth += 1;
+                    },
+                    Token::RParen => {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                        modifier.push_str(&next_token.to_string());
+                    }
+                    _ => modifier.push_str(&next_token.to_string()),
+                }
+            }
+            if depth != 0 {
+                return parser_err!(format!("unbalanced parens: {}", modifier))
+            }
+            Ok(Some(vec![modifier]))
         } else {
             Ok(None)
         }

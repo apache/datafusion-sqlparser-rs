@@ -198,6 +198,7 @@ const DEFAULT_REMAINING_DEPTH: usize = 50;
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ParserOptions {
     pub trailing_commas: bool,
+    pub no_escape: bool,
 }
 
 pub struct Parser<'a> {
@@ -207,7 +208,7 @@ pub struct Parser<'a> {
     /// The current dialect to use
     dialect: &'a dyn Dialect,
     /// Additional options that allow you to mix & match behavior otherwise
-    /// constrained to certain dialects (e.g. trailing commas)
+    /// constrained to certain dialects (e.g. trailing commas) and/or format of parse (e.g. no escape)
     options: ParserOptions,
     /// ensure the stack does not overflow by limiting recursion depth
     recursion_counter: RecursionCounter,
@@ -317,7 +318,10 @@ impl<'a> Parser<'a> {
     /// See example on [`Parser::new()`] for an example
     pub fn try_with_sql(self, sql: &str) -> Result<Self, ParserError> {
         debug!("Parsing sql '{}'...", sql);
-        let mut tokenizer = Tokenizer::new(self.dialect, sql);
+        let tokenizer_options = TokenizerOptions {
+            no_escape: self.options.no_escape,
+        };
+        let mut tokenizer = Tokenizer::new(self.dialect, sql, &tokenizer_options);
         let tokens = tokenizer.tokenize()?;
         Ok(self.with_tokens(tokens))
     }

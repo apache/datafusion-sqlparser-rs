@@ -7101,6 +7101,7 @@ fn parse_trailing_comma() {
         dialects: vec![Box::new(GenericDialect {})],
         options: Some(ParserOptions {
             trailing_commas: true,
+            no_escape: false,
         }),
     };
 

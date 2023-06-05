@@ -632,7 +632,7 @@ mod tests {
 
     fn do_visit(sql: &str) -> Vec<String> {
         let dialect = GenericDialect {};
-        let mut tokenizer = Tokenizer::new(&dialect, sql);
+        let mut tokenizer = Tokenizer::new(&dialect, sql, &TokenizerOptions { no_escape: false });
         let tokens = tokenizer.tokenize().unwrap();
         let s = Parser::new(&dialect)
             .with_tokens(tokens)

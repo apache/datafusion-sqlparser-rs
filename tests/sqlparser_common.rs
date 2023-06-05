@@ -6893,6 +6893,7 @@ fn parse_trailing_comma() {
         dialects: vec![Box::new(GenericDialect {})],
         options: Some(ParserOptions {
             trailing_commas: true,
+            no_escape: false,
         }),
     };
 
@@ -6916,4 +6917,30 @@ fn parse_trailing_comma() {
     trailing_commas.verified_stmt("SELECT * FROM track ORDER BY milliseconds");
 
     trailing_commas.verified_stmt("SELECT DISTINCT ON (album_id) name FROM track");
+}
+
+#[test]
+fn parse_with_no_escape() {
+    let no_escape = TestedDialects {
+        dialects: vec![Box::new(MySqlDialect {})], // MySQL uses backslash as escape character
+        options: Some(ParserOptions {
+            trailing_commas: false,
+            no_escape: true,
+        }),
+    };
+
+    no_escape.one_statement_parses_to(
+        r#"INSERT INTO `table` VALUES ("I\'m a value")"#,
+        r#"INSERT INTO `table` VALUES ("I\'m a value")"#,
+    );
+
+    no_escape.one_statement_parses_to(
+        r#"INSERT INTO `table` VALUES ('I''m a value')"#,
+        r#"INSERT INTO `table` VALUES ('I''m a value')"#,
+    );
+
+    no_escape.one_statement_parses_to(
+        r#"INSERT INTO `table` VALUES ('I\\'m a value')"#,
+        r#"INSERT INTO `table` VALUES ('I\\'m a value')"#,
+    );
 }

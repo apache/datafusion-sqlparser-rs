@@ -30,6 +30,10 @@ use crate::dialect::*;
 use crate::parser::{Parser, ParserError};
 use crate::{ast::*, parser::ParserOptions};
 
+
+#[cfg(test)]
+use pretty_assertions::{assert_eq, assert_ne};
+
 /// Tests use the methods on this struct to invoke the parser on one or
 /// multiple dialects.
 pub struct TestedDialects {

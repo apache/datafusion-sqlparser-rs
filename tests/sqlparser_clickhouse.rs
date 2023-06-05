@@ -344,6 +344,11 @@ fn parse_create_view() {
     clickhouse().verified_stmt(r#"CREATE VIEW analytics.runs_audit_ingest_daily (`count` UInt64, `ts` DateTime('UTC')) AS SELECT count(*) AS count, toStartOfDay(ingested_at) AS ts FROM analytics.runs_int_runs GROUP BY ts ORDER BY ts DESC"#);
 }
 
+#[test]
+fn parse_limit_by() {
+    clickhouse().verified_stmt(r#"SELECT * FROM default.last_asset_runs_mv ORDER BY created_at DESC LIMIT 1 BY asset"#);
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],

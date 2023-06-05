@@ -5103,6 +5103,7 @@ impl<'a> Parser<'a> {
                 with,
                 body: Box::new(SetExpr::Insert(insert)),
                 limit: None,
+                limit_by: vec![],
                 order_by: vec![],
                 offset: None,
                 fetch: None,
@@ -5114,6 +5115,7 @@ impl<'a> Parser<'a> {
                 with,
                 body: Box::new(SetExpr::Update(update)),
                 limit: None,
+                limit_by: vec![],
                 order_by: vec![],
                 offset: None,
                 fetch: None,
@@ -5140,7 +5142,7 @@ impl<'a> Parser<'a> {
                     offset = Some(self.parse_offset()?)
                 }
 
-                if dialect_of!(self is GenericDialect | MySqlDialect)
+                if dialect_of!(self is GenericDialect | MySqlDialect | ClickHouseDialect)
                     && limit.is_some()
                     && offset.is_none()
                     && self.consume_token(&Token::Comma)
@@ -5154,6 +5156,12 @@ impl<'a> Parser<'a> {
                     limit = Some(self.parse_expr()?);
                 }
             }
+
+            let limit_by = if dialect_of!(self is ClickHouseDialect) && self.parse_keyword(Keyword::BY) {
+                self.parse_comma_separated(Parser::parse_expr)?
+            } else {
+                vec![]
+            };
 
             let fetch = if self.parse_keyword(Keyword::FETCH) {
                 Some(self.parse_fetch()?)
@@ -5171,6 +5179,7 @@ impl<'a> Parser<'a> {
                 body,
                 order_by,
                 limit,
+                limit_by,
                 offset,
                 fetch,
                 locks,

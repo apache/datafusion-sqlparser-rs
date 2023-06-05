@@ -35,6 +35,10 @@ pub struct Query {
     pub order_by: Vec<OrderByExpr>,
     /// `LIMIT { <N> | ALL }`
     pub limit: Option<Expr>,
+
+    /// `LIMIT { <N> } BY { <expr>,<expr>,... } }`
+    pub limit_by: Vec<Expr>,
+
     /// `OFFSET <N> [ { ROW | ROWS } ]`
     pub offset: Option<Offset>,
     /// `FETCH { FIRST | NEXT } <N> [ PERCENT ] { ROW | ROWS } | { ONLY | WITH TIES }`
@@ -57,6 +61,9 @@ impl fmt::Display for Query {
         }
         if let Some(ref offset) = self.offset {
             write!(f, " {offset}")?;
+        }
+        if !self.limit_by.is_empty() {
+            write!(f, " BY {}", display_separated(&self.limit_by, ", "))?;
         }
         if let Some(ref fetch) = self.fetch {
             write!(f, " {fetch}")?;

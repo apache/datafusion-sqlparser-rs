@@ -92,6 +92,7 @@ fn parse_create_procedure() {
             body: vec![Statement::Query(Box::new(Query {
                 with: None,
                 limit: None,
+                limit_by: vec![],
                 offset: None,
                 fetch: None,
                 locks: vec![],
@@ -532,6 +533,7 @@ fn parse_substring_in_select() {
                     }))),
                     order_by: vec![],
                     limit: None,
+                    limit_by: vec![],
                     offset: None,
                     fetch: None,
                     locks: vec![],

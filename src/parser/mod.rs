@@ -4895,6 +4895,12 @@ impl<'a> Parser<'a> {
                 Keyword::ARRAY => {
                     if dialect_of!(self is SnowflakeDialect) {
                         Ok(DataType::Array(None))
+                    } else if dialect_of!(self is ClickHouseDialect) {
+                        // Clickhouse uses Array(T) syntax
+                        self.expect_token(&Token::LParen)?;
+                        let inside_type = self.parse_data_type()?;
+                        self.expect_token(&Token::RParen)?;
+                        Ok(DataType::Array(Some(Box::new(inside_type))))
                     } else {
                         // Hive array syntax. Note that nesting arrays - or other Hive syntax
                         // that ends with > will fail due to "C++" problem - >> is parsed as

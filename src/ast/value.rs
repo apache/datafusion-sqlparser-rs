@@ -54,6 +54,7 @@ pub enum Value {
     HexStringLiteral(String),
 
     DoubleQuotedString(String),
+    OriginalString(String),
     /// Boolean value true or false
     Boolean(bool),
     /// `NULL` value
@@ -70,6 +71,7 @@ impl fmt::Display for Value {
             Value::Number(v, l) => write!(f, "{}{long}", v, long = if *l { "L" } else { "" }),
             Value::DoubleQuotedString(v) => write!(f, "\"{v}\""),
             Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
+            Value::OriginalString(v) => write!(f, "{}", v),
             Value::DollarQuotedString(v) => write!(f, "{v}"),
             Value::EscapedStringLiteral(v) => write!(f, "E'{}'", escape_escaped_string(v)),
             Value::NationalStringLiteral(v) => write!(f, "N'{v}'"),

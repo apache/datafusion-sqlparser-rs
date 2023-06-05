@@ -25,14 +25,13 @@ use sqlparser::ast::TableFactor::Pivot;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, GenericDialect, HiveDialect, MsSqlDialect,
-    MySqlDialect, MySqlNoEscapeDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect,
-    SnowflakeDialect,
+    MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use test_utils::{
-    all_dialects, all_dialects_other_than_mysqlnoescape, assert_eq_vec, expr_from_projection, join,
-    number, only, table, table_alias, TestedDialects,
+    all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
+    TestedDialects,
 };
 
 #[macro_use]
@@ -946,7 +945,6 @@ fn parse_exponent_in_select() -> Result<(), ParserError> {
             // Box::new(HiveDialect {}),
             Box::new(MsSqlDialect {}),
             Box::new(MySqlDialect {}),
-            Box::new(MySqlNoEscapeDialect {}),
             Box::new(PostgreSqlDialect {}),
             Box::new(RedshiftSqlDialect {}),
             Box::new(SnowflakeDialect {}),
@@ -1001,43 +999,17 @@ fn parse_select_with_date_column_name() {
 }
 
 #[test]
-fn parse_escaped_single_quote_string_predicate_with_escape() {
+fn parse_escaped_single_quote_string_predicate() {
     use self::BinaryOperator::*;
     let sql = "SELECT id, fname, lname FROM customer \
                WHERE salary <> 'Jim''s salary'";
-
-    let ast = verified_only_select_with_dialects_other_than_mysqlnoescape(sql);
-
+    let ast = verified_only_select(sql);
     assert_eq!(
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("salary"))),
             op: NotEq,
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "Jim's salary".to_string()
-            ))),
-        }),
-        ast.selection,
-    );
-}
-
-#[test]
-fn parse_escaped_single_quote_string_predicate_with_no_escape() {
-    use self::BinaryOperator::*;
-    let sql = "SELECT id, fname, lname FROM customer \
-               WHERE salary <> 'Jim''s salary'";
-
-    let ast = TestedDialects {
-        dialects: vec![Box::new(MySqlNoEscapeDialect {})],
-        options: None,
-    }
-    .verified_only_select(sql);
-
-    assert_eq!(
-        Some(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("salary"))),
-            op: NotEq,
-            right: Box::new(Expr::Value(Value::SingleQuotedString(
-                "Jim''s salary".to_string()
             ))),
         }),
         ast.selection,
@@ -2328,7 +2300,6 @@ fn parse_create_table_hive_array() {
             Box::new(PostgreSqlDialect {}),
             Box::new(HiveDialect {}),
             Box::new(MySqlDialect {}),
-            Box::new(MySqlNoEscapeDialect {}),
         ],
         options: None,
     };
@@ -6241,10 +6212,6 @@ fn verified_only_select(query: &str) -> Select {
     all_dialects().verified_only_select(query)
 }
 
-fn verified_only_select_with_dialects_other_than_mysqlnoescape(query: &str) -> Select {
-    all_dialects_other_than_mysqlnoescape().verified_only_select(query)
-}
-
 fn verified_expr(query: &str) -> Expr {
     all_dialects().verified_expr(query)
 }
@@ -6908,7 +6875,6 @@ fn parse_non_latin_identifiers() {
             Box::new(MsSqlDialect {}),
             Box::new(RedshiftSqlDialect {}),
             Box::new(MySqlDialect {}),
-            Box::new(MySqlNoEscapeDialect {}),
         ],
         options: None,
     };

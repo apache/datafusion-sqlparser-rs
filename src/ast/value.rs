@@ -184,21 +184,11 @@ pub struct EscapeQuotedString<'a> {
 
 impl<'a> fmt::Display for EscapeQuotedString<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut peekable_chars = self.string.chars().peekable();
-        while let Some(&ch) = peekable_chars.peek() {
-            let quote = self.quote;
-            match ch {
-                char if char == quote => {
-                    write!(f, "{char}{char}", char = self.quote)?;
-                    peekable_chars.next();
-                    if peekable_chars.peek().map(|c| *c == quote).unwrap_or(false) {
-                        peekable_chars.next();
-                    }
-                }
-                _ => {
-                    write!(f, "{ch}")?;
-                    peekable_chars.next();
-                }
+        for c in self.string.chars() {
+            if c == self.quote {
+                write!(f, "{q}{q}", q = self.quote)?;
+            } else {
+                write!(f, "{c}")?;
             }
         }
         Ok(())

@@ -718,6 +718,7 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::END,
     // for MYSQL PARTITION SELECTION
     Keyword::PARTITION,
+    Keyword::ARRAY,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`

@@ -673,6 +673,10 @@ pub enum TableFactor {
         /// [Partition selection](https://dev.mysql.com/doc/refman/8.0/en/partitioning-selection.html), supported by MySQL.
         partitions: Vec<Ident>,
     },
+    FieldAccessor {
+        expr: Expr,
+        alias: Option<TableAlias>,
+    },
     Derived {
         lateral: bool,
         subquery: Box<Query>,
@@ -797,6 +801,13 @@ impl fmt::Display for TableFactor {
                 alias,
             } => {
                 write!(f, "({table_with_joins})")?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {alias}")?;
+                }
+                Ok(())
+            }
+            TableFactor::FieldAccessor { expr, alias } => {
+                write!(f, "{expr}")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }
@@ -961,6 +972,7 @@ impl fmt::Display for Join {
             ),
             JoinOperator::CrossApply => write!(f, " CROSS APPLY {}", self.relation),
             JoinOperator::OuterApply => write!(f, " OUTER APPLY {}", self.relation),
+            JoinOperator::Array => write!(f, " ARRAY JOIN {}", self.relation),
         }
     }
 }
@@ -986,6 +998,8 @@ pub enum JoinOperator {
     CrossApply,
     /// OUTER APPLY (non-standard)
     OuterApply,
+    /// ARRAY JOIN (ClickHouse)
+    Array,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

@@ -6040,6 +6040,12 @@ impl<'a> Parser<'a> {
                     relation: self.parse_table_factor()?,
                     join_operator: JoinOperator::OuterApply,
                 }
+            } else if self.parse_keyword(Keyword::ARRAY) {
+                self.expect_keyword(Keyword::JOIN)?;
+                Join {
+                    relation: self.parse_array_join_table_factor()?,
+                    join_operator: JoinOperator::Array,
+                }
             } else {
                 let natural = self.parse_keyword(Keyword::NATURAL);
                 let peek_keyword = if let Token::Word(w) = self.peek_token().token {
@@ -6216,6 +6222,7 @@ impl<'a> Parser<'a> {
                         | TableFactor::Table { alias, .. }
                         | TableFactor::UNNEST { alias, .. }
                         | TableFactor::TableFunction { alias, .. }
+                        | TableFactor::FieldAccessor { alias, .. }
                         | TableFactor::Pivot {
                             pivot_alias: alias, ..
                         }
@@ -6335,6 +6342,15 @@ impl<'a> Parser<'a> {
             Ok(Some(TableVersion::ForSystemTimeAsOf(expr)))
         } else {
             Ok(None)
+        }
+    }
+
+    pub fn parse_array_join_table_factor(&mut self) -> Result<TableFactor, ParserError> {
+        {
+            let expr = self.parse_expr()?;
+
+            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+            Ok(TableFactor::FieldAccessor { expr, alias })
         }
     }
 

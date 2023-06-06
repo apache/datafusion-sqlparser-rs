@@ -375,6 +375,12 @@ fn parse_array_accessor() {
     );
 }
 
+#[test]
+fn parse_array_join() {
+    clickhouse().verified_stmt(r#"SELECT asset AS a FROM runs AS r ARRAY JOIN r.assets AS asset"#);
+    clickhouse().verified_stmt(r#"SELECT asset AS a FROM runs ARRAY JOIN r.assets AS asset"#);
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],

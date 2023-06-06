@@ -715,6 +715,7 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::SET,
     Keyword::QUALIFY,
     Keyword::WINDOW,
+    Keyword::ARRAY,
     Keyword::END,
     // for MYSQL PARTITION SELECTION
     Keyword::PARTITION,

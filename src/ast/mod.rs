@@ -1712,7 +1712,7 @@ pub enum Statement {
         sequence_options: Vec<SequenceOptions>,
         owned_by: Option<ObjectName>,
     },
-    /// CREATE TYPE <name>
+    /// CREATE TYPE `<name>`
     CreateType {
         name: ObjectName,
         representation: UserDefinedTypeRepresentation,

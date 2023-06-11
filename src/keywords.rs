@@ -347,6 +347,7 @@ define_keywords!(
     LOCKED,
     LOGIN,
     LOWER,
+    MACRO,
     MANAGEDLOCATION,
     MATCH,
     MATCHED,

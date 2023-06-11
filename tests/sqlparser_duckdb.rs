@@ -68,3 +68,53 @@ fn test_select_wildcard_with_exclude() {
 fn parse_div_infix() {
     duckdb_and_generic().verified_stmt(r#"SELECT 5 // 2"#);
 }
+
+#[test]
+fn test_create_macro() {
+    let _macro = duckdb().verified_stmt("CREATE MACRO schema.add(a, b) AS a + b");
+    let expected = Statement::CreateMacro {
+        or_replace: false,
+        temporary: false,
+        name: ObjectName(vec![Ident::new("schema"), Ident::new("add")]),
+        args: Some(vec![OperateMacroArg::new("a"), OperateMacroArg::new("b")]),
+        expr: Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            op: BinaryOperator::Plus,
+            right: Box::new(Expr::Identifier(Ident::new("b"))),
+        },
+    };
+    assert_eq!(expected, _macro);
+}
+
+#[test]
+fn test_create_macro_default_args() {
+    let _macro = duckdb().verified_stmt("CREATE MACRO add_default(a, b := 5) AS a + b");
+    let expected = Statement::CreateMacro {
+        or_replace: false,
+        temporary: false,
+        name: ObjectName(vec![Ident::new("add_default")]),
+        args: Some(vec![OperateMacroArg::new("a"), OperateMacroArg{ name: Ident::new("b"), default_expr: Some(Expr::Value(Value::Number("5".into(), false)))}]),
+        expr: Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            op: BinaryOperator::Plus,
+            right: Box::new(Expr::Identifier(Ident::new("b"))),
+        },
+    };
+    assert_eq!(expected, _macro);
+}
+
+#[test]
+fn test_create_table_macro() {
+    let query = "SELECT col1_value AS column1, col2_value AS column2 UNION ALL SELECT 'Hello' AS col1_value, 456 AS col2_value";
+    let _macro = duckdb().verified_stmt(
+        &("CREATE OR REPLACE TEMPORARY MACRO dynamic_table (col1_value, col2_value) AS TABLE ".to_string() + query),
+    );
+    let expected = Statement::CreateTableMacro {
+        or_replace: true,
+        temporary: true,
+        name: ObjectName(vec![Ident::new("dynamic_table")]),
+        args: Some(vec![OperateMacroArg::new("col1_value"), OperateMacroArg::new("col2_value")]),
+        query: duckdb().verified_query(query),
+    };
+    assert_eq!(expected, _macro);
+}

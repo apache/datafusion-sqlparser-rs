@@ -17,7 +17,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::fmt;
+use core::fmt::{self, Display};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -31,14 +31,15 @@ pub use self::data_type::{
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
     ColumnOptionDef, GeneratedAs, IndexType, KeyOrIndexDisplay, ReferentialAction, TableConstraint,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     Cte, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, IdentWithAlias, Join,
-    JoinConstraint, JoinOperator, LateralView, LockClause, LockType, NonBlock, Offset, OffsetRows,
-    OrderByExpr, Query, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
-    SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Table, TableAlias, TableFactor,
-    TableWithJoins, Top, Values, WildcardAdditionalOptions, With,
+    JoinConstraint, JoinOperator, LateralView, LockClause, LockType, NamedWindowDefinition,
+    NonBlock, Offset, OffsetRows, OrderByExpr, Query, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Table,
+    TableAlias, TableFactor, TableWithJoins, Top, Values, WildcardAdditionalOptions, With,
 };
 pub use self::value::{
     escape_quoted_string, DateTimeField, DollarQuotedString, TrimWhereField, Value,
@@ -191,6 +192,70 @@ impl fmt::Display for Array {
             if self.named { "ARRAY" } else { "" },
             display_comma_separated(&self.elem)
         )
+    }
+}
+
+/// Represents an INTERVAL expression, roughly in the following format:
+/// `INTERVAL '<value>' [ <leading_field> [ (<leading_precision>) ] ]
+/// [ TO <last_field> [ (<fractional_seconds_precision>) ] ]`,
+/// e.g. `INTERVAL '123:45.67' MINUTE(3) TO SECOND(2)`.
+///
+/// The parser does not validate the `<value>`, nor does it ensure
+/// that the `<leading_field>` units >= the units in `<last_field>`,
+/// so the user will have to reject intervals like `HOUR TO YEAR`.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Interval {
+    pub value: Box<Expr>,
+    pub leading_field: Option<DateTimeField>,
+    pub leading_precision: Option<u64>,
+    pub last_field: Option<DateTimeField>,
+    /// The seconds precision can be specified in SQL source as
+    /// `INTERVAL '__' SECOND(_, x)` (in which case the `leading_field`
+    /// will be `Second` and the `last_field` will be `None`),
+    /// or as `__ TO SECOND(x)`.
+    pub fractional_seconds_precision: Option<u64>,
+}
+
+impl fmt::Display for Interval {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let value = self.value.as_ref();
+        match (
+            self.leading_field,
+            self.leading_precision,
+            self.fractional_seconds_precision,
+        ) {
+            (
+                Some(DateTimeField::Second),
+                Some(leading_precision),
+                Some(fractional_seconds_precision),
+            ) => {
+                // When the leading field is SECOND, the parser guarantees that
+                // the last field is None.
+                assert!(self.last_field.is_none());
+                write!(
+                    f,
+                    "INTERVAL {value} SECOND ({leading_precision}, {fractional_seconds_precision})"
+                )
+            }
+            _ => {
+                write!(f, "INTERVAL {value}")?;
+                if let Some(leading_field) = self.leading_field {
+                    write!(f, " {leading_field}")?;
+                }
+                if let Some(leading_precision) = self.leading_precision {
+                    write!(f, " ({leading_precision})")?;
+                }
+                if let Some(last_field) = self.last_field {
+                    write!(f, " TO {last_field}")?;
+                }
+                if let Some(fractional_seconds_precision) = self.fractional_seconds_precision {
+                    write!(f, " ({fractional_seconds_precision})")?;
+                }
+                Ok(())
+            }
+        }
     }
 }
 
@@ -491,25 +556,8 @@ pub enum Expr {
     ArrayIndex { obj: Box<Expr>, indexes: Vec<Expr> },
     /// An array expression e.g. `ARRAY[1, 2]`
     Array(Array),
-    /// INTERVAL literals, roughly in the following format:
-    /// `INTERVAL '<value>' [ <leading_field> [ (<leading_precision>) ] ]
-    /// [ TO <last_field> [ (<fractional_seconds_precision>) ] ]`,
-    /// e.g. `INTERVAL '123:45.67' MINUTE(3) TO SECOND(2)`.
-    ///
-    /// The parser does not validate the `<value>`, nor does it ensure
-    /// that the `<leading_field>` units >= the units in `<last_field>`,
-    /// so the user will have to reject intervals like `HOUR TO YEAR`.
-    Interval {
-        value: Box<Expr>,
-        leading_field: Option<DateTimeField>,
-        leading_precision: Option<u64>,
-        last_field: Option<DateTimeField>,
-        /// The seconds precision can be specified in SQL source as
-        /// `INTERVAL '__' SECOND(_, x)` (in which case the `leading_field`
-        /// will be `Second` and the `last_field` will be `None`),
-        /// or as `__ TO SECOND(x)`.
-        fractional_seconds_precision: Option<u64>,
-    },
+    /// An interval expression e.g. `INTERVAL '1' YEAR`
+    Interval(Interval),
     /// `MySQL` specific text search function [(1)].
     ///
     /// Syntax:
@@ -861,42 +909,8 @@ impl fmt::Display for Expr {
             } => {
                 write!(f, "{timestamp} AT TIME ZONE '{time_zone}'")
             }
-            Expr::Interval {
-                value,
-                leading_field: Some(DateTimeField::Second),
-                leading_precision: Some(leading_precision),
-                last_field,
-                fractional_seconds_precision: Some(fractional_seconds_precision),
-            } => {
-                // When the leading field is SECOND, the parser guarantees that
-                // the last field is None.
-                assert!(last_field.is_none());
-                write!(
-                    f,
-                    "INTERVAL {value} SECOND ({leading_precision}, {fractional_seconds_precision})"
-                )
-            }
-            Expr::Interval {
-                value,
-                leading_field,
-                leading_precision,
-                last_field,
-                fractional_seconds_precision,
-            } => {
-                write!(f, "INTERVAL {value}")?;
-                if let Some(leading_field) = leading_field {
-                    write!(f, " {leading_field}")?;
-                }
-                if let Some(leading_precision) = leading_precision {
-                    write!(f, " ({leading_precision})")?;
-                }
-                if let Some(last_field) = last_field {
-                    write!(f, " TO {last_field}")?;
-                }
-                if let Some(fractional_seconds_precision) = fractional_seconds_precision {
-                    write!(f, " ({fractional_seconds_precision})")?;
-                }
-                Ok(())
+            Expr::Interval(interval) => {
+                write!(f, "{interval}")
             }
             Expr::MatchAgainst {
                 columns,
@@ -913,6 +927,23 @@ impl fmt::Display for Expr {
 
                 Ok(())
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum WindowType {
+    WindowSpec(WindowSpec),
+    NamedWindow(Ident),
+}
+
+impl Display for WindowType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WindowType::WindowSpec(spec) => write!(f, "({})", spec),
+            WindowType::NamedWindow(name) => write!(f, "{}", name),
         }
     }
 }
@@ -1129,6 +1160,8 @@ pub enum Statement {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         partitions: Option<Vec<Expr>>,
+        /// TABLE - optional keyword;
+        table: bool,
     },
     /// Msck (Hive)
     Msck {
@@ -1679,6 +1712,11 @@ pub enum Statement {
         sequence_options: Vec<SequenceOptions>,
         owned_by: Option<ObjectName>,
     },
+    /// CREATE TYPE `<name>`
+    CreateType {
+        name: ObjectName,
+        representation: UserDefinedTypeRepresentation,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -1831,8 +1869,10 @@ impl fmt::Display for Statement {
             Statement::Truncate {
                 table_name,
                 partitions,
+                table,
             } => {
-                write!(f, "TRUNCATE TABLE {table_name}")?;
+                let table = if *table { "TABLE " } else { "" };
+                write!(f, "TRUNCATE {table}{table_name}")?;
                 if let Some(ref parts) = partitions {
                     if !parts.is_empty() {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;
@@ -2887,6 +2927,12 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::CreateType {
+                name,
+                representation,
+            } => {
+                write!(f, "CREATE TYPE {name} AS {representation}")
+            }
         }
     }
 }
@@ -3343,12 +3389,14 @@ impl fmt::Display for CloseCursor {
 pub struct Function {
     pub name: ObjectName,
     pub args: Vec<FunctionArg>,
-    pub over: Option<WindowSpec>,
+    pub over: Option<WindowType>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
     // Some functions must be called without trailing parentheses, for example Postgres
     // do it for current_catalog, current_schema, etc. This flags is used for formatting.
     pub special: bool,
+    // Required ordering for the function (if empty, there is no requirement).
+    pub order_by: Vec<OrderByExpr>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -3375,16 +3423,22 @@ impl fmt::Display for Function {
         if self.special {
             write!(f, "{}", self.name)?;
         } else {
+            let order_by = if !self.order_by.is_empty() {
+                " ORDER BY "
+            } else {
+                ""
+            };
             write!(
                 f,
-                "{}({}{})",
+                "{}({}{}{order_by}{})",
                 self.name,
                 if self.distinct { "DISTINCT " } else { "" },
                 display_comma_separated(&self.args),
+                display_comma_separated(&self.order_by),
             )?;
 
             if let Some(o) = &self.over {
-                write!(f, " OVER ({o})")?;
+                write!(f, " OVER {o}")?;
             }
         }
 
@@ -3505,7 +3559,7 @@ impl fmt::Display for ListAggOnOverflow {
 pub struct ArrayAgg {
     pub distinct: bool,
     pub expr: Box<Expr>,
-    pub order_by: Option<Box<OrderByExpr>>,
+    pub order_by: Option<Vec<OrderByExpr>>,
     pub limit: Option<Box<Expr>>,
     pub within_group: bool, // order by is used inside a within group or not
 }
@@ -3520,7 +3574,7 @@ impl fmt::Display for ArrayAgg {
         )?;
         if !self.within_group {
             if let Some(order_by) = &self.order_by {
-                write!(f, " ORDER BY {order_by}")?;
+                write!(f, " ORDER BY {}", display_comma_separated(order_by))?;
             }
             if let Some(limit) = &self.limit {
                 write!(f, " LIMIT {limit}")?;
@@ -3529,7 +3583,11 @@ impl fmt::Display for ArrayAgg {
         write!(f, ")")?;
         if self.within_group {
             if let Some(order_by) = &self.order_by {
-                write!(f, " WITHIN GROUP (ORDER BY {order_by})")?;
+                write!(
+                    f,
+                    " WITHIN GROUP (ORDER BY {})",
+                    display_comma_separated(order_by)
+                )?;
             }
         }
         Ok(())
@@ -4409,5 +4467,31 @@ mod tests {
             vec![Expr::Identifier(Ident::new("d"))],
         ]);
         assert_eq!("CUBE (a, (b, c), d)", format!("{cube}"));
+    }
+
+    #[test]
+    fn test_interval_display() {
+        let interval = Expr::Interval(Interval {
+            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
+                "123:45.67",
+            )))),
+            leading_field: Some(DateTimeField::Minute),
+            leading_precision: Some(10),
+            last_field: Some(DateTimeField::Second),
+            fractional_seconds_precision: Some(9),
+        });
+        assert_eq!(
+            "INTERVAL '123:45.67' MINUTE (10) TO SECOND (9)",
+            format!("{interval}"),
+        );
+
+        let interval = Expr::Interval(Interval {
+            value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("5")))),
+            leading_field: Some(DateTimeField::Second),
+            leading_precision: Some(1),
+            last_field: None,
+            fractional_seconds_precision: Some(3),
+        });
+        assert_eq!("INTERVAL '5' SECOND (1, 3)", format!("{interval}"));
     }
 }

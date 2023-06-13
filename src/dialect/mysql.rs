@@ -10,7 +10,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::dialect::Dialect;
+#[cfg(not(feature = "std"))]
+use alloc::boxed::Box;
+
+use crate::{
+    ast::{BinaryOperator, Expr},
+    dialect::Dialect,
+    keywords::Keyword,
+};
 
 /// [MySQL](https://www.mysql.com/)
 #[derive(Debug)]
@@ -34,6 +41,24 @@ impl Dialect for MySqlDialect {
 
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
         ch == '`'
+    }
+
+    fn parse_infix(
+        &self,
+        parser: &mut crate::parser::Parser,
+        expr: &crate::ast::Expr,
+        _precedence: u8,
+    ) -> Option<Result<crate::ast::Expr, crate::parser::ParserError>> {
+        // Parse DIV as an operator
+        if parser.parse_keyword(Keyword::DIV) {
+            Some(Ok(Expr::BinaryOp {
+                left: Box::new(expr.clone()),
+                op: BinaryOperator::MyIntegerDivide,
+                right: Box::new(parser.parse_expr().unwrap()),
+            }))
+        } else {
+            None
+        }
     }
 }
 

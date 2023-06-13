@@ -19,13 +19,12 @@
 //! dialect-specific parsing rules).
 
 use matches::assert_matches;
-
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::Pivot;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
-    AnsiDialect, BigQueryDialect, ClickHouseDialect, GenericDialect, HiveDialect, MsSqlDialect,
-    MySqlDialect, MySqlNoEscapeDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect,
+    AnsiDialect, BigQueryDialect, ClickHouseDialect, DuckDbDialect, GenericDialect, HiveDialect,
+    MsSqlDialect, MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect, MySqlNoEscapeDialect,
     SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
@@ -196,6 +195,7 @@ fn parse_update_set_from() {
     let dialects = TestedDialects {
         dialects: vec![
             Box::new(GenericDialect {}),
+            Box::new(DuckDbDialect {}),
             Box::new(PostgreSqlDialect {}),
             Box::new(BigQueryDialect {}),
             Box::new(SnowflakeDialect {}),
@@ -250,6 +250,7 @@ fn parse_update_set_from() {
                             distribute_by: vec![],
                             sort_by: vec![],
                             having: None,
+                            named_window: vec![],
                             qualify: None
                         }))),
                         order_by: vec![],
@@ -839,6 +840,7 @@ fn parse_select_count_wildcard() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -858,6 +860,7 @@ fn parse_select_count_distinct() {
             over: None,
             distinct: true,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -942,6 +945,7 @@ fn parse_exponent_in_select() -> Result<(), ParserError> {
             Box::new(AnsiDialect {}),
             Box::new(BigQueryDialect {}),
             Box::new(ClickHouseDialect {}),
+            Box::new(DuckDbDialect {}),
             Box::new(GenericDialect {}),
             // Box::new(HiveDialect {}),
             Box::new(MsSqlDialect {}),
@@ -1721,6 +1725,7 @@ fn parse_select_having() {
                 over: None,
                 distinct: false,
                 special: false,
+                order_by: vec![],
             })),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Value(number("1"))),
@@ -1743,7 +1748,7 @@ fn parse_select_qualify() {
             left: Box::new(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("ROW_NUMBER")]),
                 args: vec![],
-                over: Some(WindowSpec {
+                over: Some(WindowType::WindowSpec(WindowSpec {
                     partition_by: vec![Expr::Identifier(Ident::new("p"))],
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("o")),
@@ -1751,9 +1756,10 @@ fn parse_select_qualify() {
                         nulls_first: None,
                     }],
                     window_frame: None,
-                }),
+                })),
                 distinct: false,
                 special: false,
+                order_by: vec![],
             })),
             op: BinaryOperator::Eq,
             right: Box::new(Expr::Value(number("1"))),
@@ -2081,6 +2087,7 @@ fn parse_array_agg_func() {
     let supported_dialects = TestedDialects {
         dialects: vec![
             Box::new(GenericDialect {}),
+            Box::new(DuckDbDialect {}),
             Box::new(PostgreSqlDialect {}),
             Box::new(MsSqlDialect {}),
             Box::new(AnsiDialect {}),
@@ -2093,6 +2100,31 @@ fn parse_array_agg_func() {
         "SELECT ARRAY_AGG(x ORDER BY x) AS a FROM T",
         "SELECT ARRAY_AGG(x ORDER BY x LIMIT 2) FROM tbl",
         "SELECT ARRAY_AGG(DISTINCT x ORDER BY x LIMIT 2) FROM tbl",
+        "SELECT ARRAY_AGG(x ORDER BY x, y) AS a FROM T",
+        "SELECT ARRAY_AGG(x ORDER BY x ASC, y DESC) AS a FROM T",
+    ] {
+        supported_dialects.verified_stmt(sql);
+    }
+}
+
+#[test]
+fn parse_agg_with_order_by() {
+    let supported_dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(MsSqlDialect {}),
+            Box::new(AnsiDialect {}),
+            Box::new(HiveDialect {}),
+        ],
+        options: None,
+    };
+
+    for sql in [
+        "SELECT FIRST_VALUE(x ORDER BY x) AS a FROM T",
+        "SELECT FIRST_VALUE(x ORDER BY x) FROM tbl",
+        "SELECT LAST_VALUE(x ORDER BY x, y) AS a FROM T",
+        "SELECT LAST_VALUE(x ORDER BY x ASC, y DESC) AS a FROM T",
     ] {
         supported_dialects.verified_stmt(sql);
     }
@@ -2875,6 +2907,7 @@ fn parse_alter_table_add_column_if_not_exists() {
             Box::new(PostgreSqlDialect {}),
             Box::new(BigQueryDialect {}),
             Box::new(GenericDialect {}),
+            Box::new(DuckDbDialect {}),
         ],
         options: None,
     };
@@ -3143,6 +3176,7 @@ fn parse_scalar_function_in_projection() {
                 over: None,
                 distinct: false,
                 special: false,
+                order_by: vec![],
             }),
             expr_from_projection(only(&select.projection))
         );
@@ -3261,6 +3295,7 @@ fn parse_named_argument_function() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -3288,7 +3323,7 @@ fn parse_window_functions() {
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("row_number")]),
             args: vec![],
-            over: Some(WindowSpec {
+            over: Some(WindowType::WindowSpec(WindowSpec {
                 partition_by: vec![],
                 order_by: vec![OrderByExpr {
                     expr: Expr::Identifier(Ident::new("dt")),
@@ -3296,12 +3331,137 @@ fn parse_window_functions() {
                     nulls_first: None,
                 }],
                 window_frame: None,
-            }),
+            })),
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[0])
     );
+}
+
+#[test]
+fn test_parse_named_window() {
+    let sql = "SELECT \
+    MIN(c12) OVER window1 AS min1, \
+    MAX(c12) OVER window2 AS max1 \
+    FROM aggregate_test_100 \
+    WINDOW window1 AS (ORDER BY C12), \
+    window2 AS (PARTITION BY C11) \
+    ORDER BY C3";
+    let actual_select_only = verified_only_select(sql);
+    let expected = Select {
+        distinct: None,
+        top: None,
+        projection: vec![
+            SelectItem::ExprWithAlias {
+                expr: Expr::Function(Function {
+                    name: ObjectName(vec![Ident {
+                        value: "MIN".to_string(),
+                        quote_style: None,
+                    }]),
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                        Expr::Identifier(Ident {
+                            value: "c12".to_string(),
+                            quote_style: None,
+                        }),
+                    ))],
+                    over: Some(WindowType::NamedWindow(Ident {
+                        value: "window1".to_string(),
+                        quote_style: None,
+                    })),
+                    distinct: false,
+                    special: false,
+                    order_by: vec![],
+                }),
+                alias: Ident {
+                    value: "min1".to_string(),
+                    quote_style: None,
+                },
+            },
+            SelectItem::ExprWithAlias {
+                expr: Expr::Function(Function {
+                    name: ObjectName(vec![Ident {
+                        value: "MAX".to_string(),
+                        quote_style: None,
+                    }]),
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                        Expr::Identifier(Ident {
+                            value: "c12".to_string(),
+                            quote_style: None,
+                        }),
+                    ))],
+                    over: Some(WindowType::NamedWindow(Ident {
+                        value: "window2".to_string(),
+                        quote_style: None,
+                    })),
+                    distinct: false,
+                    special: false,
+                    order_by: vec![],
+                }),
+                alias: Ident {
+                    value: "max1".to_string(),
+                    quote_style: None,
+                },
+            },
+        ],
+        into: None,
+        from: vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident {
+                    value: "aggregate_test_100".to_string(),
+                    quote_style: None,
+                }]),
+                alias: None,
+                args: None,
+                with_hints: vec![],
+            },
+            joins: vec![],
+        }],
+        lateral_views: vec![],
+        selection: None,
+        group_by: vec![],
+        cluster_by: vec![],
+        distribute_by: vec![],
+        sort_by: vec![],
+        having: None,
+        named_window: vec![
+            NamedWindowDefinition(
+                Ident {
+                    value: "window1".to_string(),
+                    quote_style: None,
+                },
+                WindowSpec {
+                    partition_by: vec![],
+                    order_by: vec![OrderByExpr {
+                        expr: Expr::Identifier(Ident {
+                            value: "C12".to_string(),
+                            quote_style: None,
+                        }),
+                        asc: None,
+                        nulls_first: None,
+                    }],
+                    window_frame: None,
+                },
+            ),
+            NamedWindowDefinition(
+                Ident {
+                    value: "window2".to_string(),
+                    quote_style: None,
+                },
+                WindowSpec {
+                    partition_by: vec![Expr::Identifier(Ident {
+                        value: "C11".to_string(),
+                        quote_style: None,
+                    })],
+                    order_by: vec![],
+                    window_frame: None,
+                },
+            ),
+        ],
+        qualify: None,
+    };
+    assert_eq!(actual_select_only, expected);
 }
 
 #[test]
@@ -3424,20 +3584,20 @@ fn parse_interval() {
     let sql = "SELECT INTERVAL '1-1' YEAR TO MONTH";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1-1")))),
             leading_field: Some(DateTimeField::Year),
             leading_precision: None,
             last_field: Some(DateTimeField::Month),
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '01:01.01' MINUTE (5) TO SECOND (5)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "01:01.01"
             )))),
@@ -3445,53 +3605,53 @@ fn parse_interval() {
             leading_precision: Some(5),
             last_field: Some(DateTimeField::Second),
             fractional_seconds_precision: Some(5),
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '1' SECOND (5, 4)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("1")))),
             leading_field: Some(DateTimeField::Second),
             leading_precision: Some(5),
             last_field: None,
             fractional_seconds_precision: Some(4),
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '10' HOUR";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL 5 DAY";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(number("5"))),
             leading_field: Some(DateTimeField::Day),
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL 1 + 1 DAY";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Value(number("1"))),
                 op: BinaryOperator::Plus,
@@ -3501,27 +3661,27 @@ fn parse_interval() {
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '10' HOUR (1)";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from("10")))),
             leading_field: Some(DateTimeField::Hour),
             leading_precision: Some(1),
             last_field: None,
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
     let sql = "SELECT INTERVAL '1 DAY'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Interval {
+        &Expr::Interval(Interval {
             value: Box::new(Expr::Value(Value::SingleQuotedString(String::from(
                 "1 DAY"
             )))),
@@ -3529,7 +3689,7 @@ fn parse_interval() {
             leading_precision: None,
             last_field: None,
             fractional_seconds_precision: None,
-        },
+        }),
         expr_from_projection(only(&select.projection)),
     );
 
@@ -3610,7 +3770,7 @@ fn parse_interval_and_or_xor() {
                             quote_style: None,
                         })),
                         op: BinaryOperator::Plus,
-                        right: Box::new(Expr::Interval {
+                        right: Box::new(Expr::Interval(Interval {
                             value: Box::new(Expr::Value(Value::SingleQuotedString(
                                 "5 days".to_string(),
                             ))),
@@ -3618,7 +3778,7 @@ fn parse_interval_and_or_xor() {
                             leading_precision: None,
                             last_field: None,
                             fractional_seconds_precision: None,
-                        }),
+                        })),
                     }),
                 }),
                 op: BinaryOperator::And,
@@ -3634,7 +3794,7 @@ fn parse_interval_and_or_xor() {
                             quote_style: None,
                         })),
                         op: BinaryOperator::Plus,
-                        right: Box::new(Expr::Interval {
+                        right: Box::new(Expr::Interval(Interval {
                             value: Box::new(Expr::Value(Value::SingleQuotedString(
                                 "3 days".to_string(),
                             ))),
@@ -3642,7 +3802,7 @@ fn parse_interval_and_or_xor() {
                             leading_precision: None,
                             last_field: None,
                             fractional_seconds_precision: None,
-                        }),
+                        })),
                     }),
                 }),
             }),
@@ -3651,6 +3811,7 @@ fn parse_interval_and_or_xor() {
             distribute_by: vec![],
             sort_by: vec![],
             having: None,
+            named_window: vec![],
             qualify: None,
         }))),
         order_by: vec![],
@@ -3697,6 +3858,7 @@ fn parse_at_timezone() {
                 over: None,
                 distinct: false,
                 special: false,
+                order_by: vec![],
             })),
             time_zone: "UTC-06:00".to_string(),
         },
@@ -3723,6 +3885,7 @@ fn parse_at_timezone() {
                             over: None,
                             distinct: false,
                             special: false,
+                            order_by: vec![],
                         },)),
                         time_zone: "UTC-06:00".to_string(),
                     },),),
@@ -3733,6 +3896,7 @@ fn parse_at_timezone() {
                 over: None,
                 distinct: false,
                 special: false,
+                order_by: vec![],
             },),
             alias: Ident {
                 value: "hour".to_string(),
@@ -3890,6 +4054,7 @@ fn parse_table_function() {
                 over: None,
                 distinct: false,
                 special: false,
+                order_by: vec![],
             });
             assert_eq!(expr, expected_expr);
             assert_eq!(alias, table_alias("a"))
@@ -5917,6 +6082,7 @@ fn parse_merge() {
                             distribute_by: vec![],
                             sort_by: vec![],
                             having: None,
+                            named_window: vec![],
                             qualify: None,
                         }))),
                         order_by: vec![],
@@ -6166,6 +6332,7 @@ fn test_placeholder() {
     let dialects = TestedDialects {
         dialects: vec![
             Box::new(GenericDialect {}),
+            Box::new(DuckDbDialect {}),
             Box::new(PostgreSqlDialect {}),
             Box::new(MsSqlDialect {}),
             Box::new(AnsiDialect {}),
@@ -6317,6 +6484,7 @@ fn parse_time_functions() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -6333,6 +6501,7 @@ fn parse_time_functions() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -6349,6 +6518,7 @@ fn parse_time_functions() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -6365,6 +6535,7 @@ fn parse_time_functions() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -6381,6 +6552,7 @@ fn parse_time_functions() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -6845,6 +7017,7 @@ fn parse_pivot_table() {
                 over: None,
                 distinct: false,
                 special: false,
+                order_by: vec![],
             }),
             value_column: vec![Ident::new("a"), Ident::new("MONTH")],
             pivot_values: vec![
@@ -6904,6 +7077,7 @@ fn parse_non_latin_identifiers() {
     let supported_dialects = TestedDialects {
         dialects: vec![
             Box::new(GenericDialect {}),
+            Box::new(DuckDbDialect {}),
             Box::new(PostgreSqlDialect {}),
             Box::new(MsSqlDialect {}),
             Box::new(RedshiftSqlDialect {}),
@@ -6950,4 +7124,30 @@ fn parse_trailing_comma() {
     trailing_commas.verified_stmt("SELECT * FROM track ORDER BY milliseconds");
 
     trailing_commas.verified_stmt("SELECT DISTINCT ON (album_id) name FROM track");
+}
+
+#[test]
+fn parse_create_type() {
+    let create_type =
+        verified_stmt("CREATE TYPE db.type_name AS (foo INT, bar TEXT COLLATE \"de_DE\")");
+    assert_eq!(
+        Statement::CreateType {
+            name: ObjectName(vec![Ident::new("db"), Ident::new("type_name")]),
+            representation: UserDefinedTypeRepresentation::Composite {
+                attributes: vec![
+                    UserDefinedTypeCompositeAttributeDef {
+                        name: Ident::new("foo"),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                    },
+                    UserDefinedTypeCompositeAttributeDef {
+                        name: Ident::new("bar"),
+                        data_type: DataType::Text,
+                        collation: Some(ObjectName(vec![Ident::with_quote('\"', "de_DE")])),
+                    }
+                ]
+            }
+        },
+        create_type
+    );
 }

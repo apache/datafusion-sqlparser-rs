@@ -715,3 +715,43 @@ impl fmt::Display for ReferentialAction {
         })
     }
 }
+
+/// SQL user defined type definition
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum UserDefinedTypeRepresentation {
+    Composite {
+        attributes: Vec<UserDefinedTypeCompositeAttributeDef>,
+    },
+}
+
+impl fmt::Display for UserDefinedTypeRepresentation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            UserDefinedTypeRepresentation::Composite { attributes } => {
+                write!(f, "({})", display_comma_separated(attributes))
+            }
+        }
+    }
+}
+
+/// SQL user defined type attribute definition
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct UserDefinedTypeCompositeAttributeDef {
+    pub name: Ident,
+    pub data_type: DataType,
+    pub collation: Option<ObjectName>,
+}
+
+impl fmt::Display for UserDefinedTypeCompositeAttributeDef {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.name, self.data_type)?;
+        if let Some(collation) = &self.collation {
+            write!(f, " COLLATE {collation}")?;
+        }
+        Ok(())
+    }
+}

@@ -464,6 +464,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 distribute_by: vec![],
                 sort_by: vec![],
                 having: None,
+                named_window: vec![],
                 qualify: None
             }))),
             order_by: vec![],
@@ -540,6 +541,7 @@ fn parse_escaped_backticks_with_escape() {
                 distribute_by: vec![],
                 sort_by: vec![],
                 having: None,
+                named_window: vec![],
                 qualify: None
             }))),
             order_by: vec![],
@@ -915,6 +917,7 @@ fn parse_insert_with_on_duplicate_update() {
                             over: None,
                             distinct: false,
                             special: false,
+                            order_by: vec![],
                         })
                     },
                     Assignment {
@@ -927,6 +930,7 @@ fn parse_insert_with_on_duplicate_update() {
                             over: None,
                             distinct: false,
                             special: false,
+                            order_by: vec![],
                         })
                     },
                     Assignment {
@@ -939,6 +943,7 @@ fn parse_insert_with_on_duplicate_update() {
                             over: None,
                             distinct: false,
                             special: false,
+                            order_by: vec![],
                         })
                     },
                     Assignment {
@@ -951,6 +956,7 @@ fn parse_insert_with_on_duplicate_update() {
                             over: None,
                             distinct: false,
                             special: false,
+                            order_by: vec![],
                         })
                     },
                     Assignment {
@@ -963,6 +969,7 @@ fn parse_insert_with_on_duplicate_update() {
                             over: None,
                             distinct: false,
                             special: false,
+                            order_by: vec![],
                         })
                     },
                 ])),
@@ -1003,6 +1010,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     distribute_by: vec![],
                     sort_by: vec![],
                     having: None,
+                    named_window: vec![],
                     qualify: None,
                 })))
             );
@@ -1046,6 +1054,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     distribute_by: vec![],
                     sort_by: vec![],
                     having: None,
+                    named_window: vec![],
                     qualify: None,
                 })))
             );
@@ -1235,6 +1244,7 @@ fn parse_substring_in_select() {
                         distribute_by: vec![],
                         sort_by: vec![],
                         having: None,
+                        named_window: vec![],
                         qualify: None
                     }))),
                     order_by: vec![],
@@ -1306,6 +1316,7 @@ fn parse_table_colum_option_on_update() {
                             over: None,
                             distinct: false,
                             special: false,
+                            order_by: vec![],
                         })),
                     },],
                 }],
@@ -1516,6 +1527,7 @@ fn parse_hex_string_introducer() {
                 distribute_by: vec![],
                 sort_by: vec![],
                 having: None,
+                named_window: vec![],
                 qualify: None,
                 into: None
             }))),
@@ -1534,4 +1546,9 @@ fn parse_string_introducers() {
     mysql().one_statement_parses_to("SELECT _utf8'abc'", "SELECT _utf8 'abc'");
     mysql().one_statement_parses_to("SELECT _utf8mb4'abc'", "SELECT _utf8mb4 'abc'");
     mysql().verified_stmt("SELECT _binary 'abc', _utf8mb4 'abc'");
+}
+
+#[test]
+fn parse_div_infix() {
+    mysql().verified_stmt(r#"SELECT 5 DIV 2"#);
 }

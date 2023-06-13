@@ -169,6 +169,7 @@ pub fn all_dialects() -> TestedDialects {
             Box::new(MySqlNoEscapeDialect {}),
             Box::new(BigQueryDialect {}),
             Box::new(SQLiteDialect {}),
+            Box::new(DuckDbDialect {}),
         ],
         options: None,
     }

@@ -56,6 +56,8 @@ pub enum Token {
     SingleQuotedString(String),
     /// Double quoted string: i.e: "string"
     DoubleQuotedString(String),
+    /// String for no-escape mode
+    OriginalString(String),
     /// Dollar quoted string: i.e: $$string$$ or $tag_name$string$tag_name$
     DollarQuotedString(DollarQuotedString),
     /// Byte string literal: i.e: b'string' or B'string'
@@ -193,6 +195,7 @@ impl fmt::Display for Token {
             Token::Char(ref c) => write!(f, "{c}"),
             Token::SingleQuotedString(ref s) => write!(f, "'{s}'"),
             Token::DoubleQuotedString(ref s) => write!(f, "\"{s}\""),
+            Token::OriginalString(ref s) => write!(f, "{s}"),
             Token::DollarQuotedString(ref s) => write!(f, "{s}"),
             Token::NationalStringLiteral(ref s) => write!(f, "N'{s}'"),
             Token::EscapedStringLiteral(ref s) => write!(f, "E'{s}'"),
@@ -517,19 +520,39 @@ impl<'a> Tokenizer<'a> {
                 // BigQuery uses b or B for byte string literal
                 b @ 'B' | b @ 'b' if dialect_of!(self is BigQueryDialect | GenericDialect) => {
                     chars.next(); // consume
-                    match chars.peek() {
-                        Some('\'') => {
-                            let s = self.tokenize_quoted_string(chars, '\'')?;
-                            Ok(Some(Token::SingleQuotedByteStringLiteral(s)))
+                    if self.options.no_escape {
+                        match chars.peek() {
+                            Some('\'') => {
+                                let _s = self.tokenize_quoted_string_with_no_escape(chars, '\'')?;
+                                let s = "\'".to_string() + &_s + "\'";
+                                Ok(Some(Token::OriginalString(s)))
+                            }
+                            Some('\"') => {
+                                let _s = self.tokenize_quoted_string_with_no_escape(chars, '\"')?;
+                                let s = "\"".to_string() + &_s + "\"";
+                                Ok(Some(Token::OriginalString(s)))
+                            }
+                            _ => {
+                                // regular identifier starting with an "b" or "B"
+                                let s = self.tokenize_word(b, chars);
+                                Ok(Some(Token::make_word(&s, None)))
+                            }
                         }
-                        Some('\"') => {
-                            let s = self.tokenize_quoted_string(chars, '\"')?;
-                            Ok(Some(Token::DoubleQuotedByteStringLiteral(s)))
-                        }
-                        _ => {
-                            // regular identifier starting with an "b" or "B"
-                            let s = self.tokenize_word(b, chars);
-                            Ok(Some(Token::make_word(&s, None)))
+                    } else {
+                        match chars.peek() {
+                            Some('\'') => {
+                                let s = self.tokenize_quoted_string(chars, '\'')?;
+                                Ok(Some(Token::SingleQuotedByteStringLiteral(s)))
+                            }
+                            Some('\"') => {
+                                let s = self.tokenize_quoted_string(chars, '\"')?;
+                                Ok(Some(Token::DoubleQuotedByteStringLiteral(s)))
+                            }
+                            _ => {
+                                // regular identifier starting with an "b" or "B"
+                                let s = self.tokenize_word(b, chars);
+                                Ok(Some(Token::make_word(&s, None)))
+                            }
                         }
                     }
                 }

@@ -1159,6 +1159,37 @@ impl<'a> Tokenizer<'a> {
         self.tokenizer_error(error_loc, "Unterminated string literal")
     }
 
+    fn tokenize_quoted_string_with_no_escape(
+        &self,
+        chars: &mut State,
+        quote_style: char,
+    ) -> Result<String, TokenizerError> {
+        let mut s = String::new();
+        let error_loc = chars.location();
+
+        chars.next(); // consume the opening quote
+
+        while let Some(&ch) = chars.peek() {
+            match ch {
+                char if char == quote_style => {
+                    chars.next(); // consume
+                    if chars.peek().map(|c| *c == quote_style).unwrap_or(false) {
+                        s.push(ch);
+                        s.push(ch);
+                        chars.next();
+                    } else {
+                        return Ok(s);
+                    }
+                }
+                _ => {
+                    chars.next(); // consume
+                    s.push(ch);
+                }
+            }
+        }
+        self.tokenizer_error(error_loc, "Unterminated string literal")
+    }
+
     fn tokenize_multiline_comment(
         &self,
         chars: &mut State,

@@ -4285,6 +4285,7 @@ impl<'a> Parser<'a> {
             },
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
+            Token::OriginalString(ref s) => Ok(Value::OriginalString(s.to_string())),
             Token::DollarQuotedString(ref s) => Ok(Value::DollarQuotedString(s.clone())),
             Token::SingleQuotedByteStringLiteral(ref s) => {
                 Ok(Value::SingleQuotedByteStringLiteral(s.clone()))

@@ -216,6 +216,8 @@ pub struct Select {
     pub sort_by: Vec<Expr>,
     /// HAVING
     pub having: Option<Expr>,
+    /// WINDOW AS
+    pub named_window: Vec<NamedWindowDefinition>,
     /// QUALIFY (Snowflake)
     pub qualify: Option<Expr>,
 }
@@ -269,6 +271,9 @@ impl fmt::Display for Select {
         if let Some(ref having) = self.having {
             write!(f, " HAVING {having}")?;
         }
+        if !self.named_window.is_empty() {
+            write!(f, " WINDOW {}", display_comma_separated(&self.named_window))?;
+        }
         if let Some(ref qualify) = self.qualify {
             write!(f, " QUALIFY {qualify}")?;
         }
@@ -308,6 +313,17 @@ impl fmt::Display for LateralView {
             )?;
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct NamedWindowDefinition(pub Ident, pub WindowSpec);
+
+impl fmt::Display for NamedWindowDefinition {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} AS ({})", self.0, self.1)
     }
 }
 

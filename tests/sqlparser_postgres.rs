@@ -954,6 +954,7 @@ fn parse_copy_to() {
                     selection: None,
                     group_by: vec![],
                     having: None,
+                    named_window: vec![],
                     cluster_by: vec![],
                     distribute_by: vec![],
                     sort_by: vec![],
@@ -1799,6 +1800,7 @@ fn parse_array_subquery_expr() {
                     distribute_by: vec![],
                     sort_by: vec![],
                     having: None,
+                    named_window: vec![],
                     qualify: None,
                 }))),
                 right: Box::new(SetExpr::Select(Box::new(Select {
@@ -1820,6 +1822,7 @@ fn parse_array_subquery_expr() {
                     distribute_by: vec![],
                     sort_by: vec![],
                     having: None,
+                    named_window: vec![],
                     qualify: None,
                 }))),
             }),
@@ -2057,7 +2060,8 @@ fn test_composite_value() {
                 )))],
                 over: None,
                 distinct: false,
-                special: false
+                special: false,
+                order_by: vec![],
             }))))
         }),
         select.projection[0]
@@ -2219,6 +2223,7 @@ fn parse_current_functions() {
             over: None,
             distinct: false,
             special: true,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -2229,6 +2234,7 @@ fn parse_current_functions() {
             over: None,
             distinct: false,
             special: true,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[1])
     );
@@ -2239,6 +2245,7 @@ fn parse_current_functions() {
             over: None,
             distinct: false,
             special: true,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[2])
     );
@@ -2249,6 +2256,7 @@ fn parse_current_functions() {
             over: None,
             distinct: false,
             special: true,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[3])
     );
@@ -2503,6 +2511,7 @@ fn parse_delimited_identifiers() {
             over: None,
             distinct: false,
             special: false,
+            order_by: vec![],
         }),
         expr_from_projection(&select.projection[1]),
     );
@@ -2948,5 +2957,18 @@ fn parse_select_group_by_cube() {
             ]),
         ],
         select.group_by
+    );
+}
+
+#[test]
+fn parse_truncate() {
+    let truncate = pg_and_generic().verified_stmt("TRUNCATE db.table_name");
+    assert_eq!(
+        Statement::Truncate {
+            table_name: ObjectName(vec![Ident::new("db"), Ident::new("table_name")]),
+            partitions: None,
+            table: false
+        },
+        truncate
     );
 }

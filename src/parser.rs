@@ -975,7 +975,7 @@ impl<'a> Parser<'a> {
     /// parse a group by expr. a group by expr can be one of group sets, roll up, cube, or simple
     /// expr.
     fn parse_group_by_expr(&mut self) -> Result<Expr, ParserError> {
-        if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) {
+        if self.dialect.supports_filter_during_aggregation() {
             if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
                 self.expect_token(&Token::LParen)?;
                 let result = self.parse_comma_separated(|p| p.parse_tuple(false, true))?;

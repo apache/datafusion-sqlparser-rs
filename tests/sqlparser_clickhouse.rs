@@ -339,6 +339,24 @@ fn parse_create_table() {
     );
 }
 
+#[test]
+fn parse_create_view() {
+    clickhouse().verified_stmt(
+        r#"CREATE MATERIALIZED VIEW foo (`baz` String) AS SELECT bar AS baz FROM in"#,
+    );
+    clickhouse().verified_stmt(
+        r#"CREATE MATERIALIZED VIEW foo TO out (`baz` String) AS SELECT bar AS baz FROM in"#,
+    );
+    clickhouse().verified_stmt(r#"CREATE VIEW foo (`baz` String) AS SELECT bar AS baz FROM in"#);
+    clickhouse().verified_stmt(
+        r#"CREATE MATERIALIZED VIEW foo (`baz` String) AS SELECT bar AS baz FROM in"#,
+    );
+    clickhouse().verified_stmt(
+        r#"CREATE MATERIALIZED VIEW foo TO out (`baz` String) AS SELECT bar AS baz FROM in"#,
+    );
+    clickhouse().verified_stmt(r#"CREATE VIEW analytics.runs_audit_ingest_daily (`count` UInt64, `ts` DateTime('UTC')) AS SELECT count(*) AS count, toStartOfDay(ingested_at) AS ts FROM analytics.runs_int_runs GROUP BY ts ORDER BY ts DESC"#);
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],

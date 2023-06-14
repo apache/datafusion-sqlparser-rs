@@ -4940,7 +4940,7 @@ impl<'a> Parser<'a> {
                 match next_token.token {
                     Token::Word(w) => modifiers.push(w.to_string()),
                     Token::Number(n, _) => modifiers.push(n),
-                    Token::SingleQuotedString(s) => modifiers.push(s),
+                    Token::SingleQuotedString(s) => modifiers.push(format!("'{}'", s)),
 
                     Token::Comma => {
                         continue;

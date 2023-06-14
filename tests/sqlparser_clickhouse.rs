@@ -18,7 +18,7 @@ mod test_utils;
 
 use test_utils::*;
 
-use sqlparser::ast::Expr::{BinaryOp, Identifier, MapAccess};
+use sqlparser::ast::Expr::{BinaryOp, Identifier, ArrayIndex};
 use sqlparser::ast::Ident;
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::Table;
@@ -26,20 +26,23 @@ use sqlparser::ast::*;
 
 use sqlparser::dialect::ClickHouseDialect;
 
+#[cfg(test)]
+use pretty_assertions::{assert_eq};
+
 #[test]
-fn parse_map_access_expr() {
+fn parse_array_access_expr() {
     let sql = r#"SELECT string_values[indexOf(string_names, 'endpoint')] FROM foos WHERE id = 'test' AND string_value[indexOf(string_name, 'app')] <> 'foo'"#;
     let select = clickhouse().verified_only_select(sql);
     assert_eq!(
         Select {
             distinct: None,
             top: None,
-            projection: vec![UnnamedExpr(MapAccess {
-                column: Box::new(Identifier(Ident {
+            projection: vec![UnnamedExpr(ArrayIndex {
+                obj: Box::new(Identifier(Ident {
                     value: "string_values".to_string(),
                     quote_style: None,
                 })),
-                keys: vec![Expr::Function(Function {
+                indexes: vec![Expr::Function(Function {
                     name: ObjectName(vec!["indexOf".into()]),
                     args: vec![
                         FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new(
@@ -74,9 +77,9 @@ fn parse_map_access_expr() {
                 }),
                 op: BinaryOperator::And,
                 right: Box::new(BinaryOp {
-                    left: Box::new(MapAccess {
-                        column: Box::new(Identifier(Ident::new("string_value"))),
-                        keys: vec![Expr::Function(Function {
+                    left: Box::new(ArrayIndex {
+                        obj: Box::new(Identifier(Ident::new("string_value"))),
+                        indexes: vec![Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("indexOf")]),
                             args: vec![
                                 FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
@@ -347,6 +350,14 @@ fn parse_create_view() {
 #[test]
 fn parse_limit_by() {
     clickhouse().verified_stmt(r#"SELECT * FROM default.last_asset_runs_mv ORDER BY created_at DESC LIMIT 1 BY asset"#);
+}
+
+#[test]
+fn parse_array_accessor() {
+    clickhouse().one_statement_parses_to(
+        r#"SELECT baz.1 AS b1 FROM foo AS f"#,
+        r#"SELECT baz[1] AS b1 FROM foo AS f"#,
+    );
 }
 
 fn clickhouse() -> TestedDialects {

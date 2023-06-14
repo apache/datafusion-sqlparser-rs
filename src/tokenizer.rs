@@ -1238,7 +1238,7 @@ fn parse_quoted_ident(chars: &mut State, quote_end: char) -> (String, Option<cha
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dialect::{GenericDialect, MsSqlDialect};
+    use crate::dialect::{ClickHouseDialect, GenericDialect, MsSqlDialect};
 
     #[test]
     fn tokenizer_error_impl() {
@@ -1281,6 +1281,27 @@ mod tests {
         let expected = vec![
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
+            Token::Number(String::from(".1"), false),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_clickhouse_array_accessor() {
+        let sql = String::from("SELECT foo.1");
+        let dialect = ClickHouseDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Word(Word{
+                value: "foo".to_string(),
+                quote_style: None,
+                keyword: Keyword::NoKeyword,
+            }),
             Token::Number(String::from(".1"), false),
         ];
 

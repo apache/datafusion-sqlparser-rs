@@ -1924,7 +1924,7 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
             })
         } else if Token::LBracket == tok {
-            if dialect_of!(self is PostgreSqlDialect | GenericDialect) {
+            if dialect_of!(self is PostgreSqlDialect | GenericDialect | ClickHouseDialect) {
                 // parse index
                 return self.parse_array_index(expr);
             }
@@ -1963,6 +1963,13 @@ impl<'a> Parser<'a> {
                 right: Box::new(self.parse_expr()?),
             })
         } else {
+            if dialect_of!(self is ClickHouseDialect) {
+                if let Token::Number(s, _) = &tok.token {
+                    // ClickHouse array index
+                    return self.parse_clickhouse_array_index(expr, s.clone());
+                }
+            }
+
             // Can only happen if `get_next_precedence` got out of sync with this function
             parser_err!(
                 format!("No infix parser for token {:?}", tok.token),
@@ -1992,6 +1999,19 @@ impl<'a> Parser<'a> {
         Ok(Expr::ArrayIndex {
             obj: Box::new(expr),
             indexes,
+        })
+    }
+
+    pub fn parse_clickhouse_array_index(
+        &mut self,
+        expr: Expr,
+        ind: String,
+    ) -> Result<Expr, ParserError> {
+        let without_dot = ind[1..].to_string();
+        let index = Expr::Value(Value::Number(without_dot, false));
+        Ok(Expr::ArrayIndex {
+            obj: Box::new(expr),
+            indexes: vec![index],
         })
     }
 

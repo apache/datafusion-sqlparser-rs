@@ -11,6 +11,8 @@
 // limitations under the License.
 
 use crate::dialect::Dialect;
+use crate::parser::{Parser, ParserError};
+use crate::tokenizer::Token;
 
 #[derive(Debug)]
 pub struct ClickHouseDialect {}
@@ -23,6 +25,14 @@ impl Dialect for ClickHouseDialect {
 
     fn is_identifier_part(&self, ch: char) -> bool {
         self.is_identifier_start(ch) || ch.is_ascii_digit()
+    }
+
+    fn get_next_precedence(&self, _parser: &Parser) -> Option<Result<u8, ParserError>> {
+        let token = _parser.peek_token();
+        match token.token {
+            Token::Number(s, _) if s.starts_with(".") => Some(Ok(50)),
+            _ => None,
+        }
     }
 
     fn is_delimited_identifier_start(&self, ch: char) -> bool {

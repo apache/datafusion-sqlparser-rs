@@ -1436,6 +1436,28 @@ mod tests {
     }
 
     #[test]
+    fn tokenize_clickhouse_double_equal() {
+        let sql = String::from("SELECT foo=='1'");
+        let dialect = ClickHouseDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Word(Word {
+                value: "foo".to_string(),
+                quote_style: None,
+                keyword: Keyword::NoKeyword,
+            }),
+            Token::DoubleEq,
+            Token::SingleQuotedString("1".to_string()),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
     fn tokenize_select_exponent() {
         let sql = String::from("SELECT 1e10, 1e-10, 1e+10, 1ea, 1e-10a, 1e-10-10");
         let dialect = GenericDialect {};

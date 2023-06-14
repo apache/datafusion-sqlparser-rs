@@ -381,6 +381,14 @@ fn parse_array_join() {
     clickhouse().verified_stmt(r#"SELECT asset AS a FROM runs ARRAY JOIN r.assets AS asset"#);
 }
 
+#[test]
+fn parse_double_equal() {
+    clickhouse().one_statement_parses_to(
+        r#"SELECT foo FROM bar WHERE buz == 'buz'"#,
+        r#"SELECT foo FROM bar WHERE buz = 'buz'"#,
+    );
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],

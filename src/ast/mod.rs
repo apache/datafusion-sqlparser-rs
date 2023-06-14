@@ -1280,6 +1280,8 @@ pub enum Statement {
         query: Box<Query>,
         with_options: Vec<SqlOption>,
         cluster_by: Vec<Ident>,
+        destination_table: Option<ObjectName>,
+        columns_with_types: Vec<ColumnDef>,
     },
     /// CREATE TABLE
     CreateTable {
@@ -2106,6 +2108,8 @@ impl fmt::Display for Statement {
                 materialized,
                 with_options,
                 cluster_by,
+                destination_table,
+                columns_with_types,
             } => {
                 write!(
                     f,
@@ -2114,11 +2118,19 @@ impl fmt::Display for Statement {
                     materialized = if *materialized { "MATERIALIZED " } else { "" },
                     name = name
                 )?;
+                match destination_table {
+                    Some(table) => write!(f, " TO {table}", table = table)?,
+                    None => (),
+                }
+
                 if !with_options.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_options))?;
                 }
                 if !columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(columns))?;
+                }
+                if !columns_with_types.is_empty() {
+                    write!(f, " ({})", display_comma_separated(columns_with_types))?;
                 }
                 if !cluster_by.is_empty() {
                     write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;

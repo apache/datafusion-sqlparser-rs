@@ -23,7 +23,7 @@ use alloc::{
 use core::fmt;
 
 use log::debug;
-
+use recursion::RecursionCounter;
 use IsLateral::*;
 use IsOptional::*;
 
@@ -139,8 +139,6 @@ mod recursion {
 
     pub struct DepthGuard {}
 }
-
-use recursion::RecursionCounter;
 
 #[derive(PartialEq, Eq)]
 pub enum IsOptional {
@@ -2771,7 +2769,21 @@ impl<'a> Parser<'a> {
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let name = self.parse_object_name()?;
-        let columns = self.parse_parenthesized_column_list(Optional, false)?;
+
+
+        let destination_table = if dialect_of!(self is ClickHouseDialect) && materialized && self.parse_keyword(Keyword::TO) {
+            Some(self.parse_object_name()?)
+        } else {
+            None
+        };
+
+        let (columns, columns_with_types) = if dialect_of!(self is ClickHouseDialect) {
+            let (cols, _) = self.parse_columns()?;
+            (vec![], cols)
+        } else {
+            (self.parse_parenthesized_column_list(Optional, false)?, vec![])
+        };
+
         let with_options = self.parse_options(Keyword::WITH)?;
 
         let cluster_by = if self.parse_keyword(Keyword::CLUSTER) {
@@ -2792,6 +2804,8 @@ impl<'a> Parser<'a> {
             or_replace,
             with_options,
             cluster_by,
+            destination_table,
+            columns_with_types,
         })
     }
 

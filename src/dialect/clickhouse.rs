@@ -24,4 +24,8 @@ impl Dialect for ClickHouseDialect {
     fn is_identifier_part(&self, ch: char) -> bool {
         self.is_identifier_start(ch) || ch.is_ascii_digit()
     }
+
+    fn is_delimited_identifier_start(&self, ch: char) -> bool {
+        ch == '`' || ch == '"'
+    }
 }

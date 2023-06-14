@@ -31,6 +31,9 @@ use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Tokenizer;
 use crate::{ast::*, parser::ParserOptions};
 
+#[cfg(test)]
+use pretty_assertions::assert_eq;
+
 /// Tests use the methods on this struct to invoke the parser on one or
 /// multiple dialects.
 pub struct TestedDialects {

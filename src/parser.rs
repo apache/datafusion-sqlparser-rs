@@ -5964,7 +5964,7 @@ impl<'a> Parser<'a> {
                         | TableFactor::Function { alias, .. }
                         | TableFactor::UNNEST { alias, .. }
                         | TableFactor::TableFunction { alias, .. }
-                        | TableFactor::FieldAccessor { alias, ..}
+                        | TableFactor::FieldAccessor { alias, .. }
                         | TableFactor::Pivot {
                             pivot_alias: alias, ..
                         }

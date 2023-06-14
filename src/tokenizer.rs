@@ -30,14 +30,13 @@ use core::str::Chars;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::DollarQuotedString;
-use crate::dialect::{BigQueryDialect, DuckDbDialect, GenericDialect, SnowflakeDialect};
+use crate::dialect::{BigQueryDialect, ClickHouseDialect, DuckDbDialect, GenericDialect, SnowflakeDialect};
 use crate::dialect::{Dialect, MySqlDialect};
-use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
+use crate::keywords::{ALL_KEYWORDS, ALL_KEYWORDS_INDEX, Keyword};
 
 /// SQL Token enumeration
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -800,6 +799,8 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('>') => self.consume_and_return(chars, Token::RArrow),
+                        Some('=') if dialect_of!(self is ClickHouseDialect) =>
+                            self.consume_and_return(chars, Token::DoubleEq),
                         _ => Ok(Some(Token::Eq)),
                     }
                 }
@@ -1303,6 +1304,28 @@ mod tests {
                 keyword: Keyword::NoKeyword,
             }),
             Token::Number(String::from(".1"), false),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_clickhouse_double_equal() {
+        let sql = String::from("SELECT foo=='1'");
+        let dialect = ClickHouseDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Word(Word {
+                value: "foo".to_string(),
+                quote_style: None,
+                keyword: Keyword::NoKeyword,
+            }),
+            Token::DoubleEq,
+            Token::SingleQuotedString("1".to_string()),
         ];
 
         compare(expected, tokens);

@@ -28,4 +28,8 @@ impl Dialect for DuckDbDialect {
     fn supports_filter_during_aggregation(&self) -> bool {
         true
     }
+
+    fn supports_group_by_expr(&self) -> bool {
+        true
+    }
 }

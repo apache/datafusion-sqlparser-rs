@@ -677,6 +677,57 @@ fn parse_escaped_string_with_no_escape() {
 }
 
 #[test]
+fn check_roundtrip_of_escaped_string() {
+    TestedDialects {
+        dialects: vec![Box::new(MySqlNoEscapeDialect {})],
+        options: None,
+    }
+    .verified_stmt(r#"SELECT 'I\'m fine'"#);
+    TestedDialects {
+        dialects: vec![Box::new(MySqlNoEscapeDialect {})],
+        options: None,
+    }
+    .verified_stmt(r#"SELECT 'I''m fine'"#);
+    TestedDialects {
+        dialects: vec![Box::new(MySqlNoEscapeDialect {})],
+        options: None,
+    }
+    .verified_stmt(r#"SELECT 'I\\\'m fine'"#);
+    TestedDialects {
+        dialects: vec![Box::new(MySqlNoEscapeDialect {})],
+        options: None,
+    }
+    .verified_stmt(r#"SELECT 'I\\\'m fine'"#);
+
+    TestedDialects {
+        dialects: vec![Box::new(MySqlNoEscapeDialect {})],
+        options: None,
+    }
+    .verified_stmt(r#"SELECT "I\"m fine""#);
+    TestedDialects {
+        dialects: vec![Box::new(MySqlNoEscapeDialect {})],
+        options: None,
+    }
+    .verified_stmt(r#"SELECT "I""m fine""#);
+    TestedDialects {
+        dialects: vec![Box::new(MySqlNoEscapeDialect {})],
+        options: None,
+    }
+    .verified_stmt(r#"SELECT "I\\\"m fine""#);
+    TestedDialects {
+        dialects: vec![Box::new(MySqlNoEscapeDialect {})],
+        options: None,
+    }
+    .verified_stmt(r#"SELECT "I\\\"m fine""#);
+
+    TestedDialects {
+        dialects: vec![Box::new(MySqlNoEscapeDialect {})],
+        options: None,
+    }
+    .verified_stmt(r#"SELECT "I'm ''fine''""#);
+}
+
+#[test]
 fn parse_create_table_with_minimum_display_width() {
     let sql = "CREATE TABLE foo (bar_tinyint TINYINT(3), bar_smallint SMALLINT(5), bar_mediumint MEDIUMINT(6), bar_int INT(11), bar_bigint BIGINT(20))";
     match mysql().verified_stmt(sql) {

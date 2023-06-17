@@ -68,7 +68,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Number(v, l) => write!(f, "{}{long}", v, long = if *l { "L" } else { "" }),
-            Value::DoubleQuotedString(v) => write!(f, "\"{v}\""),
+            Value::DoubleQuotedString(v) => write!(f, "\"{}\"", escape_double_quote_string(v)),
             Value::SingleQuotedString(v) => write!(f, "'{}'", escape_single_quote_string(v)),
             Value::DollarQuotedString(v) => write!(f, "{v}"),
             Value::EscapedStringLiteral(v) => write!(f, "E'{}'", escape_escaped_string(v)),
@@ -184,15 +184,23 @@ pub struct EscapeQuotedString<'a> {
 
 impl<'a> fmt::Display for EscapeQuotedString<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let quote = self.quote;
+        let mut previous_char = char::default();
         let mut peekable_chars = self.string.chars().peekable();
         while let Some(&ch) = peekable_chars.peek() {
-            let quote = self.quote;
             match ch {
                 char if char == quote => {
-                    write!(f, "{char}{char}", char = self.quote)?;
+                    if previous_char == '\\' {
+                        write!(f, "{char}")?;
+                        peekable_chars.next();
+                        continue;
+                    }
                     peekable_chars.next();
                     if peekable_chars.peek().map(|c| *c == quote).unwrap_or(false) {
+                        write!(f, "{char}{char}")?;
                         peekable_chars.next();
+                    } else {
+                        write!(f, "{char}{char}")?;
                     }
                 }
                 _ => {
@@ -200,6 +208,7 @@ impl<'a> fmt::Display for EscapeQuotedString<'a> {
                     peekable_chars.next();
                 }
             }
+            previous_char = ch;
         }
         Ok(())
     }
@@ -211,6 +220,10 @@ pub fn escape_quoted_string(string: &str, quote: char) -> EscapeQuotedString<'_>
 
 pub fn escape_single_quote_string(s: &str) -> EscapeQuotedString<'_> {
     escape_quoted_string(s, '\'')
+}
+
+pub fn escape_double_quote_string(s: &str) -> EscapeQuotedString<'_> {
+    escape_quoted_string(s, '\"')
 }
 
 pub struct EscapeEscapedStringLiteral<'a>(&'a str);

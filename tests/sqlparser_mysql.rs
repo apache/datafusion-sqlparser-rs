@@ -503,6 +503,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 distribute_by: vec![],
                 sort_by: vec![],
                 having: None,
+                named_window: vec![],
                 qualify: None
             }))),
             order_by: vec![],
@@ -580,6 +581,7 @@ fn parse_escaped_backticks_with_no_escape() {
                 distribute_by: vec![],
                 sort_by: vec![],
                 having: None,
+                named_window: vec![],
                 qualify: None
             }))),
             order_by: vec![],

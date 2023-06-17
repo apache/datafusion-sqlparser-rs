@@ -345,11 +345,13 @@ impl<'a> Parser<'a> {
             while self.consume_token(&Token::SemiColon) {
                 expecting_statement_delimiter = false;
             }
-            if self.peek_token() == Token::Word(Word {
-                keyword: Keyword::END,
-                quote_style: None,
-                value: "END".into()
-            }) {
+            if self.peek_token()
+                == Token::Word(Word {
+                    keyword: Keyword::END,
+                    quote_style: None,
+                    value: "END".into(),
+                })
+            {
                 break;
             }
 
@@ -3514,9 +3516,7 @@ impl<'a> Parser<'a> {
     pub fn parse_procedure_param(&mut self) -> Result<ProcedureParam, ParserError> {
         let name = self.parse_identifier()?;
         let data_type = self.parse_data_type()?;
-        Ok(ProcedureParam {
-            name, data_type
-        })
+        Ok(ProcedureParam { name, data_type })
     }
 
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
@@ -7082,7 +7082,7 @@ impl<'a> Parser<'a> {
             name,
             or_alter,
             params,
-            body: statements
+            body: statements,
         })
     }
 

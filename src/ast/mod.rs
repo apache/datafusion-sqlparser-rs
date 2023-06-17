@@ -30,8 +30,8 @@ pub use self::data_type::{
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
-    ColumnOptionDef, GeneratedAs, IndexType, KeyOrIndexDisplay, ReferentialAction, TableConstraint,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation, ProcedureParam
+    ColumnOptionDef, GeneratedAs, IndexType, KeyOrIndexDisplay, ProcedureParam, ReferentialAction,
+    TableConstraint, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
@@ -1586,7 +1586,7 @@ pub enum Statement {
         or_alter: bool,
         name: ObjectName,
         params: Option<Vec<ProcedureParam>>,
-        body: Vec<Statement>
+        body: Vec<Statement>,
     },
     /// ```sql
     /// CREATE STAGE
@@ -2111,16 +2111,16 @@ impl fmt::Display for Statement {
                 name,
                 or_alter,
                 params,
-                body
+                body,
             } => {
                 write!(
                     f,
-                    "CREATE {or_alter}PROCEDURE {name} {params}AS BEGIN {body} END", 
+                    "CREATE {or_alter}PROCEDURE {name} {params}AS BEGIN {body} END",
                     or_alter = if *or_alter { "OR ALTER " } else { "" },
                     name = name,
                     params = match params {
-                        Some(p) if p.len() > 0 => format!("({}) ", display_comma_separated(p)),
-                        _ => "".to_string()
+                        Some(p) if !p.is_empty() => format!("({}) ", display_comma_separated(p)),
+                        _ => "".to_string(),
                     },
                     body = display_separated(body, ",")
                 )

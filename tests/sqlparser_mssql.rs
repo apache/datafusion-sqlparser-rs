@@ -56,6 +56,77 @@ fn parse_mssql_delimited_identifiers() {
 }
 
 #[test]
+fn parse_create_procedure() {
+    let sql = "CREATE OR ALTER PROCEDURE test (@foo INT, @bar VARCHAR(256)) AS BEGIN SELECT 1 END";
+    assert_eq!(
+        ms().verified_stmt(sql),
+        Statement::CreateProcedure {
+            or_alter: true,
+            body: vec![Statement::Query(Box::new(Query {
+                with: None,
+                limit: None,
+                offset: None,
+                fetch: None,
+                locks: vec![],
+                order_by: vec![],
+                body: Box::new(SetExpr::Select(Box::new(Select {
+                    distinct: None,
+                    top: None,
+                    projection: vec![
+                        SelectItem::UnnamedExpr (
+                            Expr::Value(Value::Number("1".to_string(), false))
+                        )
+                    ],
+                    into: None,
+                    from: vec![],
+                    lateral_views: vec![],
+                    selection: None,
+                    group_by: vec![],
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    named_window: vec![],
+                    qualify: None
+                })))
+            }))],
+            params: Some(vec![
+                ProcedureParam {
+                    name: Ident {
+                        value: "@foo".into(),
+                        quote_style: None
+                    },
+                    data_type: DataType::Int(None)
+                },
+                ProcedureParam {
+                    name: Ident {
+                        value: "@bar".into(),
+                        quote_style: None
+                    },
+                    data_type: DataType::Varchar(Some(CharacterLength {
+                        length: 256,
+                        unit: None
+                    }))
+                }
+            ]),
+            name: ObjectName(vec![Ident {
+                value: "test".into(),
+                quote_style: None
+            }])
+        }
+    )
+}
+
+#[test]
+fn parse_mssql_create_procedure() {
+    let _ = ms_and_generic().verified_stmt("CREATE OR ALTER PROCEDURE foo AS BEGIN SELECT 1 END");
+    let _ = ms_and_generic().verified_stmt("CREATE PROCEDURE foo AS BEGIN SELECT 1 END");
+    let _ = ms().verified_stmt("CREATE PROCEDURE foo AS BEGIN SELECT [myColumn] FROM [myschema].[mytable] END");
+    let _ = ms_and_generic().verified_stmt("CREATE PROCEDURE foo (@CustomerName NVARCHAR(50)) AS BEGIN SELECT * FROM DEV END");
+    let _ = ms().verified_stmt("CREATE PROCEDURE [foo] AS BEGIN UPDATE bar SET col = 'test' END");
+}
+
+#[test]
 fn parse_mssql_apply_join() {
     let _ = ms_and_generic().verified_only_select(
         "SELECT * FROM sys.dm_exec_query_stats AS deqs \

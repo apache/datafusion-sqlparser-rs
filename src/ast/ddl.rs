@@ -489,6 +489,19 @@ impl fmt::Display for IndexType {
         }
     }
 }
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ProcedureParam {
+    pub name: Ident,
+    pub data_type: DataType,
+}
+
+impl fmt::Display for ProcedureParam {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.name, self.data_type)
+    }
+}
 
 /// SQL column definition
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

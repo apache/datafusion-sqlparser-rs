@@ -1141,15 +1141,13 @@ impl<'a> Tokenizer<'a> {
                     chars.next();
                     // slash escaping is specific to MySQL dialect.
                     if dialect_of!(self is MySqlDialect) {
-                        if self.options.no_escape {
-                            // In no-escape mode, the given query has to be saved completely including backslashes.
-                            if let Some(next) = chars.peek() {
+                        if let Some(next) = chars.peek() {
+                            if self.options.no_escape {
+                                // In no-escape mode, the given query has to be saved completely including backslashes.
                                 s.push(ch);
                                 s.push(*next);
                                 chars.next(); // consume next
-                            }
-                        } else {
-                            if let Some(next) = chars.peek() {
+                            } else {
                                 // See https://dev.mysql.com/doc/refman/8.0/en/string-literals.html#character-escape-sequences
                                 let n = match next {
                                     '\'' | '\"' | '\\' | '%' | '_' => *next,

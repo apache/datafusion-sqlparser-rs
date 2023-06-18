@@ -155,7 +155,7 @@ impl TestedDialects {
     }
 }
 
-pub fn all_dialects() -> TestedDialects {
+pub fn all_dialects(options: Option<ParserOptions>) -> TestedDialects {
     TestedDialects {
         dialects: vec![
             Box::new(GenericDialect {}),
@@ -166,24 +166,12 @@ pub fn all_dialects() -> TestedDialects {
             Box::new(HiveDialect {}),
             Box::new(RedshiftSqlDialect {}),
             Box::new(MySqlDialect {}),
-            Box::new(MySqlNoEscapeDialect {}),
             Box::new(BigQueryDialect {}),
             Box::new(SQLiteDialect {}),
             Box::new(DuckDbDialect {}),
         ],
-        options: None,
+        options,
     }
-}
-
-pub fn all_dialects_other_than_mysqlnoescape() -> TestedDialects {
-    let mut all_dialects = all_dialects();
-    let index_of_mysqlnoescape = all_dialects
-        .dialects
-        .iter()
-        .position(|dialect| dialect.is::<MySqlNoEscapeDialect>())
-        .unwrap();
-    all_dialects.dialects.remove(index_of_mysqlnoescape);
-    all_dialects
 }
 
 pub fn assert_eq_vec<T: ToString>(expected: &[&str], actual: &[T]) {

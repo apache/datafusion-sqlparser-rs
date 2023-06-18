@@ -42,7 +42,6 @@ $ cargo run --feature json_example --example cli FILENAME.sql [--dialectname]
         "--postgres" => Box::new(PostgreSqlDialect {}),
         "--ms" => Box::new(MsSqlDialect {}),
         "--mysql" => Box::new(MySqlDialect {}),
-        "--mysql-no-escape" => Box::new(MySqlNoEscapeDialect {}),
         "--snowflake" => Box::new(SnowflakeDialect {}),
         "--hive" => Box::new(HiveDialect {}),
         "--redshift" => Box::new(RedshiftSqlDialect {}),

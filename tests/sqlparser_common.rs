@@ -24,14 +24,14 @@ use sqlparser::ast::TableFactor::Pivot;
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, DuckDbDialect, GenericDialect, HiveDialect,
-    MsSqlDialect, MySqlDialect, MySqlNoEscapeDialect, PostgreSqlDialect, RedshiftSqlDialect,
-    SQLiteDialect, SnowflakeDialect,
+    MsSqlDialect, MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect,
+    SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use test_utils::{
-    all_dialects, all_dialects_other_than_mysqlnoescape, assert_eq_vec, expr_from_projection, join,
-    number, only, table, table_alias, TestedDialects,
+    all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
+    TestedDialects,
 };
 
 #[macro_use]
@@ -373,14 +373,14 @@ fn parse_select_with_table_alias() {
 
 #[test]
 fn parse_invalid_table_name() {
-    let ast = all_dialects()
+    let ast = all_dialects(None)
         .run_parser_method("db.public..customer", |parser| parser.parse_object_name());
     assert!(ast.is_err());
 }
 
 #[test]
 fn parse_no_table_name() {
-    let ast = all_dialects().run_parser_method("", |parser| parser.parse_object_name());
+    let ast = all_dialects(None).run_parser_method("", |parser| parser.parse_object_name());
     assert!(ast.is_err());
 }
 
@@ -898,7 +898,7 @@ fn parse_invalid_infix_not() {
 fn parse_collate() {
     let sql = "SELECT name COLLATE \"de_DE\" FROM customer";
     assert_matches!(
-        only(&all_dialects().verified_only_select(sql).projection),
+        only(&all_dialects(None).verified_only_select(sql).projection),
         SelectItem::UnnamedExpr(Expr::Collate { .. })
     );
 }
@@ -907,7 +907,7 @@ fn parse_collate() {
 fn parse_collate_after_parens() {
     let sql = "SELECT (name) COLLATE \"de_DE\" FROM customer";
     assert_matches!(
-        only(&all_dialects().verified_only_select(sql).projection),
+        only(&all_dialects(None).verified_only_select(sql).projection),
         SelectItem::UnnamedExpr(Expr::Collate { .. })
     );
 }
@@ -950,7 +950,6 @@ fn parse_exponent_in_select() -> Result<(), ParserError> {
             // Box::new(HiveDialect {}),
             Box::new(MsSqlDialect {}),
             Box::new(MySqlDialect {}),
-            Box::new(MySqlNoEscapeDialect {}),
             Box::new(PostgreSqlDialect {}),
             Box::new(RedshiftSqlDialect {}),
             Box::new(SnowflakeDialect {}),
@@ -1010,7 +1009,7 @@ fn parse_escaped_single_quote_string_predicate_with_escape() {
     let sql = "SELECT id, fname, lname FROM customer \
                WHERE salary <> 'Jim''s salary'";
 
-    let ast = verified_only_select_with_dialects_other_than_mysqlnoescape(sql);
+    let ast = verified_only_select(sql);
 
     assert_eq!(
         Some(Expr::BinaryOp {
@@ -1031,8 +1030,11 @@ fn parse_escaped_single_quote_string_predicate_with_no_escape() {
                WHERE salary <> 'Jim''s salary'";
 
     let ast = TestedDialects {
-        dialects: vec![Box::new(MySqlNoEscapeDialect {})],
-        options: None,
+        dialects: vec![Box::new(MySqlDialect {})],
+        options: Some(ParserOptions {
+            trailing_commas: true,
+            no_escape: true,
+        }),
     }
     .verified_only_select(sql);
 
@@ -1415,7 +1417,7 @@ fn parse_string_agg() {
 /// selects all dialects but PostgreSQL
 pub fn all_dialects_but_pg() -> TestedDialects {
     TestedDialects {
-        dialects: all_dialects()
+        dialects: all_dialects(None)
             .dialects
             .into_iter()
             .filter(|x| !x.is::<PostgreSqlDialect>())
@@ -1428,8 +1430,8 @@ pub fn all_dialects_but_pg() -> TestedDialects {
 fn parse_bitwise_ops() {
     let bitwise_ops = &[
         ("^", BinaryOperator::BitwiseXor, all_dialects_but_pg()),
-        ("|", BinaryOperator::BitwiseOr, all_dialects()),
-        ("&", BinaryOperator::BitwiseAnd, all_dialects()),
+        ("|", BinaryOperator::BitwiseOr, all_dialects(None)),
+        ("&", BinaryOperator::BitwiseAnd, all_dialects(None)),
     ];
 
     for (str_op, op, dialects) in bitwise_ops {
@@ -2360,7 +2362,6 @@ fn parse_create_table_hive_array() {
             Box::new(PostgreSqlDialect {}),
             Box::new(HiveDialect {}),
             Box::new(MySqlDialect {}),
-            Box::new(MySqlNoEscapeDialect {}),
         ],
         options: None,
     };
@@ -2660,7 +2661,7 @@ fn parse_create_table_clone() {
 #[test]
 fn parse_create_table_trailing_comma() {
     let sql = "CREATE TABLE foo (bar int,)";
-    all_dialects().one_statement_parses_to(sql, "CREATE TABLE foo (bar INT)");
+    all_dialects(None).one_statement_parses_to(sql, "CREATE TABLE foo (bar INT)");
 }
 
 #[test]
@@ -4675,7 +4676,7 @@ fn parse_ctes() {
 #[test]
 fn parse_cte_renamed_columns() {
     let sql = "WITH cte (col1, col2) AS (SELECT foo, bar FROM baz) SELECT * FROM cte";
-    let query = all_dialects().verified_query(sql);
+    let query = all_dialects(None).verified_query(sql);
     assert_eq!(
         vec![Ident::new("col1"), Ident::new("col2")],
         query
@@ -6389,31 +6390,27 @@ fn all_keywords_sorted() {
 }
 
 fn parse_sql_statements(sql: &str) -> Result<Vec<Statement>, ParserError> {
-    all_dialects().parse_sql_statements(sql)
+    all_dialects(None).parse_sql_statements(sql)
 }
 
 fn one_statement_parses_to(sql: &str, canonical: &str) -> Statement {
-    all_dialects().one_statement_parses_to(sql, canonical)
+    all_dialects(None).one_statement_parses_to(sql, canonical)
 }
 
 fn verified_stmt(query: &str) -> Statement {
-    all_dialects().verified_stmt(query)
+    all_dialects(None).verified_stmt(query)
 }
 
 fn verified_query(query: &str) -> Query {
-    all_dialects().verified_query(query)
+    all_dialects(None).verified_query(query)
 }
 
 fn verified_only_select(query: &str) -> Select {
-    all_dialects().verified_only_select(query)
-}
-
-fn verified_only_select_with_dialects_other_than_mysqlnoescape(query: &str) -> Select {
-    all_dialects_other_than_mysqlnoescape().verified_only_select(query)
+    all_dialects(None).verified_only_select(query)
 }
 
 fn verified_expr(query: &str) -> Expr {
-    all_dialects().verified_expr(query)
+    all_dialects(None).verified_expr(query)
 }
 
 #[test]
@@ -6713,7 +6710,7 @@ fn parse_cache_table() {
     let sql = "SELECT a, b, c FROM foo";
     let cache_table_name = "cache_table_name";
     let table_flag = "flag";
-    let query = all_dialects().verified_query(sql);
+    let query = all_dialects(None).verified_query(sql);
 
     assert_eq!(
         verified_stmt(format!("CACHE TABLE '{cache_table_name}'").as_str()),
@@ -7082,7 +7079,6 @@ fn parse_non_latin_identifiers() {
             Box::new(MsSqlDialect {}),
             Box::new(RedshiftSqlDialect {}),
             Box::new(MySqlDialect {}),
-            Box::new(MySqlNoEscapeDialect {}),
         ],
         options: None,
     };

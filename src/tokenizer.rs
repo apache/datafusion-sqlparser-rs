@@ -36,7 +36,7 @@ use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::DollarQuotedString;
 use crate::dialect::{BigQueryDialect, DuckDbDialect, GenericDialect, SnowflakeDialect};
-use crate::dialect::{Dialect, MySqlDialect, MySqlNoEscapeDialect};
+use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
 /// SQL Token enumeration
@@ -717,9 +717,7 @@ impl<'a> Tokenizer<'a> {
 
                     // mysql dialect supports identifiers that start with a numeric prefix,
                     // as long as they aren't an exponent number.
-                    if dialect_of!(self is MySqlDialect | MySqlNoEscapeDialect)
-                        && exponent_part.is_empty()
-                    {
+                    if dialect_of!(self is MySqlDialect) && exponent_part.is_empty() {
                         let word =
                             peeking_take_while(chars, |ch| self.dialect.is_identifier_part(ch));
 
@@ -1129,7 +1127,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     if chars.peek().map(|c| *c == quote_style).unwrap_or(false) {
                         s.push(ch);
-                        if dialect_of!(self is MySqlNoEscapeDialect) {
+                        if self.options.no_escape {
                             // In no-escape mode, the given query has to be saved completely
                             s.push(ch);
                         }
@@ -1143,27 +1141,29 @@ impl<'a> Tokenizer<'a> {
                     chars.next();
                     // slash escaping is specific to MySQL dialect.
                     if dialect_of!(self is MySqlDialect) {
-                        if let Some(next) = chars.peek() {
-                            // See https://dev.mysql.com/doc/refman/8.0/en/string-literals.html#character-escape-sequences
-                            let n = match next {
-                                '\'' | '\"' | '\\' | '%' | '_' => *next,
-                                '0' => '\0',
-                                'b' => '\u{8}',
-                                'n' => '\n',
-                                'r' => '\r',
-                                't' => '\t',
-                                'Z' => '\u{1a}',
-                                _ => *next,
-                            };
-                            s.push(n);
-                            chars.next(); // consume next
-                        }
-                    } else if dialect_of!(self is MySqlNoEscapeDialect) {
-                        // In no-escape mode, the given query has to be saved completely including backslashes.
-                        if let Some(next) = chars.peek() {
-                            s.push(ch);
-                            s.push(*next);
-                            chars.next(); // consume next
+                        if self.options.no_escape {
+                            // In no-escape mode, the given query has to be saved completely including backslashes.
+                            if let Some(next) = chars.peek() {
+                                s.push(ch);
+                                s.push(*next);
+                                chars.next(); // consume next
+                            }
+                        } else {
+                            if let Some(next) = chars.peek() {
+                                // See https://dev.mysql.com/doc/refman/8.0/en/string-literals.html#character-escape-sequences
+                                let n = match next {
+                                    '\'' | '\"' | '\\' | '%' | '_' => *next,
+                                    '0' => '\0',
+                                    'b' => '\u{8}',
+                                    'n' => '\n',
+                                    'r' => '\r',
+                                    't' => '\t',
+                                    'Z' => '\u{1a}',
+                                    _ => *next,
+                                };
+                                s.push(n);
+                                chars.next(); // consume next
+                            }
                         }
                     } else {
                         s.push(ch);
@@ -1219,7 +1219,7 @@ impl<'a> Tokenizer<'a> {
                 if chars.peek() == Some(&quote_end) {
                     chars.next();
                     s.push(ch);
-                    if dialect_of!(self is MySqlNoEscapeDialect) {
+                    if self.options.no_escape {
                         // In no-escape mode, the given query has to be saved completely
                         s.push(ch);
                     }
@@ -1905,16 +1905,16 @@ mod tests {
     #[test]
     fn tokenize_quoted_identifier_with_no_escape() {
         let sql = r#" "a "" b" "a """ "c """"" "#;
-        let dialect = MySqlNoEscapeDialect {};
-        let mut tokenizer = Tokenizer::new(&dialect, sql);
+        let dialect = GenericDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, sql, &TokenizerOptions { no_escape: true });
         let tokens = tokenizer.tokenize().unwrap();
         let expected = vec![
             Token::Whitespace(Whitespace::Space),
-            Token::DoubleQuotedString(String::from(r#"a "" b"#)),
+            Token::make_word(r#"a "" b"#, Some('"')),
             Token::Whitespace(Whitespace::Space),
-            Token::DoubleQuotedString(String::from(r#"a """#)),
+            Token::make_word(r#"a """#, Some('"')),
             Token::Whitespace(Whitespace::Space),
-            Token::DoubleQuotedString(String::from(r#"c """""#)),
+            Token::make_word(r#"c """""#, Some('"')),
             Token::Whitespace(Whitespace::Space),
         ];
         compare(expected, tokens);

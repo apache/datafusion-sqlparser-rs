@@ -84,7 +84,7 @@ impl TestedDialects {
         self.one_of_identical_results(|dialect| {
             self.new_parser(dialect)
                 .try_with_sql(sql)?
-                .parse_statements()
+                .parse_statements(false)
         })
         // To fail the `ensure_multiple_dialects_are_tested` test:
         // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)

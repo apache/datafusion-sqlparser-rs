@@ -6907,7 +6907,7 @@ fn parse_deeply_nested_expr_hits_recursion_limits() {
     let res = Parser::new(&dialect)
         .try_with_sql(&sql)
         .expect("tokenize to work")
-        .parse_statements();
+        .parse_statements(false);
 
     assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
 }
@@ -6922,7 +6922,7 @@ fn parse_deeply_nested_subquery_expr_hits_recursion_limits() {
     let res = Parser::new(&dialect)
         .try_with_sql(&sql)
         .expect("tokenize to work")
-        .parse_statements();
+        .parse_statements(false);
 
     assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
 }
@@ -6938,7 +6938,7 @@ fn parse_with_recursion_limit() {
     let res = Parser::new(&dialect)
         .try_with_sql(&sql)
         .expect("tokenize to work")
-        .parse_statements();
+        .parse_statements(false);
 
     assert!(matches!(res, Ok(_)), "{res:?}");
 
@@ -6947,7 +6947,7 @@ fn parse_with_recursion_limit() {
         .try_with_sql(&sql)
         .expect("tokenize to work")
         .with_recursion_limit(20)
-        .parse_statements();
+        .parse_statements(false);
 
     assert_eq!(res, Err(ParserError::RecursionLimitExceeded));
 
@@ -6956,7 +6956,7 @@ fn parse_with_recursion_limit() {
         .try_with_sql(&sql)
         .expect("tokenize to work")
         .with_recursion_limit(50)
-        .parse_statements();
+        .parse_statements(false);
 
     assert!(matches!(res, Ok(_)), "{res:?}");
 }

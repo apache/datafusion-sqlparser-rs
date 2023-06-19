@@ -351,6 +351,15 @@ fn test_select_wildcard_with_except() {
     );
 }
 
+
+#[test]
+fn test_select_ignore_nulls() {
+    bigquery().one_statement_parses_to(
+        "SELECT last_value(user_id IGNORE NULLS) OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1",
+    "SELECT last_value(user_id) IGNORE NULLS OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1"
+    );
+}
+
 #[test]
 fn test_select_wildcard_with_replace() {
     let select = bigquery_and_generic()
@@ -438,6 +447,7 @@ fn parse_map_access_offset() {
                 distinct: false,
                 special: false,
                 order_by: vec![],
+                null_treatment: None,
             })],
         })
     );

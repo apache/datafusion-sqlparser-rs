@@ -490,6 +490,7 @@ define_keywords!(
     REPEATABLE,
     REPLACE,
     REPLICATION,
+    RESPECT,
     RESTRICT,
     RESULT,
     RETURN,

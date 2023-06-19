@@ -133,6 +133,7 @@ fn parse_delimited_identifiers() {
             distinct: false,
             special: false,
             order_by: vec![],
+            null_treatment: None,
         }),
         expr_from_projection(&select.projection[1]),
     );
@@ -273,4 +274,9 @@ fn test_sharp() {
         SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("#_of_values"))),
         select.projection[0]
     );
+}
+
+#[test]
+fn test_select_ignore_nulls() {
+    redshift().verified_stmt("SELECT last_value(b) IGNORE NULLS FROM test_data");
 }

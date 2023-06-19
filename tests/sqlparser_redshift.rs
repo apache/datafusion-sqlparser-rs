@@ -287,3 +287,9 @@ fn test_sharp() {
 fn test_select_ignore_nulls() {
     redshift().verified_stmt("SELECT last_value(b) IGNORE NULLS FROM test_data");
 }
+
+#[test]
+fn test_create_view_late_binding() {
+    redshift()
+        .verified_stmt("CREATE VIEW myevent AS SELECT eventname FROM event WITH NO SCHEMA BINDING");
+}

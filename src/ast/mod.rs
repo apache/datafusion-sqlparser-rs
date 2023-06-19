@@ -1282,6 +1282,7 @@ pub enum Statement {
         cluster_by: Vec<Ident>,
         destination_table: Option<ObjectName>,
         columns_with_types: Vec<ColumnDef>,
+        late_binding: bool,
     },
     /// CREATE TABLE
     CreateTable {
@@ -2110,6 +2111,7 @@ impl fmt::Display for Statement {
                 cluster_by,
                 destination_table,
                 columns_with_types,
+                late_binding
             } => {
                 write!(
                     f,
@@ -2135,7 +2137,11 @@ impl fmt::Display for Statement {
                 if !cluster_by.is_empty() {
                     write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
                 }
-                write!(f, " AS {query}")
+                write!(f, " AS {query}")?;
+                if *late_binding{
+                    write!(f, " WITH NO SCHEMA BINDING")?;
+                }
+                Ok(())
             }
             Statement::CreateTable {
                 name,

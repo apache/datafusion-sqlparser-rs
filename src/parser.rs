@@ -2822,6 +2822,9 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::AS)?;
         let query = Box::new(self.parse_query()?);
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
+
+        let late_binding = dialect_of!(self is RedshiftSqlDialect) && self.parse_keywords(&[Keyword::WITH, Keyword::NO, Keyword::SCHEMA, Keyword::BINDING]);
+
         Ok(Statement::CreateView {
             name,
             columns,
@@ -2832,6 +2835,7 @@ impl<'a> Parser<'a> {
             cluster_by,
             destination_table,
             columns_with_types,
+            late_binding
         })
     }
 

@@ -577,7 +577,7 @@ pub enum Expr {
     ///
     /// Syntax:
     /// ```sql
-    /// MARCH (<col>, <col>, ...) AGAINST (<expr> [<search modifier>])
+    /// MATCH (<col>, <col>, ...) AGAINST (<expr> [<search modifier>])
     ///
     /// <col> = CompoundIdentifier
     /// <expr> = String literal
@@ -3619,6 +3619,16 @@ pub struct Function {
     pub special: bool,
     // Required ordering for the function (if empty, there is no requirement).
     pub order_by: Vec<OrderByExpr>,
+    // IGNORE NULLS or RESPECT NULLS
+    pub null_treatment: Option<NullTreatment>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum NullTreatment {
+    IGNORE,
+    RESPECT,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -3650,13 +3660,23 @@ impl fmt::Display for Function {
             } else {
                 ""
             };
+
+            let null_treatment = if let Some(null_treatment) = self.null_treatment {
+                match null_treatment {
+                    NullTreatment::IGNORE => " IGNORE NULLS",
+                    NullTreatment::RESPECT => " RESPECT NULLS",
+                }
+            } else {
+                ""
+            };
             write!(
                 f,
-                "{}({}{}{order_by}{})",
+                "{}({}{}{order_by}{}){}",
                 self.name,
                 if self.distinct { "DISTINCT " } else { "" },
                 display_comma_separated(&self.args),
                 display_comma_separated(&self.order_by),
+                null_treatment
             )?;
 
             if let Some(o) = &self.over {

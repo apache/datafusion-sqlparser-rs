@@ -761,6 +761,7 @@ impl<'a> Parser<'a> {
                         distinct: false,
                         special: true,
                         order_by: vec![],
+                        null_treatment: None,
                     }))
                 }
                 Keyword::CURRENT_TIMESTAMP
@@ -941,7 +942,14 @@ impl<'a> Parser<'a> {
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let distinct = self.parse_all_or_distinct()?.is_some();
-        let (args, order_by) = self.parse_optional_args_with_orderby()?;
+        let (args, order_by, mut null_treatment) = self.parse_optional_args_with_orderby()?;
+
+        if self.parse_keywords(&[Keyword::IGNORE, Keyword::NULLS]) {
+            null_treatment = Some(NullTreatment::IGNORE)
+        } else if self.parse_keywords(&[Keyword::RESPECT, Keyword::NULLS]) {
+            null_treatment = Some(NullTreatment::RESPECT)
+        }
+
         let over = if self.parse_keyword(Keyword::OVER) {
             if self.consume_token(&Token::LParen) {
                 let window_spec = self.parse_window_spec()?;
@@ -959,15 +967,16 @@ impl<'a> Parser<'a> {
             distinct,
             special: false,
             order_by,
+            null_treatment,
         }))
     }
 
     pub fn parse_time_functions(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
-        let (args, order_by, special) = if self.consume_token(&Token::LParen) {
-            let (args, order_by) = self.parse_optional_args_with_orderby()?;
-            (args, order_by, false)
+        let (args, order_by, special, null_treatment) = if self.consume_token(&Token::LParen) {
+            let (args, order_by, null_treatment) = self.parse_optional_args_with_orderby()?;
+            (args, order_by, false, null_treatment)
         } else {
-            (vec![], vec![], true)
+            (vec![], vec![], true, None)
         };
         Ok(Expr::Function(Function {
             name,
@@ -976,6 +985,7 @@ impl<'a> Parser<'a> {
             distinct: false,
             special,
             order_by,
+            null_treatment,
         }))
     }
 
@@ -6880,9 +6890,9 @@ impl<'a> Parser<'a> {
 
     pub fn parse_optional_args_with_orderby(
         &mut self,
-    ) -> Result<(Vec<FunctionArg>, Vec<OrderByExpr>), ParserError> {
+    ) -> Result<(Vec<FunctionArg>, Vec<OrderByExpr>, Option<NullTreatment>), ParserError> {
         if self.consume_token(&Token::RParen) {
-            Ok((vec![], vec![]))
+            Ok((vec![], vec![], None))
         } else {
             let args = self.parse_comma_separated(Parser::parse_function_args)?;
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
@@ -6890,8 +6900,15 @@ impl<'a> Parser<'a> {
             } else {
                 vec![]
             };
+            let null_treatment = if self.parse_keywords(&[Keyword::IGNORE, Keyword::NULLS]) {
+                Some(NullTreatment::IGNORE)
+            } else if self.parse_keywords(&[Keyword::RESPECT, Keyword::NULLS]) {
+                Some(NullTreatment::RESPECT)
+            } else {
+                None
+            };
             self.expect_token(&Token::RParen)?;
-            Ok((args, order_by))
+            Ok((args, order_by, null_treatment))
         }
     }
 

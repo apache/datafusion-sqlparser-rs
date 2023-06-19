@@ -56,6 +56,7 @@ fn parse_array_access_expr() {
                     distinct: false,
                     special: false,
                     order_by: vec![],
+                    null_treatment: None,
                 })],
             })],
             into: None,
@@ -95,6 +96,7 @@ fn parse_array_access_expr() {
                             distinct: false,
                             special: false,
                             order_by: vec![],
+                            null_treatment: None,
                         })],
                     }),
                     op: BinaryOperator::NotEq,
@@ -144,6 +146,7 @@ fn parse_array_fn() {
             distinct: false,
             special: false,
             order_by: vec![],
+            null_treatment: None,
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -202,6 +205,7 @@ fn parse_delimited_identifiers() {
             distinct: false,
             special: false,
             order_by: vec![],
+            null_treatment: None,
         }),
         expr_from_projection(&select.projection[1]),
     );
@@ -387,6 +391,11 @@ fn parse_double_equal() {
         r#"SELECT foo FROM bar WHERE buz == 'buz'"#,
         r#"SELECT foo FROM bar WHERE buz = 'buz'"#,
     );
+}
+
+#[test]
+fn parse_select_ignore_nulls() {
+    clickhouse().verified_stmt("SELECT last_value(b) IGNORE NULLS FROM test_data");
 }
 
 fn clickhouse() -> TestedDialects {

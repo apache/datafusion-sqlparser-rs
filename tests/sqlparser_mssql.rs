@@ -338,6 +338,7 @@ fn parse_delimited_identifiers() {
             distinct: false,
             special: false,
             order_by: vec![],
+            null_treatment: None,
         }),
         expr_from_projection(&select.projection[1]),
     );

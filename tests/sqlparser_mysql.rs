@@ -1075,6 +1075,7 @@ fn parse_insert_with_on_duplicate_update() {
                             distinct: false,
                             special: false,
                             order_by: vec![],
+                            null_treatment: None,
                         })
                     },
                     Assignment {
@@ -1088,6 +1089,7 @@ fn parse_insert_with_on_duplicate_update() {
                             distinct: false,
                             special: false,
                             order_by: vec![],
+                            null_treatment: None,
                         })
                     },
                     Assignment {
@@ -1101,6 +1103,7 @@ fn parse_insert_with_on_duplicate_update() {
                             distinct: false,
                             special: false,
                             order_by: vec![],
+                            null_treatment: None,
                         })
                     },
                     Assignment {
@@ -1114,6 +1117,7 @@ fn parse_insert_with_on_duplicate_update() {
                             distinct: false,
                             special: false,
                             order_by: vec![],
+                            null_treatment: None,
                         })
                     },
                     Assignment {
@@ -1127,6 +1131,7 @@ fn parse_insert_with_on_duplicate_update() {
                             distinct: false,
                             special: false,
                             order_by: vec![],
+                            null_treatment: None,
                         })
                     },
                 ])),
@@ -1472,6 +1477,7 @@ fn parse_table_colum_option_on_update() {
                             distinct: false,
                             special: false,
                             order_by: vec![],
+                            null_treatment: None,
                         })),
                     },],
                 }],

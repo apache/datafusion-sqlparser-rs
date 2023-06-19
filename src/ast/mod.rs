@@ -577,7 +577,7 @@ pub enum Expr {
     ///
     /// Syntax:
     /// ```sql
-    /// MARCH (<col>, <col>, ...) AGAINST (<expr> [<search modifier>])
+    /// MATCH (<col>, <col>, ...) AGAINST (<expr> [<search modifier>])
     ///
     /// <col> = CompoundIdentifier
     /// <expr> = String literal
@@ -1316,6 +1316,8 @@ pub enum Statement {
         query: Box<Query>,
         with_options: Vec<SqlOption>,
         cluster_by: Vec<Ident>,
+        /// if true, has RedShift [`WITH NO SCHEMA BINDING`] clause <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_VIEW.html>
+        with_no_schema_binding: bool,
     },
     /// CREATE TABLE
     CreateTable {
@@ -2271,6 +2273,7 @@ impl fmt::Display for Statement {
                 materialized,
                 with_options,
                 cluster_by,
+                with_no_schema_binding,
             } => {
                 write!(
                     f,
@@ -2288,7 +2291,11 @@ impl fmt::Display for Statement {
                 if !cluster_by.is_empty() {
                     write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
                 }
-                write!(f, " AS {query}")
+                write!(f, " AS {query}")?;
+                if *with_no_schema_binding {
+                    write!(f, " WITH NO SCHEMA BINDING")?;
+                }
+                Ok(())
             }
             Statement::CreateTable {
                 name,

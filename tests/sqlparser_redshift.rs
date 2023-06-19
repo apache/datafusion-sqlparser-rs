@@ -16,6 +16,7 @@ mod test_utils;
 use test_utils::*;
 
 use sqlparser::ast::*;
+use sqlparser::dialect::GenericDialect;
 use sqlparser::dialect::RedshiftSqlDialect;
 
 #[test]
@@ -272,6 +273,13 @@ fn redshift() -> TestedDialects {
     }
 }
 
+fn redshift_and_generic() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(RedshiftSqlDialect {}), Box::new(GenericDialect {})],
+        options: None,
+    }
+}
+
 #[test]
 fn test_sharp() {
     let sql = "SELECT #_of_values";
@@ -280,4 +288,10 @@ fn test_sharp() {
         SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("#_of_values"))),
         select.projection[0]
     );
+}
+
+#[test]
+fn test_create_view_with_no_schema_binding() {
+    redshift_and_generic()
+        .verified_stmt("CREATE VIEW myevent AS SELECT eventname FROM event WITH NO SCHEMA BINDING");
 }

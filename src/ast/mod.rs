@@ -24,6 +24,7 @@ use alloc::{
     vec::Vec,
 };
 
+use core::borrow::Borrow;
 use core::fmt::{self, Display};
 use core::ops::Deref;
 
@@ -76,6 +77,7 @@ pub use self::value::{
 use crate::ast::helpers::stmt_data_loading::{
     DataLoadingOptions, StageLoadSelectItem, StageParamsObject,
 };
+use crate::tokenizer::Span;
 #[cfg(feature = "visitor")]
 pub use visitor::*;
 
@@ -194,7 +196,7 @@ impl fmt::Display for Ident {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ObjectName(pub Vec<Ident>);
+pub struct ObjectName(pub Vec<WithSpan<Ident>>);
 
 impl fmt::Display for ObjectName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -297,7 +299,7 @@ impl fmt::Display for Interval {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct StructField {
-    pub field_name: Option<Ident>,
+    pub field_name: Option<WithSpan<Ident>>,
     pub field_type: DataType,
 }
 
@@ -318,7 +320,7 @@ impl fmt::Display for StructField {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct UnionField {
-    pub field_name: Ident,
+    pub field_name: WithSpan<Ident>,
     pub field_type: DataType,
 }
 
@@ -335,7 +337,7 @@ impl fmt::Display for UnionField {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct DictionaryField {
-    pub key: Ident,
+    pub key: WithSpan<Ident>,
     pub value: Box<Expr>,
 }
 
@@ -527,6 +529,78 @@ pub enum CeilFloorKind {
     Scale(Value),
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct WithSpan<T>
+where
+    T: Clone + Eq + Ord + std::hash::Hash + PartialOrd + PartialEq,
+{
+    inner: T,
+    span: Span,
+}
+
+impl<T> WithSpan<T>
+where
+    T: Clone + Eq + Ord + std::hash::Hash + PartialOrd + PartialEq,
+{
+    pub fn new(inner: T, span: Span) -> Self {
+        Self { inner, span }
+    }
+
+    pub fn unwrap(self) -> T {
+        self.inner
+    }
+}
+
+pub trait SpanWrapped: Clone + Eq + Ord + std::hash::Hash + PartialOrd + PartialEq {
+    fn spanning<U: Into<Span>>(self, span: U) -> WithSpan<Self> {
+        WithSpan::new(self, span.into())
+    }
+
+    fn empty_span(self) -> WithSpan<Self> {
+        self.spanning(Span::default())
+    }
+}
+
+impl<T> SpanWrapped for T
+where
+    T: Clone + Eq + Ord + std::hash::Hash + PartialOrd + PartialEq,
+{
+    fn spanning<U: Into<Span>>(self, span: U) -> WithSpan<Self> {
+        WithSpan::new(self, span.into())
+    }
+}
+
+impl<T> Deref for WithSpan<T>
+where
+    T: Clone + Eq + Ord + std::hash::Hash + PartialOrd + PartialEq,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T> Borrow<T> for WithSpan<T>
+where
+    T: Clone + Eq + Ord + std::hash::Hash + PartialOrd + PartialEq,
+{
+    fn borrow(&self) -> &T {
+        &self.inner
+    }
+}
+
+impl<T: fmt::Display> fmt::Display for WithSpan<T>
+where
+    T: Clone + Eq + Ord + std::hash::Hash + PartialOrd + PartialEq,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}
+
 /// An SQL expression of any type.
 ///
 /// The parser does not distinguish between expressions of different types
@@ -541,9 +615,9 @@ pub enum CeilFloorKind {
 )]
 pub enum Expr {
     /// Identifier e.g. table name or column name
-    Identifier(Ident),
+    Identifier(WithSpan<Ident>),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
-    CompoundIdentifier(Vec<Ident>),
+    CompoundIdentifier(Vec<WithSpan<Ident>>),
     /// Access data nested in a value containing semi-structured data, such as
     /// the `VARIANT` type on Snowflake. for example `src:customer[0].name`.
     ///
@@ -558,7 +632,7 @@ pub enum Expr {
     /// CompositeAccess (postgres) eg: SELECT (information_schema._pg_expandarray(array['i','i'])).n
     CompositeAccess {
         expr: Box<Expr>,
-        key: Ident,
+        key: WithSpan<Ident>,
     },
     /// `IS FALSE` operator
     IsFalse(Box<Expr>),
@@ -856,7 +930,7 @@ pub enum Expr {
     /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
     Named {
         expr: Box<Expr>,
-        name: Ident,
+        name: WithSpan<Ident>,
     },
     /// `DuckDB` specific `Struct` literal expression [1]
     ///
@@ -895,7 +969,7 @@ pub enum Expr {
     /// [(1)]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-search.html#function_match
     MatchAgainst {
         /// `(<col>, <col>, ...)`.
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
         /// `<expr>`.
         match_value: Value,
         /// `<search modifier>`
@@ -1001,7 +1075,7 @@ impl fmt::Display for Subscript {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct LambdaFunction {
     /// The parameters to the lambda function.
-    pub params: OneOrManyWithParens<Ident>,
+    pub params: OneOrManyWithParens<WithSpan<Ident>>,
     /// The body of the lambda function.
     pub body: Box<Expr>,
 }
@@ -1667,7 +1741,7 @@ impl fmt::Display for Expr {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum WindowType {
     WindowSpec(WindowSpec),
-    NamedWindow(Ident),
+    NamedWindow(WithSpan<Ident>),
 }
 
 impl Display for WindowType {
@@ -1691,7 +1765,7 @@ pub struct WindowSpec {
     /// [1]: https://dev.mysql.com/doc/refman/8.0/en/window-functions-named-windows.html
     /// [2]: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
     /// [3]: https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS
-    pub window_name: Option<Ident>,
+    pub window_name: Option<WithSpan<Ident>>,
     /// `OVER (PARTITION BY ...)`
     pub partition_by: Vec<Expr>,
     /// `OVER (ORDER BY ...)`
@@ -2031,7 +2105,7 @@ impl fmt::Display for DeclareType {
 pub struct Declare {
     /// The name(s) being declared.
     /// Example: `DECLARE a, b, c DEFAULT 42;
-    pub names: Vec<Ident>,
+    pub names: Vec<WithSpan<Ident>>,
     /// Data-type assigned to the declared variable.
     /// Example: `DECLARE x INT64 DEFAULT 42;
     pub data_type: Option<DataType>,
@@ -2237,7 +2311,7 @@ pub enum Statement {
         table_name: ObjectName,
         partitions: Option<Vec<Expr>>,
         for_columns: bool,
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
         cache_metadata: bool,
         noscan: bool,
         compute_statistics: bool,
@@ -2264,7 +2338,7 @@ pub enum Statement {
         /// [ ON CLUSTER cluster_name ]
         ///
         /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/truncate/)
-        on_cluster: Option<Ident>,
+        on_cluster: Option<WithSpan<Ident>>,
     },
     /// ```sql
     /// MSCK
@@ -2289,14 +2363,14 @@ pub enum Statement {
     /// ```
     Install {
         /// Only for DuckDB
-        extension_name: Ident,
+        extension_name: WithSpan<Ident>,
     },
     /// ```sql
     /// LOAD
     /// ```
     Load {
         /// Only for DuckDB
-        extension_name: Ident,
+        extension_name: WithSpan<Ident>,
     },
     // TODO: Support ROW FORMAT
     Directory {
@@ -2338,7 +2412,7 @@ pub enum Statement {
     CopyIntoSnowflake {
         into: ObjectName,
         from_stage: ObjectName,
-        from_stage_alias: Option<Ident>,
+        from_stage_alias: Option<WithSpan<Ident>>,
         stage_params: StageParamsObject,
         from_transformations: Option<Vec<StageLoadSelectItem>>,
         files: Option<Vec<String>>,
@@ -2385,7 +2459,7 @@ pub enum Statement {
         columns: Vec<ViewColumnDef>,
         query: Box<Query>,
         options: CreateTableOptions,
-        cluster_by: Vec<Ident>,
+        cluster_by: Vec<WithSpan<Ident>>,
         /// Snowflake: Views can have comments in Snowflake.
         /// <https://docs.snowflake.com/en/sql-reference/sql/create-view#syntax>
         comment: Option<String>,
@@ -2411,8 +2485,8 @@ pub enum Statement {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         name: ObjectName,
         if_not_exists: bool,
-        module_name: Ident,
-        module_args: Vec<Ident>,
+        module_name: WithSpan<Ident>,
+        module_args: Vec<WithSpan<Ident>>,
     },
     /// ```sql
     /// `CREATE INDEX`
@@ -2436,11 +2510,11 @@ pub enum Statement {
         replication: Option<bool>,
         connection_limit: Option<Expr>,
         valid_until: Option<Expr>,
-        in_role: Vec<Ident>,
-        in_group: Vec<Ident>,
-        role: Vec<Ident>,
-        user: Vec<Ident>,
-        admin: Vec<Ident>,
+        in_role: Vec<WithSpan<Ident>>,
+        in_group: Vec<WithSpan<Ident>>,
+        role: Vec<WithSpan<Ident>>,
+        user: Vec<WithSpan<Ident>>,
+        admin: Vec<WithSpan<Ident>>,
         // MSSQL
         authorization_owner: Option<ObjectName>,
     },
@@ -2452,9 +2526,9 @@ pub enum Statement {
         or_replace: bool,
         temporary: Option<bool>,
         if_not_exists: bool,
-        name: Option<Ident>,
-        storage_specifier: Option<Ident>,
-        secret_type: Ident,
+        name: Option<WithSpan<Ident>>,
+        storage_specifier: Option<WithSpan<Ident>>,
+        secret_type: WithSpan<Ident>,
         options: Vec<SecretOption>,
     },
     /// ```sql
@@ -2462,7 +2536,7 @@ pub enum Statement {
     /// ```
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-createpolicy.html)
     CreatePolicy {
-        name: Ident,
+        name: WithSpan<Ident>,
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         policy_type: Option<CreatePolicyType>,
@@ -2485,7 +2559,7 @@ pub enum Statement {
         /// ClickHouse dialect supports `ON CLUSTER` clause for ALTER TABLE
         /// For example: `ALTER TABLE table_name ON CLUSTER cluster_name ADD COLUMN c UInt32`
         /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/update)
-        on_cluster: Option<Ident>,
+        on_cluster: Option<WithSpan<Ident>>,
     },
     /// ```sql
     /// ALTER INDEX
@@ -2501,7 +2575,7 @@ pub enum Statement {
         /// View name
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         name: ObjectName,
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
         query: Box<Query>,
         with_options: Vec<SqlOption>,
     },
@@ -2509,7 +2583,7 @@ pub enum Statement {
     /// ALTER ROLE
     /// ```
     AlterRole {
-        name: Ident,
+        name: WithSpan<Ident>,
         operation: AlterRoleOperation,
     },
     /// ```sql
@@ -2517,7 +2591,7 @@ pub enum Statement {
     /// ```
     /// (Postgresql-specific)
     AlterPolicy {
-        name: Ident,
+        name: WithSpan<Ident>,
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         operation: AlterPolicyOperation,
@@ -2528,7 +2602,7 @@ pub enum Statement {
     /// (SQLite-specific)
     AttachDatabase {
         /// The name to bind to the newly attached database
-        schema_name: Ident,
+        schema_name: WithSpan<Ident>,
         /// An expression that indicates the path to the database file
         database_file_name: Expr,
         /// true if the syntax is 'ATTACH DATABASE', false if it's just 'ATTACH'
@@ -2544,8 +2618,8 @@ pub enum Statement {
         /// true if the syntax is 'ATTACH DATABASE', false if it's just 'ATTACH'
         database: bool,
         /// An expression that indicates the path to the database file
-        database_path: Ident,
-        database_alias: Option<Ident>,
+        database_path: WithSpan<Ident>,
+        database_alias: Option<WithSpan<Ident>>,
         attach_options: Vec<AttachDuckDBDatabaseOption>,
     },
     /// (DuckDB-specific)
@@ -2557,7 +2631,7 @@ pub enum Statement {
         if_exists: bool,
         /// true if the syntax is 'DETACH DATABASE', false if it's just 'DETACH'
         database: bool,
-        database_alias: Ident,
+        database_alias: WithSpan<Ident>,
     },
     /// ```sql
     /// DROP [TABLE, VIEW, ...]
@@ -2607,8 +2681,8 @@ pub enum Statement {
     DropSecret {
         if_exists: bool,
         temporary: Option<bool>,
-        name: Ident,
-        storage_specifier: Option<Ident>,
+        name: WithSpan<Ident>,
+        storage_specifier: Option<WithSpan<Ident>>,
     },
     ///```sql
     /// DROP POLICY
@@ -2616,7 +2690,7 @@ pub enum Statement {
     /// See [PostgreSQL](https://www.postgresql.org/docs/current/sql-droppolicy.html)
     DropPolicy {
         if_exists: bool,
-        name: Ident,
+        name: WithSpan<Ident>,
         table_name: ObjectName,
         option: Option<ReferentialAction>,
     },
@@ -2637,11 +2711,11 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement,
     CreateExtension {
-        name: Ident,
+        name: WithSpan<Ident>,
         if_not_exists: bool,
         cascade: bool,
-        schema: Option<Ident>,
-        version: Option<Ident>,
+        schema: Option<WithSpan<Ident>>,
+        version: Option<WithSpan<Ident>>,
     },
     /// ```sql
     /// FETCH
@@ -2652,7 +2726,7 @@ pub enum Statement {
     /// but may also compatible with other SQL.
     Fetch {
         /// Cursor name
-        name: Ident,
+        name: WithSpan<Ident>,
         direction: FetchDirection,
         /// Optional, It's possible to fetch rows form cursor to the table
         into: Option<ObjectName>,
@@ -2692,7 +2766,7 @@ pub enum Statement {
         /// Non-ANSI optional identifier to inform if the role is defined inside the current session (`SESSION`) or transaction (`LOCAL`).
         context_modifier: ContextModifier,
         /// Role name. If NONE is specified, then the current role name is removed.
-        role_name: Option<Ident>,
+        role_name: Option<WithSpan<Ident>>,
     },
     /// ```sql
     /// SET <variable> = expression;
@@ -2739,7 +2813,7 @@ pub enum Statement {
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    ShowVariable { variable: Vec<Ident> },
+    ShowVariable { variable: Vec<WithSpan<Ident>> },
     /// ```sql
     /// SHOW [GLOBAL | SESSION] STATUS [LIKE 'pattern' | WHERE expr]
     /// ```
@@ -2788,7 +2862,7 @@ pub enum Statement {
     ShowTables {
         extended: bool,
         full: bool,
-        db_name: Option<Ident>,
+        db_name: Option<WithSpan<Ident>>,
         filter: Option<ShowStatementFilter>,
     },
     /// ```sql
@@ -2846,7 +2920,7 @@ pub enum Statement {
     /// ```
     Rollback {
         chain: bool,
-        savepoint: Option<Ident>,
+        savepoint: Option<WithSpan<Ident>>,
     },
     /// ```sql
     /// CREATE SCHEMA
@@ -2911,7 +2985,7 @@ pub enum Statement {
         /// CREATE FUNCTION foo() LANGUAGE js AS "console.log();"
         /// ```
         /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_a_javascript_udf)
-        language: Option<Ident>,
+        language: Option<WithSpan<Ident>>,
         /// Determinism keyword used for non-sql UDF definitions.
         ///
         /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_11)
@@ -3071,9 +3145,9 @@ pub enum Statement {
     Grant {
         privileges: Privileges,
         objects: GrantObjects,
-        grantees: Vec<Ident>,
+        grantees: Vec<WithSpan<Ident>>,
         with_grant_option: bool,
-        granted_by: Option<Ident>,
+        granted_by: Option<WithSpan<Ident>>,
     },
     /// ```sql
     /// REVOKE privileges ON objects FROM grantees
@@ -3081,8 +3155,8 @@ pub enum Statement {
     Revoke {
         privileges: Privileges,
         objects: GrantObjects,
-        grantees: Vec<Ident>,
-        granted_by: Option<Ident>,
+        grantees: Vec<WithSpan<Ident>>,
+        granted_by: Option<WithSpan<Ident>>,
         cascade: bool,
     },
     /// ```sql
@@ -3090,14 +3164,17 @@ pub enum Statement {
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Deallocate { name: Ident, prepare: bool },
+    Deallocate {
+        name: WithSpan<Ident>,
+        prepare: bool,
+    },
     /// ```sql
     /// EXECUTE name [ ( parameter [, ...] ) ] [USING <expr>]
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
     Execute {
-        name: Ident,
+        name: WithSpan<Ident>,
         parameters: Vec<Expr>,
         using: Vec<Expr>,
     },
@@ -3107,7 +3184,7 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement.
     Prepare {
-        name: Ident,
+        name: WithSpan<Ident>,
         data_types: Vec<DataType>,
         statement: Box<Statement>,
     },
@@ -3166,11 +3243,11 @@ pub enum Statement {
     /// SAVEPOINT
     /// ```
     /// Define a new savepoint within the current transaction
-    Savepoint { name: Ident },
+    Savepoint { name: WithSpan<Ident> },
     /// ```sql
     /// RELEASE [ SAVEPOINT ] savepoint_name
     /// ```
-    ReleaseSavepoint { name: Ident },
+    ReleaseSavepoint { name: WithSpan<Ident> },
     /// A `MERGE` statement.
     ///
     /// ```sql
@@ -3263,7 +3340,7 @@ pub enum Statement {
     // Athena <https://docs.aws.amazon.com/athena/latest/ug/unload.html>
     Unload {
         query: Box<Query>,
-        to: Ident,
+        to: WithSpan<Ident>,
         with: Vec<SqlOption>,
     },
     /// ```sql
@@ -3273,7 +3350,7 @@ pub enum Statement {
     /// See ClickHouse <https://clickhouse.com/docs/en/sql-reference/statements/optimize>
     OptimizeTable {
         name: ObjectName,
-        on_cluster: Option<Ident>,
+        on_cluster: Option<WithSpan<Ident>>,
         partition: Option<Partition>,
         include_final: bool,
         deduplicate: Option<Deduplicate>,
@@ -4248,7 +4325,10 @@ impl fmt::Display for Statement {
                 context_modifier,
                 role_name,
             } => {
-                let role_name = role_name.clone().unwrap_or_else(|| Ident::new("NONE"));
+                let role_name: Ident = role_name
+                    .clone()
+                    .map(|r| r.inner)
+                    .unwrap_or_else(|| Ident::new("NONE"));
                 write!(f, "SET{context_modifier} ROLE {role_name}")
             }
             Statement::SetVariable {
@@ -4913,7 +4993,7 @@ pub enum OnInsert {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct InsertAliases {
     pub row_alias: ObjectName,
-    pub col_aliases: Option<Vec<Ident>>,
+    pub col_aliases: Option<Vec<WithSpan<Ident>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -4927,7 +5007,7 @@ pub struct OnConflict {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ConflictTarget {
-    Columns(Vec<Ident>),
+    Columns(Vec<WithSpan<Ident>>),
     OnConstraint(ObjectName),
 }
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -5109,13 +5189,21 @@ pub enum Action {
     Create,
     Delete,
     Execute,
-    Insert { columns: Option<Vec<Ident>> },
-    References { columns: Option<Vec<Ident>> },
-    Select { columns: Option<Vec<Ident>> },
+    Insert {
+        columns: Option<Vec<WithSpan<Ident>>>,
+    },
+    References {
+        columns: Option<Vec<WithSpan<Ident>>>,
+    },
+    Select {
+        columns: Option<Vec<WithSpan<Ident>>>,
+    },
     Temporary,
     Trigger,
     Truncate,
-    Update { columns: Option<Vec<Ident>> },
+    Update {
+        columns: Option<Vec<WithSpan<Ident>>>,
+    },
     Usage,
 }
 
@@ -5293,7 +5381,7 @@ impl fmt::Display for FunctionArgOperator {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FunctionArg {
     Named {
-        name: Ident,
+        name: WithSpan<Ident>,
         arg: FunctionArgExpr,
         operator: FunctionArgOperator,
     },
@@ -5318,7 +5406,7 @@ impl fmt::Display for FunctionArg {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CloseCursor {
     All,
-    Specific { name: Ident },
+    Specific { name: WithSpan<Ident> },
 }
 
 impl fmt::Display for CloseCursor {
@@ -5719,7 +5807,7 @@ pub enum HiveRowFormat {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct HiveRowDelimiter {
     pub delimiter: HiveDelimiter,
-    pub char: Ident,
+    pub char: WithSpan<Ident>,
 }
 
 impl fmt::Display for HiveRowDelimiter {
@@ -5821,7 +5909,7 @@ pub struct HiveFormat {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ClusteredIndex {
-    pub name: Ident,
+    pub name: WithSpan<Ident>,
     pub asc: Option<bool>,
 }
 
@@ -5841,7 +5929,7 @@ impl fmt::Display for ClusteredIndex {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TableOptionsClustered {
     ColumnstoreIndex,
-    ColumnstoreIndexOrder(Vec<Ident>),
+    ColumnstoreIndexOrder(Vec<WithSpan<Ident>>),
     Index(Vec<ClusteredIndex>),
 }
 
@@ -5885,11 +5973,11 @@ pub enum SqlOption {
     /// Single identifier options, e.g. `HEAP` for MSSQL.
     ///
     /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-azure-sql-data-warehouse?view=aps-pdw-2016-au7#TableOptions>
-    Ident(Ident),
+    Ident(WithSpan<Ident>),
     /// Any option that consists of a key value pair where the value is an expression. e.g.
     ///
     ///   WITH(DISTRIBUTION = ROUND_ROBIN)
-    KeyValue { key: Ident, value: Expr },
+    KeyValue { key: WithSpan<Ident>, value: Expr },
     /// One or more table partitions and represents which partition the boundary values belong to,
     /// e.g.
     ///
@@ -5897,7 +5985,7 @@ pub enum SqlOption {
     ///
     /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-azure-sql-data-warehouse?view=aps-pdw-2016-au7#TablePartitionOptions>
     Partition {
-        column_name: Ident,
+        column_name: WithSpan<Ident>,
         range_direction: Option<PartitionRangeDirection>,
         for_values: Vec<Expr>,
     },
@@ -5940,8 +6028,8 @@ impl fmt::Display for SqlOption {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct SecretOption {
-    pub key: Ident,
-    pub value: Ident,
+    pub key: WithSpan<Ident>,
+    pub value: WithSpan<Ident>,
 }
 
 impl fmt::Display for SecretOption {
@@ -5955,7 +6043,7 @@ impl fmt::Display for SecretOption {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AttachDuckDBDatabaseOption {
     ReadOnly(Option<bool>),
-    Type(Ident),
+    Type(WithSpan<Ident>),
 }
 
 impl fmt::Display for AttachDuckDBDatabaseOption {
@@ -6132,7 +6220,7 @@ pub enum CopySource {
         table_name: ObjectName,
         /// A list of column names to copy. Empty list means that all columns
         /// are copied.
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
     },
     Query(Box<Query>),
 }
@@ -6186,7 +6274,7 @@ pub enum OnCommit {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum CopyOption {
     /// FORMAT format_name
-    Format(Ident),
+    Format(WithSpan<Ident>),
     /// FREEZE \[ boolean \]
     Freeze(bool),
     /// DELIMITER 'delimiter_character'
@@ -6200,11 +6288,11 @@ pub enum CopyOption {
     /// ESCAPE 'escape_character'
     Escape(char),
     /// FORCE_QUOTE { ( column_name [, ...] ) | * }
-    ForceQuote(Vec<Ident>),
+    ForceQuote(Vec<WithSpan<Ident>>),
     /// FORCE_NOT_NULL ( column_name [, ...] )
-    ForceNotNull(Vec<Ident>),
+    ForceNotNull(Vec<WithSpan<Ident>>),
     /// FORCE_NULL ( column_name [, ...] )
-    ForceNull(Vec<Ident>),
+    ForceNull(Vec<WithSpan<Ident>>),
     /// ENCODING 'encoding_name'
     Encoding(String),
 }
@@ -6275,9 +6363,9 @@ pub enum CopyLegacyCsvOption {
     /// ESCAPE \[ AS \] 'escape_character'
     Escape(char),
     /// FORCE QUOTE { column_name [, ...] | * }
-    ForceQuote(Vec<Ident>),
+    ForceQuote(Vec<WithSpan<Ident>>),
     /// FORCE NOT NULL column_name [, ...]
-    ForceNotNull(Vec<Ident>),
+    ForceNotNull(Vec<WithSpan<Ident>>),
 }
 
 impl fmt::Display for CopyLegacyCsvOption {
@@ -6391,7 +6479,7 @@ pub struct MergeInsertExpr {
     /// INSERT (product, quantity) VALUES(product, quantity)
     /// INSERT (product, quantity) ROW
     /// ```
-    pub columns: Vec<Ident>,
+    pub columns: Vec<WithSpan<Ident>>,
     /// The insert type used by the statement.
     pub kind: MergeInsertKind,
 }
@@ -6633,7 +6721,7 @@ impl fmt::Display for FunctionDesc {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct OperateFunctionArg {
     pub mode: Option<ArgMode>,
-    pub name: Option<Ident>,
+    pub name: Option<WithSpan<Ident>>,
     pub data_type: DataType,
     pub default_expr: Option<Expr>,
 }
@@ -6653,7 +6741,7 @@ impl OperateFunctionArg {
     pub fn with_name(name: &str, data_type: DataType) -> Self {
         Self {
             mode: None,
-            name: Some(name.into()),
+            name: Some(Ident::new(name).empty_span()),
             data_type,
             default_expr: None,
         }
@@ -6854,7 +6942,7 @@ impl fmt::Display for CreateFunctionUsing {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct MacroArg {
-    pub name: Ident,
+    pub name: WithSpan<Ident>,
     pub default_expr: Option<Expr>,
 }
 
@@ -6862,7 +6950,7 @@ impl MacroArg {
     /// Returns an argument with name.
     pub fn new(name: &str) -> Self {
         Self {
-            name: name.into(),
+            name: Ident::new(name).empty_span(),
             default_expr: None,
         }
     }
@@ -6906,9 +6994,9 @@ pub enum SchemaName {
     /// Only schema name specified: `<schema name>`.
     Simple(ObjectName),
     /// Only authorization identifier specified: `AUTHORIZATION <schema authorization identifier>`.
-    UnnamedAuthorization(Ident),
+    UnnamedAuthorization(WithSpan<Ident>),
     /// Both schema name and authorization identifier specified: `<schema name>  AUTHORIZATION <schema authorization identifier>`.
-    NamedAuthorization(ObjectName, Ident),
+    NamedAuthorization(ObjectName, WithSpan<Ident>),
 }
 
 impl fmt::Display for SchemaName {
@@ -6969,8 +7057,8 @@ impl fmt::Display for SearchModifier {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct LockTable {
-    pub table: Ident,
-    pub alias: Option<Ident>,
+    pub table: WithSpan<Ident>,
+    pub alias: Option<WithSpan<Ident>>,
     pub lock_type: LockTableType,
 }
 
@@ -7025,7 +7113,7 @@ impl fmt::Display for LockTableType {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct HiveSetLocation {
     pub has_set: bool,
-    pub location: Ident,
+    pub location: WithSpan<Ident>,
 }
 
 impl fmt::Display for HiveSetLocation {
@@ -7044,7 +7132,7 @@ impl fmt::Display for HiveSetLocation {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum MySQLColumnPosition {
     First,
-    After(Ident),
+    After(WithSpan<Ident>),
 }
 
 impl Display for MySQLColumnPosition {
@@ -7067,7 +7155,7 @@ impl Display for MySQLColumnPosition {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableEngine {
     pub name: String,
-    pub parameters: Option<Vec<Ident>>,
+    pub parameters: Option<Vec<WithSpan<Ident>>>,
 }
 
 impl Display for TableEngine {
@@ -7091,11 +7179,11 @@ impl Display for TableEngine {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct RowAccessPolicy {
     pub policy: ObjectName,
-    pub on: Vec<Ident>,
+    pub on: Vec<WithSpan<Ident>>,
 }
 
 impl RowAccessPolicy {
-    pub fn new(policy: ObjectName, on: Vec<Ident>) -> Self {
+    pub fn new(policy: ObjectName, on: Vec<WithSpan<Ident>>) -> Self {
         Self { policy, on }
     }
 }
@@ -7118,12 +7206,12 @@ impl Display for RowAccessPolicy {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Tag {
-    pub key: Ident,
+    pub key: WithSpan<Ident>,
     pub value: String,
 }
 
 impl Tag {
-    pub fn new(key: Ident, value: String) -> Self {
+    pub fn new(key: WithSpan<Ident>, value: String) -> Self {
         Self { key, value }
     }
 }
@@ -7226,7 +7314,7 @@ where
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct UtilityOption {
-    pub name: Ident,
+    pub name: WithSpan<Ident>,
     pub arg: Option<Expr>,
 }
 
@@ -7244,6 +7332,10 @@ impl Display for UtilityOption {
 mod tests {
     use super::*;
 
+    fn ident<T: Into<String>>(value: T) -> WithSpan<Ident> {
+        SpanWrapped::empty_span(Ident::new(value))
+    }
+
     #[test]
     fn test_window_frame_default() {
         let window_frame = WindowFrame::default();
@@ -7254,84 +7346,72 @@ mod tests {
     fn test_grouping_sets_display() {
         // a and b in different group
         let grouping_sets = Expr::GroupingSets(vec![
-            vec![Expr::Identifier(Ident::new("a"))],
-            vec![Expr::Identifier(Ident::new("b"))],
+            vec![Expr::Identifier(ident("a"))],
+            vec![Expr::Identifier(ident("b"))],
         ]);
         assert_eq!("GROUPING SETS ((a), (b))", format!("{grouping_sets}"));
 
         // a and b in the same group
         let grouping_sets = Expr::GroupingSets(vec![vec![
-            Expr::Identifier(Ident::new("a")),
-            Expr::Identifier(Ident::new("b")),
+            Expr::Identifier(ident("a")),
+            Expr::Identifier(ident("b")),
         ]]);
         assert_eq!("GROUPING SETS ((a, b))", format!("{grouping_sets}"));
 
         // (a, b) and (c, d) in different group
         let grouping_sets = Expr::GroupingSets(vec![
-            vec![
-                Expr::Identifier(Ident::new("a")),
-                Expr::Identifier(Ident::new("b")),
-            ],
-            vec![
-                Expr::Identifier(Ident::new("c")),
-                Expr::Identifier(Ident::new("d")),
-            ],
+            vec![Expr::Identifier(ident("a")), Expr::Identifier(ident("b"))],
+            vec![Expr::Identifier(ident("c")), Expr::Identifier(ident("d"))],
         ]);
         assert_eq!("GROUPING SETS ((a, b), (c, d))", format!("{grouping_sets}"));
     }
 
     #[test]
     fn test_rollup_display() {
-        let rollup = Expr::Rollup(vec![vec![Expr::Identifier(Ident::new("a"))]]);
+        let rollup = Expr::Rollup(vec![vec![Expr::Identifier(ident("a"))]]);
         assert_eq!("ROLLUP (a)", format!("{rollup}"));
 
         let rollup = Expr::Rollup(vec![vec![
-            Expr::Identifier(Ident::new("a")),
-            Expr::Identifier(Ident::new("b")),
+            Expr::Identifier(ident("a")),
+            Expr::Identifier(ident("b")),
         ]]);
         assert_eq!("ROLLUP ((a, b))", format!("{rollup}"));
 
         let rollup = Expr::Rollup(vec![
-            vec![Expr::Identifier(Ident::new("a"))],
-            vec![Expr::Identifier(Ident::new("b"))],
+            vec![Expr::Identifier(ident("a"))],
+            vec![Expr::Identifier(ident("b"))],
         ]);
         assert_eq!("ROLLUP (a, b)", format!("{rollup}"));
 
         let rollup = Expr::Rollup(vec![
-            vec![Expr::Identifier(Ident::new("a"))],
-            vec![
-                Expr::Identifier(Ident::new("b")),
-                Expr::Identifier(Ident::new("c")),
-            ],
-            vec![Expr::Identifier(Ident::new("d"))],
+            vec![Expr::Identifier(ident("a"))],
+            vec![Expr::Identifier(ident("b")), Expr::Identifier(ident("c"))],
+            vec![Expr::Identifier(ident("d"))],
         ]);
         assert_eq!("ROLLUP (a, (b, c), d)", format!("{rollup}"));
     }
 
     #[test]
     fn test_cube_display() {
-        let cube = Expr::Cube(vec![vec![Expr::Identifier(Ident::new("a"))]]);
+        let cube = Expr::Cube(vec![vec![Expr::Identifier(ident("a"))]]);
         assert_eq!("CUBE (a)", format!("{cube}"));
 
         let cube = Expr::Cube(vec![vec![
-            Expr::Identifier(Ident::new("a")),
-            Expr::Identifier(Ident::new("b")),
+            Expr::Identifier(ident("a")),
+            Expr::Identifier(ident("b")),
         ]]);
         assert_eq!("CUBE ((a, b))", format!("{cube}"));
 
         let cube = Expr::Cube(vec![
-            vec![Expr::Identifier(Ident::new("a"))],
-            vec![Expr::Identifier(Ident::new("b"))],
+            vec![Expr::Identifier(ident("a"))],
+            vec![Expr::Identifier(ident("b"))],
         ]);
         assert_eq!("CUBE (a, b)", format!("{cube}"));
 
         let cube = Expr::Cube(vec![
-            vec![Expr::Identifier(Ident::new("a"))],
-            vec![
-                Expr::Identifier(Ident::new("b")),
-                Expr::Identifier(Ident::new("c")),
-            ],
-            vec![Expr::Identifier(Ident::new("d"))],
+            vec![Expr::Identifier(ident("a"))],
+            vec![Expr::Identifier(ident("b")), Expr::Identifier(ident("c"))],
+            vec![Expr::Identifier(ident("d"))],
         ]);
         assert_eq!("CUBE (a, (b, c), d)", format!("{cube}"));
     }

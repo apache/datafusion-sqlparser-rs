@@ -29,10 +29,13 @@ fn test_square_brackets_over_db_schema_table_name() {
     let select = redshift().verified_only_select("SELECT [col1] FROM [test_schema].[test_table]");
     assert_eq!(
         select.projection[0],
-        SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-            value: "col1".to_string(),
-            quote_style: Some('[')
-        })),
+        SelectItem::UnnamedExpr(Expr::Identifier(
+            Ident {
+                value: "col1".to_string(),
+                quote_style: Some('[')
+            }
+            .empty_span()
+        )),
     );
     assert_eq!(
         select.from[0],
@@ -42,11 +45,13 @@ fn test_square_brackets_over_db_schema_table_name() {
                     Ident {
                         value: "test_schema".to_string(),
                         quote_style: Some('[')
-                    },
+                    }
+                    .empty_span(),
                     Ident {
                         value: "test_table".to_string(),
                         quote_style: Some('[')
                     }
+                    .empty_span()
                 ]),
                 alias: None,
                 args: None,
@@ -76,10 +81,13 @@ fn test_double_quotes_over_db_schema_table_name() {
         redshift().verified_only_select("SELECT \"col1\" FROM \"test_schema\".\"test_table\"");
     assert_eq!(
         select.projection[0],
-        SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-            value: "col1".to_string(),
-            quote_style: Some('"')
-        })),
+        SelectItem::UnnamedExpr(Expr::Identifier(
+            Ident {
+                value: "col1".to_string(),
+                quote_style: Some('"')
+            }
+            .empty_span()
+        )),
     );
     assert_eq!(
         select.from[0],
@@ -89,11 +97,13 @@ fn test_double_quotes_over_db_schema_table_name() {
                     Ident {
                         value: "test_schema".to_string(),
                         quote_style: Some('"')
-                    },
+                    }
+                    .empty_span(),
                     Ident {
                         value: "test_table".to_string(),
                         quote_style: Some('"')
                     }
+                    .empty_span()
                 ]),
                 alias: None,
                 args: None,
@@ -124,8 +134,11 @@ fn parse_delimited_identifiers() {
             with_ordinality: _,
             partitions: _,
         } => {
-            assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert_eq!(vec![Ident::with_quote('"', "a table").empty_span()], name.0);
+            assert_eq!(
+                Ident::with_quote('"', "alias").empty_span(),
+                alias.unwrap().name
+            );
             assert!(args.is_none());
             assert!(with_hints.is_empty());
             assert!(version.is_none());
@@ -136,14 +149,14 @@ fn parse_delimited_identifiers() {
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::CompoundIdentifier(vec![
-            Ident::with_quote('"', "alias"),
-            Ident::with_quote('"', "bar baz"),
+            Ident::with_quote('"', "alias").empty_span(),
+            Ident::with_quote('"', "bar baz").empty_span(),
         ]),
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            name: ObjectName(vec![Ident::with_quote('"', "myfun").empty_span()]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
@@ -159,8 +172,11 @@ fn parse_delimited_identifiers() {
     );
     match &select.projection[2] {
         SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+            assert_eq!(
+                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                expr
+            );
+            assert_eq!(&Ident::with_quote('"', "column alias").empty_span(), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
     }
@@ -186,7 +202,7 @@ fn test_sharp() {
     let sql = "SELECT #_of_values";
     let select = redshift().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("#_of_values"))),
+        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("#_of_values").empty_span())),
         select.projection[0]
     );
 }

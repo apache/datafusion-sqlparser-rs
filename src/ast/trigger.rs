@@ -82,7 +82,7 @@ impl fmt::Display for TriggerReferencing {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TriggerEvent {
     Insert,
-    Update(Vec<Ident>),
+    Update(Vec<WithSpan<Ident>>),
     Delete,
     Truncate,
 }

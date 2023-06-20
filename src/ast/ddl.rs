@@ -25,6 +25,7 @@ use core::fmt::{self, Write};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use sqlparser::ast::WithSpan;
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -60,7 +61,7 @@ pub enum AlterTableOperation {
     /// Please refer to [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/projection#add-projection)
     AddProjection {
         if_not_exists: bool,
-        name: Ident,
+        name: WithSpan<Ident>,
         select: ProjectionSelect,
     },
 
@@ -68,7 +69,10 @@ pub enum AlterTableOperation {
     ///
     /// Note: this is a ClickHouse-specific operation.
     /// Please refer to [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/projection#drop-projection)
-    DropProjection { if_exists: bool, name: Ident },
+    DropProjection {
+        if_exists: bool,
+        name: WithSpan<Ident>,
+    },
 
     /// `MATERIALIZE PROJECTION [IF EXISTS] name [IN PARTITION partition_name]`
     ///
@@ -76,8 +80,8 @@ pub enum AlterTableOperation {
     /// Please refer to [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/projection#materialize-projection)
     MaterializeProjection {
         if_exists: bool,
-        name: Ident,
-        partition: Option<Ident>,
+        name: WithSpan<Ident>,
+        partition: Option<WithSpan<Ident>>,
     },
 
     /// `CLEAR PROJECTION [IF EXISTS] name [IN PARTITION partition_name]`
@@ -86,8 +90,8 @@ pub enum AlterTableOperation {
     /// Please refer to [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/projection#clear-projection)
     ClearProjection {
         if_exists: bool,
-        name: Ident,
-        partition: Option<Ident>,
+        name: WithSpan<Ident>,
+        partition: Option<WithSpan<Ident>>,
     },
 
     /// `DISABLE ROW LEVEL SECURITY`
@@ -97,20 +101,20 @@ pub enum AlterTableOperation {
     /// `DISABLE RULE rewrite_rule_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    DisableRule { name: Ident },
+    DisableRule { name: WithSpan<Ident> },
     /// `DISABLE TRIGGER [ trigger_name | ALL | USER ]`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    DisableTrigger { name: Ident },
+    DisableTrigger { name: WithSpan<Ident> },
     /// `DROP CONSTRAINT [ IF EXISTS ] <name>`
     DropConstraint {
         if_exists: bool,
-        name: Ident,
+        name: WithSpan<Ident>,
         cascade: bool,
     },
     /// `DROP [ COLUMN ] [ IF EXISTS ] <column_name> [ CASCADE ]`
     DropColumn {
-        column_name: Ident,
+        column_name: WithSpan<Ident>,
         if_exists: bool,
         cascade: bool,
     },
@@ -134,14 +138,14 @@ pub enum AlterTableOperation {
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#freeze-partition)
     FreezePartition {
         partition: Partition,
-        with_name: Option<Ident>,
+        with_name: Option<WithSpan<Ident>>,
     },
     /// `UNFREEZE PARTITION <partition_expr>`
     /// Note: this is a ClickHouse-specific operation, please refer to
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#unfreeze-partition)
     UnfreezePartition {
         partition: Partition,
-        with_name: Option<Ident>,
+        with_name: Option<WithSpan<Ident>>,
     },
     /// `DROP PRIMARY KEY`
     ///
@@ -150,19 +154,19 @@ pub enum AlterTableOperation {
     /// `ENABLE ALWAYS RULE rewrite_rule_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableAlwaysRule { name: Ident },
+    EnableAlwaysRule { name: WithSpan<Ident> },
     /// `ENABLE ALWAYS TRIGGER trigger_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableAlwaysTrigger { name: Ident },
+    EnableAlwaysTrigger { name: WithSpan<Ident> },
     /// `ENABLE REPLICA RULE rewrite_rule_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableReplicaRule { name: Ident },
+    EnableReplicaRule { name: WithSpan<Ident> },
     /// `ENABLE REPLICA TRIGGER trigger_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableReplicaTrigger { name: Ident },
+    EnableReplicaTrigger { name: WithSpan<Ident> },
     /// `ENABLE ROW LEVEL SECURITY`
     ///
     /// Note: this is a PostgreSQL-specific operation.
@@ -170,11 +174,11 @@ pub enum AlterTableOperation {
     /// `ENABLE RULE rewrite_rule_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableRule { name: Ident },
+    EnableRule { name: WithSpan<Ident> },
     /// `ENABLE TRIGGER [ trigger_name | ALL | USER ]`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableTrigger { name: Ident },
+    EnableTrigger { name: WithSpan<Ident> },
     /// `RENAME TO PARTITION (partition=val)`
     RenamePartitions {
         old_partitions: Vec<Expr>,
@@ -191,15 +195,15 @@ pub enum AlterTableOperation {
     },
     /// `RENAME [ COLUMN ] <old_column_name> TO <new_column_name>`
     RenameColumn {
-        old_column_name: Ident,
-        new_column_name: Ident,
+        old_column_name: WithSpan<Ident>,
+        new_column_name: WithSpan<Ident>,
     },
     /// `RENAME TO <table_name>`
     RenameTable { table_name: ObjectName },
     // CHANGE [ COLUMN ] <old_name> <new_name> <data_type> [ <options> ]
     ChangeColumn {
-        old_name: Ident,
-        new_name: Ident,
+        old_name: WithSpan<Ident>,
+        new_name: WithSpan<Ident>,
         data_type: DataType,
         options: Vec<ColumnOption>,
         /// MySQL `ALTER TABLE` only  [FIRST | AFTER column_name]
@@ -207,7 +211,7 @@ pub enum AlterTableOperation {
     },
     // CHANGE [ COLUMN ] <col_name> <data_type> [ <options> ]
     ModifyColumn {
-        col_name: Ident,
+        col_name: WithSpan<Ident>,
         data_type: DataType,
         options: Vec<ColumnOption>,
         /// MySQL `ALTER TABLE` only  [FIRST | AFTER column_name]
@@ -216,10 +220,13 @@ pub enum AlterTableOperation {
     /// `RENAME CONSTRAINT <old_constraint_name> TO <new_constraint_name>`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    RenameConstraint { old_name: Ident, new_name: Ident },
+    RenameConstraint {
+        old_name: WithSpan<Ident>,
+        new_name: WithSpan<Ident>,
+    },
     /// `ALTER [ COLUMN ]`
     AlterColumn {
-        column_name: Ident,
+        column_name: WithSpan<Ident>,
         op: AlterColumnOperation,
     },
     /// 'SWAP WITH <table_name>'
@@ -243,7 +250,7 @@ pub enum AlterTableOperation {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AlterPolicyOperation {
     Rename {
-        new_name: Ident,
+        new_name: WithSpan<Ident>,
     },
     Apply {
         to: Option<Vec<Owner>>,
@@ -282,7 +289,7 @@ impl fmt::Display for AlterPolicyOperation {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Owner {
-    Ident(Ident),
+    Ident(WithSpan<Ident>),
     CurrentRole,
     CurrentUser,
     SessionUser,
@@ -654,9 +661,9 @@ pub enum TableConstraint {
         /// Constraint name.
         ///
         /// Can be not the same as `index_name`
-        name: Option<Ident>,
+        name: Option<WithSpan<Ident>>,
         /// Index name
-        index_name: Option<Ident>,
+        index_name: Option<WithSpan<Ident>>,
         /// Whether the type is followed by the keyword `KEY`, `INDEX`, or no keyword at all.
         index_type_display: KeyOrIndexDisplay,
         /// Optional `USING` of [index type][1] statement before columns.
@@ -664,7 +671,7 @@ pub enum TableConstraint {
         /// [1]: IndexType
         index_type: Option<IndexType>,
         /// Identifiers of the columns that are unique.
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
         index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,
     },
@@ -690,15 +697,15 @@ pub enum TableConstraint {
         /// Constraint name.
         ///
         /// Can be not the same as `index_name`
-        name: Option<Ident>,
+        name: Option<WithSpan<Ident>>,
         /// Index name
-        index_name: Option<Ident>,
+        index_name: Option<WithSpan<Ident>>,
         /// Optional `USING` of [index type][1] statement before columns.
         ///
         /// [1]: IndexType
         index_type: Option<IndexType>,
         /// Identifiers of the columns that form the primary key.
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
         index_options: Vec<IndexOption>,
         characteristics: Option<ConstraintCharacteristics>,
     },
@@ -708,17 +715,17 @@ pub enum TableConstraint {
     ///   [ON UPDATE <referential_action>] [ON DELETE <referential_action>]
     /// }`).
     ForeignKey {
-        name: Option<Ident>,
-        columns: Vec<Ident>,
+        name: Option<WithSpan<Ident>>,
+        columns: Vec<WithSpan<Ident>>,
         foreign_table: ObjectName,
-        referred_columns: Vec<Ident>,
+        referred_columns: Vec<WithSpan<Ident>>,
         on_delete: Option<ReferentialAction>,
         on_update: Option<ReferentialAction>,
         characteristics: Option<ConstraintCharacteristics>,
     },
     /// `[ CONSTRAINT <name> ] CHECK (<expr>)`
     Check {
-        name: Option<Ident>,
+        name: Option<WithSpan<Ident>>,
         expr: Box<Expr>,
     },
     /// MySQLs [index definition][1] for index creation. Not present on ANSI so, for now, the usage
@@ -731,13 +738,13 @@ pub enum TableConstraint {
         /// Whether this index starts with KEY (true) or INDEX (false), to maintain the same syntax.
         display_as_key: bool,
         /// Index name.
-        name: Option<Ident>,
+        name: Option<WithSpan<Ident>>,
         /// Optional [index type][1].
         ///
         /// [1]: IndexType
         index_type: Option<IndexType>,
         /// Referred column identifier list.
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
     },
     /// MySQLs [fulltext][1] definition. Since the [`SPATIAL`][2] definition is exactly the same,
     /// and MySQL displays both the same way, it is part of this definition as well.
@@ -758,9 +765,9 @@ pub enum TableConstraint {
         /// Whether the type is followed by the keyword `KEY`, `INDEX`, or no keyword at all.
         index_type_display: KeyOrIndexDisplay,
         /// Optional index name.
-        opt_index_name: Option<Ident>,
+        opt_index_name: Option<WithSpan<Ident>>,
         /// Referred column identifier list.
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
     },
 }
 
@@ -990,7 +997,7 @@ impl fmt::Display for IndexOption {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ProcedureParam {
-    pub name: Ident,
+    pub name: WithSpan<Ident>,
     pub data_type: DataType,
 }
 
@@ -1005,7 +1012,7 @@ impl fmt::Display for ProcedureParam {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ColumnDef {
-    pub name: Ident,
+    pub name: WithSpan<Ident>,
     pub data_type: DataType,
     pub collation: Option<ObjectName>,
     pub options: Vec<ColumnOptionDef>,
@@ -1048,7 +1055,7 @@ impl fmt::Display for ColumnDef {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ViewColumnDef {
-    pub name: Ident,
+    pub name: WithSpan<Ident>,
     pub data_type: Option<DataType>,
     pub options: Option<Vec<ColumnOption>>,
 }
@@ -1086,7 +1093,7 @@ impl fmt::Display for ViewColumnDef {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ColumnOptionDef {
-    pub name: Option<Ident>,
+    pub name: Option<WithSpan<Ident>>,
     pub option: ColumnOption,
 }
 
@@ -1280,8 +1287,8 @@ pub struct ColumnPolicyProperty {
     /// ```
     /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/sql/create-table
     pub with: bool,
-    pub policy_name: Ident,
-    pub using_columns: Option<Vec<Ident>>,
+    pub policy_name: WithSpan<Ident>,
+    pub using_columns: Option<Vec<WithSpan<Ident>>>,
 }
 
 /// Tags option of column
@@ -1352,7 +1359,7 @@ pub enum ColumnOption {
     /// `).
     ForeignKey {
         foreign_table: ObjectName,
-        referred_columns: Vec<Ident>,
+        referred_columns: Vec<WithSpan<Ident>>,
         on_delete: Option<ReferentialAction>,
         on_update: Option<ReferentialAction>,
         characteristics: Option<ConstraintCharacteristics>,
@@ -1550,8 +1557,8 @@ pub enum GeneratedExpressionMode {
 }
 
 #[must_use]
-fn display_constraint_name(name: &'_ Option<Ident>) -> impl fmt::Display + '_ {
-    struct ConstraintName<'a>(&'a Option<Ident>);
+fn display_constraint_name(name: &'_ Option<WithSpan<Ident>>) -> impl fmt::Display + '_ {
+    struct ConstraintName<'a>(&'a Option<WithSpan<Ident>>);
     impl<'a> fmt::Display for ConstraintName<'a> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             if let Some(name) = self.0 {
@@ -1707,7 +1714,7 @@ pub enum UserDefinedTypeRepresentation {
         attributes: Vec<UserDefinedTypeCompositeAttributeDef>,
     },
     /// Note: this is PostgreSQL-specific. See <https://www.postgresql.org/docs/current/sql-createtype.html>
-    Enum { labels: Vec<Ident> },
+    Enum { labels: Vec<WithSpan<Ident>> },
 }
 
 impl fmt::Display for UserDefinedTypeRepresentation {
@@ -1728,7 +1735,7 @@ impl fmt::Display for UserDefinedTypeRepresentation {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct UserDefinedTypeCompositeAttributeDef {
-    pub name: Ident,
+    pub name: WithSpan<Ident>,
     pub data_type: DataType,
     pub collation: Option<ObjectName>,
 }
@@ -1750,7 +1757,7 @@ impl fmt::Display for UserDefinedTypeCompositeAttributeDef {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum Partition {
-    Identifier(Ident),
+    Identifier(WithSpan<Ident>),
     Expr(Expr),
     /// ClickHouse supports PART expr which represents physical partition in disk.
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/alter/partition#attach-partitionpart)
@@ -1798,7 +1805,7 @@ impl fmt::Display for Deduplicate {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ClusteredBy {
-    pub columns: Vec<Ident>,
+    pub columns: Vec<WithSpan<Ident>>,
     pub sorted_by: Option<Vec<OrderByExpr>>,
     pub num_buckets: Value,
 }

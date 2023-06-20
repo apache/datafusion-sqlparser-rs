@@ -413,7 +413,7 @@ pub struct LateralView {
     /// LATERAL VIEW table name
     pub lateral_view_name: ObjectName,
     /// LATERAL VIEW optional column aliases
-    pub lateral_col_alias: Vec<Ident>,
+    pub lateral_col_alias: Vec<WithSpan<Ident>>,
     /// LATERAL VIEW OUTER
     pub outer: bool,
 }
@@ -456,7 +456,7 @@ pub enum NamedWindowExpr {
     /// ```
     ///
     /// [BigQuery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls#ref_named_window
-    NamedWindow(Ident),
+    NamedWindow(WithSpan<Ident>),
     /// A window expression.
     ///
     /// Example:
@@ -483,7 +483,7 @@ impl fmt::Display for NamedWindowExpr {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct NamedWindowDefinition(pub Ident, pub NamedWindowExpr);
+pub struct NamedWindowDefinition(pub WithSpan<Ident>, pub NamedWindowExpr);
 
 impl fmt::Display for NamedWindowDefinition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -544,7 +544,7 @@ impl fmt::Display for CteAsMaterialized {
 pub struct Cte {
     pub alias: TableAlias,
     pub query: Box<Query>,
-    pub from: Option<Ident>,
+    pub from: Option<WithSpan<Ident>>,
     pub materialized: Option<CteAsMaterialized>,
 }
 
@@ -569,7 +569,7 @@ pub enum SelectItem {
     /// Any expression, not followed by `[ AS ] alias`
     UnnamedExpr(Expr),
     /// An expression, followed by `[ AS ] alias`
-    ExprWithAlias { expr: Expr, alias: Ident },
+    ExprWithAlias { expr: Expr, alias: WithSpan<Ident> },
     /// `alias.*` or even `schema.table.*`
     QualifiedWildcard(ObjectName, WildcardAdditionalOptions),
     /// An unqualified `*`
@@ -586,8 +586,8 @@ pub enum SelectItem {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct IdentWithAlias {
-    pub ident: Ident,
-    pub alias: Ident,
+    pub ident: WithSpan<Ident>,
+    pub alias: WithSpan<Ident>,
 }
 
 impl fmt::Display for IdentWithAlias {
@@ -679,13 +679,13 @@ pub enum ExcludeSelectItem {
     /// ```plaintext
     /// <col_name>
     /// ```
-    Single(Ident),
+    Single(WithSpan<Ident>),
     /// Multiple column names inside parenthesis.
     /// # Syntax
     /// ```plaintext
     /// (<col_name>, <col_name>, ...)
     /// ```
-    Multiple(Vec<Ident>),
+    Multiple(Vec<WithSpan<Ident>>),
 }
 
 impl fmt::Display for ExcludeSelectItem {
@@ -755,9 +755,9 @@ impl fmt::Display for RenameSelectItem {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ExceptSelectItem {
     /// First guaranteed column.
-    pub first_element: Ident,
+    pub first_element: WithSpan<Ident>,
     /// Additional columns. This list can be empty.
-    pub additional_elements: Vec<Ident>,
+    pub additional_elements: Vec<WithSpan<Ident>>,
 }
 
 impl fmt::Display for ExceptSelectItem {
@@ -808,7 +808,7 @@ impl fmt::Display for ReplaceSelectItem {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ReplaceSelectElement {
     pub expr: Expr,
-    pub column_name: Ident,
+    pub column_name: WithSpan<Ident>,
     pub as_keyword: bool,
 }
 
@@ -887,7 +887,7 @@ impl fmt::Display for ConnectBy {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Setting {
-    pub key: Ident,
+    pub key: WithSpan<Ident>,
     pub value: Value,
 }
 
@@ -908,7 +908,7 @@ impl fmt::Display for Setting {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ExprWithAlias {
     pub expr: Expr,
-    pub alias: Option<Ident>,
+    pub alias: Option<WithSpan<Ident>>,
 }
 
 impl fmt::Display for ExprWithAlias {
@@ -963,7 +963,7 @@ pub enum TableFactor {
         /// [WITH ORDINALITY](https://www.postgresql.org/docs/current/functions-srf.html), supported by Postgres.
         with_ordinality: bool,
         /// [Partition selection](https://dev.mysql.com/doc/refman/8.0/en/partitioning-selection.html), supported by MySQL.
-        partitions: Vec<Ident>,
+        partitions: Vec<WithSpan<Ident>>,
     },
     Derived {
         lateral: bool,
@@ -996,7 +996,7 @@ pub enum TableFactor {
         alias: Option<TableAlias>,
         array_exprs: Vec<Expr>,
         with_offset: bool,
-        with_offset_alias: Option<Ident>,
+        with_offset_alias: Option<WithSpan<Ident>>,
         with_ordinality: bool,
     },
     /// The `JSON_TABLE` table-valued function.
@@ -1044,7 +1044,7 @@ pub enum TableFactor {
     Pivot {
         table: Box<TableFactor>,
         aggregate_functions: Vec<ExprWithAlias>, // Function expression
-        value_column: Vec<Ident>,
+        value_column: Vec<WithSpan<Ident>>,
         value_source: PivotValueSource,
         default_on_null: Option<Expr>,
         alias: Option<TableAlias>,
@@ -1059,9 +1059,9 @@ pub enum TableFactor {
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/unpivot>.
     Unpivot {
         table: Box<TableFactor>,
-        value: Ident,
-        name: Ident,
-        columns: Vec<Ident>,
+        value: WithSpan<Ident>,
+        name: WithSpan<Ident>,
+        columns: Vec<WithSpan<Ident>>,
         alias: Option<TableAlias>,
     },
     /// A `MATCH_RECOGNIZE` operation on a table.
@@ -1130,7 +1130,7 @@ impl fmt::Display for PivotValueSource {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Measure {
     pub expr: Expr,
-    pub alias: Ident,
+    pub alias: WithSpan<Ident>,
 }
 
 impl fmt::Display for Measure {
@@ -1179,9 +1179,9 @@ pub enum AfterMatchSkip {
     /// `TO NEXT ROW`
     ToNextRow,
     /// `TO FIRST <symbol>`
-    ToFirst(Ident),
+    ToFirst(WithSpan<Ident>),
     /// `TO LAST <symbol>`
-    ToLast(Ident),
+    ToLast(WithSpan<Ident>),
 }
 
 impl fmt::Display for AfterMatchSkip {
@@ -1225,7 +1225,7 @@ impl fmt::Display for EmptyMatchesMode {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct SymbolDefinition {
-    pub symbol: Ident,
+    pub symbol: WithSpan<Ident>,
     pub definition: Expr,
 }
 
@@ -1241,7 +1241,7 @@ impl fmt::Display for SymbolDefinition {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum MatchRecognizeSymbol {
     /// A named symbol, e.g. `S1`.
-    Named(Ident),
+    Named(WithSpan<Ident>),
     /// A virtual symbol representing the start of the of partition (`^`).
     Start,
     /// A virtual symbol representing the end of the partition (`$`).
@@ -1546,8 +1546,8 @@ impl fmt::Display for TableFactor {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableAlias {
-    pub name: Ident,
-    pub columns: Vec<Ident>,
+    pub name: WithSpan<Ident>,
+    pub columns: Vec<WithSpan<Ident>>,
 }
 
 impl fmt::Display for TableAlias {
@@ -1723,7 +1723,7 @@ pub enum JoinOperator {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum JoinConstraint {
     On(Expr),
-    Using(Vec<Ident>),
+    Using(Vec<WithSpan<Ident>>),
     Natural,
     None,
 }
@@ -1828,7 +1828,7 @@ impl fmt::Display for WithFill {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct InterpolateExpr {
-    pub column: Ident,
+    pub column: WithSpan<Ident>,
     pub expr: Option<Expr>,
 }
 
@@ -2140,7 +2140,7 @@ impl fmt::Display for GroupByExpr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum FormatClause {
-    Identifier(Ident),
+    Identifier(WithSpan<Ident>),
     Null,
 }
 
@@ -2290,7 +2290,7 @@ impl fmt::Display for ForJson {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct JsonTableColumn {
     /// The name of the column to be extracted.
-    pub name: Ident,
+    pub name: WithSpan<Ident>,
     /// The type of the column to be extracted.
     pub r#type: DataType,
     /// The path to the column to be extracted. Must be a literal string.

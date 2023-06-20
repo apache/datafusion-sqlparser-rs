@@ -36,11 +36,11 @@ fn parse_mssql_identifiers() {
     let sql = "SELECT @@version, _foo$123 FROM ##temp";
     let select = ms_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::Identifier(Ident::new("@@version")),
+        &Expr::Identifier(Ident::new("@@version").empty_span()),
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
-        &Expr::Identifier(Ident::new("_foo$123")),
+        &Expr::Identifier(Ident::new("_foo$123").empty_span()),
         expr_from_projection(&select.projection[1]),
     );
     assert_eq!(2, select.projection.len());
@@ -61,7 +61,7 @@ fn parse_table_time_travel() {
         select.from,
         vec![TableWithJoins {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new("t1")]),
+                name: ObjectName(vec![Ident::new("t1").empty_span()]),
                 alias: None,
                 args: None,
                 with_hints: vec![],
@@ -137,14 +137,16 @@ fn parse_create_procedure() {
                     name: Ident {
                         value: "@foo".into(),
                         quote_style: None
-                    },
+                    }
+                    .empty_span(),
                     data_type: DataType::Int(None)
                 },
                 ProcedureParam {
                     name: Ident {
                         value: "@bar".into(),
                         quote_style: None
-                    },
+                    }
+                    .empty_span(),
                     data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                         length: 256,
                         unit: None
@@ -154,7 +156,8 @@ fn parse_create_procedure() {
             name: ObjectName(vec![Ident {
                 value: "test".into(),
                 quote_style: None
-            }])
+            }
+            .empty_span()])
         }
     )
 }
@@ -266,7 +269,8 @@ fn parse_mssql_create_role() {
                 Some(ObjectName(vec![Ident {
                     value: "helena".into(),
                     quote_style: None
-                }]))
+                }
+                .empty_span()]))
             );
         }
         _ => unreachable!(),
@@ -282,12 +286,14 @@ fn parse_alter_role() {
             name: Ident {
                 value: "old_name".into(),
                 quote_style: None
-            },
+            }
+            .empty_span(),
             operation: AlterRoleOperation::RenameRole {
                 role_name: Ident {
                     value: "new_name".into(),
                     quote_style: None
                 }
+                .empty_span(),
             },
         }]
     );
@@ -299,12 +305,14 @@ fn parse_alter_role() {
             name: Ident {
                 value: "role_name".into(),
                 quote_style: None
-            },
+            }
+            .empty_span(),
             operation: AlterRoleOperation::AddMember {
                 member_name: Ident {
                     value: "new_member".into(),
                     quote_style: None
                 }
+                .empty_span(),
             },
         }
     );
@@ -316,12 +324,14 @@ fn parse_alter_role() {
             name: Ident {
                 value: "role_name".into(),
                 quote_style: None
-            },
+            }
+            .empty_span(),
             operation: AlterRoleOperation::DropMember {
                 member_name: Ident {
                     value: "old_member".into(),
                     quote_style: None
                 }
+                .empty_span()
             },
         }
     );
@@ -344,8 +354,11 @@ fn parse_delimited_identifiers() {
             with_ordinality: _,
             partitions: _,
         } => {
-            assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert_eq!(vec![Ident::with_quote('"', "a table").empty_span()], name.0);
+            assert_eq!(
+                Ident::with_quote('"', "alias").empty_span(),
+                alias.unwrap().name
+            );
             assert!(args.is_none());
             assert!(with_hints.is_empty());
             assert!(version.is_none());
@@ -356,14 +369,14 @@ fn parse_delimited_identifiers() {
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::CompoundIdentifier(vec![
-            Ident::with_quote('"', "alias"),
-            Ident::with_quote('"', "bar baz"),
+            Ident::with_quote('"', "alias").empty_span(),
+            Ident::with_quote('"', "bar baz").empty_span(),
         ]),
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            name: ObjectName(vec![Ident::with_quote('"', "myfun").empty_span()]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
@@ -379,8 +392,11 @@ fn parse_delimited_identifiers() {
     );
     match &select.projection[2] {
         SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+            assert_eq!(
+                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                expr
+            );
+            assert_eq!(&Ident::with_quote('"', "column alias").empty_span(), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
     }
@@ -396,8 +412,8 @@ fn parse_table_name_in_square_brackets() {
     if let TableFactor::Table { name, .. } = only(select.from).relation {
         assert_eq!(
             vec![
-                Ident::with_quote('[', "a schema"),
-                Ident::with_quote('[', "a table")
+                Ident::with_quote('[', "a schema").empty_span(),
+                Ident::with_quote('[', "a table").empty_span(),
             ],
             name.0
         );
@@ -405,7 +421,7 @@ fn parse_table_name_in_square_brackets() {
         panic!("Expecting TableFactor::Table");
     }
     assert_eq!(
-        &Expr::Identifier(Ident::with_quote('[', "a column")),
+        &Expr::Identifier(Ident::with_quote('[', "a column").empty_span()),
         expr_from_projection(&select.projection[0]),
     );
 }
@@ -515,10 +531,13 @@ fn parse_substring_in_select() {
                         distinct: Some(Distinct::Distinct),
                         top: None,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
-                            expr: Box::new(Expr::Identifier(Ident {
-                                value: "description".to_string(),
-                                quote_style: None
-                            })),
+                            expr: Box::new(Expr::Identifier(
+                                Ident {
+                                    value: "description".to_string(),
+                                    quote_style: None
+                                }
+                                .empty_span()
+                            )),
                             substring_from: Some(Box::new(Expr::Value(number("0")))),
                             substring_for: Some(Box::new(Expr::Value(number("1")))),
                             special: true,
@@ -529,7 +548,8 @@ fn parse_substring_in_select() {
                                 name: ObjectName(vec![Ident {
                                     value: "test".to_string(),
                                     quote_style: None
-                                }]),
+                                }
+                                .empty_span()]),
                                 alias: None,
                                 args: None,
                                 with_hints: vec![],
@@ -573,8 +593,11 @@ fn parse_substring_in_select() {
 #[test]
 fn parse_mssql_declare() {
     let sql = "DECLARE @foo CURSOR, @bar INT, @baz AS TEXT = 'foobar';";
-    let ast = Parser::parse_sql(&MsSqlDialect {}, sql).unwrap();
-
+    let ast = Parser::new(&MsSqlDialect {})
+        .try_with_sql_no_locations(sql)
+        .unwrap()
+        .parse_statements()
+        .unwrap();
     assert_eq!(
         vec![Statement::Declare {
             stmts: vec![
@@ -582,7 +605,8 @@ fn parse_mssql_declare() {
                     names: vec![Ident {
                         value: "@foo".to_string(),
                         quote_style: None
-                    }],
+                    }
+                    .empty_span()],
                     data_type: None,
                     assignment: None,
                     declare_type: Some(DeclareType::Cursor),
@@ -596,7 +620,8 @@ fn parse_mssql_declare() {
                     names: vec![Ident {
                         value: "@bar".to_string(),
                         quote_style: None
-                    }],
+                    }
+                    .empty_span()],
                     data_type: Some(Int(None)),
                     assignment: None,
                     declare_type: None,
@@ -610,7 +635,8 @@ fn parse_mssql_declare() {
                     names: vec![Ident {
                         value: "@baz".to_string(),
                         quote_style: None
-                    }],
+                    }
+                    .empty_span()],
                     data_type: Some(Text),
                     assignment: Some(MsSqlAssignment(Box::new(Expr::Value(SingleQuotedString(
                         "foobar".to_string()
@@ -645,7 +671,8 @@ fn parse_use() {
             ms().verified_stmt(&format!("USE {}", object_name)),
             Statement::Use(Use::Object(ObjectName(vec![Ident::new(
                 object_name.to_string()
-            )])))
+            )
+            .empty_span()])))
         );
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
@@ -654,7 +681,8 @@ fn parse_use() {
                 Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
-                )])))
+                )
+                .empty_span()])))
             );
         }
     }
@@ -670,14 +698,14 @@ fn parse_create_table_with_valid_options() {
                     key: Ident {
                         value: "DISTRIBUTION".to_string(),
                         quote_style: None,
-                    },
+                    }.empty_span(),
                     value: Expr::Identifier(Ident {
                         value: "ROUND_ROBIN".to_string(),
                         quote_style: None,
-                    })
+                    }.empty_span())
                 },
                 SqlOption::Partition {
-                    column_name: "column_a".into(),
+                    column_name: Ident::new("column_a").empty_span(),
                     range_direction: None,
                     for_values: vec![Expr::Value(test_utils::number("10")), Expr::Value(test_utils::number("11"))] ,
                 },
@@ -687,7 +715,7 @@ fn parse_create_table_with_valid_options() {
             "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (PARTITION (column_a RANGE LEFT FOR VALUES (10, 11)))",
             vec![
                 SqlOption::Partition {
-                        column_name: "column_a".into(),
+                        column_name: Ident::new("column_a").empty_span(),
                         range_direction: Some(PartitionRangeDirection::Left),
                         for_values: vec![
                             Expr::Value(test_utils::number("10")),
@@ -704,8 +732,8 @@ fn parse_create_table_with_valid_options() {
             "CREATE TABLE mytable (column_a INT, column_b INT, column_c INT) WITH (CLUSTERED COLUMNSTORE INDEX ORDER (column_a, column_b))",
             vec![
                 SqlOption::Clustered(TableOptionsClustered::ColumnstoreIndexOrder(vec![
-                    "column_a".into(),
-                    "column_b".into(),
+                    Ident::new("column_a").empty_span(),
+                    Ident::new("column_b").empty_span(),
                 ]))
             ],
         ),
@@ -717,21 +745,21 @@ fn parse_create_table_with_valid_options() {
                             name: Ident {
                                 value: "column_a".to_string(),
                                 quote_style: None,
-                            },
+                            }.empty_span(),
                             asc: Some(true),
                         },
                         ClusteredIndex {
                             name: Ident {
                                 value: "column_b".to_string(),
                                 quote_style: None,
-                            },
+                            }.empty_span(),
                             asc: Some(false),
                         },
                         ClusteredIndex {
                             name: Ident {
                                 value: "column_c".to_string(),
                                 quote_style: None,
-                            },
+                            }.empty_span(),
                             asc: None,
                         },
                     ]))
@@ -744,7 +772,7 @@ fn parse_create_table_with_valid_options() {
                     key: Ident {
                         value: "DISTRIBUTION".to_string(),
                         quote_style: None,
-                    },
+                    }.empty_span(),
                     value: Expr::Function(
                         Function {
                             name: ObjectName(
@@ -752,7 +780,7 @@ fn parse_create_table_with_valid_options() {
                                     Ident {
                                         value: "HASH".to_string(),
                                         quote_style: None,
-                                    },
+                                    }.empty_span(),
                                 ],
                             ),
                             parameters: FunctionArguments::None,
@@ -766,7 +794,7 @@ fn parse_create_table_with_valid_options() {
                                                     Ident {
                                                         value: "column_a".to_string(),
                                                         quote_style: None,
-                                                    },
+                                                    }.empty_span(),
                                                 ),
                                             ),
                                         ),
@@ -776,7 +804,7 @@ fn parse_create_table_with_valid_options() {
                                                     Ident {
                                                         value: "column_b".to_string(),
                                                         quote_style: None,
-                                                    },
+                                                    }.empty_span(),
                                                 ),
                                             ),
                                         ),
@@ -791,7 +819,7 @@ fn parse_create_table_with_valid_options() {
                         },
                     ),
                 },
-                SqlOption::Ident("HEAP".into()),
+                SqlOption::Ident(Ident::new("HEAP").empty_span()),
             ],
          ),
     ];
@@ -810,13 +838,15 @@ fn parse_create_table_with_valid_options() {
                 name: ObjectName(vec![Ident {
                     value: "mytable".to_string(),
                     quote_style: None,
-                },],),
+                }
+                .empty_span(),],),
                 columns: vec![
                     ColumnDef {
                         name: Ident {
                             value: "column_a".to_string(),
                             quote_style: None,
-                        },
+                        }
+                        .empty_span(),
                         data_type: Int(None,),
                         collation: None,
                         options: vec![],
@@ -825,7 +855,8 @@ fn parse_create_table_with_valid_options() {
                         name: Ident {
                             value: "column_b".to_string(),
                             quote_style: None,
-                        },
+                        }
+                        .empty_span(),
                         data_type: Int(None,),
                         collation: None,
                         options: vec![],
@@ -834,7 +865,8 @@ fn parse_create_table_with_valid_options() {
                         name: Ident {
                             value: "column_c".to_string(),
                             quote_style: None,
-                        },
+                        }
+                        .empty_span(),
                         data_type: Int(None,),
                         collation: None,
                         options: vec![],
@@ -975,12 +1007,14 @@ fn parse_create_table_with_identity_column() {
                 name: ObjectName(vec![Ident {
                     value: "mytable".to_string(),
                     quote_style: None,
-                },],),
+                }
+                .empty_span(),],),
                 columns: vec![ColumnDef {
                     name: Ident {
                         value: "columnA".to_string(),
                         quote_style: None,
-                    },
+                    }
+                    .empty_span(),
                     data_type: Int(None,),
                     collation: None,
                     options: column_options,

@@ -41,15 +41,18 @@ fn parse_map_access_expr() {
             distinct: None,
             top: None,
             projection: vec![UnnamedExpr(MapAccess {
-                column: Box::new(Identifier(Ident {
-                    value: "string_values".to_string(),
-                    quote_style: None,
-                })),
+                column: Box::new(Identifier(
+                    Ident {
+                        value: "string_values".to_string(),
+                        quote_style: None,
+                    }
+                    .empty_span()
+                )),
                 keys: vec![MapAccessKey {
                     key: call(
                         "indexOf",
                         [
-                            Expr::Identifier(Ident::new("string_names")),
+                            Expr::Identifier(Ident::new("string_names").empty_span()),
                             Expr::Value(Value::SingleQuotedString("endpoint".to_string()))
                         ]
                     ),
@@ -59,7 +62,7 @@ fn parse_map_access_expr() {
             into: None,
             from: vec![TableWithJoins {
                 relation: Table {
-                    name: ObjectName(vec![Ident::new("foos")]),
+                    name: ObjectName(vec![Ident::new("foos").empty_span()]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -73,19 +76,19 @@ fn parse_map_access_expr() {
             prewhere: None,
             selection: Some(BinaryOp {
                 left: Box::new(BinaryOp {
-                    left: Box::new(Identifier(Ident::new("id"))),
+                    left: Box::new(Identifier(Ident::new("id").empty_span())),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("test".to_string()))),
                 }),
                 op: BinaryOperator::And,
                 right: Box::new(BinaryOp {
                     left: Box::new(MapAccess {
-                        column: Box::new(Identifier(Ident::new("string_value"))),
+                        column: Box::new(Identifier(Ident::new("string_value").empty_span())),
                         keys: vec![MapAccessKey {
                             key: call(
                                 "indexOf",
                                 [
-                                    Expr::Identifier(Ident::new("string_name")),
+                                    Expr::Identifier(Ident::new("string_name").empty_span()),
                                     Expr::Value(Value::SingleQuotedString("app".to_string()))
                                 ]
                             ),
@@ -135,8 +138,8 @@ fn parse_array_fn() {
         &call(
             "array",
             [
-                Expr::Identifier(Ident::new("x1")),
-                Expr::Identifier(Ident::new("x2"))
+                Expr::Identifier(Ident::new("x1").empty_span()),
+                Expr::Identifier(Ident::new("x2").empty_span())
             ]
         ),
         expr_from_projection(only(&select.projection))
@@ -172,8 +175,11 @@ fn parse_delimited_identifiers() {
             with_ordinality: _,
             partitions: _,
         } => {
-            assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert_eq!(vec![Ident::with_quote('"', "a table").empty_span()], name.0);
+            assert_eq!(
+                Ident::with_quote('"', "alias").empty_span(),
+                alias.unwrap().name
+            );
             assert!(args.is_none());
             assert!(with_hints.is_empty());
             assert!(version.is_none());
@@ -184,14 +190,14 @@ fn parse_delimited_identifiers() {
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::CompoundIdentifier(vec![
-            Ident::with_quote('"', "alias"),
-            Ident::with_quote('"', "bar baz"),
+            Ident::with_quote('"', "alias").empty_span(),
+            Ident::with_quote('"', "bar baz").empty_span(),
         ]),
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            name: ObjectName(vec![Ident::with_quote('"', "myfun").empty_span()]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
@@ -207,8 +213,11 @@ fn parse_delimited_identifiers() {
     );
     match &select.projection[2] {
         SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+            assert_eq!(
+                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                expr
+            );
+            assert_eq!(&Ident::with_quote('"', "column alias").empty_span(), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
     }
@@ -241,11 +250,11 @@ fn parse_alter_table_attach_and_detach_partition() {
                     operations[0],
                     if operation == &"ATTACH" {
                         AlterTableOperation::AttachPartition {
-                            partition: Partition::Expr(Identifier(Ident::new("part"))),
+                            partition: Partition::Expr(Identifier(Ident::new("part").empty_span())),
                         }
                     } else {
                         AlterTableOperation::DetachPartition {
-                            partition: Partition::Expr(Identifier(Ident::new("part"))),
+                            partition: Partition::Expr(Identifier(Ident::new("part").empty_span())),
                         }
                     }
                 );
@@ -264,11 +273,11 @@ fn parse_alter_table_attach_and_detach_partition() {
                     operations[0],
                     if operation == &"ATTACH" {
                         AlterTableOperation::AttachPartition {
-                            partition: Partition::Part(Identifier(Ident::new("part"))),
+                            partition: Partition::Part(Identifier(Ident::new("part").empty_span())),
                         }
                     } else {
                         AlterTableOperation::DetachPartition {
-                            partition: Partition::Part(Identifier(Ident::new("part"))),
+                            partition: Partition::Part(Identifier(Ident::new("part").empty_span())),
                         }
                     }
                 );
@@ -301,25 +310,25 @@ fn parse_alter_table_add_projection() {
         Statement::AlterTable {
             name, operations, ..
         } => {
-            assert_eq!(name, ObjectName(vec!["t0".into()]));
+            assert_eq!(name, ObjectName(vec![Ident::new("t0").empty_span()]));
             assert_eq!(1, operations.len());
             assert_eq!(
                 operations[0],
                 AlterTableOperation::AddProjection {
                     if_not_exists: true,
-                    name: "my_name".into(),
+                    name: Ident::new("my_name").empty_span(),
                     select: ProjectionSelect {
                         projection: vec![
-                            UnnamedExpr(Identifier(Ident::new("a"))),
-                            UnnamedExpr(Identifier(Ident::new("b"))),
+                            UnnamedExpr(Identifier(Ident::new("a").empty_span())),
+                            UnnamedExpr(Identifier(Ident::new("b").empty_span())),
                         ],
                         group_by: Some(GroupByExpr::Expressions(
-                            vec![Identifier(Ident::new("a"))],
+                            vec![Identifier(Ident::new("a").empty_span())],
                             vec![]
                         )),
                         order_by: Some(OrderBy {
                             exprs: vec![OrderByExpr {
-                                expr: Identifier(Ident::new("b")),
+                                expr: Identifier(Ident::new("b").empty_span()),
                                 asc: None,
                                 nulls_first: None,
                                 with_fill: None,
@@ -371,13 +380,13 @@ fn parse_alter_table_drop_projection() {
         Statement::AlterTable {
             name, operations, ..
         } => {
-            assert_eq!(name, ObjectName(vec!["t0".into()]));
+            assert_eq!(name, ObjectName(vec![Ident::new("t0").empty_span()]));
             assert_eq!(1, operations.len());
             assert_eq!(
                 operations[0],
                 AlterTableOperation::DropProjection {
                     if_exists: true,
-                    name: "my_name".into(),
+                    name: Ident::new("my_name").empty_span(),
                 }
             )
         }
@@ -404,21 +413,21 @@ fn parse_alter_table_clear_and_materialize_projection() {
             Statement::AlterTable {
                 name, operations, ..
             } => {
-                assert_eq!(name, ObjectName(vec!["t0".into()]));
+                assert_eq!(name, ObjectName(vec![Ident::new("t0").empty_span()]));
                 assert_eq!(1, operations.len());
                 assert_eq!(
                     operations[0],
                     if keyword == "CLEAR" {
                         AlterTableOperation::ClearProjection {
                             if_exists: true,
-                            name: "my_name".into(),
-                            partition: Some(Ident::new("p0")),
+                            name: Ident::new("my_name").empty_span(),
+                            partition: Some(Ident::new("p0").empty_span()),
                         }
                     } else {
                         AlterTableOperation::MaterializeProjection {
                             if_exists: true,
-                            name: "my_name".into(),
-                            partition: Some(Ident::new("p0")),
+                            name: Ident::new("my_name").empty_span(),
+                            partition: Some(Ident::new("p0").empty_span()),
                         }
                     }
                 )
@@ -484,15 +493,19 @@ fn parse_optimize_table() {
             ..
         } => {
             assert_eq!(name.to_string(), "t0");
-            assert_eq!(on_cluster, Some(Ident::new("cluster")));
+            assert_eq!(on_cluster, Some(Ident::new("cluster").empty_span()));
             assert_eq!(
                 partition,
-                Some(Partition::Identifier(Ident::with_quote('\'', "2024-07")))
+                Some(Partition::Identifier(
+                    Ident::with_quote('\'', "2024-07").empty_span()
+                ))
             );
             assert!(include_final);
             assert_eq!(
                 deduplicate,
-                Some(Deduplicate::ByExpression(Identifier(Ident::new("id"))))
+                Some(Deduplicate::ByExpression(Identifier(
+                    Ident::new("id").empty_span()
+                )))
             );
         }
         _ => unreachable!(),
@@ -521,7 +534,7 @@ fn parse_optimize_table() {
 
 fn column_def(name: Ident, data_type: DataType) -> ColumnDef {
     ColumnDef {
-        name,
+        name: name.empty_span(),
         data_type,
         collation: None,
         options: vec![],
@@ -548,7 +561,7 @@ fn parse_clickhouse_data_types() {
 
     match clickhouse_and_generic().one_statement_parses_to(sql, &canonical_sql) {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {
-            assert_eq!(name, ObjectName(vec!["table".into()]));
+            assert_eq!(name, ObjectName(vec![Ident::new("table").empty_span()]));
             assert_eq!(
                 columns,
                 vec![
@@ -589,7 +602,7 @@ fn parse_create_table_with_nullable() {
 
     match clickhouse_and_generic().one_statement_parses_to(sql, &canonical_sql) {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {
-            assert_eq!(name, ObjectName(vec!["table".into()]));
+            assert_eq!(name, ObjectName(vec![Ident::new("table").empty_span()]));
             assert_eq!(
                 columns,
                 vec![
@@ -610,7 +623,7 @@ fn parse_create_table_with_nullable() {
                         DataType::Nullable(Box::new(DataType::Datetime64(9, None)))
                     ),
                     ColumnDef {
-                        name: "d".into(),
+                        name: Ident::new("d").empty_span(),
                         data_type: DataType::Date32,
                         collation: None,
                         options: vec![ColumnOptionDef {
@@ -638,12 +651,12 @@ fn parse_create_table_with_nested_data_types() {
 
     match clickhouse().one_statement_parses_to(sql, "") {
         Statement::CreateTable(CreateTable { name, columns, .. }) => {
-            assert_eq!(name, ObjectName(vec!["table".into()]));
+            assert_eq!(name, ObjectName(vec![Ident::new("table").empty_span()]));
             assert_eq!(
                 columns,
                 vec![
                     ColumnDef {
-                        name: Ident::new("i"),
+                        name: Ident::new("i").empty_span(),
                         data_type: DataType::Nested(vec![
                             column_def(
                                 "a".into(),
@@ -660,7 +673,7 @@ fn parse_create_table_with_nested_data_types() {
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("k"),
+                        name: Ident::new("k").empty_span(),
                         data_type: DataType::Array(ArrayElemTypeDef::Parenthesis(Box::new(
                             DataType::Tuple(vec![
                                 StructField {
@@ -677,14 +690,14 @@ fn parse_create_table_with_nested_data_types() {
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("l"),
+                        name: Ident::new("l").empty_span(),
                         data_type: DataType::Tuple(vec![
                             StructField {
-                                field_name: Some("a".into()),
+                                field_name: Some(Ident::new("a").empty_span()),
                                 field_type: DataType::Datetime64(9, None),
                             },
                             StructField {
-                                field_name: Some("b".into()),
+                                field_name: Some(Ident::new("b").empty_span()),
                                 field_type: DataType::Array(ArrayElemTypeDef::Parenthesis(
                                     Box::new(DataType::Uuid)
                                 ))
@@ -694,7 +707,7 @@ fn parse_create_table_with_nested_data_types() {
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("m"),
+                        name: Ident::new("m").empty_span(),
                         data_type: DataType::Map(
                             Box::new(DataType::String(None)),
                             Box::new(DataType::UInt16)
@@ -729,13 +742,13 @@ fn parse_create_table_with_primary_key() {
             assert_eq!(
                 vec![
                     ColumnDef {
-                        name: Ident::with_quote('`', "i"),
+                        name: Ident::with_quote('`', "i").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::with_quote('`', "k"),
+                        name: Ident::with_quote('`', "k").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![],
@@ -748,18 +761,18 @@ fn parse_create_table_with_primary_key() {
                 Some(TableEngine {
                     name: "SharedMergeTree".to_string(),
                     parameters: Some(vec![
-                        Ident::with_quote('\'', "/clickhouse/tables/{uuid}/{shard}"),
-                        Ident::with_quote('\'', "{replica}"),
+                        Ident::with_quote('\'', "/clickhouse/tables/{uuid}/{shard}").empty_span(),
+                        Ident::with_quote('\'', "{replica}").empty_span(),
                     ]),
                 })
             );
             fn assert_function(actual: &Function, name: &str, arg: &str) -> bool {
-                assert_eq!(actual.name, ObjectName(vec![Ident::new(name)]));
+                assert_eq!(actual.name, ObjectName(vec![Ident::new(name).empty_span()]));
                 assert_eq!(
                     actual.args,
                     FunctionArguments::List(FunctionArgumentList {
                         args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(
-                            Ident::new(arg)
+                            Ident::new(arg).empty_span()
                         )),)],
                         duplicate_treatment: None,
                         clauses: vec![],
@@ -807,13 +820,13 @@ fn parse_create_table_with_variant_default_expressions() {
                 columns,
                 vec![
                     ColumnDef {
-                        name: Ident::new("a"),
+                        name: Ident::new("a").empty_span(),
                         data_type: DataType::Datetime(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Materialized(Expr::Function(Function {
-                                name: ObjectName(vec![Ident::new("now")]),
+                                name: ObjectName(vec![Ident::new("now").empty_span()]),
                                 args: FunctionArguments::List(FunctionArgumentList {
                                     args: vec![],
                                     duplicate_treatment: None,
@@ -828,13 +841,13 @@ fn parse_create_table_with_variant_default_expressions() {
                         }],
                     },
                     ColumnDef {
-                        name: Ident::new("b"),
+                        name: Ident::new("b").empty_span(),
                         data_type: DataType::Datetime(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Ephemeral(Some(Expr::Function(Function {
-                                name: ObjectName(vec![Ident::new("now")]),
+                                name: ObjectName(vec![Ident::new("now").empty_span()]),
                                 args: FunctionArguments::List(FunctionArgumentList {
                                     args: vec![],
                                     duplicate_treatment: None,
@@ -849,7 +862,7 @@ fn parse_create_table_with_variant_default_expressions() {
                         }],
                     },
                     ColumnDef {
-                        name: Ident::new("c"),
+                        name: Ident::new("c").empty_span(),
                         data_type: DataType::Datetime(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
@@ -858,16 +871,16 @@ fn parse_create_table_with_variant_default_expressions() {
                         }],
                     },
                     ColumnDef {
-                        name: Ident::new("d"),
+                        name: Ident::new("d").empty_span(),
                         data_type: DataType::String(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Alias(Expr::Function(Function {
-                                name: ObjectName(vec![Ident::new("toString")]),
+                                name: ObjectName(vec![Ident::new("toString").empty_span()]),
                                 args: FunctionArguments::List(FunctionArgumentList {
                                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                        Identifier(Ident::new("c"))
+                                        Identifier(Ident::new("c").empty_span())
                                     ))],
                                     duplicate_treatment: None,
                                     clauses: vec![],
@@ -891,28 +904,30 @@ fn parse_create_table_with_variant_default_expressions() {
 fn parse_create_view_with_fields_data_types() {
     match clickhouse().verified_stmt(r#"CREATE VIEW v (i "int", f "String") AS SELECT * FROM t"#) {
         Statement::CreateView { name, columns, .. } => {
-            assert_eq!(name, ObjectName(vec!["v".into()]));
+            assert_eq!(name, ObjectName(vec![Ident::new("v").empty_span()]));
             assert_eq!(
                 columns,
                 vec![
                     ViewColumnDef {
-                        name: "i".into(),
+                        name: Ident::new("i").empty_span(),
                         data_type: Some(DataType::Custom(
                             ObjectName(vec![Ident {
                                 value: "int".into(),
                                 quote_style: Some('"')
-                            }]),
+                            }
+                            .empty_span()]),
                             vec![]
                         )),
                         options: None
                     },
                     ViewColumnDef {
-                        name: "f".into(),
+                        name: Ident::new("f").empty_span(),
                         data_type: Some(DataType::Custom(
                             ObjectName(vec![Ident {
                                 value: "String".into(),
                                 quote_style: Some('"')
-                            }]),
+                            }
+                            .empty_span()]),
                             vec![]
                         )),
                         options: None
@@ -956,11 +971,11 @@ fn parse_settings_in_query() {
                 query.settings,
                 Some(vec![
                     Setting {
-                        key: Ident::new("max_threads"),
+                        key: Ident::new("max_threads").empty_span(),
                         value: Number("1".parse().unwrap(), false)
                     },
                     Setting {
-                        key: Ident::new("max_block_size"),
+                        key: Ident::new("max_block_size").empty_span(),
                         value: Number("10000".parse().unwrap(), false)
                     },
                 ])
@@ -1002,11 +1017,15 @@ fn parse_select_parametric_function() {
                     assert_eq!(args.args.len(), 2);
                     assert_eq!(
                         args.args[0],
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(Ident::from("x"))))
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(
+                            Ident::from("x").empty_span()
+                        )))
                     );
                     assert_eq!(
                         args.args[1],
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(Ident::from("y"))))
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(
+                            Ident::from("y").empty_span()
+                        )))
                     );
 
                     let parameters = match f.parameters {
@@ -1088,7 +1107,7 @@ fn parse_group_by_with_modifier() {
                             &GroupByExpr::Expressions(
                                 clause
                                     .split(", ")
-                                    .map(|c| Identifier(Ident::new(c)))
+                                    .map(|c| Identifier(Ident::new(c).empty_span()))
                                     .collect(),
                                 expected_modifier.to_vec()
                             )
@@ -1127,7 +1146,7 @@ fn parse_select_order_by_with_fill_interpolate() {
         OrderBy {
             exprs: vec![
                 OrderByExpr {
-                    expr: Expr::Identifier(Ident::new("fname")),
+                    expr: Expr::Identifier(Ident::new("fname").empty_span()),
                     asc: Some(true),
                     nulls_first: Some(true),
                     with_fill: Some(WithFill {
@@ -1137,7 +1156,7 @@ fn parse_select_order_by_with_fill_interpolate() {
                     }),
                 },
                 OrderByExpr {
-                    expr: Expr::Identifier(Ident::new("lname")),
+                    expr: Expr::Identifier(Ident::new("lname").empty_span()),
                     asc: Some(false),
                     nulls_first: Some(false),
                     with_fill: Some(WithFill {
@@ -1149,9 +1168,9 @@ fn parse_select_order_by_with_fill_interpolate() {
             ],
             interpolate: Some(Interpolate {
                 exprs: Some(vec![InterpolateExpr {
-                    column: Ident::new("col1"),
+                    column: Ident::new("col1").empty_span(),
                     expr: Some(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("col1"))),
+                        left: Box::new(Expr::Identifier(Ident::new("col1").empty_span())),
                         op: BinaryOperator::Plus,
                         right: Box::new(Expr::Value(number("1"))),
                     }),
@@ -1236,21 +1255,21 @@ fn parse_interpolate_body_with_columns() {
         Some(Interpolate {
             exprs: Some(vec![
                 InterpolateExpr {
-                    column: Ident::new("col1"),
+                    column: Ident::new("col1").empty_span(),
                     expr: Some(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("col1"))),
+                        left: Box::new(Expr::Identifier(Ident::new("col1").empty_span())),
                         op: BinaryOperator::Plus,
                         right: Box::new(Expr::Value(number("1"))),
                     }),
                 },
                 InterpolateExpr {
-                    column: Ident::new("col2"),
-                    expr: Some(Expr::Identifier(Ident::new("col3"))),
+                    column: Ident::new("col2").empty_span(),
+                    expr: Some(Expr::Identifier(Ident::new("col3").empty_span())),
                 },
                 InterpolateExpr {
-                    column: Ident::new("col4"),
+                    column: Ident::new("col4").empty_span(),
                     expr: Some(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("col4"))),
+                        left: Box::new(Expr::Identifier(Ident::new("col4").empty_span())),
                         op: BinaryOperator::Plus,
                         right: Box::new(Expr::Value(number("4"))),
                     }),
@@ -1291,7 +1310,7 @@ fn test_prewhere() {
             assert_eq!(
                 prewhere,
                 Some(&BinaryOp {
-                    left: Box::new(Identifier(Ident::new("x"))),
+                    left: Box::new(Identifier(Ident::new("x").empty_span())),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
                 })
@@ -1300,7 +1319,7 @@ fn test_prewhere() {
             assert_eq!(
                 selection,
                 Some(&BinaryOp {
-                    left: Box::new(Identifier(Ident::new("y"))),
+                    left: Box::new(Identifier(Ident::new("y").empty_span())),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(Value::Number("2".parse().unwrap(), false))),
                 })
@@ -1316,13 +1335,13 @@ fn test_prewhere() {
                 prewhere,
                 Some(&BinaryOp {
                     left: Box::new(BinaryOp {
-                        left: Box::new(Identifier(Ident::new("x"))),
+                        left: Box::new(Identifier(Ident::new("x").empty_span())),
                         op: BinaryOperator::Eq,
                         right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
                     }),
                     op: BinaryOperator::And,
                     right: Box::new(BinaryOp {
-                        left: Box::new(Identifier(Ident::new("y"))),
+                        left: Box::new(Identifier(Ident::new("y").empty_span())),
                         op: BinaryOperator::Eq,
                         right: Box::new(Expr::Value(Value::Number("2".parse().unwrap(), false))),
                     }),
@@ -1351,7 +1370,8 @@ fn parse_use() {
             clickhouse().verified_stmt(&format!("USE {}", object_name)),
             Statement::Use(Use::Object(ObjectName(vec![Ident::new(
                 object_name.to_string()
-            )])))
+            )
+            .empty_span()])))
         );
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
@@ -1360,7 +1380,8 @@ fn parse_use() {
                 Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
-                )])))
+                )
+                .empty_span()])))
             );
         }
     }
@@ -1378,7 +1399,7 @@ fn test_query_with_format_clause() {
                 } else {
                     assert_eq!(
                         query.format_clause,
-                        Some(FormatClause::Identifier(Ident::new(*format)))
+                        Some(FormatClause::Identifier(Ident::new(*format).empty_span()))
                     );
                 }
             }
@@ -1464,12 +1485,12 @@ fn parse_freeze_and_unfreeze_partition() {
                 let expected_operation = if operation_name == &"FREEZE" {
                     AlterTableOperation::FreezePartition {
                         partition: expected_partition,
-                        with_name: Some(Ident::with_quote('\'', "hello")),
+                        with_name: Some(Ident::with_quote('\'', "hello").empty_span()),
                     }
                 } else {
                     AlterTableOperation::UnfreezePartition {
                         partition: expected_partition,
-                        with_name: Some(Ident::with_quote('\'', "hello")),
+                        with_name: Some(Ident::with_quote('\'', "hello").empty_span()),
                     }
                 };
                 assert_eq!(operations[0], expected_operation);
@@ -1528,16 +1549,16 @@ fn parse_select_table_function_settings() {
         "SELECT * FROM table_function(arg, SETTINGS s0 = 3, s1 = 's')",
         &TableFunctionArgs {
             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                Expr::Identifier("arg".into()),
+                Expr::Identifier(Ident::new("arg").empty_span()),
             ))],
 
             settings: Some(vec![
                 Setting {
-                    key: "s0".into(),
+                    key: Ident::new("s0").empty_span(),
                     value: Value::Number("3".parse().unwrap(), false),
                 },
                 Setting {
-                    key: "s1".into(),
+                    key: Ident::new("s1").empty_span(),
                     value: Value::SingleQuotedString("s".into()),
                 },
             ]),
@@ -1547,7 +1568,7 @@ fn parse_select_table_function_settings() {
         r#"SELECT * FROM table_function(arg)"#,
         &TableFunctionArgs {
             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                Expr::Identifier("arg".into()),
+                Expr::Identifier(Ident::new("arg").empty_span()),
             ))],
             settings: None,
         },
@@ -1558,11 +1579,11 @@ fn parse_select_table_function_settings() {
             args: vec![],
             settings: Some(vec![
                 Setting {
-                    key: "s0".into(),
+                    key: Ident::new("s0").empty_span(),
                     value: Value::Number("3".parse().unwrap(), false),
                 },
                 Setting {
-                    key: "s1".into(),
+                    key: Ident::new("s1").empty_span(),
                     value: Value::SingleQuotedString("s".into()),
                 },
             ]),

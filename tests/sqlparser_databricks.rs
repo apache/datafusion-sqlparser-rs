@@ -39,7 +39,7 @@ fn test_databricks_identifiers() {
     // databricks uses backtick for delimited identifiers
     assert_eq!(
         databricks().verified_only_select("SELECT `Ä`").projection[0],
-        SelectItem::UnnamedExpr(Expr::Identifier(Ident::with_quote('`', "Ä")))
+        SelectItem::UnnamedExpr(Expr::Identifier(Ident::with_quote('`', "Ä").empty_span()))
     );
 
     // double quotes produce string literals, not delimited identifiers
@@ -68,8 +68,10 @@ fn test_databricks_exists() {
                     ]
                 ),
                 Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::One(Ident::new("x")),
-                    body: Box::new(Expr::IsNull(Box::new(Expr::Identifier(Ident::new("x")))))
+                    params: OneOrManyWithParens::One(Ident::new("x").empty_span()),
+                    body: Box::new(Expr::IsNull(Box::new(Expr::Identifier(
+                        Ident::new("x").empty_span()
+                    ))))
                 })
             ]
         ),
@@ -104,24 +106,27 @@ fn test_databricks_lambdas() {
                     ]
                 ),
                 Expr::Lambda(LambdaFunction {
-                    params: OneOrManyWithParens::Many(vec![Ident::new("p1"), Ident::new("p2")]),
+                    params: OneOrManyWithParens::Many(vec![
+                        Ident::new("p1").empty_span(),
+                        Ident::new("p2").empty_span()
+                    ]),
                     body: Box::new(Expr::Case {
                         operand: None,
                         conditions: vec![
                             Expr::BinaryOp {
-                                left: Box::new(Expr::Identifier(Ident::new("p1"))),
+                                left: Box::new(Expr::Identifier(Ident::new("p1").empty_span())),
                                 op: BinaryOperator::Eq,
-                                right: Box::new(Expr::Identifier(Ident::new("p2")))
+                                right: Box::new(Expr::Identifier(Ident::new("p2").empty_span()))
                             },
                             Expr::BinaryOp {
                                 left: Box::new(call(
                                     "reverse",
-                                    [Expr::Identifier(Ident::new("p1"))]
+                                    [Expr::Identifier(Ident::new("p1").empty_span())]
                                 )),
                                 op: BinaryOperator::Lt,
                                 right: Box::new(call(
                                     "reverse",
-                                    [Expr::Identifier(Ident::new("p2"))]
+                                    [Expr::Identifier(Ident::new("p2").empty_span())]
                                 ))
                             }
                         ],
@@ -186,7 +191,7 @@ fn test_values_clause() {
     ));
     assert_eq!(
         Some(&TableFactor::Table {
-            name: ObjectName(vec![Ident::new("values")]),
+            name: ObjectName(vec![Ident::new("values").empty_span()]),
             alias: None,
             args: None,
             with_hints: vec![],
@@ -215,7 +220,8 @@ fn parse_use() {
             databricks().verified_stmt(&format!("USE {}", object_name)),
             Statement::Use(Use::Object(ObjectName(vec![Ident::new(
                 object_name.to_string()
-            )])))
+            )
+            .empty_span()])))
         );
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
@@ -224,7 +230,8 @@ fn parse_use() {
                 Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
-                )])))
+                )
+                .empty_span()])))
             );
         }
     }
@@ -236,36 +243,45 @@ fn parse_use() {
             Statement::Use(Use::Catalog(ObjectName(vec![Ident::with_quote(
                 quote,
                 "my_catalog".to_string(),
-            )])))
+            )
+            .empty_span()])))
         );
         assert_eq!(
             databricks().verified_stmt(&format!("USE DATABASE {0}my_database{0}", quote)),
             Statement::Use(Use::Database(ObjectName(vec![Ident::with_quote(
                 quote,
                 "my_database".to_string(),
-            )])))
+            )
+            .empty_span()])))
         );
         assert_eq!(
             databricks().verified_stmt(&format!("USE SCHEMA {0}my_schema{0}", quote)),
             Statement::Use(Use::Schema(ObjectName(vec![Ident::with_quote(
                 quote,
                 "my_schema".to_string(),
-            )])))
+            )
+            .empty_span()])))
         );
     }
 
     // Test single identifier with keyword and no quotes
     assert_eq!(
         databricks().verified_stmt("USE CATALOG my_catalog"),
-        Statement::Use(Use::Catalog(ObjectName(vec![Ident::new("my_catalog")])))
+        Statement::Use(Use::Catalog(ObjectName(vec![
+            Ident::new("my_catalog").empty_span()
+        ])))
     );
     assert_eq!(
         databricks().verified_stmt("USE DATABASE my_schema"),
-        Statement::Use(Use::Database(ObjectName(vec![Ident::new("my_schema")])))
+        Statement::Use(Use::Database(ObjectName(vec![
+            Ident::new("my_schema").empty_span()
+        ])))
     );
     assert_eq!(
         databricks().verified_stmt("USE SCHEMA my_schema"),
-        Statement::Use(Use::Schema(ObjectName(vec![Ident::new("my_schema")])))
+        Statement::Use(Use::Schema(ObjectName(vec![
+            Ident::new("my_schema").empty_span()
+        ])))
     );
 
     // Test invalid syntax - missing identifier

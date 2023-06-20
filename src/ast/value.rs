@@ -26,7 +26,7 @@ use bigdecimal::BigDecimal;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::ast::Ident;
+use crate::ast::{Ident, WithSpan};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -163,7 +163,7 @@ pub enum DateTimeField {
     /// ```
     ///
     /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#extract)
-    Week(Option<Ident>),
+    Week(Option<WithSpan<Ident>>),
     Day,
     DayOfWeek,
     DayOfYear,
@@ -203,7 +203,7 @@ pub enum DateTimeField {
     /// EXTRACT(q FROM CURRENT_TIMESTAMP)
     /// ```
     /// [Snowflake](https://docs.snowflake.com/en/sql-reference/functions-date-time#supported-date-and-time-parts)
-    Custom(Ident),
+    Custom(WithSpan<Ident>),
 }
 
 impl fmt::Display for DateTimeField {

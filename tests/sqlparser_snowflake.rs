@@ -271,8 +271,8 @@ fn test_snowflake_create_table_with_tag() {
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some(vec![
-                    Tag::new("A".into(), "TAG A".to_string()),
-                    Tag::new("B".into(), "TAG B".to_string())
+                    Tag::new(Ident::new("A").empty_span(), "TAG A".to_string()),
+                    Tag::new(Ident::new("B").empty_span(), "TAG B".to_string())
                 ]),
                 with_tags
             );
@@ -292,8 +292,8 @@ fn test_snowflake_create_table_with_tag() {
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some(vec![
-                    Tag::new("A".into(), "TAG A".to_string()),
-                    Tag::new("B".into(), "TAG B".to_string())
+                    Tag::new(Ident::new("A").empty_span(), "TAG A".to_string()),
+                    Tag::new(Ident::new("B").empty_span(), "TAG B".to_string())
                 ]),
                 with_tags
             );
@@ -340,7 +340,7 @@ fn test_snowflake_create_table_column_comment() {
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 vec![ColumnDef {
-                    name: "a".into(),
+                    name: Ident::new("a").empty_span(),
                     data_type: DataType::String(None),
                     options: vec![ColumnOptionDef {
                         name: None,
@@ -450,8 +450,8 @@ fn test_snowflake_create_table_cluster_by() {
             assert_eq!("my_table", name.to_string());
             assert_eq!(
                 Some(WrappedCollection::Parentheses(vec![
-                    Ident::new("a"),
-                    Ident::new("b"),
+                    Ident::new("a").empty_span(),
+                    Ident::new("b").empty_span(),
                 ])),
                 cluster_by
             )
@@ -542,7 +542,7 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                 columns,
                 vec![
                     ColumnDef {
-                        name: "a".into(),
+                        name: Ident::new("a").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
@@ -556,7 +556,7 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                         }]
                     },
                     ColumnDef {
-                        name: "b".into(),
+                        name: Ident::new("b").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
@@ -575,7 +575,7 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                         }]
                     },
                     ColumnDef {
-                        name: "c".into(),
+                        name: Ident::new("c").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
@@ -589,7 +589,7 @@ fn test_snowflake_create_table_with_autoincrement_columns() {
                         }]
                     },
                     ColumnDef {
-                        name: "d".into(),
+                        name: Ident::new("d").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
@@ -623,9 +623,11 @@ fn test_snowflake_create_table_with_collated_column() {
             assert_eq!(
                 columns,
                 vec![ColumnDef {
-                    name: "a".into(),
+                    name: Ident::new("a").empty_span(),
                     data_type: DataType::Text,
-                    collation: Some(ObjectName(vec![Ident::with_quote('\'', "de_DE")])),
+                    collation: Some(ObjectName(vec![
+                        Ident::with_quote('\'', "de_DE").empty_span()
+                    ])),
                     options: vec![]
                 },]
             );
@@ -650,12 +652,18 @@ fn test_snowflake_create_table_with_columns_masking_policy() {
         (
             "CREATE TABLE my_table (a INT WITH MASKING POLICY p USING (a, b))",
             true,
-            Some(vec!["a".into(), "b".into()]),
+            Some(vec![
+                Ident::new("a").empty_span(),
+                Ident::new("b").empty_span(),
+            ]),
         ),
         (
             "CREATE TABLE my_table (a INT MASKING POLICY p USING (a, b))",
             false,
-            Some(vec!["a".into(), "b".into()]),
+            Some(vec![
+                Ident::new("a").empty_span(),
+                Ident::new("b").empty_span(),
+            ]),
         ),
     ] {
         match snowflake().verified_stmt(sql) {
@@ -663,7 +671,7 @@ fn test_snowflake_create_table_with_columns_masking_policy() {
                 assert_eq!(
                     columns,
                     vec![ColumnDef {
-                        name: "a".into(),
+                        name: Ident::new("a").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
@@ -671,7 +679,7 @@ fn test_snowflake_create_table_with_columns_masking_policy() {
                             option: ColumnOption::Policy(ColumnPolicy::MaskingPolicy(
                                 ColumnPolicyProperty {
                                     with,
-                                    policy_name: "p".into(),
+                                    policy_name: Ident::new("p").empty_span(),
                                     using_columns,
                                 }
                             ))
@@ -698,7 +706,7 @@ fn test_snowflake_create_table_with_columns_projection_policy() {
                 assert_eq!(
                     columns,
                     vec![ColumnDef {
-                        name: "a".into(),
+                        name: Ident::new("a").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
@@ -706,7 +714,7 @@ fn test_snowflake_create_table_with_columns_projection_policy() {
                             option: ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(
                                 ColumnPolicyProperty {
                                     with,
-                                    policy_name: "p".into(),
+                                    policy_name: Ident::new("p").empty_span(),
                                     using_columns: None,
                                 }
                             ))
@@ -736,7 +744,7 @@ fn test_snowflake_create_table_with_columns_tags() {
                 assert_eq!(
                     columns,
                     vec![ColumnDef {
-                        name: "a".into(),
+                        name: Ident::new("a").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
@@ -744,8 +752,8 @@ fn test_snowflake_create_table_with_columns_tags() {
                             option: ColumnOption::Tags(TagsColumnOption {
                                 with,
                                 tags: vec![
-                                    Tag::new("A".into(), "TAG A".into()),
-                                    Tag::new("B".into(), "TAG B".into()),
+                                    Tag::new(Ident::new("A").empty_span(), "TAG A".into()),
+                                    Tag::new(Ident::new("B").empty_span(), "TAG B".into()),
                                 ]
                             }),
                         }],
@@ -771,7 +779,7 @@ fn test_snowflake_create_table_with_several_column_options() {
                 columns,
                 vec![
                     ColumnDef {
-                        name: "a".into(),
+                        name: Ident::new("a").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![
@@ -789,8 +797,11 @@ fn test_snowflake_create_table_with_several_column_options() {
                                 option: ColumnOption::Policy(ColumnPolicy::MaskingPolicy(
                                     ColumnPolicyProperty {
                                         with: true,
-                                        policy_name: "p1".into(),
-                                        using_columns: Some(vec!["a".into(), "b".into()]),
+                                        policy_name: Ident::new("p1").empty_span(),
+                                        using_columns: Some(vec![
+                                            Ident::new("a").empty_span(),
+                                            Ident::new("b").empty_span()
+                                        ]),
                                     }
                                 )),
                             },
@@ -799,24 +810,26 @@ fn test_snowflake_create_table_with_several_column_options() {
                                 option: ColumnOption::Tags(TagsColumnOption {
                                     with: true,
                                     tags: vec![
-                                        Tag::new("A".into(), "TAG A".into()),
-                                        Tag::new("B".into(), "TAG B".into()),
+                                        Tag::new(Ident::new("A").empty_span(), "TAG A".into()),
+                                        Tag::new(Ident::new("B").empty_span(), "TAG B".into()),
                                     ]
                                 }),
                             }
                         ],
                     },
                     ColumnDef {
-                        name: "b".into(),
+                        name: Ident::new("b").empty_span(),
                         data_type: DataType::Text,
-                        collation: Some(ObjectName(vec![Ident::with_quote('\'', "de_DE")])),
+                        collation: Some(ObjectName(vec![
+                            Ident::with_quote('\'', "de_DE").empty_span()
+                        ])),
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
                                 option: ColumnOption::Policy(ColumnPolicy::ProjectionPolicy(
                                     ColumnPolicyProperty {
                                         with: false,
-                                        policy_name: "p2".into(),
+                                        policy_name: Ident::new("p2").empty_span(),
                                         using_columns: None,
                                     }
                                 )),
@@ -826,8 +839,8 @@ fn test_snowflake_create_table_with_several_column_options() {
                                 option: ColumnOption::Tags(TagsColumnOption {
                                     with: false,
                                     tags: vec![
-                                        Tag::new("C".into(), "TAG C".into()),
-                                        Tag::new("D".into(), "TAG D".into()),
+                                        Tag::new(Ident::new("C").empty_span(), "TAG C".into()),
+                                        Tag::new(Ident::new("D").empty_span(), "TAG D".into()),
                                     ]
                                 }),
                             }
@@ -967,7 +980,7 @@ fn parse_array() {
     assert_eq!(
         &Expr::Cast {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("a"))),
+            expr: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             data_type: DataType::Array(ArrayElemTypeDef::None),
             format: None,
         },
@@ -989,7 +1002,7 @@ fn parse_semi_structured_data_traversal() {
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            value: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             path: JsonPath {
                 path: vec![JsonPathElem::Dot {
                     key: "b".to_owned(),
@@ -1005,7 +1018,7 @@ fn parse_semi_structured_data_traversal() {
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            value: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             path: JsonPath {
                 path: vec![JsonPathElem::Dot {
                     key: "my long object key name".to_owned(),
@@ -1021,7 +1034,7 @@ fn parse_semi_structured_data_traversal() {
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            value: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             path: JsonPath {
                 path: vec![JsonPathElem::Bracket {
                     key: Expr::BinaryOp {
@@ -1043,7 +1056,7 @@ fn parse_semi_structured_data_traversal() {
     assert_eq!(
         vec![
             SelectItem::UnnamedExpr(Expr::JsonAccess {
-                value: Box::new(Expr::Identifier(Ident::new("a"))),
+                value: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
                 path: JsonPath {
                     path: vec![JsonPathElem::Dot {
                         key: "select".to_owned(),
@@ -1052,7 +1065,7 @@ fn parse_semi_structured_data_traversal() {
                 },
             }),
             SelectItem::UnnamedExpr(Expr::JsonAccess {
-                value: Box::new(Expr::Identifier(Ident::new("a"))),
+                value: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
                 path: JsonPath {
                     path: vec![JsonPathElem::Dot {
                         key: "from".to_owned(),
@@ -1070,7 +1083,7 @@ fn parse_semi_structured_data_traversal() {
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            value: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             path: JsonPath {
                 path: vec![
                     JsonPathElem::Dot {
@@ -1097,7 +1110,7 @@ fn parse_semi_structured_data_traversal() {
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            value: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             path: JsonPath {
                 path: vec![
                     JsonPathElem::Dot {
@@ -1123,7 +1136,7 @@ fn parse_semi_structured_data_traversal() {
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         vec![SelectItem::UnnamedExpr(Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            value: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             path: JsonPath {
                 path: vec![
                     JsonPathElem::Bracket {
@@ -1147,11 +1160,11 @@ fn parse_semi_structured_data_traversal() {
     assert_eq!(
         snowflake().verified_expr("a[b:c]"),
         Expr::JsonAccess {
-            value: Box::new(Expr::Identifier(Ident::new("a"))),
+            value: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             path: JsonPath {
                 path: vec![JsonPathElem::Bracket {
                     key: Expr::JsonAccess {
-                        value: Box::new(Expr::Identifier(Ident::new("b"))),
+                        value: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
                         path: JsonPath {
                             path: vec![JsonPathElem::Dot {
                                 key: "c".to_owned(),
@@ -1191,8 +1204,11 @@ fn parse_delimited_identifiers() {
             with_ordinality: _,
             partitions: _,
         } => {
-            assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert_eq!(vec![Ident::with_quote('"', "a table").empty_span()], name.0);
+            assert_eq!(
+                Ident::with_quote('"', "alias").empty_span(),
+                alias.unwrap().name
+            );
             assert!(args.is_none());
             assert!(with_hints.is_empty());
             assert!(version.is_none());
@@ -1203,14 +1219,14 @@ fn parse_delimited_identifiers() {
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::CompoundIdentifier(vec![
-            Ident::with_quote('"', "alias"),
-            Ident::with_quote('"', "bar baz"),
+            Ident::with_quote('"', "alias").empty_span(),
+            Ident::with_quote('"', "bar baz").empty_span(),
         ]),
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            name: ObjectName(vec![Ident::with_quote('"', "myfun").empty_span()]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
@@ -1226,8 +1242,11 @@ fn parse_delimited_identifiers() {
     );
     match &select.projection[2] {
         SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+            assert_eq!(
+                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                expr
+            );
+            assert_eq!(&Ident::with_quote('"', "column alias").empty_span(), alias);
         }
         _ => panic!("Expected: ExprWithAlias"),
     }
@@ -1273,7 +1292,9 @@ fn snowflake_and_generic() -> TestedDialects {
 fn test_select_wildcard_with_exclude() {
     let select = snowflake_and_generic().verified_only_select("SELECT * EXCLUDE (col_a) FROM data");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
-        opt_exclude: Some(ExcludeSelectItem::Multiple(vec![Ident::new("col_a")])),
+        opt_exclude: Some(ExcludeSelectItem::Multiple(vec![
+            Ident::new("col_a").empty_span()
+        ])),
         ..Default::default()
     });
     assert_eq!(expected, select.projection[0]);
@@ -1281,9 +1302,11 @@ fn test_select_wildcard_with_exclude() {
     let select = snowflake_and_generic()
         .verified_only_select("SELECT name.* EXCLUDE department_id FROM employee_table");
     let expected = SelectItem::QualifiedWildcard(
-        ObjectName(vec![Ident::new("name")]),
+        ObjectName(vec![Ident::new("name").empty_span()]),
         WildcardAdditionalOptions {
-            opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("department_id"))),
+            opt_exclude: Some(ExcludeSelectItem::Single(
+                Ident::new("department_id").empty_span(),
+            )),
             ..Default::default()
         },
     );
@@ -1293,8 +1316,8 @@ fn test_select_wildcard_with_exclude() {
         .verified_only_select("SELECT * EXCLUDE (department_id, employee_id) FROM employee_table");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_exclude: Some(ExcludeSelectItem::Multiple(vec![
-            Ident::new("department_id"),
-            Ident::new("employee_id"),
+            Ident::new("department_id").empty_span(),
+            Ident::new("employee_id").empty_span(),
         ])),
         ..Default::default()
     });
@@ -1307,8 +1330,8 @@ fn test_select_wildcard_with_rename() {
         snowflake_and_generic().verified_only_select("SELECT * RENAME col_a AS col_b FROM data");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_rename: Some(RenameSelectItem::Single(IdentWithAlias {
-            ident: Ident::new("col_a"),
-            alias: Ident::new("col_b"),
+            ident: Ident::new("col_a").empty_span(),
+            alias: Ident::new("col_b").empty_span(),
         })),
         ..Default::default()
     });
@@ -1318,16 +1341,16 @@ fn test_select_wildcard_with_rename() {
         "SELECT name.* RENAME (department_id AS new_dep, employee_id AS new_emp) FROM employee_table",
     );
     let expected = SelectItem::QualifiedWildcard(
-        ObjectName(vec![Ident::new("name")]),
+        ObjectName(vec![Ident::new("name").empty_span()]),
         WildcardAdditionalOptions {
             opt_rename: Some(RenameSelectItem::Multiple(vec![
                 IdentWithAlias {
-                    ident: Ident::new("department_id"),
-                    alias: Ident::new("new_dep"),
+                    ident: Ident::new("department_id").empty_span(),
+                    alias: Ident::new("new_dep").empty_span(),
                 },
                 IdentWithAlias {
-                    ident: Ident::new("employee_id"),
-                    alias: Ident::new("new_emp"),
+                    ident: Ident::new("employee_id").empty_span(),
+                    alias: Ident::new("new_emp").empty_span(),
                 },
             ])),
             ..Default::default()
@@ -1345,17 +1368,17 @@ fn test_select_wildcard_with_replace_and_rename() {
         opt_replace: Some(ReplaceSelectItem {
             items: vec![Box::new(ReplaceSelectElement {
                 expr: Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("col_z"))),
+                    left: Box::new(Expr::Identifier(Ident::new("col_z").empty_span())),
                     op: BinaryOperator::StringConcat,
-                    right: Box::new(Expr::Identifier(Ident::new("col_z"))),
+                    right: Box::new(Expr::Identifier(Ident::new("col_z").empty_span())),
                 },
-                column_name: Ident::new("col_z"),
+                column_name: Ident::new("col_z").empty_span(),
                 as_keyword: true,
             })],
         }),
         opt_rename: Some(RenameSelectItem::Multiple(vec![IdentWithAlias {
-            ident: Ident::new("col_z"),
-            alias: Ident::new("col_zz"),
+            ident: Ident::new("col_z").empty_span(),
+            alias: Ident::new("col_zz").empty_span(),
         }])),
         ..Default::default()
     });
@@ -1379,10 +1402,10 @@ fn test_select_wildcard_with_exclude_and_rename() {
     let select = snowflake_and_generic()
         .verified_only_select("SELECT * EXCLUDE col_z RENAME col_a AS col_b FROM data");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
-        opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("col_z"))),
+        opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("col_z").empty_span())),
         opt_rename: Some(RenameSelectItem::Single(IdentWithAlias {
-            ident: Ident::new("col_a"),
-            alias: Ident::new("col_b"),
+            ident: Ident::new("col_a").empty_span(),
+            alias: Ident::new("col_b").empty_span(),
         })),
         ..Default::default()
     });
@@ -1450,7 +1473,7 @@ fn parse_snowflake_declare_cursor() {
             "DECLARE c1 CURSOR FOR res",
             "c1",
             Some(DeclareAssignment::For(
-                Expr::Identifier(Ident::new("res")).into(),
+                Expr::Identifier(Ident::new("res").empty_span()).into(),
             )),
             None,
         ),
@@ -1466,7 +1489,7 @@ fn parse_snowflake_declare_cursor() {
                     for_query,
                     ..
                 } = stmts.swap_remove(0);
-                assert_eq!(vec![Ident::new(expected_name)], names);
+                assert_eq!(vec![Ident::new(expected_name).empty_span()], names);
                 assert!(data_type.is_none());
                 assert_eq!(Some(DeclareType::Cursor), declare_type);
                 assert_eq!(expected_assigned_expr, assigned_expr);
@@ -1534,7 +1557,7 @@ fn parse_snowflake_declare_result_set() {
                     for_query,
                     ..
                 } = stmts.swap_remove(0);
-                assert_eq!(vec![Ident::new(expected_name)], names);
+                assert_eq!(vec![Ident::new(expected_name).empty_span()], names);
                 assert!(data_type.is_none());
                 assert!(for_query.is_none());
                 assert_eq!(Some(DeclareType::ResultSet), declare_type);
@@ -1587,7 +1610,7 @@ fn parse_snowflake_declare_exception() {
                     for_query,
                     ..
                 } = stmts.swap_remove(0);
-                assert_eq!(vec![Ident::new(expected_name)], names);
+                assert_eq!(vec![Ident::new(expected_name).empty_span()], names);
                 assert!(data_type.is_none());
                 assert!(for_query.is_none());
                 assert_eq!(Some(DeclareType::Exception), declare_type);
@@ -1627,7 +1650,7 @@ fn parse_snowflake_declare_variable() {
                     for_query,
                     ..
                 } = stmts.swap_remove(0);
-                assert_eq!(vec![Ident::new(expected_name)], names);
+                assert_eq!(vec![Ident::new(expected_name).empty_span()], names);
                 assert!(for_query.is_none());
                 assert_eq!(expected_data_type, data_type);
                 assert_eq!(None, declare_type);
@@ -1913,11 +1936,16 @@ fn test_copy_into() {
         } => {
             assert_eq!(
                 into,
-                ObjectName(vec![Ident::new("my_company"), Ident::new("emp_basic")])
+                ObjectName(vec![
+                    Ident::new("my_company").empty_span(),
+                    Ident::new("emp_basic").empty_span()
+                ])
             );
             assert_eq!(
                 from_stage,
-                ObjectName(vec![Ident::with_quote('\'', "gcs://mybucket/./../a.csv")])
+                ObjectName(vec![
+                    Ident::with_quote('\'', "gcs://mybucket/./../a.csv").empty_span()
+                ])
             );
             assert!(files.is_none());
             assert!(pattern.is_none());
@@ -1948,7 +1976,9 @@ fn test_copy_into_with_stage_params() {
             //assert_eq!("s3://load/files/", stage_params.url.unwrap());
             assert_eq!(
                 from_stage,
-                ObjectName(vec![Ident::with_quote('\'', "s3://load/files/")])
+                ObjectName(vec![
+                    Ident::with_quote('\'', "s3://load/files/").empty_span()
+                ])
             );
             assert_eq!("myint", stage_params.storage_integration.unwrap());
             assert_eq!(
@@ -2007,7 +2037,9 @@ fn test_copy_into_with_stage_params() {
         } => {
             assert_eq!(
                 from_stage,
-                ObjectName(vec![Ident::with_quote('\'', "s3://load/files/")])
+                ObjectName(vec![
+                    Ident::with_quote('\'', "s3://load/files/").empty_span()
+                ])
             );
             assert_eq!("myint", stage_params.storage_integration.unwrap());
         }
@@ -2036,7 +2068,10 @@ fn test_copy_into_with_files_and_pattern_and_verification() {
             assert_eq!(files.unwrap(), vec!["file1.json", "file2.json"]);
             assert_eq!(pattern.unwrap(), ".*employees0[1-5].csv.gz");
             assert_eq!(validation_mode.unwrap(), "RETURN_7_ROWS");
-            assert_eq!(from_stage_alias.unwrap(), Ident::new("some_alias"));
+            assert_eq!(
+                from_stage_alias.unwrap(),
+                Ident::new("some_alias").empty_span()
+            );
         }
         _ => unreachable!(),
     }
@@ -2061,15 +2096,18 @@ fn test_copy_into_with_transformations() {
         } => {
             assert_eq!(
                 from_stage,
-                ObjectName(vec![Ident::new("@schema"), Ident::new("general_finished")])
+                ObjectName(vec![
+                    Ident::new("@schema").empty_span(),
+                    Ident::new("general_finished").empty_span()
+                ])
             );
             assert_eq!(
                 from_transformations.as_ref().unwrap()[0],
                 StageLoadSelectItem {
-                    alias: Some(Ident::new("t1")),
+                    alias: Some(Ident::new("t1").empty_span()),
                     file_col_num: 1,
-                    element: Some(Ident::new("st")),
-                    item_as: Some(Ident::new("st"))
+                    element: Some(Ident::new("st").empty_span()),
+                    item_as: Some(Ident::new("st").empty_span())
                 }
             );
             assert_eq!(
@@ -2077,14 +2115,14 @@ fn test_copy_into_with_transformations() {
                 StageLoadSelectItem {
                     alias: None,
                     file_col_num: 1,
-                    element: Some(Ident::new("index")),
+                    element: Some(Ident::new("index").empty_span()),
                     item_as: None
                 }
             );
             assert_eq!(
                 from_transformations.as_ref().unwrap()[2],
                 StageLoadSelectItem {
-                    alias: Some(Ident::new("t2")),
+                    alias: Some(Ident::new("t2").empty_span()),
                     file_col_num: 1,
                     element: None,
                     item_as: None
@@ -2170,17 +2208,23 @@ fn test_snowflake_stage_object_names() {
         "@~/path",
     ];
     let mut allowed_object_names = [
-        ObjectName(vec![Ident::new("my_company"), Ident::new("emp_basic")]),
-        ObjectName(vec![Ident::new("@namespace"), Ident::new("%table_name")]),
         ObjectName(vec![
-            Ident::new("@namespace"),
-            Ident::new("%table_name/path"),
+            Ident::new("my_company").empty_span(),
+            Ident::new("emp_basic").empty_span(),
         ]),
         ObjectName(vec![
-            Ident::new("@namespace"),
-            Ident::new("stage_name/path"),
+            Ident::new("@namespace").empty_span(),
+            Ident::new("%table_name").empty_span(),
         ]),
-        ObjectName(vec![Ident::new("@~/path")]),
+        ObjectName(vec![
+            Ident::new("@namespace").empty_span(),
+            Ident::new("%table_name/path").empty_span(),
+        ]),
+        ObjectName(vec![
+            Ident::new("@namespace").empty_span(),
+            Ident::new("stage_name/path").empty_span(),
+        ]),
+        ObjectName(vec![Ident::new("@~/path").empty_span()]),
     ];
 
     for it in allowed_formatted_names
@@ -2209,10 +2253,19 @@ fn test_snowflake_copy_into() {
         Statement::CopyIntoSnowflake {
             into, from_stage, ..
         } => {
-            assert_eq!(into, ObjectName(vec![Ident::new("a"), Ident::new("b")]));
+            assert_eq!(
+                into,
+                ObjectName(vec![
+                    Ident::new("a").empty_span(),
+                    Ident::new("b").empty_span()
+                ])
+            );
             assert_eq!(
                 from_stage,
-                ObjectName(vec![Ident::new("@namespace"), Ident::new("stage_name")])
+                ObjectName(vec![
+                    Ident::new("@namespace").empty_span(),
+                    Ident::new("stage_name").empty_span()
+                ])
             )
         }
         _ => unreachable!(),
@@ -2230,13 +2283,16 @@ fn test_snowflake_copy_into_stage_name_ends_with_parens() {
             assert_eq!(
                 into,
                 ObjectName(vec![
-                    Ident::new("SCHEMA"),
-                    Ident::new("SOME_MONITORING_SYSTEM")
+                    Ident::new("SCHEMA").empty_span(),
+                    Ident::new("SOME_MONITORING_SYSTEM").empty_span()
                 ])
             );
             assert_eq!(
                 from_stage,
-                ObjectName(vec![Ident::new("@schema"), Ident::new("general_finished")])
+                ObjectName(vec![
+                    Ident::new("@schema").empty_span(),
+                    Ident::new("general_finished").empty_span()
+                ])
             )
         }
         _ => unreachable!(),
@@ -2337,9 +2393,9 @@ fn parse_extract_custom_part() {
     let select = snowflake_and_generic().verified_only_select(sql);
     assert_eq!(
         &Expr::Extract {
-            field: DateTimeField::Custom(Ident::new("eod")),
+            field: DateTimeField::Custom(Ident::new("eod").empty_span()),
             syntax: ExtractSyntax::From,
-            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            expr: Box::new(Expr::Identifier(Ident::new("d").empty_span())),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -2353,7 +2409,7 @@ fn parse_extract_comma() {
         &Expr::Extract {
             field: DateTimeField::Hour,
             syntax: ExtractSyntax::Comma,
-            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            expr: Box::new(Expr::Identifier(Ident::new("d").empty_span())),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -2365,9 +2421,9 @@ fn parse_extract_comma_quoted() {
     let select = snowflake_and_generic().verified_only_select(sql);
     assert_eq!(
         &Expr::Extract {
-            field: DateTimeField::Custom(Ident::with_quote('\'', "hour")),
+            field: DateTimeField::Custom(Ident::with_quote('\'', "hour").empty_span()),
             syntax: ExtractSyntax::Comma,
-            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            expr: Box::new(Expr::Identifier(Ident::new("d").empty_span())),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -2382,13 +2438,13 @@ fn parse_comma_outer_join() {
         case1.selection,
         Some(Expr::BinaryOp {
             left: Box::new(Expr::CompoundIdentifier(vec![
-                Ident::new("t1"),
-                Ident::new("c1")
+                Ident::new("t1").empty_span(),
+                Ident::new("c1").empty_span()
             ])),
             op: BinaryOperator::Eq,
             right: Box::new(Expr::OuterJoin(Box::new(Expr::CompoundIdentifier(vec![
-                Ident::new("t2"),
-                Ident::new("c2")
+                Ident::new("t2").empty_span(),
+                Ident::new("c2").empty_span()
             ]))))
         })
     );
@@ -2399,11 +2455,11 @@ fn parse_comma_outer_join() {
     assert_eq!(
         case2.selection,
         Some(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("c1"))),
+            left: Box::new(Expr::Identifier(Ident::new("c1").empty_span())),
             op: BinaryOperator::Eq,
-            right: Box::new(Expr::OuterJoin(Box::new(Expr::Identifier(Ident::new(
-                "c2"
-            )))))
+            right: Box::new(Expr::OuterJoin(Box::new(Expr::Identifier(
+                Ident::new("c2").empty_span()
+            ))))
         })
     );
 
@@ -2413,7 +2469,7 @@ fn parse_comma_outer_join() {
     assert_eq!(
         case3.selection,
         Some(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("c1"))),
+            left: Box::new(Expr::Identifier(Ident::new("c1").empty_span())),
             op: BinaryOperator::Eq,
             right: Box::new(call(
                 "myudf",
@@ -2558,13 +2614,13 @@ fn asof_joins() {
                 join_operator: JoinOperator::AsOf {
                     match_condition: Expr::BinaryOp {
                         left: Box::new(Expr::CompoundIdentifier(vec![
-                            Ident::new("tu"),
-                            Ident::new("trade_time"),
+                            Ident::new("tu").empty_span(),
+                            Ident::new("trade_time").empty_span(),
                         ])),
                         op: BinaryOperator::GtEq,
                         right: Box::new(Expr::CompoundIdentifier(vec![
-                            Ident::new("qu"),
-                            Ident::new("quote_time"),
+                            Ident::new("qu").empty_span(),
+                            Ident::new("quote_time").empty_span(),
                         ])),
                     },
                     constraint: JoinConstraint::None,
@@ -2652,7 +2708,8 @@ fn parse_use() {
             snowflake().verified_stmt(&format!("USE {}", object_name)),
             Statement::Use(Use::Object(ObjectName(vec![Ident::new(
                 object_name.to_string()
-            )])))
+            )
+            .empty_span()])))
         );
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
@@ -2661,7 +2718,8 @@ fn parse_use() {
                 Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
-                )])))
+                )
+                .empty_span()])))
             );
         }
     }
@@ -2671,8 +2729,8 @@ fn parse_use() {
         std::assert_eq!(
             snowflake().verified_stmt(&format!("USE {0}CATALOG{0}.{0}my_schema{0}", quote)),
             Statement::Use(Use::Object(ObjectName(vec![
-                Ident::with_quote(quote, "CATALOG"),
-                Ident::with_quote(quote, "my_schema")
+                Ident::with_quote(quote, "CATALOG").empty_span(),
+                Ident::with_quote(quote, "my_schema").empty_span(),
             ])))
         );
     }
@@ -2680,8 +2738,8 @@ fn parse_use() {
     std::assert_eq!(
         snowflake().verified_stmt("USE mydb.my_schema"),
         Statement::Use(Use::Object(ObjectName(vec![
-            Ident::new("mydb"),
-            Ident::new("my_schema")
+            Ident::new("mydb").empty_span(),
+            Ident::new("my_schema").empty_span(),
         ])))
     );
 
@@ -2692,20 +2750,22 @@ fn parse_use() {
             Statement::Use(Use::Database(ObjectName(vec![Ident::with_quote(
                 quote,
                 "my_database".to_string(),
-            )])))
+            )
+            .empty_span()])))
         );
         std::assert_eq!(
             snowflake().verified_stmt(&format!("USE SCHEMA {0}my_schema{0}", quote)),
             Statement::Use(Use::Schema(ObjectName(vec![Ident::with_quote(
                 quote,
                 "my_schema".to_string(),
-            )])))
+            )
+            .empty_span()])))
         );
         std::assert_eq!(
             snowflake().verified_stmt(&format!("USE SCHEMA {0}CATALOG{0}.{0}my_schema{0}", quote)),
             Statement::Use(Use::Schema(ObjectName(vec![
-                Ident::with_quote(quote, "CATALOG"),
-                Ident::with_quote(quote, "my_schema")
+                Ident::with_quote(quote, "CATALOG").empty_span(),
+                Ident::with_quote(quote, "my_schema").empty_span(),
             ])))
         );
     }
@@ -2743,12 +2803,12 @@ fn parse_view_column_descriptions() {
                 columns,
                 vec![
                     ViewColumnDef {
-                        name: Ident::new("a"),
+                        name: Ident::new("a").empty_span(),
                         data_type: None,
                         options: Some(vec![ColumnOption::Comment("Comment".to_string())]),
                     },
                     ViewColumnDef {
-                        name: Ident::new("b"),
+                        name: Ident::new("b").empty_span(),
                         data_type: None,
                         options: None,
                     }

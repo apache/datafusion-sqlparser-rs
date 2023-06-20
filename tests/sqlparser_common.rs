@@ -49,6 +49,7 @@ mod test_utils;
 use pretty_assertions::assert_eq;
 use sqlparser::ast::ColumnOption::Comment;
 use sqlparser::ast::Expr::{Identifier, UnaryOp};
+use sqlparser::ast::SpanWrapped;
 use sqlparser::test_utils::all_dialects_except;
 
 #[test]
@@ -100,7 +101,10 @@ fn parse_insert_values() {
                 assert_eq!(table_name.to_string(), expected_table_name);
                 assert_eq!(columns.len(), expected_columns.len());
                 for (index, column) in columns.iter().enumerate() {
-                    assert_eq!(column, &Ident::new(expected_columns[index].clone()));
+                    assert_eq!(
+                        column,
+                        &Ident::new(expected_columns[index].clone()).empty_span()
+                    );
                 }
                 match *source.body {
                     SetExpr::Values(Values { rows, .. }) => {
@@ -148,7 +152,10 @@ fn parse_insert_default_values() {
             assert_eq!(partitioned, None);
             assert_eq!(returning, None);
             assert_eq!(source, None);
-            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+            assert_eq!(
+                table_name,
+                ObjectName(vec![Ident::new("test_table").empty_span()])
+            );
         }
         _ => unreachable!(),
     }
@@ -173,7 +180,10 @@ fn parse_insert_default_values() {
             assert_eq!(partitioned, None);
             assert!(returning.is_some());
             assert_eq!(source, None);
-            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+            assert_eq!(
+                table_name,
+                ObjectName(vec![Ident::new("test_table").empty_span()])
+            );
         }
         _ => unreachable!(),
     }
@@ -198,7 +208,10 @@ fn parse_insert_default_values() {
             assert_eq!(partitioned, None);
             assert_eq!(returning, None);
             assert_eq!(source, None);
-            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+            assert_eq!(
+                table_name,
+                ObjectName(vec![Ident::new("test_table").empty_span()])
+            );
         }
         _ => unreachable!(),
     }
@@ -303,20 +316,29 @@ fn parse_update() {
                 assignments,
                 vec![
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName(vec!["a".into()])),
+                        target: AssignmentTarget::ColumnName(ObjectName(vec![
+                            Ident::new("a").empty_span()
+                        ])),
                         value: Expr::Value(number("1")),
                     },
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName(vec!["b".into()])),
+                        target: AssignmentTarget::ColumnName(ObjectName(vec![
+                            Ident::new("b").empty_span()
+                        ])),
                         value: Expr::Value(number("2")),
                     },
                     Assignment {
-                        target: AssignmentTarget::ColumnName(ObjectName(vec!["c".into()])),
+                        target: AssignmentTarget::ColumnName(ObjectName(vec![
+                            Ident::new("c").empty_span()
+                        ])),
                         value: Expr::Value(number("3")),
                     },
                 ]
             );
-            assert_eq!(selection.unwrap(), Expr::Identifier("d".into()));
+            assert_eq!(
+                selection.unwrap(),
+                Expr::Identifier(Ident::new("d").empty_span())
+            );
         }
         _ => unreachable!(),
     }
@@ -357,7 +379,7 @@ fn parse_update_set_from() {
         Statement::Update {
             table: TableWithJoins {
                 relation: TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("t1")]),
+                    name: ObjectName(vec![Ident::new("t1").empty_span()]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -368,8 +390,13 @@ fn parse_update_set_from() {
                 joins: vec![],
             },
             assignments: vec![Assignment {
-                target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new("name")])),
-                value: Expr::CompoundIdentifier(vec![Ident::new("t2"), Ident::new("name")])
+                target: AssignmentTarget::ColumnName(ObjectName(vec![
+                    Ident::new("name").empty_span()
+                ])),
+                value: Expr::CompoundIdentifier(vec![
+                    Ident::new("t2").empty_span(),
+                    Ident::new("name").empty_span()
+                ])
             }],
             from: Some(TableWithJoins {
                 relation: TableFactor::Derived {
@@ -380,13 +407,17 @@ fn parse_update_set_from() {
                             distinct: None,
                             top: None,
                             projection: vec![
-                                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
-                                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
+                                SelectItem::UnnamedExpr(Expr::Identifier(
+                                    Ident::new("name").empty_span()
+                                )),
+                                SelectItem::UnnamedExpr(Expr::Identifier(
+                                    Ident::new("id").empty_span()
+                                )),
                             ],
                             into: None,
                             from: vec![TableWithJoins {
                                 relation: TableFactor::Table {
-                                    name: ObjectName(vec![Ident::new("t1")]),
+                                    name: ObjectName(vec![Ident::new("t1").empty_span()]),
                                     alias: None,
                                     args: None,
                                     with_hints: vec![],
@@ -400,7 +431,7 @@ fn parse_update_set_from() {
                             prewhere: None,
                             selection: None,
                             group_by: GroupByExpr::Expressions(
-                                vec![Expr::Identifier(Ident::new("id"))],
+                                vec![Expr::Identifier(Ident::new("id").empty_span())],
                                 vec![]
                             ),
                             cluster_by: vec![],
@@ -424,7 +455,7 @@ fn parse_update_set_from() {
                         format_clause: None,
                     }),
                     alias: Some(TableAlias {
-                        name: Ident::new("t2"),
+                        name: Ident::new("t2").empty_span(),
                         columns: vec![],
                     })
                 },
@@ -432,13 +463,13 @@ fn parse_update_set_from() {
             }),
             selection: Some(Expr::BinaryOp {
                 left: Box::new(Expr::CompoundIdentifier(vec![
-                    Ident::new("t1"),
-                    Ident::new("id")
+                    Ident::new("t1").empty_span(),
+                    Ident::new("id").empty_span(),
                 ])),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::CompoundIdentifier(vec![
-                    Ident::new("t2"),
-                    Ident::new("id")
+                    Ident::new("t2").empty_span(),
+                    Ident::new("id").empty_span(),
                 ])),
             }),
             returning: None,
@@ -460,9 +491,9 @@ fn parse_update_with_table_alias() {
             assert_eq!(
                 TableWithJoins {
                     relation: TableFactor::Table {
-                        name: ObjectName(vec![Ident::new("users")]),
+                        name: ObjectName(vec![Ident::new("users").empty_span()]),
                         alias: Some(TableAlias {
-                            name: Ident::new("u"),
+                            name: Ident::new("u").empty_span(),
                             columns: vec![],
                         }),
                         args: None,
@@ -478,8 +509,8 @@ fn parse_update_with_table_alias() {
             assert_eq!(
                 vec![Assignment {
                     target: AssignmentTarget::ColumnName(ObjectName(vec![
-                        Ident::new("u"),
-                        Ident::new("username")
+                        Ident::new("u").empty_span(),
+                        Ident::new("username").empty_span(),
                     ])),
                     value: Expr::Value(Value::SingleQuotedString("new_user".to_string())),
                 }],
@@ -488,8 +519,8 @@ fn parse_update_with_table_alias() {
             assert_eq!(
                 Some(Expr::BinaryOp {
                     left: Box::new(Expr::CompoundIdentifier(vec![
-                        Ident::new("u"),
-                        Ident::new("username"),
+                        Ident::new("u").empty_span(),
+                        Ident::new("username").empty_span(),
                     ])),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString(
@@ -519,19 +550,23 @@ fn parse_select_with_table_alias() {
     assert_eq!(
         select.projection,
         vec![
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("a")),),
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("b")),),
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("c")),),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("a").empty_span()),),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("b").empty_span()),),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("c").empty_span()),),
         ]
     );
     assert_eq!(
         select.from,
         vec![TableWithJoins {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new("lineitem")]),
+                name: ObjectName(vec![Ident::new("lineitem").empty_span()]),
                 alias: Some(TableAlias {
-                    name: Ident::new("l"),
-                    columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C"),],
+                    name: Ident::new("l").empty_span(),
+                    columns: vec![
+                        Ident::new("A").empty_span(),
+                        Ident::new("B").empty_span(),
+                        Ident::new("C").empty_span(),
+                    ],
                 }),
                 args: None,
                 with_hints: vec![],
@@ -568,7 +603,7 @@ fn parse_delete_statement() {
         }) => {
             assert_eq!(
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::with_quote('"', "table")]),
+                    name: ObjectName(vec![Ident::with_quote('"', "table").empty_span()]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -606,16 +641,25 @@ fn parse_delete_statement_for_multi_tables() {
             ..
         }) => {
             assert_eq!(
-                ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                ObjectName(vec![
+                    Ident::new("schema1").empty_span(),
+                    Ident::new("table1").empty_span()
+                ]),
                 tables[0]
             );
             assert_eq!(
-                ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                ObjectName(vec![
+                    Ident::new("schema2").empty_span(),
+                    Ident::new("table2").empty_span()
+                ]),
                 tables[1]
             );
             assert_eq!(
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                    name: ObjectName(vec![
+                        Ident::new("schema1").empty_span(),
+                        Ident::new("table1").empty_span()
+                    ]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -627,7 +671,10 @@ fn parse_delete_statement_for_multi_tables() {
             );
             assert_eq!(
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                    name: ObjectName(vec![
+                        Ident::new("schema2").empty_span(),
+                        Ident::new("table2").empty_span()
+                    ]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -653,7 +700,10 @@ fn parse_delete_statement_for_multi_tables_with_using() {
         }) => {
             assert_eq!(
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                    name: ObjectName(vec![
+                        Ident::new("schema1").empty_span(),
+                        Ident::new("table1").empty_span()
+                    ]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -665,7 +715,10 @@ fn parse_delete_statement_for_multi_tables_with_using() {
             );
             assert_eq!(
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                    name: ObjectName(vec![
+                        Ident::new("schema2").empty_span(),
+                        Ident::new("table2").empty_span()
+                    ]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -677,7 +730,10 @@ fn parse_delete_statement_for_multi_tables_with_using() {
             );
             assert_eq!(
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
+                    name: ObjectName(vec![
+                        Ident::new("schema1").empty_span(),
+                        Ident::new("table1").empty_span()
+                    ]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -689,7 +745,10 @@ fn parse_delete_statement_for_multi_tables_with_using() {
             );
             assert_eq!(
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("schema2"), Ident::new("table2")]),
+                    name: ObjectName(vec![
+                        Ident::new("schema2").empty_span(),
+                        Ident::new("table2").empty_span()
+                    ]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -720,7 +779,7 @@ fn parse_where_delete_statement() {
         }) => {
             assert_eq!(
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("foo")]),
+                    name: ObjectName(vec![Ident::new("foo").empty_span()]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -734,7 +793,7 @@ fn parse_where_delete_statement() {
             assert_eq!(None, using);
             assert_eq!(
                 Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("name"))),
+                    left: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                     op: Eq,
                     right: Box::new(Expr::Value(number("5"))),
                 },
@@ -762,9 +821,9 @@ fn parse_where_delete_with_alias_statement() {
         }) => {
             assert_eq!(
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("basket")]),
+                    name: ObjectName(vec![Ident::new("basket").empty_span()]),
                     alias: Some(TableAlias {
-                        name: Ident::new("a"),
+                        name: Ident::new("a").empty_span(),
                         columns: vec![],
                     }),
                     args: None,
@@ -778,9 +837,9 @@ fn parse_where_delete_with_alias_statement() {
             assert_eq!(
                 Some(vec![TableWithJoins {
                     relation: TableFactor::Table {
-                        name: ObjectName(vec![Ident::new("basket")]),
+                        name: ObjectName(vec![Ident::new("basket").empty_span()]),
                         alias: Some(TableAlias {
-                            name: Ident::new("b"),
+                            name: Ident::new("b").empty_span(),
                             columns: vec![],
                         }),
                         args: None,
@@ -796,13 +855,13 @@ fn parse_where_delete_with_alias_statement() {
             assert_eq!(
                 Expr::BinaryOp {
                     left: Box::new(Expr::CompoundIdentifier(vec![
-                        Ident::new("a"),
-                        Ident::new("id"),
+                        Ident::new("a").empty_span(),
+                        Ident::new("id").empty_span(),
                     ])),
                     op: Lt,
                     right: Box::new(Expr::CompoundIdentifier(vec![
-                        Ident::new("b"),
-                        Ident::new("id"),
+                        Ident::new("b").empty_span(),
+                        Ident::new("id").empty_span(),
                     ])),
                 },
                 selection.unwrap(),
@@ -853,7 +912,7 @@ fn parse_select_distinct() {
     let select = verified_only_select(sql);
     assert!(select.distinct.is_some());
     assert_eq!(
-        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name").empty_span())),
         only(&select.projection)
     );
 }
@@ -864,11 +923,11 @@ fn parse_select_distinct_two_fields() {
     let select = verified_only_select(sql);
     assert!(select.distinct.is_some());
     assert_eq!(
-        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name"))),
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("name").empty_span())),
         &select.projection[0]
     );
     assert_eq!(
-        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id"))),
+        &SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("id").empty_span())),
         &select.projection[1]
     );
 }
@@ -879,8 +938,8 @@ fn parse_select_distinct_tuple() {
     let select = verified_only_select(sql);
     assert_eq!(
         &vec![SelectItem::UnnamedExpr(Expr::Tuple(vec![
-            Expr::Identifier(Ident::new("name")),
-            Expr::Identifier(Ident::new("id")),
+            Expr::Identifier(Ident::new("name").empty_span()),
+            Expr::Identifier(Ident::new("id").empty_span()),
         ]))],
         &select.projection
     );
@@ -891,7 +950,9 @@ fn parse_select_distinct_on() {
     let sql = "SELECT DISTINCT ON (album_id) name FROM track ORDER BY album_id, milliseconds";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Some(Distinct::On(vec![Expr::Identifier(Ident::new("album_id"))])),
+        &Some(Distinct::On(vec![Expr::Identifier(
+            Ident::new("album_id").empty_span()
+        )])),
         &select.distinct
     );
 
@@ -903,8 +964,8 @@ fn parse_select_distinct_on() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Some(Distinct::On(vec![
-            Expr::Identifier(Ident::new("album_id")),
-            Expr::Identifier(Ident::new("milliseconds")),
+            Expr::Identifier(Ident::new("album_id").empty_span()),
+            Expr::Identifier(Ident::new("milliseconds").empty_span()),
         ])),
         &select.distinct
     );
@@ -943,7 +1004,7 @@ fn parse_select_into() {
             temporary: false,
             unlogged: false,
             table: false,
-            name: ObjectName(vec![Ident::new("table0")]),
+            name: ObjectName(vec![Ident::new("table0").empty_span()]),
         },
         only(&select.into)
     );
@@ -976,7 +1037,7 @@ fn parse_select_wildcard() {
     let select = verified_only_select(sql);
     assert_eq!(
         &SelectItem::QualifiedWildcard(
-            ObjectName(vec![Ident::new("foo")]),
+            ObjectName(vec![Ident::new("foo").empty_span()]),
             WildcardAdditionalOptions::default()
         ),
         only(&select.projection)
@@ -986,7 +1047,10 @@ fn parse_select_wildcard() {
     let select = verified_only_select(sql);
     assert_eq!(
         &SelectItem::QualifiedWildcard(
-            ObjectName(vec![Ident::new("myschema"), Ident::new("mytable"),]),
+            ObjectName(vec![
+                Ident::new("myschema").empty_span(),
+                Ident::new("mytable").empty_span(),
+            ]),
             WildcardAdditionalOptions::default(),
         ),
         only(&select.projection)
@@ -1022,7 +1086,7 @@ fn parse_column_aliases() {
     {
         assert_eq!(&BinaryOperator::Plus, op);
         assert_eq!(&Expr::Value(number("1")), right.as_ref());
-        assert_eq!(&Ident::new("newname"), alias);
+        assert_eq!(&Ident::new("newname").empty_span(), alias);
     } else {
         panic!("Expected: ExprWithAlias")
     }
@@ -1063,7 +1127,7 @@ fn parse_select_count_wildcard() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("COUNT")]),
+            name: ObjectName(vec![Ident::new("COUNT").empty_span()]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
@@ -1085,13 +1149,13 @@ fn parse_select_count_distinct() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("COUNT")]),
+            name: ObjectName(vec![Ident::new("COUNT").empty_span()]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: Some(DuplicateTreatment::Distinct),
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::UnaryOp {
                     op: UnaryOperator::Plus,
-                    expr: Box::new(Expr::Identifier(Ident::new("x"))),
+                    expr: Box::new(Expr::Identifier(Ident::new("x").empty_span())),
                 }))],
                 clauses: vec![],
             }),
@@ -1209,11 +1273,11 @@ fn parse_exponent_in_select() -> Result<(), ParserError> {
             SelectItem::UnnamedExpr(Expr::Value(number("1e+3"))),
             SelectItem::ExprWithAlias {
                 expr: Expr::Value(number("1e3")),
-                alias: Ident::new("a")
+                alias: Ident::new("a").empty_span(),
             },
             SelectItem::ExprWithAlias {
                 expr: Expr::Value(number("1")),
-                alias: Ident::new("e")
+                alias: Ident::new("e").empty_span(),
             },
             SelectItem::UnnamedExpr(Expr::Value(number("0.5e2"))),
         ],
@@ -1228,10 +1292,13 @@ fn parse_select_with_date_column_name() {
     let sql = "SELECT date";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Identifier(Ident {
-            value: "date".into(),
-            quote_style: None,
-        }),
+        &Expr::Identifier(
+            Ident {
+                value: "date".into(),
+                quote_style: None,
+            }
+            .empty_span()
+        ),
         expr_from_projection(only(&select.projection)),
     );
 }
@@ -1246,7 +1313,7 @@ fn parse_escaped_single_quote_string_predicate_with_escape() {
 
     assert_eq!(
         Some(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("salary"))),
+            left: Box::new(Expr::Identifier(Ident::new("salary").empty_span())),
             op: NotEq,
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "Jim's salary".to_string()
@@ -1272,7 +1339,7 @@ fn parse_escaped_single_quote_string_predicate_with_no_escape() {
 
     assert_eq!(
         Some(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("salary"))),
+            left: Box::new(Expr::Identifier(Ident::new("salary").empty_span())),
             op: NotEq,
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "Jim''s salary".to_string()
@@ -1303,12 +1370,12 @@ fn parse_compound_expr_1() {
     let sql = "a + b * c";
     assert_eq!(
         BinaryOp {
-            left: Box::new(Identifier(Ident::new("a"))),
+            left: Box::new(Identifier(Ident::new("a").empty_span())),
             op: Plus,
             right: Box::new(BinaryOp {
-                left: Box::new(Identifier(Ident::new("b"))),
+                left: Box::new(Identifier(Ident::new("b").empty_span())),
                 op: Multiply,
-                right: Box::new(Identifier(Ident::new("c"))),
+                right: Box::new(Identifier(Ident::new("c").empty_span())),
             }),
         },
         verified_expr(sql)
@@ -1323,12 +1390,12 @@ fn parse_compound_expr_2() {
     assert_eq!(
         BinaryOp {
             left: Box::new(BinaryOp {
-                left: Box::new(Identifier(Ident::new("a"))),
+                left: Box::new(Identifier(Ident::new("a").empty_span())),
                 op: Multiply,
-                right: Box::new(Identifier(Ident::new("b"))),
+                right: Box::new(Identifier(Ident::new("b").empty_span())),
             }),
             op: Plus,
-            right: Box::new(Identifier(Ident::new("c"))),
+            right: Box::new(Identifier(Ident::new("c").empty_span())),
         },
         verified_expr(sql)
     );
@@ -1342,12 +1409,12 @@ fn parse_unary_math_with_plus() {
         BinaryOp {
             left: Box::new(UnaryOp {
                 op: UnaryOperator::Minus,
-                expr: Box::new(Identifier(Ident::new("a"))),
+                expr: Box::new(Identifier(Ident::new("a").empty_span())),
             }),
             op: BinaryOperator::Plus,
             right: Box::new(UnaryOp {
                 op: UnaryOperator::Minus,
-                expr: Box::new(Identifier(Ident::new("b"))),
+                expr: Box::new(Identifier(Ident::new("b").empty_span())),
             }),
         },
         verified_expr(sql)
@@ -1362,12 +1429,12 @@ fn parse_unary_math_with_multiply() {
         BinaryOp {
             left: Box::new(UnaryOp {
                 op: UnaryOperator::Minus,
-                expr: Box::new(Identifier(Ident::new("a"))),
+                expr: Box::new(Identifier(Ident::new("a").empty_span())),
             }),
             op: BinaryOperator::Multiply,
             right: Box::new(UnaryOp {
                 op: UnaryOperator::Minus,
-                expr: Box::new(Identifier(Ident::new("b"))),
+                expr: Box::new(Identifier(Ident::new("b").empty_span())),
             }),
         },
         verified_expr(sql)
@@ -1380,9 +1447,9 @@ fn parse_mod() {
     let sql = "a % b";
     assert_eq!(
         BinaryOp {
-            left: Box::new(Identifier(Ident::new("a"))),
+            left: Box::new(Identifier(Ident::new("a").empty_span())),
             op: BinaryOperator::Modulo,
-            right: Box::new(Identifier(Ident::new("b"))),
+            right: Box::new(Identifier(Ident::new("b").empty_span())),
         },
         verified_expr(sql)
     );
@@ -1418,9 +1485,9 @@ fn parse_json_ops_without_colon() {
         let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
                 op,
-                right: Box::new(Expr::Identifier(Ident::new("b"))),
+                right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
             }),
             select.projection[0]
         );
@@ -1436,9 +1503,9 @@ fn parse_mod_no_spaces() {
         println!("Parsing {sql}");
         assert_eq!(
             BinaryOp {
-                left: Box::new(Identifier(Ident::new("a1"))),
+                left: Box::new(Identifier(Ident::new("a1").empty_span())),
                 op: BinaryOperator::Modulo,
-                right: Box::new(Identifier(Ident::new("b1"))),
+                right: Box::new(Identifier(Ident::new("b1").empty_span())),
             },
             pg_and_generic().expr_parses_to(sql, canonical)
         );
@@ -1450,7 +1517,7 @@ fn parse_is_null() {
     use self::Expr::*;
     let sql = "a IS NULL";
     assert_eq!(
-        IsNull(Box::new(Identifier(Ident::new("a")))),
+        IsNull(Box::new(Identifier(Ident::new("a").empty_span()))),
         verified_expr(sql)
     );
 }
@@ -1460,7 +1527,7 @@ fn parse_is_not_null() {
     use self::Expr::*;
     let sql = "a IS NOT NULL";
     assert_eq!(
-        IsNotNull(Box::new(Identifier(Ident::new("a")))),
+        IsNotNull(Box::new(Identifier(Ident::new("a").empty_span()))),
         verified_expr(sql)
     );
 }
@@ -1471,8 +1538,8 @@ fn parse_is_distinct_from() {
     let sql = "a IS DISTINCT FROM b";
     assert_eq!(
         IsDistinctFrom(
-            Box::new(Identifier(Ident::new("a"))),
-            Box::new(Identifier(Ident::new("b"))),
+            Box::new(Identifier(Ident::new("a").empty_span())),
+            Box::new(Identifier(Ident::new("b").empty_span())),
         ),
         verified_expr(sql)
     );
@@ -1484,8 +1551,8 @@ fn parse_is_not_distinct_from() {
     let sql = "a IS NOT DISTINCT FROM b";
     assert_eq!(
         IsNotDistinctFrom(
-            Box::new(Identifier(Ident::new("a"))),
-            Box::new(Identifier(Ident::new("b"))),
+            Box::new(Identifier(Ident::new("a").empty_span())),
+            Box::new(Identifier(Ident::new("b").empty_span())),
         ),
         verified_expr(sql)
     );
@@ -1551,7 +1618,7 @@ fn parse_not_precedence() {
         Expr::UnaryOp {
             op: UnaryOperator::Not,
             expr: Box::new(Expr::InList {
-                expr: Box::new(Expr::Identifier("a".into())),
+                expr: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
                 list: vec![Expr::Value(Value::SingleQuotedString("a".into()))],
                 negated: true,
             }),
@@ -1569,7 +1636,7 @@ fn parse_null_like() {
     assert_eq!(
         SelectItem::ExprWithAlias {
             expr: Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("column1"))),
+                expr: Box::new(Expr::Identifier(Ident::new("column1").empty_span())),
                 any: false,
                 negated: false,
                 pattern: Box::new(Expr::Value(Value::Null)),
@@ -1578,7 +1645,8 @@ fn parse_null_like() {
             alias: Ident {
                 value: "col_null".to_owned(),
                 quote_style: None,
-            },
+            }
+            .empty_span(),
         },
         select.projection[0]
     );
@@ -1588,13 +1656,14 @@ fn parse_null_like() {
                 expr: Box::new(Expr::Value(Value::Null)),
                 any: false,
                 negated: false,
-                pattern: Box::new(Expr::Identifier(Ident::new("column1"))),
+                pattern: Box::new(Expr::Identifier(Ident::new("column1").empty_span())),
                 escape_char: None,
             },
             alias: Ident {
                 value: "null_col".to_owned(),
                 quote_style: None,
-            },
+            }
+            .empty_span(),
         },
         select.projection[1]
     );
@@ -1610,7 +1679,7 @@ fn parse_ilike() {
         let select = verified_only_select(sql);
         assert_eq!(
             Expr::ILike {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -1627,7 +1696,7 @@ fn parse_ilike() {
         let select = verified_only_select(sql);
         assert_eq!(
             Expr::ILike {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('^'.to_string()),
@@ -1645,7 +1714,7 @@ fn parse_ilike() {
         let select = verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::ILike {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -1668,7 +1737,7 @@ fn parse_like() {
         let select = verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -1685,7 +1754,7 @@ fn parse_like() {
         let select = verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('^'.to_string()),
@@ -1703,7 +1772,7 @@ fn parse_like() {
         let select = verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -1726,7 +1795,7 @@ fn parse_similar_to() {
         let select = verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -1742,7 +1811,7 @@ fn parse_similar_to() {
         let select = verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('^'.to_string()),
@@ -1758,7 +1827,7 @@ fn parse_similar_to() {
         let select = verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('^'.to_string()),
@@ -1780,7 +1849,7 @@ fn parse_in_list() {
         let select = verified_only_select(sql);
         assert_eq!(
             Expr::InList {
-                expr: Box::new(Expr::Identifier(Ident::new("segment"))),
+                expr: Box::new(Expr::Identifier(Ident::new("segment").empty_span())),
                 list: vec![
                     Expr::Value(Value::SingleQuotedString("HIGH".to_string())),
                     Expr::Value(Value::SingleQuotedString("MED".to_string())),
@@ -1800,7 +1869,7 @@ fn parse_in_subquery() {
     let select = verified_only_select(sql);
     assert_eq!(
         Expr::InSubquery {
-            expr: Box::new(Expr::Identifier(Ident::new("segment"))),
+            expr: Box::new(Expr::Identifier(Ident::new("segment").empty_span())),
             subquery: Box::new(verified_query("SELECT segm FROM bar")),
             negated: false,
         },
@@ -1818,7 +1887,7 @@ fn parse_in_unnest() {
         let select = verified_only_select(sql);
         assert_eq!(
             Expr::InUnnest {
-                expr: Box::new(Expr::Identifier(Ident::new("segment"))),
+                expr: Box::new(Expr::Identifier(Ident::new("segment").empty_span())),
                 array_expr: Box::new(verified_expr("expr")),
                 negated,
             },
@@ -1847,9 +1916,9 @@ fn parse_string_agg() {
     let select = verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             op: BinaryOperator::StringConcat,
-            right: Box::new(Expr::Identifier(Ident::new("b"))),
+            right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
         }),
         select.projection[0]
     );
@@ -1878,9 +1947,9 @@ fn parse_bitwise_ops() {
         let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
                 op: op.clone(),
-                right: Box::new(Expr::Identifier(Ident::new("b"))),
+                right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
             }),
             select.projection[0]
         );
@@ -1892,9 +1961,9 @@ fn parse_binary_any() {
     let select = verified_only_select("SELECT a = ANY(b)");
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::AnyOp {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             compare_op: BinaryOperator::Eq,
-            right: Box::new(Expr::Identifier(Ident::new("b"))),
+            right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
             is_some: false,
         }),
         select.projection[0]
@@ -1906,9 +1975,9 @@ fn parse_binary_all() {
     let select = verified_only_select("SELECT a = ALL(b)");
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::AllOp {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             compare_op: BinaryOperator::Eq,
-            right: Box::new(Expr::Identifier(Ident::new("b"))),
+            right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
         }),
         select.projection[0]
     );
@@ -1962,7 +2031,7 @@ fn parse_between() {
         let select = verified_only_select(sql);
         assert_eq!(
             Expr::Between {
-                expr: Box::new(Expr::Identifier(Ident::new("age"))),
+                expr: Box::new(Expr::Identifier(Ident::new("age").empty_span())),
                 low: Box::new(Expr::Value(number("25"))),
                 high: Box::new(Expr::Value(number("32"))),
                 negated,
@@ -2011,7 +2080,7 @@ fn parse_between_with_expr() {
                 expr: Box::new(Expr::BinaryOp {
                     left: Box::new(Expr::Value(number("1"))),
                     op: BinaryOperator::Plus,
-                    right: Box::new(Expr::Identifier(Ident::new("x"))),
+                    right: Box::new(Expr::Identifier(Ident::new("x").empty_span())),
                 }),
                 low: Box::new(Expr::Value(number("1"))),
                 high: Box::new(Expr::Value(number("2"))),
@@ -2036,7 +2105,7 @@ fn parse_tuples() {
             SelectItem::UnnamedExpr(Expr::Tuple(vec![
                 Expr::Value(Value::SingleQuotedString("foo".into())),
                 Expr::Value(number("3")),
-                Expr::Identifier(Ident::new("baz")),
+                Expr::Identifier(Ident::new("baz").empty_span()),
             ])),
         ],
         select.projection
@@ -2067,19 +2136,19 @@ fn parse_select_order_by() {
         assert_eq!(
             vec![
                 OrderByExpr {
-                    expr: Expr::Identifier(Ident::new("lname")),
+                    expr: Expr::Identifier(Ident::new("lname").empty_span()),
                     asc: Some(true),
                     nulls_first: None,
                     with_fill: None,
                 },
                 OrderByExpr {
-                    expr: Expr::Identifier(Ident::new("fname")),
+                    expr: Expr::Identifier(Ident::new("fname").empty_span()),
                     asc: Some(false),
                     nulls_first: None,
                     with_fill: None,
                 },
                 OrderByExpr {
-                    expr: Expr::Identifier(Ident::new("id")),
+                    expr: Expr::Identifier(Ident::new("id").empty_span()),
                     asc: None,
                     nulls_first: None,
                     with_fill: None,
@@ -2102,13 +2171,13 @@ fn parse_select_order_by_limit() {
     assert_eq!(
         vec![
             OrderByExpr {
-                expr: Expr::Identifier(Ident::new("lname")),
+                expr: Expr::Identifier(Ident::new("lname").empty_span()),
                 asc: Some(true),
                 nulls_first: None,
                 with_fill: None,
             },
             OrderByExpr {
-                expr: Expr::Identifier(Ident::new("fname")),
+                expr: Expr::Identifier(Ident::new("fname").empty_span()),
                 asc: Some(false),
                 nulls_first: None,
                 with_fill: None,
@@ -2127,13 +2196,13 @@ fn parse_select_order_by_nulls_order() {
     assert_eq!(
         vec![
             OrderByExpr {
-                expr: Expr::Identifier(Ident::new("lname")),
+                expr: Expr::Identifier(Ident::new("lname").empty_span()),
                 asc: Some(true),
                 nulls_first: Some(true),
                 with_fill: None,
             },
             OrderByExpr {
-                expr: Expr::Identifier(Ident::new("fname")),
+                expr: Expr::Identifier(Ident::new("fname").empty_span()),
                 asc: Some(false),
                 nulls_first: Some(false),
                 with_fill: None,
@@ -2151,8 +2220,8 @@ fn parse_select_group_by() {
     assert_eq!(
         GroupByExpr::Expressions(
             vec![
-                Expr::Identifier(Ident::new("lname")),
-                Expr::Identifier(Ident::new("fname")),
+                Expr::Identifier(Ident::new("lname").empty_span()),
+                Expr::Identifier(Ident::new("fname").empty_span()),
             ],
             vec![]
         ),
@@ -2185,7 +2254,7 @@ fn parse_select_having() {
     assert_eq!(
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("COUNT")]),
+                name: ObjectName(vec![Ident::new("COUNT").empty_span()]),
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
@@ -2215,7 +2284,7 @@ fn parse_select_qualify() {
     assert_eq!(
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("ROW_NUMBER")]),
+                name: ObjectName(vec![Ident::new("ROW_NUMBER").empty_span()]),
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
@@ -2226,9 +2295,9 @@ fn parse_select_qualify() {
                 filter: None,
                 over: Some(WindowType::WindowSpec(WindowSpec {
                     window_name: None,
-                    partition_by: vec![Expr::Identifier(Ident::new("p"))],
+                    partition_by: vec![Expr::Identifier(Ident::new("p").empty_span())],
                     order_by: vec![OrderByExpr {
-                        expr: Expr::Identifier(Ident::new("o")),
+                        expr: Expr::Identifier(Ident::new("o").empty_span()),
                         asc: None,
                         nulls_first: None,
                         with_fill: None,
@@ -2247,7 +2316,7 @@ fn parse_select_qualify() {
     let select = verified_only_select(sql);
     assert_eq!(
         Some(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("row_num"))),
+            left: Box::new(Expr::Identifier(Ident::new("row_num").empty_span())),
             op: BinaryOperator::Eq,
             right: Box::new(Expr::Value(number("1"))),
         }),
@@ -2270,7 +2339,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Box::new(Expr::Identifier(Ident::new("id").empty_span())),
             data_type: DataType::BigInt(None),
             format: None,
         },
@@ -2282,7 +2351,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Box::new(Expr::Identifier(Ident::new("id").empty_span())),
             data_type: DataType::TinyInt(None),
             format: None,
         },
@@ -2310,7 +2379,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Box::new(Expr::Identifier(Ident::new("id").empty_span())),
             data_type: DataType::Nvarchar(Some(CharacterLength::IntegerLength {
                 length: 50,
                 unit: None,
@@ -2325,7 +2394,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Box::new(Expr::Identifier(Ident::new("id").empty_span())),
             data_type: DataType::Clob(None),
             format: None,
         },
@@ -2337,7 +2406,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Box::new(Expr::Identifier(Ident::new("id").empty_span())),
             data_type: DataType::Clob(Some(50)),
             format: None,
         },
@@ -2349,7 +2418,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Box::new(Expr::Identifier(Ident::new("id").empty_span())),
             data_type: DataType::Binary(Some(50)),
             format: None,
         },
@@ -2361,7 +2430,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Box::new(Expr::Identifier(Ident::new("id").empty_span())),
             data_type: DataType::Varbinary(Some(50)),
             format: None,
         },
@@ -2373,7 +2442,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Box::new(Expr::Identifier(Ident::new("id").empty_span())),
             data_type: DataType::Blob(None),
             format: None,
         },
@@ -2385,7 +2454,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Box::new(Expr::Identifier(Ident::new("id").empty_span())),
             data_type: DataType::Blob(Some(50)),
             format: None,
         },
@@ -2397,7 +2466,7 @@ fn parse_cast() {
     assert_eq!(
         &Expr::Cast {
             kind: CastKind::Cast,
-            expr: Box::new(Expr::Identifier(Ident::new("details"))),
+            expr: Box::new(Expr::Identifier(Ident::new("details").empty_span())),
             data_type: DataType::JSONB,
             format: None,
         },
@@ -2412,7 +2481,7 @@ fn parse_try_cast() {
     assert_eq!(
         &Expr::Cast {
             kind: CastKind::TryCast,
-            expr: Box::new(Expr::Identifier(Ident::new("id"))),
+            expr: Box::new(Expr::Identifier(Ident::new("id").empty_span())),
             data_type: DataType::BigInt(None),
             format: None,
         },
@@ -2435,7 +2504,7 @@ fn parse_extract() {
         &Expr::Extract {
             field: DateTimeField::Year,
             syntax: ExtractSyntax::From,
-            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            expr: Box::new(Expr::Identifier(Ident::new("d").empty_span())),
         },
         expr_from_projection(only(&select.projection)),
     );
@@ -2518,7 +2587,7 @@ fn parse_ceil_scale() {
     #[cfg(feature = "bigdecimal")]
     assert_eq!(
         &Expr::Ceil {
-            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            expr: Box::new(Expr::Identifier(Ident::new("d").empty_span())),
             field: CeilFloorKind::Scale(Value::Number(bigdecimal::BigDecimal::from(2), false)),
         },
         expr_from_projection(only(&select.projection)),
@@ -2527,7 +2596,7 @@ fn parse_ceil_scale() {
     #[cfg(not(feature = "bigdecimal"))]
     assert_eq!(
         &Expr::Ceil {
-            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            expr: Box::new(Expr::Identifier(Ident::new("d").empty_span())),
             field: CeilFloorKind::Scale(Value::Number(2.to_string(), false)),
         },
         expr_from_projection(only(&select.projection)),
@@ -2542,7 +2611,7 @@ fn parse_floor_scale() {
     #[cfg(feature = "bigdecimal")]
     assert_eq!(
         &Expr::Floor {
-            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            expr: Box::new(Expr::Identifier(Ident::new("d").empty_span())),
             field: CeilFloorKind::Scale(Value::Number(bigdecimal::BigDecimal::from(2), false)),
         },
         expr_from_projection(only(&select.projection)),
@@ -2551,7 +2620,7 @@ fn parse_floor_scale() {
     #[cfg(not(feature = "bigdecimal"))]
     assert_eq!(
         &Expr::Floor {
-            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            expr: Box::new(Expr::Identifier(Ident::new("d").empty_span())),
             field: CeilFloorKind::Scale(Value::Number(2.to_string(), false)),
         },
         expr_from_projection(only(&select.projection)),
@@ -2564,7 +2633,7 @@ fn parse_ceil_datetime() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Ceil {
-            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            expr: Box::new(Expr::Identifier(Ident::new("d").empty_span())),
             field: CeilFloorKind::DateTimeField(DateTimeField::Day),
         },
         expr_from_projection(only(&select.projection)),
@@ -2591,7 +2660,7 @@ fn parse_floor_datetime() {
     let select = verified_only_select(sql);
     assert_eq!(
         &Expr::Floor {
-            expr: Box::new(Expr::Identifier(Ident::new("d"))),
+            expr: Box::new(Expr::Identifier(Ident::new("d").empty_span())),
             field: CeilFloorKind::DateTimeField(DateTimeField::Day),
         },
         expr_from_projection(only(&select.projection)),
@@ -2621,14 +2690,14 @@ fn parse_listagg() {
 
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("LISTAGG")]),
+            name: ObjectName(vec![Ident::new("LISTAGG").empty_span()]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: Some(DuplicateTreatment::Distinct),
                 args: vec![
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new(
-                        "dateid"
-                    )))),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                        Ident::new("dateid").empty_span()
+                    ))),
                     FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                         Value::SingleQuotedString(", ".to_owned())
                     )))
@@ -2647,19 +2716,25 @@ fn parse_listagg() {
             over: None,
             within_group: vec![
                 OrderByExpr {
-                    expr: Expr::Identifier(Ident {
-                        value: "id".to_string(),
-                        quote_style: None,
-                    }),
+                    expr: Expr::Identifier(
+                        Ident {
+                            value: "id".to_string(),
+                            quote_style: None,
+                        }
+                        .empty_span()
+                    ),
                     asc: None,
                     nulls_first: None,
                     with_fill: None,
                 },
                 OrderByExpr {
-                    expr: Expr::Identifier(Ident {
-                        value: "username".to_string(),
-                        quote_style: None,
-                    }),
+                    expr: Expr::Identifier(
+                        Ident {
+                            value: "username".to_string(),
+                            quote_style: None,
+                        }
+                        .empty_span()
+                    ),
                     asc: None,
                     nulls_first: None,
                     with_fill: None,
@@ -2773,7 +2848,10 @@ fn parse_window_function_null_treatment_arg() {
         let SelectItem::UnnamedExpr(Expr::Function(actual)) = &projection[i] else {
             unreachable!()
         };
-        assert_eq!(ObjectName(vec![Ident::new("FIRST_VALUE")]), actual.name);
+        assert_eq!(
+            ObjectName(vec![Ident::new("FIRST_VALUE").empty_span()]),
+            actual.name
+        );
         let FunctionArguments::List(arg_list) = &actual.args else {
             panic!("expected argument list")
         };
@@ -2789,7 +2867,7 @@ fn parse_window_function_null_treatment_arg() {
         else {
             unreachable!()
         };
-        assert_eq!(&Ident::new(expected_expr), actual_expr);
+        assert_eq!(&Ident::new(expected_expr).empty_span(), actual_expr);
         assert_eq!(
             Some(expected_null_treatment),
             arg_list.clauses.iter().find_map(|clause| match clause {
@@ -2871,7 +2949,7 @@ fn parse_create_table() {
                 columns,
                 vec![
                     ColumnDef {
-                        name: "name".into(),
+                        name: Ident::new("name").empty_span(),
                         data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                             length: 100,
                             unit: None,
@@ -2883,7 +2961,7 @@ fn parse_create_table() {
                         }],
                     },
                     ColumnDef {
-                        name: "lat".into(),
+                        name: Ident::new("lat").empty_span(),
                         data_type: DataType::Double,
                         collation: None,
                         options: vec![ColumnOptionDef {
@@ -2892,13 +2970,13 @@ fn parse_create_table() {
                         }],
                     },
                     ColumnDef {
-                        name: "lng".into(),
+                        name: Ident::new("lng").empty_span(),
                         data_type: DataType::Double,
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: "constrained".into(),
+                        name: Ident::new("constrained").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![
@@ -2907,7 +2985,7 @@ fn parse_create_table() {
                                 option: ColumnOption::Null,
                             },
                             ColumnOptionDef {
-                                name: Some("pkey".into()),
+                                name: Some(Ident::new("pkey").empty_span()),
                                 option: ColumnOption::Unique {
                                     is_primary: true,
                                     characteristics: None
@@ -2931,14 +3009,19 @@ fn parse_create_table() {
                         ],
                     },
                     ColumnDef {
-                        name: "ref".into(),
+                        name: Ident::new("ref").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::ForeignKey {
-                                foreign_table: ObjectName(vec!["othertable".into()]),
-                                referred_columns: vec!["a".into(), "b".into()],
+                                foreign_table: ObjectName(vec![
+                                    Ident::new("othertable").empty_span()
+                                ]),
+                                referred_columns: vec![
+                                    Ident::new("a").empty_span(),
+                                    Ident::new("b").empty_span()
+                                ],
                                 on_delete: None,
                                 on_update: None,
                                 characteristics: None,
@@ -2946,13 +3029,15 @@ fn parse_create_table() {
                         }],
                     },
                     ColumnDef {
-                        name: "ref2".into(),
+                        name: Ident::new("ref2").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::ForeignKey {
-                                foreign_table: ObjectName(vec!["othertable2".into()]),
+                                foreign_table: ObjectName(vec![
+                                    Ident::new("othertable2").empty_span()
+                                ]),
                                 referred_columns: vec![],
                                 on_delete: Some(ReferentialAction::Cascade),
                                 on_update: Some(ReferentialAction::NoAction),
@@ -2966,37 +3051,37 @@ fn parse_create_table() {
                 constraints,
                 vec![
                     TableConstraint::ForeignKey {
-                        name: Some("fkey".into()),
-                        columns: vec!["lat".into()],
-                        foreign_table: ObjectName(vec!["othertable3".into()]),
-                        referred_columns: vec!["lat".into()],
+                        name: Some(Ident::new("fkey").empty_span()),
+                        columns: vec![Ident::new("lat").empty_span()],
+                        foreign_table: ObjectName(vec![Ident::new("othertable3").empty_span()]),
+                        referred_columns: vec![Ident::new("lat").empty_span()],
                         on_delete: Some(ReferentialAction::Restrict),
                         on_update: None,
                         characteristics: None,
                     },
                     TableConstraint::ForeignKey {
-                        name: Some("fkey2".into()),
-                        columns: vec!["lat".into()],
-                        foreign_table: ObjectName(vec!["othertable4".into()]),
-                        referred_columns: vec!["lat".into()],
+                        name: Some(Ident::new("fkey2").empty_span()),
+                        columns: vec![Ident::new("lat").empty_span()],
+                        foreign_table: ObjectName(vec![Ident::new("othertable4").empty_span()]),
+                        referred_columns: vec![Ident::new("lat").empty_span()],
                         on_delete: Some(ReferentialAction::NoAction),
                         on_update: Some(ReferentialAction::Restrict),
                         characteristics: None,
                     },
                     TableConstraint::ForeignKey {
                         name: None,
-                        columns: vec!["lat".into()],
-                        foreign_table: ObjectName(vec!["othertable4".into()]),
-                        referred_columns: vec!["lat".into()],
+                        columns: vec![Ident::new("lat").empty_span()],
+                        foreign_table: ObjectName(vec![Ident::new("othertable4").empty_span()]),
+                        referred_columns: vec![Ident::new("lat").empty_span()],
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: Some(ReferentialAction::SetDefault),
                         characteristics: None,
                     },
                     TableConstraint::ForeignKey {
                         name: None,
-                        columns: vec!["lng".into()],
-                        foreign_table: ObjectName(vec!["othertable4".into()]),
-                        referred_columns: vec!["longitude".into()],
+                        columns: vec![Ident::new("lng").empty_span()],
+                        foreign_table: ObjectName(vec![Ident::new("othertable4").empty_span()]),
+                        referred_columns: vec![Ident::new("longitude").empty_span()],
                         on_delete: None,
                         on_update: Some(ReferentialAction::SetNull),
                         characteristics: None,
@@ -3060,7 +3145,7 @@ fn parse_create_table_with_constraint_characteristics() {
                 columns,
                 vec![
                     ColumnDef {
-                        name: "name".into(),
+                        name: Ident::new("name").empty_span(),
                         data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                             length: 100,
                             unit: None,
@@ -3072,7 +3157,7 @@ fn parse_create_table_with_constraint_characteristics() {
                         }],
                     },
                     ColumnDef {
-                        name: "lat".into(),
+                        name: Ident::new("lat").empty_span(),
                         data_type: DataType::Double,
                         collation: None,
                         options: vec![ColumnOptionDef {
@@ -3081,7 +3166,7 @@ fn parse_create_table_with_constraint_characteristics() {
                         }],
                     },
                     ColumnDef {
-                        name: "lng".into(),
+                        name: Ident::new("lng").empty_span(),
                         data_type: DataType::Double,
                         collation: None,
                         options: vec![],
@@ -3092,10 +3177,10 @@ fn parse_create_table_with_constraint_characteristics() {
                 constraints,
                 vec![
                     TableConstraint::ForeignKey {
-                        name: Some("fkey".into()),
-                        columns: vec!["lat".into()],
-                        foreign_table: ObjectName(vec!["othertable3".into()]),
-                        referred_columns: vec!["lat".into()],
+                        name: Some(Ident::new("fkey").empty_span()),
+                        columns: vec![Ident::new("lat").empty_span()],
+                        foreign_table: ObjectName(vec![Ident::new("othertable3").empty_span()]),
+                        referred_columns: vec![Ident::new("lat").empty_span()],
                         on_delete: Some(ReferentialAction::Restrict),
                         on_update: None,
                         characteristics: Some(ConstraintCharacteristics {
@@ -3105,10 +3190,10 @@ fn parse_create_table_with_constraint_characteristics() {
                         }),
                     },
                     TableConstraint::ForeignKey {
-                        name: Some("fkey2".into()),
-                        columns: vec!["lat".into()],
-                        foreign_table: ObjectName(vec!["othertable4".into()]),
-                        referred_columns: vec!["lat".into()],
+                        name: Some(Ident::new("fkey2").empty_span()),
+                        columns: vec![Ident::new("lat").empty_span()],
+                        foreign_table: ObjectName(vec![Ident::new("othertable4").empty_span()]),
+                        referred_columns: vec![Ident::new("lat").empty_span()],
                         on_delete: Some(ReferentialAction::NoAction),
                         on_update: Some(ReferentialAction::Restrict),
                         characteristics: Some(ConstraintCharacteristics {
@@ -3119,9 +3204,9 @@ fn parse_create_table_with_constraint_characteristics() {
                     },
                     TableConstraint::ForeignKey {
                         name: None,
-                        columns: vec!["lat".into()],
-                        foreign_table: ObjectName(vec!["othertable4".into()]),
-                        referred_columns: vec!["lat".into()],
+                        columns: vec![Ident::new("lat").empty_span()],
+                        foreign_table: ObjectName(vec![Ident::new("othertable4").empty_span()]),
+                        referred_columns: vec![Ident::new("lat").empty_span()],
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: Some(ReferentialAction::SetDefault),
                         characteristics: Some(ConstraintCharacteristics {
@@ -3132,9 +3217,9 @@ fn parse_create_table_with_constraint_characteristics() {
                     },
                     TableConstraint::ForeignKey {
                         name: None,
-                        columns: vec!["lng".into()],
-                        foreign_table: ObjectName(vec!["othertable4".into()]),
-                        referred_columns: vec!["longitude".into()],
+                        columns: vec![Ident::new("lng").empty_span()],
+                        foreign_table: ObjectName(vec![Ident::new("othertable4").empty_span()]),
+                        referred_columns: vec![Ident::new("longitude").empty_span()],
                         on_delete: None,
                         on_update: Some(ReferentialAction::SetNull),
                         characteristics: Some(ConstraintCharacteristics {
@@ -3216,7 +3301,7 @@ fn parse_create_table_column_constraint_characteristics() {
                 assert_eq!(
                     columns,
                     vec![ColumnDef {
-                        name: "a".into(),
+                        name: Ident::new("a").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![ColumnOptionDef {
@@ -3326,18 +3411,18 @@ fn parse_create_table_hive_array() {
                 ..
             }) => {
                 assert!(if_not_exists);
-                assert_eq!(name, ObjectName(vec!["something".into()]));
+                assert_eq!(name, ObjectName(vec![Ident::new("something").empty_span()]));
                 assert_eq!(
                     columns,
                     vec![
                         ColumnDef {
-                            name: Ident::new("name"),
+                            name: Ident::new("name").empty_span(),
                             data_type: DataType::Int(None),
                             collation: None,
                             options: vec![],
                         },
                         ColumnDef {
-                            name: Ident::new("val"),
+                            name: Ident::new("val").empty_span(),
                             data_type: DataType::Array(expected),
                             collation: None,
                             options: vec![],
@@ -3523,7 +3608,7 @@ fn parse_create_table_as_table() {
 
     match verified_stmt(sql1) {
         Statement::CreateTable(CreateTable { query, name, .. }) => {
-            assert_eq!(name, ObjectName(vec![Ident::new("new_table")]));
+            assert_eq!(name, ObjectName(vec![Ident::new("new_table").empty_span()]));
             assert_eq!(query.unwrap(), expected_query1);
         }
         _ => unreachable!(),
@@ -3550,7 +3635,7 @@ fn parse_create_table_as_table() {
 
     match verified_stmt(sql2) {
         Statement::CreateTable(CreateTable { query, name, .. }) => {
-            assert_eq!(name, ObjectName(vec![Ident::new("new_table")]));
+            assert_eq!(name, ObjectName(vec![Ident::new("new_table").empty_span()]));
             assert_eq!(query.unwrap(), expected_query2);
         }
         _ => unreachable!(),
@@ -3633,11 +3718,11 @@ fn parse_create_table_with_options() {
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
-                        key: "foo".into(),
+                        key: Ident::new("foo").empty_span(),
                         value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption::KeyValue {
-                        key: "a".into(),
+                        key: Ident::new("a").empty_span(),
                         value: Expr::Value(number("123")),
                     },
                 ],
@@ -3653,8 +3738,11 @@ fn parse_create_table_clone() {
     let sql = "CREATE OR REPLACE TABLE a CLONE a_tmp";
     match verified_stmt(sql) {
         Statement::CreateTable(CreateTable { name, clone, .. }) => {
-            assert_eq!(ObjectName(vec![Ident::new("a")]), name);
-            assert_eq!(Some(ObjectName(vec![(Ident::new("a_tmp"))])), clone)
+            assert_eq!(ObjectName(vec![Ident::new("a").empty_span()]), name);
+            assert_eq!(
+                Some(ObjectName(vec![(Ident::new("a_tmp").empty_span())])),
+                clone
+            )
         }
         _ => unreachable!(),
     }
@@ -3700,7 +3788,7 @@ fn parse_create_external_table() {
                 columns,
                 vec![
                     ColumnDef {
-                        name: "name".into(),
+                        name: Ident::new("name").empty_span(),
                         data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                             length: 100,
                             unit: None,
@@ -3712,7 +3800,7 @@ fn parse_create_external_table() {
                         }],
                     },
                     ColumnDef {
-                        name: "lat".into(),
+                        name: Ident::new("lat").empty_span(),
                         data_type: DataType::Double,
                         collation: None,
                         options: vec![ColumnOptionDef {
@@ -3721,7 +3809,7 @@ fn parse_create_external_table() {
                         }],
                     },
                     ColumnDef {
-                        name: "lng".into(),
+                        name: Ident::new("lng").empty_span(),
                         data_type: DataType::Double,
                         collation: None,
                         options: vec![],
@@ -3771,7 +3859,7 @@ fn parse_create_or_replace_external_table() {
             assert_eq!(
                 columns,
                 vec![ColumnDef {
-                    name: "name".into(),
+                    name: Ident::new("name").empty_span(),
                     data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                         length: 100,
                         unit: None,
@@ -3866,7 +3954,8 @@ fn parse_alter_table() {
                     key: Ident {
                         value: "classification".to_string(),
                         quote_style: Some('\'')
-                    },
+                    }
+                    .empty_span(),
                     value: Expr::Value(Value::SingleQuotedString("parquet".to_string())),
                 }],
             );
@@ -3884,7 +3973,10 @@ fn test_alter_table_with_on_cluster() {
             name, on_cluster, ..
         } => {
             std::assert_eq!(name.to_string(), "t");
-            std::assert_eq!(on_cluster, Some(Ident::with_quote('\'', "cluster")));
+            std::assert_eq!(
+                on_cluster,
+                Some(Ident::with_quote('\'', "cluster").empty_span())
+            );
         }
         _ => unreachable!(),
     }
@@ -3896,7 +3988,7 @@ fn test_alter_table_with_on_cluster() {
             name, on_cluster, ..
         } => {
             std::assert_eq!(name.to_string(), "t");
-            std::assert_eq!(on_cluster, Some(Ident::new("cluster_name")));
+            std::assert_eq!(on_cluster, Some(Ident::new("cluster_name").empty_span()));
         }
         _ => unreachable!(),
     }
@@ -3935,7 +4027,7 @@ fn parse_alter_view() {
             with_options,
         } => {
             assert_eq!("myschema.myview", name.to_string());
-            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!(columns, vec![]);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert_eq!(with_options, vec![]);
         }
@@ -3951,11 +4043,11 @@ fn parse_alter_view_with_options() {
             assert_eq!(
                 vec![
                     SqlOption::KeyValue {
-                        key: "foo".into(),
+                        key: Ident::new("foo").empty_span(),
                         value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption::KeyValue {
-                        key: "a".into(),
+                        key: Ident::new("a").empty_span(),
                         value: Expr::Value(number("123")),
                     },
                 ],
@@ -3977,7 +4069,13 @@ fn parse_alter_view_with_columns() {
             with_options,
         } => {
             assert_eq!("v", name.to_string());
-            assert_eq!(columns, vec![Ident::new("has"), Ident::new("cols")]);
+            assert_eq!(
+                columns,
+                vec![
+                    Ident::new("has").empty_span(),
+                    Ident::new("cols").empty_span()
+                ]
+            );
             assert_eq!("SELECT 1, 2", query.to_string());
             assert_eq!(with_options, vec![]);
         }
@@ -4235,7 +4333,10 @@ fn parse_scalar_function_in_projection() {
         let sql = format!("SELECT {function_name}(id) FROM foo");
         let select = verified_only_select(&sql);
         assert_eq!(
-            &call(function_name, [Expr::Identifier(Ident::new("id"))]),
+            &call(
+                function_name,
+                [Expr::Identifier(Ident::new("id").empty_span())]
+            ),
             expr_from_projection(only(&select.projection))
         );
     }
@@ -4415,20 +4516,20 @@ fn parse_named_argument_function() {
 
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("FUN")]),
+            name: ObjectName(vec![Ident::new("FUN").empty_span()]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![
                     FunctionArg::Named {
-                        name: Ident::new("a"),
+                        name: Ident::new("a").empty_span(),
                         arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                             "1".to_owned()
                         ))),
                         operator: FunctionArgOperator::RightArrow
                     },
                     FunctionArg::Named {
-                        name: Ident::new("b"),
+                        name: Ident::new("b").empty_span(),
                         arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                             "2".to_owned()
                         ))),
@@ -4454,20 +4555,20 @@ fn parse_named_argument_function_with_eq_operator() {
         .verified_only_select(sql);
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("FUN")]),
+            name: ObjectName(vec![Ident::new("FUN").empty_span()]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
                 args: vec![
                     FunctionArg::Named {
-                        name: Ident::new("a"),
+                        name: Ident::new("a").empty_span(),
                         arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                             "1".to_owned()
                         ))),
                         operator: FunctionArgOperator::Equals
                     },
                     FunctionArg::Named {
-                        name: Ident::new("b"),
+                        name: Ident::new("b").empty_span(),
                         arg: FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(
                             "2".to_owned()
                         ))),
@@ -4492,7 +4593,7 @@ fn parse_named_argument_function_with_eq_operator() {
         call(
             "foo",
             [Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("bar"))),
+                left: Box::new(Expr::Identifier(Ident::new("bar").empty_span())),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Value(number("42"))),
             }]
@@ -4528,7 +4629,7 @@ fn parse_window_functions() {
 
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("row_number")]),
+            name: ObjectName(vec![Ident::new("row_number").empty_span()]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
@@ -4541,7 +4642,7 @@ fn parse_window_functions() {
                 window_name: None,
                 partition_by: vec![],
                 order_by: vec![OrderByExpr {
-                    expr: Expr::Identifier(Ident::new("dt")),
+                    expr: Expr::Identifier(Ident::new("dt").empty_span()),
                     asc: Some(false),
                     nulls_first: None,
                     with_fill: None,
@@ -4594,11 +4695,11 @@ fn parse_named_window_functions() {
             expr_from_projection(&select.projection[i]),
             Expr::Function(Function {
                 over: Some(WindowType::WindowSpec(WindowSpec {
-                    window_name: Some(Ident { value, .. }),
+                    window_name: Some(wnd),
                     ..
                 })),
                 ..
-            }) if value == win_name
+            }) if wnd.value == *win_name
         ));
     }
 
@@ -4655,60 +4756,76 @@ fn test_parse_named_window() {
                     name: ObjectName(vec![Ident {
                         value: "MIN".to_string(),
                         quote_style: None,
-                    }]),
+                    }
+                    .empty_span()]),
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
                         duplicate_treatment: None,
                         args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                            Expr::Identifier(Ident {
-                                value: "c12".to_string(),
-                                quote_style: None,
-                            }),
+                            Expr::Identifier(
+                                Ident {
+                                    value: "c12".to_string(),
+                                    quote_style: None,
+                                }
+                                .empty_span(),
+                            ),
                         ))],
                         clauses: vec![],
                     }),
                     null_treatment: None,
                     filter: None,
-                    over: Some(WindowType::NamedWindow(Ident {
-                        value: "window1".to_string(),
-                        quote_style: None,
-                    })),
+                    over: Some(WindowType::NamedWindow(
+                        Ident {
+                            value: "window1".to_string(),
+                            quote_style: None,
+                        }
+                        .empty_span(),
+                    )),
                     within_group: vec![],
                 }),
                 alias: Ident {
                     value: "min1".to_string(),
                     quote_style: None,
-                },
+                }
+                .empty_span(),
             },
             SelectItem::ExprWithAlias {
                 expr: Expr::Function(Function {
                     name: ObjectName(vec![Ident {
                         value: "MAX".to_string(),
                         quote_style: None,
-                    }]),
+                    }
+                    .empty_span()]),
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
                         duplicate_treatment: None,
                         args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                            Expr::Identifier(Ident {
-                                value: "c12".to_string(),
-                                quote_style: None,
-                            }),
+                            Expr::Identifier(
+                                Ident {
+                                    value: "c12".to_string(),
+                                    quote_style: None,
+                                }
+                                .empty_span(),
+                            ),
                         ))],
                         clauses: vec![],
                     }),
                     null_treatment: None,
                     filter: None,
-                    over: Some(WindowType::NamedWindow(Ident {
-                        value: "window2".to_string(),
-                        quote_style: None,
-                    })),
+                    over: Some(WindowType::NamedWindow(
+                        Ident {
+                            value: "window2".to_string(),
+                            quote_style: None,
+                        }
+                        .empty_span(),
+                    )),
                     within_group: vec![],
                 }),
                 alias: Ident {
                     value: "max1".to_string(),
                     quote_style: None,
-                },
+                }
+                .empty_span(),
             },
         ],
         into: None,
@@ -4717,7 +4834,8 @@ fn test_parse_named_window() {
                 name: ObjectName(vec![Ident {
                     value: "aggregate_test_100".to_string(),
                     quote_style: None,
-                }]),
+                }
+                .empty_span()]),
                 alias: None,
                 args: None,
                 with_hints: vec![],
@@ -4740,15 +4858,19 @@ fn test_parse_named_window() {
                 Ident {
                     value: "window1".to_string(),
                     quote_style: None,
-                },
+                }
+                .empty_span(),
                 NamedWindowExpr::WindowSpec(WindowSpec {
                     window_name: None,
                     partition_by: vec![],
                     order_by: vec![OrderByExpr {
-                        expr: Expr::Identifier(Ident {
-                            value: "C12".to_string(),
-                            quote_style: None,
-                        }),
+                        expr: Expr::Identifier(
+                            Ident {
+                                value: "C12".to_string(),
+                                quote_style: None,
+                            }
+                            .empty_span(),
+                        ),
                         asc: None,
                         nulls_first: None,
                         with_fill: None,
@@ -4760,13 +4882,17 @@ fn test_parse_named_window() {
                 Ident {
                     value: "window2".to_string(),
                     quote_style: None,
-                },
+                }
+                .empty_span(),
                 NamedWindowExpr::WindowSpec(WindowSpec {
                     window_name: None,
-                    partition_by: vec![Expr::Identifier(Ident {
-                        value: "C11".to_string(),
-                        quote_style: None,
-                    })],
+                    partition_by: vec![Expr::Identifier(
+                        Ident {
+                            value: "C11".to_string(),
+                            quote_style: None,
+                        }
+                        .empty_span(),
+                    )],
                     order_by: vec![],
                     window_frame: None,
                 }),
@@ -4809,8 +4935,8 @@ fn parse_window_clause_named_window() {
             .verified_only_select(sql);
     assert_eq!(
         vec![NamedWindowDefinition(
-            Ident::new("window1"),
-            NamedWindowExpr::NamedWindow(Ident::new("window2"))
+            Ident::new("window1").empty_span(),
+            NamedWindowExpr::NamedWindow(Ident::new("window2").empty_span())
         )],
         named_window
     );
@@ -5244,10 +5370,13 @@ fn interval_disallow_interval_expr_gt() {
                 fractional_seconds_precision: None,
             },)),
             op: BinaryOperator::Gt,
-            right: Box::new(Expr::Identifier(Ident {
-                value: "x".to_string(),
-                quote_style: None,
-            })),
+            right: Box::new(Expr::Identifier(
+                Ident {
+                    value: "x".to_string(),
+                    quote_style: None,
+                }
+                .empty_span()
+            )),
         }
     )
 }
@@ -5289,17 +5418,21 @@ fn parse_interval_and_or_xor() {
         body: Box::new(SetExpr::Select(Box::new(Select {
             distinct: None,
             top: None,
-            projection: vec![UnnamedExpr(Expr::Identifier(Ident {
-                value: "col".to_string(),
-                quote_style: None,
-            }))],
+            projection: vec![UnnamedExpr(Expr::Identifier(
+                Ident {
+                    value: "col".to_string(),
+                    quote_style: None,
+                }
+                .empty_span(),
+            ))],
             into: None,
             from: vec![TableWithJoins {
                 relation: TableFactor::Table {
                     name: ObjectName(vec![Ident {
                         value: "test".to_string(),
                         quote_style: None,
-                    }]),
+                    }
+                    .empty_span()]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -5313,16 +5446,22 @@ fn parse_interval_and_or_xor() {
             prewhere: None,
             selection: Some(Expr::BinaryOp {
                 left: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident {
-                        value: "d3_date".to_string(),
-                        quote_style: None,
-                    })),
+                    left: Box::new(Expr::Identifier(
+                        Ident {
+                            value: "d3_date".to_string(),
+                            quote_style: None,
+                        }
+                        .empty_span(),
+                    )),
                     op: BinaryOperator::Gt,
                     right: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident {
-                            value: "d1_date".to_string(),
-                            quote_style: None,
-                        })),
+                        left: Box::new(Expr::Identifier(
+                            Ident {
+                                value: "d1_date".to_string(),
+                                quote_style: None,
+                            }
+                            .empty_span(),
+                        )),
                         op: BinaryOperator::Plus,
                         right: Box::new(Expr::Interval(Interval {
                             value: Box::new(Expr::Value(Value::SingleQuotedString(
@@ -5337,16 +5476,22 @@ fn parse_interval_and_or_xor() {
                 }),
                 op: BinaryOperator::And,
                 right: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident {
-                        value: "d2_date".to_string(),
-                        quote_style: None,
-                    })),
+                    left: Box::new(Expr::Identifier(
+                        Ident {
+                            value: "d2_date".to_string(),
+                            quote_style: None,
+                        }
+                        .empty_span(),
+                    )),
                     op: BinaryOperator::Gt,
                     right: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident {
-                            value: "d1_date".to_string(),
-                            quote_style: None,
-                        })),
+                        left: Box::new(Expr::Identifier(
+                            Ident {
+                                value: "d1_date".to_string(),
+                                quote_style: None,
+                            }
+                            .empty_span(),
+                        )),
                         op: BinaryOperator::Plus,
                         right: Box::new(Expr::Interval(Interval {
                             value: Box::new(Expr::Value(Value::SingleQuotedString(
@@ -5437,7 +5582,8 @@ fn parse_at_timezone() {
             alias: Ident {
                 value: "hour".to_string(),
                 quote_style: Some('"'),
-            },
+            }
+            .empty_span(),
         },
         only(&select.projection),
     );
@@ -5653,10 +5799,10 @@ fn parse_unnest_in_from_clause() {
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: Some(TableAlias {
-                    name: Ident::new("numbers"),
+                    name: Ident::new("numbers").empty_span(),
                     columns: vec![],
                 }),
-                array_exprs: vec![Expr::Identifier(Ident::new("expr"))],
+                array_exprs: vec![Expr::Identifier(Ident::new("expr").empty_span())],
                 with_offset: true,
                 with_offset_alias: None,
                 with_ordinality: false,
@@ -5674,7 +5820,7 @@ fn parse_unnest_in_from_clause() {
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: None,
-                array_exprs: vec![Expr::Identifier(Ident::new("expr"))],
+                array_exprs: vec![Expr::Identifier(Ident::new("expr").empty_span())],
                 with_offset: false,
                 with_offset_alias: None,
                 with_ordinality: false,
@@ -5692,7 +5838,7 @@ fn parse_unnest_in_from_clause() {
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: None,
-                array_exprs: vec![Expr::Identifier(Ident::new("expr"))],
+                array_exprs: vec![Expr::Identifier(Ident::new("expr").empty_span())],
                 with_offset: true,
                 with_offset_alias: None,
                 with_ordinality: false,
@@ -5710,10 +5856,10 @@ fn parse_unnest_in_from_clause() {
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: Some(TableAlias {
-                    name: Ident::new("numbers"),
+                    name: Ident::new("numbers").empty_span(),
                     columns: vec![],
                 }),
-                array_exprs: vec![Expr::Identifier(Ident::new("expr"))],
+                array_exprs: vec![Expr::Identifier(Ident::new("expr").empty_span())],
                 with_offset: false,
                 with_offset_alias: None,
                 with_ordinality: false,
@@ -5787,15 +5933,15 @@ fn parse_parens() {
     assert_eq!(
         BinaryOp {
             left: Box::new(Nested(Box::new(BinaryOp {
-                left: Box::new(Identifier(Ident::new("a"))),
+                left: Box::new(Identifier(Ident::new("a").empty_span())),
                 op: Plus,
-                right: Box::new(Identifier(Ident::new("b"))),
+                right: Box::new(Identifier(Ident::new("b").empty_span())),
             }))),
             op: Minus,
             right: Box::new(Nested(Box::new(BinaryOp {
-                left: Box::new(Identifier(Ident::new("c"))),
+                left: Box::new(Identifier(Ident::new("c").empty_span())),
                 op: Plus,
-                right: Box::new(Identifier(Ident::new("d"))),
+                right: Box::new(Identifier(Ident::new("d").empty_span())),
             }))),
         },
         verified_expr(sql)
@@ -5812,14 +5958,14 @@ fn parse_searched_case_expr() {
         &Case {
             operand: None,
             conditions: vec![
-                IsNull(Box::new(Identifier(Ident::new("bar")))),
+                IsNull(Box::new(Identifier(Ident::new("bar").empty_span()))),
                 BinaryOp {
-                    left: Box::new(Identifier(Ident::new("bar"))),
+                    left: Box::new(Identifier(Ident::new("bar").empty_span())),
                     op: Eq,
                     right: Box::new(Expr::Value(number("0"))),
                 },
                 BinaryOp {
-                    left: Box::new(Identifier(Ident::new("bar"))),
+                    left: Box::new(Identifier(Ident::new("bar").empty_span())),
                     op: GtEq,
                     right: Box::new(Expr::Value(number("0"))),
                 },
@@ -5845,7 +5991,7 @@ fn parse_simple_case_expr() {
     use self::Expr::{Case, Identifier};
     assert_eq!(
         &Case {
-            operand: Some(Box::new(Identifier(Ident::new("foo")))),
+            operand: Some(Box::new(Identifier(Ident::new("foo").empty_span()))),
             conditions: vec![Expr::Value(number("1"))],
             results: vec![Expr::Value(Value::SingleQuotedString("Y".to_string()))],
             else_result: Some(Box::new(Expr::Value(Value::SingleQuotedString(
@@ -5876,7 +6022,7 @@ fn parse_implicit_join() {
         vec![
             TableWithJoins {
                 relation: TableFactor::Table {
-                    name: ObjectName(vec!["t1".into()]),
+                    name: ObjectName(vec![Ident::new("t1").empty_span()]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -5888,7 +6034,7 @@ fn parse_implicit_join() {
             },
             TableWithJoins {
                 relation: TableFactor::Table {
-                    name: ObjectName(vec!["t2".into()]),
+                    name: ObjectName(vec![Ident::new("t2").empty_span()]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -5908,7 +6054,7 @@ fn parse_implicit_join() {
         vec![
             TableWithJoins {
                 relation: TableFactor::Table {
-                    name: ObjectName(vec!["t1a".into()]),
+                    name: ObjectName(vec![Ident::new("t1a").empty_span()]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -5918,7 +6064,7 @@ fn parse_implicit_join() {
                 },
                 joins: vec![Join {
                     relation: TableFactor::Table {
-                        name: ObjectName(vec!["t1b".into()]),
+                        name: ObjectName(vec![Ident::new("t1b").empty_span()]),
                         alias: None,
                         args: None,
                         with_hints: vec![],
@@ -5932,7 +6078,7 @@ fn parse_implicit_join() {
             },
             TableWithJoins {
                 relation: TableFactor::Table {
-                    name: ObjectName(vec!["t2a".into()]),
+                    name: ObjectName(vec![Ident::new("t2a").empty_span()]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -5942,7 +6088,7 @@ fn parse_implicit_join() {
                 },
                 joins: vec![Join {
                     relation: TableFactor::Table {
-                        name: ObjectName(vec!["t2b".into()]),
+                        name: ObjectName(vec![Ident::new("t2b").empty_span()]),
                         alias: None,
                         args: None,
                         with_hints: vec![],
@@ -5966,7 +6112,7 @@ fn parse_cross_join() {
     assert_eq!(
         Join {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new("t2")]),
+                name: ObjectName(vec![Ident::new("t2").empty_span()]),
                 alias: None,
                 args: None,
                 with_hints: vec![],
@@ -5991,7 +6137,7 @@ fn parse_joins_on() {
     ) -> Join {
         Join {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new(relation.into())]),
+                name: ObjectName(vec![Ident::new(relation.into()).empty_span()]),
                 alias,
                 args: None,
                 with_hints: vec![],
@@ -6001,9 +6147,9 @@ fn parse_joins_on() {
             },
             global,
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier("c1".into())),
+                left: Box::new(Expr::Identifier(Ident::new("c1").empty_span())),
                 op: BinaryOperator::Eq,
-                right: Box::new(Expr::Identifier("c2".into())),
+                right: Box::new(Expr::Identifier(Ident::new("c2").empty_span())),
             })),
         }
     }
@@ -6110,7 +6256,7 @@ fn parse_joins_using() {
     ) -> Join {
         Join {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new(relation.into())]),
+                name: ObjectName(vec![Ident::new(relation.into()).empty_span()]),
                 alias,
                 args: None,
                 with_hints: vec![],
@@ -6119,7 +6265,7 @@ fn parse_joins_using() {
                 with_ordinality: false,
             },
             global: false,
-            join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
+            join_operator: f(JoinConstraint::Using(vec![Ident::new("c1").empty_span()])),
         }
     }
     // Test parsing of aliases
@@ -6175,7 +6321,7 @@ fn parse_natural_join() {
     fn natural_join(f: impl Fn(JoinConstraint) -> JoinOperator, alias: Option<TableAlias>) -> Join {
         Join {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new("t2")]),
+                name: ObjectName(vec![Ident::new("t2").empty_span()]),
                 alias,
                 args: None,
                 with_hints: vec![],
@@ -6319,9 +6465,9 @@ fn parse_ctes() {
             assert_eq!(*exp, query.to_string());
             assert_eq!(
                 if i == 0 {
-                    Ident::new("a")
+                    Ident::new("a").empty_span()
                 } else {
-                    Ident::new("b")
+                    Ident::new("b").empty_span()
                 },
                 alias.name
             );
@@ -6366,7 +6512,10 @@ fn parse_cte_renamed_columns() {
     let sql = "WITH cte (col1, col2) AS (SELECT foo, bar FROM baz) SELECT * FROM cte";
     let query = all_dialects().verified_query(sql);
     assert_eq!(
-        vec![Ident::new("col1"), Ident::new("col2")],
+        vec![
+            Ident::new("col1").empty_span(),
+            Ident::new("col2").empty_span()
+        ],
         query
             .with
             .unwrap()
@@ -6394,11 +6543,13 @@ fn parse_recursive_cte() {
             name: Ident {
                 value: "nums".to_string(),
                 quote_style: None,
-            },
+            }
+            .empty_span(),
             columns: vec![Ident {
                 value: "val".to_string(),
                 quote_style: None,
-            }],
+            }
+            .empty_span()],
         },
         query: Box::new(cte_query),
         from: None,
@@ -6438,13 +6589,13 @@ fn parse_derived_tables() {
                     lateral: false,
                     subquery: Box::new(verified_query("(SELECT 1) UNION (SELECT 2)")),
                     alias: Some(TableAlias {
-                        name: "t1".into(),
+                        name: Ident::new("t1").empty_span(),
                         columns: vec![],
                     }),
                 },
                 joins: vec![Join {
                     relation: TableFactor::Table {
-                        name: ObjectName(vec!["t2".into()]),
+                        name: ObjectName(vec![Ident::new("t2").empty_span()]),
                         alias: None,
                         args: None,
                         with_hints: vec![],
@@ -6580,10 +6731,10 @@ fn parse_overlay() {
     assert_eq!(
         &Expr::Overlay {
             expr: Box::new(Expr::Value(Value::SingleQuotedString("abcdef".to_string()))),
-            overlay_what: Box::new(Expr::Identifier(Ident::new("name"))),
+            overlay_what: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
             overlay_from: Box::new(Expr::Value(number("3"))),
             overlay_for: Some(Box::new(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("id"))),
+                left: Box::new(Expr::Identifier(Ident::new("id").empty_span())),
                 op: BinaryOperator::Plus,
                 right: Box::new(Expr::Value(number("1"))),
             })),
@@ -6810,11 +6961,11 @@ fn parse_create_view_with_options() {
             assert_eq!(
                 CreateTableOptions::With(vec![
                     SqlOption::KeyValue {
-                        key: "foo".into(),
+                        key: Ident::new("foo").empty_span(),
                         value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption::KeyValue {
-                        key: "a".into(),
+                        key: Ident::new("a").empty_span(),
                         value: Expr::Value(number("123")),
                     },
                 ]),
@@ -6848,14 +6999,17 @@ fn parse_create_view_with_columns() {
             assert_eq!("v", name.to_string());
             assert_eq!(
                 columns,
-                vec![Ident::new("has"), Ident::new("cols"),]
-                    .into_iter()
-                    .map(|name| ViewColumnDef {
-                        name,
-                        data_type: None,
-                        options: None
-                    })
-                    .collect::<Vec<_>>()
+                vec![
+                    Ident::new("has").empty_span(),
+                    Ident::new("cols").empty_span(),
+                ]
+                .into_iter()
+                .map(|name| ViewColumnDef {
+                    name,
+                    data_type: None,
+                    options: None
+                })
+                .collect::<Vec<_>>()
             );
             assert_eq!(options, CreateTableOptions::None);
             assert_eq!("SELECT 1, 2", query.to_string());
@@ -7040,7 +7194,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             assert!(materialized);
             assert_eq!(options, CreateTableOptions::None);
             assert!(!or_replace);
-            assert_eq!(cluster_by, vec![Ident::new("foo")]);
+            assert_eq!(cluster_by, vec![Ident::new("foo").empty_span()]);
             assert!(comment.is_none());
             assert!(!late_binding);
             assert!(!if_not_exists);
@@ -7331,7 +7485,7 @@ fn lateral_derived() {
         } = join.relation
         {
             assert_eq!(lateral_in, lateral);
-            assert_eq!(Ident::new("order"), alias.name);
+            assert_eq!(Ident::new("order").empty_span(), alias.name);
             assert_eq!(
                 subquery.to_string(),
                 "SELECT * FROM order WHERE order.customer = customer.id LIMIT 3"
@@ -7380,7 +7534,8 @@ fn lateral_function() {
                 name: ObjectName(vec![Ident {
                     value: "customer".to_string(),
                     quote_style: None,
-                }]),
+                }
+                .empty_span()]),
                 alias: None,
                 args: None,
                 with_hints: vec![],
@@ -7391,11 +7546,14 @@ fn lateral_function() {
             joins: vec![Join {
                 relation: TableFactor::Function {
                     lateral: true,
-                    name: ObjectName(vec!["generate_series".into()]),
+                    name: ObjectName(vec![Ident::new("generate_series").empty_span()]),
                     args: vec![
                         FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
                         FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(
-                            vec![Ident::new("customer"), Ident::new("id")],
+                            vec![
+                                Ident::new("customer").empty_span(),
+                                Ident::new("id").empty_span(),
+                            ],
                         ))),
                     ],
                     alias: None,
@@ -7531,7 +7689,7 @@ fn parse_set_variable() {
             assert!(!hivevar);
             assert_eq!(
                 variables,
-                OneOrManyWithParens::One(ObjectName(vec!["SOMETHING".into()]))
+                OneOrManyWithParens::One(ObjectName(vec![Ident::new("SOMETHING").empty_span()]))
             );
             assert_eq!(
                 value,
@@ -7555,9 +7713,9 @@ fn parse_set_variable() {
             assert_eq!(
                 variables,
                 OneOrManyWithParens::Many(vec![
-                    ObjectName(vec!["a".into()]),
-                    ObjectName(vec!["b".into()]),
-                    ObjectName(vec!["c".into()]),
+                    ObjectName(vec![Ident::new("a").empty_span()]),
+                    ObjectName(vec![Ident::new("b").empty_span()]),
+                    ObjectName(vec![Ident::new("c").empty_span()]),
                 ])
             );
             assert_eq!(
@@ -7631,7 +7789,7 @@ fn parse_set_role_as_variable() {
             assert!(!hivevar);
             assert_eq!(
                 variables,
-                OneOrManyWithParens::One(ObjectName(vec!["role".into()]))
+                OneOrManyWithParens::One(ObjectName(vec![Ident::new("role").empty_span()]))
             );
             assert_eq!(
                 value,
@@ -7678,7 +7836,7 @@ fn parse_set_time_zone() {
             assert!(!hivevar);
             assert_eq!(
                 variable,
-                OneOrManyWithParens::One(ObjectName(vec!["TIMEZONE".into()]))
+                OneOrManyWithParens::One(ObjectName(vec![Ident::new("TIMEZONE").empty_span()]))
             );
             assert_eq!(
                 value,
@@ -7757,7 +7915,7 @@ fn parse_rollback() {
             chain: false,
             savepoint,
         } => {
-            assert_eq!(savepoint, Some(Ident::new("test1")));
+            assert_eq!(savepoint, Some(Ident::new("test1").empty_span()));
         }
         _ => unreachable!(),
     }
@@ -7767,7 +7925,7 @@ fn parse_rollback() {
             chain: true,
             savepoint,
         } => {
-            assert_eq!(savepoint, Some(Ident::new("test1")));
+            assert_eq!(savepoint, Some(Ident::new("test1").empty_span()));
         }
         _ => unreachable!(),
     }
@@ -7800,13 +7958,13 @@ fn parse_create_index() {
     let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test(name,age DESC)";
     let indexed_columns = vec![
         OrderByExpr {
-            expr: Expr::Identifier(Ident::new("name")),
+            expr: Expr::Identifier(Ident::new("name").empty_span()),
             asc: None,
             nulls_first: None,
             with_fill: None,
         },
         OrderByExpr {
-            expr: Expr::Identifier(Ident::new("age")),
+            expr: Expr::Identifier(Ident::new("age").empty_span()),
             asc: Some(false),
             nulls_first: None,
             with_fill: None,
@@ -7836,13 +7994,13 @@ fn test_create_index_with_using_function() {
     let sql = "CREATE UNIQUE INDEX IF NOT EXISTS idx_name ON test USING btree (name,age DESC)";
     let indexed_columns = vec![
         OrderByExpr {
-            expr: Expr::Identifier(Ident::new("name")),
+            expr: Expr::Identifier(Ident::new("name").empty_span()),
             asc: None,
             nulls_first: None,
             with_fill: None,
         },
         OrderByExpr {
-            expr: Expr::Identifier(Ident::new("age")),
+            expr: Expr::Identifier(Ident::new("age").empty_span()),
             asc: Some(false),
             nulls_first: None,
             with_fill: None,
@@ -7880,18 +8038,18 @@ fn test_create_index_with_using_function() {
 fn test_create_index_with_with_clause() {
     let sql = "CREATE UNIQUE INDEX title_idx ON films(title) WITH (fillfactor = 70, single_param)";
     let indexed_columns = vec![OrderByExpr {
-        expr: Expr::Identifier(Ident::new("title")),
+        expr: Expr::Identifier(Ident::new("title").empty_span()),
         asc: None,
         nulls_first: None,
         with_fill: None,
     }];
     let with_parameters = vec![
         Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("fillfactor"))),
+            left: Box::new(Expr::Identifier(Ident::new("fillfactor").empty_span())),
             op: BinaryOperator::Eq,
             right: Box::new(Expr::Value(number("70"))),
         },
-        Expr::Identifier(Ident::new("single_param")),
+        Expr::Identifier(Ident::new("single_param").empty_span()),
     ];
     let dialects = all_dialects_where(|d| d.supports_create_index_with_clause());
     match dialects.verified_stmt(sql) {
@@ -8017,11 +8175,13 @@ fn parse_grant() {
                                 Ident {
                                     value: "shape".into(),
                                     quote_style: None,
-                                },
+                                }
+                                .empty_span(),
                                 Ident {
                                     value: "size".into(),
                                     quote_style: None,
-                                },
+                                }
+                                .empty_span(),
                             ])
                         },
                         Action::Usage,
@@ -8192,9 +8352,12 @@ fn parse_merge() {
             assert_eq!(
                 table,
                 TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("s"), Ident::new("bar")]),
+                    name: ObjectName(vec![
+                        Ident::new("s").empty_span(),
+                        Ident::new("bar").empty_span()
+                    ]),
                     alias: Some(TableAlias {
-                        name: Ident::new("dest"),
+                        name: Ident::new("dest").empty_span(),
                         columns: vec![],
                     }),
                     args: None,
@@ -8221,7 +8384,10 @@ fn parse_merge() {
                             into: None,
                             from: vec![TableWithJoins {
                                 relation: TableFactor::Table {
-                                    name: ObjectName(vec![Ident::new("s"), Ident::new("foo")]),
+                                    name: ObjectName(vec![
+                                        Ident::new("s").empty_span(),
+                                        Ident::new("foo").empty_span()
+                                    ]),
                                     alias: None,
                                     args: None,
                                     with_hints: vec![],
@@ -8259,7 +8425,8 @@ fn parse_merge() {
                         name: Ident {
                             value: "stg".to_string(),
                             quote_style: None,
-                        },
+                        }
+                        .empty_span(),
                         columns: vec![],
                     }),
                 }
@@ -8271,25 +8438,25 @@ fn parse_merge() {
                 Box::new(Expr::BinaryOp {
                     left: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::CompoundIdentifier(vec![
-                            Ident::new("dest"),
-                            Ident::new("D"),
+                            Ident::new("dest").empty_span(),
+                            Ident::new("D").empty_span(),
                         ])),
                         op: BinaryOperator::Eq,
                         right: Box::new(Expr::CompoundIdentifier(vec![
-                            Ident::new("stg"),
-                            Ident::new("D"),
+                            Ident::new("stg").empty_span(),
+                            Ident::new("D").empty_span(),
                         ])),
                     }),
                     op: BinaryOperator::And,
                     right: Box::new(Expr::BinaryOp {
                         left: Box::new(Expr::CompoundIdentifier(vec![
-                            Ident::new("dest"),
-                            Ident::new("E"),
+                            Ident::new("dest").empty_span(),
+                            Ident::new("E").empty_span(),
                         ])),
                         op: BinaryOperator::Eq,
                         right: Box::new(Expr::CompoundIdentifier(vec![
-                            Ident::new("stg"),
-                            Ident::new("E"),
+                            Ident::new("stg").empty_span(),
+                            Ident::new("E").empty_span(),
                         ])),
                     }),
                 })
@@ -8303,21 +8470,25 @@ fn parse_merge() {
                         clause_kind: MergeClauseKind::NotMatched,
                         predicate: None,
                         action: MergeAction::Insert(MergeInsertExpr {
-                            columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C")],
+                            columns: vec![
+                                Ident::new("A").empty_span(),
+                                Ident::new("B").empty_span(),
+                                Ident::new("C").empty_span()
+                            ],
                             kind: MergeInsertKind::Values(Values {
                                 explicit_row: false,
                                 rows: vec![vec![
                                     Expr::CompoundIdentifier(vec![
-                                        Ident::new("stg"),
-                                        Ident::new("A")
+                                        Ident::new("stg").empty_span(),
+                                        Ident::new("A").empty_span(),
                                     ]),
                                     Expr::CompoundIdentifier(vec![
-                                        Ident::new("stg"),
-                                        Ident::new("B")
+                                        Ident::new("stg").empty_span(),
+                                        Ident::new("B").empty_span(),
                                     ]),
                                     Expr::CompoundIdentifier(vec![
-                                        Ident::new("stg"),
-                                        Ident::new("C")
+                                        Ident::new("stg").empty_span(),
+                                        Ident::new("C").empty_span(),
                                     ]),
                                 ]]
                             }),
@@ -8327,8 +8498,8 @@ fn parse_merge() {
                         clause_kind: MergeClauseKind::Matched,
                         predicate: Some(Expr::BinaryOp {
                             left: Box::new(Expr::CompoundIdentifier(vec![
-                                Ident::new("dest"),
-                                Ident::new("A"),
+                                Ident::new("dest").empty_span(),
+                                Ident::new("A").empty_span(),
                             ])),
                             op: BinaryOperator::Eq,
                             right: Box::new(Expr::Value(Value::SingleQuotedString(
@@ -8339,22 +8510,22 @@ fn parse_merge() {
                             assignments: vec![
                                 Assignment {
                                     target: AssignmentTarget::ColumnName(ObjectName(vec![
-                                        Ident::new("dest"),
-                                        Ident::new("F")
+                                        Ident::new("dest").empty_span(),
+                                        Ident::new("F").empty_span(),
                                     ])),
                                     value: Expr::CompoundIdentifier(vec![
-                                        Ident::new("stg"),
-                                        Ident::new("F"),
+                                        Ident::new("stg").empty_span(),
+                                        Ident::new("F").empty_span(),
                                     ]),
                                 },
                                 Assignment {
                                     target: AssignmentTarget::ColumnName(ObjectName(vec![
-                                        Ident::new("dest"),
-                                        Ident::new("G")
+                                        Ident::new("dest").empty_span(),
+                                        Ident::new("G").empty_span(),
                                     ])),
                                     value: Expr::CompoundIdentifier(vec![
-                                        Ident::new("stg"),
-                                        Ident::new("G"),
+                                        Ident::new("stg").empty_span(),
+                                        Ident::new("G").empty_span(),
                                     ]),
                                 },
                             ],
@@ -8459,7 +8630,8 @@ fn test_lock_table() {
         vec![Ident {
             value: "school".to_string(),
             quote_style: None
-        }]
+        }
+        .empty_span()]
     );
     assert!(lock.nonblock.is_none());
 
@@ -8473,7 +8645,8 @@ fn test_lock_table() {
         vec![Ident {
             value: "school".to_string(),
             quote_style: None
-        }]
+        }
+        .empty_span()]
     );
     assert!(lock.nonblock.is_none());
 
@@ -8487,7 +8660,8 @@ fn test_lock_table() {
         vec![Ident {
             value: "school".to_string(),
             quote_style: None
-        }]
+        }
+        .empty_span()]
     );
     assert!(lock.nonblock.is_none());
     let lock = ast.locks.remove(0);
@@ -8497,7 +8671,8 @@ fn test_lock_table() {
         vec![Ident {
             value: "student".to_string(),
             quote_style: None
-        }]
+        }
+        .empty_span()]
     );
     assert!(lock.nonblock.is_none());
 }
@@ -8514,7 +8689,8 @@ fn test_lock_nonblock() {
         vec![Ident {
             value: "school".to_string(),
             quote_style: None
-        }]
+        }
+        .empty_span()]
     );
     assert_eq!(lock.nonblock.unwrap(), NonBlock::SkipLocked);
 
@@ -8528,7 +8704,8 @@ fn test_lock_nonblock() {
         vec![Ident {
             value: "school".to_string(),
             quote_style: None
-        }]
+        }
+        .empty_span()]
     );
     assert_eq!(lock.nonblock.unwrap(), NonBlock::Nowait);
 }
@@ -8551,7 +8728,7 @@ fn test_placeholder() {
     assert_eq!(
         ast.selection,
         Some(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("id"))),
+            left: Box::new(Expr::Identifier(Ident::new("id").empty_span())),
             op: BinaryOperator::Eq,
             right: Box::new(Expr::Value(Value::Placeholder("$Id1".into()))),
         })
@@ -8588,7 +8765,7 @@ fn test_placeholder() {
     assert_eq!(
         ast.selection,
         Some(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("id"))),
+            left: Box::new(Expr::Identifier(Ident::new("id").empty_span())),
             op: BinaryOperator::Eq,
             right: Box::new(Expr::Value(Value::Placeholder("?".into()))),
         })
@@ -8710,7 +8887,7 @@ fn parse_time_functions() {
         let sql = format!("SELECT {}()", func_name);
         let select = verified_only_select(&sql);
         let select_localtime_func_call_ast = Function {
-            name: ObjectName(vec![Ident::new(func_name)]),
+            name: ObjectName(vec![Ident::new(func_name).empty_span()]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
@@ -8749,7 +8926,7 @@ fn parse_position() {
     assert_eq!(
         Expr::Position {
             expr: Box::new(Expr::Value(Value::SingleQuotedString("@".to_string()))),
-            r#in: Box::new(Expr::Identifier(Ident::new("field"))),
+            r#in: Box::new(Expr::Identifier(Ident::new("field").empty_span())),
         },
         verified_expr("POSITION('@' IN field)"),
     );
@@ -8784,37 +8961,37 @@ fn parse_is_boolean() {
 
     let sql = "a IS TRUE";
     assert_eq!(
-        IsTrue(Box::new(Identifier(Ident::new("a")))),
+        IsTrue(Box::new(Identifier(Ident::new("a").empty_span()))),
         verified_expr(sql)
     );
 
     let sql = "a IS NOT TRUE";
     assert_eq!(
-        IsNotTrue(Box::new(Identifier(Ident::new("a")))),
+        IsNotTrue(Box::new(Identifier(Ident::new("a").empty_span()))),
         verified_expr(sql)
     );
 
     let sql = "a IS FALSE";
     assert_eq!(
-        IsFalse(Box::new(Identifier(Ident::new("a")))),
+        IsFalse(Box::new(Identifier(Ident::new("a").empty_span()))),
         verified_expr(sql)
     );
 
     let sql = "a IS NOT FALSE";
     assert_eq!(
-        IsNotFalse(Box::new(Identifier(Ident::new("a")))),
+        IsNotFalse(Box::new(Identifier(Ident::new("a").empty_span()))),
         verified_expr(sql)
     );
 
     let sql = "a IS UNKNOWN";
     assert_eq!(
-        IsUnknown(Box::new(Identifier(Ident::new("a")))),
+        IsUnknown(Box::new(Identifier(Ident::new("a").empty_span()))),
         verified_expr(sql)
     );
 
     let sql = "a IS NOT UNKNOWN";
     assert_eq!(
-        IsNotUnknown(Box::new(Identifier(Ident::new("a")))),
+        IsNotUnknown(Box::new(Identifier(Ident::new("a").empty_span()))),
         verified_expr(sql)
     );
 
@@ -8872,7 +9049,7 @@ fn parse_cursor() {
         Statement::Close { cursor } => assert_eq!(
             cursor,
             CloseCursor::Specific {
-                name: Ident::new("my_cursor"),
+                name: Ident::new("my_cursor").empty_span(),
             }
         ),
         _ => unreachable!(),
@@ -8906,7 +9083,7 @@ fn parse_cache_table() {
         verified_stmt(format!("CACHE TABLE '{cache_table_name}'").as_str()),
         Statement::Cache {
             table_flag: None,
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name).empty_span()]),
             has_as: false,
             options: vec![],
             query: None,
@@ -8916,8 +9093,8 @@ fn parse_cache_table() {
     assert_eq!(
         verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}'").as_str()),
         Statement::Cache {
-            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_flag: Some(ObjectName(vec![Ident::new(table_flag).empty_span()])),
+            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name).empty_span()]),
             has_as: false,
             options: vec![],
             query: None,
@@ -8932,16 +9109,16 @@ fn parse_cache_table() {
             .as_str()
         ),
         Statement::Cache {
-            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_flag: Some(ObjectName(vec![Ident::new(table_flag).empty_span()])),
+            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name).empty_span()]),
             has_as: false,
             options: vec![
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K1"),
+                    key: Ident::with_quote('\'', "K1").empty_span(),
                     value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K2"),
+                    key: Ident::with_quote('\'', "K2").empty_span(),
                     value: Expr::Value(number("0.88")),
                 },
             ],
@@ -8957,16 +9134,16 @@ fn parse_cache_table() {
             .as_str()
         ),
         Statement::Cache {
-            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_flag: Some(ObjectName(vec![Ident::new(table_flag).empty_span()])),
+            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name).empty_span()]),
             has_as: false,
             options: vec![
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K1"),
+                    key: Ident::with_quote('\'', "K1").empty_span(),
                     value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K2"),
+                    key: Ident::with_quote('\'', "K2").empty_span(),
                     value: Expr::Value(number("0.88")),
                 },
             ],
@@ -8982,16 +9159,16 @@ fn parse_cache_table() {
             .as_str()
         ),
         Statement::Cache {
-            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_flag: Some(ObjectName(vec![Ident::new(table_flag).empty_span()])),
+            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name).empty_span()]),
             has_as: true,
             options: vec![
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K1"),
+                    key: Ident::with_quote('\'', "K1").empty_span(),
                     value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
                 SqlOption::KeyValue {
-                    key: Ident::with_quote('\'', "K2"),
+                    key: Ident::with_quote('\'', "K2").empty_span(),
                     value: Expr::Value(number("0.88")),
                 },
             ],
@@ -9002,8 +9179,8 @@ fn parse_cache_table() {
     assert_eq!(
         verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}' {sql}").as_str()),
         Statement::Cache {
-            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_flag: Some(ObjectName(vec![Ident::new(table_flag).empty_span()])),
+            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name).empty_span()]),
             has_as: false,
             options: vec![],
             query: Some(query.clone().into()),
@@ -9013,8 +9190,8 @@ fn parse_cache_table() {
     assert_eq!(
         verified_stmt(format!("CACHE {table_flag} TABLE '{cache_table_name}' AS {sql}").as_str()),
         Statement::Cache {
-            table_flag: Some(ObjectName(vec![Ident::new(table_flag)])),
-            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name)]),
+            table_flag: Some(ObjectName(vec![Ident::new(table_flag).empty_span()])),
+            table_name: ObjectName(vec![Ident::with_quote('\'', cache_table_name).empty_span()]),
             has_as: true,
             options: vec![],
             query: Some(query.into()),
@@ -9077,7 +9254,7 @@ fn parse_uncache_table() {
     assert_eq!(
         verified_stmt("UNCACHE TABLE 'table_name'"),
         Statement::UNCache {
-            table_name: ObjectName(vec![Ident::with_quote('\'', "table_name")]),
+            table_name: ObjectName(vec![Ident::with_quote('\'', "table_name").empty_span()]),
             if_exists: false,
         }
     );
@@ -9085,7 +9262,7 @@ fn parse_uncache_table() {
     assert_eq!(
         verified_stmt("UNCACHE TABLE IF EXISTS 'table_name'"),
         Statement::UNCache {
-            table_name: ObjectName(vec![Ident::with_quote('\'', "table_name")]),
+            table_name: ObjectName(vec![Ident::with_quote('\'', "table_name").empty_span()]),
             if_exists: true,
         }
     );
@@ -9280,11 +9457,11 @@ fn parse_pivot_table() {
             expr: call(
                 "SUM",
                 [Expr::CompoundIdentifier(vec![
-                    Ident::new(table),
-                    Ident::new("amount"),
+                    Ident::new(table).empty_span(),
+                    Ident::new("amount").empty_span(),
                 ])],
             ),
-            alias: alias.map(Ident::new),
+            alias: alias.map(Ident::new).map(SpanWrapped::empty_span),
         }
     }
 
@@ -9292,9 +9469,9 @@ fn parse_pivot_table() {
         verified_only_select(sql).from[0].relation,
         Pivot {
             table: Box::new(TableFactor::Table {
-                name: ObjectName(vec![Ident::new("monthly_sales")]),
+                name: ObjectName(vec![Ident::new("monthly_sales").empty_span()]),
                 alias: Some(TableAlias {
-                    name: Ident::new("a"),
+                    name: Ident::new("a").empty_span(),
                     columns: vec![]
                 }),
                 args: None,
@@ -9308,19 +9485,22 @@ fn parse_pivot_table() {
                 expected_function("b", Some("t")),
                 expected_function("c", Some("u")),
             ],
-            value_column: vec![Ident::new("a"), Ident::new("MONTH")],
+            value_column: vec![
+                Ident::new("a").empty_span(),
+                Ident::new("MONTH").empty_span()
+            ],
             value_source: PivotValueSource::List(vec![
                 ExprWithAlias {
                     expr: Expr::Value(number("1")),
-                    alias: Some(Ident::new("x"))
+                    alias: Some(Ident::new("x").empty_span())
                 },
                 ExprWithAlias {
                     expr: Expr::Value(Value::SingleQuotedString("two".to_string())),
                     alias: None
                 },
                 ExprWithAlias {
-                    expr: Expr::Identifier(Ident::new("three")),
-                    alias: Some(Ident::new("y"))
+                    expr: Expr::Identifier(Ident::new("three").empty_span()),
+                    alias: Some(Ident::new("y").empty_span())
                 },
             ]),
             default_on_null: None,
@@ -9328,8 +9508,9 @@ fn parse_pivot_table() {
                 name: Ident {
                     value: "p".to_string(),
                     quote_style: None
-                },
-                columns: vec![Ident::new("c"), Ident::new("d")],
+                }
+                .empty_span(),
+                columns: vec![Ident::new("c").empty_span(), Ident::new("d").empty_span()],
             }),
         }
     );
@@ -9362,9 +9543,9 @@ fn parse_unpivot_table() {
         verified_only_select(sql).from[0].relation,
         Unpivot {
             table: Box::new(TableFactor::Table {
-                name: ObjectName(vec![Ident::new("sales")]),
+                name: ObjectName(vec![Ident::new("sales").empty_span()]),
                 alias: Some(TableAlias {
-                    name: Ident::new("s"),
+                    name: Ident::new("s").empty_span(),
                     columns: vec![]
                 }),
                 args: None,
@@ -9376,21 +9557,25 @@ fn parse_unpivot_table() {
             value: Ident {
                 value: "quantity".to_string(),
                 quote_style: None
-            },
+            }
+            .empty_span(),
 
             name: Ident {
                 value: "quarter".to_string(),
                 quote_style: None
-            },
+            }
+            .empty_span(),
             columns: ["Q1", "Q2", "Q3", "Q4"]
                 .into_iter()
                 .map(Ident::new)
+                .map(SpanWrapped::empty_span)
                 .collect(),
             alias: Some(TableAlias {
-                name: Ident::new("u"),
+                name: Ident::new("u").empty_span(),
                 columns: ["product", "quarter", "quantity"]
                     .into_iter()
                     .map(Ident::new)
+                    .map(SpanWrapped::empty_span)
                     .collect()
             }),
         }
@@ -9429,9 +9614,9 @@ fn parse_pivot_unpivot_table() {
         Pivot {
             table: Box::new(Unpivot {
                 table: Box::new(TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("census")]),
+                    name: ObjectName(vec![Ident::new("census").empty_span()]),
                     alias: Some(TableAlias {
-                        name: Ident::new("c"),
+                        name: Ident::new("c").empty_span(),
                         columns: vec![]
                     }),
                     args: None,
@@ -9443,26 +9628,31 @@ fn parse_pivot_unpivot_table() {
                 value: Ident {
                     value: "population".to_string(),
                     quote_style: None
-                },
+                }
+                .empty_span(),
 
                 name: Ident {
                     value: "year".to_string(),
                     quote_style: None
-                },
+                }
+                .empty_span(),
                 columns: ["population_2000", "population_2010"]
                     .into_iter()
-                    .map(Ident::new)
+                    .map(|s| Ident::new(s).empty_span())
                     .collect(),
                 alias: Some(TableAlias {
-                    name: Ident::new("u"),
+                    name: Ident::new("u").empty_span(),
                     columns: vec![]
                 }),
             }),
             aggregate_functions: vec![ExprWithAlias {
-                expr: call("sum", [Expr::Identifier(Ident::new("population"))]),
+                expr: call(
+                    "sum",
+                    [Expr::Identifier(Ident::new("population").empty_span())]
+                ),
                 alias: None
             }],
-            value_column: vec![Ident::new("year")],
+            value_column: vec![Ident::new("year").empty_span()],
             value_source: PivotValueSource::List(vec![
                 ExprWithAlias {
                     expr: Expr::Value(Value::SingleQuotedString("population_2000".to_string())),
@@ -9475,7 +9665,7 @@ fn parse_pivot_unpivot_table() {
             ]),
             default_on_null: None,
             alias: Some(TableAlias {
-                name: Ident::new("p"),
+                name: Ident::new("p").empty_span(),
                 columns: vec![]
             }),
         }
@@ -9630,18 +9820,23 @@ fn parse_create_type() {
         verified_stmt("CREATE TYPE db.type_name AS (foo INT, bar TEXT COLLATE \"de_DE\")");
     assert_eq!(
         Statement::CreateType {
-            name: ObjectName(vec![Ident::new("db"), Ident::new("type_name")]),
+            name: ObjectName(vec![
+                Ident::new("db").empty_span(),
+                Ident::new("type_name").empty_span()
+            ]),
             representation: UserDefinedTypeRepresentation::Composite {
                 attributes: vec![
                     UserDefinedTypeCompositeAttributeDef {
-                        name: Ident::new("foo"),
+                        name: Ident::new("foo").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                     },
                     UserDefinedTypeCompositeAttributeDef {
-                        name: Ident::new("bar"),
+                        name: Ident::new("bar").empty_span(),
                         data_type: DataType::Text,
-                        collation: Some(ObjectName(vec![Ident::with_quote('\"', "de_DE")])),
+                        collation: Some(ObjectName(vec![
+                            Ident::with_quote('\"', "de_DE").empty_span()
+                        ])),
                     }
                 ]
             }
@@ -9721,7 +9916,7 @@ fn parse_call() {
                 )))],
                 clauses: vec![],
             }),
-            name: ObjectName(vec![Ident::new("my_procedure")]),
+            name: ObjectName(vec![Ident::new("my_procedure").empty_span()]),
             filter: None,
             null_treatment: None,
             over: None,
@@ -9803,11 +9998,13 @@ fn parse_unload() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
-                    projection: vec![UnnamedExpr(Expr::Identifier(Ident::new("cola"))),],
+                    projection: vec![UnnamedExpr(Expr::Identifier(
+                        Ident::new("cola").empty_span()
+                    )),],
                     into: None,
                     from: vec![TableWithJoins {
                         relation: TableFactor::Table {
-                            name: ObjectName(vec![Ident::new("tab")]),
+                            name: ObjectName(vec![Ident::new("tab").empty_span()]),
                             alias: None,
                             args: None,
                             with_hints: vec![],
@@ -9845,12 +10042,14 @@ fn parse_unload() {
             to: Ident {
                 value: "s3://...".to_string(),
                 quote_style: Some('\'')
-            },
+            }
+            .empty_span(),
             with: vec![SqlOption::KeyValue {
                 key: Ident {
                     value: "format".to_string(),
                     quote_style: None
-                },
+                }
+                .empty_span(),
                 value: Expr::Value(Value::SingleQuotedString("AVRO".to_string()))
             }]
         }
@@ -9861,7 +10060,7 @@ fn parse_unload() {
 fn test_savepoint() {
     match verified_stmt("SAVEPOINT test1") {
         Statement::Savepoint { name } => {
-            assert_eq!(Ident::new("test1"), name);
+            assert_eq!(Ident::new("test1").empty_span(), name);
         }
         _ => unreachable!(),
     }
@@ -9871,7 +10070,7 @@ fn test_savepoint() {
 fn test_release_savepoint() {
     match verified_stmt("RELEASE SAVEPOINT test1") {
         Statement::ReleaseSavepoint { name } => {
-            assert_eq!(Ident::new("test1"), name);
+            assert_eq!(Ident::new("test1").empty_span(), name);
         }
         _ => unreachable!(),
     }
@@ -9911,7 +10110,7 @@ fn test_parse_inline_comment() {
             assert_eq!(
                 columns,
                 vec![ColumnDef {
-                    name: Ident::new("id".to_string()),
+                    name: Ident::new("id".to_string()).empty_span(),
                     data_type: DataType::Int(None),
                     collation: None,
                     options: vec![ColumnOptionDef {
@@ -9951,7 +10150,7 @@ fn parse_map_access_expr() {
     ]);
     let expr = dialects.verified_expr(sql);
     let expected = Expr::MapAccess {
-        column: Expr::Identifier(Ident::new("users")).into(),
+        column: Expr::Identifier(Ident::new("users").empty_span()).into(),
         keys: vec![
             MapAccessKey {
                 key: Expr::UnaryOp {
@@ -9979,13 +10178,13 @@ fn parse_connect_by() {
         distinct: None,
         top: None,
         projection: vec![
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id"))),
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
-            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id").empty_span())),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id").empty_span())),
+            SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title").empty_span())),
         ],
         from: vec![TableWithJoins {
             relation: TableFactor::Table {
-                name: ObjectName(vec![Ident::new("employees")]),
+                name: ObjectName(vec![Ident::new("employees").empty_span()]),
                 alias: None,
                 args: None,
                 with_hints: vec![],
@@ -10010,18 +10209,18 @@ fn parse_connect_by() {
         value_table_mode: None,
         connect_by: Some(ConnectBy {
             condition: Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("title"))),
+                left: Box::new(Expr::Identifier(Ident::new("title").empty_span())),
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Value(Value::SingleQuotedString(
                     "president".to_owned(),
                 ))),
             },
             relationships: vec![Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
+                left: Box::new(Expr::Identifier(Ident::new("manager_id").empty_span())),
                 op: BinaryOperator::Eq,
-                right: Box::new(Expr::Prior(Box::new(Expr::Identifier(Ident::new(
-                    "employee_id",
-                ))))),
+                right: Box::new(Expr::Prior(Box::new(Expr::Identifier(
+                    Ident::new("employee_id").empty_span(),
+                )))),
             }],
         }),
     };
@@ -10065,13 +10264,13 @@ fn parse_connect_by() {
             distinct: None,
             top: None,
             projection: vec![
-                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id"))),
-                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id"))),
-                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title"))),
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("employee_id").empty_span())),
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("manager_id").empty_span())),
+                SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("title").empty_span())),
             ],
             from: vec![TableWithJoins {
                 relation: TableFactor::Table {
-                    name: ObjectName(vec![Ident::new("employees")]),
+                    name: ObjectName(vec![Ident::new("employees").empty_span()]),
                     alias: None,
                     args: None,
                     with_hints: vec![],
@@ -10085,7 +10284,7 @@ fn parse_connect_by() {
             lateral_views: vec![],
             prewhere: None,
             selection: Some(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("employee_id"))),
+                left: Box::new(Expr::Identifier(Ident::new("employee_id").empty_span())),
                 op: BinaryOperator::NotEq,
                 right: Box::new(Expr::Value(number("42"))),
             }),
@@ -10100,18 +10299,18 @@ fn parse_connect_by() {
             value_table_mode: None,
             connect_by: Some(ConnectBy {
                 condition: Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("title"))),
+                    left: Box::new(Expr::Identifier(Ident::new("title").empty_span())),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString(
                         "president".to_owned(),
                     ))),
                 },
                 relationships: vec![Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("manager_id"))),
+                    left: Box::new(Expr::Identifier(Ident::new("manager_id").empty_span())),
                     op: BinaryOperator::Eq,
-                    right: Box::new(Expr::Prior(Box::new(Expr::Identifier(Ident::new(
-                        "employee_id",
-                    ))))),
+                    right: Box::new(Expr::Prior(Box::new(Expr::Identifier(
+                        Ident::new("employee_id",).empty_span()
+                    )))),
                 }],
             }),
         }
@@ -10134,9 +10333,9 @@ fn parse_connect_by() {
         all_dialects()
             .verified_only_select("SELECT prior FROM some_table")
             .projection,
-        vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
-            "prior"
-        )))]
+        vec![SelectItem::UnnamedExpr(Expr::Identifier(
+            Ident::new("prior").empty_span()
+        ))]
     );
 }
 
@@ -10154,17 +10353,17 @@ fn test_selective_aggregation() {
             .projection,
         vec![
             SelectItem::UnnamedExpr(Expr::Function(Function {
-                name: ObjectName(vec![Ident::new("ARRAY_AGG")]),
+                name: ObjectName(vec![Ident::new("ARRAY_AGG").empty_span()]),
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
                     args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                        Expr::Identifier(Ident::new("name"))
+                        Expr::Identifier(Ident::new("name").empty_span())
                     ))],
                     clauses: vec![],
                 }),
                 filter: Some(Box::new(Expr::IsNotNull(Box::new(Expr::Identifier(
-                    Ident::new("name")
+                    Ident::new("name").empty_span()
                 ))))),
                 over: None,
                 within_group: vec![],
@@ -10172,18 +10371,18 @@ fn test_selective_aggregation() {
             })),
             SelectItem::ExprWithAlias {
                 expr: Expr::Function(Function {
-                    name: ObjectName(vec![Ident::new("ARRAY_AGG")]),
+                    name: ObjectName(vec![Ident::new("ARRAY_AGG").empty_span()]),
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
                         duplicate_treatment: None,
                         args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                            Expr::Identifier(Ident::new("name"))
+                            Expr::Identifier(Ident::new("name").empty_span())
                         ))],
                         clauses: vec![],
                     }),
                     filter: Some(Box::new(Expr::Like {
                         negated: false,
-                        expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                        expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                         pattern: Box::new(Expr::Value(Value::SingleQuotedString("a%".to_owned()))),
                         escape_char: None,
                         any: false,
@@ -10192,7 +10391,7 @@ fn test_selective_aggregation() {
                     over: None,
                     within_group: vec![]
                 }),
-                alias: Ident::new("agg2")
+                alias: Ident::new("agg2").empty_span(),
             },
         ]
     )
@@ -10213,11 +10412,11 @@ fn test_group_by_grouping_sets() {
         GroupByExpr::Expressions(
             vec![Expr::GroupingSets(vec![
                 vec![
-                    Expr::Identifier(Ident::new("city")),
-                    Expr::Identifier(Ident::new("car_model"))
+                    Expr::Identifier(Ident::new("city").empty_span()),
+                    Expr::Identifier(Ident::new("car_model").empty_span())
                 ],
-                vec![Expr::Identifier(Ident::new("city")),],
-                vec![Expr::Identifier(Ident::new("car_model"))],
+                vec![Expr::Identifier(Ident::new("city").empty_span()),],
+                vec![Expr::Identifier(Ident::new("car_model").empty_span())],
                 vec![]
             ])],
             vec![]
@@ -10232,7 +10431,7 @@ fn test_match_recognize() {
     use RepetitionQuantifier::*;
 
     let table = TableFactor::Table {
-        name: ObjectName(vec![Ident::new("my_table")]),
+        name: ObjectName(vec![Ident::new("my_table").empty_span()]),
         alias: None,
         args: None,
         with_hints: vec![],
@@ -10265,9 +10464,9 @@ fn test_match_recognize() {
         ),
         TableFactor::MatchRecognize {
             table: Box::new(table),
-            partition_by: vec![Expr::Identifier(Ident::new("company"))],
+            partition_by: vec![Expr::Identifier(Ident::new("company").empty_span())],
             order_by: vec![OrderByExpr {
-                expr: Expr::Identifier(Ident::new("price_date")),
+                expr: Expr::Identifier(Ident::new("price_date").empty_span()),
                 asc: None,
                 nulls_first: None,
                 with_fill: None,
@@ -10275,47 +10474,63 @@ fn test_match_recognize() {
             measures: vec![
                 Measure {
                     expr: call("MATCH_NUMBER", []),
-                    alias: Ident::new("match_number"),
+                    alias: Ident::new("match_number").empty_span(),
                 },
                 Measure {
-                    expr: call("FIRST", [Expr::Identifier(Ident::new("price_date"))]),
-                    alias: Ident::new("start_date"),
+                    expr: call(
+                        "FIRST",
+                        [Expr::Identifier(Ident::new("price_date").empty_span())],
+                    ),
+                    alias: Ident::new("start_date").empty_span(),
                 },
                 Measure {
-                    expr: call("LAST", [Expr::Identifier(Ident::new("price_date"))]),
-                    alias: Ident::new("end_date"),
+                    expr: call(
+                        "LAST",
+                        [Expr::Identifier(Ident::new("price_date").empty_span())],
+                    ),
+                    alias: Ident::new("end_date").empty_span(),
                 },
             ],
             rows_per_match: Some(RowsPerMatch::OneRow),
-            after_match_skip: Some(AfterMatchSkip::ToLast(Ident::new(
-                "row_with_price_increase",
-            ))),
+            after_match_skip: Some(AfterMatchSkip::ToLast(
+                Ident::new("row_with_price_increase").empty_span(),
+            )),
             pattern: Concat(vec![
-                Symbol(Named(Ident::new("row_before_decrease"))),
+                Symbol(Named(Ident::new("row_before_decrease").empty_span())),
                 Repetition(
-                    Box::new(Symbol(Named(Ident::new("row_with_price_decrease")))),
+                    Box::new(Symbol(Named(
+                        Ident::new("row_with_price_decrease").empty_span(),
+                    ))),
                     OneOrMore,
                 ),
                 Repetition(
-                    Box::new(Symbol(Named(Ident::new("row_with_price_increase")))),
+                    Box::new(Symbol(Named(
+                        Ident::new("row_with_price_increase").empty_span(),
+                    ))),
                     OneOrMore,
                 ),
             ]),
             symbols: vec![
                 SymbolDefinition {
-                    symbol: Ident::new("row_with_price_decrease"),
+                    symbol: Ident::new("row_with_price_decrease").empty_span(),
                     definition: Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("price"))),
+                        left: Box::new(Expr::Identifier(Ident::new("price").empty_span())),
                         op: BinaryOperator::Lt,
-                        right: Box::new(call("LAG", [Expr::Identifier(Ident::new("price"))])),
+                        right: Box::new(call(
+                            "LAG",
+                            [Expr::Identifier(Ident::new("price").empty_span())],
+                        )),
                     },
                 },
                 SymbolDefinition {
-                    symbol: Ident::new("row_with_price_increase"),
+                    symbol: Ident::new("row_with_price_increase").empty_span(),
                     definition: Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("price"))),
+                        left: Box::new(Expr::Identifier(Ident::new("price").empty_span())),
                         op: BinaryOperator::Gt,
-                        right: Box::new(call("LAG", [Expr::Identifier(Ident::new("price"))])),
+                        right: Box::new(call(
+                            "LAG",
+                            [Expr::Identifier(Ident::new("price").empty_span())],
+                        )),
                     },
                 },
             ],
@@ -10396,27 +10611,27 @@ fn test_match_recognize_patterns() {
     }
 
     // just a symbol
-    check("FOO", Symbol(Named(Ident::new("FOO"))));
+    check("FOO", Symbol(Named(Ident::new("FOO").empty_span())));
 
     // just a symbol
     check(
         "^ FOO $",
         Concat(vec![
             Symbol(Start),
-            Symbol(Named(Ident::new("FOO"))),
+            Symbol(Named(Ident::new("FOO").empty_span())),
             Symbol(End),
         ]),
     );
 
     // exclusion
-    check("{- FOO -}", Exclude(Named(Ident::new("FOO"))));
+    check("{- FOO -}", Exclude(Named(Ident::new("FOO").empty_span())));
 
     check(
         "PERMUTE(A, B, C)",
         Permute(vec![
-            Named(Ident::new("A")),
-            Named(Ident::new("B")),
-            Named(Ident::new("C")),
+            Named(Ident::new("A").empty_span()),
+            Named(Ident::new("B").empty_span()),
+            Named(Ident::new("C").empty_span()),
         ]),
     );
 
@@ -10424,9 +10639,9 @@ fn test_match_recognize_patterns() {
     check(
         "FOO | \"BAR\" | baz42",
         Alternation(vec![
-            Symbol(Named(Ident::new("FOO"))),
-            Symbol(Named(Ident::with_quote('"', "BAR"))),
-            Symbol(Named(Ident::new("baz42"))),
+            Symbol(Named(Ident::new("FOO").empty_span())),
+            Symbol(Named(Ident::with_quote('"', "BAR").empty_span())),
+            Symbol(Named(Ident::new("baz42").empty_span())),
         ]),
     );
 
@@ -10434,9 +10649,18 @@ fn test_match_recognize_patterns() {
     check(
         "S1* S2+ S3?",
         Concat(vec![
-            Repetition(Box::new(Symbol(Named(Ident::new("S1")))), ZeroOrMore),
-            Repetition(Box::new(Symbol(Named(Ident::new("S2")))), OneOrMore),
-            Repetition(Box::new(Symbol(Named(Ident::new("S3")))), AtMostOne),
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S1").empty_span()))),
+                ZeroOrMore,
+            ),
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S2").empty_span()))),
+                OneOrMore,
+            ),
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S3").empty_span()))),
+                AtMostOne,
+            ),
         ]),
     );
 
@@ -10445,7 +10669,7 @@ fn test_match_recognize_patterns() {
         "S2*?",
         Repetition(
             Box::new(Repetition(
-                Box::new(Symbol(Named(Ident::new("S2")))),
+                Box::new(Symbol(Named(Ident::new("S2").empty_span()))),
                 ZeroOrMore,
             )),
             AtMostOne,
@@ -10456,10 +10680,22 @@ fn test_match_recognize_patterns() {
     check(
         "S1{1} | S2{2,3} | S3{4,} | S4{,5}",
         Alternation(vec![
-            Repetition(Box::new(Symbol(Named(Ident::new("S1")))), Exactly(1)),
-            Repetition(Box::new(Symbol(Named(Ident::new("S2")))), Range(2, 3)),
-            Repetition(Box::new(Symbol(Named(Ident::new("S3")))), AtLeast(4)),
-            Repetition(Box::new(Symbol(Named(Ident::new("S4")))), AtMost(5)),
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S1").empty_span()))),
+                Exactly(1),
+            ),
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S2").empty_span()))),
+                Range(2, 3),
+            ),
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S3").empty_span()))),
+                AtLeast(4),
+            ),
+            Repetition(
+                Box::new(Symbol(Named(Ident::new("S4").empty_span()))),
+                AtMost(5),
+            ),
         ]),
     );
 
@@ -10467,8 +10703,8 @@ fn test_match_recognize_patterns() {
     check(
         "S1 ( S2 )",
         Concat(vec![
-            Symbol(Named(Ident::new("S1"))),
-            Group(Box::new(Symbol(Named(Ident::new("S2"))))),
+            Symbol(Named(Ident::new("S1").empty_span())),
+            Group(Box::new(Symbol(Named(Ident::new("S2").empty_span())))),
         ]),
     );
 
@@ -10477,8 +10713,8 @@ fn test_match_recognize_patterns() {
         "( {- S3 -} S4 )+",
         Repetition(
             Box::new(Group(Box::new(Concat(vec![
-                Exclude(Named(Ident::new("S3"))),
-                Symbol(Named(Ident::new("S4"))),
+                Exclude(Named(Ident::new("S3").empty_span())),
+                Symbol(Named(Ident::new("S4").empty_span())),
             ])))),
             OneOrMore,
         ),
@@ -10490,18 +10726,18 @@ fn test_match_recognize_patterns() {
         Alternation(vec![
             Concat(vec![
                 Symbol(Start),
-                Symbol(Named(Ident::new("S1"))),
+                Symbol(Named(Ident::new("S1").empty_span())),
                 Repetition(
                     Box::new(Repetition(
-                        Box::new(Symbol(Named(Ident::new("S2")))),
+                        Box::new(Symbol(Named(Ident::new("S2").empty_span()))),
                         ZeroOrMore,
                     )),
                     AtMostOne,
                 ),
                 Repetition(
                     Box::new(Group(Box::new(Concat(vec![
-                        Exclude(Named(Ident::new("S3"))),
-                        Symbol(Named(Ident::new("S4"))),
+                        Exclude(Named(Ident::new("S3").empty_span())),
+                        Symbol(Named(Ident::new("S4").empty_span())),
                     ])))),
                     OneOrMore,
                 ),
@@ -10509,8 +10745,8 @@ fn test_match_recognize_patterns() {
             Concat(vec![
                 Repetition(
                     Box::new(Permute(vec![
-                        Named(Ident::new("S1")),
-                        Named(Ident::new("S2")),
+                        Named(Ident::new("S1").empty_span()),
+                        Named(Ident::new("S2").empty_span()),
                     ])),
                     Range(1, 2),
                 ),
@@ -10534,8 +10770,8 @@ fn test_select_wildcard_with_replace() {
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_replace: Some(ReplaceSelectItem {
             items: vec![Box::new(ReplaceSelectElement {
-                expr: call("lower", [Expr::Identifier(Ident::new("city"))]),
-                column_name: Ident::new("city"),
+                expr: call("lower", [Expr::Identifier(Ident::new("city").empty_span())]),
+                column_name: Ident::new("city").empty_span(),
                 as_keyword: true,
             })],
         }),
@@ -10549,7 +10785,7 @@ fn test_select_wildcard_with_replace() {
         opt_replace: Some(ReplaceSelectItem {
             items: vec![Box::new(ReplaceSelectElement {
                 expr: Expr::Value(Value::SingleQuotedString("widget".to_owned())),
-                column_name: Ident::new("item_name"),
+                column_name: Ident::new("item_name").empty_span(),
                 as_keyword: true,
             })],
         }),
@@ -10565,16 +10801,16 @@ fn test_select_wildcard_with_replace() {
             items: vec![
                 Box::new(ReplaceSelectElement {
                     expr: Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("quantity"))),
+                        left: Box::new(Expr::Identifier(Ident::new("quantity").empty_span())),
                         op: BinaryOperator::Divide,
                         right: Box::new(Expr::Value(number("2"))),
                     },
-                    column_name: Ident::new("quantity"),
+                    column_name: Ident::new("quantity").empty_span(),
                     as_keyword: true,
                 }),
                 Box::new(ReplaceSelectElement {
                     expr: Expr::Value(number("3")),
-                    column_name: Ident::new("order_id"),
+                    column_name: Ident::new("order_id").empty_span(),
                     as_keyword: true,
                 }),
             ],
@@ -10622,13 +10858,13 @@ fn test_dictionary_syntax() {
         "{'Alberta': 'Edmonton', 'Manitoba': 'Winnipeg'}",
         Expr::Dictionary(vec![
             DictionaryField {
-                key: Ident::with_quote('\'', "Alberta"),
+                key: Ident::with_quote('\'', "Alberta").empty_span(),
                 value: Box::new(Expr::Value(Value::SingleQuotedString(
                     "Edmonton".to_owned(),
                 ))),
             },
             DictionaryField {
-                key: Ident::with_quote('\'', "Manitoba"),
+                key: Ident::with_quote('\'', "Manitoba").empty_span(),
                 value: Box::new(Expr::Value(Value::SingleQuotedString(
                     "Winnipeg".to_owned(),
                 ))),
@@ -10640,7 +10876,7 @@ fn test_dictionary_syntax() {
         "{'start': CAST('2023-04-01' AS TIMESTAMP), 'end': CAST('2023-04-05' AS TIMESTAMP)}",
         Expr::Dictionary(vec![
             DictionaryField {
-                key: Ident::with_quote('\'', "start"),
+                key: Ident::with_quote('\'', "start").empty_span(),
                 value: Box::new(Expr::Cast {
                     kind: CastKind::Cast,
                     expr: Box::new(Expr::Value(Value::SingleQuotedString(
@@ -10651,7 +10887,7 @@ fn test_dictionary_syntax() {
                 }),
             },
             DictionaryField {
-                key: Ident::with_quote('\'', "end"),
+                key: Ident::with_quote('\'', "end").empty_span(),
                 value: Box::new(Expr::Cast {
                     kind: CastKind::Cast,
                     expr: Box::new(Expr::Value(Value::SingleQuotedString(
@@ -10822,7 +11058,7 @@ fn parse_select_wildcard_with_except() {
     let select = dialects.verified_only_select("SELECT * EXCEPT (col_a) FROM data");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_except: Some(ExceptSelectItem {
-            first_element: Ident::new("col_a"),
+            first_element: Ident::new("col_a").empty_span(),
             additional_elements: vec![],
         }),
         ..Default::default()
@@ -10833,8 +11069,8 @@ fn parse_select_wildcard_with_except() {
         .verified_only_select("SELECT * EXCEPT (department_id, employee_id) FROM employee_table");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_except: Some(ExceptSelectItem {
-            first_element: Ident::new("department_id"),
-            additional_elements: vec![Ident::new("employee_id")],
+            first_element: Ident::new("department_id").empty_span(),
+            additional_elements: vec![Ident::new("employee_id").empty_span()],
         }),
         ..Default::default()
     });
@@ -10881,7 +11117,7 @@ fn test_group_by_nothing() {
         std::assert_eq!(
             GroupByExpr::Expressions(
                 vec![
-                    Identifier(Ident::new("name".to_string())),
+                    Identifier(Ident::new("name".to_string()).empty_span()),
                     Expr::Tuple(vec![])
                 ],
                 vec![]
@@ -10899,10 +11135,13 @@ fn test_extract_seconds_ok() {
     assert_eq!(
         stmt,
         Expr::Extract {
-            field: DateTimeField::Custom(Ident {
-                value: "seconds".to_string(),
-                quote_style: None,
-            }),
+            field: DateTimeField::Custom(
+                Ident {
+                    value: "seconds".to_string(),
+                    quote_style: None,
+                }
+                .empty_span()
+            ),
             syntax: ExtractSyntax::From,
             expr: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
@@ -10924,10 +11163,13 @@ fn test_extract_seconds_single_quote_ok() {
     assert_eq!(
         stmt,
         Expr::Extract {
-            field: DateTimeField::Custom(Ident {
-                value: "seconds".to_string(),
-                quote_style: Some('\''),
-            }),
+            field: DateTimeField::Custom(
+                Ident {
+                    value: "seconds".to_string(),
+                    quote_style: Some('\''),
+                }
+                .empty_span()
+            ),
             syntax: ExtractSyntax::From,
             expr: Box::new(Expr::Cast {
                 kind: CastKind::DoubleColon,
@@ -10968,7 +11210,7 @@ fn test_truncate_table_with_on_cluster() {
     let sql = "TRUNCATE TABLE t ON CLUSTER cluster_name";
     match all_dialects().verified_stmt(sql) {
         Statement::Truncate { on_cluster, .. } => {
-            assert_eq!(on_cluster, Some(Ident::new("cluster_name")));
+            assert_eq!(on_cluster, Some(Ident::new("cluster_name").empty_span()));
         }
         _ => panic!("Expected: TRUNCATE TABLE statement"),
     }
@@ -10994,11 +11236,11 @@ fn parse_explain_with_option_list() {
         None,
         Some(vec![
             UtilityOption {
-                name: Ident::new("ANALYZE"),
+                name: Ident::new("ANALYZE").empty_span(),
                 arg: Some(Expr::Value(Value::Boolean(false))),
             },
             UtilityOption {
-                name: Ident::new("VERBOSE"),
+                name: Ident::new("VERBOSE").empty_span(),
                 arg: Some(Expr::Value(Value::Boolean(true))),
             },
         ]),
@@ -11012,12 +11254,12 @@ fn parse_explain_with_option_list() {
         None,
         Some(vec![
             UtilityOption {
-                name: Ident::new("ANALYZE"),
-                arg: Some(Expr::Identifier(Ident::new("ON"))),
+                name: Ident::new("ANALYZE").empty_span(),
+                arg: Some(Expr::Identifier(Ident::new("ON").empty_span())),
             },
             UtilityOption {
-                name: Ident::new("VERBOSE"),
-                arg: Some(Expr::Identifier(Ident::new("OFF"))),
+                name: Ident::new("VERBOSE").empty_span(),
+                arg: Some(Expr::Identifier(Ident::new("OFF").empty_span())),
             },
         ]),
     );
@@ -11030,20 +11272,20 @@ fn parse_explain_with_option_list() {
         None,
         Some(vec![
             UtilityOption {
-                name: Ident::new("FORMAT1"),
-                arg: Some(Expr::Identifier(Ident::new("TEXT"))),
+                name: Ident::new("FORMAT1").empty_span(),
+                arg: Some(Expr::Identifier(Ident::new("TEXT").empty_span())),
             },
             UtilityOption {
-                name: Ident::new("FORMAT2"),
+                name: Ident::new("FORMAT2").empty_span(),
                 arg: Some(Expr::Value(Value::SingleQuotedString("JSON".to_string()))),
             },
             UtilityOption {
-                name: Ident::new("FORMAT3"),
-                arg: Some(Expr::Identifier(Ident::with_quote('"', "XML"))),
+                name: Ident::new("FORMAT3").empty_span(),
+                arg: Some(Expr::Identifier(Ident::with_quote('"', "XML").empty_span())),
             },
             UtilityOption {
-                name: Ident::new("FORMAT4"),
-                arg: Some(Expr::Identifier(Ident::new("YAML"))),
+                name: Ident::new("FORMAT4").empty_span(),
+                arg: Some(Expr::Identifier(Ident::new("YAML").empty_span())),
             },
         ]),
     );
@@ -11056,18 +11298,18 @@ fn parse_explain_with_option_list() {
         None,
         Some(vec![
             UtilityOption {
-                name: Ident::new("NUM1"),
+                name: Ident::new("NUM1").empty_span(),
                 arg: Some(Expr::Value(Value::Number("10".parse().unwrap(), false))),
             },
             UtilityOption {
-                name: Ident::new("NUM2"),
+                name: Ident::new("NUM2").empty_span(),
                 arg: Some(Expr::UnaryOp {
                     op: UnaryOperator::Plus,
                     expr: Box::new(Expr::Value(Value::Number("10.1".parse().unwrap(), false))),
                 }),
             },
             UtilityOption {
-                name: Ident::new("NUM3"),
+                name: Ident::new("NUM3").empty_span(),
                 arg: Some(Expr::UnaryOp {
                     op: UnaryOperator::Minus,
                     expr: Box::new(Expr::Value(Value::Number("10.2".parse().unwrap(), false))),
@@ -11078,23 +11320,23 @@ fn parse_explain_with_option_list() {
 
     let utility_options = vec![
         UtilityOption {
-            name: Ident::new("ANALYZE"),
+            name: Ident::new("ANALYZE").empty_span(),
             arg: None,
         },
         UtilityOption {
-            name: Ident::new("VERBOSE"),
+            name: Ident::new("VERBOSE").empty_span(),
             arg: Some(Expr::Value(Value::Boolean(true))),
         },
         UtilityOption {
-            name: Ident::new("WAL"),
-            arg: Some(Expr::Identifier(Ident::new("OFF"))),
+            name: Ident::new("WAL").empty_span(),
+            arg: Some(Expr::Identifier(Ident::new("OFF").empty_span())),
         },
         UtilityOption {
-            name: Ident::new("FORMAT"),
-            arg: Some(Expr::Identifier(Ident::new("YAML"))),
+            name: Ident::new("FORMAT").empty_span(),
+            arg: Some(Expr::Identifier(Ident::new("YAML").empty_span())),
         },
         UtilityOption {
-            name: Ident::new("USER_DEF_NUM"),
+            name: Ident::new("USER_DEF_NUM").empty_span(),
             arg: Some(Expr::UnaryOp {
                 op: UnaryOperator::Minus,
                 expr: Box::new(Expr::Value(Value::Number("100.1".parse().unwrap(), false))),
@@ -11135,14 +11377,14 @@ fn test_create_policy() {
             assert_eq!(
                 to,
                 Some(vec![
-                    Owner::Ident(Ident::new("my_role")),
+                    Owner::Ident(Ident::new("my_role").empty_span()),
                     Owner::CurrentUser
                 ])
             );
             assert_eq!(
                 using,
                 Some(Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier(Ident::new("c0"))),
+                    left: Box::new(Expr::Identifier(Ident::new("c0").empty_span())),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(Value::Number("1".parse().unwrap(), false))),
                 })
@@ -11268,7 +11510,7 @@ fn test_alter_policy() {
             assert_eq!(
                 operation,
                 AlterPolicyOperation::Rename {
-                    new_name: Ident::new("new_policy")
+                    new_name: Ident::new("new_policy").empty_span()
                 }
             );
         }

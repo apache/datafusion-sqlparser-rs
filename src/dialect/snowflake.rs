@@ -25,7 +25,7 @@ use crate::ast::helpers::stmt_data_loading::{
 use crate::ast::{
     ColumnOption, ColumnPolicy, ColumnPolicyProperty, Ident, IdentityParameters, IdentityProperty,
     IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, ObjectName,
-    RowAccessPolicy, Statement, TagsColumnOption, WrappedCollection,
+    RowAccessPolicy, SpanWrapped, Statement, TagsColumnOption, WithSpan, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -445,7 +445,7 @@ pub fn parse_create_stage(
     })
 }
 
-pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserError> {
+pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<WithSpan<Ident>, ParserError> {
     let mut ident = String::new();
     while let Some(next_token) = parser.next_token_no_skip() {
         match &next_token.token {
@@ -466,7 +466,7 @@ pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserE
             _ => return parser.expected("stage name identifier", parser.peek_token()),
         }
     }
-    Ok(Ident::new(ident))
+    Ok(Ident::new(ident).empty_span())
 }
 
 pub fn parse_snowflake_stage_name(parser: &mut Parser) -> Result<ObjectName, ParserError> {
@@ -493,7 +493,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
     let into: ObjectName = parse_snowflake_stage_name(parser)?;
     let mut files: Vec<String> = vec![];
     let mut from_transformations: Option<Vec<StageLoadSelectItem>> = None;
-    let from_stage_alias;
+    let from_stage_alias: Option<WithSpan<Ident>>;
     let from_stage: ObjectName;
     let stage_params: StageParamsObject;
 
@@ -511,8 +511,9 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
 
             // as
             from_stage_alias = if parser.parse_keyword(Keyword::AS) {
-                Some(match parser.next_token().token {
-                    Token::Word(w) => Ok(Ident::new(w.value)),
+                let next = parser.next_token();
+                Some(match next.token {
+                    Token::Word(w) => Ok(Ident::new(w.value).spanning(next.span)),
                     _ => parser.expected("stage alias", parser.peek_token()),
                 }?)
             } else {
@@ -527,8 +528,9 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
 
             // as
             from_stage_alias = if parser.parse_keyword(Keyword::AS) {
-                Some(match parser.next_token().token {
-                    Token::Word(w) => Ok(Ident::new(w.value)),
+                let next = parser.next_token();
+                Some(match next.token {
+                    Token::Word(w) => Ok(Ident::new(w.value).spanning(next.span)),
                     _ => parser.expected("stage alias", parser.peek_token()),
                 }?)
             } else {
@@ -614,10 +616,10 @@ fn parse_select_items_for_data_load(
     // [<alias>.]$<file_col_num>[.<element>] [ , [<alias>.]$<file_col_num>[.<element>] ... ]
     let mut select_items: Vec<StageLoadSelectItem> = vec![];
     loop {
-        let mut alias: Option<Ident> = None;
+        let mut alias: Option<WithSpan<Ident>> = None;
         let mut file_col_num: i32 = 0;
-        let mut element: Option<Ident> = None;
-        let mut item_as: Option<Ident> = None;
+        let mut element: Option<WithSpan<Ident>> = None;
+        let mut item_as: Option<WithSpan<Ident>> = None;
 
         let next_token = parser.next_token();
         match next_token.token {
@@ -628,7 +630,7 @@ fn parse_select_items_for_data_load(
                 Ok(())
             }
             Token::Word(w) => {
-                alias = Some(Ident::new(w.value));
+                alias = Some(Ident::new(w.value).spanning(next_token.span));
                 Ok(())
             }
             _ => parser.expected("alias or file_col_num", next_token),
@@ -653,10 +655,14 @@ fn parse_select_items_for_data_load(
         match parser.next_token().token {
             Token::Colon => {
                 // parse element
-                element = Some(Ident::new(match parser.next_token().token {
-                    Token::Word(w) => Ok(w.value),
-                    _ => parser.expected("file_col_num", parser.peek_token()),
-                }?));
+                let next_token = parser.next_token();
+                element = Some(
+                    Ident::new(match next_token.token {
+                        Token::Word(w) => Ok(w.value),
+                        _ => parser.expected("file_col_num", parser.peek_token()),
+                    }?)
+                    .spanning(next_token.span),
+                );
             }
             _ => {
                 // element not present move back
@@ -666,8 +672,9 @@ fn parse_select_items_for_data_load(
 
         // as
         if parser.parse_keyword(Keyword::AS) {
-            item_as = Some(match parser.next_token().token {
-                Token::Word(w) => Ok(Ident::new(w.value)),
+            let next_token = parser.next_token();
+            item_as = Some(match next_token.token {
+                Token::Word(w) => Ok(Ident::new(w.value).spanning(next_token.span)),
                 _ => parser.expected("column item alias", parser.peek_token()),
             }?);
         }

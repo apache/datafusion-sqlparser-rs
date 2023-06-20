@@ -23,7 +23,7 @@
 use sqlparser::ast::{
     ClusteredBy, CommentDef, CreateFunctionBody, CreateFunctionUsing, CreateTable, Expr, Function,
     FunctionArgumentList, FunctionArguments, Ident, ObjectName, OneOrManyWithParens, OrderByExpr,
-    SelectItem, Statement, TableFactor, UnaryOperator, Use, Value,
+    SelectItem, SpanWrapped, Statement, TableFactor, UnaryOperator, Use, Value,
 };
 use sqlparser::dialect::{GenericDialect, HiveDialect, MsSqlDialect};
 use sqlparser::parser::ParserError;
@@ -166,16 +166,16 @@ fn create_table_with_clustered_by() {
             assert_eq!(
                 clustered_by.unwrap(),
                 ClusteredBy {
-                    columns: vec![Ident::new("a"), Ident::new("b")],
+                    columns: vec![Ident::new("a").empty_span(), Ident::new("b").empty_span()],
                     sorted_by: Some(vec![
                         OrderByExpr {
-                            expr: Expr::Identifier(Ident::new("a")),
+                            expr: Expr::Identifier(Ident::new("a").empty_span()),
                             asc: Some(true),
                             nulls_first: None,
                             with_fill: None,
                         },
                         OrderByExpr {
-                            expr: Expr::Identifier(Ident::new("b")),
+                            expr: Expr::Identifier(Ident::new("b").empty_span()),
                             asc: Some(false),
                             nulls_first: None,
                             with_fill: None,
@@ -368,14 +368,14 @@ fn set_statement_with_minus() {
             local: false,
             hivevar: false,
             variables: OneOrManyWithParens::One(ObjectName(vec![
-                Ident::new("hive"),
-                Ident::new("tez"),
-                Ident::new("java"),
-                Ident::new("opts")
+                Ident::new("hive").empty_span(),
+                Ident::new("tez").empty_span(),
+                Ident::new("java").empty_span(),
+                Ident::new("opts").empty_span(),
             ])),
             value: vec![Expr::UnaryOp {
                 op: UnaryOperator::Minus,
-                expr: Box::new(Expr::Identifier(Ident::new("Xmx4g")))
+                expr: Box::new(Expr::Identifier(Ident::new("Xmx4g").empty_span()))
             }],
         }
     );
@@ -458,8 +458,11 @@ fn parse_delimited_identifiers() {
             with_ordinality: _,
             partitions: _,
         } => {
-            assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert_eq!(vec![Ident::with_quote('"', "a table").empty_span()], name.0);
+            assert_eq!(
+                Ident::with_quote('"', "alias").empty_span(),
+                alias.unwrap().name
+            );
             assert!(args.is_none());
             assert!(with_hints.is_empty());
             assert!(version.is_none());
@@ -470,14 +473,14 @@ fn parse_delimited_identifiers() {
     assert_eq!(3, select.projection.len());
     assert_eq!(
         &Expr::CompoundIdentifier(vec![
-            Ident::with_quote('"', "alias"),
-            Ident::with_quote('"', "bar baz"),
+            Ident::with_quote('"', "alias").empty_span(),
+            Ident::with_quote('"', "bar baz").empty_span(),
         ]),
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
         &Expr::Function(Function {
-            name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
+            name: ObjectName(vec![Ident::with_quote('"', "myfun").empty_span()]),
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
@@ -493,8 +496,11 @@ fn parse_delimited_identifiers() {
     );
     match &select.projection[2] {
         SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+            assert_eq!(
+                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                expr
+            );
+            assert_eq!(&Ident::with_quote('"', "column alias").empty_span(), alias);
         }
         _ => panic!("Expected: ExprWithAlias"),
     }
@@ -514,7 +520,8 @@ fn parse_use() {
             hive().verified_stmt(&format!("USE {}", object_name)),
             Statement::Use(Use::Object(ObjectName(vec![Ident::new(
                 object_name.to_string()
-            )])))
+            )
+            .empty_span()])))
         );
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
@@ -523,7 +530,8 @@ fn parse_use() {
                 Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
-                )])))
+                )
+                .empty_span()])))
             );
         }
     }

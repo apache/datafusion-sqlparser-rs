@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use super::{Expr, Ident, Password};
-use crate::ast::{display_separated, ObjectName};
+use crate::ast::{display_separated, ObjectName, WithSpan};
 
 /// An option in `ROLE` statement.
 ///
@@ -126,15 +126,15 @@ pub enum ResetConfig {
 pub enum AlterRoleOperation {
     /// Generic
     RenameRole {
-        role_name: Ident,
+        role_name: WithSpan<Ident>,
     },
     /// MS SQL Server
     /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/alter-role-transact-sql>
     AddMember {
-        member_name: Ident,
+        member_name: WithSpan<Ident>,
     },
     DropMember {
-        member_name: Ident,
+        member_name: WithSpan<Ident>,
     },
     /// PostgreSQL
     /// <https://www.postgresql.org/docs/current/sql-alterrole.html>

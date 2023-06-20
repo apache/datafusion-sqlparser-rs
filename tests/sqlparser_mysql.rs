@@ -143,16 +143,19 @@ fn parse_flush() {
                     Ident {
                         value: "mek".to_string(),
                         quote_style: Some('`')
-                    },
+                    }
+                    .empty_span(),
                     Ident {
                         value: "table1".to_string(),
                         quote_style: Some('`')
                     }
+                    .empty_span(),
                 ]),
                 ObjectName(vec![Ident {
                     value: "table2".to_string(),
                     quote_style: None
-                }])
+                }
+                .empty_span()])
             ]
         }
     );
@@ -180,16 +183,19 @@ fn parse_flush() {
                     Ident {
                         value: "mek".to_string(),
                         quote_style: Some('`')
-                    },
+                    }
+                    .empty_span(),
                     Ident {
                         value: "table1".to_string(),
                         quote_style: Some('`')
                     }
+                    .empty_span(),
                 ]),
                 ObjectName(vec![Ident {
                     value: "table2".to_string(),
                     quote_style: None
-                }])
+                }
+                .empty_span()])
             ]
         }
     );
@@ -206,16 +212,19 @@ fn parse_flush() {
                     Ident {
                         value: "mek".to_string(),
                         quote_style: Some('`')
-                    },
+                    }
+                    .empty_span(),
                     Ident {
                         value: "table1".to_string(),
                         quote_style: Some('`')
                     }
+                    .empty_span(),
                 ]),
                 ObjectName(vec![Ident {
                     value: "table2".to_string(),
                     quote_style: None
-                }])
+                }
+                .empty_span()])
             ]
         }
     );
@@ -223,7 +232,7 @@ fn parse_flush() {
 
 #[test]
 fn parse_show_columns() {
-    let table_name = ObjectName(vec![Ident::new("mytable")]);
+    let table_name = ObjectName(vec![Ident::new("mytable").empty_span()]);
     assert_eq!(
         mysql_and_generic().verified_stmt("SHOW COLUMNS FROM mytable"),
         Statement::ShowColumns {
@@ -238,7 +247,10 @@ fn parse_show_columns() {
         Statement::ShowColumns {
             extended: false,
             full: false,
-            table_name: ObjectName(vec![Ident::new("mydb"), Ident::new("mytable")]),
+            table_name: ObjectName(vec![
+                Ident::new("mydb").empty_span(),
+                Ident::new("mytable").empty_span()
+            ]),
             filter: None,
         }
     );
@@ -338,7 +350,7 @@ fn parse_show_tables() {
         Statement::ShowTables {
             extended: false,
             full: false,
-            db_name: Some(Ident::new("mydb")),
+            db_name: Some(Ident::new("mydb").empty_span()),
             filter: None,
         }
     );
@@ -405,7 +417,7 @@ fn parse_show_extended_full() {
 
 #[test]
 fn parse_show_create() {
-    let obj_name = ObjectName(vec![Ident::new("myident")]);
+    let obj_name = ObjectName(vec![Ident::new("myident").empty_span()]);
 
     for obj_type in &[
         ShowCreateObject::Table,
@@ -464,7 +476,8 @@ fn parse_use() {
             mysql_and_generic().verified_stmt(&format!("USE {}", object_name)),
             Statement::Use(Use::Object(ObjectName(vec![Ident::new(
                 object_name.to_string()
-            )])))
+            )
+            .empty_span()])))
         );
         for &quote in &quote_styles {
             // Test single identifier with different type of quotes
@@ -474,7 +487,8 @@ fn parse_use() {
                 Statement::Use(Use::Object(ObjectName(vec![Ident::with_quote(
                     quote,
                     object_name.to_string(),
-                )])))
+                )
+                .empty_span()])))
             );
         }
     }
@@ -488,7 +502,9 @@ fn parse_set_variables() {
         Statement::SetVariable {
             local: true,
             hivevar: false,
-            variables: OneOrManyWithParens::One(ObjectName(vec!["autocommit".into()])),
+            variables: OneOrManyWithParens::One(ObjectName(vec![
+                Ident::new("autocommit").empty_span()
+            ])),
             value: vec![Expr::Value(number("1"))],
         }
     );
@@ -502,7 +518,7 @@ fn parse_create_table_auto_increment() {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
-                    name: Ident::new("bar"),
+                    name: Ident::new("bar").empty_span(),
                     data_type: DataType::Int(None),
                     collation: None,
                     options: vec![
@@ -531,10 +547,10 @@ fn parse_create_table_auto_increment() {
 /// if `unique_index_type_display` is `Some` create `TableConstraint::Unique`
 ///  otherwise create `TableConstraint::Primary`
 fn table_constraint_unique_primary_ctor(
-    name: Option<Ident>,
-    index_name: Option<Ident>,
+    name: Option<WithSpan<Ident>>,
+    index_name: Option<WithSpan<Ident>>,
     index_type: Option<IndexType>,
-    columns: Vec<Ident>,
+    columns: Vec<WithSpan<Ident>>,
     index_options: Vec<IndexOption>,
     characteristics: Option<ConstraintCharacteristics>,
     unique_index_type_display: Option<KeyOrIndexDisplay>,
@@ -578,10 +594,10 @@ fn parse_create_table_primary_and_unique_key() {
                 assert_eq!(name.to_string(), "foo");
 
                 let expected_constraint = table_constraint_unique_primary_ctor(
-                    Some(Ident::new("bar_key")),
+                    Some(Ident::new("bar_key").empty_span()),
                     None,
                     None,
-                    vec![Ident::new("bar")],
+                    vec![Ident::new("bar").empty_span()],
                     vec![],
                     None,
                     index_type_display,
@@ -591,7 +607,7 @@ fn parse_create_table_primary_and_unique_key() {
                 assert_eq!(
                     vec![
                         ColumnDef {
-                            name: Ident::new("id"),
+                            name: Ident::new("id").empty_span(),
                             data_type: DataType::Int(None),
                             collation: None,
                             options: vec![
@@ -611,7 +627,7 @@ fn parse_create_table_primary_and_unique_key() {
                             ],
                         },
                         ColumnDef {
-                            name: Ident::new("bar"),
+                            name: Ident::new("bar").empty_span(),
                             data_type: DataType::Int(None),
                             collation: None,
                             options: vec![ColumnOptionDef {
@@ -643,10 +659,13 @@ fn parse_create_table_primary_and_unique_key_with_index_options() {
                 assert_eq!(name.to_string(), "foo");
 
                 let expected_constraint = table_constraint_unique_primary_ctor(
-                    Some(Ident::new("constr")),
-                    Some(Ident::new("index_name")),
+                    Some(Ident::new("constr").empty_span()),
+                    Some(Ident::new("index_name").empty_span()),
                     None,
-                    vec![Ident::new("bar"), Ident::new("var")],
+                    vec![
+                        Ident::new("bar").empty_span(),
+                        Ident::new("var").empty_span(),
+                    ],
                     vec![
                         IndexOption::Using(IndexType::Hash),
                         IndexOption::Comment("yes, ".into()),
@@ -682,9 +701,9 @@ fn parse_create_table_primary_and_unique_key_with_index_type() {
 
                 let expected_constraint = table_constraint_unique_primary_ctor(
                     None,
-                    Some(Ident::new("index_name")),
+                    Some(Ident::new("index_name").empty_span()),
                     Some(IndexType::BTree),
-                    vec![Ident::new("bar")],
+                    vec![Ident::new("bar").empty_span()],
                     vec![IndexOption::Using(IndexType::Hash)],
                     None,
                     index_type_display,
@@ -761,13 +780,13 @@ fn parse_create_table_set_enum() {
             assert_eq!(
                 vec![
                     ColumnDef {
-                        name: Ident::new("bar"),
+                        name: Ident::new("bar").empty_span(),
                         data_type: DataType::Set(vec!["a".to_string(), "b".to_string()]),
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("baz"),
+                        name: Ident::new("baz").empty_span(),
                         data_type: DataType::Enum(vec!["a".to_string(), "b".to_string()]),
                         collation: None,
                         options: vec![],
@@ -794,7 +813,7 @@ fn parse_create_table_engine_default_charset() {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
-                    name: Ident::new("id"),
+                    name: Ident::new("id").empty_span(),
                     data_type: DataType::Int(Some(11)),
                     collation: None,
                     options: vec![],
@@ -827,7 +846,7 @@ fn parse_create_table_collate() {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
-                    name: Ident::new("id"),
+                    name: Ident::new("id").empty_span(),
                     data_type: DataType::Int(Some(11)),
                     collation: None,
                     options: vec![],
@@ -875,7 +894,7 @@ fn parse_create_table_comment_character_set() {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
-                    name: Ident::new("s"),
+                    name: Ident::new("s").empty_span(),
                     data_type: DataType::Text,
                     collation: None,
                     options: vec![
@@ -883,7 +902,8 @@ fn parse_create_table_comment_character_set() {
                             name: None,
                             option: ColumnOption::CharacterSet(ObjectName(vec![Ident::new(
                                 "utf8mb4"
-                            )]))
+                            )
+                            .empty_span()]))
                         },
                         ColumnOptionDef {
                             name: None,
@@ -922,7 +942,7 @@ fn parse_quote_identifiers() {
             assert_eq!(name.to_string(), "`PRIMARY`");
             assert_eq!(
                 vec![ColumnDef {
-                    name: Ident::with_quote('`', "BEGIN"),
+                    name: Ident::with_quote('`', "BEGIN").empty_span(),
                     data_type: DataType::Int(None),
                     collation: None,
                     options: vec![ColumnOptionDef {
@@ -950,10 +970,13 @@ fn parse_escaped_quote_identifiers_with_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "quoted ` identifier".into(),
-                    quote_style: Some('`'),
-                }))],
+                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(
+                    Ident {
+                        value: "quoted ` identifier".into(),
+                        quote_style: Some('`'),
+                    }
+                    .empty_span()
+                ))],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1000,10 +1023,13 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "quoted `` identifier".into(),
-                    quote_style: Some('`'),
-                }))],
+                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(
+                    Ident {
+                        value: "quoted `` identifier".into(),
+                        quote_style: Some('`'),
+                    }
+                    .empty_span()
+                ))],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1043,10 +1069,13 @@ fn parse_escaped_backticks_with_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "`quoted identifier`".into(),
-                    quote_style: Some('`'),
-                }))],
+                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(
+                    Ident {
+                        value: "`quoted identifier`".into(),
+                        quote_style: Some('`'),
+                    }
+                    .empty_span()
+                ))],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1090,10 +1119,13 @@ fn parse_escaped_backticks_with_no_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-                    value: "``quoted identifier``".into(),
-                    quote_style: Some('`'),
-                }))],
+                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(
+                    Ident {
+                        value: "``quoted identifier``".into(),
+                        quote_style: Some('`'),
+                    }
+                    .empty_span()
+                ))],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1167,31 +1199,31 @@ fn parse_create_table_with_minimum_display_width() {
             assert_eq!(
                 vec![
                     ColumnDef {
-                        name: Ident::new("bar_tinyint"),
+                        name: Ident::new("bar_tinyint").empty_span(),
                         data_type: DataType::TinyInt(Some(3)),
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_smallint"),
+                        name: Ident::new("bar_smallint").empty_span(),
                         data_type: DataType::SmallInt(Some(5)),
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_mediumint"),
+                        name: Ident::new("bar_mediumint").empty_span(),
                         data_type: DataType::MediumInt(Some(6)),
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_int"),
+                        name: Ident::new("bar_int").empty_span(),
                         data_type: DataType::Int(Some(11)),
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_bigint"),
+                        name: Ident::new("bar_bigint").empty_span(),
                         data_type: DataType::BigInt(Some(20)),
                         collation: None,
                         options: vec![],
@@ -1213,31 +1245,31 @@ fn parse_create_table_unsigned() {
             assert_eq!(
                 vec![
                     ColumnDef {
-                        name: Ident::new("bar_tinyint"),
+                        name: Ident::new("bar_tinyint").empty_span(),
                         data_type: DataType::UnsignedTinyInt(Some(3)),
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_smallint"),
+                        name: Ident::new("bar_smallint").empty_span(),
                         data_type: DataType::UnsignedSmallInt(Some(5)),
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_mediumint"),
+                        name: Ident::new("bar_mediumint").empty_span(),
                         data_type: DataType::UnsignedMediumInt(Some(13)),
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_int"),
+                        name: Ident::new("bar_int").empty_span(),
                         data_type: DataType::UnsignedInt(Some(11)),
                         collation: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_bigint"),
+                        name: Ident::new("bar_bigint").empty_span(),
                         data_type: DataType::UnsignedBigInt(Some(20)),
                         collation: None,
                         options: vec![],
@@ -1262,8 +1294,17 @@ fn parse_simple_insert() {
             on,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                ObjectName(vec![Ident::new("tasks").empty_span()]),
+                table_name
+            );
+            assert_eq!(
+                vec![
+                    Ident::new("title").empty_span(),
+                    Ident::new("priority").empty_span()
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert_eq!(
                 Some(Box::new(Query {
@@ -1317,8 +1358,17 @@ fn parse_ignore_insert() {
             ignore,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                ObjectName(vec![Ident::new("tasks").empty_span()]),
+                table_name
+            );
+            assert_eq!(
+                vec![
+                    Ident::new("title").empty_span(),
+                    Ident::new("priority").empty_span()
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert!(ignore);
             assert_eq!(
@@ -1361,8 +1411,17 @@ fn parse_priority_insert() {
             priority,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                ObjectName(vec![Ident::new("tasks").empty_span()]),
+                table_name
+            );
+            assert_eq!(
+                vec![
+                    Ident::new("title").empty_span(),
+                    Ident::new("priority").empty_span()
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert_eq!(priority, Some(HighPriority));
             assert_eq!(
@@ -1402,8 +1461,17 @@ fn parse_priority_insert() {
             priority,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                ObjectName(vec![Ident::new("tasks").empty_span()]),
+                table_name
+            );
+            assert_eq!(
+                vec![
+                    Ident::new("title").empty_span(),
+                    Ident::new("priority").empty_span()
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert_eq!(priority, Some(LowPriority));
             assert_eq!(
@@ -1445,14 +1513,14 @@ fn parse_insert_as() {
             ..
         }) => {
             assert_eq!(
-                ObjectName(vec![Ident::with_quote('`', "table")]),
+                ObjectName(vec![Ident::with_quote('`', "table").empty_span()]),
                 table_name
             );
-            assert_eq!(vec![Ident::with_quote('`', "date")], columns);
+            assert_eq!(vec![Ident::with_quote('`', "date").empty_span()], columns);
             let insert_alias = insert_alias.unwrap();
 
             assert_eq!(
-                ObjectName(vec![Ident::with_quote('`', "alias")]),
+                ObjectName(vec![Ident::with_quote('`', "alias").empty_span()]),
                 insert_alias.row_alias
             );
             assert_eq!(Some(vec![]), insert_alias.col_aliases);
@@ -1497,22 +1565,25 @@ fn parse_insert_as() {
             ..
         }) => {
             assert_eq!(
-                ObjectName(vec![Ident::with_quote('`', "table")]),
+                ObjectName(vec![Ident::with_quote('`', "table").empty_span()]),
                 table_name
             );
             assert_eq!(
-                vec![Ident::with_quote('`', "id"), Ident::with_quote('`', "date")],
+                vec![
+                    Ident::with_quote('`', "id").empty_span(),
+                    Ident::with_quote('`', "date").empty_span()
+                ],
                 columns
             );
             let insert_alias = insert_alias.unwrap();
             assert_eq!(
-                ObjectName(vec![Ident::with_quote('`', "alias")]),
+                ObjectName(vec![Ident::with_quote('`', "alias").empty_span()]),
                 insert_alias.row_alias
             );
             assert_eq!(
                 Some(vec![
-                    Ident::with_quote('`', "mek_id"),
-                    Ident::with_quote('`', "mek_date")
+                    Ident::with_quote('`', "mek_id").empty_span(),
+                    Ident::with_quote('`', "mek_date").empty_span(),
                 ]),
                 insert_alias.col_aliases
             );
@@ -1556,8 +1627,17 @@ fn parse_replace_insert() {
             priority,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                ObjectName(vec![Ident::new("tasks").empty_span()]),
+                table_name
+            );
+            assert_eq!(
+                vec![
+                    Ident::new("title").empty_span(),
+                    Ident::new("priority").empty_span()
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert!(replace_into);
             assert_eq!(priority, Some(Delayed));
@@ -1600,7 +1680,7 @@ fn parse_empty_row_insert() {
             on,
             ..
         }) => {
-            assert_eq!(ObjectName(vec![Ident::new("tb")]), table_name);
+            assert_eq!(ObjectName(vec![Ident::new("tb").empty_span()]), table_name);
             assert!(columns.is_empty());
             assert!(on.is_none());
             assert_eq!(
@@ -1640,17 +1720,17 @@ fn parse_insert_with_on_duplicate_update() {
             ..
         }) => {
             assert_eq!(
-                ObjectName(vec![Ident::new("permission_groups")]),
+                ObjectName(vec![Ident::new("permission_groups").empty_span()]),
                 table_name
             );
             assert_eq!(
                 vec![
-                    Ident::new("name"),
-                    Ident::new("description"),
-                    Ident::new("perm_create"),
-                    Ident::new("perm_read"),
-                    Ident::new("perm_update"),
-                    Ident::new("perm_delete")
+                    Ident::new("name").empty_span(),
+                    Ident::new("description").empty_span(),
+                    Ident::new("perm_create").empty_span(),
+                    Ident::new("perm_read").empty_span(),
+                    Ident::new("perm_update").empty_span(),
+                    Ident::new("perm_delete").empty_span(),
                 ],
                 columns
             );
@@ -1689,32 +1769,52 @@ fn parse_insert_with_on_duplicate_update() {
                     Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
                             "description".to_string()
-                        )])),
-                        value: call("VALUES", [Expr::Identifier(Ident::new("description"))]),
+                        )
+                        .empty_span()])),
+                        value: call(
+                            "VALUES",
+                            [Expr::Identifier(Ident::new("description").empty_span())]
+                        ),
                     },
                     Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
                             "perm_create".to_string()
-                        )])),
-                        value: call("VALUES", [Expr::Identifier(Ident::new("perm_create"))]),
+                        )
+                        .empty_span()])),
+                        value: call(
+                            "VALUES",
+                            [Expr::Identifier(Ident::new("perm_create").empty_span())]
+                        ),
                     },
                     Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
                             "perm_read".to_string()
-                        )])),
-                        value: call("VALUES", [Expr::Identifier(Ident::new("perm_read"))]),
+                        )
+                        .empty_span()])),
+                        value: call(
+                            "VALUES",
+                            [Expr::Identifier(Ident::new("perm_read").empty_span())]
+                        ),
                     },
                     Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
                             "perm_update".to_string()
-                        )])),
-                        value: call("VALUES", [Expr::Identifier(Ident::new("perm_update"))]),
+                        )
+                        .empty_span()])),
+                        value: call(
+                            "VALUES",
+                            [Expr::Identifier(Ident::new("perm_update").empty_span())]
+                        ),
                     },
                     Assignment {
                         target: AssignmentTarget::ColumnName(ObjectName(vec![Ident::new(
                             "perm_delete".to_string()
-                        )])),
-                        value: call("VALUES", [Expr::Identifier(Ident::new("perm_delete"))]),
+                        )
+                        .empty_span()])),
+                        value: call(
+                            "VALUES",
+                            [Expr::Identifier(Ident::new("perm_delete").empty_span())]
+                        ),
                     },
                 ])),
                 on
@@ -1734,13 +1834,13 @@ fn parse_select_with_numeric_prefix_column_name() {
                 Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
-                        "123col_$@123abc"
-                    )))],
+                    projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(
+                        Ident::new("123col_$@123abc").empty_span()
+                    ))],
                     into: None,
                     from: vec![TableWithJoins {
                         relation: TableFactor::Table {
-                            name: ObjectName(vec![Ident::with_quote('"', "table")]),
+                            name: ObjectName(vec![Ident::with_quote('"', "table").empty_span()]),
                             alias: None,
                             args: None,
                             with_hints: vec![],
@@ -1790,12 +1890,14 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     top: None,
                     projection: vec![
                         SelectItem::UnnamedExpr(Expr::Value(number("123e4"))),
-                        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("123col_$@123abc")))
+                        SelectItem::UnnamedExpr(Expr::Identifier(
+                            Ident::new("123col_$@123abc").empty_span()
+                        ))
                     ],
                     into: None,
                     from: vec![TableWithJoins {
                         relation: TableFactor::Table {
-                            name: ObjectName(vec![Ident::with_quote('"', "table")]),
+                            name: ObjectName(vec![Ident::with_quote('"', "table").empty_span()]),
                             alias: None,
                             args: None,
                             with_hints: vec![],
@@ -1835,10 +1937,13 @@ fn parse_insert_with_numeric_prefix_column_name() {
             ..
         }) => {
             assert_eq!(
-                ObjectName(vec![Ident::new("s1"), Ident::new("t1")]),
+                ObjectName(vec![
+                    Ident::new("s1").empty_span(),
+                    Ident::new("t1").empty_span()
+                ]),
                 table_name
             );
-            assert_eq!(vec![Ident::new("123col_$@length123")], columns);
+            assert_eq!(vec![Ident::new("123col_$@length123").empty_span()], columns);
         }
         _ => unreachable!(),
     }
@@ -1858,9 +1963,9 @@ fn parse_update_with_joins() {
             assert_eq!(
                 TableWithJoins {
                     relation: TableFactor::Table {
-                        name: ObjectName(vec![Ident::new("orders")]),
+                        name: ObjectName(vec![Ident::new("orders").empty_span()]),
                         alias: Some(TableAlias {
-                            name: Ident::new("o"),
+                            name: Ident::new("o").empty_span(),
                             columns: vec![]
                         }),
                         args: None,
@@ -1871,9 +1976,9 @@ fn parse_update_with_joins() {
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
-                            name: ObjectName(vec![Ident::new("customers")]),
+                            name: ObjectName(vec![Ident::new("customers").empty_span()]),
                             alias: Some(TableAlias {
-                                name: Ident::new("c"),
+                                name: Ident::new("c").empty_span(),
                                 columns: vec![]
                             }),
                             args: None,
@@ -1885,13 +1990,13 @@ fn parse_update_with_joins() {
                         global: false,
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
                             left: Box::new(Expr::CompoundIdentifier(vec![
-                                Ident::new("o"),
-                                Ident::new("customer_id")
+                                Ident::new("o").empty_span(),
+                                Ident::new("customer_id").empty_span()
                             ])),
                             op: BinaryOperator::Eq,
                             right: Box::new(Expr::CompoundIdentifier(vec![
-                                Ident::new("c"),
-                                Ident::new("id")
+                                Ident::new("c").empty_span(),
+                                Ident::new("id").empty_span(),
                             ]))
                         })),
                     }]
@@ -1901,8 +2006,8 @@ fn parse_update_with_joins() {
             assert_eq!(
                 vec![Assignment {
                     target: AssignmentTarget::ColumnName(ObjectName(vec![
-                        Ident::new("o"),
-                        Ident::new("completed")
+                        Ident::new("o").empty_span(),
+                        Ident::new("completed").empty_span(),
                     ])),
                     value: Expr::Value(Value::Boolean(true))
                 }],
@@ -1911,8 +2016,8 @@ fn parse_update_with_joins() {
             assert_eq!(
                 Some(Expr::BinaryOp {
                     left: Box::new(Expr::CompoundIdentifier(vec![
-                        Ident::new("c"),
-                        Ident::new("firstname")
+                        Ident::new("c").empty_span(),
+                        Ident::new("firstname").empty_span(),
                     ])),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("Peter".to_string())))
@@ -1932,10 +2037,13 @@ fn parse_delete_with_order_by() {
         Statement::Delete(Delete { order_by, .. }) => {
             assert_eq!(
                 vec![OrderByExpr {
-                    expr: Expr::Identifier(Ident {
-                        value: "id".to_owned(),
-                        quote_style: None
-                    }),
+                    expr: Expr::Identifier(
+                        Ident {
+                            value: "id".to_owned(),
+                            quote_style: None
+                        }
+                        .empty_span()
+                    ),
                     asc: Some(false),
                     nulls_first: None,
                     with_fill: None,
@@ -1978,7 +2086,7 @@ fn parse_alter_table_add_column() {
                     column_keyword: true,
                     if_not_exists: false,
                     column_def: ColumnDef {
-                        name: "b".into(),
+                        name: Ident::new("b").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![],
@@ -2008,15 +2116,18 @@ fn parse_alter_table_add_column() {
                     column_keyword: true,
                     if_not_exists: false,
                     column_def: ColumnDef {
-                        name: "b".into(),
+                        name: Ident::new("b").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         options: vec![],
                     },
-                    column_position: Some(MySQLColumnPosition::After(Ident {
-                        value: String::from("foo"),
-                        quote_style: None
-                    })),
+                    column_position: Some(MySQLColumnPosition::After(
+                        Ident {
+                            value: String::from("foo"),
+                            quote_style: None
+                        }
+                        .empty_span()
+                    )),
                 },]
             );
         }
@@ -2047,7 +2158,7 @@ fn parse_alter_table_add_columns() {
                         column_keyword: true,
                         if_not_exists: false,
                         column_def: ColumnDef {
-                            name: "a".into(),
+                            name: Ident::new("a").empty_span(),
                             data_type: DataType::Text,
                             collation: None,
                             options: vec![],
@@ -2058,15 +2169,18 @@ fn parse_alter_table_add_columns() {
                         column_keyword: true,
                         if_not_exists: false,
                         column_def: ColumnDef {
-                            name: "b".into(),
+                            name: Ident::new("b").empty_span(),
                             data_type: DataType::Int(None),
                             collation: None,
                             options: vec![],
                         },
-                        column_position: Some(MySQLColumnPosition::After(Ident {
-                            value: String::from("foo"),
-                            quote_style: None,
-                        })),
+                        column_position: Some(MySQLColumnPosition::After(
+                            Ident {
+                                value: String::from("foo"),
+                                quote_style: None,
+                            }
+                            .empty_span()
+                        )),
                     },
                 ]
             );
@@ -2085,10 +2199,10 @@ fn parse_alter_table_drop_primary_key() {
 
 #[test]
 fn parse_alter_table_change_column() {
-    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_name = ObjectName(vec![Ident::new("orders").empty_span()]);
     let expected_operation = AlterTableOperation::ChangeColumn {
-        old_name: Ident::new("description"),
-        new_name: Ident::new("desc"),
+        old_name: Ident::new("description").empty_span(),
+        new_name: Ident::new("desc").empty_span(),
         data_type: DataType::Text,
         options: vec![ColumnOption::NotNull],
         column_position: None,
@@ -2107,8 +2221,8 @@ fn parse_alter_table_change_column() {
     assert_eq!(expected_operation, operation);
 
     let expected_operation = AlterTableOperation::ChangeColumn {
-        old_name: Ident::new("description"),
-        new_name: Ident::new("desc"),
+        old_name: Ident::new("description").empty_span(),
+        new_name: Ident::new("desc").empty_span(),
         data_type: DataType::Text,
         options: vec![ColumnOption::NotNull],
         column_position: Some(MySQLColumnPosition::First),
@@ -2119,14 +2233,17 @@ fn parse_alter_table_change_column() {
     assert_eq!(expected_operation, operation);
 
     let expected_operation = AlterTableOperation::ChangeColumn {
-        old_name: Ident::new("description"),
-        new_name: Ident::new("desc"),
+        old_name: Ident::new("description").empty_span(),
+        new_name: Ident::new("desc").empty_span(),
         data_type: DataType::Text,
         options: vec![ColumnOption::NotNull],
-        column_position: Some(MySQLColumnPosition::After(Ident {
-            value: String::from("foo"),
-            quote_style: None,
-        })),
+        column_position: Some(MySQLColumnPosition::After(
+            Ident {
+                value: String::from("foo"),
+                quote_style: None,
+            }
+            .empty_span(),
+        )),
     };
     let sql4 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL AFTER foo";
     let operation =
@@ -2136,10 +2253,10 @@ fn parse_alter_table_change_column() {
 
 #[test]
 fn parse_alter_table_change_column_with_column_position() {
-    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_name = ObjectName(vec![Ident::new("orders").empty_span()]);
     let expected_operation_first = AlterTableOperation::ChangeColumn {
-        old_name: Ident::new("description"),
-        new_name: Ident::new("desc"),
+        old_name: Ident::new("description").empty_span(),
+        new_name: Ident::new("desc").empty_span(),
         data_type: DataType::Text,
         options: vec![ColumnOption::NotNull],
         column_position: Some(MySQLColumnPosition::First),
@@ -2158,14 +2275,17 @@ fn parse_alter_table_change_column_with_column_position() {
     assert_eq!(expected_operation_first, operation);
 
     let expected_operation_after = AlterTableOperation::ChangeColumn {
-        old_name: Ident::new("description"),
-        new_name: Ident::new("desc"),
+        old_name: Ident::new("description").empty_span(),
+        new_name: Ident::new("desc").empty_span(),
         data_type: DataType::Text,
         options: vec![ColumnOption::NotNull],
-        column_position: Some(MySQLColumnPosition::After(Ident {
-            value: String::from("total_count"),
-            quote_style: None,
-        })),
+        column_position: Some(MySQLColumnPosition::After(
+            Ident {
+                value: String::from("total_count"),
+                quote_style: None,
+            }
+            .empty_span(),
+        )),
     };
 
     let sql1 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL AFTER total_count";
@@ -2183,9 +2303,9 @@ fn parse_alter_table_change_column_with_column_position() {
 
 #[test]
 fn parse_alter_table_modify_column() {
-    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_name = ObjectName(vec![Ident::new("orders").empty_span()]);
     let expected_operation = AlterTableOperation::ModifyColumn {
-        col_name: Ident::new("description"),
+        col_name: Ident::new("description").empty_span(),
         data_type: DataType::Text,
         options: vec![ColumnOption::NotNull],
         column_position: None,
@@ -2204,7 +2324,7 @@ fn parse_alter_table_modify_column() {
     assert_eq!(expected_operation, operation);
 
     let expected_operation = AlterTableOperation::ModifyColumn {
-        col_name: Ident::new("description"),
+        col_name: Ident::new("description").empty_span(),
         data_type: DataType::Text,
         options: vec![ColumnOption::NotNull],
         column_position: Some(MySQLColumnPosition::First),
@@ -2215,13 +2335,16 @@ fn parse_alter_table_modify_column() {
     assert_eq!(expected_operation, operation);
 
     let expected_operation = AlterTableOperation::ModifyColumn {
-        col_name: Ident::new("description"),
+        col_name: Ident::new("description").empty_span(),
         data_type: DataType::Text,
         options: vec![ColumnOption::NotNull],
-        column_position: Some(MySQLColumnPosition::After(Ident {
-            value: String::from("foo"),
-            quote_style: None,
-        })),
+        column_position: Some(MySQLColumnPosition::After(
+            Ident {
+                value: String::from("foo"),
+                quote_style: None,
+            }
+            .empty_span(),
+        )),
     };
     let sql4 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL AFTER foo";
     let operation =
@@ -2231,9 +2354,9 @@ fn parse_alter_table_modify_column() {
 
 #[test]
 fn parse_alter_table_modify_column_with_column_position() {
-    let expected_name = ObjectName(vec![Ident::new("orders")]);
+    let expected_name = ObjectName(vec![Ident::new("orders").empty_span()]);
     let expected_operation_first = AlterTableOperation::ModifyColumn {
-        col_name: Ident::new("description"),
+        col_name: Ident::new("description").empty_span(),
         data_type: DataType::Text,
         options: vec![ColumnOption::NotNull],
         column_position: Some(MySQLColumnPosition::First),
@@ -2252,13 +2375,16 @@ fn parse_alter_table_modify_column_with_column_position() {
     assert_eq!(expected_operation_first, operation);
 
     let expected_operation_after = AlterTableOperation::ModifyColumn {
-        col_name: Ident::new("description"),
+        col_name: Ident::new("description").empty_span(),
         data_type: DataType::Text,
         options: vec![ColumnOption::NotNull],
-        column_position: Some(MySQLColumnPosition::After(Ident {
-            value: String::from("total_count"),
-            quote_style: None,
-        })),
+        column_position: Some(MySQLColumnPosition::After(
+            Ident {
+                value: String::from("total_count"),
+                quote_style: None,
+            }
+            .empty_span(),
+        )),
     };
 
     let sql1 = "ALTER TABLE orders MODIFY COLUMN description TEXT NOT NULL AFTER total_count";
@@ -2289,10 +2415,13 @@ fn parse_substring_in_select() {
                         distinct: Some(Distinct::Distinct),
                         top: None,
                         projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
-                            expr: Box::new(Expr::Identifier(Ident {
-                                value: "description".to_string(),
-                                quote_style: None
-                            })),
+                            expr: Box::new(Expr::Identifier(
+                                Ident {
+                                    value: "description".to_string(),
+                                    quote_style: None
+                                }
+                                .empty_span()
+                            )),
                             substring_from: Some(Box::new(Expr::Value(number("0")))),
                             substring_for: Some(Box::new(Expr::Value(number("1")))),
                             special: true,
@@ -2303,7 +2432,8 @@ fn parse_substring_in_select() {
                                 name: ObjectName(vec![Ident {
                                     value: "test".to_string(),
                                     quote_style: None
-                                }]),
+                                }
+                                .empty_span()]),
                                 alias: None,
                                 args: None,
                                 with_hints: vec![],
@@ -2407,7 +2537,7 @@ fn parse_table_colum_option_on_update() {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
-                    name: Ident::with_quote('`', "modification_time"),
+                    name: Ident::with_quote('`', "modification_time").empty_span(),
                     data_type: DataType::Datetime(None),
                     collation: None,
                     options: vec![ColumnOptionDef {
@@ -2705,12 +2835,16 @@ fn parse_create_table_with_column_collate() {
             assert_eq!(name.to_string(), "tb");
             assert_eq!(
                 vec![ColumnDef {
-                    name: Ident::new("id"),
+                    name: Ident::new("id").empty_span(),
                     data_type: DataType::Text,
-                    collation: Some(ObjectName(vec![Ident::new("utf8mb4_0900_ai_ci")])),
+                    collation: Some(ObjectName(vec![
+                        Ident::new("utf8mb4_0900_ai_ci").empty_span()
+                    ])),
                     options: vec![ColumnOptionDef {
                         name: None,
-                        option: ColumnOption::CharacterSet(ObjectName(vec![Ident::new("utf8mb4")]))
+                        option: ColumnOption::CharacterSet(ObjectName(vec![
+                            Ident::new("utf8mb4").empty_span()
+                        ]))
                     }],
                 },],
                 columns
@@ -2770,7 +2904,7 @@ fn parse_json_table() {
             json_path: Value::SingleQuotedString("$[*]".to_string()),
             columns: vec![
                 JsonTableColumn {
-                    name: Ident::new("x"),
+                    name: Ident::new("x").empty_span(),
                     r#type: DataType::Int(None),
                     path: Value::SingleQuotedString("$".to_string()),
                     exists: false,
@@ -2779,7 +2913,7 @@ fn parse_json_table() {
                 },
             ],
             alias: Some(TableAlias {
-                name: Ident::new("t"),
+                name: Ident::new("t").empty_span(),
                 columns: vec![],
             }),
         }

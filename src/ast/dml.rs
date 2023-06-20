@@ -23,6 +23,7 @@ use alloc::{
     vec::Vec,
 };
 
+use crate::ast::WithSpan;
 use core::fmt::{self, Display};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -48,12 +49,12 @@ pub struct CreateIndex {
     pub name: Option<ObjectName>,
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub table_name: ObjectName,
-    pub using: Option<Ident>,
+    pub using: Option<WithSpan<Ident>>,
     pub columns: Vec<OrderByExpr>,
     pub unique: bool,
     pub concurrently: bool,
     pub if_not_exists: bool,
-    pub include: Vec<Ident>,
+    pub include: Vec<WithSpan<Ident>>,
     pub nulls_distinct: Option<bool>,
     /// WITH clause: <https://www.postgresql.org/docs/current/sql-createindex.html>
     pub with: Vec<Expr>,
@@ -141,7 +142,7 @@ pub struct CreateTable {
     pub on_commit: Option<OnCommit>,
     /// ClickHouse "ON CLUSTER" clause:
     /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
-    pub on_cluster: Option<Ident>,
+    pub on_cluster: Option<WithSpan<Ident>>,
     /// ClickHouse "PRIMARY KEY " clause.
     /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
     pub primary_key: Option<Box<Expr>>,
@@ -154,7 +155,7 @@ pub struct CreateTable {
     pub partition_by: Option<Box<Expr>>,
     /// BigQuery: Table clustering column list.
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
-    pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
+    pub cluster_by: Option<WrappedCollection<Vec<WithSpan<Ident>>>>,
     /// Hive: Table clustering column list.
     /// <https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable>
     pub clustered_by: Option<ClusteredBy>,
@@ -473,9 +474,9 @@ pub struct Insert {
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub table_name: ObjectName,
     /// table_name as foo (for PostgreSQL)
-    pub table_alias: Option<Ident>,
+    pub table_alias: Option<WithSpan<Ident>>,
     /// COLUMNS
-    pub columns: Vec<Ident>,
+    pub columns: Vec<WithSpan<Ident>>,
     /// Overwrite (Hive)
     pub overwrite: bool,
     /// A SQL query that specifies what to insert
@@ -483,7 +484,7 @@ pub struct Insert {
     /// partitioned insert (Hive)
     pub partitioned: Option<Vec<Expr>>,
     /// Columns defined after PARTITION
-    pub after_columns: Vec<Ident>,
+    pub after_columns: Vec<WithSpan<Ident>>,
     /// whether the insert has the table keyword (Hive)
     pub table: bool,
     pub on: Option<OnInsert>,

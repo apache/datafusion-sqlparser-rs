@@ -28,7 +28,7 @@ use super::super::dml::CreateTable;
 use crate::ast::{
     ClusteredBy, ColumnDef, CommentDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident,
     ObjectName, OnCommit, OneOrManyWithParens, Query, RowAccessPolicy, SqlOption, Statement,
-    TableConstraint, TableEngine, Tag, WrappedCollection,
+    TableConstraint, TableEngine, Tag, WithSpan, WrappedCollection,
 };
 use crate::parser::ParserError;
 
@@ -42,7 +42,7 @@ use crate::parser::ParserError;
 /// ```rust
 /// use sqlparser::ast::helpers::stmt_create_table::CreateTableBuilder;
 /// use sqlparser::ast::{ColumnDef, DataType, Ident, ObjectName};
-/// let builder = CreateTableBuilder::new(ObjectName(vec![Ident::new("table_name")]))
+/// let builder = CreateTableBuilder::new(ObjectName(vec![Ident::new("table_name").empty_span()]))
 ///    .if_not_exists(true)
 ///    .columns(vec![ColumnDef {
 ///        name: Ident::new("c1"),
@@ -90,11 +90,11 @@ pub struct CreateTableBuilder {
     pub default_charset: Option<String>,
     pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
-    pub on_cluster: Option<Ident>,
+    pub on_cluster: Option<WithSpan<Ident>>,
     pub primary_key: Option<Box<Expr>>,
     pub order_by: Option<OneOrManyWithParens<Expr>>,
     pub partition_by: Option<Box<Expr>>,
-    pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
+    pub cluster_by: Option<WrappedCollection<Vec<WithSpan<Ident>>>>,
     pub clustered_by: Option<ClusteredBy>,
     pub options: Option<Vec<SqlOption>>,
     pub strict: bool,
@@ -280,7 +280,7 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn on_cluster(mut self, on_cluster: Option<Ident>) -> Self {
+    pub fn on_cluster(mut self, on_cluster: Option<WithSpan<Ident>>) -> Self {
         self.on_cluster = on_cluster;
         self
     }
@@ -300,7 +300,10 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn cluster_by(mut self, cluster_by: Option<WrappedCollection<Vec<Ident>>>) -> Self {
+    pub fn cluster_by(
+        mut self,
+        cluster_by: Option<WrappedCollection<Vec<WithSpan<Ident>>>>,
+    ) -> Self {
         self.cluster_by = cluster_by;
         self
     }
@@ -527,19 +530,20 @@ impl TryFrom<Statement> for CreateTableBuilder {
 #[derive(Default)]
 pub(crate) struct CreateTableConfiguration {
     pub partition_by: Option<Box<Expr>>,
-    pub cluster_by: Option<WrappedCollection<Vec<Ident>>>,
+    pub cluster_by: Option<WrappedCollection<Vec<WithSpan<Ident>>>>,
     pub options: Option<Vec<SqlOption>>,
 }
 
 #[cfg(test)]
 mod tests {
     use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
-    use crate::ast::{Ident, ObjectName, Statement};
+    use crate::ast::{Ident, ObjectName, SpanWrapped, Statement};
     use crate::parser::ParserError;
 
     #[test]
     pub fn test_from_valid_statement() {
-        let builder = CreateTableBuilder::new(ObjectName(vec![Ident::new("table_name")]));
+        let builder =
+            CreateTableBuilder::new(ObjectName(vec![Ident::new("table_name").empty_span()]));
 
         let stmt = builder.clone().build();
 

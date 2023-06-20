@@ -402,7 +402,7 @@ fn test_select_wildcard_with_except() {
             .parse_sql_statements("SELECT * EXCEPT () FROM employee_table")
             .unwrap_err()
             .to_string(),
-        "sql parser error: Expected identifier, found: )"
+        "sql parser error: Expected identifier, found: )\nNear `SELECT * EXCEPT ()`"
     );
 }
 

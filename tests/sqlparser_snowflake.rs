@@ -398,7 +398,7 @@ fn test_array_agg_func() {
     assert_eq!(
         result,
         Err(ParserError::ParserError(String::from(
-            "Expected ), found: order"
+            "Expected ), found: order\nNear `select array_agg(x`"
         )))
     )
 }
@@ -504,7 +504,7 @@ fn test_select_wildcard_with_exclude_and_rename() {
             .parse_sql_statements("SELECT * RENAME col_a AS col_b EXCLUDE col_z FROM data")
             .unwrap_err()
             .to_string(),
-        "sql parser error: Expected end of statement, found: EXCLUDE"
+        "sql parser error: Expected end of statement, found: EXCLUDE\nNear ` * RENAME col_a AS col_b`"
     );
 }
 

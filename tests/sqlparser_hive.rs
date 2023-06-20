@@ -232,7 +232,7 @@ fn set_statement_with_minus() {
     assert_eq!(
         hive().parse_sql_statements("SET hive.tez.java.opts = -"),
         Err(ParserError::ParserError(
-            "Expected variable value, found: EOF".to_string()
+            "Expected variable value, found: EOF\nNear `tez.java.opts = -`".to_string()
         ))
     )
 }
@@ -273,14 +273,15 @@ fn parse_create_function() {
     assert_eq!(
         generic.parse_sql_statements(sql).unwrap_err(),
         ParserError::ParserError(
-            "Expected an object type after CREATE, found: FUNCTION".to_string()
+            "Expected an object type after CREATE, found: FUNCTION\nNear `CREATE TEMPORARY `"
+                .to_string()
         )
     );
 
     let sql = "CREATE TEMPORARY FUNCTION mydb.myfunc AS 'org.random.class.Name' USING JAR";
     assert_eq!(
         hive().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("Expected literal string, found: EOF".to_string()),
+        ParserError::ParserError("Expected literal string, found: EOF\nNear `myfunc AS 'org.random.class.Name' USING JAR`".to_string()),
     );
 }
 

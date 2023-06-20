@@ -23,6 +23,7 @@ use alloc::{
 use core::fmt;
 
 use log::debug;
+
 use recursion::RecursionCounter;
 use IsLateral::*;
 use IsOptional::*;
@@ -2319,8 +2320,23 @@ impl<'a> Parser<'a> {
 
     /// Report unexpected token
     pub fn expected<T>(&self, expected: &str, found: TokenWithLocation) -> Result<T, ParserError> {
+        let start_off = self.index.saturating_sub(10);
+        let end_off = self.index.min(self.tokens.len());
+        let near_tokens = &self.tokens[start_off..end_off];
+        struct TokensDisplay<'a>(&'a [TokenWithLocation]);
+        impl<'a> fmt::Display for TokensDisplay<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                for token in self.0 {
+                    write!(f, "{}", token)?;
+                }
+                Ok(())
+            }
+        }
         parser_err!(
-            format!("Expected {expected}, found: {found}"),
+            format!(
+                "Expected {expected}, found: {found}\nNear `{}`",
+                TokensDisplay(near_tokens)
+            ),
             found.location
         )
     }
@@ -8234,7 +8250,7 @@ mod tests {
         assert_eq!(
             ast,
             Err(ParserError::ParserError(
-                "Expected [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a at Line: 1, Column 16"
+                "Expected [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a\nNear `SELECT this is` at Line: 1, Column 16"
                     .to_string()
             ))
         );

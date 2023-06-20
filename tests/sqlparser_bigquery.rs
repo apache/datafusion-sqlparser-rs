@@ -168,9 +168,13 @@ fn parse_join_constraint_unnest_alias() {
                 with_offset_alias: None
             },
             join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier("c1".into())),
+                left: Box::new(Expr::Identifier(
+                    Ident::new("c1").empty_span()
+                )),
                 op: BinaryOperator::Eq,
-                right: Box::new(Expr::Identifier("c2".into())),
+                right: Box::new(Expr::Identifier(
+                    Ident::new("c2").empty_span()
+                )),
             })),
         }]
     );
@@ -209,7 +213,7 @@ fn parse_like() {
         let select = bigquery().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -225,7 +229,7 @@ fn parse_like() {
         let select = bigquery().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -242,7 +246,7 @@ fn parse_like() {
         let select = bigquery().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -264,7 +268,7 @@ fn parse_similar_to() {
         let select = bigquery().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -280,7 +284,9 @@ fn parse_similar_to() {
         let select = bigquery().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(
+                    Ident::new("name").empty_span())
+                ),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -296,7 +302,9 @@ fn parse_similar_to() {
         let select = bigquery().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(
+                    Ident::new("name").empty_span())
+                ),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -304,6 +312,7 @@ fn parse_similar_to() {
             select.selection.unwrap()
         );
     }
+
     chk(false);
     chk(true);
 }
@@ -384,7 +393,7 @@ fn test_select_wildcard_with_replace() {
             items: vec![
                 Box::new(ReplaceSelectElement {
                     expr: Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("quantity"))),
+                        left: Box::new(Expr::Identifier(Ident::new("quantity").empty_span())),
                         op: BinaryOperator::Divide,
                         #[cfg(not(feature = "bigdecimal"))]
                         right: Box::new(Expr::Value(Value::Number("2".to_string(), false))),
@@ -434,10 +443,13 @@ fn parse_map_access_offset() {
     assert_eq!(
         _select.projection[0],
         SelectItem::UnnamedExpr(Expr::MapAccess {
-            column: Box::new(Expr::Identifier(Ident {
-                value: "d".to_string(),
-                quote_style: None,
-            })),
+            column: Box::new(Expr::Identifier(
+                Ident {
+                    value: "d".to_string(),
+                    quote_style: None,
+                }
+                .empty_span()
+            )),
             keys: vec![Expr::Function(Function {
                 name: ObjectName(vec!["offset".into()]),
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(

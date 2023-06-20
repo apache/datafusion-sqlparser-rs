@@ -26,11 +26,11 @@ fn parse_mssql_identifiers() {
     let sql = "SELECT @@version, _foo$123 FROM ##temp";
     let select = ms_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::Identifier(Ident::new("@@version")),
+        &Expr::Identifier(Ident::new("@@version").empty_span()),
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
-        &Expr::Identifier(Ident::new("_foo$123")),
+        &Expr::Identifier(Ident::new("_foo$123").empty_span()),
         expr_from_projection(&select.projection[1]),
     );
     assert_eq!(2, select.projection.len());
@@ -184,7 +184,10 @@ fn parse_delimited_identifiers() {
     );
     match &select.projection[2] {
         SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
+            assert_eq!(
+                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                expr
+            );
             assert_eq!(&Ident::with_quote('"', "column alias"), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
@@ -205,7 +208,7 @@ fn parse_like() {
         let select = ms_and_generic().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -221,7 +224,7 @@ fn parse_like() {
         let select = ms_and_generic().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -238,7 +241,7 @@ fn parse_like() {
         let select = ms_and_generic().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -260,7 +263,7 @@ fn parse_similar_to() {
         let select = ms_and_generic().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -276,7 +279,7 @@ fn parse_similar_to() {
         let select = ms_and_generic().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -292,7 +295,7 @@ fn parse_similar_to() {
         let select = ms_and_generic().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),

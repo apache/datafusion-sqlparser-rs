@@ -20,6 +20,7 @@ use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use sqlparser::ast::WithSpan;
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -754,7 +755,7 @@ impl fmt::Display for UserDefinedTypeRepresentation {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct UserDefinedTypeCompositeAttributeDef {
-    pub name: Ident,
+    pub name: WithSpan<Ident>,
     pub data_type: DataType,
     pub collation: Option<ObjectName>,
 }

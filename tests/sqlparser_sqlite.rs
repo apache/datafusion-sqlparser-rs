@@ -151,7 +151,7 @@ fn parse_like() {
         let select = sqlite().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -167,7 +167,7 @@ fn parse_like() {
         let select = sqlite().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -184,7 +184,7 @@ fn parse_like() {
         let select = sqlite().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -206,7 +206,7 @@ fn parse_similar_to() {
         let select = sqlite().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -222,7 +222,7 @@ fn parse_similar_to() {
         let select = sqlite().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -238,7 +238,7 @@ fn parse_similar_to() {
         let select = sqlite().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),

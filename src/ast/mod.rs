@@ -17,7 +17,10 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+
+use core::borrow::Borrow;
 use core::fmt::{self, Display};
+use std::ops::Deref;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -50,6 +53,7 @@ pub use self::value::{
 use crate::ast::helpers::stmt_data_loading::{
     DataLoadingOptions, StageLoadSelectItem, StageParamsObject,
 };
+use crate::tokenizer::Span;
 #[cfg(feature = "visitor")]
 pub use visitor::*;
 
@@ -340,6 +344,78 @@ impl fmt::Display for JsonOperator {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct WithSpan<T>
+where
+    T: Clone + Eq + Ord + std::hash::Hash + PartialOrd + PartialEq,
+{
+    inner: T,
+    span: Span,
+}
+
+impl<T> WithSpan<T>
+where
+    T: Clone + Eq + Ord + std::hash::Hash + PartialOrd + PartialEq,
+{
+    pub fn new(inner: T, span: Span) -> Self {
+        Self { inner, span }
+    }
+
+    pub fn unwrap(self) -> T {
+        self.inner
+    }
+}
+
+pub trait SpanWrapped: Clone + Eq + Ord + std::hash::Hash + PartialOrd + PartialEq {
+    fn spanning<U: Into<Span>>(self, span: U) -> WithSpan<Self> {
+        WithSpan::new(self, span.into())
+    }
+
+    fn empty_span(self) -> WithSpan<Self> {
+        self.spanning(Span::default())
+    }
+}
+
+impl<T> SpanWrapped for T
+where
+    T: Clone + Eq + Ord + std::hash::Hash + PartialOrd + PartialEq,
+{
+    fn spanning<U: Into<Span>>(self, span: U) -> WithSpan<Self> {
+        WithSpan::new(self, span.into())
+    }
+}
+
+impl<T> Deref for WithSpan<T>
+where
+    T: Clone + Eq + Ord + std::hash::Hash + PartialOrd + PartialEq,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T> Borrow<T> for WithSpan<T>
+where
+    T: Clone + Eq + Ord + std::hash::Hash + PartialOrd + PartialEq,
+{
+    fn borrow(&self) -> &T {
+        &self.inner
+    }
+}
+
+impl<T: fmt::Display> fmt::Display for WithSpan<T>
+where
+    T: Clone + Eq + Ord + std::hash::Hash + PartialOrd + PartialEq,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}
+
 /// An SQL expression of any type.
 ///
 /// The parser does not distinguish between expressions of different types
@@ -354,7 +430,7 @@ impl fmt::Display for JsonOperator {
 )]
 pub enum Expr {
     /// Identifier e.g. table name or column name
-    Identifier(Ident),
+    Identifier(WithSpan<Ident>),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
     /// JSON access (postgres)  eg: data->'tags'
@@ -1025,7 +1101,7 @@ impl fmt::Display for Expr {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum WindowType {
     WindowSpec(WindowSpec),
-    NamedWindow(Ident),
+    NamedWindow(WithSpan<Ident>),
 }
 
 impl Display for WindowType {
@@ -4732,6 +4808,10 @@ impl fmt::Display for SearchModifier {
 mod tests {
     use super::*;
 
+    fn ident<T: Into<String>>(value: T) -> WithSpan<Ident> {
+        SpanWrapped::empty_span(Ident::new(value))
+    }
+
     #[test]
     fn test_window_frame_default() {
         let window_frame = WindowFrame::default();
@@ -4742,84 +4822,72 @@ mod tests {
     fn test_grouping_sets_display() {
         // a and b in different group
         let grouping_sets = Expr::GroupingSets(vec![
-            vec![Expr::Identifier(Ident::new("a"))],
-            vec![Expr::Identifier(Ident::new("b"))],
+            vec![Expr::Identifier(ident("a"))],
+            vec![Expr::Identifier(ident("b"))],
         ]);
         assert_eq!("GROUPING SETS ((a), (b))", format!("{grouping_sets}"));
 
         // a and b in the same group
         let grouping_sets = Expr::GroupingSets(vec![vec![
-            Expr::Identifier(Ident::new("a")),
-            Expr::Identifier(Ident::new("b")),
+            Expr::Identifier(ident("a")),
+            Expr::Identifier(ident("b")),
         ]]);
         assert_eq!("GROUPING SETS ((a, b))", format!("{grouping_sets}"));
 
         // (a, b) and (c, d) in different group
         let grouping_sets = Expr::GroupingSets(vec![
-            vec![
-                Expr::Identifier(Ident::new("a")),
-                Expr::Identifier(Ident::new("b")),
-            ],
-            vec![
-                Expr::Identifier(Ident::new("c")),
-                Expr::Identifier(Ident::new("d")),
-            ],
+            vec![Expr::Identifier(ident("a")), Expr::Identifier(ident("b"))],
+            vec![Expr::Identifier(ident("c")), Expr::Identifier(ident("d"))],
         ]);
         assert_eq!("GROUPING SETS ((a, b), (c, d))", format!("{grouping_sets}"));
     }
 
     #[test]
     fn test_rollup_display() {
-        let rollup = Expr::Rollup(vec![vec![Expr::Identifier(Ident::new("a"))]]);
+        let rollup = Expr::Rollup(vec![vec![Expr::Identifier(ident("a"))]]);
         assert_eq!("ROLLUP (a)", format!("{rollup}"));
 
         let rollup = Expr::Rollup(vec![vec![
-            Expr::Identifier(Ident::new("a")),
-            Expr::Identifier(Ident::new("b")),
+            Expr::Identifier(ident("a")),
+            Expr::Identifier(ident("b")),
         ]]);
         assert_eq!("ROLLUP ((a, b))", format!("{rollup}"));
 
         let rollup = Expr::Rollup(vec![
-            vec![Expr::Identifier(Ident::new("a"))],
-            vec![Expr::Identifier(Ident::new("b"))],
+            vec![Expr::Identifier(ident("a"))],
+            vec![Expr::Identifier(ident("b"))],
         ]);
         assert_eq!("ROLLUP (a, b)", format!("{rollup}"));
 
         let rollup = Expr::Rollup(vec![
-            vec![Expr::Identifier(Ident::new("a"))],
-            vec![
-                Expr::Identifier(Ident::new("b")),
-                Expr::Identifier(Ident::new("c")),
-            ],
-            vec![Expr::Identifier(Ident::new("d"))],
+            vec![Expr::Identifier(ident("a"))],
+            vec![Expr::Identifier(ident("b")), Expr::Identifier(ident("c"))],
+            vec![Expr::Identifier(ident("d"))],
         ]);
         assert_eq!("ROLLUP (a, (b, c), d)", format!("{rollup}"));
     }
 
     #[test]
     fn test_cube_display() {
-        let cube = Expr::Cube(vec![vec![Expr::Identifier(Ident::new("a"))]]);
+        let cube = Expr::Cube(vec![vec![Expr::Identifier(ident("a"))]]);
         assert_eq!("CUBE (a)", format!("{cube}"));
 
         let cube = Expr::Cube(vec![vec![
-            Expr::Identifier(Ident::new("a")),
-            Expr::Identifier(Ident::new("b")),
+            Expr::Identifier(ident("a")),
+            Expr::Identifier(ident("b")),
         ]]);
         assert_eq!("CUBE ((a, b))", format!("{cube}"));
 
         let cube = Expr::Cube(vec![
-            vec![Expr::Identifier(Ident::new("a"))],
-            vec![Expr::Identifier(Ident::new("b"))],
+            vec![Expr::Identifier(ident("a"))],
+            vec![Expr::Identifier(ident("b"))],
         ]);
         assert_eq!("CUBE (a, b)", format!("{cube}"));
 
         let cube = Expr::Cube(vec![
-            vec![Expr::Identifier(Ident::new("a"))],
-            vec![
-                Expr::Identifier(Ident::new("b")),
-                Expr::Identifier(Ident::new("c")),
-            ],
-            vec![Expr::Identifier(Ident::new("d"))],
+            vec![Expr::Identifier(ident("a"))],
+            vec![Expr::Identifier(ident("b")), Expr::Identifier(ident("c"))],
+            vec![Expr::Identifier(ident("d"))],
         ]);
         assert_eq!("CUBE (a, (b, c), d)", format!("{cube}"));
     }

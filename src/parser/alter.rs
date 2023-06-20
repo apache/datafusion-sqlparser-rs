@@ -37,17 +37,17 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_mssql_alter_role(&mut self) -> Result<Statement, ParserError> {
-        let role_name = self.parse_identifier()?;
+        let role_name = self.parse_identifier()?.unwrap();
 
         let operation = if self.parse_keywords(&[Keyword::ADD, Keyword::MEMBER]) {
-            let member_name = self.parse_identifier()?;
+            let member_name = self.parse_identifier()?.unwrap();
             AlterRoleOperation::AddMember { member_name }
         } else if self.parse_keywords(&[Keyword::DROP, Keyword::MEMBER]) {
-            let member_name = self.parse_identifier()?;
+            let member_name = self.parse_identifier()?.unwrap();
             AlterRoleOperation::DropMember { member_name }
         } else if self.parse_keywords(&[Keyword::WITH, Keyword::NAME]) {
             if self.consume_token(&Token::Eq) {
-                let role_name = self.parse_identifier()?;
+                let role_name = self.parse_identifier()?.unwrap();
                 AlterRoleOperation::RenameRole { role_name }
             } else {
                 return self.expected("= after WITH NAME ", self.peek_token());
@@ -63,7 +63,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_pg_alter_role(&mut self) -> Result<Statement, ParserError> {
-        let role_name = self.parse_identifier()?;
+        let role_name = self.parse_identifier()?.unwrap();
 
         // [ IN DATABASE _`database_name`_ ]
         let in_database = if self.parse_keywords(&[Keyword::IN, Keyword::DATABASE]) {
@@ -74,7 +74,7 @@ impl<'a> Parser<'a> {
 
         let operation = if self.parse_keyword(Keyword::RENAME) {
             if self.parse_keyword(Keyword::TO) {
-                let role_name = self.parse_identifier()?;
+                let role_name = self.parse_identifier()?.unwrap();
                 AlterRoleOperation::RenameRole { role_name }
             } else {
                 return self.expected("TO after RENAME", self.peek_token());

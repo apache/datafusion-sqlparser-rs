@@ -27,6 +27,8 @@ use alloc::{
 use core::fmt;
 use core::iter::Peekable;
 use core::str::Chars;
+use std::cmp::{max, min};
+use std::ops::Range;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -349,13 +351,32 @@ impl fmt::Display for Whitespace {
     }
 }
 
+pub type LineNumber = u64;
+pub type ColumnPosition = u64;
+pub type LineColumn = (LineNumber, ColumnPosition);
+
 /// Location in input string
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, Ord, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Location {
     /// Line number, starting from 1
-    pub line: u64,
+    pub line: LineNumber,
     /// Line column, starting from 1
-    pub column: u64,
+    pub column: ColumnPosition,
+}
+
+impl Location {
+    fn is_valid(&self) -> bool {
+        self.line > 0 && self.column > 0
+    }
+    pub fn of(line: LineNumber, column: ColumnPosition) -> Self {
+        Self { line, column }
+    }
+
+    pub fn span_to(self, end: Self) -> Span {
+        Span { start: self, end }
+    }
 }
 
 impl fmt::Display for Location {
@@ -372,23 +393,114 @@ impl fmt::Display for Location {
     }
 }
 
+impl Default for Location {
+    fn default() -> Self {
+        Self { line: 0, column: 0 }
+    }
+}
+
+impl From<LineColumn> for Location {
+    fn from(value: LineColumn) -> Self {
+        Location {
+            line: value.0,
+            column: value.1,
+        }
+    }
+}
+
+impl From<u64> for Location {
+    fn from(value: u64) -> Self {
+        Location {
+            line: 1,
+            column: value,
+        }
+    }
+}
+
+impl From<usize> for Location {
+    fn from(value: usize) -> Self {
+        Location {
+            line: 1,
+            column: value as u64,
+        }
+    }
+}
+
+impl From<i32> for Location {
+    fn from(value: i32) -> Self {
+        Location {
+            line: 1,
+            column: value as u64,
+        }
+    }
+}
+
+/// Location in input string
+#[derive(Debug, Eq, PartialEq, Clone, Copy, Default, Ord, PartialOrd, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Span {
+    /// The span start location, inclusive.
+    pub start: Location,
+    /// The span end location, exclusive.
+    pub end: Location,
+}
+
+impl Span {
+    pub fn new<T: Into<Location>, U: Into<Location>>(start: T, end: U) -> Self {
+        Self {
+            start: start.into(),
+            end: end.into(),
+        }
+    }
+
+    pub fn zero_width(start: Location) -> Self {
+        Self { start, end: start }
+    }
+
+    pub fn union(self, other: Self) -> Self {
+        Self {
+            start: min(self.start, other.start),
+            end: max(self.end, other.end),
+        }
+    }
+
+    pub fn start(self) -> Location {
+        self.start
+    }
+
+    pub fn end(self) -> Location {
+        self.end
+    }
+}
+
+impl<T: Into<Location>> From<Range<T>> for Span {
+    fn from(value: Range<T>) -> Self {
+        Span::new(value.start.into(), value.end.into())
+    }
+}
+
 /// A [Token] with [Location] attached to it
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct TokenWithLocation {
     pub token: Token,
-    pub location: Location,
+    pub span: Span,
 }
 
 impl TokenWithLocation {
-    pub fn new(token: Token, line: u64, column: u64) -> TokenWithLocation {
+    pub fn new(token: Token, span: Span) -> TokenWithLocation {
+        TokenWithLocation { token, span }
+    }
+
+    pub fn at(token: Token, start: LineColumn, end: LineColumn) -> TokenWithLocation {
         TokenWithLocation {
             token,
-            location: Location { line, column },
+            span: Location::from(start).span_to(end.into()),
         }
     }
 
     pub fn wrap(token: Token) -> TokenWithLocation {
-        TokenWithLocation::new(token, 0, 0)
+        TokenWithLocation::new(token, Span::default())
     }
 }
 
@@ -555,7 +667,8 @@ impl<'a> Tokenizer<'a> {
 
         let mut location = state.location();
         while let Some(token) = self.next_token(&mut state)? {
-            tokens.push(TokenWithLocation { token, location });
+            let span = location.span_to(state.location());
+            tokens.push(TokenWithLocation { token, span });
 
             location = state.location();
         }
@@ -2050,15 +2163,21 @@ mod tests {
             .tokenize_with_location()
             .unwrap();
         let expected = vec![
-            TokenWithLocation::new(Token::make_keyword("SELECT"), 1, 1),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 1, 7),
-            TokenWithLocation::new(Token::make_word("a", None), 1, 8),
-            TokenWithLocation::new(Token::Comma, 1, 9),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Newline), 1, 10),
-            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 2, 1),
-            TokenWithLocation::new(Token::make_word("b", None), 2, 2),
+            TokenWithLocation::at(Token::make_keyword("SELECT"), (1, 1), (1, 7)),
+            TokenWithLocation::at(Token::Whitespace(Whitespace::Space), (1, 7), (1, 8)),
+            TokenWithLocation::at(Token::make_word("a", None), (1, 8), (1, 9)),
+            TokenWithLocation::at(Token::Comma, (1, 9), (1, 10)),
+            TokenWithLocation::at(Token::Whitespace(Whitespace::Newline), (1, 10), (2, 1)),
+            TokenWithLocation::at(Token::Whitespace(Whitespace::Space), (2, 1), (2, 2)),
+            TokenWithLocation::at(Token::make_word("b", None), (2, 2), (2, 3)),
         ];
         compare(expected, tokens);
+    }
+
+    #[test]
+    fn default_location_is_invalid() {
+        let d = Location::default();
+        assert!(!d.is_valid())
     }
 
     fn compare<T: PartialEq + std::fmt::Debug>(expected: Vec<T>, actual: Vec<T>) {

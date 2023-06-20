@@ -38,16 +38,19 @@ fn parse_array_access_expr() {
             distinct: None,
             top: None,
             projection: vec![UnnamedExpr(ArrayIndex {
-                obj: Box::new(Identifier(Ident {
-                    value: "string_values".to_string(),
-                    quote_style: None,
-                })),
+                obj: Box::new(Identifier(
+                    Ident {
+                        value: "string_values".to_string(),
+                        quote_style: None,
+                    }
+                    .empty_span()
+                )),
                 indexes: vec![Expr::Function(Function {
                     name: ObjectName(vec!["indexOf".into()]),
                     args: vec![
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new(
-                            "string_names"
-                        )))),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                            Ident::new("string_names").empty_span()
+                        ))),
                         FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                             Value::SingleQuotedString("endpoint".to_string())
                         ))),
@@ -74,19 +77,19 @@ fn parse_array_access_expr() {
             lateral_views: vec![],
             selection: Some(BinaryOp {
                 left: Box::new(BinaryOp {
-                    left: Box::new(Identifier(Ident::new("id"))),
+                    left: Box::new(Identifier(Ident::new("id").empty_span())),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("test".to_string()))),
                 }),
                 op: BinaryOperator::And,
                 right: Box::new(BinaryOp {
                     left: Box::new(ArrayIndex {
-                        obj: Box::new(Identifier(Ident::new("string_value"))),
+                        obj: Box::new(Identifier(Ident::new("string_value").empty_span())),
                         indexes: vec![Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("indexOf")]),
                             args: vec![
                                 FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
-                                    Ident::new("string_name")
+                                    Ident::new("string_name").empty_span()
                                 ))),
                                 FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                                     Value::SingleQuotedString("app".to_string())
@@ -139,8 +142,12 @@ fn parse_array_fn() {
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("array")]),
             args: vec![
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new("x1")))),
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new("x2")))),
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                    Ident::new("x1").empty_span()
+                ))),
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                    Ident::new("x2").empty_span()
+                ))),
             ],
             over: None,
             distinct: false,
@@ -211,7 +218,10 @@ fn parse_delimited_identifiers() {
     );
     match &select.projection[2] {
         SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
+            assert_eq!(
+                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                expr
+            );
             assert_eq!(&Ident::with_quote('"', "column alias"), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
@@ -232,7 +242,7 @@ fn parse_like() {
         let select = clickhouse().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -248,7 +258,7 @@ fn parse_like() {
         let select = clickhouse().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -265,7 +275,7 @@ fn parse_like() {
         let select = clickhouse().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -287,7 +297,7 @@ fn parse_similar_to() {
         let select = clickhouse().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -303,7 +313,7 @@ fn parse_similar_to() {
         let select = clickhouse().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -319,7 +329,7 @@ fn parse_similar_to() {
         let select = clickhouse().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),

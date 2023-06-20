@@ -1121,10 +1121,13 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a")]),
-            value: vec![Expr::Identifier(Ident {
-                value: "b".into(),
-                quote_style: None
-            })],
+            value: vec![Expr::Identifier(
+                Ident {
+                    value: "b".into(),
+                    quote_style: None
+                }
+                .empty_span()
+            )],
         }
     );
 
@@ -1157,10 +1160,13 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a")]),
-            value: vec![Expr::Identifier(Ident {
-                value: "DEFAULT".into(),
-                quote_style: None
-            })],
+            value: vec![Expr::Identifier(
+                Ident {
+                    value: "DEFAULT".into(),
+                    quote_style: None
+                }
+                .empty_span()
+            )],
         }
     );
 
@@ -1171,7 +1177,7 @@ fn parse_set() {
             local: true,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a")]),
-            value: vec![Expr::Identifier("b".into())],
+            value: vec![Expr::Identifier(Ident::new("b").empty_span())],
         }
     );
 
@@ -1182,10 +1188,13 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a"), Ident::new("b"), Ident::new("c")]),
-            value: vec![Expr::Identifier(Ident {
-                value: "b".into(),
-                quote_style: None
-            })],
+            value: vec![Expr::Identifier(
+                Ident {
+                    value: "b".into(),
+                    quote_style: None
+                }
+                .empty_span()
+            )],
         }
     );
 
@@ -1387,9 +1396,9 @@ fn parse_prepare() {
             assert!(columns.is_empty());
 
             let expected_values = [vec![
-                Expr::Identifier("a1".into()),
-                Expr::Identifier("a2".into()),
-                Expr::Identifier("a3".into()),
+                Expr::Identifier(Ident::new("a1").empty_span()),
+                Expr::Identifier(Ident::new("a2").empty_span()),
+                Expr::Identifier(Ident::new("a3").empty_span()),
             ]];
             match &*source.body {
                 SetExpr::Values(Values { rows, .. }) => {
@@ -1538,10 +1547,13 @@ fn parse_pg_on_conflict() {
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
                     selection: Some(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident {
-                            value: "dsize".to_string(),
-                            quote_style: None
-                        })),
+                        left: Box::new(Expr::Identifier(
+                            Ident {
+                                value: "dsize".to_string(),
+                                quote_style: None
+                            }
+                            .empty_span()
+                        )),
                         op: BinaryOperator::Gt,
                         right: Box::new(Expr::Value(Value::Placeholder("$2".to_string())))
                     })
@@ -1575,10 +1587,13 @@ fn parse_pg_on_conflict() {
                         value: Expr::Value(Value::Placeholder("$1".to_string()))
                     },],
                     selection: Some(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident {
-                            value: "dsize".to_string(),
-                            quote_style: None
-                        })),
+                        left: Box::new(Expr::Identifier(
+                            Ident {
+                                value: "dsize".to_string(),
+                                quote_style: None
+                            }
+                            .empty_span()
+                        )),
                         op: BinaryOperator::Gt,
                         right: Box::new(Expr::Value(Value::Placeholder("$2".to_string())))
                     })
@@ -1599,7 +1614,7 @@ fn parse_pg_returning() {
         Statement::Insert { returning, .. } => {
             assert_eq!(
                 Some(vec![SelectItem::UnnamedExpr(Expr::Identifier(
-                    "did".into()
+                    Ident::new("did").empty_span()
                 )),]),
                 returning
             );
@@ -1617,14 +1632,14 @@ fn parse_pg_returning() {
             assert_eq!(
                 Some(vec![
                     SelectItem::ExprWithAlias {
-                        expr: Expr::Identifier("temp_lo".into()),
+                        expr: Expr::Identifier(Ident::new("temp_lo").empty_span()),
                         alias: "lo".into()
                     },
                     SelectItem::ExprWithAlias {
-                        expr: Expr::Identifier("temp_hi".into()),
+                        expr: Expr::Identifier(Ident::new("temp_hi").empty_span()),
                         alias: "hi".into()
                     },
-                    SelectItem::UnnamedExpr(Expr::Identifier("prcp".into())),
+                    SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("prcp").empty_span())),
                 ]),
                 returning
             );
@@ -1661,9 +1676,9 @@ fn parse_pg_binary_ops() {
         let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
                 op: op.clone(),
-                right: Box::new(Expr::Identifier(Ident::new("b"))),
+                right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
             }),
             select.projection[0]
         );
@@ -1685,7 +1700,7 @@ fn parse_pg_unary_ops() {
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: *op,
-                expr: Box::new(Expr::Identifier(Ident::new("a"))),
+                expr: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             }),
             select.projection[0]
         );
@@ -1701,7 +1716,7 @@ fn parse_pg_postfix_factorial() {
         assert_eq!(
             SelectItem::UnnamedExpr(Expr::UnaryOp {
                 op: *op,
-                expr: Box::new(Expr::Identifier(Ident::new("a"))),
+                expr: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             }),
             select.projection[0]
         );
@@ -1740,7 +1755,7 @@ fn parse_array_index_expr() {
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
         &Expr::ArrayIndex {
-            obj: Box::new(Expr::Identifier(Ident::new("foo"))),
+            obj: Box::new(Expr::Identifier(Ident::new("foo").empty_span())),
             indexes: vec![num[0].clone()],
         },
         expr_from_projection(only(&select.projection)),
@@ -1750,7 +1765,7 @@ fn parse_array_index_expr() {
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
         &Expr::ArrayIndex {
-            obj: Box::new(Expr::Identifier(Ident::new("foo"))),
+            obj: Box::new(Expr::Identifier(Ident::new("foo").empty_span())),
             indexes: vec![num[0].clone(), num[0].clone()],
         },
         expr_from_projection(only(&select.projection)),
@@ -1760,17 +1775,23 @@ fn parse_array_index_expr() {
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
         &Expr::ArrayIndex {
-            obj: Box::new(Expr::Identifier(Ident::new("bar"))),
+            obj: Box::new(Expr::Identifier(Ident::new("bar").empty_span())),
             indexes: vec![
                 num[0].clone(),
-                Expr::Identifier(Ident {
-                    value: "baz".to_string(),
-                    quote_style: Some('"')
-                }),
-                Expr::Identifier(Ident {
-                    value: "fooz".to_string(),
-                    quote_style: Some('"')
-                })
+                Expr::Identifier(
+                    Ident {
+                        value: "baz".to_string(),
+                        quote_style: Some('"')
+                    }
+                    .empty_span()
+                ),
+                Expr::Identifier(
+                    Ident {
+                        value: "fooz".to_string(),
+                        quote_style: Some('"')
+                    }
+                    .empty_span()
+                )
             ],
         },
         expr_from_projection(only(&select.projection)),
@@ -2107,7 +2128,7 @@ fn test_json() {
     let select = pg().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("params"))),
+            left: Box::new(Expr::Identifier(Ident::new("params").empty_span())),
             operator: JsonOperator::LongArrow,
             right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()))),
         }),
@@ -2118,7 +2139,7 @@ fn test_json() {
     let select = pg().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("params"))),
+            left: Box::new(Expr::Identifier(Ident::new("params").empty_span())),
             operator: JsonOperator::Arrow,
             right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()))),
         }),
@@ -2129,7 +2150,7 @@ fn test_json() {
     let select = pg().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("info"))),
+            left: Box::new(Expr::Identifier(Ident::new("info").empty_span())),
             operator: JsonOperator::Arrow,
             right: Box::new(Expr::JsonAccess {
                 left: Box::new(Expr::Value(Value::SingleQuotedString("items".to_string()))),
@@ -2146,7 +2167,7 @@ fn test_json() {
     let select = pg().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("info"))),
+            left: Box::new(Expr::Identifier(Ident::new("info").empty_span())),
             operator: JsonOperator::HashArrow,
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "{a,b,c}".to_string()
@@ -2159,7 +2180,7 @@ fn test_json() {
     let select = pg().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("info"))),
+            left: Box::new(Expr::Identifier(Ident::new("info").empty_span())),
             operator: JsonOperator::HashLongArrow,
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "{a,b,c}".to_string()
@@ -2172,7 +2193,7 @@ fn test_json() {
     let select = pg().verified_only_select(sql);
     assert_eq!(
         Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("info"))),
+            left: Box::new(Expr::Identifier(Ident::new("info").empty_span())),
             operator: JsonOperator::AtArrow,
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "{\"a\": 1}".to_string()
@@ -2189,7 +2210,7 @@ fn test_json() {
                 "{\"a\": 1}".to_string()
             ))),
             operator: JsonOperator::ArrowAt,
-            right: Box::new(Expr::Identifier(Ident::new("info"))),
+            right: Box::new(Expr::Identifier(Ident::new("info").empty_span())),
         },
         select.selection.unwrap(),
     );
@@ -2198,7 +2219,7 @@ fn test_json() {
     let select = pg().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::from("info"))),
+            left: Box::new(Expr::Identifier(Ident::from("info").empty_span())),
             operator: JsonOperator::HashMinus,
             right: Box::new(Expr::Array(Array {
                 elem: vec![
@@ -2215,7 +2236,7 @@ fn test_json() {
     let select = pg().verified_only_select(sql);
     assert_eq!(
         Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::from("info"))),
+            left: Box::new(Expr::Identifier(Ident::from("info").empty_span())),
             operator: JsonOperator::AtQuestion,
             right: Box::new(Expr::Value(Value::SingleQuotedString("$.a".to_string())),),
         },
@@ -2226,7 +2247,7 @@ fn test_json() {
     let select = pg().verified_only_select(sql);
     assert_eq!(
         Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::from("info"))),
+            left: Box::new(Expr::Identifier(Ident::from("info").empty_span())),
             operator: JsonOperator::AtAt,
             right: Box::new(Expr::Value(Value::SingleQuotedString("$.a".to_string())),),
         },
@@ -2523,10 +2544,13 @@ fn parse_custom_operator() {
     assert_eq!(
         select.selection,
         Some(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident {
-                value: "relname".into(),
-                quote_style: None,
-            })),
+            left: Box::new(Expr::Identifier(
+                Ident {
+                    value: "relname".into(),
+                    quote_style: None,
+                }
+                .empty_span()
+            )),
             op: BinaryOperator::PGCustomBinaryOperator(vec![
                 "database".into(),
                 "pg_catalog".into(),
@@ -2542,10 +2566,13 @@ fn parse_custom_operator() {
     assert_eq!(
         select.selection,
         Some(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident {
-                value: "relname".into(),
-                quote_style: None,
-            })),
+            left: Box::new(Expr::Identifier(
+                Ident {
+                    value: "relname".into(),
+                    quote_style: None,
+                }
+                .empty_span()
+            )),
             op: BinaryOperator::PGCustomBinaryOperator(vec!["pg_catalog".into(), "~".into()]),
             right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
         })
@@ -2557,10 +2584,13 @@ fn parse_custom_operator() {
     assert_eq!(
         select.selection,
         Some(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident {
-                value: "relname".into(),
-                quote_style: None,
-            })),
+            left: Box::new(Expr::Identifier(
+                Ident {
+                    value: "relname".into(),
+                    quote_style: None,
+                }
+                .empty_span()
+            )),
             op: BinaryOperator::PGCustomBinaryOperator(vec!["~".into()]),
             right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
         })
@@ -2942,7 +2972,10 @@ fn parse_delimited_identifiers() {
     );
     match &select.projection[2] {
         SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
+            assert_eq!(
+                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                expr
+            );
             assert_eq!(&Ident::with_quote('"', "column alias"), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
@@ -2983,7 +3016,7 @@ fn parse_like() {
         let select = pg().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -2999,7 +3032,7 @@ fn parse_like() {
         let select = pg().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -3016,7 +3049,7 @@ fn parse_like() {
         let select = pg().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -3038,7 +3071,7 @@ fn parse_similar_to() {
         let select = pg().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -3054,7 +3087,7 @@ fn parse_similar_to() {
         let select = pg().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -3070,7 +3103,7 @@ fn parse_similar_to() {
         let select = pg().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -3128,9 +3161,9 @@ fn parse_create_function() {
                 language: Some("SQL".into()),
                 behavior: Some(FunctionBehavior::Immutable),
                 return_: Some(Expr::BinaryOp {
-                    left: Box::new(Expr::Identifier("a".into())),
+                    left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
                     op: BinaryOperator::Plus,
-                    right: Box::new(Expr::Identifier("b".into())),
+                    right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
                 }),
                 ..Default::default()
             },
@@ -3340,10 +3373,10 @@ fn parse_select_group_by_grouping_sets() {
     );
     assert_eq!(
         GroupByExpr::Expressions(vec![
-            Expr::Identifier(Ident::new("size")),
+            Expr::Identifier(Ident::new("size").empty_span()),
             Expr::GroupingSets(vec![
-                vec![Expr::Identifier(Ident::new("brand"))],
-                vec![Expr::Identifier(Ident::new("size"))],
+                vec![Expr::Identifier(Ident::new("brand").empty_span())],
+                vec![Expr::Identifier(Ident::new("size").empty_span())],
                 vec![],
             ]),
         ]),
@@ -3358,10 +3391,10 @@ fn parse_select_group_by_rollup() {
     );
     assert_eq!(
         GroupByExpr::Expressions(vec![
-            Expr::Identifier(Ident::new("size")),
+            Expr::Identifier(Ident::new("size").empty_span()),
             Expr::Rollup(vec![
-                vec![Expr::Identifier(Ident::new("brand"))],
-                vec![Expr::Identifier(Ident::new("size"))],
+                vec![Expr::Identifier(Ident::new("brand").empty_span())],
+                vec![Expr::Identifier(Ident::new("size").empty_span())],
             ]),
         ]),
         select.group_by
@@ -3375,10 +3408,10 @@ fn parse_select_group_by_cube() {
     );
     assert_eq!(
         GroupByExpr::Expressions(vec![
-            Expr::Identifier(Ident::new("size")),
+            Expr::Identifier(Ident::new("size").empty_span()),
             Expr::Cube(vec![
-                vec![Expr::Identifier(Ident::new("brand"))],
-                vec![Expr::Identifier(Ident::new("size"))],
+                vec![Expr::Identifier(Ident::new("brand").empty_span())],
+                vec![Expr::Identifier(Ident::new("size").empty_span())],
             ]),
         ]),
         select.group_by
@@ -3488,9 +3521,9 @@ fn parse_join_constraint_unnest_alias() {
                 with_offset_alias: None
             },
             join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier("c1".into())),
+                left: Box::new(Expr::Identifier(Ident::new("c1").empty_span())),
                 op: BinaryOperator::Eq,
-                right: Box::new(Expr::Identifier("c2".into())),
+                right: Box::new(Expr::Identifier(Ident::new("c2").empty_span())),
             })),
         }]
     );

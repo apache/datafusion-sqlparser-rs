@@ -17,7 +17,7 @@
 
 use sqlparser::ast::{
     CreateFunctionBody, CreateFunctionUsing, Expr, Function, FunctionDefinition, Ident, ObjectName,
-    SelectItem, Statement, TableFactor, UnaryOperator, Value,
+    SelectItem, SpanWrapped, Statement, TableFactor, UnaryOperator, Value,
 };
 use sqlparser::dialect::{GenericDialect, HiveDialect};
 use sqlparser::parser::ParserError;
@@ -224,7 +224,7 @@ fn set_statement_with_minus() {
             ]),
             value: vec![Expr::UnaryOp {
                 op: UnaryOperator::Minus,
-                expr: Box::new(Expr::Identifier(Ident::new("Xmx4g")))
+                expr: Box::new(Expr::Identifier(Ident::new("Xmx4g").empty_span()))
             }],
         }
     );
@@ -357,7 +357,10 @@ fn parse_delimited_identifiers() {
     );
     match &select.projection[2] {
         SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
+            assert_eq!(
+                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                expr
+            );
             assert_eq!(&Ident::with_quote('"', "column alias"), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
@@ -378,7 +381,7 @@ fn parse_like() {
         let select = hive().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -394,7 +397,7 @@ fn parse_like() {
         let select = hive().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -411,7 +414,7 @@ fn parse_like() {
         let select = hive().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -433,7 +436,7 @@ fn parse_similar_to() {
         let select = hive().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -449,7 +452,7 @@ fn parse_similar_to() {
         let select = hive().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -465,7 +468,7 @@ fn parse_similar_to() {
         let select = hive().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),

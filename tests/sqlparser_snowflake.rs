@@ -165,7 +165,7 @@ fn parse_array() {
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         &Expr::Cast {
-            expr: Box::new(Expr::Identifier(Ident::new("a"))),
+            expr: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             data_type: DataType::Array(None),
             format: None,
         },
@@ -185,7 +185,7 @@ fn parse_json_using_colon() {
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             operator: JsonOperator::Colon,
             right: Box::new(Expr::Value(Value::UnQuotedString("b".to_string()))),
         }),
@@ -196,7 +196,7 @@ fn parse_json_using_colon() {
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             operator: JsonOperator::Colon,
             right: Box::new(Expr::Value(Value::UnQuotedString("type".to_string()))),
         }),
@@ -207,7 +207,7 @@ fn parse_json_using_colon() {
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
         SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             operator: JsonOperator::Colon,
             right: Box::new(Expr::Value(Value::UnQuotedString("location".to_string()))),
         }),
@@ -264,7 +264,10 @@ fn parse_delimited_identifiers() {
     );
     match &select.projection[2] {
         SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
+            assert_eq!(
+                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                expr
+            );
             assert_eq!(&Ident::with_quote('"', "column alias"), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
@@ -285,7 +288,7 @@ fn parse_like() {
         let select = snowflake().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -301,7 +304,7 @@ fn parse_like() {
         let select = snowflake().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -318,7 +321,7 @@ fn parse_like() {
         let select = snowflake().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -340,7 +343,7 @@ fn parse_similar_to() {
         let select = snowflake().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -356,7 +359,7 @@ fn parse_similar_to() {
         let select = snowflake().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -372,7 +375,7 @@ fn parse_similar_to() {
         let select = snowflake().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),

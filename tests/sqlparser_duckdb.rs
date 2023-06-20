@@ -78,9 +78,9 @@ fn test_create_macro() {
         name: ObjectName(vec![Ident::new("schema"), Ident::new("add")]),
         args: Some(vec![MacroArg::new("a"), MacroArg::new("b")]),
         definition: MacroDefinition::Expr(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             op: BinaryOperator::Plus,
-            right: Box::new(Expr::Identifier(Ident::new("b"))),
+            right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
         }),
     };
     assert_eq!(expected, macro_);
@@ -101,9 +101,9 @@ fn test_create_macro_default_args() {
             },
         ]),
         definition: MacroDefinition::Expr(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(Ident::new("a"))),
+            left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             op: BinaryOperator::Plus,
-            right: Box::new(Expr::Identifier(Ident::new("b"))),
+            right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
         }),
     };
     assert_eq!(expected, macro_);

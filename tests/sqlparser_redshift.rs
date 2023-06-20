@@ -23,10 +23,13 @@ fn test_square_brackets_over_db_schema_table_name() {
     let select = redshift().verified_only_select("SELECT [col1] FROM [test_schema].[test_table]");
     assert_eq!(
         select.projection[0],
-        SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-            value: "col1".to_string(),
-            quote_style: Some('[')
-        })),
+        SelectItem::UnnamedExpr(Expr::Identifier(
+            Ident {
+                value: "col1".to_string(),
+                quote_style: Some('[')
+            }
+            .empty_span()
+        )),
     );
     assert_eq!(
         select.from[0],
@@ -69,10 +72,13 @@ fn test_double_quotes_over_db_schema_table_name() {
         redshift().verified_only_select("SELECT \"col1\" FROM \"test_schema\".\"test_table\"");
     assert_eq!(
         select.projection[0],
-        SelectItem::UnnamedExpr(Expr::Identifier(Ident {
-            value: "col1".to_string(),
-            quote_style: Some('"')
-        })),
+        SelectItem::UnnamedExpr(Expr::Identifier(
+            Ident {
+                value: "col1".to_string(),
+                quote_style: Some('"')
+            }
+            .empty_span()
+        )),
     );
     assert_eq!(
         select.from[0],
@@ -146,7 +152,10 @@ fn parse_delimited_identifiers() {
     );
     match &select.projection[2] {
         SelectItem::ExprWithAlias { expr, alias } => {
-            assert_eq!(&Expr::Identifier(Ident::with_quote('"', "simple id")), expr);
+            assert_eq!(
+                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                expr
+            );
             assert_eq!(&Ident::with_quote('"', "column alias"), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
@@ -167,7 +176,7 @@ fn parse_like() {
         let select = redshift().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -183,7 +192,7 @@ fn parse_like() {
         let select = redshift().verified_only_select(sql);
         assert_eq!(
             Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -200,7 +209,7 @@ fn parse_like() {
         let select = redshift().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::Like {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -222,7 +231,7 @@ fn parse_similar_to() {
         let select = redshift().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
@@ -238,7 +247,7 @@ fn parse_similar_to() {
         let select = redshift().verified_only_select(sql);
         assert_eq!(
             Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -254,7 +263,7 @@ fn parse_similar_to() {
         let select = redshift().verified_only_select(sql);
         assert_eq!(
             Expr::IsNull(Box::new(Expr::SimilarTo {
-                expr: Box::new(Expr::Identifier(Ident::new("name"))),
+                expr: Box::new(Expr::Identifier(Ident::new("name").empty_span())),
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
@@ -278,7 +287,7 @@ fn test_sharp() {
     let sql = "SELECT #_of_values";
     let select = redshift().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("#_of_values"))),
+        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("#_of_values").empty_span())),
         select.projection[0]
     );
 }

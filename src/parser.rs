@@ -225,7 +225,7 @@ impl<'a> Parser<'a> {
     /// let dialect = GenericDialect{};
     /// let statements = Parser::new(&dialect)
     ///   .try_with_sql("SELECT * FROM foo")?
-    ///   .parse_statements(false)?;
+    ///   .parse_statements()?;
     /// # Ok(())
     /// # }
     /// ```
@@ -254,7 +254,7 @@ impl<'a> Parser<'a> {
     /// let result = Parser::new(&dialect)
     ///   .with_recursion_limit(1)
     ///   .try_with_sql("SELECT * FROM foo WHERE (a OR (b OR (c OR d)))")?
-    ///   .parse_statements(false);
+    ///   .parse_statements();
     ///   assert_eq!(result, Err(ParserError::RecursionLimitExceeded));
     /// # Ok(())
     /// # }
@@ -279,7 +279,7 @@ impl<'a> Parser<'a> {
     /// let result = Parser::new(&dialect)
     ///   .with_options(ParserOptions { trailing_commas: true })
     ///   .try_with_sql("SELECT a, b, COUNT(*), FROM foo GROUP BY a, b,")?
-    ///   .parse_statements(false);
+    ///   .parse_statements();
     ///   assert!(matches!(result, Ok(_)));
     /// # Ok(())
     /// # }
@@ -332,12 +332,12 @@ impl<'a> Parser<'a> {
     /// let statements = Parser::new(&dialect)
     ///   // Parse a SQL string with 2 separate statements
     ///   .try_with_sql("SELECT * FROM foo; SELECT * FROM bar;")?
-    ///   .parse_statements(false)?;
+    ///   .parse_statements()?;
     /// assert_eq!(statements.len(), 2);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn parse_statements(&mut self, break_on_end: bool) -> Result<Vec<Statement>, ParserError> {
+    pub fn parse_statements(&mut self) -> Result<Vec<Statement>, ParserError> {
         let mut stmts = Vec::new();
         let mut expecting_statement_delimiter = false;
         loop {
@@ -346,15 +346,12 @@ impl<'a> Parser<'a> {
                 expecting_statement_delimiter = false;
             }
 
-            if self.peek_token() == Token::EOF {
-                break;
-            }
-            if let true = break_on_end {
-                if let Token::Word(word) = self.peek_token().token {
-                    if word.keyword == Keyword::END {
-                        break;
-                    }
-                }
+            match self.peek_token().token {
+                Token::EOF => break,
+
+                // end of statement
+                Token::Word(word) if word.keyword == Keyword::END => break,
+                _ => {}
             }
 
             if expecting_statement_delimiter {
@@ -384,9 +381,7 @@ impl<'a> Parser<'a> {
     /// # }
     /// ```
     pub fn parse_sql(dialect: &dyn Dialect, sql: &str) -> Result<Vec<Statement>, ParserError> {
-        Parser::new(dialect)
-            .try_with_sql(sql)?
-            .parse_statements(false)
+        Parser::new(dialect).try_with_sql(sql)?.parse_statements()
     }
 
     /// Parse a single top-level statement (such as SELECT, INSERT, CREATE, etc.),
@@ -7077,7 +7072,7 @@ impl<'a> Parser<'a> {
         let params = self.parse_optional_procedure_parameters()?;
         self.expect_keyword(Keyword::AS)?;
         self.expect_keyword(Keyword::BEGIN)?;
-        let statements = self.parse_statements(true)?;
+        let statements = self.parse_statements()?;
         self.expect_keyword(Keyword::END)?;
         Ok(Statement::CreateProcedure {
             name,

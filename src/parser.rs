@@ -799,7 +799,7 @@ impl<'a> Parser<'a> {
                 };
                 Ok(Expr::UnaryOp {
                     op,
-                    expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
+                    expr: Box::new(self.parse_subexpr(Self::MUL_DIV_MOD_OP_PREC)?),
                 })
             }
             tok @ Token::DoubleExclamationMark
@@ -1964,6 +1964,7 @@ impl<'a> Parser<'a> {
     }
 
     // use https://www.postgresql.org/docs/7.0/operators.htm#AEN2026 as a reference
+    const MUL_DIV_MOD_OP_PREC: u8 = 40;
     const PLUS_MINUS_PREC: u8 = 30;
     const XOR_PREC: u8 = 24;
     const TIME_ZONE_PREC: u8 = 20;
@@ -1973,8 +1974,6 @@ impl<'a> Parser<'a> {
     const UNARY_NOT_PREC: u8 = 15;
     const AND_PREC: u8 = 10;
     const OR_PREC: u8 = 5;
-
-    const DIV_OP_PREC: u8 = 40;
 
     /// Get the precedence of the next token
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
@@ -2025,7 +2024,7 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(Self::BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::DIV => Ok(Self::DIV_OP_PREC),
+            Token::Word(w) if w.keyword == Keyword::DIV => Ok(Self::MUL_DIV_MOD_OP_PREC),
             Token::Eq
             | Token::Lt
             | Token::LtEq
@@ -2043,7 +2042,7 @@ impl<'a> Parser<'a> {
             Token::Ampersand => Ok(23),
             Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
             Token::Mul | Token::Div | Token::DuckIntDiv | Token::Mod | Token::StringConcat => {
-                Ok(40)
+                Ok(Self::MUL_DIV_MOD_OP_PREC)
             }
             Token::DoubleColon => Ok(50),
             Token::Colon => Ok(50),

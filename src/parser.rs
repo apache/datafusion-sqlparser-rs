@@ -346,9 +346,14 @@ impl<'a> Parser<'a> {
                 expecting_statement_delimiter = false;
             }
 
-            if self.peek_token() == Token::EOF {
-                break;
+            match self.peek_token().token {
+                Token::EOF => break,
+
+                // end of statement
+                Token::Word(word) if word.keyword == Keyword::END => break,
+                _ => {}
             }
+
             if expecting_statement_delimiter {
                 return self.expected("end of statement", self.peek_token());
             }
@@ -2324,6 +2329,7 @@ impl<'a> Parser<'a> {
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
         let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
+        let or_alter = self.parse_keywords(&[Keyword::OR, Keyword::ALTER]);
         let local = self.parse_one_of_keywords(&[Keyword::LOCAL]).is_some();
         let global = self.parse_one_of_keywords(&[Keyword::GLOBAL]).is_some();
         let transient = self.parse_one_of_keywords(&[Keyword::TRANSIENT]).is_some();
@@ -2369,6 +2375,8 @@ impl<'a> Parser<'a> {
             self.parse_create_sequence(temporary)
         } else if self.parse_keyword(Keyword::TYPE) {
             self.parse_create_type()
+        } else if self.parse_keyword(Keyword::PROCEDURE) {
+            self.parse_create_procedure(or_alter)
         } else {
             self.expected("an object type after CREATE", self.peek_token())
         }
@@ -3503,6 +3511,28 @@ impl<'a> Parser<'a> {
             .build())
     }
 
+    pub fn parse_optional_procedure_parameters(
+        &mut self,
+    ) -> Result<Option<Vec<ProcedureParam>>, ParserError> {
+        let mut params = vec![];
+        if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
+            return Ok(Some(params));
+        }
+        loop {
+            if let Token::Word(_) = self.peek_token().token {
+                params.push(self.parse_procedure_param()?)
+            }
+            let comma = self.consume_token(&Token::Comma);
+            if self.consume_token(&Token::RParen) {
+                // allow a trailing comma, even though it's not in standard
+                break;
+            } else if !comma {
+                return self.expected("',' or ')' after parameter definition", self.peek_token());
+            }
+        }
+        Ok(Some(params))
+    }
+
     pub fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
         let mut columns = vec![];
         let mut constraints = vec![];
@@ -3528,6 +3558,12 @@ impl<'a> Parser<'a> {
         }
 
         Ok((columns, constraints))
+    }
+
+    pub fn parse_procedure_param(&mut self) -> Result<ProcedureParam, ParserError> {
+        let name = self.parse_identifier()?;
+        let data_type = self.parse_data_type()?;
+        Ok(ProcedureParam { name, data_type })
     }
 
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
@@ -7080,6 +7116,21 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let window_spec = self.parse_window_spec()?;
         Ok(NamedWindowDefinition(ident, window_spec))
+    }
+
+    pub fn parse_create_procedure(&mut self, or_alter: bool) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name()?;
+        let params = self.parse_optional_procedure_parameters()?;
+        self.expect_keyword(Keyword::AS)?;
+        self.expect_keyword(Keyword::BEGIN)?;
+        let statements = self.parse_statements()?;
+        self.expect_keyword(Keyword::END)?;
+        Ok(Statement::CreateProcedure {
+            name,
+            or_alter,
+            params,
+            body: statements,
+        })
     }
 
     pub fn parse_window_spec(&mut self) -> Result<WindowSpec, ParserError> {

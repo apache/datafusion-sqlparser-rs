@@ -30,8 +30,8 @@ pub use self::data_type::{
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
-    ColumnOptionDef, GeneratedAs, IndexType, KeyOrIndexDisplay, ReferentialAction, TableConstraint,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
+    ColumnOptionDef, GeneratedAs, IndexType, KeyOrIndexDisplay, ProcedureParam, ReferentialAction,
+    TableConstraint, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
@@ -1580,6 +1580,15 @@ pub enum Statement {
         params: CreateFunctionBody,
     },
     /// ```sql
+    /// CREATE PROCEDURE
+    /// ```
+    CreateProcedure {
+        or_alter: bool,
+        name: ObjectName,
+        params: Option<Vec<ProcedureParam>>,
+        body: Vec<Statement>,
+    },
+    /// ```sql
     /// CREATE MACRO
     /// ```
     ///
@@ -2110,6 +2119,30 @@ impl fmt::Display for Statement {
                 }
                 write!(f, "{params}")?;
                 Ok(())
+            }
+            Statement::CreateProcedure {
+                name,
+                or_alter,
+                params,
+                body,
+            } => {
+                write!(
+                    f,
+                    "CREATE {or_alter}PROCEDURE {name}",
+                    or_alter = if *or_alter { "OR ALTER " } else { "" },
+                    name = name
+                )?;
+
+                if let Some(p) = params {
+                    if !p.is_empty() {
+                        write!(f, " ({})", display_comma_separated(p))?;
+                    }
+                }
+                write!(
+                    f,
+                    " AS BEGIN {body} END",
+                    body = display_separated(body, "; ")
+                )
             }
             Statement::CreateMacro {
                 or_replace,

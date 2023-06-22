@@ -58,6 +58,13 @@ fn parse_mssql_delimited_identifiers() {
 #[test]
 fn parse_create_procedure() {
     let sql = "CREATE OR ALTER PROCEDURE test (@foo INT, @bar VARCHAR(256)) AS BEGIN SELECT 1 END";
+
+    #[cfg(feature = "bigdecimal")]
+    let one = Value::Number(bigdecimal::BigDecimal::from(1), false);
+
+    #[cfg(not(feature = "bigdecimal"))]
+    let one = Value::Number("1".to_string(), false);
+
     assert_eq!(
         ms().verified_stmt(sql),
         Statement::CreateProcedure {
@@ -72,10 +79,7 @@ fn parse_create_procedure() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(Value::Number(
-                        "1".to_string(),
-                        false
-                    )))],
+                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(one))],
                     into: None,
                     from: vec![],
                     lateral_views: vec![],

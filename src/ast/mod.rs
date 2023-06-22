@@ -2115,13 +2115,19 @@ impl fmt::Display for Statement {
             } => {
                 write!(
                     f,
-                    "CREATE {or_alter}PROCEDURE {name} {params}AS BEGIN {body} END",
+                    "CREATE {or_alter}PROCEDURE {name}",
                     or_alter = if *or_alter { "OR ALTER " } else { "" },
-                    name = name,
-                    params = match params {
-                        Some(p) if !p.is_empty() => format!("({}) ", display_comma_separated(p)),
-                        _ => "".to_string(),
-                    },
+                    name = name
+                )?;
+
+                if let Some(p) = params {
+                    if !p.is_empty() {
+                        write!(f, " ({})", display_comma_separated(p))?;
+                    }
+                }
+                write!(
+                    f,
+                    " AS BEGIN {body} END",
                     body = display_separated(body, ",")
                 )
             }

@@ -1074,7 +1074,7 @@ fn parse_compound_expr_2() {
 }
 
 #[test]
-fn parse_unary_math() {
+fn parse_unary_math_with_plus() {
     use self::Expr::*;
     let sql = "-a + -b";
     assert_eq!(
@@ -1084,6 +1084,26 @@ fn parse_unary_math() {
                 expr: Box::new(Identifier(Ident::new("a"))),
             }),
             op: BinaryOperator::Plus,
+            right: Box::new(UnaryOp {
+                op: UnaryOperator::Minus,
+                expr: Box::new(Identifier(Ident::new("b"))),
+            }),
+        },
+        verified_expr(sql)
+    );
+}
+
+#[test]
+fn parse_unary_math_with_multiply() {
+    use self::Expr::*;
+    let sql = "-a * -b";
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(UnaryOp {
+                op: UnaryOperator::Minus,
+                expr: Box::new(Identifier(Ident::new("a"))),
+            }),
+            op: BinaryOperator::Multiply,
             right: Box::new(UnaryOp {
                 op: UnaryOperator::Minus,
                 expr: Box::new(Identifier(Ident::new("b"))),

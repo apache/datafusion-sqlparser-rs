@@ -28,4 +28,8 @@ impl Dialect for GenericDialect {
             || ch == '#'
             || ch == '_'
     }
+
+    fn supports_group_by_expr(&self) -> bool {
+        true
+    }
 }

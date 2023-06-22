@@ -1589,6 +1589,19 @@ pub enum Statement {
         body: Vec<Statement>,
     },
     /// ```sql
+    /// CREATE MACRO
+    /// ```
+    ///
+    /// Supported variants:
+    /// 1. [DuckDB](https://duckdb.org/docs/sql/statements/create_macro)
+    CreateMacro {
+        or_replace: bool,
+        temporary: bool,
+        name: ObjectName,
+        args: Option<Vec<MacroArg>>,
+        definition: MacroDefinition,
+    },
+    /// ```sql
     /// CREATE STAGE
     /// ```
     /// See <https://docs.snowflake.com/en/sql-reference/sql/create-stage>
@@ -2130,6 +2143,28 @@ impl fmt::Display for Statement {
                     " AS BEGIN {body} END",
                     body = display_separated(body, "; ")
                 )
+            }
+            Statement::CreateMacro {
+                or_replace,
+                temporary,
+                name,
+                args,
+                definition,
+            } => {
+                write!(
+                    f,
+                    "CREATE {or_replace}{temp}MACRO {name}",
+                    temp = if *temporary { "TEMPORARY " } else { "" },
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                )?;
+                if let Some(args) = args {
+                    write!(f, "({})", display_comma_separated(args))?;
+                }
+                match definition {
+                    MacroDefinition::Expr(expr) => write!(f, " AS {expr}")?,
+                    MacroDefinition::Table(query) => write!(f, " AS TABLE {query}")?,
+                }
+                Ok(())
             }
             Statement::CreateView {
                 name,
@@ -4334,6 +4369,56 @@ impl fmt::Display for CreateFunctionUsing {
             CreateFunctionUsing::File(uri) => write!(f, "FILE '{uri}'"),
             CreateFunctionUsing::Archive(uri) => write!(f, "ARCHIVE '{uri}'"),
         }
+    }
+}
+
+/// `NAME = <EXPR>` arguments for DuckDB macros
+///
+/// See [Create Macro - DuckDB](https://duckdb.org/docs/sql/statements/create_macro)
+/// for more details
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MacroArg {
+    pub name: Ident,
+    pub default_expr: Option<Expr>,
+}
+
+impl MacroArg {
+    /// Returns an argument with name.
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.into(),
+            default_expr: None,
+        }
+    }
+}
+
+impl fmt::Display for MacroArg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(default_expr) = &self.default_expr {
+            write!(f, " := {default_expr}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MacroDefinition {
+    Expr(Expr),
+    Table(Query),
+}
+
+impl fmt::Display for MacroDefinition {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MacroDefinition::Expr(expr) => write!(f, "{expr}")?,
+            MacroDefinition::Table(query) => write!(f, "{query}")?,
+        }
+        Ok(())
     }
 }
 

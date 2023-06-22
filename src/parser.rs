@@ -980,7 +980,7 @@ impl<'a> Parser<'a> {
     /// parse a group by expr. a group by expr can be one of group sets, roll up, cube, or simple
     /// expr.
     fn parse_group_by_expr(&mut self) -> Result<Expr, ParserError> {
-        if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) {
+        if self.dialect.supports_group_by_expr() {
             if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
                 self.expect_token(&Token::LParen)?;
                 let result = self.parse_comma_separated(|p| p.parse_tuple(false, true))?;
@@ -2352,6 +2352,8 @@ impl<'a> Parser<'a> {
             self.parse_create_external_table(or_replace)
         } else if self.parse_keyword(Keyword::FUNCTION) {
             self.parse_create_function(or_replace, temporary)
+        } else if self.parse_keyword(Keyword::MACRO) {
+            self.parse_create_macro(or_replace, temporary)
         } else if or_replace {
             self.expected(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION after CREATE OR REPLACE",
@@ -2632,6 +2634,8 @@ impl<'a> Parser<'a> {
                 return_type,
                 params,
             })
+        } else if dialect_of!(self is DuckDbDialect) {
+            self.parse_create_macro(or_replace, temporary)
         } else {
             self.prev_token();
             self.expected("an object type after CREATE", self.peek_token())
@@ -2705,6 +2709,53 @@ impl<'a> Parser<'a> {
                 return Ok(body);
             }
         }
+    }
+
+    pub fn parse_create_macro(
+        &mut self,
+        or_replace: bool,
+        temporary: bool,
+    ) -> Result<Statement, ParserError> {
+        if dialect_of!(self is DuckDbDialect |  GenericDialect) {
+            let name = self.parse_object_name()?;
+            self.expect_token(&Token::LParen)?;
+            let args = if self.consume_token(&Token::RParen) {
+                self.prev_token();
+                None
+            } else {
+                Some(self.parse_comma_separated(Parser::parse_macro_arg)?)
+            };
+
+            self.expect_token(&Token::RParen)?;
+            self.expect_keyword(Keyword::AS)?;
+
+            Ok(Statement::CreateMacro {
+                or_replace,
+                temporary,
+                name,
+                args,
+                definition: if self.parse_keyword(Keyword::TABLE) {
+                    MacroDefinition::Table(self.parse_query()?)
+                } else {
+                    MacroDefinition::Expr(self.parse_expr()?)
+                },
+            })
+        } else {
+            self.prev_token();
+            self.expected("an object type after CREATE", self.peek_token())
+        }
+    }
+
+    fn parse_macro_arg(&mut self) -> Result<MacroArg, ParserError> {
+        let name = self.parse_identifier()?;
+
+        let default_expr =
+            if self.consume_token(&Token::DuckAssignment) || self.consume_token(&Token::RArrow) {
+                Some(self.parse_expr()?)
+            } else {
+                None
+            };
+        Ok(MacroArg { name, default_expr })
     }
 
     pub fn parse_create_external_table(

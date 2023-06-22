@@ -2128,7 +2128,7 @@ impl fmt::Display for Statement {
                 write!(
                     f,
                     " AS BEGIN {body} END",
-                    body = display_separated(body, ",")
+                    body = display_separated(body, "; ")
                 )
             }
             Statement::CreateView {

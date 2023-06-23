@@ -70,6 +70,7 @@ pub struct CreateTableBuilder {
     pub on_commit: Option<OnCommit>,
     pub on_cluster: Option<String>,
     pub order_by: Option<Vec<Ident>>,
+    pub strict: bool,
 }
 
 impl CreateTableBuilder {
@@ -100,6 +101,7 @@ impl CreateTableBuilder {
             on_commit: None,
             on_cluster: None,
             order_by: None,
+            strict: false,
         }
     }
     pub fn or_replace(mut self, or_replace: bool) -> Self {
@@ -220,6 +222,11 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn strict(mut self, strict: bool) -> Self{
+        self.strict = strict;
+        self
+    }
+
     pub fn build(self) -> Statement {
         Statement::CreateTable {
             or_replace: self.or_replace,
@@ -247,6 +254,7 @@ impl CreateTableBuilder {
             on_commit: self.on_commit,
             on_cluster: self.on_cluster,
             order_by: self.order_by,
+            strict: self.strict,
         }
     }
 }
@@ -284,6 +292,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 on_commit,
                 on_cluster,
                 order_by,
+                strict,
             } => Ok(Self {
                 or_replace,
                 temporary,
@@ -310,6 +319,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 on_commit,
                 on_cluster,
                 order_by,
+                strict,
             }),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"

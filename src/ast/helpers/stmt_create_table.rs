@@ -222,7 +222,7 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn strict(mut self, strict: bool) -> Self{
+    pub fn strict(mut self, strict: bool) -> Self {
         self.strict = strict;
         self
     }

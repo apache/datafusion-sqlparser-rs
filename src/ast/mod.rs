@@ -1318,7 +1318,7 @@ pub enum Statement {
         order_by: Option<Vec<Ident>>,
         /// SQLite "STRICT" clause.
         /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
-        /// then strict typing rules apply to that table. 
+        /// then strict typing rules apply to that table.
         strict: bool,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`

@@ -15,6 +15,7 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 * Support `CREATE PROCEDURE` of MSSQL (#900) - Thanks  @delsehi
 * Support DuckDB's `CREATE MACRO` statements (#897) - Thanks @MartinNowak
 * Support for `CREATE TYPE (AS)` statements (#888) - Thanks @srijs
+* Support `STRICT` tables of sqlite (#903) - Thanks @parkma99
 
 ### Fixed
 * Fixed precedence of unary negation operator with operators: Mul, Div and Mod (#902) - Thanks  @izveigor

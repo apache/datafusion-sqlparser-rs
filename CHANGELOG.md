@@ -8,6 +8,21 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+
+## [0.35.0] 2023-06-23
+
+### Added
+* Support `CREATE PROCEDURE` of MSSQL (#900) - Thanks  @delsehi
+* Support DuckDB's `CREATE MACRO` statements (#897) - Thanks @MartinNowak
+* Support for `CREATE TYPE (AS)` statements (#888) - Thanks @srijs
+
+### Fixed
+* Fixed precedence of unary negation operator with operators: Mul, Div and Mod (#902) - Thanks  @izveigor
+
+### Changed
+* Add `support_group_by_expr` to `Dialect` trait (#896) - Thanks @jdye64
+* Update criterion requirement from `0.4` to `0.5` in `/sqlparser_bench` (#890) - Thanks @dependabot (!!)
+
 ## [0.34.0] 2023-05-19
 
 ### Added

@@ -247,7 +247,7 @@ fn parse_create_table_with_strict() {
     let sql = "CREATE TABLE Fruits (id TEXT NOT NULL PRIMARY KEY) STRICT";
     if let Statement::CreateTable { name, strict, .. } = sqlite().verified_stmt(sql) {
         assert_eq!(name.to_string(), "Fruits");
-        assert_eq!(strict, true);
+        assert!(strict);
     }
 }
 

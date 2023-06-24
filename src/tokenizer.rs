@@ -451,7 +451,7 @@ pub struct Tokenizer<'a> {
 }
 
 pub struct TokenizerOptions {
-    pub no_escape: bool,
+    pub no_escape: bool, // true when no-escape mode is enabled by the user
 }
 
 impl<'a> Tokenizer<'a> {

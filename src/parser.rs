@@ -318,9 +318,7 @@ impl<'a> Parser<'a> {
     /// See example on [`Parser::new()`] for an example
     pub fn try_with_sql(self, sql: &str) -> Result<Self, ParserError> {
         debug!("Parsing sql '{}'...", sql);
-        let tokenizer_options = TokenizerOptions {
-            no_escape: self.options.no_escape,
-        };
+        let tokenizer_options = TokenizerOptions::default().with_no_escape(self.options.no_escape);
         let mut tokenizer = Tokenizer::new(self.dialect, sql, &tokenizer_options);
         let tokens = tokenizer.tokenize()?;
         Ok(self.with_tokens(tokens))

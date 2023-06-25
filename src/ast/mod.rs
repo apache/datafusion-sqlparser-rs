@@ -1375,6 +1375,15 @@ pub enum Statement {
         name: ObjectName,
         operation: AlterIndexOperation,
     },
+    /// ALTER VIEW
+    AlterView {
+        /// View name
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+        name: ObjectName,
+        columns: Vec<Ident>,
+        query: Box<Query>,
+        with_options: Vec<SqlOption>,
+    },
     /// DROP
     Drop {
         /// The type of the object to drop: TABLE, VIEW, etc.
@@ -2533,6 +2542,21 @@ impl fmt::Display for Statement {
             }
             Statement::AlterIndex { name, operation } => {
                 write!(f, "ALTER INDEX {name} {operation}")
+            }
+            Statement::AlterView {
+                name,
+                columns,
+                query,
+                with_options,
+            } => {
+                write!(f, "ALTER VIEW {name}")?;
+                if !with_options.is_empty() {
+                    write!(f, " WITH ({})", display_comma_separated(with_options))?;
+                }
+                if !columns.is_empty() {
+                    write!(f, " ({})", display_comma_separated(columns))?;
+                }
+                write!(f, " AS {query}")
             }
             Statement::Drop {
                 object_type,

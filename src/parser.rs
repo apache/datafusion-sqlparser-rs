@@ -3898,8 +3898,11 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_alter(&mut self) -> Result<Statement, ParserError> {
-        let object_type = self.expect_one_of_keywords(&[Keyword::TABLE, Keyword::INDEX])?;
+        let object_type = self.expect_one_of_keywords(&[Keyword::VIEW, Keyword::TABLE, Keyword::INDEX])?;
         match object_type {
+            Keyword::VIEW => {
+                self.parse_alter_view()
+            }
             Keyword::TABLE => {
                 let _ = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
                 let table_name = self.parse_object_name()?;
@@ -4095,6 +4098,23 @@ impl<'a> Parser<'a> {
             // unreachable because expect_one_of_keywords used above
             _ => unreachable!(),
         }
+    }
+
+    pub fn parse_alter_view(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name()?;
+        let columns = self.parse_parenthesized_column_list(Optional, false)?;
+
+        let with_options = self.parse_options(Keyword::WITH)?;
+
+        self.expect_keyword(Keyword::AS)?;
+        let query = Box::new(self.parse_query()?);
+
+        Ok(Statement::AlterView {
+            name,
+            columns,
+            query,
+            with_options,
+        })
     }
 
     /// Parse a copy statement

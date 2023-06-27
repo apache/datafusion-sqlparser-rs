@@ -38,7 +38,8 @@ fn test_select_wildcard_with_exclude() {
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_exclude: Some(ExcludeSelectItem::Multiple(vec![Ident::new("col_a")])),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select =
@@ -49,7 +50,8 @@ fn test_select_wildcard_with_exclude() {
             opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("department_id"))),
             ..Default::default()
         },
-    );
+    )
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = duckdb()
@@ -60,7 +62,8 @@ fn test_select_wildcard_with_exclude() {
             Ident::new("employee_id"),
         ])),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 }
 
@@ -144,7 +147,8 @@ fn test_select_union_by_name() {
                 opt_except: None,
                 opt_rename: None,
                 opt_replace: None,
-            })],
+            })
+            .empty_span()],
             into: None,
             from: vec![TableWithJoins {
                 relation: TableFactor::Table {
@@ -178,7 +182,8 @@ fn test_select_union_by_name() {
                 opt_except: None,
                 opt_rename: None,
                 opt_replace: None,
-            })],
+            })
+            .empty_span()],
             into: None,
             from: vec![TableWithJoins {
                 relation: TableFactor::Table {
@@ -221,7 +226,8 @@ fn test_select_union_by_name() {
                 opt_except: None,
                 opt_rename: None,
                 opt_replace: None,
-            })],
+            })
+            .empty_span()],
             into: None,
             from: vec![TableWithJoins {
                 relation: TableFactor::Table {
@@ -255,7 +261,8 @@ fn test_select_union_by_name() {
                 opt_except: None,
                 opt_rename: None,
                 opt_replace: None,
-            })],
+            })
+            .empty_span()],
             into: None,
             from: vec![TableWithJoins {
                 relation: TableFactor::Table {

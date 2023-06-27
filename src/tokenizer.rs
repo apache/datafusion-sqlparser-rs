@@ -367,7 +367,7 @@ pub struct Location {
 }
 
 impl Location {
-    fn is_valid(&self) -> bool {
+    pub fn is_valid(&self) -> bool {
         self.line > 0 && self.column > 0
     }
     pub fn of(line: LineNumber, column: ColumnPosition) -> Self {

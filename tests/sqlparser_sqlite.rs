@@ -137,7 +137,7 @@ fn test_placeholder() {
     let ast = sqlite().verified_only_select(sql);
     assert_eq!(
         ast.projection[0],
-        UnnamedExpr(Expr::Value(Value::Placeholder("@xxx".into()))),
+        UnnamedExpr(Expr::Value(Value::Placeholder("@xxx".into())).empty_span()).empty_span(),
     );
 }
 

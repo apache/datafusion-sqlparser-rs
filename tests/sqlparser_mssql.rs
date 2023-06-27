@@ -100,7 +100,10 @@ fn parse_create_procedure() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))],
+                    projection: vec![SelectItem::UnnamedExpr(
+                        Expr::Value(number("1")).empty_span()
+                    )
+                    .empty_span()],
                     into: None,
                     from: vec![],
                     lateral_views: vec![],
@@ -314,7 +317,10 @@ fn parse_delimited_identifiers() {
             partitions: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert_eq!(
+                Ident::with_quote('"', "alias").empty_span(),
+                alias.unwrap().name
+            );
             assert!(args.is_none());
             assert!(with_hints.is_empty());
             assert!(version.is_none());
@@ -342,13 +348,13 @@ fn parse_delimited_identifiers() {
         }),
         expr_from_projection(&select.projection[1]),
     );
-    match &select.projection[2] {
+    match &select.projection[2].clone().unwrap() {
         SelectItem::ExprWithAlias { expr, alias } => {
             assert_eq!(
-                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()).empty_span(),
                 expr
             );
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+            assert_eq!(&Ident::with_quote('"', "column alias").empty_span(), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
     }
@@ -501,18 +507,22 @@ fn parse_substring_in_select() {
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         distinct: Some(Distinct::Distinct),
                         top: None,
-                        projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
-                            expr: Box::new(Expr::Identifier(
-                                Ident {
-                                    value: "description".to_string(),
-                                    quote_style: None
-                                }
-                                .empty_span()
-                            )),
-                            substring_from: Some(Box::new(Expr::Value(number("0")))),
-                            substring_for: Some(Box::new(Expr::Value(number("1")))),
-                            special: true,
-                        })],
+                        projection: vec![SelectItem::UnnamedExpr(
+                            Expr::Substring {
+                                expr: Box::new(Expr::Identifier(
+                                    Ident {
+                                        value: "description".to_string(),
+                                        quote_style: None
+                                    }
+                                    .empty_span()
+                                )),
+                                substring_from: Some(Box::new(Expr::Value(number("0")))),
+                                substring_for: Some(Box::new(Expr::Value(number("1")))),
+                                special: true,
+                            }
+                            .empty_span()
+                        )
+                        .empty_span()],
                         into: None,
                         from: vec![TableWithJoins {
                             relation: TableFactor::Table {

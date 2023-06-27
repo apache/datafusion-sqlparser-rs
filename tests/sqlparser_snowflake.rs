@@ -184,33 +184,45 @@ fn parse_json_using_colon() {
     let sql = "SELECT a:b FROM t";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
-            operator: JsonOperator::Colon,
-            right: Box::new(Expr::Value(Value::UnQuotedString("b".to_string()))),
-        }),
+        SelectItem::UnnamedExpr(
+            Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
+                operator: JsonOperator::Colon,
+                right: Box::new(Expr::Value(Value::UnQuotedString("b".to_string()))),
+            }
+            .empty_span()
+        )
+        .empty_span(),
         select.projection[0]
     );
 
     let sql = "SELECT a:type FROM t";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
-            operator: JsonOperator::Colon,
-            right: Box::new(Expr::Value(Value::UnQuotedString("type".to_string()))),
-        }),
+        SelectItem::UnnamedExpr(
+            Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
+                operator: JsonOperator::Colon,
+                right: Box::new(Expr::Value(Value::UnQuotedString("type".to_string()))),
+            }
+            .empty_span()
+        )
+        .empty_span(),
         select.projection[0]
     );
 
     let sql = "SELECT a:location FROM t";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
-            operator: JsonOperator::Colon,
-            right: Box::new(Expr::Value(Value::UnQuotedString("location".to_string()))),
-        }),
+        SelectItem::UnnamedExpr(
+            Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
+                operator: JsonOperator::Colon,
+                right: Box::new(Expr::Value(Value::UnQuotedString("location".to_string()))),
+            }
+            .empty_span()
+        )
+        .empty_span(),
         select.projection[0]
     );
 
@@ -234,7 +246,10 @@ fn parse_delimited_identifiers() {
             partitions: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert_eq!(
+                Ident::with_quote('"', "alias").empty_span(),
+                alias.unwrap().name
+            );
             assert!(args.is_none());
             assert!(with_hints.is_empty());
             assert!(version.is_none());
@@ -262,13 +277,13 @@ fn parse_delimited_identifiers() {
         }),
         expr_from_projection(&select.projection[1]),
     );
-    match &select.projection[2] {
+    match &select.projection[2].clone().unwrap() {
         SelectItem::ExprWithAlias { expr, alias } => {
             assert_eq!(
-                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()).empty_span(),
                 expr
             );
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+            assert_eq!(&Ident::with_quote('"', "column alias").empty_span(), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
     }
@@ -426,7 +441,8 @@ fn test_select_wildcard_with_exclude() {
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_exclude: Some(ExcludeSelectItem::Multiple(vec![Ident::new("col_a")])),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = snowflake_and_generic()
@@ -437,7 +453,8 @@ fn test_select_wildcard_with_exclude() {
             opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("department_id"))),
             ..Default::default()
         },
-    );
+    )
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = snowflake_and_generic()
@@ -448,7 +465,8 @@ fn test_select_wildcard_with_exclude() {
             Ident::new("employee_id"),
         ])),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 }
 
@@ -462,7 +480,8 @@ fn test_select_wildcard_with_rename() {
             alias: Ident::new("col_b"),
         })),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = snowflake_and_generic().verified_only_select(
@@ -483,7 +502,8 @@ fn test_select_wildcard_with_rename() {
             ])),
             ..Default::default()
         },
-    );
+    )
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 }
 
@@ -498,7 +518,8 @@ fn test_select_wildcard_with_exclude_and_rename() {
             alias: Ident::new("col_b"),
         })),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     // rename cannot precede exclude

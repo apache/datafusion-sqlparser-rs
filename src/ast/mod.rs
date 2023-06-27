@@ -366,6 +366,10 @@ where
     pub fn unwrap(self) -> T {
         self.inner
     }
+
+    pub fn span_location(&self) -> Span {
+        self.span
+    }
 }
 
 pub trait SpanWrapped: Clone + Eq + Ord + std::hash::Hash + PartialOrd + PartialEq {
@@ -1360,7 +1364,7 @@ pub enum Statement {
         table: bool,
         on: Option<OnInsert>,
         /// RETURNING
-        returning: Option<Vec<SelectItem>>,
+        returning: Option<Vec<WithSpan<SelectItem>>>,
     },
     // TODO: Support ROW FORMAT
     Directory {
@@ -1420,7 +1424,7 @@ pub enum Statement {
         /// WHERE
         selection: Option<Expr>,
         /// RETURNING
-        returning: Option<Vec<SelectItem>>,
+        returning: Option<Vec<WithSpan<SelectItem>>>,
     },
     /// DELETE
     Delete {
@@ -1433,7 +1437,7 @@ pub enum Statement {
         /// WHERE
         selection: Option<Expr>,
         /// RETURNING
-        returning: Option<Vec<SelectItem>>,
+        returning: Option<Vec<WithSpan<SelectItem>>>,
     },
     /// CREATE VIEW
     CreateView {

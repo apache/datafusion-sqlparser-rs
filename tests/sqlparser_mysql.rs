@@ -544,13 +544,17 @@ fn parse_escaped_quote_identifiers_with_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(
-                    Ident {
-                        value: "quoted ` identifier".into(),
-                        quote_style: Some('`'),
-                    }
+                projection: vec![SelectItem::UnnamedExpr(
+                    Expr::Identifier(
+                        Ident {
+                            value: "quoted ` identifier".into(),
+                            quote_style: Some('`'),
+                        }
+                        .empty_span()
+                    )
                     .empty_span()
-                ))],
+                )
+                .empty_span()],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -590,13 +594,17 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(
-                    Ident {
-                        value: "quoted `` identifier".into(),
-                        quote_style: Some('`'),
-                    }
+                projection: vec![SelectItem::UnnamedExpr(
+                    Expr::Identifier(
+                        Ident {
+                            value: "quoted `` identifier".into(),
+                            quote_style: Some('`'),
+                        }
+                        .empty_span()
+                    )
                     .empty_span()
-                ))],
+                )
+                .empty_span()],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -633,13 +641,17 @@ fn parse_escaped_backticks_with_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(
-                    Ident {
-                        value: "`quoted identifier`".into(),
-                        quote_style: Some('`'),
-                    }
+                projection: vec![SelectItem::UnnamedExpr(
+                    Expr::Identifier(
+                        Ident {
+                            value: "`quoted identifier`".into(),
+                            quote_style: Some('`'),
+                        }
+                        .empty_span()
+                    )
                     .empty_span()
-                ))],
+                )
+                .empty_span()],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -676,13 +688,17 @@ fn parse_escaped_backticks_with_no_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
-                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(
-                    Ident {
-                        value: "``quoted identifier``".into(),
-                        quote_style: Some('`'),
-                    }
+                projection: vec![SelectItem::UnnamedExpr(
+                    Expr::Identifier(
+                        Ident {
+                            value: "``quoted identifier``".into(),
+                            quote_style: Some('`'),
+                        }
+                        .empty_span()
+                    )
                     .empty_span()
-                ))],
+                )
+                .empty_span()],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -1164,9 +1180,10 @@ fn parse_select_with_numeric_prefix_column_name() {
                 Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(
-                        Ident::new("123col_$@123abc").empty_span()
-                    ))],
+                    projection: vec![SelectItem::UnnamedExpr(
+                        Expr::Identifier(Ident::new("123col_$@123abc").empty_span()).empty_span()
+                    )
+                    .empty_span()],
                     into: None,
                     from: vec![TableWithJoins {
                         relation: TableFactor::Table {
@@ -1214,10 +1231,13 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     distinct: None,
                     top: None,
                     projection: vec![
-                        SelectItem::UnnamedExpr(Expr::Value(number("123e4"))),
-                        SelectItem::UnnamedExpr(Expr::Identifier(
-                            Ident::new("123col_$@123abc").empty_span()
-                        ))
+                        SelectItem::UnnamedExpr(Expr::Value(number("123e4")).empty_span())
+                            .empty_span(),
+                        SelectItem::UnnamedExpr(
+                            Expr::Identifier(Ident::new("123col_$@123abc").empty_span())
+                                .empty_span()
+                        )
+                        .empty_span()
                     ],
                     into: None,
                     from: vec![TableWithJoins {
@@ -1282,7 +1302,7 @@ fn parse_update_with_joins() {
                     relation: TableFactor::Table {
                         name: ObjectName(vec![Ident::new("orders")]),
                         alias: Some(TableAlias {
-                            name: Ident::new("o"),
+                            name: Ident::new("o").empty_span(),
                             columns: vec![]
                         }),
                         args: None,
@@ -1294,7 +1314,7 @@ fn parse_update_with_joins() {
                         relation: TableFactor::Table {
                             name: ObjectName(vec![Ident::new("customers")]),
                             alias: Some(TableAlias {
-                                name: Ident::new("c"),
+                                name: Ident::new("c").empty_span(),
                                 columns: vec![]
                             }),
                             args: None,
@@ -1386,18 +1406,22 @@ fn parse_substring_in_select() {
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         distinct: Some(Distinct::Distinct),
                         top: None,
-                        projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
-                            expr: Box::new(Expr::Identifier(
-                                Ident {
-                                    value: "description".to_string(),
-                                    quote_style: None
-                                }
-                                .empty_span()
-                            )),
-                            substring_from: Some(Box::new(Expr::Value(number("0")))),
-                            substring_for: Some(Box::new(Expr::Value(number("1")))),
-                            special: false,
-                        })],
+                        projection: vec![SelectItem::UnnamedExpr(
+                            Expr::Substring {
+                                expr: Box::new(Expr::Identifier(
+                                    Ident {
+                                        value: "description".to_string(),
+                                        quote_style: None
+                                    }
+                                    .empty_span()
+                                )),
+                                substring_from: Some(Box::new(Expr::Value(number("0")))),
+                                substring_for: Some(Box::new(Expr::Value(number("1")))),
+                                special: false,
+                            }
+                            .empty_span()
+                        )
+                        .empty_span()],
                         into: None,
                         from: vec![TableWithJoins {
                             relation: TableFactor::Table {
@@ -1689,10 +1713,14 @@ fn parse_hex_string_introducer() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,
-                projection: vec![SelectItem::UnnamedExpr(Expr::IntroducedString {
-                    introducer: "_latin1".to_string(),
-                    value: Value::HexStringLiteral("4D7953514C".to_string())
-                })],
+                projection: vec![SelectItem::UnnamedExpr(
+                    Expr::IntroducedString {
+                        introducer: "_latin1".to_string(),
+                        value: Value::HexStringLiteral("4D7953514C".to_string())
+                    }
+                    .empty_span()
+                )
+                .empty_span()],
                 from: vec![],
                 lateral_views: vec![],
                 selection: None,

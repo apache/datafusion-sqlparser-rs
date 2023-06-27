@@ -195,7 +195,7 @@ impl fmt::Display for ParserError {
 impl std::error::Error for ParserError {}
 
 // By default, allow expressions up to this deep before erroring
-const DEFAULT_REMAINING_DEPTH: usize = 50;
+const DEFAULT_REMAINING_DEPTH: usize = 48;
 
 /// Options that control how the [`Parser`] parses SQL text
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2452,7 +2452,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a comma-separated list of 1+ SelectItem
-    pub fn parse_projection(&mut self) -> Result<Vec<SelectItem>, ParserError> {
+    pub fn parse_projection(&mut self) -> Result<Vec<WithSpan<SelectItem>>, ParserError> {
         // BigQuery allows trailing commas, but only in project lists
         // e.g. `SELECT 1, 2, FROM t`
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#trailing_commas
@@ -5142,7 +5142,7 @@ impl<'a> Parser<'a> {
     pub fn parse_optional_alias(
         &mut self,
         reserved_kwds: &[Keyword],
-    ) -> Result<Option<Ident>, ParserError> {
+    ) -> Result<Option<WithSpan<Ident>>, ParserError> {
         let after_as = self.parse_keyword(Keyword::AS);
         let next_token = self.next_token();
         match next_token.token {
@@ -5152,7 +5152,7 @@ impl<'a> Parser<'a> {
             // (For example, in `FROM t1 JOIN` the `JOIN` will always be parsed as a keyword,
             // not an alias.)
             Token::Word(w) if after_as || !reserved_kwds.contains(&w.keyword) => {
-                Ok(Some(w.to_ident()))
+                Ok(Some(w.to_ident().spanning(next_token.span)))
             }
             // MSSQL supports single-quoted strings as aliases for columns
             // We accept them as table aliases too, although MSSQL does not.
@@ -5166,9 +5166,13 @@ impl<'a> Parser<'a> {
             //    character. When it sees such a <literal>, your DBMS will
             //    ignore the <separator> and treat the multiple strings as
             //    a single <literal>."
-            Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
+            Token::SingleQuotedString(s) => {
+                Ok(Some(Ident::with_quote('\'', s).spanning(next_token.span)))
+            }
             // Support for MySql dialect double quoted string, `AS "HOUR"` for example
-            Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote('\"', s))),
+            Token::DoubleQuotedString(s) => {
+                Ok(Some(Ident::with_quote('\"', s).spanning(next_token.span)))
+            }
             _ => {
                 if after_as {
                     return self.expected("an identifier after AS", next_token);
@@ -5705,7 +5709,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a CTE (`alias [( col1, col2, ... )] AS (subquery)`)
     pub fn parse_cte(&mut self) -> Result<Cte, ParserError> {
-        let name = self.parse_identifier()?.unwrap();
+        let name = self.parse_identifier()?;
 
         let mut cte = if self.parse_keyword(Keyword::AS) {
             self.expect_token(&Token::LParen)?;
@@ -5882,7 +5886,7 @@ impl<'a> Parser<'a> {
                 let outer = self.parse_keyword(Keyword::OUTER);
                 let lateral_view = self.parse_expr()?;
                 let lateral_view_name = self.parse_object_name()?;
-                let lateral_col_alias = self
+                let lateral_col_alias: Vec<WithSpan<Ident>> = self
                     .parse_comma_separated(|parser| {
                         parser.parse_optional_alias(&[
                             Keyword::WHERE,
@@ -7052,7 +7056,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a comma-delimited list of projections after SELECT
-    pub fn parse_select_item(&mut self) -> Result<SelectItem, ParserError> {
+    pub fn parse_select_item(&mut self) -> Result<WithSpan<SelectItem>, ParserError> {
+        let start_span = self.index;
         match self.parse_wildcard_expr()? {
             WildcardExpr::Expr(expr) => {
                 let expr: Expr = if self.dialect.supports_filter_during_aggregation()
@@ -7073,19 +7078,27 @@ impl<'a> Parser<'a> {
                 } else {
                     expr
                 };
+                let expr_with_location = expr.spanning(self.span_from_index(start_span));
                 self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)
                     .map(|alias| match alias {
-                        Some(alias) => SelectItem::ExprWithAlias { expr, alias },
-                        None => SelectItem::UnnamedExpr(expr),
+                        Some(alias) => SelectItem::ExprWithAlias {
+                            expr: expr_with_location,
+                            alias,
+                        }
+                        .spanning(self.span_from_index(start_span)),
+                        None => SelectItem::UnnamedExpr(expr_with_location)
+                            .spanning(self.span_from_index(start_span)),
                     })
             }
             WildcardExpr::QualifiedWildcard(prefix) => Ok(SelectItem::QualifiedWildcard(
                 prefix,
                 self.parse_wildcard_additional_options()?,
-            )),
+            )
+            .spanning(self.span_from_index(start_span))),
             WildcardExpr::Wildcard => Ok(SelectItem::Wildcard(
                 self.parse_wildcard_additional_options()?,
-            )),
+            )
+            .spanning(self.span_from_index(start_span))),
         }
     }
 
@@ -7779,6 +7792,50 @@ impl<'a> Parser<'a> {
             name,
             representation: UserDefinedTypeRepresentation::Composite { attributes },
         })
+    }
+
+    fn span_from_index(&mut self, mut start_index: usize) -> Span {
+        let mut start_token = &self.tokens[start_index];
+        loop {
+            match start_token {
+                TokenWithLocation {
+                    token: Token::Whitespace(_),
+                    span: _,
+                } => {
+                    start_index += 1;
+                    start_token = &self.tokens[start_index];
+                    continue;
+                }
+                _ => break,
+            }
+        }
+        let start_span = start_token.span;
+
+        let mut idx = self.index.max(start_index).min(self.tokens.len());
+        loop {
+            if idx <= start_index || idx >= self.tokens.len() {
+                break;
+            }
+            let curr_token = &self.tokens[idx];
+            match curr_token {
+                TokenWithLocation {
+                    token: Token::Whitespace(_),
+                    span: _,
+                } => {
+                    idx -= 1;
+                    continue;
+                }
+                TokenWithLocation {
+                    token: Token::Word(word),
+                    span: _,
+                } if word.keyword != Keyword::NoKeyword => {
+                    idx -= 1;
+                    continue;
+                }
+                non_whitespace => return non_whitespace.span.union(start_span),
+            }
+        }
+        return start_span;
     }
 
     fn parse_partitions(&mut self) -> Result<Vec<Ident>, ParserError> {

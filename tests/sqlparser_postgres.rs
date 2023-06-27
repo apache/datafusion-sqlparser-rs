@@ -980,19 +980,24 @@ fn parse_copy_to() {
                     top: None,
                     projection: vec![
                         SelectItem::ExprWithAlias {
-                            expr: Expr::Value(number("42")),
+                            expr: Expr::Value(number("42")).empty_span(),
                             alias: Ident {
                                 value: "a".into(),
                                 quote_style: None,
-                            },
-                        },
+                            }
+                            .empty_span(),
+                        }
+                        .empty_span(),
                         SelectItem::ExprWithAlias {
-                            expr: Expr::Value(Value::SingleQuotedString("hello".into())),
+                            expr: Expr::Value(Value::SingleQuotedString("hello".into()))
+                                .empty_span(),
                             alias: Ident {
                                 value: "b".into(),
                                 quote_style: None,
-                            },
+                            }
+                            .empty_span(),
                         }
+                        .empty_span()
                     ],
                     into: None,
                     from: vec![],
@@ -1613,9 +1618,10 @@ fn parse_pg_returning() {
     match stmt {
         Statement::Insert { returning, .. } => {
             assert_eq!(
-                Some(vec![SelectItem::UnnamedExpr(Expr::Identifier(
-                    Ident::new("did").empty_span()
-                )),]),
+                Some(vec![SelectItem::UnnamedExpr(
+                    Expr::Identifier(Ident::new("did").empty_span()).empty_span()
+                )
+                .empty_span(),]),
                 returning
             );
         }
@@ -1632,14 +1638,19 @@ fn parse_pg_returning() {
             assert_eq!(
                 Some(vec![
                     SelectItem::ExprWithAlias {
-                        expr: Expr::Identifier(Ident::new("temp_lo").empty_span()),
-                        alias: "lo".into()
-                    },
+                        expr: Expr::Identifier(Ident::new("temp_lo").empty_span()).empty_span(),
+                        alias: Ident::new("lo").empty_span()
+                    }
+                    .empty_span(),
                     SelectItem::ExprWithAlias {
-                        expr: Expr::Identifier(Ident::new("temp_hi").empty_span()),
-                        alias: "hi".into()
-                    },
-                    SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("prcp").empty_span())),
+                        expr: Expr::Identifier(Ident::new("temp_hi").empty_span()).empty_span(),
+                        alias: Ident::new("hi").empty_span()
+                    }
+                    .empty_span(),
+                    SelectItem::UnnamedExpr(
+                        Expr::Identifier(Ident::new("prcp").empty_span()).empty_span()
+                    )
+                    .empty_span(),
                 ]),
                 returning
             );
@@ -1653,7 +1664,8 @@ fn parse_pg_returning() {
             assert_eq!(
                 Some(vec![SelectItem::Wildcard(
                     WildcardAdditionalOptions::default()
-                ),]),
+                )
+                .empty_span(),]),
                 returning
             );
         }
@@ -1675,11 +1687,15 @@ fn parse_pg_binary_ops() {
     for (str_op, op, dialects) in binary_ops {
         let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
         assert_eq!(
-            SelectItem::UnnamedExpr(Expr::BinaryOp {
-                left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
-                op: op.clone(),
-                right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
-            }),
+            SelectItem::UnnamedExpr(
+                Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
+                    op: op.clone(),
+                    right: Box::new(Expr::Identifier(Ident::new("b").empty_span())),
+                }
+                .empty_span()
+            )
+            .empty_span(),
             select.projection[0]
         );
     }
@@ -1698,11 +1714,14 @@ fn parse_pg_unary_ops() {
     for (str_op, op) in pg_unary_ops {
         let select = pg().verified_only_select(&format!("SELECT {}a", &str_op));
         assert_eq!(
-            SelectItem::UnnamedExpr(Expr::UnaryOp {
-                op: *op,
-                expr: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
-            }),
-            select.projection[0]
+            SelectItem::UnnamedExpr(
+                Expr::UnaryOp {
+                    op: *op,
+                    expr: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
+                }
+                .empty_span()
+            ),
+            select.projection[0].clone().unwrap(),
         );
     }
 }
@@ -1714,11 +1733,14 @@ fn parse_pg_postfix_factorial() {
     for (str_op, op) in postfix_factorial {
         let select = pg().verified_only_select(&format!("SELECT a{}", &str_op));
         assert_eq!(
-            SelectItem::UnnamedExpr(Expr::UnaryOp {
-                op: *op,
-                expr: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
-            }),
-            select.projection[0]
+            SelectItem::UnnamedExpr(
+                Expr::UnaryOp {
+                    op: *op,
+                    expr: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
+                }
+                .empty_span()
+            ),
+            select.projection[0].clone().unwrap(),
         );
     }
 }
@@ -1735,12 +1757,15 @@ fn parse_pg_regex_match_ops() {
     for (str_op, op) in pg_regex_match_ops {
         let select = pg().verified_only_select(&format!("SELECT 'abc' {} '^a'", &str_op));
         assert_eq!(
-            SelectItem::UnnamedExpr(Expr::BinaryOp {
-                left: Box::new(Expr::Value(Value::SingleQuotedString("abc".into()))),
-                op: op.clone(),
-                right: Box::new(Expr::Value(Value::SingleQuotedString("^a".into()))),
-            }),
-            select.projection[0]
+            SelectItem::UnnamedExpr(
+                Expr::BinaryOp {
+                    left: Box::new(Expr::Value(Value::SingleQuotedString("abc".into()))),
+                    op: op.clone(),
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("^a".into()))),
+                }
+                .empty_span()
+            ),
+            select.projection[0].clone().unwrap(),
         );
     }
 }
@@ -2045,7 +2070,10 @@ fn parse_array_subquery_expr() {
                 left: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))],
+                    projection: vec![SelectItem::UnnamedExpr(
+                        Expr::Value(number("1")).empty_span()
+                    )
+                    .empty_span()],
                     into: None,
                     from: vec![],
                     lateral_views: vec![],
@@ -2061,7 +2089,10 @@ fn parse_array_subquery_expr() {
                 right: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("2")))],
+                    projection: vec![SelectItem::UnnamedExpr(
+                        Expr::Value(number("2")).empty_span()
+                    )
+                    .empty_span()],
                     into: None,
                     from: vec![],
                     lateral_views: vec![],
@@ -2127,66 +2158,81 @@ fn test_json() {
     let sql = "SELECT params ->> 'name' FROM events";
     let select = pg().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("params").empty_span())),
-            operator: JsonOperator::LongArrow,
-            right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()))),
-        }),
-        select.projection[0]
+        SelectItem::UnnamedExpr(
+            Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("params").empty_span())),
+                operator: JsonOperator::LongArrow,
+                right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()))),
+            }
+            .empty_span()
+        ),
+        select.projection[0].clone().unwrap()
     );
 
     let sql = "SELECT params -> 'name' FROM events";
     let select = pg().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("params").empty_span())),
-            operator: JsonOperator::Arrow,
-            right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()))),
-        }),
-        select.projection[0]
+        SelectItem::UnnamedExpr(
+            Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("params").empty_span())),
+                operator: JsonOperator::Arrow,
+                right: Box::new(Expr::Value(Value::SingleQuotedString("name".to_string()))),
+            }
+            .empty_span()
+        ),
+        select.projection[0].clone().unwrap()
     );
 
     let sql = "SELECT info -> 'items' ->> 'product' FROM orders";
     let select = pg().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("info").empty_span())),
-            operator: JsonOperator::Arrow,
-            right: Box::new(Expr::JsonAccess {
-                left: Box::new(Expr::Value(Value::SingleQuotedString("items".to_string()))),
-                operator: JsonOperator::LongArrow,
-                right: Box::new(Expr::Value(Value::SingleQuotedString(
-                    "product".to_string()
-                )))
-            }),
-        }),
-        select.projection[0]
+        SelectItem::UnnamedExpr(
+            Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("info").empty_span())),
+                operator: JsonOperator::Arrow,
+                right: Box::new(Expr::JsonAccess {
+                    left: Box::new(Expr::Value(Value::SingleQuotedString("items".to_string()))),
+                    operator: JsonOperator::LongArrow,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "product".to_string()
+                    )))
+                }),
+            }
+            .empty_span()
+        ),
+        select.projection[0].clone().unwrap()
     );
 
     let sql = "SELECT info #> '{a,b,c}' FROM orders";
     let select = pg().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("info").empty_span())),
-            operator: JsonOperator::HashArrow,
-            right: Box::new(Expr::Value(Value::SingleQuotedString(
-                "{a,b,c}".to_string()
-            ))),
-        }),
-        select.projection[0]
+        SelectItem::UnnamedExpr(
+            Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("info").empty_span())),
+                operator: JsonOperator::HashArrow,
+                right: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "{a,b,c}".to_string()
+                ))),
+            }
+            .empty_span()
+        ),
+        select.projection[0].clone().unwrap()
     );
 
     let sql = "SELECT info #>> '{a,b,c}' FROM orders";
     let select = pg().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("info").empty_span())),
-            operator: JsonOperator::HashLongArrow,
-            right: Box::new(Expr::Value(Value::SingleQuotedString(
-                "{a,b,c}".to_string()
-            ))),
-        }),
-        select.projection[0]
+        SelectItem::UnnamedExpr(
+            Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("info").empty_span())),
+                operator: JsonOperator::HashLongArrow,
+                right: Box::new(Expr::Value(Value::SingleQuotedString(
+                    "{a,b,c}".to_string()
+                ))),
+            }
+            .empty_span()
+        ),
+        select.projection[0].clone().unwrap()
     );
 
     let sql = "SELECT info FROM orders WHERE info @> '{\"a\": 1}'";
@@ -2218,18 +2264,21 @@ fn test_json() {
     let sql = "SELECT info #- ARRAY['a', 'b'] FROM orders";
     let select = pg().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::from("info").empty_span())),
-            operator: JsonOperator::HashMinus,
-            right: Box::new(Expr::Array(Array {
-                elem: vec![
-                    Expr::Value(Value::SingleQuotedString("a".to_string())),
-                    Expr::Value(Value::SingleQuotedString("b".to_string())),
-                ],
-                named: true,
-            })),
-        }),
-        select.projection[0],
+        SelectItem::UnnamedExpr(
+            Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::from("info").empty_span())),
+                operator: JsonOperator::HashMinus,
+                right: Box::new(Expr::Array(Array {
+                    elem: vec![
+                        Expr::Value(Value::SingleQuotedString("a".to_string())),
+                        Expr::Value(Value::SingleQuotedString("b".to_string())),
+                    ],
+                    named: true,
+                })),
+            }
+            .empty_span()
+        ),
+        select.projection[0].clone().unwrap(),
     );
 
     let sql = "SELECT info FROM orders WHERE info @? '$.a'";
@@ -2260,14 +2309,17 @@ fn test_composite_value() {
     let sql = "SELECT (on_hand.item).name FROM on_hand WHERE (on_hand.item).price > 9";
     let select = pg().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::CompositeAccess {
-            key: Ident::new("name"),
-            expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
-                Ident::new("on_hand"),
-                Ident::new("item")
-            ]))))
-        }),
-        select.projection[0]
+        SelectItem::UnnamedExpr(
+            Expr::CompositeAccess {
+                key: Ident::new("name"),
+                expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new("on_hand"),
+                    Ident::new("item")
+                ]))))
+            }
+            .empty_span()
+        ),
+        select.projection[0].clone().unwrap()
     );
 
     assert_eq!(
@@ -2288,30 +2340,33 @@ fn test_composite_value() {
     let sql = "SELECT (information_schema._pg_expandarray(ARRAY['i', 'i'])).n";
     let select = pg().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::CompositeAccess {
-            key: Ident::new("n"),
-            expr: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
-                name: ObjectName(vec![
-                    Ident::new("information_schema"),
-                    Ident::new("_pg_expandarray")
-                ]),
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Array(
-                    Array {
-                        elem: vec![
-                            Expr::Value(Value::SingleQuotedString("i".to_string())),
-                            Expr::Value(Value::SingleQuotedString("i".to_string())),
-                        ],
-                        named: true
-                    }
-                )))],
-                over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![],
-                null_treatment: None,
-            }))))
-        }),
-        select.projection[0]
+        SelectItem::UnnamedExpr(
+            Expr::CompositeAccess {
+                key: Ident::new("n"),
+                expr: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
+                    name: ObjectName(vec![
+                        Ident::new("information_schema"),
+                        Ident::new("_pg_expandarray")
+                    ]),
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Array(
+                        Array {
+                            elem: vec![
+                                Expr::Value(Value::SingleQuotedString("i".to_string())),
+                                Expr::Value(Value::SingleQuotedString("i".to_string())),
+                            ],
+                            named: true
+                        }
+                    )))],
+                    over: None,
+                    distinct: false,
+                    special: false,
+                    order_by: vec![],
+                    null_treatment: None,
+                }))))
+            }
+            .empty_span()
+        ),
+        select.projection[0].clone().unwrap()
     );
 }
 
@@ -2942,7 +2997,10 @@ fn parse_delimited_identifiers() {
             partitions: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert_eq!(
+                Ident::with_quote('"', "alias").empty_span(),
+                alias.unwrap().name
+            );
             assert!(args.is_none());
             assert!(with_hints.is_empty());
             assert!(version.is_none());
@@ -2970,13 +3028,13 @@ fn parse_delimited_identifiers() {
         }),
         expr_from_projection(&select.projection[1]),
     );
-    match &select.projection[2] {
+    match &select.projection[2].clone().unwrap() {
         SelectItem::ExprWithAlias { expr, alias } => {
             assert_eq!(
-                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()).empty_span(),
                 expr
             );
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+            assert_eq!(&Ident::with_quote('"', "column alias").empty_span(), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
     }
@@ -3324,16 +3382,18 @@ fn parse_dollar_quoted_string() {
     );
 
     assert_eq!(
-        projection[3],
+        projection[3].clone().unwrap(),
         SelectItem::ExprWithAlias {
             expr: Expr::Value(Value::DollarQuotedString(DollarQuotedString {
                 tag: None,
                 value: "Foo$Bar".into(),
-            })),
+            }))
+            .empty_span(),
             alias: Ident {
                 value: "col_name".into(),
                 quote_style: None,
-            },
+            }
+            .empty_span(),
         }
     );
 

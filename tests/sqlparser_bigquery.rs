@@ -384,7 +384,8 @@ fn test_select_wildcard_with_except() {
             additional_elements: vec![],
         }),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = bigquery_and_generic()
@@ -395,7 +396,8 @@ fn test_select_wildcard_with_except() {
             additional_elements: vec![Ident::new("employee_id")],
         }),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     assert_eq!(
@@ -428,7 +430,8 @@ fn test_select_wildcard_with_replace() {
             })],
         }),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = bigquery_and_generic().verified_only_select(
@@ -454,7 +457,8 @@ fn test_select_wildcard_with_replace() {
             ],
         }),
         ..Default::default()
-    });
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 }
 
@@ -478,26 +482,30 @@ fn parse_map_access_offset() {
     let _select = bigquery().verified_only_select(sql);
     assert_eq!(
         _select.projection[0],
-        SelectItem::UnnamedExpr(Expr::MapAccess {
-            column: Box::new(Expr::Identifier(
-                Ident {
-                    value: "d".to_string(),
-                    quote_style: None,
-                }
-                .empty_span()
-            )),
-            keys: vec![Expr::Function(Function {
-                name: ObjectName(vec!["offset".into()]),
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                    number("0")
-                ))),],
-                over: None,
-                distinct: false,
-                special: false,
-                order_by: vec![],
-                null_treatment: None,
-            })],
-        })
+        SelectItem::UnnamedExpr(
+            Expr::MapAccess {
+                column: Box::new(Expr::Identifier(
+                    Ident {
+                        value: "d".to_string(),
+                        quote_style: None,
+                    }
+                    .empty_span()
+                )),
+                keys: vec![Expr::Function(Function {
+                    name: ObjectName(vec!["offset".into()]),
+                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                        number("0")
+                    ))),],
+                    over: None,
+                    distinct: false,
+                    special: false,
+                    order_by: vec![],
+                    null_treatment: None,
+                })],
+            }
+            .empty_span()
+        )
+        .empty_span()
     );
 
     // test other operators

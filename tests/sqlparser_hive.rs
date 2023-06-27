@@ -327,7 +327,10 @@ fn parse_delimited_identifiers() {
             partitions: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert_eq!(
+                Ident::with_quote('"', "alias"),
+                alias.unwrap().name.unwrap()
+            );
             assert!(args.is_none());
             assert!(with_hints.is_empty());
             assert!(version.is_none());
@@ -355,13 +358,13 @@ fn parse_delimited_identifiers() {
         }),
         expr_from_projection(&select.projection[1]),
     );
-    match &select.projection[2] {
+    match &select.projection[2].clone().unwrap() {
         SelectItem::ExprWithAlias { expr, alias } => {
             assert_eq!(
-                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()).empty_span(),
                 expr
             );
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+            assert_eq!(&Ident::with_quote('"', "column alias").empty_span(), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
     }

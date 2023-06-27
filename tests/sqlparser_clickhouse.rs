@@ -37,31 +37,35 @@ fn parse_array_access_expr() {
         Select {
             distinct: None,
             top: None,
-            projection: vec![UnnamedExpr(ArrayIndex {
-                obj: Box::new(Identifier(
-                    Ident {
-                        value: "string_values".to_string(),
-                        quote_style: None,
-                    }
-                    .empty_span()
-                )),
-                indexes: vec![Expr::Function(Function {
-                    name: ObjectName(vec!["indexOf".into()]),
-                    args: vec![
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
-                            Ident::new("string_names").empty_span()
-                        ))),
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                            Value::SingleQuotedString("endpoint".to_string())
-                        ))),
-                    ],
-                    over: None,
-                    distinct: false,
-                    special: false,
-                    order_by: vec![],
-                    null_treatment: None,
-                })],
-            })],
+            projection: vec![UnnamedExpr(
+                ArrayIndex {
+                    obj: Box::new(Identifier(
+                        Ident {
+                            value: "string_values".to_string(),
+                            quote_style: None,
+                        }
+                        .empty_span()
+                    )),
+                    indexes: vec![Expr::Function(Function {
+                        name: ObjectName(vec!["indexOf".into()]),
+                        args: vec![
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                                Ident::new("string_names").empty_span()
+                            ))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                Value::SingleQuotedString("endpoint".to_string())
+                            ))),
+                        ],
+                        over: None,
+                        distinct: false,
+                        special: false,
+                        order_by: vec![],
+                        null_treatment: None,
+                    })],
+                }
+                .empty_span()
+            )
+            .empty_span()],
             into: None,
             from: vec![TableWithJoins {
                 relation: Table {
@@ -188,7 +192,10 @@ fn parse_delimited_identifiers() {
             partitions: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert_eq!(
+                Ident::with_quote('"', "alias").empty_span(),
+                alias.unwrap().name
+            );
             assert!(args.is_none());
             assert!(with_hints.is_empty());
             assert!(version.is_none());
@@ -216,13 +223,13 @@ fn parse_delimited_identifiers() {
         }),
         expr_from_projection(&select.projection[1]),
     );
-    match &select.projection[2] {
+    match select.projection[2].clone().unwrap() {
         SelectItem::ExprWithAlias { expr, alias } => {
             assert_eq!(
-                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()).empty_span(),
                 expr
             );
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+            assert_eq!(Ident::with_quote('"', "column alias").empty_span(), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
     }

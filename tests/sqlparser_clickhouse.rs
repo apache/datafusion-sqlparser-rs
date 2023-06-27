@@ -59,7 +59,7 @@ fn parse_array_access_expr() {
                     order_by: vec![],
                     null_treatment: None,
                 })],
-            })],
+            }.empty_span()).empty_span()],
             into: None,
             from: vec![TableWithJoins {
                 relation: Table {
@@ -182,7 +182,7 @@ fn parse_delimited_identifiers() {
             with_hints,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
-            assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
+            assert_eq!(Ident::with_quote('"', "alias").empty_span(), alias.unwrap().name);
             assert!(args.is_none());
             assert!(with_hints.is_empty());
         }
@@ -209,13 +209,13 @@ fn parse_delimited_identifiers() {
         }),
         expr_from_projection(&select.projection[1]),
     );
-    match &select.projection[2] {
+    match select.projection[2].clone().unwrap() {
         SelectItem::ExprWithAlias { expr, alias } => {
             assert_eq!(
-                &Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()),
+                Expr::Identifier(Ident::with_quote('"', "simple id").empty_span()).empty_span(),
                 expr
             );
-            assert_eq!(&Ident::with_quote('"', "column alias"), alias);
+            assert_eq!(Ident::with_quote('"', "column alias").empty_span(), alias);
         }
         _ => panic!("Expected ExprWithAlias"),
     }

@@ -207,7 +207,7 @@ pub fn number(n: &'static str) -> Value {
 
 pub fn table_alias(name: impl Into<String>) -> Option<TableAlias> {
     Some(TableAlias {
-        name: Ident::new(name),
+        name: Ident::new(name).empty_span(),
         columns: vec![],
     })
 }

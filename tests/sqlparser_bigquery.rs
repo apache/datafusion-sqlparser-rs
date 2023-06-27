@@ -337,7 +337,7 @@ fn test_select_wildcard_with_except() {
             additional_elements: vec![],
         }),
         ..Default::default()
-    });
+    }).empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = bigquery_and_generic()
@@ -348,7 +348,7 @@ fn test_select_wildcard_with_except() {
             additional_elements: vec![Ident::new("employee_id")],
         }),
         ..Default::default()
-    });
+    }).empty_span();
     assert_eq!(expected, select.projection[0]);
 
     assert_eq!(
@@ -382,7 +382,7 @@ fn test_select_wildcard_with_replace() {
             })],
         }),
         ..Default::default()
-    });
+    }).empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = bigquery_and_generic().verified_only_select(
@@ -417,7 +417,7 @@ fn test_select_wildcard_with_replace() {
             ],
         }),
         ..Default::default()
-    });
+    }).empty_span();
     assert_eq!(expected, select.projection[0]);
 }
 
@@ -461,7 +461,7 @@ fn parse_map_access_offset() {
                 order_by: vec![],
                 null_treatment: None,
             })],
-        })
+        }.empty_span()).empty_span()
     );
 
     // test other operators

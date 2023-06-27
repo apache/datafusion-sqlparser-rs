@@ -453,7 +453,7 @@ fn parse_quote_identifiers_2() {
                         quote_style: Some('`'),
                     }
                     .empty_span()
-                ))],
+                ).empty_span()).empty_span()],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -492,7 +492,7 @@ fn parse_quote_identifiers_3() {
                         quote_style: Some('`'),
                     }
                     .empty_span()
-                ))],
+                ).empty_span()).empty_span()],
                 into: None,
                 from: vec![],
                 lateral_views: vec![],
@@ -884,7 +884,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     top: None,
                     projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident::new(
                         "123col_$@123abc"
-                    ).empty_span()))],
+                    ).empty_span()).empty_span()).empty_span()],
                     into: None,
                     from: vec![TableWithJoins {
                         relation: TableFactor::Table {
@@ -926,8 +926,8 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                         SelectItem::UnnamedExpr(Expr::Value(Value::Number(
                             "123e4".to_string(),
                             false
-                        ))),
-                        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("123col_$@123abc").empty_span()))
+                        )).empty_span()).empty_span(),
+                        SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("123col_$@123abc").empty_span()).empty_span()).empty_span()
                     ],
                     into: None,
                     from: vec![TableWithJoins {
@@ -990,7 +990,7 @@ fn parse_update_with_joins() {
                     relation: TableFactor::Table {
                         name: ObjectName(vec![Ident::new("orders")]),
                         alias: Some(TableAlias {
-                            name: Ident::new("o"),
+                            name: Ident::new("o").empty_span(),
                             columns: vec![]
                         }),
                         args: None,
@@ -1000,7 +1000,7 @@ fn parse_update_with_joins() {
                         relation: TableFactor::Table {
                             name: ObjectName(vec![Ident::new("customers")]),
                             alias: Some(TableAlias {
-                                name: Ident::new("c"),
+                                name: Ident::new("c").empty_span(),
                                 columns: vec![]
                             }),
                             args: None,
@@ -1118,7 +1118,7 @@ fn parse_substring_in_select() {
                                 "1".to_string(),
                                 false
                             ))))
-                        })],
+                        }.empty_span()).empty_span()],
                         into: None,
                         from: vec![TableWithJoins {
                             relation: TableFactor::Table {
@@ -1411,7 +1411,7 @@ fn parse_hex_string_introducer() {
                 projection: vec![SelectItem::UnnamedExpr(Expr::IntroducedString {
                     introducer: "_latin1".to_string(),
                     value: Value::HexStringLiteral("4D7953514C".to_string())
-                })],
+                }.empty_span()).empty_span()],
                 from: vec![],
                 lateral_views: vec![],
                 selection: None,

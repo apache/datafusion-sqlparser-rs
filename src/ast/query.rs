@@ -204,7 +204,7 @@ pub struct Select {
     /// MSSQL syntax: `TOP (<N>) [ PERCENT ] [ WITH TIES ]`
     pub top: Option<Top>,
     /// projection expressions
-    pub projection: Vec<SelectItem>,
+    pub projection: Vec<WithSpan<SelectItem>>,
     /// INTO
     pub into: Option<SelectInto>,
     /// FROM
@@ -298,7 +298,7 @@ pub struct LateralView {
     /// LATERAL VIEW table name
     pub lateral_view_name: ObjectName,
     /// LATERAL VIEW optional column aliases
-    pub lateral_col_alias: Vec<Ident>,
+    pub lateral_col_alias: Vec<WithSpan<Ident>>,
     /// LATERAL VIEW OUTER
     pub outer: bool,
 }
@@ -382,9 +382,9 @@ impl fmt::Display for Cte {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SelectItem {
     /// Any expression, not followed by `[ AS ] alias`
-    UnnamedExpr(Expr),
+    UnnamedExpr(WithSpan<Expr>),
     /// An expression, followed by `[ AS ] alias`
-    ExprWithAlias { expr: Expr, alias: Ident },
+    ExprWithAlias { expr: WithSpan<Expr>, alias: WithSpan<Ident> },
     /// `alias.*` or even `schema.table.*`
     QualifiedWildcard(ObjectName, WildcardAdditionalOptions),
     /// An unqualified `*`
@@ -697,7 +697,7 @@ pub enum TableFactor {
         alias: Option<TableAlias>,
         array_expr: Box<Expr>,
         with_offset: bool,
-        with_offset_alias: Option<Ident>,
+        with_offset_alias: Option<WithSpan<Ident>>,
     },
     /// Represents a parenthesized table factor. The SQL spec only allows a
     /// join expression (`(foo <JOIN> bar [ <JOIN> baz ... ])`) to be nested,
@@ -857,7 +857,7 @@ impl fmt::Display for TableFactor {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableAlias {
-    pub name: Ident,
+    pub name: WithSpan<Ident>,
     pub columns: Vec<Ident>,
 }
 

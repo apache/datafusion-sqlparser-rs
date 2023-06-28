@@ -4105,7 +4105,7 @@ fn parse_unnest() {
                     name: Ident::new("numbers"),
                     columns: vec![],
                 }),
-                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                array_exprs: vec![Box::new(Expr::Identifier(Ident::new("expr")))],
                 with_offset: true,
                 with_offset_alias: None,
             },
@@ -4121,7 +4121,7 @@ fn parse_unnest() {
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: None,
-                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                array_exprs: vec![Box::new(Expr::Identifier(Ident::new("expr")))],
                 with_offset: false,
                 with_offset_alias: None,
             },
@@ -4137,7 +4137,7 @@ fn parse_unnest() {
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: None,
-                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                array_exprs: vec![Box::new(Expr::Identifier(Ident::new("expr")))],
                 with_offset: true,
                 with_offset_alias: None,
             },
@@ -4156,7 +4156,7 @@ fn parse_unnest() {
                     name: Ident::new("numbers"),
                     columns: vec![],
                 }),
-                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                array_exprs: vec![Box::new(Expr::Identifier(Ident::new("expr")))],
                 with_offset: false,
                 with_offset_alias: None,
             },

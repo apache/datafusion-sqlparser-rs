@@ -5980,8 +5980,16 @@ impl<'a> Parser<'a> {
             && self.parse_keyword(Keyword::UNNEST)
         {
             self.expect_token(&Token::LParen)?;
-            let expr = self.parse_expr()?;
-            self.expect_token(&Token::RParen)?;
+
+            let args = self.parse_optional_args()?;
+            let expr = Expr::Function(Function {
+                name: ObjectName(vec!["unnest".into()]),
+                args,
+                over: None,
+                distinct: false,
+                special: false,
+                order_by: vec![],
+            });
 
             let alias = match self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS) {
                 Ok(Some(alias)) => Some(alias),

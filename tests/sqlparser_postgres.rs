@@ -2407,7 +2407,7 @@ fn parse_create_role() {
                 in_role,
                 in_group,
                 role,
-                user,
+                user: _,
                 admin,
                 authorization_owner,
             }],

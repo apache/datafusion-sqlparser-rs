@@ -5992,7 +5992,6 @@ impl<'a> Parser<'a> {
             && self.parse_keyword(Keyword::UNNEST)
         {
             let exprs = self.parse_unnest_exprs()?;
-            let exprs: Vec<Box<Expr>> = exprs.into_iter().map(Box::new).collect();
 
             let alias = match self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS) {
                 Ok(Some(alias)) => Some(alias),

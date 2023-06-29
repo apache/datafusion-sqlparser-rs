@@ -677,7 +677,7 @@ pub enum TableFactor {
     /// ```
     UNNEST {
         alias: Option<TableAlias>,
-        array_exprs: Vec<Box<Expr>>,
+        array_exprs: Vec<Expr>,
         with_offset: bool,
         with_offset_alias: Option<Ident>,
     },

@@ -3898,11 +3898,10 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_alter(&mut self) -> Result<Statement, ParserError> {
-        let object_type = self.expect_one_of_keywords(&[Keyword::VIEW, Keyword::TABLE, Keyword::INDEX])?;
+        let object_type =
+            self.expect_one_of_keywords(&[Keyword::VIEW, Keyword::TABLE, Keyword::INDEX])?;
         match object_type {
-            Keyword::VIEW => {
-                self.parse_alter_view()
-            }
+            Keyword::VIEW => self.parse_alter_view(),
             Keyword::TABLE => {
                 let _ = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
                 let table_name = self.parse_object_name()?;

@@ -2870,6 +2870,67 @@ fn parse_alter_index() {
 }
 
 #[test]
+fn parse_alter_view() {
+    let sql = "ALTER VIEW myschema.myview AS SELECT foo FROM bar";
+    match verified_stmt(sql) {
+        Statement::AlterView {
+            name,
+            columns,
+            query,
+            with_options,
+        } => {
+            assert_eq!("myschema.myview", name.to_string());
+            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!("SELECT foo FROM bar", query.to_string());
+            assert_eq!(with_options, vec![]);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_view_with_options() {
+    let sql = "ALTER VIEW v WITH (foo = 'bar', a = 123) AS SELECT 1";
+    match verified_stmt(sql) {
+        Statement::AlterView { with_options, .. } => {
+            assert_eq!(
+                vec![
+                    SqlOption {
+                        name: "foo".into(),
+                        value: Value::SingleQuotedString("bar".into()),
+                    },
+                    SqlOption {
+                        name: "a".into(),
+                        value: number("123"),
+                    },
+                ],
+                with_options
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_view_with_columns() {
+    let sql = "ALTER VIEW v (has, cols) AS SELECT 1, 2";
+    match verified_stmt(sql) {
+        Statement::AlterView {
+            name,
+            columns,
+            query,
+            with_options,
+        } => {
+            assert_eq!("v", name.to_string());
+            assert_eq!(columns, vec![Ident::new("has"), Ident::new("cols")]);
+            assert_eq!("SELECT 1, 2", query.to_string());
+            assert_eq!(with_options, vec![]);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_alter_table_add_column() {
     match verified_stmt("ALTER TABLE tab ADD foo TEXT") {
         Statement::AlterTable {

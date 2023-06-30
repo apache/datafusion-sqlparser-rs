@@ -4130,7 +4130,16 @@ fn parse_table_function() {
 
 #[test]
 fn parse_unnest() {
+    let sql = "SELECT UNNEST(make_array(1, 2, 3))";
+    one_statement_parses_to(sql, sql);
+    let sql = "SELECT UNNEST(make_array(1, 2, 3), make_array(4, 5))";
+    one_statement_parses_to(sql, sql);
+}
+
+#[test]
+fn parse_unnest_in_from_clause() {
     fn chk(
+        array_exprs: &str,
         alias: bool,
         with_offset: bool,
         with_offset_alias: bool,
@@ -4138,7 +4147,8 @@ fn parse_unnest() {
         want: Vec<TableWithJoins>,
     ) {
         let sql = &format!(
-            "SELECT * FROM UNNEST(expr){}{}{}",
+            "SELECT * FROM UNNEST({}){}{}{}",
+            array_exprs,
             if alias { " AS numbers" } else { "" },
             if with_offset { " WITH OFFSET" } else { "" },
             if with_offset_alias {
@@ -4156,6 +4166,7 @@ fn parse_unnest() {
     };
     // 1. both Alias and WITH OFFSET clauses.
     chk(
+        "expr",
         true,
         true,
         false,
@@ -4166,7 +4177,7 @@ fn parse_unnest() {
                     name: Ident::new("numbers"),
                     columns: vec![],
                 }),
-                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                array_exprs: vec![Expr::Identifier(Ident::new("expr"))],
                 with_offset: true,
                 with_offset_alias: None,
             },
@@ -4175,6 +4186,7 @@ fn parse_unnest() {
     );
     // 2. neither Alias nor WITH OFFSET clause.
     chk(
+        "expr",
         false,
         false,
         false,
@@ -4182,7 +4194,7 @@ fn parse_unnest() {
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: None,
-                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                array_exprs: vec![Expr::Identifier(Ident::new("expr"))],
                 with_offset: false,
                 with_offset_alias: None,
             },
@@ -4191,6 +4203,7 @@ fn parse_unnest() {
     );
     // 3. Alias but no WITH OFFSET clause.
     chk(
+        "expr",
         false,
         true,
         false,
@@ -4198,7 +4211,7 @@ fn parse_unnest() {
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: None,
-                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                array_exprs: vec![Expr::Identifier(Ident::new("expr"))],
                 with_offset: true,
                 with_offset_alias: None,
             },
@@ -4207,6 +4220,7 @@ fn parse_unnest() {
     );
     // 4. WITH OFFSET but no Alias.
     chk(
+        "expr",
         true,
         false,
         false,
@@ -4217,13 +4231,82 @@ fn parse_unnest() {
                     name: Ident::new("numbers"),
                     columns: vec![],
                 }),
-                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                array_exprs: vec![Expr::Identifier(Ident::new("expr"))],
                 with_offset: false,
                 with_offset_alias: None,
             },
             joins: vec![],
         }],
     );
+    // 5. Simple array
+    chk(
+        "make_array(1, 2, 3)",
+        false,
+        false,
+        false,
+        &dialects,
+        vec![TableWithJoins {
+            relation: TableFactor::UNNEST {
+                alias: None,
+                array_exprs: vec![Expr::Function(Function {
+                    name: ObjectName(vec![Ident::new("make_array")]),
+                    args: vec![
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("2")))),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("3")))),
+                    ],
+                    over: None,
+                    distinct: false,
+                    special: false,
+                    order_by: vec![],
+                })],
+                with_offset: false,
+                with_offset_alias: None,
+            },
+            joins: vec![],
+        }],
+    );
+    // 6. Multiple arrays
+    chk(
+        "make_array(1, 2, 3), make_array(5, 6)",
+        false,
+        false,
+        false,
+        &dialects,
+        vec![TableWithJoins {
+            relation: TableFactor::UNNEST {
+                alias: None,
+                array_exprs: vec![
+                    Expr::Function(Function {
+                        name: ObjectName(vec![Ident::new("make_array")]),
+                        args: vec![
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("2")))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("3")))),
+                        ],
+                        over: None,
+                        distinct: false,
+                        special: false,
+                        order_by: vec![],
+                    }),
+                    Expr::Function(Function {
+                        name: ObjectName(vec![Ident::new("make_array")]),
+                        args: vec![
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("5")))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("6")))),
+                        ],
+                        over: None,
+                        distinct: false,
+                        special: false,
+                        order_by: vec![],
+                    }),
+                ],
+                with_offset: false,
+                with_offset_alias: None,
+            },
+            joins: vec![],
+        }],
+    )
 }
 
 #[test]

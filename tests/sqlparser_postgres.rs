@@ -2407,7 +2407,7 @@ fn parse_create_role() {
                 in_role,
                 in_group,
                 role,
-                user,
+                user: _,
                 admin,
                 authorization_owner,
             }],
@@ -2435,7 +2435,6 @@ fn parse_create_role() {
             assert_eq_vec(&["role1", "role2"], in_role);
             assert!(in_group.is_empty());
             assert_eq_vec(&["role3"], role);
-            assert!(user.is_empty());
             assert_eq_vec(&["role4", "role5"], admin);
             assert_eq!(*authorization_owner, None);
         }

@@ -5999,7 +5999,7 @@ impl<'a> Parser<'a> {
             && self.parse_keyword(Keyword::UNNEST)
         {
             self.expect_token(&Token::LParen)?;
-            let expr = self.parse_expr()?;
+            let array_exprs = self.parse_comma_separated(Parser::parse_expr)?;
             self.expect_token(&Token::RParen)?;
 
             let alias = match self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS) {
@@ -6025,7 +6025,7 @@ impl<'a> Parser<'a> {
 
             Ok(TableFactor::UNNEST {
                 alias,
-                array_expr: Box::new(expr),
+                array_exprs,
                 with_offset,
                 with_offset_alias,
             })

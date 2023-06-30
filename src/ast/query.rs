@@ -677,7 +677,7 @@ pub enum TableFactor {
     /// ```
     UNNEST {
         alias: Option<TableAlias>,
-        array_expr: Box<Expr>,
+        array_exprs: Vec<Expr>,
         with_offset: bool,
         with_offset_alias: Option<Ident>,
     },
@@ -749,11 +749,12 @@ impl fmt::Display for TableFactor {
             }
             TableFactor::UNNEST {
                 alias,
-                array_expr,
+                array_exprs,
                 with_offset,
                 with_offset_alias,
             } => {
-                write!(f, "UNNEST({array_expr})")?;
+                write!(f, "UNNEST({})", display_comma_separated(array_exprs))?;
+
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }

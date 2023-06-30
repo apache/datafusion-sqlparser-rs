@@ -1099,13 +1099,7 @@ fn parse_set() {
             local: false,
             hivevar: false,
             variable: ObjectName(vec![Ident::new("a")]),
-            value: vec![Expr::Value(Value::Number(
-                #[cfg(not(feature = "bigdecimal"))]
-                "0".to_string(),
-                #[cfg(feature = "bigdecimal")]
-                bigdecimal::BigDecimal::from(0),
-                false,
-            ))],
+            value: vec![Expr::Value(number("0"))],
         }
     );
 
@@ -1690,13 +1684,8 @@ fn parse_pg_regex_match_ops() {
 
 #[test]
 fn parse_array_index_expr() {
-    #[cfg(feature = "bigdecimal")]
     let num: Vec<Expr> = (0..=10)
-        .map(|s| Expr::Value(Value::Number(bigdecimal::BigDecimal::from(s), false)))
-        .collect();
-    #[cfg(not(feature = "bigdecimal"))]
-    let num: Vec<Expr> = (0..=10)
-        .map(|s| Expr::Value(Value::Number(s.to_string(), false)))
+        .map(|s| Expr::Value(number(&s.to_string())))
         .collect();
 
     let sql = "SELECT foo[0] FROM foos";
@@ -1784,13 +1773,7 @@ fn parse_array_subquery_expr() {
                 left: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(Value::Number(
-                        #[cfg(not(feature = "bigdecimal"))]
-                        "1".to_string(),
-                        #[cfg(feature = "bigdecimal")]
-                        bigdecimal::BigDecimal::from(1),
-                        false,
-                    )))],
+                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("1")))],
                     into: None,
                     from: vec![],
                     lateral_views: vec![],
@@ -1806,13 +1789,7 @@ fn parse_array_subquery_expr() {
                 right: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
-                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(Value::Number(
-                        #[cfg(not(feature = "bigdecimal"))]
-                        "2".to_string(),
-                        #[cfg(feature = "bigdecimal")]
-                        bigdecimal::BigDecimal::from(2),
-                        false,
-                    )))],
+                    projection: vec![SelectItem::UnnamedExpr(Expr::Value(number("2")))],
                     into: None,
                     from: vec![],
                     lateral_views: vec![],
@@ -2020,10 +1997,6 @@ fn test_composite_value() {
         select.projection[0]
     );
 
-    #[cfg(feature = "bigdecimal")]
-    let num: Expr = Expr::Value(Value::Number(bigdecimal::BigDecimal::from(9), false));
-    #[cfg(not(feature = "bigdecimal"))]
-    let num: Expr = Expr::Value(Value::Number("9".to_string(), false));
     assert_eq!(
         select.selection,
         Some(Expr::BinaryOp {
@@ -2035,7 +2008,7 @@ fn test_composite_value() {
                 ]))))
             }),
             op: BinaryOperator::Gt,
-            right: Box::new(num)
+            right: Box::new(Expr::Value(number("9")))
         })
     );
 

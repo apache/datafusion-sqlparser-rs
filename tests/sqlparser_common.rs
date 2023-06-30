@@ -1731,7 +1731,6 @@ fn parse_select_having() {
     assert!(select.having.is_some());
 }
 
-#[cfg(feature = "bigdecimal")]
 #[test]
 fn parse_select_qualify() {
     let sql = "SELECT i, p, o FROM qt QUALIFY ROW_NUMBER() OVER (PARTITION BY p ORDER BY o) = 1";

@@ -17,11 +17,6 @@ use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 use test_utils::*;
 
-#[cfg(feature = "bigdecimal")]
-use bigdecimal::*;
-#[cfg(feature = "bigdecimal")]
-use std::str::FromStr;
-
 #[test]
 fn parse_literal_string() {
     let sql = r#"SELECT 'single', "double""#;
@@ -377,22 +372,13 @@ fn test_select_wildcard_with_replace() {
                     expr: Expr::BinaryOp {
                         left: Box::new(Expr::Identifier(Ident::new("quantity"))),
                         op: BinaryOperator::Divide,
-                        #[cfg(not(feature = "bigdecimal"))]
-                        right: Box::new(Expr::Value(Value::Number("2".to_string(), false))),
-                        #[cfg(feature = "bigdecimal")]
-                        right: Box::new(Expr::Value(Value::Number(
-                            BigDecimal::from_str("2").unwrap(),
-                            false,
-                        ))),
+                        right: Box::new(Expr::Value(number("2"))),
                     },
                     column_name: Ident::new("quantity"),
                     as_keyword: true,
                 }),
                 Box::new(ReplaceSelectElement {
-                    #[cfg(not(feature = "bigdecimal"))]
-                    expr: Expr::Value(Value::Number("3".to_string(), false)),
-                    #[cfg(feature = "bigdecimal")]
-                    expr: Expr::Value(Value::Number(BigDecimal::from_str("3").unwrap(), false)),
+                    expr: Expr::Value(number("3")),
                     column_name: Ident::new("order_id"),
                     as_keyword: true,
                 }),
@@ -421,7 +407,6 @@ fn bigquery_and_generic() -> TestedDialects {
 fn parse_map_access_offset() {
     let sql = "SELECT d[offset(0)]";
     let _select = bigquery().verified_only_select(sql);
-    #[cfg(not(feature = "bigdecimal"))]
     assert_eq!(
         _select.projection[0],
         SelectItem::UnnamedExpr(Expr::MapAccess {
@@ -432,7 +417,7 @@ fn parse_map_access_offset() {
             keys: vec![Expr::Function(Function {
                 name: ObjectName(vec!["offset".into()]),
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                    Value::Number("0".into(), false)
+                    number("0")
                 ))),],
                 over: None,
                 distinct: false,

@@ -4190,18 +4190,9 @@ fn parse_unnest_in_from_clause() {
                 array_exprs: vec![Expr::Function(Function {
                     name: ObjectName(vec![Ident::new("make_array")]),
                     args: vec![
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Number(
-                            "1".into(),
-                            false,
-                        )))),
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Number(
-                            "2".into(),
-                            false,
-                        )))),
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::Number(
-                            "3".into(),
-                            false,
-                        )))),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("2")))),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("3")))),
                     ],
                     over: None,
                     distinct: false,
@@ -4228,15 +4219,9 @@ fn parse_unnest_in_from_clause() {
                     Expr::Function(Function {
                         name: ObjectName(vec![Ident::new("make_array")]),
                         args: vec![
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::Number("1".into(), false),
-                            ))),
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::Number("2".into(), false),
-                            ))),
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::Number("3".into(), false),
-                            ))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("2")))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("3")))),
                         ],
                         over: None,
                         distinct: false,
@@ -4246,12 +4231,8 @@ fn parse_unnest_in_from_clause() {
                     Expr::Function(Function {
                         name: ObjectName(vec![Ident::new("make_array")]),
                         args: vec![
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::Number("5".into(), false),
-                            ))),
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                Value::Number("6".into(), false),
-                            ))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("5")))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("6")))),
                         ],
                         over: None,
                         distinct: false,

@@ -1281,18 +1281,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_unnest_exprs(&mut self) -> Result<Vec<Expr>, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        if self.peek_token().token == Token::RParen {
-            let _ = self.next_token(); // consume ]
-            Ok(vec![])
-        } else {
-            let exprs = self.parse_comma_separated(Parser::parse_expr)?;
-            self.expect_token(&Token::RParen)?;
-            Ok(exprs)
-        }
-    }
-
     // Parses an array constructed from a subquery
     pub fn parse_array_subquery(&mut self) -> Result<Expr, ParserError> {
         let query = self.parse_query()?;

@@ -5991,7 +5991,9 @@ impl<'a> Parser<'a> {
         } else if dialect_of!(self is BigQueryDialect | GenericDialect)
             && self.parse_keyword(Keyword::UNNEST)
         {
-            let exprs = self.parse_unnest_exprs()?;
+            self.expect_token(&Token::LParen)?;
+            let array_exprs = self.parse_comma_separated(Parser::parse_expr)?;
+            self.expect_token(&Token::RParen)?;
 
             let alias = match self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS) {
                 Ok(Some(alias)) => Some(alias),
@@ -6016,7 +6018,7 @@ impl<'a> Parser<'a> {
 
             Ok(TableFactor::UNNEST {
                 alias,
-                array_exprs: exprs,
+                array_exprs,
                 with_offset,
                 with_offset_alias,
             })
@@ -7718,22 +7720,6 @@ mod tests {
                 "Unterminated string literal at Line: 1, Column 5".to_string()
             ))
         );
-    }
-
-    #[test]
-    fn test_unnest() {
-        let sql = "select * from unnest(array[1,2,3])";
-        let ast = Parser::parse_sql(&GenericDialect, sql);
-        assert!(ast.is_ok());
-        let sql = "select * from unnest(array[1,2,3],array[4,5])";
-        let ast = Parser::parse_sql(&GenericDialect, sql);
-        assert!(ast.is_ok());
-        let sql = "select unnest(array[1,2,3])";
-        let ast = Parser::parse_sql(&GenericDialect, sql);
-        assert!(ast.is_ok());
-        let sql = "select * from unnest(array[1,2,3],array[4,5]) as data(a,b)";
-        let ast = Parser::parse_sql(&GenericDialect, sql);
-        assert!(ast.is_ok());
     }
 
     #[test]

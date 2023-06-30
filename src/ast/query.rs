@@ -753,11 +753,7 @@ impl fmt::Display for TableFactor {
                 with_offset,
                 with_offset_alias,
             } => {
-                match array_exprs.len() {
-                    0 => write!(f, "UNNEST()")?,
-                    1 => write!(f, "UNNEST({})", array_exprs[0])?,
-                    _ => write!(f, "UNNEST({})", display_comma_separated(array_exprs))?,
-                }
+                write!(f, "UNNEST({})", display_comma_separated(array_exprs))?;
 
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;

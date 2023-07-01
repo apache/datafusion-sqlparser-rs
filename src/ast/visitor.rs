@@ -590,6 +590,7 @@ mod tests {
     use crate::dialect::GenericDialect;
     use crate::parser::Parser;
     use crate::tokenizer::Tokenizer;
+    use crate::tokenizer::TokenizerOptions;
 
     #[derive(Default)]
     struct TestVisitor {
@@ -632,7 +633,7 @@ mod tests {
 
     fn do_visit(sql: &str) -> Vec<String> {
         let dialect = GenericDialect {};
-        let option = TokenizerOptions::default().with_no_escape(false);
+        let option = TokenizerOptions::new().with_no_escape(false);
         let mut tokenizer = Tokenizer::new(&dialect, sql, &option);
         let tokens = tokenizer.tokenize().unwrap();
         let s = Parser::new(&dialect)

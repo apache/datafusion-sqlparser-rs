@@ -9284,7 +9284,10 @@ impl<'a> Parser<'a> {
         };
 
         let selection = if self.parse_keyword(Keyword::WHERE) {
-            Some(self.parse_expr()?)
+            let start_idx = self.index;
+            let expr = self.parse_expr()?;
+
+            Some(expr.spanning(self.span_from_index(start_idx)))
         } else {
             None
         };

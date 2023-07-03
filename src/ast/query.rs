@@ -293,7 +293,7 @@ pub struct Select {
     /// [ClickHouse](https://clickhouse.com/docs/en/sql-reference/statements/select/prewhere)
     pub prewhere: Option<Expr>,
     /// WHERE
-    pub selection: Option<Expr>,
+    pub selection: Option<WithSpan<Expr>>,
     /// GROUP BY
     pub group_by: GroupByExpr,
     /// CLUSTER BY (Hive)

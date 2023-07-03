@@ -99,7 +99,7 @@ fn parse_map_access_expr() {
                     op: BinaryOperator::NotEq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("foo".to_string()))),
                 }),
-            }),
+            }.empty_span()),
             group_by: GroupByExpr::Expressions(vec![], vec![]),
             cluster_by: vec![],
             distribute_by: vec![],
@@ -1324,7 +1324,7 @@ fn test_prewhere() {
                     left: Box::new(Identifier(Ident::new("y").empty_span())),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(Value::Number("2".parse().unwrap(), false))),
-                })
+                }.empty_span())
             );
         }
         _ => unreachable!(),

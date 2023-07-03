@@ -2462,7 +2462,7 @@ fn parse_comma_outer_join() {
                 Ident::new("t2").empty_span(),
                 Ident::new("c2").empty_span()
             ]))))
-        })
+        }.empty_span())
     );
 
     // regular identifiers
@@ -2476,7 +2476,7 @@ fn parse_comma_outer_join() {
             right: Box::new(Expr::OuterJoin(Box::new(Expr::Identifier(
                 Ident::new("c2").empty_span()
             ))))
-        })
+        }.empty_span())
     );
 
     // ensure we can still parse function calls with a unary plus arg
@@ -2494,7 +2494,7 @@ fn parse_comma_outer_join() {
                     expr: Box::new(Expr::Value(number("42")))
                 }]
             )),
-        })
+        }.empty_span())
     );
 
     // permissive with whitespace

@@ -2799,21 +2799,21 @@ fn test_json() {
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "{\"a\": 1}".to_string()
             ))),
-        },
+        }.empty_span(),
         select.selection.unwrap(),
     );
 
     let sql = "SELECT info FROM orders WHERE '{\"a\": 1}' <@ info";
     let select = pg().verified_only_select(sql);
     assert_eq!(
-        Expr::BinaryOp {
+        Some(Expr::BinaryOp {
             left: Box::new(Expr::Value(Value::SingleQuotedString(
                 "{\"a\": 1}".to_string()
             ))),
             op: BinaryOperator::ArrowAt,
             right: Box::new(Expr::Identifier(Ident::new("info").empty_span())),
-        },
-        select.selection.unwrap(),
+        }.empty_span()),
+        select.selection,
     );
 
     let sql = "SELECT info #- ARRAY['a', 'b'] FROM orders";
@@ -2841,7 +2841,7 @@ fn test_json() {
             left: Box::new(Expr::Identifier(Ident::from("info").empty_span())),
             op: BinaryOperator::AtQuestion,
             right: Box::new(Expr::Value(Value::SingleQuotedString("$.a".to_string())),),
-        },
+        }.empty_span(),
         select.selection.unwrap(),
     );
 
@@ -2852,7 +2852,7 @@ fn test_json() {
             left: Box::new(Expr::Identifier(Ident::from("info").empty_span())),
             op: BinaryOperator::AtAt,
             right: Box::new(Expr::Value(Value::SingleQuotedString("$.a".to_string())),),
-        },
+        }.empty_span(),
         select.selection.unwrap(),
     );
 
@@ -2863,7 +2863,7 @@ fn test_json() {
             left: Box::new(Expr::Identifier(Ident::new("info").empty_span())),
             op: BinaryOperator::Question,
             right: Box::new(Expr::Value(Value::SingleQuotedString("b".to_string()))),
-        },
+        }.empty_span(),
         select.selection.unwrap(),
     );
 
@@ -2880,7 +2880,7 @@ fn test_json() {
                 ],
                 named: true
             }))
-        },
+        }.empty_span(),
         select.selection.unwrap(),
     );
 
@@ -2897,7 +2897,7 @@ fn test_json() {
                 ],
                 named: true
             }))
-        },
+        }.empty_span(),
         select.selection.unwrap(),
     );
 }
@@ -2945,7 +2945,7 @@ fn test_composite_value() {
             }),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Value(number("9")))
-        })
+        }.empty_span())
     );
 
     let sql = "SELECT (information_schema._pg_expandarray(ARRAY['i', 'i'])).n";
@@ -3290,7 +3290,7 @@ fn parse_custom_operator() {
                 "~".into()
             ]),
             right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
-        })
+        }.empty_span())
     );
 
     // operator with a schema
@@ -3308,7 +3308,7 @@ fn parse_custom_operator() {
             )),
             op: BinaryOperator::PGCustomBinaryOperator(vec!["pg_catalog".into(), "~".into()]),
             right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
-        })
+        }.empty_span())
     );
 
     // custom operator without a schema
@@ -3326,7 +3326,7 @@ fn parse_custom_operator() {
             )),
             op: BinaryOperator::PGCustomBinaryOperator(vec!["~".into()]),
             right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
-        })
+        }.empty_span())
     );
 }
 

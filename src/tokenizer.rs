@@ -150,6 +150,8 @@ pub enum Token {
     ShiftLeft,
     /// `>>`, a bitwise shift right operator in PostgreSQL
     ShiftRight,
+    /// '&&', an overlap operator in PostgreSQL
+    Overlap,
     /// Exclamation Mark `!` used for PostgreSQL factorial operator
     ExclamationMark,
     /// Double Exclamation Mark `!!` used for PostgreSQL prefix factorial operator
@@ -158,7 +160,7 @@ pub enum Token {
     AtSign,
     /// `|/`, a square root math operator in PostgreSQL
     PGSquareRoot,
-    /// `||/` , a cube root math operator in PostgreSQL
+    /// `||/`, a cube root math operator in PostgreSQL
     PGCubeRoot,
     /// `?` or `$` , a prepared statement arg placeholder
     Placeholder(String),
@@ -245,6 +247,7 @@ impl fmt::Display for Token {
             Token::AtSign => f.write_str("@"),
             Token::ShiftLeft => f.write_str("<<"),
             Token::ShiftRight => f.write_str(">>"),
+            Token::Overlap => f.write_str("&&"),
             Token::PGSquareRoot => f.write_str("|/"),
             Token::PGCubeRoot => f.write_str("||/"),
             Token::Placeholder(ref s) => write!(f, "{s}"),
@@ -858,7 +861,14 @@ impl<'a> Tokenizer<'a> {
                 '\\' => self.consume_and_return(chars, Token::Backslash),
                 '[' => self.consume_and_return(chars, Token::LBracket),
                 ']' => self.consume_and_return(chars, Token::RBracket),
-                '&' => self.consume_and_return(chars, Token::Ampersand),
+                '&' => {
+                    chars.next(); // consume the '&'
+                    match chars.peek() {
+                        Some('&') => self.consume_and_return(chars, Token::Overlap),
+                        // Bitshift '&' operator
+                        _ => Ok(Some(Token::Ampersand)),
+                    }
+                }
                 '^' => self.consume_and_return(chars, Token::Caret),
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),

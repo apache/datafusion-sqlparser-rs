@@ -1085,10 +1085,18 @@ impl<'a> Parser<'a> {
         let expr = self.parse_expr()?;
         self.expect_keyword(Keyword::AS)?;
         let data_type = self.parse_data_type()?;
+
+        let format = if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::FORMAT) {
+            Some(self.parse_value()?)
+        } else {
+            None
+        };
+
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Cast {
             expr: Box::new(expr),
             data_type,
+            format,
         })
     }
 
@@ -1098,10 +1106,18 @@ impl<'a> Parser<'a> {
         let expr = self.parse_expr()?;
         self.expect_keyword(Keyword::AS)?;
         let data_type = self.parse_data_type()?;
+
+        let format = if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::FORMAT) {
+            Some(self.parse_value()?)
+        } else {
+            None
+        };
+
         self.expect_token(&Token::RParen)?;
         Ok(Expr::TryCast {
             expr: Box::new(expr),
             data_type,
+            format,
         })
     }
 
@@ -1111,10 +1127,18 @@ impl<'a> Parser<'a> {
         let expr = self.parse_expr()?;
         self.expect_keyword(Keyword::AS)?;
         let data_type = self.parse_data_type()?;
+
+        let format = if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::FORMAT) {
+            Some(self.parse_value()?)
+        } else {
+            None
+        };
+
         self.expect_token(&Token::RParen)?;
         Ok(Expr::SafeCast {
             expr: Box::new(expr),
             data_type,
+            format,
         })
     }
 
@@ -1990,6 +2014,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::Cast {
             expr: Box::new(expr),
             data_type: self.parse_data_type()?,
+            format: None,
         })
     }
 

@@ -204,6 +204,37 @@ fn parse_cast_type() {
 }
 
 #[test]
+fn parse_cast_date_format() {
+    let sql = r#"SELECT CAST(date_valid_from AS DATE FORMAT 'YYYY-MM-DD') AS date_valid_from FROM foo"#;
+    bigquery().verified_only_select(sql);
+}
+
+#[test]
+fn parse_cast_time_format() {
+    let sql = r#"SELECT CAST(TIME '21:30:00' AS STRING FORMAT 'PM') AS date_time_to_string"#;
+    bigquery().verified_only_select(sql);
+}
+
+#[test]
+#[ignore]
+fn parse_cast_timestamp_format_tz() {
+    let sql = r#"SELECT CAST(TIMESTAMP '2008-12-25 00:00:00+00:00' AS STRING FORMAT 'TZH' AT TIME ZONE 'Asia/Kolkata') AS date_time_to_string"#;
+    bigquery().verified_only_select(sql);
+}
+
+#[test]
+fn parse_cast_string_to_bytes_format() {
+    let sql = r#"SELECT CAST('Hello' AS BYTES FORMAT 'ASCII') AS string_to_bytes"#;
+    bigquery().verified_only_select(sql);
+}
+
+#[test]
+fn parse_cast_bytes_to_string_format() {
+    let sql = r#"SELECT CAST(B'\x48\x65\x6c\x6c\x6f' AS STRING FORMAT 'ASCII') AS bytes_to_string"#;
+    bigquery().verified_only_select(sql);
+}
+
+#[test]
 fn parse_like() {
     fn chk(negated: bool) {
         let sql = &format!(

@@ -169,6 +169,7 @@ fn parse_array() {
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
             data_type: DataType::Array(None),
+            format: None,
         },
         expr_from_projection(only(&select.projection))
     );

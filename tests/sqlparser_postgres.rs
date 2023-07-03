@@ -2244,7 +2244,8 @@ fn test_json() {
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "{\"a\": 1}".to_string()
             ))),
-        },
+        }
+        .empty_span(),
         select.selection.unwrap(),
     );
 
@@ -2257,7 +2258,8 @@ fn test_json() {
             ))),
             operator: JsonOperator::ArrowAt,
             right: Box::new(Expr::Identifier(Ident::new("info").empty_span())),
-        },
+        }
+        .empty_span(),
         select.selection.unwrap(),
     );
 
@@ -2288,7 +2290,8 @@ fn test_json() {
             left: Box::new(Expr::Identifier(Ident::from("info").empty_span())),
             operator: JsonOperator::AtQuestion,
             right: Box::new(Expr::Value(Value::SingleQuotedString("$.a".to_string())),),
-        },
+        }
+        .empty_span(),
         select.selection.unwrap(),
     );
 
@@ -2299,7 +2302,8 @@ fn test_json() {
             left: Box::new(Expr::Identifier(Ident::from("info").empty_span())),
             operator: JsonOperator::AtAt,
             right: Box::new(Expr::Value(Value::SingleQuotedString("$.a".to_string())),),
-        },
+        }
+        .empty_span(),
         select.selection.unwrap(),
     );
 }
@@ -2324,17 +2328,20 @@ fn test_composite_value() {
 
     assert_eq!(
         select.selection,
-        Some(Expr::BinaryOp {
-            left: Box::new(Expr::CompositeAccess {
-                key: Ident::new("price"),
-                expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
-                    Ident::new("on_hand"),
-                    Ident::new("item")
-                ]))))
-            }),
-            op: BinaryOperator::Gt,
-            right: Box::new(Expr::Value(number("9")))
-        })
+        Some(
+            Expr::BinaryOp {
+                left: Box::new(Expr::CompositeAccess {
+                    key: Ident::new("price"),
+                    expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
+                        Ident::new("on_hand"),
+                        Ident::new("item")
+                    ]))))
+                }),
+                op: BinaryOperator::Gt,
+                right: Box::new(Expr::Value(number("9")))
+            }
+            .empty_span()
+        )
     );
 
     let sql = "SELECT (information_schema._pg_expandarray(ARRAY['i', 'i'])).n";
@@ -2598,21 +2605,24 @@ fn parse_custom_operator() {
     let select = pg().verified_only_select(sql);
     assert_eq!(
         select.selection,
-        Some(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(
-                Ident {
-                    value: "relname".into(),
-                    quote_style: None,
-                }
-                .empty_span()
-            )),
-            op: BinaryOperator::PGCustomBinaryOperator(vec![
-                "database".into(),
-                "pg_catalog".into(),
-                "~".into()
-            ]),
-            right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
-        })
+        Some(
+            Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(
+                    Ident {
+                        value: "relname".into(),
+                        quote_style: None,
+                    }
+                    .empty_span()
+                )),
+                op: BinaryOperator::PGCustomBinaryOperator(vec![
+                    "database".into(),
+                    "pg_catalog".into(),
+                    "~".into()
+                ]),
+                right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
+            }
+            .empty_span()
+        )
     );
 
     // operator with a schema
@@ -2620,17 +2630,20 @@ fn parse_custom_operator() {
     let select = pg().verified_only_select(sql);
     assert_eq!(
         select.selection,
-        Some(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(
-                Ident {
-                    value: "relname".into(),
-                    quote_style: None,
-                }
-                .empty_span()
-            )),
-            op: BinaryOperator::PGCustomBinaryOperator(vec!["pg_catalog".into(), "~".into()]),
-            right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
-        })
+        Some(
+            Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(
+                    Ident {
+                        value: "relname".into(),
+                        quote_style: None,
+                    }
+                    .empty_span()
+                )),
+                op: BinaryOperator::PGCustomBinaryOperator(vec!["pg_catalog".into(), "~".into()]),
+                right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
+            }
+            .empty_span()
+        )
     );
 
     // custom operator without a schema
@@ -2638,17 +2651,20 @@ fn parse_custom_operator() {
     let select = pg().verified_only_select(sql);
     assert_eq!(
         select.selection,
-        Some(Expr::BinaryOp {
-            left: Box::new(Expr::Identifier(
-                Ident {
-                    value: "relname".into(),
-                    quote_style: None,
-                }
-                .empty_span()
-            )),
-            op: BinaryOperator::PGCustomBinaryOperator(vec!["~".into()]),
-            right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
-        })
+        Some(
+            Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(
+                    Ident {
+                        value: "relname".into(),
+                        quote_style: None,
+                    }
+                    .empty_span()
+                )),
+                op: BinaryOperator::PGCustomBinaryOperator(vec!["~".into()]),
+                right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
+            }
+            .empty_span()
+        )
     );
 }
 
@@ -3078,7 +3094,8 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            },
+            }
+            .empty_span(),
             select.selection.unwrap()
         );
 
@@ -3094,7 +3111,8 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            },
+            }
+            .empty_span(),
             select.selection.unwrap()
         );
 
@@ -3111,7 +3129,8 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            })),
+            }))
+            .empty_span(),
             select.selection.unwrap()
         );
     }
@@ -3133,7 +3152,8 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            },
+            }
+            .empty_span(),
             select.selection.unwrap()
         );
 
@@ -3149,7 +3169,8 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            },
+            }
+            .empty_span(),
             select.selection.unwrap()
         );
 
@@ -3165,7 +3186,8 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            })),
+            }))
+            .empty_span(),
             select.selection.unwrap()
         );
     }

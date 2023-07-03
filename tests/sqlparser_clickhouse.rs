@@ -79,37 +79,40 @@ fn parse_array_access_expr() {
                 joins: vec![],
             }],
             lateral_views: vec![],
-            selection: Some(BinaryOp {
-                left: Box::new(BinaryOp {
-                    left: Box::new(Identifier(Ident::new("id").empty_span())),
-                    op: BinaryOperator::Eq,
-                    right: Box::new(Expr::Value(Value::SingleQuotedString("test".to_string()))),
-                }),
-                op: BinaryOperator::And,
-                right: Box::new(BinaryOp {
-                    left: Box::new(ArrayIndex {
-                        obj: Box::new(Identifier(Ident::new("string_value").empty_span())),
-                        indexes: vec![Expr::Function(Function {
-                            name: ObjectName(vec![Ident::new("indexOf")]),
-                            args: vec![
-                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
-                                    Ident::new("string_name").empty_span()
-                                ))),
-                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                                    Value::SingleQuotedString("app".to_string())
-                                ))),
-                            ],
-                            over: None,
-                            distinct: false,
-                            special: false,
-                            order_by: vec![],
-                            null_treatment: None,
-                        })],
+            selection: Some(
+                BinaryOp {
+                    left: Box::new(BinaryOp {
+                        left: Box::new(Identifier(Ident::new("id").empty_span())),
+                        op: BinaryOperator::Eq,
+                        right: Box::new(Expr::Value(Value::SingleQuotedString("test".to_string()))),
                     }),
-                    op: BinaryOperator::NotEq,
-                    right: Box::new(Expr::Value(Value::SingleQuotedString("foo".to_string()))),
-                }),
-            }),
+                    op: BinaryOperator::And,
+                    right: Box::new(BinaryOp {
+                        left: Box::new(ArrayIndex {
+                            obj: Box::new(Identifier(Ident::new("string_value").empty_span())),
+                            indexes: vec![Expr::Function(Function {
+                                name: ObjectName(vec![Ident::new("indexOf")]),
+                                args: vec![
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                                        Ident::new("string_name").empty_span()
+                                    ))),
+                                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                                        Value::SingleQuotedString("app".to_string())
+                                    ))),
+                                ],
+                                over: None,
+                                distinct: false,
+                                special: false,
+                                order_by: vec![],
+                                null_treatment: None,
+                            })],
+                        }),
+                        op: BinaryOperator::NotEq,
+                        right: Box::new(Expr::Value(Value::SingleQuotedString("foo".to_string()))),
+                    }),
+                }
+                .empty_span()
+            ),
             group_by: GroupByExpr::Expressions(vec![]),
             cluster_by: vec![],
             distribute_by: vec![],
@@ -253,7 +256,8 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            },
+            }
+            .empty_span(),
             select.selection.unwrap()
         );
 
@@ -269,7 +273,8 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            },
+            }
+            .empty_span(),
             select.selection.unwrap()
         );
 
@@ -286,7 +291,8 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            })),
+            }))
+            .empty_span(),
             select.selection.unwrap()
         );
     }
@@ -308,7 +314,8 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            },
+            }
+            .empty_span(),
             select.selection.unwrap()
         );
 
@@ -324,7 +331,8 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            },
+            }
+            .empty_span(),
             select.selection.unwrap()
         );
 
@@ -340,7 +348,8 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            })),
+            }))
+            .empty_span(),
             select.selection.unwrap()
         );
     }

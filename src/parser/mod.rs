@@ -5912,7 +5912,10 @@ impl<'a> Parser<'a> {
         }
 
         let selection = if self.parse_keyword(Keyword::WHERE) {
-            Some(self.parse_expr()?)
+            let start_idx = self.index;
+            let expr = self.parse_expr()?;
+
+            Some(expr.spanning(self.span_from_index(start_idx)))
         } else {
             None
         };
@@ -7811,7 +7814,7 @@ impl<'a> Parser<'a> {
         }
         let start_span = start_token.span;
 
-        let mut idx = self.index.max(start_index).min(self.tokens.len());
+        let mut idx = self.index.max(start_index).min(self.tokens.len() - 1);
         loop {
             if idx <= start_index || idx >= self.tokens.len() {
                 break;
@@ -7820,6 +7823,13 @@ impl<'a> Parser<'a> {
             match curr_token {
                 TokenWithLocation {
                     token: Token::Whitespace(_),
+                    span: _,
+                } => {
+                    idx -= 1;
+                    continue;
+                }
+                TokenWithLocation {
+                    token: Token::Comma,
                     span: _,
                 } => {
                     idx -= 1;

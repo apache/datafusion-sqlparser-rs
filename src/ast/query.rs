@@ -219,7 +219,7 @@ pub struct Select {
     /// LATERAL VIEWs
     pub lateral_views: Vec<LateralView>,
     /// WHERE
-    pub selection: Option<Expr>,
+    pub selection: Option<WithSpan<Expr>>,
     /// GROUP BY
     pub group_by: GroupByExpr,
     /// CLUSTER BY (Hive)

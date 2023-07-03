@@ -101,7 +101,7 @@ fn parse_array_access_expr() {
                     op: BinaryOperator::NotEq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("foo".to_string())))
                 })
-            }),
+            }.empty_span()),
             group_by: vec![],
             cluster_by: vec![],
             distribute_by: vec![],
@@ -239,7 +239,7 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
 
@@ -255,7 +255,7 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
 
@@ -272,7 +272,7 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            })),
+            })).empty_span(),
             select.selection.unwrap()
         );
     }
@@ -294,7 +294,7 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
 
@@ -310,7 +310,7 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
 
@@ -326,7 +326,7 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            })),
+            })).empty_span(),
             select.selection.unwrap()
         );
     }

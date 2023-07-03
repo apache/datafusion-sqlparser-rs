@@ -147,7 +147,7 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
 
@@ -163,7 +163,7 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
 
@@ -180,7 +180,7 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            })),
+            })).empty_span(),
             select.selection.unwrap()
         );
     }
@@ -202,7 +202,7 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
 
@@ -218,7 +218,7 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
 
@@ -234,7 +234,7 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            })),
+            })).empty_span(),
             select.selection.unwrap()
         );
     }

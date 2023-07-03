@@ -1032,7 +1032,7 @@ fn parse_escaped_single_quote_string_predicate() {
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "Jim's salary".to_string()
             ))),
-        }),
+        }.empty_span()),
         ast.selection,
     );
 }
@@ -1275,7 +1275,7 @@ fn parse_ilike() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
 
@@ -1291,7 +1291,7 @@ fn parse_ilike() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('^'),
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
 
@@ -1308,7 +1308,7 @@ fn parse_ilike() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            })),
+            })).empty_span(),
             select.selection.unwrap()
         );
     }
@@ -1332,7 +1332,7 @@ fn parse_in_list() {
                     Expr::Value(Value::SingleQuotedString("MED".to_string())),
                 ],
                 negated,
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
     }
@@ -1349,7 +1349,7 @@ fn parse_in_subquery() {
             expr: Box::new(Expr::Identifier(Ident::new("segment").empty_span())),
             subquery: Box::new(verified_query("SELECT segm FROM bar")),
             negated: false,
-        },
+        }.empty_span(),
         select.selection.unwrap()
     );
 }
@@ -1367,7 +1367,7 @@ fn parse_in_unnest() {
                 expr: Box::new(Expr::Identifier(Ident::new("segment").empty_span())),
                 array_expr: Box::new(verified_expr("expr")),
                 negated,
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
     }
@@ -1516,7 +1516,7 @@ fn parse_between() {
                 low: Box::new(Expr::Value(number("25"))),
                 high: Box::new(Expr::Value(number("32"))),
                 negated,
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
     }
@@ -1543,7 +1543,7 @@ fn parse_between_with_expr() {
                 right: Box::new(Expr::Value(number("4"))),
             }),
             negated: false,
-        })),
+        })).empty_span(),
         select.selection.unwrap()
     );
 
@@ -1567,7 +1567,7 @@ fn parse_between_with_expr() {
                 high: Box::new(Expr::Value(number("2"))),
                 negated: false,
             }),
-        },
+        }.empty_span(),
         select.selection.unwrap(),
     )
 }
@@ -3826,7 +3826,7 @@ fn parse_interval_and_or_xor() {
                         })),
                     }),
                 }),
-            }),
+            }.empty_span()),
             group_by: vec![],
             cluster_by: vec![],
             distribute_by: vec![],
@@ -4968,7 +4968,7 @@ fn parse_exists_subquery() {
         Expr::Exists {
             negated: false,
             subquery: Box::new(expected_inner.clone()),
-        },
+        }.empty_span(),
         select.selection.unwrap(),
     );
 
@@ -4978,7 +4978,7 @@ fn parse_exists_subquery() {
         Expr::Exists {
             negated: true,
             subquery: Box::new(expected_inner),
-        },
+        }.empty_span(),
         select.selection.unwrap(),
     );
 
@@ -6391,7 +6391,7 @@ fn test_placeholder() {
             left: Box::new(Expr::Identifier(Ident::new("id").empty_span())),
             op: BinaryOperator::Eq,
             right: Box::new(Expr::Value(Value::Placeholder("?".into()))),
-        })
+        }.empty_span())
     );
 
     let dialects = TestedDialects {
@@ -6416,7 +6416,7 @@ fn test_placeholder() {
             left: Box::new(Expr::Identifier(Ident::new("id").empty_span())),
             op: BinaryOperator::Eq,
             right: Box::new(Expr::Value(Value::Placeholder("$Id1".into()))),
-        })
+        }.empty_span())
     );
 
     let sql = "SELECT * FROM student LIMIT $1 OFFSET $2";

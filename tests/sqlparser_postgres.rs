@@ -1971,7 +1971,7 @@ fn test_json() {
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "{\"a\": 1}".to_string()
             ))),
-        },
+        }.empty_span(),
         select.selection.unwrap(),
     );
 
@@ -1984,7 +1984,7 @@ fn test_json() {
             ))),
             operator: JsonOperator::ArrowAt,
             right: Box::new(Expr::Identifier(Ident::new("info").empty_span())),
-        },
+        }.empty_span(),
         select.selection.unwrap(),
     );
 
@@ -2012,7 +2012,7 @@ fn test_json() {
             left: Box::new(Expr::Identifier(Ident::from("info").empty_span())),
             operator: JsonOperator::AtQuestion,
             right: Box::new(Expr::Value(Value::SingleQuotedString("$.a".to_string())),),
-        },
+        }.empty_span(),
         select.selection.unwrap(),
     );
 
@@ -2023,7 +2023,7 @@ fn test_json() {
             left: Box::new(Expr::Identifier(Ident::from("info").empty_span())),
             operator: JsonOperator::AtAt,
             right: Box::new(Expr::Value(Value::SingleQuotedString("$.a".to_string())),),
-        },
+        }.empty_span(),
         select.selection.unwrap(),
     );
 }
@@ -2059,7 +2059,7 @@ fn test_composite_value() {
             }),
             op: BinaryOperator::Gt,
             right: Box::new(num)
-        })
+        }.empty_span())
     );
 
     let sql = "SELECT (information_schema._pg_expandarray(ARRAY['i', 'i'])).n";
@@ -2335,7 +2335,7 @@ fn parse_custom_operator() {
                 "~".into()
             ]),
             right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
-        })
+        }.empty_span())
     );
 
     // operator with a schema
@@ -2353,7 +2353,7 @@ fn parse_custom_operator() {
             )),
             op: BinaryOperator::PGCustomBinaryOperator(vec!["pg_catalog".into(), "~".into()]),
             right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
-        })
+        }.empty_span())
     );
 
     // custom operator without a schema
@@ -2371,7 +2371,7 @@ fn parse_custom_operator() {
             )),
             op: BinaryOperator::PGCustomBinaryOperator(vec!["~".into()]),
             right: Box::new(Expr::Value(Value::SingleQuotedString("^(table)$".into())))
-        })
+        }.empty_span())
     );
 }
 
@@ -2603,7 +2603,7 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
 
@@ -2619,7 +2619,7 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
 
@@ -2636,7 +2636,7 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            })),
+            })).empty_span(),
             select.selection.unwrap()
         );
     }
@@ -2658,7 +2658,7 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
 
@@ -2674,7 +2674,7 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            },
+            }.empty_span(),
             select.selection.unwrap()
         );
 
@@ -2690,7 +2690,7 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            })),
+            })).empty_span(),
             select.selection.unwrap()
         );
     }

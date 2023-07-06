@@ -31,7 +31,6 @@ impl Dialect for MySqlDialect {
         ch.is_alphabetic()
             || ch == '_'
             || ch == '$'
-            || ch == '@'
             || ('\u{0080}'..='\u{ffff}').contains(&ch)
     }
 

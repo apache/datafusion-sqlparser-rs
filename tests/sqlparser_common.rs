@@ -1114,6 +1114,36 @@ fn parse_unary_math_with_multiply() {
 }
 
 #[test]
+fn parse_arrow_at() {
+    use self::JsonOperator::*;
+    use self::Expr::*;
+    let sql = "a <@ b";
+    assert_eq!(
+        JsonAccess {
+            left: Box::new(Identifier(Ident::new("a"))),
+            operator: ArrowAt,
+            right: Box::new(Identifier(Ident::new("b"))),
+        },
+        verified_expr(sql)
+    );
+}
+
+#[test]
+fn parse_at_arrow() {
+    use self::JsonOperator::*;
+    use self::Expr::*;
+    let sql = "a @> b";
+    assert_eq!(
+        JsonAccess {
+            left: Box::new(Identifier(Ident::new("a"))),
+            operator: AtArrow,
+            right: Box::new(Identifier(Ident::new("b"))),
+        },
+        verified_expr(sql)
+    );
+}
+
+#[test]
 fn parse_is_null() {
     use self::Expr::*;
     let sql = "a IS NULL";

@@ -35,7 +35,9 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::DollarQuotedString;
-use crate::dialect::{BigQueryDialect, DuckDbDialect, GenericDialect, SnowflakeDialect};
+use crate::dialect::{
+    BigQueryDialect, DuckDbDialect, GenericDialect, HiveDialect, SnowflakeDialect,
+};
 use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
@@ -495,9 +497,32 @@ impl<'a> Tokenizer<'a> {
         Ok(tokens)
     }
 
+    fn tokenize_identifier_or_keyword(
+        &self,
+        ch: String,
+        chars: &mut State,
+    ) -> Result<Option<Token>, TokenizerError> {
+        chars.next(); // consume the first char
+        let word = self.tokenize_word(ch, chars);
+
+        // TODO: implement parsing of exponent here
+        if word.chars().all(|x| x.is_ascii_digit() || x == '.') {
+            let mut inner_state = State {
+                peekable: word.chars().peekable(),
+                line: 0,
+                col: 0,
+            };
+            let mut s = peeking_take_while(&mut inner_state, |ch| matches!(ch, '0'..='9' | '.'));
+            let s2 = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
+            s += s2.as_str();
+            return Ok(Some(Token::Number(s, false)));
+        }
+
+        Ok(Some(Token::make_word(&word, None)))
+    }
+
     /// Get the next token or return None
     fn next_token(&self, chars: &mut State) -> Result<Option<Token>, TokenizerError> {
-        //println!("next_token: {:?}", chars.peek());
         match chars.peek() {
             Some(&ch) => match ch {
                 ' ' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Space)),
@@ -525,7 +550,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "b" or "B"
-                            let s = self.tokenize_word(b, chars);
+                            let s = self.tokenize_word(b.to_string(), chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -544,7 +569,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "r" or "R"
-                            let s = self.tokenize_word(b, chars);
+                            let s = self.tokenize_word(b.to_string(), chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -560,7 +585,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "N"
-                            let s = self.tokenize_word(n, chars);
+                            let s = self.tokenize_word(n.to_string(), chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -577,7 +602,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "E" or "e"
-                            let s = self.tokenize_word(x, chars);
+                            let s = self.tokenize_word(x.to_string(), chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -594,32 +619,10 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "X"
-                            let s = self.tokenize_word(x, chars);
+                            let s = self.tokenize_word(x.to_string(), chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
-                }
-                // identifier or keyword
-                ch if self.dialect.is_identifier_start(ch) => {
-                    chars.next(); // consume the first char
-                    let word = self.tokenize_word(ch, chars);
-
-                    // TODO: implement parsing of exponent here
-                    if word.chars().all(|x| x.is_ascii_digit() || x == '.') {
-                        let mut inner_state = State {
-                            peekable: word.chars().peekable(),
-                            line: 0,
-                            col: 0,
-                        };
-                        let mut s = peeking_take_while(&mut inner_state, |ch| {
-                            matches!(ch, '0'..='9' | '.')
-                        });
-                        let s2 = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
-                        s += s2.as_str();
-                        return Ok(Some(Token::Number(s, false)));
-                    }
-
-                    Ok(Some(Token::make_word(&word, None)))
                 }
                 // single quoted string
                 '\'' => {
@@ -714,7 +717,7 @@ impl<'a> Tokenizer<'a> {
 
                     // mysql dialect supports identifiers that start with a numeric prefix,
                     // as long as they aren't an exponent number.
-                    if dialect_of!(self is MySqlDialect) && exponent_part.is_empty() {
+                    if dialect_of!(self is MySqlDialect | HiveDialect) && exponent_part.is_empty() {
                         let word =
                             peeking_take_while(chars, |ch| self.dialect.is_identifier_part(ch));
 
@@ -786,7 +789,18 @@ impl<'a> Tokenizer<'a> {
                 }
                 '+' => self.consume_and_return(chars, Token::Plus),
                 '*' => self.consume_and_return(chars, Token::Mul),
-                '%' => self.consume_and_return(chars, Token::Mod),
+                '%' => {
+                    chars.next();
+                    match chars.peek() {
+                        Some(' ') => self.consume_and_return(chars, Token::Mod),
+                        Some(sch) if self.dialect.is_identifier_start('%') => {
+                            let mut s = ch.to_string();
+                            s.push_str(&sch.to_string());
+                            self.tokenize_identifier_or_keyword(s, chars)
+                        }
+                        _ => self.consume_and_return(chars, Token::Mod),
+                    }
+                }
                 '|' => {
                     chars.next(); // consume the '|'
                     match chars.peek() {
@@ -901,6 +915,12 @@ impl<'a> Tokenizer<'a> {
                                 _ => Ok(Some(Token::HashArrow)),
                             }
                         }
+                        Some(' ') => Ok(Some(Token::Sharp)),
+                        Some(sch) if self.dialect.is_identifier_start('#') => {
+                            let mut s = ch.to_string();
+                            s.push_str(&sch.to_string());
+                            self.tokenize_identifier_or_keyword(s, chars)
+                        }
                         _ => Ok(Some(Token::Sharp)),
                     }
                 }
@@ -909,7 +929,25 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('>') => self.consume_and_return(chars, Token::AtArrow),
                         Some('?') => self.consume_and_return(chars, Token::AtQuestion),
-                        Some('@') => self.consume_and_return(chars, Token::AtAt),
+                        Some('@') => {
+                            chars.next();
+                            match chars.peek() {
+                                Some(' ') => Ok(Some(Token::AtAt)),
+                                Some(tch) if self.dialect.is_identifier_start('@') => {
+                                    let mut s = ch.to_string();
+                                    s.push('@');
+                                    s.push_str(&tch.to_string());
+                                    self.tokenize_identifier_or_keyword(s, chars)
+                                }
+                                _ => Ok(Some(Token::AtAt)),
+                            }
+                        }
+                        Some(' ') => Ok(Some(Token::AtSign)),
+                        Some(sch) if self.dialect.is_identifier_start('@') => {
+                            let mut s = ch.to_string();
+                            s.push_str(&sch.to_string());
+                            self.tokenize_identifier_or_keyword(s, chars)
+                        }
                         _ => Ok(Some(Token::AtSign)),
                     }
                 }
@@ -917,6 +955,11 @@ impl<'a> Tokenizer<'a> {
                     chars.next();
                     let s = peeking_take_while(chars, |ch| ch.is_numeric());
                     Ok(Some(Token::Placeholder(String::from("?") + &s)))
+                }
+
+                // identifier or keyword
+                ch if self.dialect.is_identifier_start(ch) => {
+                    self.tokenize_identifier_or_keyword(ch.to_string(), chars)
                 }
                 '$' => Ok(Some(self.tokenize_dollar_preceded_value(chars)?)),
 
@@ -1043,8 +1086,8 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Tokenize an identifier or keyword, after the first char is already consumed.
-    fn tokenize_word(&self, first_char: char, chars: &mut State) -> String {
-        let mut s = first_char.to_string();
+    fn tokenize_word(&self, first_chars: String, chars: &mut State) -> String {
+        let mut s = first_chars;
         s.push_str(&peeking_take_while(chars, |ch| {
             self.dialect.is_identifier_part(ch)
         }));

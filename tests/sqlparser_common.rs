@@ -1113,34 +1113,39 @@ fn parse_unary_math_with_multiply() {
     );
 }
 
-#[test]
-fn parse_arrow_at() {
-    use self::JsonOperator::*;
-    use self::Expr::*;
-    let sql = "a <@ b";
-    assert_eq!(
-        JsonAccess {
-            left: Box::new(Identifier(Ident::new("a"))),
-            operator: ArrowAt,
-            right: Box::new(Identifier(Ident::new("b"))),
-        },
-        verified_expr(sql)
-    );
+fn pg_and_generic() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(GenericDialect {})],
+        options: None,
+    }
 }
 
 #[test]
-fn parse_at_arrow() {
-    use self::JsonOperator::*;
-    use self::Expr::*;
-    let sql = "a @> b";
-    assert_eq!(
-        JsonAccess {
-            left: Box::new(Identifier(Ident::new("a"))),
-            operator: AtArrow,
-            right: Box::new(Identifier(Ident::new("b"))),
-        },
-        verified_expr(sql)
-    );
+fn parse_json_ops_without_colon() {
+    use self::JsonOperator;
+    let binary_ops = &[
+        ("->", JsonOperator::Arrow, all_dialects()),
+        ("->>", JsonOperator::LongArrow, all_dialects()),
+        ("#>", JsonOperator::HashArrow, pg_and_generic()),
+        ("#>>", JsonOperator::HashLongArrow, pg_and_generic()),
+        ("@>", JsonOperator::AtArrow, all_dialects()),
+        ("<@", JsonOperator::ArrowAt, all_dialects()),
+        ("#-", JsonOperator::HashMinus, pg_and_generic()),
+        ("@?", JsonOperator::AtQuestion, all_dialects()),
+        ("@@", JsonOperator::AtAt, all_dialects()),
+    ];
+
+    for (str_op, op, dialects) in binary_ops {
+        let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                operator: *op,
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }),
+            select.projection[0]
+        );
+    }
 }
 
 #[test]

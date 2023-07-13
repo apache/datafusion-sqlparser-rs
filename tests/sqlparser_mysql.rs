@@ -1597,3 +1597,29 @@ fn parse_string_introducers() {
 fn parse_div_infix() {
     mysql().verified_stmt(r#"SELECT 5 DIV 2"#);
 }
+
+#[test]
+fn parse_drop_temporary_table() {
+    let sql = "DROP TEMPORARY TABLE foo";
+    match mysql().verified_stmt(sql) {
+        Statement::Drop {
+            object_type,
+            if_exists,
+            names,
+            cascade,
+            purge: _,
+            temporary,
+            ..
+        } => {
+            assert!(!if_exists);
+            assert_eq!(ObjectType::Table, object_type);
+            assert_eq!(
+                vec!["foo"],
+                names.iter().map(ToString::to_string).collect::<Vec<_>>()
+            );
+            assert!(!cascade);
+            assert!(temporary);
+        }
+        _ => unreachable!(),
+    }
+}

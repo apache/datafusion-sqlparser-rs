@@ -3126,6 +3126,10 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_drop(&mut self) -> Result<Statement, ParserError> {
+        // MySQL dialect supports `TEMPORARY`
+        let temporary = dialect_of!(self is MySqlDialect | GenericDialect)
+            && self.parse_keyword(Keyword::TEMPORARY);
+
         let object_type = if self.parse_keyword(Keyword::TABLE) {
             ObjectType::Table
         } else if self.parse_keyword(Keyword::VIEW) {
@@ -3168,6 +3172,7 @@ impl<'a> Parser<'a> {
             cascade,
             restrict,
             purge,
+            temporary,
         })
     }
 

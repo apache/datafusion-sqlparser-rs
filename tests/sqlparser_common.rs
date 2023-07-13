@@ -5400,6 +5400,7 @@ fn parse_drop_table() {
             names,
             cascade,
             purge: _,
+            temporary,
             ..
         } => {
             assert!(!if_exists);
@@ -5409,6 +5410,7 @@ fn parse_drop_table() {
                 names.iter().map(ToString::to_string).collect::<Vec<_>>()
             );
             assert!(!cascade);
+            assert!(!temporary);
         }
         _ => unreachable!(),
     }
@@ -5421,6 +5423,7 @@ fn parse_drop_table() {
             names,
             cascade,
             purge: _,
+            temporary,
             ..
         } => {
             assert!(if_exists);
@@ -5430,6 +5433,7 @@ fn parse_drop_table() {
                 names.iter().map(ToString::to_string).collect::<Vec<_>>()
             );
             assert!(cascade);
+            assert!(!temporary);
         }
         _ => unreachable!(),
     }

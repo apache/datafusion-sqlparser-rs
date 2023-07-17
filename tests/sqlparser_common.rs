@@ -1031,10 +1031,11 @@ fn parse_escaped_single_quote_string_predicate_with_no_escape() {
 
     let ast = TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],
-        options: Some(ParserOptions {
-            trailing_commas: true,
-            no_escape: true,
-        }),
+        options: Some(
+            ParserOptions::new()
+                .with_trailing_commas(true)
+                .with_unescape(false),
+        ),
     }
     .verified_only_select(sql);
 
@@ -7095,10 +7096,7 @@ fn parse_non_latin_identifiers() {
 fn parse_trailing_comma() {
     let trailing_commas = TestedDialects {
         dialects: vec![Box::new(GenericDialect {})],
-        options: Some(ParserOptions {
-            trailing_commas: true,
-            no_escape: false,
-        }),
+        options: Some(ParserOptions::new().with_trailing_commas(true)),
     };
 
     trailing_commas.one_statement_parses_to(

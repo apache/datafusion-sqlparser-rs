@@ -485,7 +485,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
             dialects: vec![Box::new(MySqlDialect {})],
             options: Some(ParserOptions {
                 trailing_commas: false,
-                no_escape: true
+                unescape: false,
             }),
         }
         .verified_stmt(sql),
@@ -564,10 +564,7 @@ fn parse_escaped_backticks_with_no_escape() {
     assert_eq!(
         TestedDialects {
             dialects: vec![Box::new(MySqlDialect {})],
-            options: Some(ParserOptions {
-                trailing_commas: false,
-                no_escape: true
-            }),
+            options: Some(ParserOptions::new().with_unescape(false)),
         }
         .verified_stmt(sql),
         Statement::Query(Box::new(Query {
@@ -652,10 +649,7 @@ fn parse_escaped_string_with_no_escape() {
     fn assert_mysql_query_value(sql: &str, quoted: &str) {
         let stmt = TestedDialects {
             dialects: vec![Box::new(MySqlDialect {})],
-            options: Some(ParserOptions {
-                trailing_commas: false,
-                no_escape: true,
-            }),
+            options: Some(ParserOptions::new().with_unescape(false)),
         }
         .one_statement_parses_to(sql, "");
 
@@ -688,78 +682,53 @@ fn parse_escaped_string_with_no_escape() {
 
 #[test]
 fn check_roundtrip_of_escaped_string() {
+    let options = Some(ParserOptions::new().with_unescape(false));
+
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],
-        options: Some(ParserOptions {
-            trailing_commas: false,
-            no_escape: true,
-        }),
+        options: options.clone(),
     }
     .verified_stmt(r#"SELECT 'I\'m fine'"#);
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],
-        options: Some(ParserOptions {
-            trailing_commas: false,
-            no_escape: true,
-        }),
+        options: options.clone(),
     }
     .verified_stmt(r#"SELECT 'I''m fine'"#);
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],
-        options: Some(ParserOptions {
-            trailing_commas: false,
-            no_escape: true,
-        }),
+        options: options.clone(),
     }
     .verified_stmt(r#"SELECT 'I\\\'m fine'"#);
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],
-        options: Some(ParserOptions {
-            trailing_commas: false,
-            no_escape: true,
-        }),
+        options: options.clone(),
     }
     .verified_stmt(r#"SELECT 'I\\\'m fine'"#);
 
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],
-        options: Some(ParserOptions {
-            trailing_commas: false,
-            no_escape: true,
-        }),
+        options: options.clone(),
     }
     .verified_stmt(r#"SELECT "I\"m fine""#);
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],
-        options: Some(ParserOptions {
-            trailing_commas: false,
-            no_escape: true,
-        }),
+        options: options.clone(),
     }
     .verified_stmt(r#"SELECT "I""m fine""#);
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],
-        options: Some(ParserOptions {
-            trailing_commas: false,
-            no_escape: true,
-        }),
+        options: options.clone(),
     }
     .verified_stmt(r#"SELECT "I\\\"m fine""#);
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],
-        options: Some(ParserOptions {
-            trailing_commas: false,
-            no_escape: true,
-        }),
+        options: options.clone(),
     }
     .verified_stmt(r#"SELECT "I\\\"m fine""#);
 
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],
-        options: Some(ParserOptions {
-            trailing_commas: false,
-            no_escape: true,
-        }),
+        options,
     }
     .verified_stmt(r#"SELECT "I'm ''fine''""#);
 }

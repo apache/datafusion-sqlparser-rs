@@ -198,7 +198,7 @@ pub fn expr_from_projection(item: &SelectItem) -> &Expr {
 }
 
 /// Creates a `Value::Number`, panic'ing if n is not a number
-pub fn number(n: &'static str) -> Value {
+pub fn number(n: &str) -> Value {
     Value::Number(n.parse().unwrap(), false)
 }
 

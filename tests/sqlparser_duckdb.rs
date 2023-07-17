@@ -97,13 +97,7 @@ fn test_create_macro_default_args() {
             MacroArg::new("a"),
             MacroArg {
                 name: Ident::new("b"),
-                default_expr: Some(Expr::Value(Value::Number(
-                    #[cfg(not(feature = "bigdecimal"))]
-                    5.to_string(),
-                    #[cfg(feature = "bigdecimal")]
-                    bigdecimal::BigDecimal::from(5),
-                    false,
-                ))),
+                default_expr: Some(Expr::Value(number("5"))),
             },
         ]),
         definition: MacroDefinition::Expr(Expr::BinaryOp {

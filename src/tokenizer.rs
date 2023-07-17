@@ -497,12 +497,14 @@ impl<'a> Tokenizer<'a> {
         Ok(tokens)
     }
 
+    // Tokenize the identifer or keywords in `ch`
     fn tokenize_identifier_or_keyword(
         &self,
-        ch: String,
+        ch: impl IntoIterator<Item = char>,
         chars: &mut State,
     ) -> Result<Option<Token>, TokenizerError> {
         chars.next(); // consume the first char
+        let ch: String = ch.into_iter().collect();
         let word = self.tokenize_word(ch, chars);
 
         // TODO: implement parsing of exponent here
@@ -550,7 +552,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "b" or "B"
-                            let s = self.tokenize_word(b.to_string(), chars);
+                            let s = self.tokenize_word(b, chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -569,7 +571,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "r" or "R"
-                            let s = self.tokenize_word(b.to_string(), chars);
+                            let s = self.tokenize_word(b, chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -585,7 +587,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "N"
-                            let s = self.tokenize_word(n.to_string(), chars);
+                            let s = self.tokenize_word(n, chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -602,7 +604,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "E" or "e"
-                            let s = self.tokenize_word(x.to_string(), chars);
+                            let s = self.tokenize_word(x, chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -619,7 +621,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         _ => {
                             // regular identifier starting with an "X"
-                            let s = self.tokenize_word(x.to_string(), chars);
+                            let s = self.tokenize_word(x, chars);
                             Ok(Some(Token::make_word(&s, None)))
                         }
                     }
@@ -794,9 +796,7 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some(' ') => self.consume_and_return(chars, Token::Mod),
                         Some(sch) if self.dialect.is_identifier_start('%') => {
-                            let mut s = ch.to_string();
-                            s.push_str(&sch.to_string());
-                            self.tokenize_identifier_or_keyword(s, chars)
+                            self.tokenize_identifier_or_keyword([ch, *sch], chars)
                         }
                         _ => self.consume_and_return(chars, Token::Mod),
                     }
@@ -917,9 +917,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         Some(' ') => Ok(Some(Token::Sharp)),
                         Some(sch) if self.dialect.is_identifier_start('#') => {
-                            let mut s = ch.to_string();
-                            s.push_str(&sch.to_string());
-                            self.tokenize_identifier_or_keyword(s, chars)
+                            self.tokenize_identifier_or_keyword([ch, *sch], chars)
                         }
                         _ => Ok(Some(Token::Sharp)),
                     }
@@ -934,19 +932,14 @@ impl<'a> Tokenizer<'a> {
                             match chars.peek() {
                                 Some(' ') => Ok(Some(Token::AtAt)),
                                 Some(tch) if self.dialect.is_identifier_start('@') => {
-                                    let mut s = ch.to_string();
-                                    s.push('@');
-                                    s.push_str(&tch.to_string());
-                                    self.tokenize_identifier_or_keyword(s, chars)
+                                    self.tokenize_identifier_or_keyword([ch, '@', *tch], chars)
                                 }
                                 _ => Ok(Some(Token::AtAt)),
                             }
                         }
                         Some(' ') => Ok(Some(Token::AtSign)),
                         Some(sch) if self.dialect.is_identifier_start('@') => {
-                            let mut s = ch.to_string();
-                            s.push_str(&sch.to_string());
-                            self.tokenize_identifier_or_keyword(s, chars)
+                            self.tokenize_identifier_or_keyword([ch, *sch], chars)
                         }
                         _ => Ok(Some(Token::AtSign)),
                     }
@@ -959,7 +952,7 @@ impl<'a> Tokenizer<'a> {
 
                 // identifier or keyword
                 ch if self.dialect.is_identifier_start(ch) => {
-                    self.tokenize_identifier_or_keyword(ch.to_string(), chars)
+                    self.tokenize_identifier_or_keyword([ch], chars)
                 }
                 '$' => Ok(Some(self.tokenize_dollar_preceded_value(chars)?)),
 
@@ -1086,8 +1079,8 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Tokenize an identifier or keyword, after the first char is already consumed.
-    fn tokenize_word(&self, first_chars: String, chars: &mut State) -> String {
-        let mut s = first_chars;
+    fn tokenize_word(&self, first_chars: impl Into<String>, chars: &mut State) -> String {
+        let mut s = first_chars.into();
         s.push_str(&peeking_take_while(chars, |ch| {
             self.dialect.is_identifier_part(ch)
         }));

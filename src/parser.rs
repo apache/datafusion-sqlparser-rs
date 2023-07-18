@@ -5332,10 +5332,10 @@ impl<'a> Parser<'a> {
         match op {
             Some(SetOperator::Union) => {
                 if self.parse_keywords(&[Keyword::BY, Keyword::NAME]) {
-                    SetQuantifier::ByName(false)
+                    SetQuantifier::ByName
                 } else if self.parse_keyword(Keyword::ALL) {
                     if self.parse_keywords(&[Keyword::BY, Keyword::NAME]) {
-                        SetQuantifier::ByName(true)
+                        SetQuantifier::AllByName
                     } else {
                         SetQuantifier::All
                     }

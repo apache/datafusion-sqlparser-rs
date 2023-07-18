@@ -141,7 +141,7 @@ fn test_select_union_by_name() {
     let ast = duckdb().verified_query("SELECT * FROM capitals UNION BY NAME SELECT * FROM weather");
     let expected = Box::<SetExpr>::new(SetExpr::SetOperation {
         op: SetOperator::Union,
-        set_quantifier: SetQuantifier::ByName(false),
+        set_quantifier: SetQuantifier::ByName,
         left: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
             distinct: None,
             top: None,
@@ -214,7 +214,7 @@ fn test_select_union_by_name() {
         duckdb().verified_query("SELECT * FROM capitals UNION ALL BY NAME SELECT * FROM weather");
     let expected = Box::<SetExpr>::new(SetExpr::SetOperation {
         op: SetOperator::Union,
-        set_quantifier: SetQuantifier::ByName(true),
+        set_quantifier: SetQuantifier::AllByName,
         left: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
             distinct: None,
             top: None,

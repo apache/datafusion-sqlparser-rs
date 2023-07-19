@@ -155,7 +155,7 @@ impl TestedDialects {
     }
 }
 
-pub fn all_dialects(options: Option<ParserOptions>) -> TestedDialects {
+pub fn all_dialects() -> TestedDialects {
     TestedDialects {
         dialects: vec![
             Box::new(GenericDialect {}),
@@ -170,7 +170,7 @@ pub fn all_dialects(options: Option<ParserOptions>) -> TestedDialects {
             Box::new(SQLiteDialect {}),
             Box::new(DuckDbDialect {}),
         ],
-        options,
+        options: None,
     }
 }
 

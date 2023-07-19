@@ -7295,7 +7295,7 @@ mod tests {
     #[test]
     fn test_prev_index() {
         let sql = "SELECT version";
-        all_dialects(None).run_parser_method(sql, |parser| {
+        all_dialects().run_parser_method(sql, |parser| {
             assert_eq!(parser.peek_token(), Token::make_keyword("SELECT"));
             assert_eq!(parser.next_token(), Token::make_keyword("SELECT"));
             parser.prev_token();
@@ -7650,7 +7650,7 @@ mod tests {
         // The expected name should be identical as the input name, that's why I don't receive both
         macro_rules! test_parse_schema_name {
             ($input:expr, $expected_name:expr $(,)?) => {{
-                all_dialects(None).run_parser_method(&*$input, |parser| {
+                all_dialects().run_parser_method(&*$input, |parser| {
                     let schema_name = parser.parse_schema_name().unwrap();
                     // Validate that the structure is the same as expected
                     assert_eq!(schema_name, $expected_name);
@@ -7862,7 +7862,7 @@ mod tests {
     fn test_parse_multipart_identifier_negative() {
         macro_rules! test_parse_multipart_identifier_error {
             ($input:expr, $expected_err:expr $(,)?) => {{
-                all_dialects(None).run_parser_method(&*$input, |parser| {
+                all_dialects().run_parser_method(&*$input, |parser| {
                     let actual_err = parser.parse_multipart_identifier().unwrap_err();
                     assert_eq!(actual_err.to_string(), $expected_err);
                 });

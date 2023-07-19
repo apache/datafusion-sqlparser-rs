@@ -195,9 +195,52 @@ impl std::error::Error for ParserError {}
 // By default, allow expressions up to this deep before erroring
 const DEFAULT_REMAINING_DEPTH: usize = 50;
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+/// Options that control how the [`Parser`] parses SQL text
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParserOptions {
     pub trailing_commas: bool,
+    /// Controls how literal values are unescaped. See
+    /// [`Tokenizer::with_unescape`] for more details.
+    pub unescape: bool,
+}
+
+impl Default for ParserOptions {
+    fn default() -> Self {
+        Self {
+            trailing_commas: false,
+            unescape: true,
+        }
+    }
+}
+
+impl ParserOptions {
+    /// Create a new [`ParserOptions`]
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Set if trailing commas are allowed.
+    ///
+    /// If this option is `false` (the default), the following SQL will
+    /// not parse. If the option is `true`, the SQL will parse.
+    ///
+    /// ```sql
+    ///  SELECT
+    ///   foo,
+    ///   bar,
+    ///  FROM baz
+    /// ```
+    pub fn with_trailing_commas(mut self, trailing_commas: bool) -> Self {
+        self.trailing_commas = trailing_commas;
+        self
+    }
+
+    /// Set if literal values are unescaped. Defaults to true. See
+    /// [`Tokenizer::with_unescape`] for more details.
+    pub fn with_unescape(mut self, unescape: bool) -> Self {
+        self.unescape = unescape;
+        self
+    }
 }
 
 pub struct Parser<'a> {
@@ -206,8 +249,9 @@ pub struct Parser<'a> {
     index: usize,
     /// The current dialect to use
     dialect: &'a dyn Dialect,
-    /// Additional options that allow you to mix & match behavior otherwise
-    /// constrained to certain dialects (e.g. trailing commas)
+    /// Additional options that allow you to mix & match behavior
+    /// otherwise constrained to certain dialects (e.g. trailing
+    /// commas) and/or format of parse (e.g. unescaping)
     options: ParserOptions,
     /// ensure the stack does not overflow by limiting recursion depth
     recursion_counter: RecursionCounter,
@@ -267,17 +311,20 @@ impl<'a> Parser<'a> {
     /// Specify additional parser options
     ///
     ///
-    /// [`Parser`] supports additional options ([`ParserOptions`]) that allow you to
-    /// mix & match behavior otherwise constrained to certain dialects (e.g. trailing
-    /// commas).
+    /// [`Parser`] supports additional options ([`ParserOptions`])
+    /// that allow you to mix & match behavior otherwise constrained
+    /// to certain dialects (e.g. trailing commas).
     ///
     /// Example:
     /// ```
     /// # use sqlparser::{parser::{Parser, ParserError, ParserOptions}, dialect::GenericDialect};
     /// # fn main() -> Result<(), ParserError> {
     /// let dialect = GenericDialect{};
+    /// let options = ParserOptions::new()
+    ///    .with_trailing_commas(true)
+    ///    .with_unescape(false);
     /// let result = Parser::new(&dialect)
-    ///   .with_options(ParserOptions { trailing_commas: true })
+    ///   .with_options(options)
     ///   .try_with_sql("SELECT a, b, COUNT(*), FROM foo GROUP BY a, b,")?
     ///   .parse_statements();
     ///   assert!(matches!(result, Ok(_)));
@@ -317,8 +364,9 @@ impl<'a> Parser<'a> {
     /// See example on [`Parser::new()`] for an example
     pub fn try_with_sql(self, sql: &str) -> Result<Self, ParserError> {
         debug!("Parsing sql '{}'...", sql);
-        let mut tokenizer = Tokenizer::new(self.dialect, sql);
-        let tokens = tokenizer.tokenize()?;
+        let tokens = Tokenizer::new(self.dialect, sql)
+            .with_unescape(self.options.unescape)
+            .tokenize()?;
         Ok(self.with_tokens(tokens))
     }
 
@@ -3654,7 +3702,7 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::RParen)?;
             Ok(Some(ColumnOption::Check(expr)))
         } else if self.parse_keyword(Keyword::AUTO_INCREMENT)
-            && dialect_of!(self is MySqlDialect |  GenericDialect)
+            && dialect_of!(self is MySqlDialect | GenericDialect)
         {
             // Support AUTO_INCREMENT for MySQL
             Ok(Some(ColumnOption::DialectSpecific(vec![

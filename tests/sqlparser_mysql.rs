@@ -18,6 +18,7 @@ use sqlparser::ast::Expr;
 use sqlparser::ast::Value;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
+use sqlparser::parser::ParserOptions;
 use sqlparser::tokenizer::Token;
 use test_utils::*;
 
@@ -432,10 +433,14 @@ fn parse_quote_identifiers() {
 }
 
 #[test]
-fn parse_quote_identifiers_2() {
+fn parse_escaped_quote_identifiers_with_escape() {
     let sql = "SELECT `quoted `` identifier`";
     assert_eq!(
-        mysql().verified_stmt(sql),
+        TestedDialects {
+            dialects: vec![Box::new(MySqlDialect {})],
+            options: None,
+        }
+        .verified_stmt(sql),
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
@@ -467,10 +472,56 @@ fn parse_quote_identifiers_2() {
 }
 
 #[test]
-fn parse_quote_identifiers_3() {
+fn parse_escaped_quote_identifiers_with_no_escape() {
+    let sql = "SELECT `quoted `` identifier`";
+    assert_eq!(
+        TestedDialects {
+            dialects: vec![Box::new(MySqlDialect {})],
+            options: Some(ParserOptions {
+                trailing_commas: false,
+                unescape: false,
+            }),
+        }
+        .verified_stmt(sql),
+        Statement::Query(Box::new(Query {
+            with: None,
+            body: Box::new(SetExpr::Select(Box::new(Select {
+                distinct: None,
+                top: None,
+                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
+                    value: "quoted `` identifier".into(),
+                    quote_style: Some('`'),
+                }))],
+                into: None,
+                from: vec![],
+                lateral_views: vec![],
+                selection: None,
+                group_by: vec![],
+                cluster_by: vec![],
+                distribute_by: vec![],
+                sort_by: vec![],
+                having: None,
+                named_window: vec![],
+                qualify: None
+            }))),
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            fetch: None,
+            locks: vec![],
+        }))
+    );
+}
+
+#[test]
+fn parse_escaped_backticks_with_escape() {
     let sql = "SELECT ```quoted identifier```";
     assert_eq!(
-        mysql().verified_stmt(sql),
+        TestedDialects {
+            dialects: vec![Box::new(MySqlDialect {})],
+            options: None,
+        }
+        .verified_stmt(sql),
         Statement::Query(Box::new(Query {
             with: None,
             body: Box::new(SetExpr::Select(Box::new(Select {
@@ -478,6 +529,45 @@ fn parse_quote_identifiers_3() {
                 top: None,
                 projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
                     value: "`quoted identifier`".into(),
+                    quote_style: Some('`'),
+                }))],
+                into: None,
+                from: vec![],
+                lateral_views: vec![],
+                selection: None,
+                group_by: vec![],
+                cluster_by: vec![],
+                distribute_by: vec![],
+                sort_by: vec![],
+                having: None,
+                named_window: vec![],
+                qualify: None
+            }))),
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            fetch: None,
+            locks: vec![],
+        }))
+    );
+}
+
+#[test]
+fn parse_escaped_backticks_with_no_escape() {
+    let sql = "SELECT ```quoted identifier```";
+    assert_eq!(
+        TestedDialects {
+            dialects: vec![Box::new(MySqlDialect {})],
+            options: Some(ParserOptions::new().with_unescape(false)),
+        }
+        .verified_stmt(sql),
+        Statement::Query(Box::new(Query {
+            with: None,
+            body: Box::new(SetExpr::Select(Box::new(Select {
+                distinct: None,
+                top: None,
+                projection: vec![SelectItem::UnnamedExpr(Expr::Identifier(Ident {
+                    value: "``quoted identifier``".into(),
                     quote_style: Some('`'),
                 }))],
                 into: None,
@@ -513,9 +603,13 @@ fn parse_unterminated_escape() {
 }
 
 #[test]
-fn parse_escaped_string() {
+fn parse_escaped_string_with_escape() {
     fn assert_mysql_query_value(sql: &str, quoted: &str) {
-        let stmt = mysql().one_statement_parses_to(sql, "");
+        let stmt = TestedDialects {
+            dialects: vec![Box::new(MySqlDialect {})],
+            options: None,
+        }
+        .one_statement_parses_to(sql, "");
 
         match stmt {
             Statement::Query(query) => match *query.body {
@@ -542,6 +636,95 @@ fn parse_escaped_string() {
 
     let sql = r#"SELECT 'Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ '"#;
     assert_mysql_query_value(sql, "Testing: \0 \\ % _ \u{8} \n \r \t \u{1a} a  ");
+}
+
+#[test]
+fn parse_escaped_string_with_no_escape() {
+    fn assert_mysql_query_value(sql: &str, quoted: &str) {
+        let stmt = TestedDialects {
+            dialects: vec![Box::new(MySqlDialect {})],
+            options: Some(ParserOptions::new().with_unescape(false)),
+        }
+        .one_statement_parses_to(sql, "");
+
+        match stmt {
+            Statement::Query(query) => match *query.body {
+                SetExpr::Select(value) => {
+                    let expr = expr_from_projection(only(&value.projection));
+                    assert_eq!(
+                        *expr,
+                        Expr::Value(Value::SingleQuotedString(quoted.to_string()))
+                    );
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        };
+    }
+    let sql = r#"SELECT 'I\'m fine'"#;
+    assert_mysql_query_value(sql, r#"I\'m fine"#);
+
+    let sql = r#"SELECT 'I''m fine'"#;
+    assert_mysql_query_value(sql, r#"I''m fine"#);
+
+    let sql = r#"SELECT 'I\"m fine'"#;
+    assert_mysql_query_value(sql, r#"I\"m fine"#);
+
+    let sql = r#"SELECT 'Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ '"#;
+    assert_mysql_query_value(sql, r#"Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ "#);
+}
+
+#[test]
+fn check_roundtrip_of_escaped_string() {
+    let options = Some(ParserOptions::new().with_unescape(false));
+
+    TestedDialects {
+        dialects: vec![Box::new(MySqlDialect {})],
+        options: options.clone(),
+    }
+    .verified_stmt(r#"SELECT 'I\'m fine'"#);
+    TestedDialects {
+        dialects: vec![Box::new(MySqlDialect {})],
+        options: options.clone(),
+    }
+    .verified_stmt(r#"SELECT 'I''m fine'"#);
+    TestedDialects {
+        dialects: vec![Box::new(MySqlDialect {})],
+        options: options.clone(),
+    }
+    .verified_stmt(r#"SELECT 'I\\\'m fine'"#);
+    TestedDialects {
+        dialects: vec![Box::new(MySqlDialect {})],
+        options: options.clone(),
+    }
+    .verified_stmt(r#"SELECT 'I\\\'m fine'"#);
+
+    TestedDialects {
+        dialects: vec![Box::new(MySqlDialect {})],
+        options: options.clone(),
+    }
+    .verified_stmt(r#"SELECT "I\"m fine""#);
+    TestedDialects {
+        dialects: vec![Box::new(MySqlDialect {})],
+        options: options.clone(),
+    }
+    .verified_stmt(r#"SELECT "I""m fine""#);
+    TestedDialects {
+        dialects: vec![Box::new(MySqlDialect {})],
+        options: options.clone(),
+    }
+    .verified_stmt(r#"SELECT "I\\\"m fine""#);
+    TestedDialects {
+        dialects: vec![Box::new(MySqlDialect {})],
+        options: options.clone(),
+    }
+    .verified_stmt(r#"SELECT "I\\\"m fine""#);
+
+    TestedDialects {
+        dialects: vec![Box::new(MySqlDialect {})],
+        options,
+    }
+    .verified_stmt(r#"SELECT "I'm ''fine''""#);
 }
 
 #[test]

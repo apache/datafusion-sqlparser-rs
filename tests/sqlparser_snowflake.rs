@@ -55,8 +55,7 @@ fn test_snowflake_create_transient_table() {
 fn test_snowflake_single_line_tokenize() {
     let sql = "CREATE TABLE# this is a comment \ntable_1";
     let dialect = SnowflakeDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
-    let tokens = tokenizer.tokenize().unwrap();
+    let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
 
     let expected = vec![
         Token::make_keyword("CREATE"),
@@ -72,8 +71,7 @@ fn test_snowflake_single_line_tokenize() {
     assert_eq!(expected, tokens);
 
     let sql = "CREATE TABLE // this is a comment \ntable_1";
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
-    let tokens = tokenizer.tokenize().unwrap();
+    let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
 
     let expected = vec![
         Token::make_keyword("CREATE"),

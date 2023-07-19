@@ -1004,17 +1004,47 @@ fn parse_select_with_date_column_name() {
 }
 
 #[test]
-fn parse_escaped_single_quote_string_predicate() {
+fn parse_escaped_single_quote_string_predicate_with_escape() {
     use self::BinaryOperator::*;
     let sql = "SELECT id, fname, lname FROM customer \
                WHERE salary <> 'Jim''s salary'";
+
     let ast = verified_only_select(sql);
+
     assert_eq!(
         Some(Expr::BinaryOp {
             left: Box::new(Expr::Identifier(Ident::new("salary"))),
             op: NotEq,
             right: Box::new(Expr::Value(Value::SingleQuotedString(
                 "Jim's salary".to_string()
+            ))),
+        }),
+        ast.selection,
+    );
+}
+
+#[test]
+fn parse_escaped_single_quote_string_predicate_with_no_escape() {
+    use self::BinaryOperator::*;
+    let sql = "SELECT id, fname, lname FROM customer \
+               WHERE salary <> 'Jim''s salary'";
+
+    let ast = TestedDialects {
+        dialects: vec![Box::new(MySqlDialect {})],
+        options: Some(
+            ParserOptions::new()
+                .with_trailing_commas(true)
+                .with_unescape(false),
+        ),
+    }
+    .verified_only_select(sql);
+
+    assert_eq!(
+        Some(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("salary"))),
+            op: NotEq,
+            right: Box::new(Expr::Value(Value::SingleQuotedString(
+                "Jim''s salary".to_string()
             ))),
         }),
         ast.selection,
@@ -7264,9 +7294,7 @@ fn parse_non_latin_identifiers() {
 fn parse_trailing_comma() {
     let trailing_commas = TestedDialects {
         dialects: vec![Box::new(GenericDialect {})],
-        options: Some(ParserOptions {
-            trailing_commas: true,
-        }),
+        options: Some(ParserOptions::new().with_trailing_commas(true)),
     };
 
     trailing_commas.one_statement_parses_to(

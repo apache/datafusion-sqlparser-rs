@@ -8,6 +8,25 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.36.0] 2023-07-19
+
+### Added
+* Support toggling "unescape" mode to retain original escaping (#870)  - Thanks @canalun
+* Support UNION (ALL) BY NAME syntax (#915) - Thanks @parkma99
+* Add doc comment for all operators (#917) - Thanks @izveigor
+* Support `PGOverlap` operator (#912) - Thanks @izveigor
+* Support multi args for unnest (#909) - Thanks  @jayzhan211
+* Support `ALTER VIEW`, MySQL syntax (#907) - Thanks  @liadgiladi
+* Add DeltaLake keywords (#906) - Thanks @roeap
+
+### Fixed
+* Parse JsonOperators correctly (#913) - Thanks @izveigor
+* Fix dependabot by removing rust-toolchain toml (#922) - Thanks @alamb
+
+### Changed
+* Clean up JSON operator tokenizing code (#923) - Thanks @alamb
+* Upgrade bigdecimal to 0.4.1 (#921) - Thanks @jinlee0
+* Remove most instances of #[cfg(feature(bigdecimal))] in tests (#910) - Thanks @alamb
 
 ## [0.35.0] 2023-06-23
 

@@ -182,8 +182,27 @@ pub struct EscapeQuotedString<'a> {
     quote: char,
 }
 
+
 impl<'a> fmt::Display for EscapeQuotedString<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // EscapeQuotedString doesn't know which mode of escape was
+        // chosen by the user. So this code must to correctly display
+        // strings without knowing if the strings are already escaped
+        // or not.
+        //
+        // If the quote symbol in the string is repeated twice, OR, if
+        // the quote symbol is after backslash, display all the chars
+        // without any escape. However, if the quote symbol is used
+        // just between usual chars, `fmt()` should display it twice."
+        //
+        // The following table has examples
+        //
+        // | original query | mode      | AST Node                                           | serialized   |
+        // | -------------  | --------- | -------------------------------------------------- | ------------ |
+        // | `"A""B""A"`    | no-escape | `DoubleQuotedString(String::from("A\"\"B\"\"A"))`  | `"A""B""A"`  |
+        // | `"A""B""A"`    | default   | `DoubleQuotedString(String::from("A\"B\"A"))`      | `"A""B""A"`  |
+        // | `"A\"B\"A"`    | no-escape | `DoubleQuotedString(String::from("A\\\"B\\\"A"))`  | `"A\"B\"A"`  |
+        // | `"A\"B\"A"`    | default   | `DoubleQuotedString(String::from("A\"B\"A"))`      | `"A""B""A"`  |
         let quote = self.quote;
         let mut previous_char = char::default();
         let mut peekable_chars = self.string.chars().peekable();

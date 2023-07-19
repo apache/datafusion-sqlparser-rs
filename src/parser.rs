@@ -394,9 +394,14 @@ impl<'a> Parser<'a> {
                 expecting_statement_delimiter = false;
             }
 
-            if self.peek_token() == Token::EOF {
-                break;
+            match self.peek_token().token {
+                Token::EOF => break,
+
+                // end of statement
+                Token::Word(word) if word.keyword == Keyword::END => break,
+                _ => {}
             }
+
             if expecting_statement_delimiter {
                 return self.expected("end of statement", self.peek_token());
             }
@@ -842,7 +847,7 @@ impl<'a> Parser<'a> {
                 };
                 Ok(Expr::UnaryOp {
                     op,
-                    expr: Box::new(self.parse_subexpr(Self::PLUS_MINUS_PREC)?),
+                    expr: Box::new(self.parse_subexpr(Self::MUL_DIV_MOD_OP_PREC)?),
                 })
             }
             tok @ Token::DoubleExclamationMark
@@ -1023,7 +1028,7 @@ impl<'a> Parser<'a> {
     /// parse a group by expr. a group by expr can be one of group sets, roll up, cube, or simple
     /// expr.
     fn parse_group_by_expr(&mut self) -> Result<Expr, ParserError> {
-        if dialect_of!(self is PostgreSqlDialect | DuckDbDialect | GenericDialect) {
+        if self.dialect.supports_group_by_expr() {
             if self.parse_keywords(&[Keyword::GROUPING, Keyword::SETS]) {
                 self.expect_token(&Token::LParen)?;
                 let result = self.parse_comma_separated(|p| p.parse_tuple(false, true))?;
@@ -1705,6 +1710,9 @@ impl<'a> Parser<'a> {
             Token::Sharp if dialect_of!(self is PostgreSqlDialect) => {
                 Some(BinaryOperator::PGBitwiseXor)
             }
+            Token::Overlap if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
+                Some(BinaryOperator::PGOverlap)
+            }
             Token::Tilde => Some(BinaryOperator::PGRegexMatch),
             Token::TildeAsterisk => Some(BinaryOperator::PGRegexIMatch),
             Token::ExclamationMarkTilde => Some(BinaryOperator::PGRegexNotMatch),
@@ -2007,6 +2015,7 @@ impl<'a> Parser<'a> {
     }
 
     // use https://www.postgresql.org/docs/7.0/operators.htm#AEN2026 as a reference
+    const MUL_DIV_MOD_OP_PREC: u8 = 40;
     const PLUS_MINUS_PREC: u8 = 30;
     const XOR_PREC: u8 = 24;
     const TIME_ZONE_PREC: u8 = 20;
@@ -2016,8 +2025,6 @@ impl<'a> Parser<'a> {
     const UNARY_NOT_PREC: u8 = 15;
     const AND_PREC: u8 = 10;
     const OR_PREC: u8 = 5;
-
-    const DIV_OP_PREC: u8 = 40;
 
     /// Get the precedence of the next token
     pub fn get_next_precedence(&self) -> Result<u8, ParserError> {
@@ -2068,7 +2075,7 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(Self::BETWEEN_PREC),
-            Token::Word(w) if w.keyword == Keyword::DIV => Ok(Self::DIV_OP_PREC),
+            Token::Word(w) if w.keyword == Keyword::DIV => Ok(Self::MUL_DIV_MOD_OP_PREC),
             Token::Eq
             | Token::Lt
             | Token::LtEq
@@ -2086,7 +2093,7 @@ impl<'a> Parser<'a> {
             Token::Ampersand => Ok(23),
             Token::Plus | Token::Minus => Ok(Self::PLUS_MINUS_PREC),
             Token::Mul | Token::Div | Token::DuckIntDiv | Token::Mod | Token::StringConcat => {
-                Ok(40)
+                Ok(Self::MUL_DIV_MOD_OP_PREC)
             }
             Token::DoubleColon => Ok(50),
             Token::Colon => Ok(50),
@@ -2094,6 +2101,7 @@ impl<'a> Parser<'a> {
             Token::LBracket
             | Token::LongArrow
             | Token::Arrow
+            | Token::Overlap
             | Token::HashArrow
             | Token::HashLongArrow
             | Token::AtArrow
@@ -2372,6 +2380,7 @@ impl<'a> Parser<'a> {
     /// Parse a SQL CREATE statement
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
         let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
+        let or_alter = self.parse_keywords(&[Keyword::OR, Keyword::ALTER]);
         let local = self.parse_one_of_keywords(&[Keyword::LOCAL]).is_some();
         let global = self.parse_one_of_keywords(&[Keyword::GLOBAL]).is_some();
         let transient = self.parse_one_of_keywords(&[Keyword::TRANSIENT]).is_some();
@@ -2394,6 +2403,8 @@ impl<'a> Parser<'a> {
             self.parse_create_external_table(or_replace)
         } else if self.parse_keyword(Keyword::FUNCTION) {
             self.parse_create_function(or_replace, temporary)
+        } else if self.parse_keyword(Keyword::MACRO) {
+            self.parse_create_macro(or_replace, temporary)
         } else if or_replace {
             self.expected(
                 "[EXTERNAL] TABLE or [MATERIALIZED] VIEW or FUNCTION after CREATE OR REPLACE",
@@ -2415,6 +2426,8 @@ impl<'a> Parser<'a> {
             self.parse_create_sequence(temporary)
         } else if self.parse_keyword(Keyword::TYPE) {
             self.parse_create_type()
+        } else if self.parse_keyword(Keyword::PROCEDURE) {
+            self.parse_create_procedure(or_alter)
         } else {
             self.expected("an object type after CREATE", self.peek_token())
         }
@@ -2672,6 +2685,8 @@ impl<'a> Parser<'a> {
                 return_type,
                 params,
             })
+        } else if dialect_of!(self is DuckDbDialect) {
+            self.parse_create_macro(or_replace, temporary)
         } else {
             self.prev_token();
             self.expected("an object type after CREATE", self.peek_token())
@@ -2745,6 +2760,53 @@ impl<'a> Parser<'a> {
                 return Ok(body);
             }
         }
+    }
+
+    pub fn parse_create_macro(
+        &mut self,
+        or_replace: bool,
+        temporary: bool,
+    ) -> Result<Statement, ParserError> {
+        if dialect_of!(self is DuckDbDialect |  GenericDialect) {
+            let name = self.parse_object_name()?;
+            self.expect_token(&Token::LParen)?;
+            let args = if self.consume_token(&Token::RParen) {
+                self.prev_token();
+                None
+            } else {
+                Some(self.parse_comma_separated(Parser::parse_macro_arg)?)
+            };
+
+            self.expect_token(&Token::RParen)?;
+            self.expect_keyword(Keyword::AS)?;
+
+            Ok(Statement::CreateMacro {
+                or_replace,
+                temporary,
+                name,
+                args,
+                definition: if self.parse_keyword(Keyword::TABLE) {
+                    MacroDefinition::Table(self.parse_query()?)
+                } else {
+                    MacroDefinition::Expr(self.parse_expr()?)
+                },
+            })
+        } else {
+            self.prev_token();
+            self.expected("an object type after CREATE", self.peek_token())
+        }
+    }
+
+    fn parse_macro_arg(&mut self) -> Result<MacroArg, ParserError> {
+        let name = self.parse_identifier()?;
+
+        let default_expr =
+            if self.consume_token(&Token::DuckAssignment) || self.consume_token(&Token::RArrow) {
+                Some(self.parse_expr()?)
+            } else {
+                None
+            };
+        Ok(MacroArg { name, default_expr })
     }
 
     pub fn parse_create_external_table(
@@ -3475,6 +3537,7 @@ impl<'a> Parser<'a> {
                 None
             };
 
+        let strict = self.parse_keyword(Keyword::STRICT);
         Ok(CreateTableBuilder::new(table_name)
             .temporary(temporary)
             .columns(columns)
@@ -3497,7 +3560,30 @@ impl<'a> Parser<'a> {
             .collation(collation)
             .on_commit(on_commit)
             .on_cluster(on_cluster)
+            .strict(strict)
             .build())
+    }
+
+    pub fn parse_optional_procedure_parameters(
+        &mut self,
+    ) -> Result<Option<Vec<ProcedureParam>>, ParserError> {
+        let mut params = vec![];
+        if !self.consume_token(&Token::LParen) || self.consume_token(&Token::RParen) {
+            return Ok(Some(params));
+        }
+        loop {
+            if let Token::Word(_) = self.peek_token().token {
+                params.push(self.parse_procedure_param()?)
+            }
+            let comma = self.consume_token(&Token::Comma);
+            if self.consume_token(&Token::RParen) {
+                // allow a trailing comma, even though it's not in standard
+                break;
+            } else if !comma {
+                return self.expected("',' or ')' after parameter definition", self.peek_token());
+            }
+        }
+        Ok(Some(params))
     }
 
     pub fn parse_columns(&mut self) -> Result<(Vec<ColumnDef>, Vec<TableConstraint>), ParserError> {
@@ -3525,6 +3611,12 @@ impl<'a> Parser<'a> {
         }
 
         Ok((columns, constraints))
+    }
+
+    pub fn parse_procedure_param(&mut self) -> Result<ProcedureParam, ParserError> {
+        let name = self.parse_identifier()?;
+        let data_type = self.parse_data_type()?;
+        Ok(ProcedureParam { name, data_type })
     }
 
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
@@ -3858,8 +3950,10 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_alter(&mut self) -> Result<Statement, ParserError> {
-        let object_type = self.expect_one_of_keywords(&[Keyword::TABLE, Keyword::INDEX])?;
+        let object_type =
+            self.expect_one_of_keywords(&[Keyword::VIEW, Keyword::TABLE, Keyword::INDEX])?;
         match object_type {
+            Keyword::VIEW => self.parse_alter_view(),
             Keyword::TABLE => {
                 let _ = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
                 let table_name = self.parse_object_name()?;
@@ -4055,6 +4149,23 @@ impl<'a> Parser<'a> {
             // unreachable because expect_one_of_keywords used above
             _ => unreachable!(),
         }
+    }
+
+    pub fn parse_alter_view(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name()?;
+        let columns = self.parse_parenthesized_column_list(Optional, false)?;
+
+        let with_options = self.parse_options(Keyword::WITH)?;
+
+        self.expect_keyword(Keyword::AS)?;
+        let query = Box::new(self.parse_query()?);
+
+        Ok(Statement::AlterView {
+            name,
+            columns,
+            query,
+            with_options,
+        })
     }
 
     /// Parse a copy statement
@@ -5268,8 +5379,14 @@ impl<'a> Parser<'a> {
     pub fn parse_set_quantifier(&mut self, op: &Option<SetOperator>) -> SetQuantifier {
         match op {
             Some(SetOperator::Union) => {
-                if self.parse_keyword(Keyword::ALL) {
-                    SetQuantifier::All
+                if self.parse_keywords(&[Keyword::BY, Keyword::NAME]) {
+                    SetQuantifier::ByName
+                } else if self.parse_keyword(Keyword::ALL) {
+                    if self.parse_keywords(&[Keyword::BY, Keyword::NAME]) {
+                        SetQuantifier::AllByName
+                    } else {
+                        SetQuantifier::All
+                    }
                 } else if self.parse_keyword(Keyword::DISTINCT) {
                     SetQuantifier::Distinct
                 } else {
@@ -5940,7 +6057,7 @@ impl<'a> Parser<'a> {
             && self.parse_keyword(Keyword::UNNEST)
         {
             self.expect_token(&Token::LParen)?;
-            let expr = self.parse_expr()?;
+            let array_exprs = self.parse_comma_separated(Parser::parse_expr)?;
             self.expect_token(&Token::RParen)?;
 
             let alias = match self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS) {
@@ -5966,7 +6083,7 @@ impl<'a> Parser<'a> {
 
             Ok(TableFactor::UNNEST {
                 alias,
-                array_expr: Box::new(expr),
+                array_exprs,
                 with_offset,
                 with_offset_alias,
             })
@@ -7077,6 +7194,21 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let window_spec = self.parse_window_spec()?;
         Ok(NamedWindowDefinition(ident, window_spec))
+    }
+
+    pub fn parse_create_procedure(&mut self, or_alter: bool) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name()?;
+        let params = self.parse_optional_procedure_parameters()?;
+        self.expect_keyword(Keyword::AS)?;
+        self.expect_keyword(Keyword::BEGIN)?;
+        let statements = self.parse_statements()?;
+        self.expect_keyword(Keyword::END)?;
+        Ok(Statement::CreateProcedure {
+            name,
+            or_alter,
+            params,
+            body: statements,
+        })
     }
 
     pub fn parse_window_spec(&mut self) -> Result<WindowSpec, ParserError> {

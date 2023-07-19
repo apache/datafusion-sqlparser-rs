@@ -35,7 +35,9 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::DollarQuotedString;
-use crate::dialect::{BigQueryDialect, DuckDbDialect, GenericDialect, SnowflakeDialect};
+use crate::dialect::{
+    BigQueryDialect, DuckDbDialect, GenericDialect, HiveDialect, SnowflakeDialect,
+};
 use crate::dialect::{Dialect, MySqlDialect};
 use crate::keywords::{Keyword, ALL_KEYWORDS, ALL_KEYWORDS_INDEX};
 
@@ -114,6 +116,8 @@ pub enum Token {
     Colon,
     /// DoubleColon `::` (used for casting in postgresql)
     DoubleColon,
+    /// Assignment `:=` (used for keyword argument in DuckDB macros)
+    DuckAssignment,
     /// SemiColon `;` used as separator for COPY and payload
     SemiColon,
     /// Backslash `\` used in terminating the COPY payload with `\.`
@@ -148,6 +152,8 @@ pub enum Token {
     ShiftLeft,
     /// `>>`, a bitwise shift right operator in PostgreSQL
     ShiftRight,
+    /// '&&', an overlap operator in PostgreSQL
+    Overlap,
     /// Exclamation Mark `!` used for PostgreSQL factorial operator
     ExclamationMark,
     /// Double Exclamation Mark `!!` used for PostgreSQL prefix factorial operator
@@ -156,7 +162,7 @@ pub enum Token {
     AtSign,
     /// `|/`, a square root math operator in PostgreSQL
     PGSquareRoot,
-    /// `||/` , a cube root math operator in PostgreSQL
+    /// `||/`, a cube root math operator in PostgreSQL
     PGCubeRoot,
     /// `?` or `$` , a prepared statement arg placeholder
     Placeholder(String),
@@ -222,6 +228,7 @@ impl fmt::Display for Token {
             Token::Period => f.write_str("."),
             Token::Colon => f.write_str(":"),
             Token::DoubleColon => f.write_str("::"),
+            Token::DuckAssignment => f.write_str(":="),
             Token::SemiColon => f.write_str(";"),
             Token::Backslash => f.write_str("\\"),
             Token::LBracket => f.write_str("["),
@@ -242,6 +249,7 @@ impl fmt::Display for Token {
             Token::AtSign => f.write_str("@"),
             Token::ShiftLeft => f.write_str("<<"),
             Token::ShiftRight => f.write_str(">>"),
+            Token::Overlap => f.write_str("&&"),
             Token::PGSquareRoot => f.write_str("|/"),
             Token::PGCubeRoot => f.write_str("||/"),
             Token::Placeholder(ref s) => write!(f, "{s}"),
@@ -546,9 +554,34 @@ impl<'a> Tokenizer<'a> {
         Ok(tokens)
     }
 
+    // Tokenize the identifer or keywords in `ch`
+    fn tokenize_identifier_or_keyword(
+        &self,
+        ch: impl IntoIterator<Item = char>,
+        chars: &mut State,
+    ) -> Result<Option<Token>, TokenizerError> {
+        chars.next(); // consume the first char
+        let ch: String = ch.into_iter().collect();
+        let word = self.tokenize_word(ch, chars);
+
+        // TODO: implement parsing of exponent here
+        if word.chars().all(|x| x.is_ascii_digit() || x == '.') {
+            let mut inner_state = State {
+                peekable: word.chars().peekable(),
+                line: 0,
+                col: 0,
+            };
+            let mut s = peeking_take_while(&mut inner_state, |ch| matches!(ch, '0'..='9' | '.'));
+            let s2 = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
+            s += s2.as_str();
+            return Ok(Some(Token::Number(s, false)));
+        }
+
+        Ok(Some(Token::make_word(&word, None)))
+    }
+
     /// Get the next token or return None
     fn next_token(&self, chars: &mut State) -> Result<Option<Token>, TokenizerError> {
-        //println!("next_token: {:?}", chars.peek());
         match chars.peek() {
             Some(&ch) => match ch {
                 ' ' => self.consume_and_return(chars, Token::Whitespace(Whitespace::Space)),
@@ -650,28 +683,6 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
                 }
-                // identifier or keyword
-                ch if self.dialect.is_identifier_start(ch) => {
-                    chars.next(); // consume the first char
-                    let word = self.tokenize_word(ch, chars);
-
-                    // TODO: implement parsing of exponent here
-                    if word.chars().all(|x| x.is_ascii_digit() || x == '.') {
-                        let mut inner_state = State {
-                            peekable: word.chars().peekable(),
-                            line: 0,
-                            col: 0,
-                        };
-                        let mut s = peeking_take_while(&mut inner_state, |ch| {
-                            matches!(ch, '0'..='9' | '.')
-                        });
-                        let s2 = peeking_take_while(chars, |ch| matches!(ch, '0'..='9' | '.'));
-                        s += s2.as_str();
-                        return Ok(Some(Token::Number(s, false)));
-                    }
-
-                    Ok(Some(Token::make_word(&word, None)))
-                }
                 // single quoted string
                 '\'' => {
                     let s = self.tokenize_quoted_string(chars, '\'')?;
@@ -765,7 +776,7 @@ impl<'a> Tokenizer<'a> {
 
                     // mysql dialect supports identifiers that start with a numeric prefix,
                     // as long as they aren't an exponent number.
-                    if dialect_of!(self is MySqlDialect) && exponent_part.is_empty() {
+                    if dialect_of!(self is MySqlDialect | HiveDialect) && exponent_part.is_empty() {
                         let word =
                             peeking_take_while(chars, |ch| self.dialect.is_identifier_part(ch));
 
@@ -837,7 +848,16 @@ impl<'a> Tokenizer<'a> {
                 }
                 '+' => self.consume_and_return(chars, Token::Plus),
                 '*' => self.consume_and_return(chars, Token::Mul),
-                '%' => self.consume_and_return(chars, Token::Mod),
+                '%' => {
+                    chars.next();
+                    match chars.peek() {
+                        Some(' ') => self.consume_and_return(chars, Token::Mod),
+                        Some(sch) if self.dialect.is_identifier_start('%') => {
+                            self.tokenize_identifier_or_keyword([ch, *sch], chars)
+                        }
+                        _ => self.consume_and_return(chars, Token::Mod),
+                    }
+                }
                 '|' => {
                     chars.next(); // consume the '|'
                     match chars.peek() {
@@ -904,6 +924,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next();
                     match chars.peek() {
                         Some(':') => self.consume_and_return(chars, Token::DoubleColon),
+                        Some('=') => self.consume_and_return(chars, Token::DuckAssignment),
                         _ => Ok(Some(Token::Colon)),
                     }
                 }
@@ -911,7 +932,14 @@ impl<'a> Tokenizer<'a> {
                 '\\' => self.consume_and_return(chars, Token::Backslash),
                 '[' => self.consume_and_return(chars, Token::LBracket),
                 ']' => self.consume_and_return(chars, Token::RBracket),
-                '&' => self.consume_and_return(chars, Token::Ampersand),
+                '&' => {
+                    chars.next(); // consume the '&'
+                    match chars.peek() {
+                        Some('&') => self.consume_and_return(chars, Token::Overlap),
+                        // Bitshift '&' operator
+                        _ => Ok(Some(Token::Ampersand)),
+                    }
+                }
                 '^' => self.consume_and_return(chars, Token::Caret),
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
@@ -944,6 +972,10 @@ impl<'a> Tokenizer<'a> {
                                 _ => Ok(Some(Token::HashArrow)),
                             }
                         }
+                        Some(' ') => Ok(Some(Token::Sharp)),
+                        Some(sch) if self.dialect.is_identifier_start('#') => {
+                            self.tokenize_identifier_or_keyword([ch, *sch], chars)
+                        }
                         _ => Ok(Some(Token::Sharp)),
                     }
                 }
@@ -952,7 +984,20 @@ impl<'a> Tokenizer<'a> {
                     match chars.peek() {
                         Some('>') => self.consume_and_return(chars, Token::AtArrow),
                         Some('?') => self.consume_and_return(chars, Token::AtQuestion),
-                        Some('@') => self.consume_and_return(chars, Token::AtAt),
+                        Some('@') => {
+                            chars.next();
+                            match chars.peek() {
+                                Some(' ') => Ok(Some(Token::AtAt)),
+                                Some(tch) if self.dialect.is_identifier_start('@') => {
+                                    self.tokenize_identifier_or_keyword([ch, '@', *tch], chars)
+                                }
+                                _ => Ok(Some(Token::AtAt)),
+                            }
+                        }
+                        Some(' ') => Ok(Some(Token::AtSign)),
+                        Some(sch) if self.dialect.is_identifier_start('@') => {
+                            self.tokenize_identifier_or_keyword([ch, *sch], chars)
+                        }
                         _ => Ok(Some(Token::AtSign)),
                     }
                 }
@@ -960,6 +1005,11 @@ impl<'a> Tokenizer<'a> {
                     chars.next();
                     let s = peeking_take_while(chars, |ch| ch.is_numeric());
                     Ok(Some(Token::Placeholder(String::from("?") + &s)))
+                }
+
+                // identifier or keyword
+                ch if self.dialect.is_identifier_start(ch) => {
+                    self.tokenize_identifier_or_keyword([ch], chars)
                 }
                 '$' => Ok(Some(self.tokenize_dollar_preceded_value(chars)?)),
 
@@ -1086,8 +1136,8 @@ impl<'a> Tokenizer<'a> {
     }
 
     /// Tokenize an identifier or keyword, after the first char is already consumed.
-    fn tokenize_word(&self, first_char: char, chars: &mut State) -> String {
-        let mut s = first_char.to_string();
+    fn tokenize_word(&self, first_chars: impl Into<String>, chars: &mut State) -> String {
+        let mut s = first_chars.into();
         s.push_str(&peeking_take_while(chars, |ch| {
             self.dialect.is_identifier_part(ch)
         }));

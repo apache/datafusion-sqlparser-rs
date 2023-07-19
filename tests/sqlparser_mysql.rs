@@ -260,13 +260,7 @@ fn parse_set_variables() {
             local: true,
             hivevar: false,
             variable: ObjectName(vec!["autocommit".into()]),
-            value: vec![Expr::Value(Value::Number(
-                #[cfg(not(feature = "bigdecimal"))]
-                "1".to_string(),
-                #[cfg(feature = "bigdecimal")]
-                bigdecimal::BigDecimal::from(1),
-                false
-            ))],
+            value: vec![Expr::Value(number("1"))],
         }
     );
 }
@@ -826,7 +820,6 @@ fn parse_create_table_unsigned() {
 }
 
 #[test]
-#[cfg(not(feature = "bigdecimal"))]
 fn parse_simple_insert() {
     let sql = r"INSERT INTO tasks (title, priority) VALUES ('Test Some Inserts', 1), ('Test Entry 2', 2), ('Test Entry 3', 3)";
 
@@ -851,15 +844,15 @@ fn parse_simple_insert() {
                                 Expr::Value(Value::SingleQuotedString(
                                     "Test Some Inserts".to_string()
                                 )),
-                                Expr::Value(Value::Number("1".to_string(), false))
+                                Expr::Value(number("1"))
                             ],
                             vec![
                                 Expr::Value(Value::SingleQuotedString("Test Entry 2".to_string())),
-                                Expr::Value(Value::Number("2".to_string(), false))
+                                Expr::Value(number("2"))
                             ],
                             vec![
                                 Expr::Value(Value::SingleQuotedString("Test Entry 3".to_string())),
-                                Expr::Value(Value::Number("3".to_string(), false))
+                                Expr::Value(number("3"))
                             ]
                         ]
                     })),
@@ -1078,6 +1071,13 @@ fn parse_select_with_numeric_prefix_column_name() {
     }
 }
 
+// Don't run with bigdecimal as it fails like this on rust beta:
+//
+// 'parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column'
+// panicked at 'assertion failed: `(left == right)`
+//
+//  left: `"SELECT 123e4, 123col_$@123abc FROM \"table\""`,
+//  right: `"SELECT 1230000, 123col_$@123abc FROM \"table\""`', src/test_utils.rs:114:13
 #[cfg(not(feature = "bigdecimal"))]
 #[test]
 fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
@@ -1090,10 +1090,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     distinct: None,
                     top: None,
                     projection: vec![
-                        SelectItem::UnnamedExpr(Expr::Value(Value::Number(
-                            "123e4".to_string(),
-                            false
-                        ))),
+                        SelectItem::UnnamedExpr(Expr::Value(number("123e4"))),
                         SelectItem::UnnamedExpr(Expr::Identifier(Ident::new("123col_$@123abc")))
                     ],
                     into: None,
@@ -1255,7 +1252,6 @@ fn parse_alter_table_change_column() {
 }
 
 #[test]
-#[cfg(not(feature = "bigdecimal"))]
 fn parse_substring_in_select() {
     let sql = "SELECT DISTINCT SUBSTRING(description, 0, 1) FROM test";
     match mysql().one_statement_parses_to(
@@ -1274,14 +1270,8 @@ fn parse_substring_in_select() {
                                 value: "description".to_string(),
                                 quote_style: None
                             })),
-                            substring_from: Some(Box::new(Expr::Value(Value::Number(
-                                "0".to_string(),
-                                false
-                            )))),
-                            substring_for: Some(Box::new(Expr::Value(Value::Number(
-                                "1".to_string(),
-                                false
-                            ))))
+                            substring_from: Some(Box::new(Expr::Value(number("0")))),
+                            substring_for: Some(Box::new(Expr::Value(number("1"))))
                         })],
                         into: None,
                         from: vec![TableWithJoins {

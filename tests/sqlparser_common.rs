@@ -1104,7 +1104,7 @@ fn parse_compound_expr_2() {
 }
 
 #[test]
-fn parse_unary_math() {
+fn parse_unary_math_with_plus() {
     use self::Expr::*;
     let sql = "-a + -b";
     assert_eq!(
@@ -1121,6 +1121,61 @@ fn parse_unary_math() {
         },
         verified_expr(sql)
     );
+}
+
+#[test]
+fn parse_unary_math_with_multiply() {
+    use self::Expr::*;
+    let sql = "-a * -b";
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(UnaryOp {
+                op: UnaryOperator::Minus,
+                expr: Box::new(Identifier(Ident::new("a"))),
+            }),
+            op: BinaryOperator::Multiply,
+            right: Box::new(UnaryOp {
+                op: UnaryOperator::Minus,
+                expr: Box::new(Identifier(Ident::new("b"))),
+            }),
+        },
+        verified_expr(sql)
+    );
+}
+
+fn pg_and_generic() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(GenericDialect {})],
+        options: None,
+    }
+}
+
+#[test]
+fn parse_json_ops_without_colon() {
+    use self::JsonOperator;
+    let binary_ops = &[
+        ("->", JsonOperator::Arrow, all_dialects()),
+        ("->>", JsonOperator::LongArrow, all_dialects()),
+        ("#>", JsonOperator::HashArrow, pg_and_generic()),
+        ("#>>", JsonOperator::HashLongArrow, pg_and_generic()),
+        ("@>", JsonOperator::AtArrow, all_dialects()),
+        ("<@", JsonOperator::ArrowAt, all_dialects()),
+        ("#-", JsonOperator::HashMinus, pg_and_generic()),
+        ("@?", JsonOperator::AtQuestion, all_dialects()),
+        ("@@", JsonOperator::AtAt, all_dialects()),
+    ];
+
+    for (str_op, op, dialects) in binary_ops {
+        let select = dialects.verified_only_select(&format!("SELECT a {} b", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                operator: *op,
+                right: Box::new(Expr::Identifier(Ident::new("b"))),
+            }),
+            select.projection[0]
+        );
+    }
 }
 
 #[test]
@@ -1741,7 +1796,6 @@ fn parse_select_having() {
     assert!(select.having.is_some());
 }
 
-#[cfg(feature = "bigdecimal")]
 #[test]
 fn parse_select_qualify() {
     let sql = "SELECT i, p, o FROM qt QUALIFY ROW_NUMBER() OVER (PARTITION BY p ORDER BY o) = 1";
@@ -2877,6 +2931,67 @@ fn parse_alter_index() {
         }
         _ => unreachable!(),
     };
+}
+
+#[test]
+fn parse_alter_view() {
+    let sql = "ALTER VIEW myschema.myview AS SELECT foo FROM bar";
+    match verified_stmt(sql) {
+        Statement::AlterView {
+            name,
+            columns,
+            query,
+            with_options,
+        } => {
+            assert_eq!("myschema.myview", name.to_string());
+            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!("SELECT foo FROM bar", query.to_string());
+            assert_eq!(with_options, vec![]);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_view_with_options() {
+    let sql = "ALTER VIEW v WITH (foo = 'bar', a = 123) AS SELECT 1";
+    match verified_stmt(sql) {
+        Statement::AlterView { with_options, .. } => {
+            assert_eq!(
+                vec![
+                    SqlOption {
+                        name: "foo".into(),
+                        value: Value::SingleQuotedString("bar".into()),
+                    },
+                    SqlOption {
+                        name: "a".into(),
+                        value: number("123"),
+                    },
+                ],
+                with_options
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_view_with_columns() {
+    let sql = "ALTER VIEW v (has, cols) AS SELECT 1, 2";
+    match verified_stmt(sql) {
+        Statement::AlterView {
+            name,
+            columns,
+            query,
+            with_options,
+        } => {
+            assert_eq!("v", name.to_string());
+            assert_eq!(columns, vec![Ident::new("has"), Ident::new("cols")]);
+            assert_eq!("SELECT 1, 2", query.to_string());
+            assert_eq!(with_options, vec![]);
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]
@@ -4079,7 +4194,16 @@ fn parse_table_function() {
 
 #[test]
 fn parse_unnest() {
+    let sql = "SELECT UNNEST(make_array(1, 2, 3))";
+    one_statement_parses_to(sql, sql);
+    let sql = "SELECT UNNEST(make_array(1, 2, 3), make_array(4, 5))";
+    one_statement_parses_to(sql, sql);
+}
+
+#[test]
+fn parse_unnest_in_from_clause() {
     fn chk(
+        array_exprs: &str,
         alias: bool,
         with_offset: bool,
         with_offset_alias: bool,
@@ -4087,7 +4211,8 @@ fn parse_unnest() {
         want: Vec<TableWithJoins>,
     ) {
         let sql = &format!(
-            "SELECT * FROM UNNEST(expr){}{}{}",
+            "SELECT * FROM UNNEST({}){}{}{}",
+            array_exprs,
             if alias { " AS numbers" } else { "" },
             if with_offset { " WITH OFFSET" } else { "" },
             if with_offset_alias {
@@ -4105,6 +4230,7 @@ fn parse_unnest() {
     };
     // 1. both Alias and WITH OFFSET clauses.
     chk(
+        "expr",
         true,
         true,
         false,
@@ -4115,7 +4241,7 @@ fn parse_unnest() {
                     name: Ident::new("numbers"),
                     columns: vec![],
                 }),
-                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                array_exprs: vec![Expr::Identifier(Ident::new("expr"))],
                 with_offset: true,
                 with_offset_alias: None,
             },
@@ -4124,6 +4250,7 @@ fn parse_unnest() {
     );
     // 2. neither Alias nor WITH OFFSET clause.
     chk(
+        "expr",
         false,
         false,
         false,
@@ -4131,7 +4258,7 @@ fn parse_unnest() {
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: None,
-                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                array_exprs: vec![Expr::Identifier(Ident::new("expr"))],
                 with_offset: false,
                 with_offset_alias: None,
             },
@@ -4140,6 +4267,7 @@ fn parse_unnest() {
     );
     // 3. Alias but no WITH OFFSET clause.
     chk(
+        "expr",
         false,
         true,
         false,
@@ -4147,7 +4275,7 @@ fn parse_unnest() {
         vec![TableWithJoins {
             relation: TableFactor::UNNEST {
                 alias: None,
-                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                array_exprs: vec![Expr::Identifier(Ident::new("expr"))],
                 with_offset: true,
                 with_offset_alias: None,
             },
@@ -4156,6 +4284,7 @@ fn parse_unnest() {
     );
     // 4. WITH OFFSET but no Alias.
     chk(
+        "expr",
         true,
         false,
         false,
@@ -4166,13 +4295,82 @@ fn parse_unnest() {
                     name: Ident::new("numbers"),
                     columns: vec![],
                 }),
-                array_expr: Box::new(Expr::Identifier(Ident::new("expr"))),
+                array_exprs: vec![Expr::Identifier(Ident::new("expr"))],
                 with_offset: false,
                 with_offset_alias: None,
             },
             joins: vec![],
         }],
     );
+    // 5. Simple array
+    chk(
+        "make_array(1, 2, 3)",
+        false,
+        false,
+        false,
+        &dialects,
+        vec![TableWithJoins {
+            relation: TableFactor::UNNEST {
+                alias: None,
+                array_exprs: vec![Expr::Function(Function {
+                    name: ObjectName(vec![Ident::new("make_array")]),
+                    args: vec![
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("2")))),
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("3")))),
+                    ],
+                    over: None,
+                    distinct: false,
+                    special: false,
+                    order_by: vec![],
+                })],
+                with_offset: false,
+                with_offset_alias: None,
+            },
+            joins: vec![],
+        }],
+    );
+    // 6. Multiple arrays
+    chk(
+        "make_array(1, 2, 3), make_array(5, 6)",
+        false,
+        false,
+        false,
+        &dialects,
+        vec![TableWithJoins {
+            relation: TableFactor::UNNEST {
+                alias: None,
+                array_exprs: vec![
+                    Expr::Function(Function {
+                        name: ObjectName(vec![Ident::new("make_array")]),
+                        args: vec![
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("1")))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("2")))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("3")))),
+                        ],
+                        over: None,
+                        distinct: false,
+                        special: false,
+                        order_by: vec![],
+                    }),
+                    Expr::Function(Function {
+                        name: ObjectName(vec![Ident::new("make_array")]),
+                        args: vec![
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("5")))),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("6")))),
+                        ],
+                        over: None,
+                        distinct: false,
+                        special: false,
+                        order_by: vec![],
+                    }),
+                ],
+                with_offset: false,
+                with_offset_alias: None,
+            },
+            joins: vec![],
+        }],
+    )
 }
 
 #[test]

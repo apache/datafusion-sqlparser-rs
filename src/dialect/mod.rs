@@ -113,6 +113,10 @@ pub trait Dialect: Debug + Any {
     fn supports_within_after_array_aggregation(&self) -> bool {
         false
     }
+    /// Returns true if the dialects supports `group sets, roll up, or cube` expressions.
+    fn supports_group_by_expr(&self) -> bool {
+        false
+    }
     /// Dialect-specific prefix parser override
     fn parse_prefix(&self, _parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
         // return None to fall back to the default behavior

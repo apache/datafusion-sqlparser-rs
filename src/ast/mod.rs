@@ -30,8 +30,8 @@ pub use self::data_type::{
 };
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
-    ColumnOptionDef, GeneratedAs, IndexType, KeyOrIndexDisplay, ReferentialAction, TableConstraint,
-    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
+    ColumnOptionDef, GeneratedAs, IndexType, KeyOrIndexDisplay, ProcedureParam, ReferentialAction,
+    TableConstraint, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
@@ -1316,6 +1316,10 @@ pub enum Statement {
         /// than empty (represented as ()), the latter meaning "no sorting".
         /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
         order_by: Option<Vec<Ident>>,
+        /// SQLite "STRICT" clause.
+        /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
+        /// then strict typing rules apply to that table.
+        strict: bool,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -1370,6 +1374,15 @@ pub enum Statement {
     AlterIndex {
         name: ObjectName,
         operation: AlterIndexOperation,
+    },
+    /// ALTER VIEW
+    AlterView {
+        /// View name
+        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
+        name: ObjectName,
+        columns: Vec<Ident>,
+        query: Box<Query>,
+        with_options: Vec<SqlOption>,
     },
     /// DROP
     Drop {
@@ -1578,6 +1591,28 @@ pub enum Statement {
         return_type: Option<DataType>,
         /// Optional parameters.
         params: CreateFunctionBody,
+    },
+    /// ```sql
+    /// CREATE PROCEDURE
+    /// ```
+    CreateProcedure {
+        or_alter: bool,
+        name: ObjectName,
+        params: Option<Vec<ProcedureParam>>,
+        body: Vec<Statement>,
+    },
+    /// ```sql
+    /// CREATE MACRO
+    /// ```
+    ///
+    /// Supported variants:
+    /// 1. [DuckDB](https://duckdb.org/docs/sql/statements/create_macro)
+    CreateMacro {
+        or_replace: bool,
+        temporary: bool,
+        name: ObjectName,
+        args: Option<Vec<MacroArg>>,
+        definition: MacroDefinition,
     },
     /// ```sql
     /// CREATE STAGE
@@ -2098,6 +2133,52 @@ impl fmt::Display for Statement {
                 write!(f, "{params}")?;
                 Ok(())
             }
+            Statement::CreateProcedure {
+                name,
+                or_alter,
+                params,
+                body,
+            } => {
+                write!(
+                    f,
+                    "CREATE {or_alter}PROCEDURE {name}",
+                    or_alter = if *or_alter { "OR ALTER " } else { "" },
+                    name = name
+                )?;
+
+                if let Some(p) = params {
+                    if !p.is_empty() {
+                        write!(f, " ({})", display_comma_separated(p))?;
+                    }
+                }
+                write!(
+                    f,
+                    " AS BEGIN {body} END",
+                    body = display_separated(body, "; ")
+                )
+            }
+            Statement::CreateMacro {
+                or_replace,
+                temporary,
+                name,
+                args,
+                definition,
+            } => {
+                write!(
+                    f,
+                    "CREATE {or_replace}{temp}MACRO {name}",
+                    temp = if *temporary { "TEMPORARY " } else { "" },
+                    or_replace = if *or_replace { "OR REPLACE " } else { "" },
+                )?;
+                if let Some(args) = args {
+                    write!(f, "({})", display_comma_separated(args))?;
+                }
+                match definition {
+                    MacroDefinition::Expr(expr) => write!(f, " AS {expr}")?,
+                    MacroDefinition::Table(query) => write!(f, " AS TABLE {query}")?,
+                }
+                Ok(())
+            }
             Statement::CreateView {
                 name,
                 or_replace,
@@ -2151,6 +2232,7 @@ impl fmt::Display for Statement {
                 on_commit,
                 on_cluster,
                 order_by,
+                strict,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -2319,7 +2401,9 @@ impl fmt::Display for Statement {
                     };
                     write!(f, " {on_commit}")?;
                 }
-
+                if *strict {
+                    write!(f, " STRICT")?;
+                }
                 Ok(())
             }
             Statement::CreateVirtualTable {
@@ -2458,6 +2542,21 @@ impl fmt::Display for Statement {
             }
             Statement::AlterIndex { name, operation } => {
                 write!(f, "ALTER INDEX {name} {operation}")
+            }
+            Statement::AlterView {
+                name,
+                columns,
+                query,
+                with_options,
+            } => {
+                write!(f, "ALTER VIEW {name}")?;
+                if !with_options.is_empty() {
+                    write!(f, " WITH ({})", display_comma_separated(with_options))?;
+                }
+                if !columns.is_empty() {
+                    write!(f, " ({})", display_comma_separated(columns))?;
+                }
+                write!(f, " AS {query}")
             }
             Statement::Drop {
                 object_type,
@@ -4301,6 +4400,56 @@ impl fmt::Display for CreateFunctionUsing {
             CreateFunctionUsing::File(uri) => write!(f, "FILE '{uri}'"),
             CreateFunctionUsing::Archive(uri) => write!(f, "ARCHIVE '{uri}'"),
         }
+    }
+}
+
+/// `NAME = <EXPR>` arguments for DuckDB macros
+///
+/// See [Create Macro - DuckDB](https://duckdb.org/docs/sql/statements/create_macro)
+/// for more details
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MacroArg {
+    pub name: Ident,
+    pub default_expr: Option<Expr>,
+}
+
+impl MacroArg {
+    /// Returns an argument with name.
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.into(),
+            default_expr: None,
+        }
+    }
+}
+
+impl fmt::Display for MacroArg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(default_expr) = &self.default_expr {
+            write!(f, " := {default_expr}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MacroDefinition {
+    Expr(Expr),
+    Table(Query),
+}
+
+impl fmt::Display for MacroDefinition {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MacroDefinition::Expr(expr) => write!(f, "{expr}")?,
+            MacroDefinition::Table(query) => write!(f, "{query}")?,
+        }
+        Ok(())
     }
 }
 

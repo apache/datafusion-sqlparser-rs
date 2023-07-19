@@ -1154,15 +1154,15 @@ fn pg_and_generic() -> TestedDialects {
 fn parse_json_ops_without_colon() {
     use self::JsonOperator;
     let binary_ops = &[
-        ("->", JsonOperator::Arrow, all_dialects()),
-        ("->>", JsonOperator::LongArrow, all_dialects()),
+        ("->", JsonOperator::Arrow, all_dialects(None)),
+        ("->>", JsonOperator::LongArrow, all_dialects(None)),
         ("#>", JsonOperator::HashArrow, pg_and_generic()),
         ("#>>", JsonOperator::HashLongArrow, pg_and_generic()),
-        ("@>", JsonOperator::AtArrow, all_dialects()),
-        ("<@", JsonOperator::ArrowAt, all_dialects()),
+        ("@>", JsonOperator::AtArrow, all_dialects(None)),
+        ("<@", JsonOperator::ArrowAt, all_dialects(None)),
         ("#-", JsonOperator::HashMinus, pg_and_generic()),
-        ("@?", JsonOperator::AtQuestion, all_dialects()),
-        ("@@", JsonOperator::AtAt, all_dialects()),
+        ("@?", JsonOperator::AtQuestion, all_dialects(None)),
+        ("@@", JsonOperator::AtAt, all_dialects(None)),
     ];
 
     for (str_op, op, dialects) in binary_ops {

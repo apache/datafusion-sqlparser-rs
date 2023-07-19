@@ -185,7 +185,6 @@ pub struct EscapeQuotedString<'a> {
     quote: char,
 }
 
-
 impl<'a> fmt::Display for EscapeQuotedString<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // EscapeQuotedString doesn't know which mode of escape was

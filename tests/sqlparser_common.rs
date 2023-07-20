@@ -1192,17 +1192,11 @@ fn parse_json_ops_without_colon() {
     }
 }
 
-
 #[test]
 fn parse_mod_no_spaces() {
     use self::Expr::*;
     let canonical = "a1 % b1";
-    let sqls = [
-        "a1 % b1",
-        "a1% b1",
-        "a1 %b1",
-        "a1%b1"
-    ];
+    let sqls = ["a1 % b1", "a1% b1", "a1 %b1", "a1%b1"];
     for sql in sqls {
         println!("Parsing {sql}");
         assert_eq!(
@@ -1215,7 +1209,6 @@ fn parse_mod_no_spaces() {
         );
     }
 }
-
 
 #[test]
 fn parse_is_null() {

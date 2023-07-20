@@ -857,7 +857,7 @@ impl<'a> Tokenizer<'a> {
                         Some(sch) if self.dialect.is_identifier_start('%') => {
                             self.tokenize_identifier_or_keyword([ch, *sch], chars)
                         }
-                        _ => Ok(Some(Token::Mod))
+                        _ => Ok(Some(Token::Mod)),
                     }
                 }
                 '|' => {

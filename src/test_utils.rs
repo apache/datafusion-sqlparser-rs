@@ -126,7 +126,6 @@ impl TestedDialects {
         ast
     }
 
-
     /// Ensures that `sql` parses as a single [Statement], and that
     /// re-serializing the parse result produces the same `sql`
     /// string (is not modified after a serialization round-trip).

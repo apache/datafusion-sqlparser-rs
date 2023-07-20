@@ -116,6 +116,17 @@ impl TestedDialects {
         only_statement
     }
 
+    /// Ensures that `sql` parses as an [`Expr`], and that
+    /// re-serializing the parse result produces canonical
+    pub fn expr_parses_to(&self, sql: &str, canonical: &str) -> Expr {
+        let ast = self
+            .run_parser_method(sql, |parser| parser.parse_expr())
+            .unwrap();
+        assert_eq!(canonical, &ast.to_string());
+        ast
+    }
+
+
     /// Ensures that `sql` parses as a single [Statement], and that
     /// re-serializing the parse result produces the same `sql`
     /// string (is not modified after a serialization round-trip).
@@ -147,11 +158,7 @@ impl TestedDialects {
     /// re-serializing the parse result produces the same `sql`
     /// string (is not modified after a serialization round-trip).
     pub fn verified_expr(&self, sql: &str) -> Expr {
-        let ast = self
-            .run_parser_method(sql, |parser| parser.parse_expr())
-            .unwrap();
-        assert_eq!(sql, &ast.to_string(), "round-tripping without changes");
-        ast
+        self.expr_parses_to(sql, sql)
     }
 }
 

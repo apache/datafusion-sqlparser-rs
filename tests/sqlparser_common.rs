@@ -1143,6 +1143,20 @@ fn parse_unary_math_with_multiply() {
     );
 }
 
+#[test]
+fn parse_mod() {
+    use self::Expr::*;
+    let sql = "a % b";
+    assert_eq!(
+        BinaryOp {
+            left: Box::new(Identifier(Ident::new("a"))),
+            op: BinaryOperator::Modulo,
+            right: Box::new(Identifier(Ident::new("b"))),
+        },
+        verified_expr(sql)
+    );
+}
+
 fn pg_and_generic() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(GenericDialect {})],
@@ -1177,6 +1191,31 @@ fn parse_json_ops_without_colon() {
         );
     }
 }
+
+
+#[test]
+fn parse_mod_no_spaces() {
+    use self::Expr::*;
+    let canonical = "a1 % b1";
+    let sqls = [
+        "a1 % b1",
+        "a1% b1",
+        "a1 %b1",
+        "a1%b1"
+    ];
+    for sql in sqls {
+        println!("Parsing {sql}");
+        assert_eq!(
+            BinaryOp {
+                left: Box::new(Identifier(Ident::new("a1"))),
+                op: BinaryOperator::Modulo,
+                right: Box::new(Identifier(Ident::new("b1"))),
+            },
+            pg_and_generic().expr_parses_to(sql, canonical)
+        );
+    }
+}
+
 
 #[test]
 fn parse_is_null() {

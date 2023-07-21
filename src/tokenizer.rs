@@ -424,6 +424,7 @@ struct State<'a> {
 }
 
 impl<'a> State<'a> {
+    /// return the next character and advance the stream
     pub fn next(&mut self) -> Option<char> {
         match self.peekable.next() {
             None => None,
@@ -439,6 +440,7 @@ impl<'a> State<'a> {
         }
     }
 
+    /// return the next character but do not advance the stream
     pub fn peek(&mut self) -> Option<&char> {
         self.peekable.peek()
     }
@@ -849,13 +851,13 @@ impl<'a> Tokenizer<'a> {
                 '+' => self.consume_and_return(chars, Token::Plus),
                 '*' => self.consume_and_return(chars, Token::Mul),
                 '%' => {
-                    chars.next();
+                    chars.next(); // advance past '%'
                     match chars.peek() {
-                        Some(' ') => self.consume_and_return(chars, Token::Mod),
+                        Some(' ') => Ok(Some(Token::Mod)),
                         Some(sch) if self.dialect.is_identifier_start('%') => {
                             self.tokenize_identifier_or_keyword([ch, *sch], chars)
                         }
-                        _ => self.consume_and_return(chars, Token::Mod),
+                        _ => Ok(Some(Token::Mod)),
                     }
                 }
                 '|' => {

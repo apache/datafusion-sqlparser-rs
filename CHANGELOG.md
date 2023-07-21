@@ -8,6 +8,11 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.36.1] 2023-07-19
+
+### Fixed
+* Fix parsing of identifiers after '%' symbol (#927) - Thanks @alamb
+
 ## [0.36.0] 2023-07-19
 
 ### Added

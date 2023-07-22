@@ -6703,90 +6703,37 @@ fn parse_offset_and_limit() {
 
 #[test]
 fn parse_time_functions() {
-    let sql = "SELECT CURRENT_TIMESTAMP()";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]),
+    fn test_time_function(func_name: &'static str) {
+        let sql = format!("SELECT {}()", func_name);
+        let select = verified_only_select(&sql);
+        let select_localtime_func_call_ast = Function {
+            name: ObjectName(vec![Ident::new(func_name)]),
             args: vec![],
             over: None,
             distinct: false,
             special: false,
             order_by: vec![],
-        }),
-        expr_from_projection(&select.projection[0])
-    );
+        };
+        assert_eq!(
+            &Expr::Function(select_localtime_func_call_ast.clone()),
+            expr_from_projection(&select.projection[0])
+        );
 
-    // Validating Parenthesis
-    one_statement_parses_to("SELECT CURRENT_TIMESTAMP", sql);
+        // Validating Parenthesis
+        let sql_without_parens = format!("SELECT {}", func_name);
+        let mut ast_without_parens = select_localtime_func_call_ast.clone();
+        ast_without_parens.special = true;
+        assert_eq!(
+            &Expr::Function(ast_without_parens.clone()),
+            expr_from_projection(&verified_only_select(&sql_without_parens).projection[0])
+        );
+    }
 
-    let sql = "SELECT CURRENT_TIME()";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("CURRENT_TIME")]),
-            args: vec![],
-            over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
-        }),
-        expr_from_projection(&select.projection[0])
-    );
-
-    // Validating Parenthesis
-    one_statement_parses_to("SELECT CURRENT_TIME", sql);
-
-    let sql = "SELECT CURRENT_DATE()";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("CURRENT_DATE")]),
-            args: vec![],
-            over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
-        }),
-        expr_from_projection(&select.projection[0])
-    );
-
-    // Validating Parenthesis
-    one_statement_parses_to("SELECT CURRENT_DATE", sql);
-
-    let sql = "SELECT LOCALTIME()";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("LOCALTIME")]),
-            args: vec![],
-            over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
-        }),
-        expr_from_projection(&select.projection[0])
-    );
-
-    // Validating Parenthesis
-    one_statement_parses_to("SELECT LOCALTIME", sql);
-
-    let sql = "SELECT LOCALTIMESTAMP()";
-    let select = verified_only_select(sql);
-    assert_eq!(
-        &Expr::Function(Function {
-            name: ObjectName(vec![Ident::new("LOCALTIMESTAMP")]),
-            args: vec![],
-            over: None,
-            distinct: false,
-            special: false,
-            order_by: vec![],
-        }),
-        expr_from_projection(&select.projection[0])
-    );
-
-    // Validating Parenthesis
-    one_statement_parses_to("SELECT LOCALTIMESTAMP", sql);
+    test_time_function("CURRENT_TIMESTAMP");
+    test_time_function("CURRENT_TIME");
+    test_time_function("CURRENT_DATE");
+    test_time_function("LOCALTIME");
+    test_time_function("LOCALTIMESTAMP");
 }
 
 #[test]

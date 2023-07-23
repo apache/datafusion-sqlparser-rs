@@ -2186,3 +2186,73 @@ fn parse_similar_to() {
     chk(false);
     chk(true);
 }
+
+#[test]
+fn parse_create_table_with_alias() {
+    let sql = "CREATE TABLE public.datatype_aliases
+    (
+      int8_col INT8,
+      int4_col INT4,
+      int2_col INT2,
+      float8_col FLOAT8,
+      float4_col FLOAT4,
+      bool_col BOOL,
+    );";
+    match pg_and_generic().one_statement_parses_to(sql, "") {
+        Statement::CreateTable {
+            name,
+            columns,
+            constraints,
+            with_options: _with_options,
+            if_not_exists: false,
+            external: false,
+            file_format: None,
+            location: None,
+            ..
+        } => {
+            assert_eq!("public.datatype_aliases", name.to_string());
+            assert_eq!(
+                columns,
+                vec![
+                    ColumnDef {
+                        name: "int8_col".into(),
+                        data_type: DataType::Int8(None),
+                        collation: None,
+                        options: vec![]
+                    },
+                    ColumnDef {
+                        name: "int4_col".into(),
+                        data_type: DataType::Int4(None),
+                        collation: None,
+                        options: vec![]
+                    },
+                    ColumnDef {
+                        name: "int2_col".into(),
+                        data_type: DataType::Int2(None),
+                        collation: None,
+                        options: vec![]
+                    },
+                    ColumnDef {
+                        name: "float8_col".into(),
+                        data_type: DataType::FLOAT8,
+                        collation: None,
+                        options: vec![]
+                    },
+                    ColumnDef {
+                        name: "float4_col".into(),
+                        data_type: DataType::FLOAT4,
+                        collation: None,
+                        options: vec![]
+                    },
+                    ColumnDef {
+                        name: "bool_col".into(),
+                        data_type: DataType::Bool,
+                        collation: None,
+                        options: vec![]
+                    },
+                    ]);
+            assert!(constraints.is_empty());
+        }
+        _ => unreachable!(),
+    }
+}

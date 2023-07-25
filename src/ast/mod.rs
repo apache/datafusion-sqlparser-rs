@@ -1541,7 +1541,10 @@ pub enum Statement {
     /// Note: This is a MySQL-specific statement.
     Use { db_name: Ident },
     /// `{ BEGIN [ TRANSACTION | WORK ] | START TRANSACTION } ...`
-    StartTransaction { modes: Vec<TransactionMode> },
+    StartTransaction {
+        modes: Vec<TransactionMode>,
+        syntax_begin: bool,
+    },
     /// `SET TRANSACTION ...`
     SetTransaction {
         modes: Vec<TransactionMode>,
@@ -2720,8 +2723,15 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::StartTransaction { modes } => {
-                write!(f, "START TRANSACTION")?;
+            Statement::StartTransaction {
+                modes,
+                syntax_begin,
+            } => {
+                if *syntax_begin {
+                    write!(f, "BEGIN TRANSACTION")?;
+                } else {
+                    write!(f, "START TRANSACTION")?;
+                }
                 if !modes.is_empty() {
                     write!(f, " {}", display_comma_separated(modes))?;
                 }

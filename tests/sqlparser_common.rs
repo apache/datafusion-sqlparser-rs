@@ -5732,7 +5732,7 @@ fn lateral_derived() {
 #[test]
 fn parse_start_transaction() {
     match verified_stmt("START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE") {
-        Statement::StartTransaction { modes } => assert_eq!(
+        Statement::StartTransaction { modes, .. } => assert_eq!(
             modes,
             vec![
                 TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
@@ -5749,7 +5749,7 @@ fn parse_start_transaction() {
         "START TRANSACTION READ ONLY READ WRITE ISOLATION LEVEL SERIALIZABLE",
         "START TRANSACTION READ ONLY, READ WRITE, ISOLATION LEVEL SERIALIZABLE",
     ) {
-        Statement::StartTransaction { modes } => assert_eq!(
+        Statement::StartTransaction { modes, .. } => assert_eq!(
             modes,
             vec![
                 TransactionMode::AccessMode(TransactionAccessMode::ReadOnly),
@@ -5761,9 +5761,9 @@ fn parse_start_transaction() {
     }
 
     verified_stmt("START TRANSACTION");
-    one_statement_parses_to("BEGIN", "START TRANSACTION");
-    one_statement_parses_to("BEGIN WORK", "START TRANSACTION");
-    one_statement_parses_to("BEGIN TRANSACTION", "START TRANSACTION");
+    one_statement_parses_to("BEGIN", "BEGIN TRANSACTION");
+    one_statement_parses_to("BEGIN WORK", "BEGIN TRANSACTION");
+    one_statement_parses_to("BEGIN TRANSACTION", "BEGIN TRANSACTION");
 
     verified_stmt("START TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
     verified_stmt("START TRANSACTION ISOLATION LEVEL READ COMMITTED");

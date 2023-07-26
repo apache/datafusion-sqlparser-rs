@@ -957,17 +957,18 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_time_functions(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
-        let (args, order_by) = if self.consume_token(&Token::LParen) {
-            self.parse_optional_args_with_orderby()?
+        let (args, order_by, special) = if self.consume_token(&Token::LParen) {
+            let (args, order_by) = self.parse_optional_args_with_orderby()?;
+            (args, order_by, false)
         } else {
-            (vec![], vec![])
+            (vec![], vec![], true)
         };
         Ok(Expr::Function(Function {
             name,
             args,
             over: None,
             distinct: false,
-            special: false,
+            special,
             order_by,
         }))
     }

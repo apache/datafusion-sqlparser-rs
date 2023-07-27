@@ -4560,8 +4560,11 @@ impl<'a> Parser<'a> {
         let mut data = match next_token.token {
             Token::Word(w) => match w.keyword {
                 Keyword::BOOLEAN => Ok(DataType::Boolean),
+                Keyword::BOOL => Ok(DataType::Bool),
                 Keyword::FLOAT => Ok(DataType::Float(self.parse_optional_precision()?)),
                 Keyword::REAL => Ok(DataType::Real),
+                Keyword::FLOAT4 => Ok(DataType::FLOAT4),
+                Keyword::FLOAT8 => Ok(DataType::FLOAT8),
                 Keyword::DOUBLE => {
                     if self.parse_keyword(Keyword::PRECISION) {
                         Ok(DataType::DoublePrecision)
@@ -4575,6 +4578,14 @@ impl<'a> Parser<'a> {
                         Ok(DataType::UnsignedTinyInt(optional_precision?))
                     } else {
                         Ok(DataType::TinyInt(optional_precision?))
+                    }
+                }
+                Keyword::INT2 => {
+                    let optional_precision = self.parse_optional_precision();
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::UnsignedInt2(optional_precision?))
+                    } else {
+                        Ok(DataType::Int2(optional_precision?))
                     }
                 }
                 Keyword::SMALLINT => {
@@ -4601,6 +4612,14 @@ impl<'a> Parser<'a> {
                         Ok(DataType::Int(optional_precision?))
                     }
                 }
+                Keyword::INT4 => {
+                    let optional_precision = self.parse_optional_precision();
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::UnsignedInt4(optional_precision?))
+                    } else {
+                        Ok(DataType::Int4(optional_precision?))
+                    }
+                }
                 Keyword::INTEGER => {
                     let optional_precision = self.parse_optional_precision();
                     if self.parse_keyword(Keyword::UNSIGNED) {
@@ -4615,6 +4634,14 @@ impl<'a> Parser<'a> {
                         Ok(DataType::UnsignedBigInt(optional_precision?))
                     } else {
                         Ok(DataType::BigInt(optional_precision?))
+                    }
+                }
+                Keyword::INT8 => {
+                    let optional_precision = self.parse_optional_precision();
+                    if self.parse_keyword(Keyword::UNSIGNED) {
+                        Ok(DataType::UnsignedInt8(optional_precision?))
+                    } else {
+                        Ok(DataType::Int8(optional_precision?))
                     }
                 }
                 Keyword::VARCHAR => Ok(DataType::Varchar(self.parse_optional_character_length()?)),

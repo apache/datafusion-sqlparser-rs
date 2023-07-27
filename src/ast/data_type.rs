@@ -99,8 +99,9 @@ pub enum DataType {
     UnsignedTinyInt(Option<u64>),
     /// Int2 as alias for SmallInt in [postgresql]
     /// Note: Int2 mean 2 bytes in postgres (not 2 bits)
-    /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
     /// Int2 with optional display width e.g. INT2 or INT2(5)
+    ///
+    /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
     Int2(Option<u64>),
     /// Unsigned Int2 with optional display width e.g. INT2 Unsigned or INT2(5) Unsigned
     UnsignedInt2(Option<u64>),
@@ -120,8 +121,9 @@ pub enum DataType {
     Int(Option<u64>),
     /// Int4 as alias for Integer in [postgresql]
     /// Note: Int4 mean 4 bytes in postgres (not 4 bits)
-    /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
     /// Int4 with optional display width e.g. Int4 or Int4(11)
+    ///
+    /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
     Int4(Option<u64>),
     /// Integer with optional display width e.g. INTEGER or INTEGER(11)
     Integer(Option<u64>),
@@ -137,18 +139,21 @@ pub enum DataType {
     UnsignedBigInt(Option<u64>),
     /// Int8 as alias for Bigint in [postgresql]
     /// Note: Int8 mean 8 bytes in postgres (not 8 bits)
-    /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
     /// Int8 with optional display width e.g. INT8 or INT8(11)
+    ///
+    /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
     Int8(Option<u64>),
     /// Unsigned Int8 with optional display width e.g. INT8 UNSIGNED or INT8(11) UNSIGNED
     UnsignedInt8(Option<u64>),
     /// FLOAT4 as alias for Real in [postgresql]
-    /// [postgresql] : https://www.postgresql.org/docs/15/datatype.html
+    ///
+    /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
     FLOAT4,
     /// Floating point e.g. REAL
     Real,
     /// FLOAT8 as alias for Double in [postgresql]
-    /// [postgresql] : https://www.postgresql.org/docs/15/datatype.html
+    ///
+    /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
     FLOAT8,
     /// Double
     Double,
@@ -158,7 +163,8 @@ pub enum DataType {
     /// [postgresql]: https://www.postgresql.org/docs/current/datatype-numeric.html
     DoublePrecision,
     /// Bool as alias for Boolean in [postgresql]
-    /// [postgresql] : https://www.postgresql.org/docs/15/datatype.html
+    ///
+    /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
     Bool,
     /// Boolean
     Boolean,

@@ -3009,7 +3009,8 @@ fn parse_create_table_with_alias() {
                         collation: None,
                         options: vec![]
                     },
-                    ]);
+                ]
+            );
             assert!(constraints.is_empty());
         }
         _ => unreachable!(),

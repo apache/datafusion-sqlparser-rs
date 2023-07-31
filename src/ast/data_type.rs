@@ -145,16 +145,16 @@ pub enum DataType {
     Int8(Option<u64>),
     /// Unsigned Int8 with optional display width e.g. INT8 UNSIGNED or INT8(11) UNSIGNED
     UnsignedInt8(Option<u64>),
-    /// FLOAT4 as alias for Real in [postgresql]
+    /// Float4 as alias for Real in [postgresql]
     ///
     /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
-    FLOAT4,
+    Float4,
     /// Floating point e.g. REAL
     Real,
-    /// FLOAT8 as alias for Double in [postgresql]
+    /// Float8 as alias for Double in [postgresql]
     ///
     /// [postgresql]: https://www.postgresql.org/docs/15/datatype.html
-    FLOAT8,
+    Float8,
     /// Double
     Double,
     /// Double PRECISION e.g. [standard], [postgresql]
@@ -296,9 +296,9 @@ impl fmt::Display for DataType {
                 format_type_with_optional_length(f, "INT8", zerofill, true)
             }
             DataType::Real => write!(f, "REAL"),
-            DataType::FLOAT4 => write!(f, "FLOAT4"),
+            DataType::Float4 => write!(f, "FLOAT4"),
             DataType::Double => write!(f, "DOUBLE"),
-            DataType::FLOAT8 => write!(f, "FLOAT8"),
+            DataType::Float8 => write!(f, "FLOAT8"),
             DataType::DoublePrecision => write!(f, "DOUBLE PRECISION"),
             DataType::Bool => write!(f, "BOOL"),
             DataType::Boolean => write!(f, "BOOLEAN"),

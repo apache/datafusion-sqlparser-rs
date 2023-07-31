@@ -2993,13 +2993,13 @@ fn parse_create_table_with_alias() {
                     },
                     ColumnDef {
                         name: "float8_col".into(),
-                        data_type: DataType::FLOAT8,
+                        data_type: DataType::Float8,
                         collation: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "float4_col".into(),
-                        data_type: DataType::FLOAT4,
+                        data_type: DataType::Float4,
                         collation: None,
                         options: vec![]
                     },

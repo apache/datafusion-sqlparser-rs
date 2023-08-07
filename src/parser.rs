@@ -4568,8 +4568,8 @@ impl<'a> Parser<'a> {
                 Keyword::BOOL => Ok(DataType::Bool),
                 Keyword::FLOAT => Ok(DataType::Float(self.parse_optional_precision()?)),
                 Keyword::REAL => Ok(DataType::Real),
-                Keyword::FLOAT4 => Ok(DataType::FLOAT4),
-                Keyword::FLOAT8 => Ok(DataType::FLOAT8),
+                Keyword::FLOAT4 => Ok(DataType::Float4),
+                Keyword::FLOAT8 => Ok(DataType::Float8),
                 Keyword::DOUBLE => {
                     if self.parse_keyword(Keyword::PRECISION) {
                         Ok(DataType::DoublePrecision)

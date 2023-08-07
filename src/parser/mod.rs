@@ -33,6 +33,8 @@ use crate::dialect::*;
 use crate::keywords::{self, Keyword};
 use crate::tokenizer::*;
 
+mod role;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParserError {
     TokenizerError(String),
@@ -3990,8 +3992,12 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_alter(&mut self) -> Result<Statement, ParserError> {
-        let object_type =
-            self.expect_one_of_keywords(&[Keyword::VIEW, Keyword::TABLE, Keyword::INDEX])?;
+        let object_type = self.expect_one_of_keywords(&[
+            Keyword::VIEW,
+            Keyword::TABLE,
+            Keyword::INDEX,
+            Keyword::ROLE,
+        ])?;
         match object_type {
             Keyword::VIEW => self.parse_alter_view(),
             Keyword::TABLE => {
@@ -4186,6 +4192,7 @@ impl<'a> Parser<'a> {
                     operation,
                 })
             }
+            Keyword::ROLE => self.parse_alter_role(),
             // unreachable because expect_one_of_keywords used above
             _ => unreachable!(),
         }

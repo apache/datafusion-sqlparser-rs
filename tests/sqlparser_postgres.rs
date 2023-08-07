@@ -2448,6 +2448,33 @@ fn parse_create_role() {
 }
 
 #[test]
+fn parse_alter_role() {
+    let sql = "ALTER ROLE old_name RENAME TO new_name";
+    match pg().verified_stmt(sql) {
+        Statement::AlterRole {
+            name,
+            operation: AlterRoleOperation::RenameRole { role_name },
+        } => {
+            assert_eq!("old_name", name.to_string());
+            assert_eq!("new_name", role_name.to_string());
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "ALTER ROLE role_name WITH BYPASSRLS CREATEDB";
+    match pg().verified_stmt(sql) {
+        Statement::AlterRole {
+            name,
+            operation: AlterRoleOperation::WithOptions { options },
+        } => {
+            assert_eq!("role_name", name.to_string());
+            assert_eq_vec(&["BYPASSRLS", "CREATEDB"], &options);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_delimited_identifiers() {
     // check that quoted identifiers in any position remain quoted after serialization
     let select = pg().verified_only_select(

@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use super::Expr;
+use super::{Expr, Ident, Password};
 use crate::ast::{display_separated, ObjectName};
 
 /// An option in `ROLE` statement.
@@ -33,22 +33,59 @@ use crate::ast::{display_separated, ObjectName};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum RoleOption {
-    SuperUser(bool),
+    BypassRLS(bool),
+    ConnectionLimit(Expr),
     CreateDB(bool),
-    BypassRls(bool),
+    CreateRole(bool),
+    Inherit(bool),
+    Login(bool),
+    Password(Password),
+    Replication(bool),
+    SuperUser(bool),
+    ValidUntil(Expr),
 }
 
 impl fmt::Display for RoleOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            RoleOption::SuperUser(value) => {
-                write!(f, "{}", if *value { "SUPERUSER" } else { "NOSUPERUSER" })
+            RoleOption::BypassRLS(value) => {
+                write!(f, "{}", if *value { "BYPASSRLS" } else { "NOBYPASSRLS" })
+            }
+            RoleOption::ConnectionLimit(expr) => {
+                write!(f, "{expr}")
             }
             RoleOption::CreateDB(value) => {
                 write!(f, "{}", if *value { "CREATEDB" } else { "NOCREATEDB" })
             }
-            RoleOption::BypassRls(value) => {
-                write!(f, "{}", if *value { "BYPASSRLS" } else { "NOBYPASSRLS" })
+            RoleOption::CreateRole(value) => {
+                write!(f, "{}", if *value { "CREATEROLE" } else { "NOCREATEROLE" })
+            }
+            RoleOption::Inherit(value) => {
+                write!(f, "{}", if *value { "INHERIT" } else { "NOINHERIT" })
+            }
+            RoleOption::Login(value) => {
+                write!(f, "{}", if *value { "LOGIN" } else { "NOLOGIN" })
+            }
+            RoleOption::Password(password) => match password {
+                Password::Password(expr) => write!(f, "{expr}"),
+                Password::NullPassword => write!(f, "NULL"),
+            },
+            RoleOption::Replication(value) => {
+                write!(
+                    f,
+                    "{}",
+                    if *value {
+                        "REPLICATION"
+                    } else {
+                        "NOREPLICATION"
+                    }
+                )
+            }
+            RoleOption::SuperUser(value) => {
+                write!(f, "{}", if *value { "SUPERUSER" } else { "NOSUPERUSER" })
+            }
+            RoleOption::ValidUntil(expr) => {
+                write!(f, "{expr}")
             }
         }
     }
@@ -61,15 +98,15 @@ impl fmt::Display for RoleOption {
 pub enum AlterRoleOperation {
     /// Generic
     RenameRole {
-        role_name: ObjectName,
+        role_name: Ident,
     },
     /// MS SQL Server
     /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/alter-role-transact-sql>
     AddMember {
-        member_name: ObjectName,
+        member_name: Ident,
     },
     DropMember {
-        member_name: ObjectName,
+        member_name: Ident,
     },
     /// PostgreSQL
     /// <https://www.postgresql.org/docs/current/sql-alterrole.html>

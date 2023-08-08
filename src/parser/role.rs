@@ -14,7 +14,7 @@
 
 use super::{Parser, ParserError};
 use crate::{
-    ast::{AlterRoleOperation, RoleOption, Statement},
+    ast::{AlterRoleOperation, Expr, Password, RoleOption, Statement},
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,
     tokenizer::Token,
@@ -34,23 +34,23 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_mssql_alter_role(&mut self) -> Result<Statement, ParserError> {
-        let role_name = self.parse_object_name()?;
+        let role_name = self.parse_identifier()?;
 
         let operation = if self.parse_keywords(&[Keyword::ADD, Keyword::MEMBER]) {
-            let member_name = self.parse_object_name()?;
+            let member_name = self.parse_identifier()?;
             AlterRoleOperation::AddMember { member_name }
         } else if self.parse_keywords(&[Keyword::DROP, Keyword::MEMBER]) {
-            let member_name = self.parse_object_name()?;
+            let member_name = self.parse_identifier()?;
             AlterRoleOperation::DropMember { member_name }
         } else if self.parse_keywords(&[Keyword::WITH, Keyword::NAME]) {
             if self.consume_token(&Token::Eq) {
-                let role_name = self.parse_object_name()?;
+                let role_name = self.parse_identifier()?;
                 AlterRoleOperation::RenameRole { role_name }
             } else {
                 return self.expected("= after WITH NAME ", self.peek_token());
             }
         } else {
-            return self.expected("TO after RENAME", self.peek_token());
+            return self.expected("'ADD' or 'DROP' or 'WITH NAME'", self.peek_token());
         };
 
         Ok(Statement::AlterRole {
@@ -60,7 +60,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_pg_alter_role(&mut self) -> Result<Statement, ParserError> {
-        let role_name = self.parse_object_name()?;
+        let role_name = self.parse_identifier()?;
 
         // [ IN DATABASE _`database_name`_ ]
         let in_database = if self.parse_keywords(&[Keyword::IN, Keyword::DATABASE]) {
@@ -71,7 +71,7 @@ impl<'a> Parser<'a> {
 
         let operation = if self.parse_keyword(Keyword::RENAME) {
             if self.parse_keyword(Keyword::TO) {
-                let role_name = self.parse_object_name()?;
+                let role_name = self.parse_identifier()?;
                 AlterRoleOperation::RenameRole { role_name }
             } else {
                 return self.expected("TO after RENAME", self.peek_token());
@@ -107,10 +107,10 @@ impl<'a> Parser<'a> {
                         value: Some(expr),
                     }
                 } else {
-                    self.expected("variable value", self.peek_token())?
+                    self.expected("config param value", self.peek_token())?
                 }
             } else {
-                self.expected("variable value", self.peek_token())?
+                self.expected("'TO' or '=' or 'FROM CURRENT'", self.peek_token())?
             }
         // RESET
         } else if self.parse_keyword(Keyword::RESET) {
@@ -135,6 +135,11 @@ impl<'a> Parser<'a> {
             while let Some(opt) = self.maybe_parse(|parser| parser.parse_pg_role_option()) {
                 options.push(opt);
             }
+            // check option
+            if options.is_empty() {
+                return self.expected("option", self.peek_token())?;
+            }
+
             AlterRoleOperation::WithOptions { options }
         };
 
@@ -164,10 +169,36 @@ impl<'a> Parser<'a> {
             Keyword::NOSUPERUSER,
             Keyword::VALID,
         ]) {
-            Some(Keyword::BYPASSRLS) => RoleOption::BypassRls(true),
-            Some(Keyword::NOBYPASSRLS) => RoleOption::BypassRls(false),
+            Some(Keyword::BYPASSRLS) => RoleOption::BypassRLS(true),
+            Some(Keyword::NOBYPASSRLS) => RoleOption::BypassRLS(false),
+            Some(Keyword::CONNECTION) => {
+                self.expect_keyword(Keyword::LIMIT)?;
+                RoleOption::ConnectionLimit(Expr::Value(self.parse_number_value()?))
+            }
             Some(Keyword::CREATEDB) => RoleOption::CreateDB(true),
             Some(Keyword::NOCREATEDB) => RoleOption::CreateDB(false),
+            Some(Keyword::CREATEROLE) => RoleOption::CreateRole(true),
+            Some(Keyword::NOCREATEROLE) => RoleOption::CreateRole(false),
+            Some(Keyword::INHERIT) => RoleOption::Inherit(true),
+            Some(Keyword::NOINHERIT) => RoleOption::Inherit(false),
+            Some(Keyword::LOGIN) => RoleOption::Login(true),
+            Some(Keyword::NOLOGIN) => RoleOption::Login(false),
+            Some(Keyword::PASSWORD) => {
+                let password = if self.parse_keyword(Keyword::NULL) {
+                    Password::NullPassword
+                } else {
+                    Password::Password(Expr::Value(self.parse_value()?))
+                };
+                RoleOption::Password(password)
+            }
+            Some(Keyword::REPLICATION) => RoleOption::Replication(true),
+            Some(Keyword::NOREPLICATION) => RoleOption::Replication(false),
+            Some(Keyword::SUPERUSER) => RoleOption::SuperUser(true),
+            Some(Keyword::NOSUPERUSER) => RoleOption::SuperUser(false),
+            Some(Keyword::VALID) => {
+                self.expect_keyword(Keyword::UNTIL)?;
+                RoleOption::ConnectionLimit(Expr::Value(self.parse_value()?))
+            }
             _ => self.expected("option", self.peek_token())?,
         };
 

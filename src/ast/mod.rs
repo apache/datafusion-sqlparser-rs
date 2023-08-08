@@ -1402,7 +1402,7 @@ pub enum Statement {
     },
     /// ALTER ROLE
     AlterRole {
-        name: ObjectName,
+        name: Ident,
         operation: AlterRoleOperation,
     },
     /// DROP

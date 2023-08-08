@@ -219,32 +219,35 @@ fn parse_mssql_create_role() {
 #[test]
 fn parse_alter_role() {
     let sql = "ALTER ROLE old_name WITH NAME = new_name";
-    match ms().parse_sql_statements(sql).as_deref() {
-        Ok(
-            [Statement::AlterRole {
-                name,
-                operation: AlterRoleOperation::RenameRole { role_name },
-            }],
-        ) => {
-            assert_eq!("old_name", name.to_string());
-            assert_eq!("new_name", role_name.to_string());
-        }
-        err => panic!("Failed to parse ALTER ROLE test case: {err:?}"),
-    }
+    assert_eq!(
+        ms().parse_sql_statements(sql).unwrap(),
+        [Statement::AlterRole {
+            name: Ident {
+                value: "old_name".into(),
+                quote_style: None
+            },
+            operation: AlterRoleOperation::RenameRole {
+                role_name: Ident {
+                    value: "new_name".into(),
+                    quote_style: None
+                }
+            },
+        }]
+    );
 
     let sql = "ALTER ROLE role_name ADD MEMBER new_member";
     assert_eq!(
         ms().verified_stmt(sql),
         Statement::AlterRole {
-            name: ObjectName(vec![Ident {
+            name: Ident {
                 value: "role_name".into(),
                 quote_style: None
-            }]),
+            },
             operation: AlterRoleOperation::AddMember {
-                member_name: ObjectName(vec![Ident {
+                member_name: Ident {
                     value: "new_member".into(),
                     quote_style: None
-                }])
+                }
             },
         }
     );
@@ -253,15 +256,15 @@ fn parse_alter_role() {
     assert_eq!(
         ms().verified_stmt(sql),
         Statement::AlterRole {
-            name: ObjectName(vec![Ident {
+            name: Ident {
                 value: "role_name".into(),
                 quote_style: None
-            }]),
+            },
             operation: AlterRoleOperation::DropMember {
-                member_name: ObjectName(vec![Ident {
+                member_name: Ident {
                     value: "old_member".into(),
                     quote_style: None
-                }])
+                }
             },
         }
     );

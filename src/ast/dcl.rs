@@ -23,7 +23,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::ObjectName;
+use super::Expr;
+use crate::ast::{display_separated, ObjectName};
 
 /// An option in `ROLE` statement.
 ///
@@ -58,8 +59,34 @@ impl fmt::Display for RoleOption {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum AlterRoleOperation {
-    RenameRole { role_name: ObjectName },
-    WithOptions { options: Vec<RoleOption> },
+    /// Generic
+    RenameRole {
+        role_name: ObjectName,
+    },
+    /// MS SQL Server
+    /// <https://learn.microsoft.com/en-us/sql/t-sql/statements/alter-role-transact-sql>
+    AddMember {
+        member_name: ObjectName,
+    },
+    DropMember {
+        member_name: ObjectName,
+    },
+    /// PostgreSQL
+    /// <https://www.postgresql.org/docs/current/sql-alterrole.html>
+    WithOptions {
+        options: Vec<RoleOption>,
+    },
+    Set {
+        config_param: ObjectName,
+        default_value: bool,
+        from_current: bool,
+        in_database: Option<ObjectName>,
+        value: Option<Expr>,
+    },
+    Reset {
+        config_param: Option<ObjectName>,
+        all: bool,
+    },
 }
 
 impl fmt::Display for AlterRoleOperation {
@@ -68,16 +95,56 @@ impl fmt::Display for AlterRoleOperation {
             AlterRoleOperation::RenameRole { role_name } => {
                 write!(f, "RENAME TO {role_name}")
             }
+            AlterRoleOperation::AddMember { member_name } => {
+                write!(f, "ADD MEMBER {member_name}")
+            }
+            AlterRoleOperation::DropMember { member_name } => {
+                write!(f, "DROP MEMBER {member_name}")
+            }
             AlterRoleOperation::WithOptions { options } => {
-                write!(
-                    f,
-                    "WITH {}",
-                    options
-                        .iter()
-                        .map(|v| v.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                )
+                write!(f, "WITH {}", display_separated(options, " "))
+            }
+            AlterRoleOperation::Set {
+                config_param,
+                default_value,
+                from_current,
+                in_database,
+                value,
+            } => {
+                if let Some(database_name) = in_database {
+                    write!(f, "IN DATABASE {} ", database_name)?;
+                }
+
+                if *from_current {
+                    write!(f, "SET {config_param} FROM CURRENT")
+                } else if *default_value {
+                    write!(f, "SET {config_param} TO DEFAULT")
+                } else {
+                    write!(
+                        f,
+                        "SET {config_param} TO {value}",
+                        value = if let Some(value) = value {
+                            value.to_string()
+                        } else {
+                            "".to_string()
+                        }
+                    )
+                }
+            }
+            AlterRoleOperation::Reset { config_param, all } => {
+                if *all {
+                    write!(f, "RESET ALL")
+                } else {
+                    write!(
+                        f,
+                        "RESET {param}",
+                        param = if let Some(param) = config_param {
+                            param.to_string()
+                        } else {
+                            "".to_string()
+                        }
+                    )
+                }
             }
         }
     }

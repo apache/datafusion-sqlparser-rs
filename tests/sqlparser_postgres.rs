@@ -2472,6 +2472,138 @@ fn parse_alter_role() {
         }
         _ => unreachable!(),
     }
+
+    let sql = "ALTER ROLE role_name SET maintenance_work_mem FROM CURRENT";
+    match pg().verified_stmt(sql) {
+        Statement::AlterRole {
+            name,
+            operation:
+                AlterRoleOperation::Set {
+                    config_param,
+                    default_value,
+                    from_current,
+                    in_database,
+                    value,
+                },
+        } => {
+            assert_eq!("role_name", name.to_string());
+            assert_eq!("maintenance_work_mem", config_param.to_string());
+            assert!(!default_value);
+            assert!(from_current);
+            assert!(in_database.is_none());
+            assert!(value.is_none());
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "ALTER ROLE role_name IN DATABASE database_name SET maintenance_work_mem = 100000";
+    match pg().parse_sql_statements(sql).as_deref() {
+        Ok(
+            [Statement::AlterRole {
+                name,
+                operation:
+                    AlterRoleOperation::Set {
+                        config_param,
+                        default_value,
+                        from_current,
+                        in_database,
+                        value,
+                    },
+            }],
+        ) => {
+            assert_eq!("role_name", name.to_string());
+            assert_eq!("maintenance_work_mem", config_param.to_string());
+            assert!(!default_value);
+            assert!(!from_current);
+            assert_eq!(
+                Some(ObjectName(vec![Ident::new("database_name")])),
+                *in_database
+            );
+            assert_eq!(Some(Expr::Value(number("100000"))), *value);
+        }
+        err => panic!("Failed to parse ALTER ROLE test case: {err:?}"),
+    }
+
+    let sql = "ALTER ROLE role_name IN DATABASE database_name SET maintenance_work_mem TO 100000";
+    match pg().verified_stmt(sql) {
+        Statement::AlterRole {
+            name,
+            operation:
+                AlterRoleOperation::Set {
+                    config_param,
+                    default_value,
+                    from_current,
+                    in_database,
+                    value,
+                },
+        } => {
+            assert_eq!("role_name", name.to_string());
+            assert_eq!("maintenance_work_mem", config_param.to_string());
+            assert!(!default_value);
+            assert!(!from_current);
+            assert_eq!(
+                Some(ObjectName(vec![Ident::new("database_name")])),
+                in_database
+            );
+            assert_eq!(Some(Expr::Value(number("100000"))), value);
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "ALTER ROLE role_name IN DATABASE database_name SET maintenance_work_mem TO DEFAULT";
+    match pg().verified_stmt(sql) {
+        Statement::AlterRole {
+            name,
+            operation:
+                AlterRoleOperation::Set {
+                    config_param,
+                    default_value,
+                    from_current,
+                    in_database,
+                    value,
+                },
+        } => {
+            assert_eq!("role_name", name.to_string());
+            assert_eq!("maintenance_work_mem", config_param.to_string());
+            assert!(default_value);
+            assert!(!from_current);
+            assert_eq!(
+                Some(ObjectName(vec![Ident::new("database_name")])),
+                in_database
+            );
+            assert!(value.is_none());
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "ALTER ROLE role_name RESET ALL";
+    match pg().verified_stmt(sql) {
+        Statement::AlterRole {
+            name,
+            operation: AlterRoleOperation::Reset { config_param, all },
+        } => {
+            assert_eq!("role_name", name.to_string());
+            assert!(config_param.is_none());
+            assert!(all);
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = "ALTER ROLE role_name RESET maintenance_work_mem";
+    match pg().verified_stmt(sql) {
+        Statement::AlterRole {
+            name,
+            operation: AlterRoleOperation::Reset { config_param, all },
+        } => {
+            assert_eq!("role_name", name.to_string());
+            assert_eq!(
+                Some(ObjectName(vec![Ident::new("maintenance_work_mem")])),
+                config_param
+            );
+            assert!(!all);
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

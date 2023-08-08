@@ -508,6 +508,7 @@ define_keywords!(
     REPEATABLE,
     REPLACE,
     REPLICATION,
+    RESET,
     RESTRICT,
     RESULT,
     RETAIN,

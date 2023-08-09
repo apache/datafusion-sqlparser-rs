@@ -3389,6 +3389,15 @@ impl<'a> Parser<'a> {
         let columns = self.parse_comma_separated(Parser::parse_order_by_expr)?;
         self.expect_token(&Token::RParen)?;
 
+        let include = if self.parse_keyword(Keyword::INCLUDE) {
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(Parser::parse_identifier)?;
+            self.expect_token(&Token::RParen)?;
+            columns
+        } else {
+            vec![]
+        };
+
         let nulls_distinct = if self.parse_keyword(Keyword::NULLS) {
             let not = self.parse_keyword(Keyword::NOT);
             self.expect_keyword(Keyword::DISTINCT)?;
@@ -3396,6 +3405,7 @@ impl<'a> Parser<'a> {
         } else {
             false
         };
+
         let predicate = if self.parse_keyword(Keyword::WHERE) {
             Some(self.parse_expr()?)
         } else {
@@ -3410,6 +3420,7 @@ impl<'a> Parser<'a> {
             unique,
             concurrently,
             if_not_exists,
+            include,
             nulls_distinct,
             predicate,
         })

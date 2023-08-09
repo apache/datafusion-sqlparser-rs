@@ -6022,6 +6022,7 @@ fn test_create_index_with_using_function() {
             unique,
             concurrently,
             if_not_exists,
+            include,
             nulls_distinct,
             predicate: None,
         } => {
@@ -6032,6 +6033,7 @@ fn test_create_index_with_using_function() {
             assert!(unique);
             assert!(!concurrently);
             assert!(if_not_exists);
+            assert!(include.is_empty());
             assert!(!nulls_distinct)
         }
         _ => unreachable!(),

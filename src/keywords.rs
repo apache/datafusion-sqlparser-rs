@@ -311,6 +311,7 @@ define_keywords!(
     ILIKE,
     IMMUTABLE,
     IN,
+    INCLUDE,
     INCREMENT,
     INDEX,
     INDICATOR,

@@ -1356,6 +1356,7 @@ pub enum Statement {
         unique: bool,
         concurrently: bool,
         if_not_exists: bool,
+        include: Vec<Ident>,
         nulls_distinct: bool,
         predicate: Option<Expr>,
     },
@@ -2469,6 +2470,7 @@ impl fmt::Display for Statement {
                 unique,
                 concurrently,
                 if_not_exists,
+                include,
                 nulls_distinct,
                 predicate,
             } => {
@@ -2488,6 +2490,9 @@ impl fmt::Display for Statement {
                     write!(f, " USING {value} ")?;
                 }
                 write!(f, "({})", display_separated(columns, ","))?;
+                if !include.is_empty() {
+                    write!(f, " INCLUDE ({})", display_separated(include, ","))?;
+                }
                 if *nulls_distinct {
                     write!(f, " NULLS DISTINCT")?;
                 }

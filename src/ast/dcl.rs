@@ -52,7 +52,7 @@ impl fmt::Display for RoleOption {
                 write!(f, "{}", if *value { "BYPASSRLS" } else { "NOBYPASSRLS" })
             }
             RoleOption::ConnectionLimit(expr) => {
-                write!(f, "{expr}")
+                write!(f, "CONNECTION LIMIT {expr}")
             }
             RoleOption::CreateDB(value) => {
                 write!(f, "{}", if *value { "CREATEDB" } else { "NOCREATEDB" })
@@ -67,8 +67,8 @@ impl fmt::Display for RoleOption {
                 write!(f, "{}", if *value { "LOGIN" } else { "NOLOGIN" })
             }
             RoleOption::Password(password) => match password {
-                Password::Password(expr) => write!(f, "{expr}"),
-                Password::NullPassword => write!(f, "NULL"),
+                Password::Password(expr) => write!(f, "PASSWORD {expr}"),
+                Password::NullPassword => write!(f, "PASSWORD NULL"),
             },
             RoleOption::Replication(value) => {
                 write!(
@@ -85,10 +85,33 @@ impl fmt::Display for RoleOption {
                 write!(f, "{}", if *value { "SUPERUSER" } else { "NOSUPERUSER" })
             }
             RoleOption::ValidUntil(expr) => {
-                write!(f, "{expr}")
+                write!(f, "VALID UNTIL {expr}")
             }
         }
     }
+}
+
+/// SET config value option:
+/// * SET `configuration_parameter` { TO | = } { `value` | DEFAULT }
+/// * SET `configuration_parameter` FROM CURRENT
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SetConfigValue {
+    Default,
+    FromCurrent,
+    Value(Expr),
+}
+
+/// RESET config option:
+/// * RESET `configuration_parameter`
+/// * RESET ALL
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ResetConfig {
+    ALL,
+    ConfigName(ObjectName),
 }
 
 /// An `ALTER ROLE` (`Statement::AlterRole`) operation
@@ -114,15 +137,13 @@ pub enum AlterRoleOperation {
         options: Vec<RoleOption>,
     },
     Set {
-        config_param: ObjectName,
-        default_value: bool,
-        from_current: bool,
+        config_name: ObjectName,
+        config_value: SetConfigValue,
         in_database: Option<ObjectName>,
-        value: Option<Expr>,
     },
     Reset {
-        config_param: Option<ObjectName>,
-        all: bool,
+        config_name: ResetConfig,
+        in_database: Option<ObjectName>,
     },
 }
 
@@ -142,45 +163,31 @@ impl fmt::Display for AlterRoleOperation {
                 write!(f, "WITH {}", display_separated(options, " "))
             }
             AlterRoleOperation::Set {
-                config_param,
-                default_value,
-                from_current,
+                config_name,
+                config_value,
                 in_database,
-                value,
             } => {
                 if let Some(database_name) = in_database {
                     write!(f, "IN DATABASE {} ", database_name)?;
                 }
 
-                if *from_current {
-                    write!(f, "SET {config_param} FROM CURRENT")
-                } else if *default_value {
-                    write!(f, "SET {config_param} TO DEFAULT")
-                } else {
-                    write!(
-                        f,
-                        "SET {config_param} TO {value}",
-                        value = if let Some(value) = value {
-                            value.to_string()
-                        } else {
-                            "".to_string()
-                        }
-                    )
+                match config_value {
+                    SetConfigValue::Default => write!(f, "SET {config_name} TO DEFAULT"),
+                    SetConfigValue::FromCurrent => write!(f, "SET {config_name} FROM CURRENT"),
+                    SetConfigValue::Value(expr) => write!(f, "SET {config_name} TO {expr}"),
                 }
             }
-            AlterRoleOperation::Reset { config_param, all } => {
-                if *all {
-                    write!(f, "RESET ALL")
-                } else {
-                    write!(
-                        f,
-                        "RESET {param}",
-                        param = if let Some(param) = config_param {
-                            param.to_string()
-                        } else {
-                            "".to_string()
-                        }
-                    )
+            AlterRoleOperation::Reset {
+                config_name,
+                in_database,
+            } => {
+                if let Some(database_name) = in_database {
+                    write!(f, "IN DATABASE {} ", database_name)?;
+                }
+
+                match config_name {
+                    ResetConfig::ALL => write!(f, "RESET ALL"),
+                    ResetConfig::ConfigName(name) => write!(f, "RESET {name}"),
                 }
             }
         }

@@ -14,7 +14,7 @@
 
 use super::{Parser, ParserError};
 use crate::{
-    ast::{AlterRoleOperation, Expr, Password, RoleOption, Statement},
+    ast::{AlterRoleOperation, Expr, Password, ResetConfig, RoleOption, SetConfigValue, Statement},
     dialect::{MsSqlDialect, PostgreSqlDialect},
     keywords::Keyword,
     tokenizer::Token,
@@ -78,36 +78,30 @@ impl<'a> Parser<'a> {
             }
         // SET
         } else if self.parse_keyword(Keyword::SET) {
-            let config_param = self.parse_object_name()?;
+            let config_name = self.parse_object_name()?;
             // FROM CURRENT
             if self.parse_keywords(&[Keyword::FROM, Keyword::CURRENT]) {
                 AlterRoleOperation::Set {
-                    config_param,
-                    default_value: false,
-                    from_current: true,
+                    config_name,
+                    config_value: SetConfigValue::FromCurrent,
                     in_database,
-                    value: None,
                 }
             // { TO | = } { value | DEFAULT }
             } else if self.consume_token(&Token::Eq) || self.parse_keyword(Keyword::TO) {
                 if self.parse_keyword(Keyword::DEFAULT) {
                     AlterRoleOperation::Set {
-                        config_param,
-                        default_value: true,
-                        from_current: false,
+                        config_name,
+                        config_value: SetConfigValue::Default,
                         in_database,
-                        value: None,
                     }
                 } else if let Ok(expr) = self.parse_expr() {
                     AlterRoleOperation::Set {
-                        config_param,
-                        default_value: false,
-                        from_current: false,
+                        config_name,
+                        config_value: SetConfigValue::Value(expr),
                         in_database,
-                        value: Some(expr),
                     }
                 } else {
-                    self.expected("config param value", self.peek_token())?
+                    self.expected("config value", self.peek_token())?
                 }
             } else {
                 self.expected("'TO' or '=' or 'FROM CURRENT'", self.peek_token())?
@@ -116,14 +110,14 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::RESET) {
             if self.parse_keyword(Keyword::ALL) {
                 AlterRoleOperation::Reset {
-                    config_param: None,
-                    all: true,
+                    config_name: ResetConfig::ALL,
+                    in_database,
                 }
             } else {
-                let config_param = self.parse_object_name()?;
+                let config_name = self.parse_object_name()?;
                 AlterRoleOperation::Reset {
-                    config_param: Some(config_param),
-                    all: false,
+                    config_name: ResetConfig::ConfigName(config_name),
+                    in_database,
                 }
             }
         // option
@@ -197,7 +191,7 @@ impl<'a> Parser<'a> {
             Some(Keyword::NOSUPERUSER) => RoleOption::SuperUser(false),
             Some(Keyword::VALID) => {
                 self.expect_keyword(Keyword::UNTIL)?;
-                RoleOption::ConnectionLimit(Expr::Value(self.parse_value()?))
+                RoleOption::ValidUntil(Expr::Value(self.parse_value()?))
             }
             _ => self.expected("option", self.peek_token())?,
         };

@@ -1785,7 +1785,7 @@ fn parse_create_index() {
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
-            assert!(!nulls_distinct)
+            assert!(nulls_distinct)
         }
         _ => unreachable!(),
     }
@@ -1815,7 +1815,7 @@ fn parse_create_anonymous_index() {
             assert!(!if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
-            assert!(!nulls_distinct);
+            assert!(nulls_distinct);
         }
         _ => unreachable!(),
     }
@@ -1845,7 +1845,7 @@ fn parse_create_index_concurrently() {
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
-            assert!(!nulls_distinct);
+            assert!(nulls_distinct);
         }
         _ => unreachable!(),
     }
@@ -1875,7 +1875,7 @@ fn parse_create_index_with_predicate() {
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
-            assert!(!nulls_distinct);
+            assert!(nulls_distinct);
         }
         _ => unreachable!(),
     }
@@ -1905,7 +1905,7 @@ fn parse_create_index_with_include() {
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert_eq_vec(&["col3"], &include);
-            assert!(!nulls_distinct)
+            assert!(nulls_distinct)
         }
         _ => unreachable!(),
     }
@@ -1913,7 +1913,7 @@ fn parse_create_index_with_include() {
 
 #[test]
 fn parse_create_index_with_nulls_distinct() {
-    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) NULLS DISTINCT";
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) NULLS NOT DISTINCT";
     match pg().verified_stmt(sql) {
         Statement::CreateIndex {
             name: Some(ObjectName(name)),
@@ -1935,7 +1935,7 @@ fn parse_create_index_with_nulls_distinct() {
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
             assert!(include.is_empty());
-            assert!(nulls_distinct)
+            assert!(!nulls_distinct)
         }
         _ => unreachable!(),
     }

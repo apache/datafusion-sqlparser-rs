@@ -2493,8 +2493,8 @@ impl fmt::Display for Statement {
                 if !include.is_empty() {
                     write!(f, " INCLUDE ({})", display_separated(include, ","))?;
                 }
-                if *nulls_distinct {
-                    write!(f, " NULLS DISTINCT")?;
+                if !nulls_distinct {
+                    write!(f, " NULLS NOT DISTINCT")?;
                 }
                 if let Some(predicate) = predicate {
                     write!(f, " WHERE {predicate}")?;

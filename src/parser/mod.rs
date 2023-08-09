@@ -3403,7 +3403,7 @@ impl<'a> Parser<'a> {
             self.expect_keyword(Keyword::DISTINCT)?;
             !not
         } else {
-            false
+            true
         };
 
         let predicate = if self.parse_keyword(Keyword::WHERE) {

@@ -6034,7 +6034,7 @@ fn test_create_index_with_using_function() {
             assert!(!concurrently);
             assert!(if_not_exists);
             assert!(include.is_empty());
-            assert!(!nulls_distinct)
+            assert!(nulls_distinct)
         }
         _ => unreachable!(),
     }

@@ -33,7 +33,7 @@ use crate::dialect::*;
 use crate::keywords::{self, Keyword};
 use crate::tokenizer::*;
 
-mod role;
+mod alter;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParserError {

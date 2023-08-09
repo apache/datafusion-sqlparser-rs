@@ -1773,6 +1773,7 @@ fn parse_create_index() {
             unique,
             concurrently,
             if_not_exists,
+            predicate: None,
         } => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -1798,6 +1799,7 @@ fn parse_create_anonymous_index() {
             unique,
             concurrently,
             if_not_exists,
+            predicate: None,
         } => {
             assert_eq!(None, name);
             assert_eq_vec(&["my_table"], &table_name);
@@ -1823,12 +1825,39 @@ fn parse_create_index_concurrently() {
             unique,
             concurrently,
             if_not_exists,
+            predicate: None,
         } => {
             assert_eq_vec(&["my_index"], &name);
             assert_eq_vec(&["my_table"], &table_name);
             assert_eq!(None, using);
             assert!(!unique);
             assert!(concurrently);
+            assert!(if_not_exists);
+            assert_eq_vec(&["col1", "col2"], &columns);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_index_with_predicate() {
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) WHERE col3 IS NULL";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex {
+            name: Some(ObjectName(name)),
+            table_name: ObjectName(table_name),
+            using,
+            columns,
+            unique,
+            concurrently,
+            if_not_exists,
+            predicate: Some(_),
+        } => {
+            assert_eq_vec(&["my_index"], &name);
+            assert_eq_vec(&["my_table"], &table_name);
+            assert_eq!(None, using);
+            assert!(!unique);
+            assert!(!concurrently);
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
         }

@@ -3388,6 +3388,13 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let columns = self.parse_comma_separated(Parser::parse_order_by_expr)?;
         self.expect_token(&Token::RParen)?;
+
+        let predicate = if self.parse_keyword(Keyword::WHERE) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
         Ok(Statement::CreateIndex {
             name: index_name,
             table_name,
@@ -3396,6 +3403,7 @@ impl<'a> Parser<'a> {
             unique,
             concurrently,
             if_not_exists,
+            predicate,
         })
     }
 

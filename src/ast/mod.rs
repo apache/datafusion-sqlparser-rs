@@ -1356,6 +1356,7 @@ pub enum Statement {
         unique: bool,
         concurrently: bool,
         if_not_exists: bool,
+        predicate: Option<Expr>,
     },
     /// CREATE ROLE
     /// See [postgres](https://www.postgresql.org/docs/current/sql-createrole.html)
@@ -2467,6 +2468,7 @@ impl fmt::Display for Statement {
                 unique,
                 concurrently,
                 if_not_exists,
+                predicate,
             } => {
                 write!(
                     f,
@@ -2478,12 +2480,16 @@ impl fmt::Display for Statement {
                         Some(name) => format!("{} ", name),
                         None => "".to_string(),
                     },
-                    table_name = table_name
+                    table_name = table_name,
                 )?;
                 if let Some(value) = using {
                     write!(f, " USING {value} ")?;
                 }
-                write!(f, "({})", display_separated(columns, ","))
+                write!(f, "({})", display_separated(columns, ","))?;
+                if let Some(predicate) = predicate {
+                    write!(f, " WHERE {predicate}")?;
+                }
+                Ok(())
             }
             Statement::CreateRole {
                 names,

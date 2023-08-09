@@ -6022,6 +6022,7 @@ fn test_create_index_with_using_function() {
             unique,
             concurrently,
             if_not_exists,
+            predicate: None,
         } => {
             assert_eq!("idx_name", name.to_string());
             assert_eq!("test", table_name.to_string());

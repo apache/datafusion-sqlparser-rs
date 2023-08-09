@@ -1354,6 +1354,7 @@ pub enum Statement {
         using: Option<Ident>,
         columns: Vec<OrderByExpr>,
         unique: bool,
+        concurrently: bool,
         if_not_exists: bool,
     },
     /// CREATE ROLE
@@ -2464,12 +2465,14 @@ impl fmt::Display for Statement {
                 using,
                 columns,
                 unique,
+                concurrently,
                 if_not_exists,
             } => {
                 write!(
                     f,
-                    "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}",
+                    "CREATE {unique}INDEX {concurrently}{if_not_exists}{name} ON {table_name}",
                     unique = if *unique { "UNIQUE " } else { "" },
+                    concurrently = if *concurrently { "CONCURRENTLY " } else { "" },
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
                     name = name,
                     table_name = table_name

@@ -3370,6 +3370,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_create_index(&mut self, unique: bool) -> Result<Statement, ParserError> {
+        let concurrently = self.parse_keyword(Keyword::CONCURRENTLY);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let index_name = self.parse_object_name()?;
         self.expect_keyword(Keyword::ON)?;
@@ -3388,6 +3389,7 @@ impl<'a> Parser<'a> {
             using,
             columns,
             unique,
+            concurrently,
             if_not_exists,
         })
     }

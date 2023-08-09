@@ -153,6 +153,7 @@ define_keywords!(
     COMMITTED,
     COMPRESSION,
     COMPUTE,
+    CONCURRENTLY,
     CONDITION,
     CONFLICT,
     CONNECT,

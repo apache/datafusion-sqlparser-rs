@@ -6020,6 +6020,7 @@ fn test_create_index_with_using_function() {
             using,
             columns,
             unique,
+            concurrently,
             if_not_exists,
         } => {
             assert_eq!("idx_name", name.to_string());
@@ -6027,6 +6028,7 @@ fn test_create_index_with_using_function() {
             assert_eq!("btree", using.unwrap().to_string());
             assert_eq!(indexed_columns, columns);
             assert!(unique);
+            assert!(!concurrently);
             assert!(if_not_exists)
         }
         _ => unreachable!(),

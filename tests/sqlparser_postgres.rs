@@ -1762,6 +1762,56 @@ fn parse_array_index_expr() {
 }
 
 #[test]
+fn parse_create_index() {
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex {
+            name: ObjectName(name),
+            table_name: ObjectName(table_name),
+            using,
+            columns,
+            unique,
+            concurrently,
+            if_not_exists,
+        } => {
+            assert_eq_vec(&["my_index"], &name);
+            assert_eq_vec(&["my_table"], &table_name);
+            assert_eq!(None, using);
+            assert!(!unique);
+            assert!(!concurrently);
+            assert!(if_not_exists);
+            assert_eq_vec(&["col1", "col2"], &columns);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_index_concurrently() {
+    let sql = "CREATE INDEX CONCURRENTLY IF NOT EXISTS my_index ON my_table(col1,col2)";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex {
+            name: ObjectName(name),
+            table_name: ObjectName(table_name),
+            using,
+            columns,
+            unique,
+            concurrently,
+            if_not_exists,
+        } => {
+            assert_eq_vec(&["my_index"], &name);
+            assert_eq_vec(&["my_table"], &table_name);
+            assert_eq!(None, using);
+            assert!(!unique);
+            assert!(concurrently);
+            assert!(if_not_exists);
+            assert_eq_vec(&["col1", "col2"], &columns);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_array_subquery_expr() {
     let sql = "SELECT ARRAY(SELECT 1 UNION SELECT 2)";
     let select = pg().verified_only_select(sql);

@@ -5981,7 +5981,7 @@ fn parse_create_index() {
     ];
     match verified_stmt(sql) {
         Statement::CreateIndex {
-            name,
+            name: Some(name),
             table_name,
             columns,
             unique,
@@ -6015,7 +6015,7 @@ fn test_create_index_with_using_function() {
     ];
     match verified_stmt(sql) {
         Statement::CreateIndex {
-            name,
+            name: Some(name),
             table_name,
             using,
             columns,

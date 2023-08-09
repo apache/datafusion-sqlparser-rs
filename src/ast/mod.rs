@@ -1348,7 +1348,7 @@ pub enum Statement {
     /// CREATE INDEX
     CreateIndex {
         /// index name
-        name: ObjectName,
+        name: Option<ObjectName>,
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         using: Option<Ident>,
@@ -2470,11 +2470,14 @@ impl fmt::Display for Statement {
             } => {
                 write!(
                     f,
-                    "CREATE {unique}INDEX {concurrently}{if_not_exists}{name} ON {table_name}",
+                    "CREATE {unique}INDEX {concurrently}{if_not_exists}{name}ON {table_name}",
                     unique = if *unique { "UNIQUE " } else { "" },
                     concurrently = if *concurrently { "CONCURRENTLY " } else { "" },
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                    name = name,
+                    name = match name {
+                        Some(name) => format!("{} ", name),
+                        None => "".to_string(),
+                    },
                     table_name = table_name
                 )?;
                 if let Some(value) = using {

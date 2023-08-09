@@ -1356,6 +1356,7 @@ pub enum Statement {
         unique: bool,
         concurrently: bool,
         if_not_exists: bool,
+        nulls_distinct: bool,
         predicate: Option<Expr>,
     },
     /// CREATE ROLE
@@ -2468,6 +2469,7 @@ impl fmt::Display for Statement {
                 unique,
                 concurrently,
                 if_not_exists,
+                nulls_distinct,
                 predicate,
             } => {
                 write!(
@@ -2486,6 +2488,9 @@ impl fmt::Display for Statement {
                     write!(f, " USING {value} ")?;
                 }
                 write!(f, "({})", display_separated(columns, ","))?;
+                if *nulls_distinct {
+                    write!(f, " NULLS DISTINCT")?;
+                }
                 if let Some(predicate) = predicate {
                     write!(f, " WHERE {predicate}")?;
                 }

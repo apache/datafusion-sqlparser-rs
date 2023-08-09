@@ -6022,6 +6022,7 @@ fn test_create_index_with_using_function() {
             unique,
             concurrently,
             if_not_exists,
+            nulls_distinct,
             predicate: None,
         } => {
             assert_eq!("idx_name", name.to_string());
@@ -6030,7 +6031,8 @@ fn test_create_index_with_using_function() {
             assert_eq!(indexed_columns, columns);
             assert!(unique);
             assert!(!concurrently);
-            assert!(if_not_exists)
+            assert!(if_not_exists);
+            assert!(!nulls_distinct)
         }
         _ => unreachable!(),
     }

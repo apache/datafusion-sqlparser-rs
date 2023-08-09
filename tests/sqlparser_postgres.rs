@@ -1773,6 +1773,7 @@ fn parse_create_index() {
             unique,
             concurrently,
             if_not_exists,
+            nulls_distinct,
             predicate: None,
         } => {
             assert_eq_vec(&["my_index"], &name);
@@ -1782,6 +1783,7 @@ fn parse_create_index() {
             assert!(!concurrently);
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
+            assert!(!nulls_distinct)
         }
         _ => unreachable!(),
     }
@@ -1799,6 +1801,7 @@ fn parse_create_anonymous_index() {
             unique,
             concurrently,
             if_not_exists,
+            nulls_distinct,
             predicate: None,
         } => {
             assert_eq!(None, name);
@@ -1808,6 +1811,7 @@ fn parse_create_anonymous_index() {
             assert!(!concurrently);
             assert!(!if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
+            assert!(!nulls_distinct);
         }
         _ => unreachable!(),
     }
@@ -1825,6 +1829,7 @@ fn parse_create_index_concurrently() {
             unique,
             concurrently,
             if_not_exists,
+            nulls_distinct,
             predicate: None,
         } => {
             assert_eq_vec(&["my_index"], &name);
@@ -1834,6 +1839,7 @@ fn parse_create_index_concurrently() {
             assert!(concurrently);
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
+            assert!(!nulls_distinct);
         }
         _ => unreachable!(),
     }
@@ -1851,6 +1857,7 @@ fn parse_create_index_with_predicate() {
             unique,
             concurrently,
             if_not_exists,
+            nulls_distinct,
             predicate: Some(_),
         } => {
             assert_eq_vec(&["my_index"], &name);
@@ -1860,6 +1867,35 @@ fn parse_create_index_with_predicate() {
             assert!(!concurrently);
             assert!(if_not_exists);
             assert_eq_vec(&["col1", "col2"], &columns);
+            assert!(!nulls_distinct);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_index_with_nulls_distinct() {
+    let sql = "CREATE INDEX IF NOT EXISTS my_index ON my_table(col1,col2) NULLS DISTINCT";
+    match pg().verified_stmt(sql) {
+        Statement::CreateIndex {
+            name: Some(ObjectName(name)),
+            table_name: ObjectName(table_name),
+            using,
+            columns,
+            unique,
+            concurrently,
+            if_not_exists,
+            nulls_distinct,
+            predicate: None,
+        } => {
+            assert_eq_vec(&["my_index"], &name);
+            assert_eq_vec(&["my_table"], &table_name);
+            assert_eq!(None, using);
+            assert!(!unique);
+            assert!(!concurrently);
+            assert!(if_not_exists);
+            assert_eq_vec(&["col1", "col2"], &columns);
+            assert!(nulls_distinct)
         }
         _ => unreachable!(),
     }

@@ -3389,6 +3389,13 @@ impl<'a> Parser<'a> {
         let columns = self.parse_comma_separated(Parser::parse_order_by_expr)?;
         self.expect_token(&Token::RParen)?;
 
+        let nulls_distinct = if self.parse_keyword(Keyword::NULLS) {
+            let not = self.parse_keyword(Keyword::NOT);
+            self.expect_keyword(Keyword::DISTINCT)?;
+            !not
+        } else {
+            false
+        };
         let predicate = if self.parse_keyword(Keyword::WHERE) {
             Some(self.parse_expr()?)
         } else {
@@ -3403,6 +3410,7 @@ impl<'a> Parser<'a> {
             unique,
             concurrently,
             if_not_exists,
+            nulls_distinct,
             predicate,
         })
     }

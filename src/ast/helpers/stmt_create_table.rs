@@ -65,6 +65,7 @@ pub struct CreateTableBuilder {
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
     pub engine: Option<String>,
+    pub comment: Option<String>,
     pub default_charset: Option<String>,
     pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
@@ -96,6 +97,7 @@ impl CreateTableBuilder {
             like: None,
             clone: None,
             engine: None,
+            comment: None,
             default_charset: None,
             collation: None,
             on_commit: None,
@@ -197,6 +199,11 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn comment(mut self, comment: Option<String>) -> Self {
+        self.comment = comment;
+        self
+    }
+
     pub fn default_charset(mut self, default_charset: Option<String>) -> Self {
         self.default_charset = default_charset;
         self
@@ -249,6 +256,7 @@ impl CreateTableBuilder {
             like: self.like,
             clone: self.clone,
             engine: self.engine,
+            comment: self.comment,
             default_charset: self.default_charset,
             collation: self.collation,
             on_commit: self.on_commit,
@@ -287,6 +295,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 like,
                 clone,
                 engine,
+                comment,
                 default_charset,
                 collation,
                 on_commit,
@@ -314,6 +323,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 like,
                 clone,
                 engine,
+                comment,
                 default_charset,
                 collation,
                 on_commit,

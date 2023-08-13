@@ -297,6 +297,18 @@ fn parse_create_table_auto_increment() {
 }
 
 #[test]
+fn parse_create_table_comment() {
+    let sql = "CREATE TABLE foo (bar INT) COMMENT 'baz'";
+    match mysql().verified_stmt(sql) {
+        Statement::CreateTable { name, comment, .. } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(comment.expect("Should exist").to_string(), "baz");
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_set_enum() {
     let sql = "CREATE TABLE foo (bar SET('a', 'b'), baz ENUM('a', 'b'))";
     match mysql().verified_stmt(sql) {

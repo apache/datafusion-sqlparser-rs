@@ -1223,25 +1223,47 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_substring_expr(&mut self) -> Result<Expr, ParserError> {
-        // PARSE SUBSTRING (EXPR [FROM 1] [FOR 3])
-        self.expect_token(&Token::LParen)?;
-        let expr = self.parse_expr()?;
-        let mut from_expr = None;
-        if self.parse_keyword(Keyword::FROM) || self.consume_token(&Token::Comma) {
-            from_expr = Some(self.parse_expr()?);
-        }
+        if self.dialect.supports_substring_from_for_expr() {
+            // PARSE SUBSTRING (EXPR [FROM 1] [FOR 3])
+            self.expect_token(&Token::LParen)?;
+            let expr = self.parse_expr()?;
+            let mut from_expr = None;
+            if self.parse_keyword(Keyword::FROM) || self.consume_token(&Token::Comma) {
+                from_expr = Some(self.parse_expr()?);
+            }
 
-        let mut to_expr = None;
-        if self.parse_keyword(Keyword::FOR) || self.consume_token(&Token::Comma) {
-            to_expr = Some(self.parse_expr()?);
-        }
-        self.expect_token(&Token::RParen)?;
+            let mut to_expr = None;
+            if self.parse_keyword(Keyword::FOR) || self.consume_token(&Token::Comma) {
+                to_expr = Some(self.parse_expr()?);
+            }
+            self.expect_token(&Token::RParen)?;
 
-        Ok(Expr::Substring {
-            expr: Box::new(expr),
-            substring_from: from_expr.map(Box::new),
-            substring_for: to_expr.map(Box::new),
-        })
+            Ok(Expr::Substring {
+                expr: Box::new(expr),
+                substring_from: from_expr.map(Box::new),
+                substring_for: to_expr.map(Box::new),
+                special: !self.dialect.supports_substring_from_for_expr(),
+            })
+        } else {
+            // PARSE SUBSTRING(EXPR, start, length)
+            self.expect_token(&Token::LParen)?;
+            let expr = self.parse_expr()?;
+
+            self.expect_token(&Token::Comma)?;
+            let from_expr = Some(self.parse_expr()?);
+
+            self.expect_token(&Token::Comma)?;
+            let to_expr = Some(self.parse_expr()?);
+
+            self.expect_token(&Token::RParen)?;
+
+            Ok(Expr::Substring {
+                expr: Box::new(expr),
+                substring_from: from_expr.map(Box::new),
+                substring_for: to_expr.map(Box::new),
+                special: !self.dialect.supports_substring_from_for_expr(),
+            })
+        }
     }
 
     pub fn parse_overlay_expr(&mut self) -> Result<Expr, ParserError> {

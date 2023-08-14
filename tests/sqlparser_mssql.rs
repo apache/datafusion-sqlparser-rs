@@ -379,6 +379,65 @@ fn parse_similar_to() {
     chk(true);
 }
 
+#[test]
+fn parse_substring_in_select() {
+    let sql = "SELECT DISTINCT SUBSTRING(description, 0, 1) FROM test";
+    match ms().one_statement_parses_to(
+        sql,
+        "SELECT DISTINCT SUBSTRING(description, 0, 1) FROM test",
+    ) {
+        Statement::Query(query) => {
+            assert_eq!(
+                Box::new(Query {
+                    with: None,
+                    body: Box::new(SetExpr::Select(Box::new(Select {
+                        distinct: Some(Distinct::Distinct),
+                        top: None,
+                        projection: vec![SelectItem::UnnamedExpr(Expr::Substring {
+                            expr: Box::new(Expr::Identifier(Ident {
+                                value: "description".to_string(),
+                                quote_style: None
+                            })),
+                            substring_from: Some(Box::new(Expr::Value(number("0")))),
+                            substring_for: Some(Box::new(Expr::Value(number("1")))),
+                            special: true,
+                        })],
+                        into: None,
+                        from: vec![TableWithJoins {
+                            relation: TableFactor::Table {
+                                name: ObjectName(vec![Ident {
+                                    value: "test".to_string(),
+                                    quote_style: None
+                                }]),
+                                alias: None,
+                                args: None,
+                                with_hints: vec![]
+                            },
+                            joins: vec![]
+                        }],
+                        lateral_views: vec![],
+                        selection: None,
+                        group_by: vec![],
+                        cluster_by: vec![],
+                        distribute_by: vec![],
+                        sort_by: vec![],
+                        having: None,
+                        named_window: vec![],
+                        qualify: None
+                    }))),
+                    order_by: vec![],
+                    limit: None,
+                    offset: None,
+                    fetch: None,
+                    locks: vec![],
+                }),
+                query
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
 fn ms() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(MsSqlDialect {})],

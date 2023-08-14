@@ -1271,7 +1271,8 @@ fn parse_substring_in_select() {
                                 quote_style: None
                             })),
                             substring_from: Some(Box::new(Expr::Value(number("0")))),
-                            substring_for: Some(Box::new(Expr::Value(number("1"))))
+                            substring_for: Some(Box::new(Expr::Value(number("1")))),
+                            special: false,
                         })],
                         into: None,
                         from: vec![TableWithJoins {

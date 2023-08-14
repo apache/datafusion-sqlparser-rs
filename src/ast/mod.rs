@@ -477,6 +477,10 @@ pub enum Expr {
         expr: Box<Expr>,
         substring_from: Option<Box<Expr>>,
         substring_for: Option<Box<Expr>>,
+
+        // Some dialects use `SUBSTRING(expr [FROM start] [FOR len])` syntax while others omit FROM,
+        // FOR keywords (e.g. Microsoft SQL Server). This flags is used for formatting.
+        special: bool,
     },
     /// ```sql
     /// TRIM([BOTH | LEADING | TRAILING] [<expr> FROM] <expr>)
@@ -830,13 +834,22 @@ impl fmt::Display for Expr {
                 expr,
                 substring_from,
                 substring_for,
+                special,
             } => {
                 write!(f, "SUBSTRING({expr}")?;
                 if let Some(from_part) = substring_from {
-                    write!(f, " FROM {from_part}")?;
+                    if *special {
+                        write!(f, ", {from_part}")?;
+                    } else {
+                        write!(f, " FROM {from_part}")?;
+                    }
                 }
                 if let Some(for_part) = substring_for {
-                    write!(f, " FOR {for_part}")?;
+                    if *special {
+                        write!(f, ", {for_part}")?;
+                    } else {
+                        write!(f, " FOR {for_part}")?;
+                    }
                 }
 
                 write!(f, ")")

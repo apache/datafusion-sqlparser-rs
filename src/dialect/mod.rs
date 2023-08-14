@@ -117,6 +117,10 @@ pub trait Dialect: Debug + Any {
     fn supports_group_by_expr(&self) -> bool {
         false
     }
+    /// Returns true if the dialect supports `SUBSTRING(expr [FROM start] [FOR len])` expressions
+    fn supports_substring_from_for_expr(&self) -> bool {
+        true
+    }
     /// Dialect-specific prefix parser override
     fn parse_prefix(&self, _parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
         // return None to fall back to the default behavior

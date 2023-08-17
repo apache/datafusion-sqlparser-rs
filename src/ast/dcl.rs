@@ -14,7 +14,7 @@
 //! (commonly referred to as Data Control Language, or DCL)
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::vec::Vec;
 use core::fmt;
 
 #[cfg(feature = "serde")]

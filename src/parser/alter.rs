@@ -12,6 +12,9 @@
 
 //! SQL Parser for ALTER
 
+#[cfg(not(feature = "std"))]
+use alloc::vec;
+
 use super::{Parser, ParserError};
 use crate::{
     ast::{AlterRoleOperation, Expr, Password, ResetConfig, RoleOption, SetConfigValue, Statement},
@@ -29,7 +32,7 @@ impl<'a> Parser<'a> {
         }
 
         Err(ParserError::ParserError(
-            "ALTER ROLE is only support for PostgreSqlDialect, MsSqlDialect".to_string(),
+            "ALTER ROLE is only support for PostgreSqlDialect, MsSqlDialect".into(),
         ))
     }
 

@@ -217,6 +217,60 @@ fn parse_mssql_create_role() {
 }
 
 #[test]
+fn parse_alter_role() {
+    let sql = "ALTER ROLE old_name WITH NAME = new_name";
+    assert_eq!(
+        ms().parse_sql_statements(sql).unwrap(),
+        [Statement::AlterRole {
+            name: Ident {
+                value: "old_name".into(),
+                quote_style: None
+            },
+            operation: AlterRoleOperation::RenameRole {
+                role_name: Ident {
+                    value: "new_name".into(),
+                    quote_style: None
+                }
+            },
+        }]
+    );
+
+    let sql = "ALTER ROLE role_name ADD MEMBER new_member";
+    assert_eq!(
+        ms().verified_stmt(sql),
+        Statement::AlterRole {
+            name: Ident {
+                value: "role_name".into(),
+                quote_style: None
+            },
+            operation: AlterRoleOperation::AddMember {
+                member_name: Ident {
+                    value: "new_member".into(),
+                    quote_style: None
+                }
+            },
+        }
+    );
+
+    let sql = "ALTER ROLE role_name DROP MEMBER old_member";
+    assert_eq!(
+        ms().verified_stmt(sql),
+        Statement::AlterRole {
+            name: Ident {
+                value: "role_name".into(),
+                quote_style: None
+            },
+            operation: AlterRoleOperation::DropMember {
+                member_name: Ident {
+                    value: "old_member".into(),
+                    quote_style: None
+                }
+            },
+        }
+    );
+}
+
+#[test]
 fn parse_delimited_identifiers() {
     // check that quoted identifiers in any position remain quoted after serialization
     let select = ms_and_generic().verified_only_select(

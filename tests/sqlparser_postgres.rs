@@ -2448,6 +2448,199 @@ fn parse_create_role() {
 }
 
 #[test]
+fn parse_alter_role() {
+    let sql = "ALTER ROLE old_name RENAME TO new_name";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::AlterRole {
+            name: Ident {
+                value: "old_name".into(),
+                quote_style: None
+            },
+            operation: AlterRoleOperation::RenameRole {
+                role_name: Ident {
+                    value: "new_name".into(),
+                    quote_style: None
+                }
+            },
+        }
+    );
+
+    let sql = "ALTER ROLE role_name WITH SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 100 PASSWORD 'abcdef' VALID UNTIL '2025-01-01'";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::AlterRole {
+            name: Ident {
+                value: "role_name".into(),
+                quote_style: None
+            },
+            operation: AlterRoleOperation::WithOptions {
+                options: vec![
+                    RoleOption::SuperUser(true),
+                    RoleOption::CreateDB(true),
+                    RoleOption::CreateRole(true),
+                    RoleOption::Inherit(true),
+                    RoleOption::Login(true),
+                    RoleOption::Replication(true),
+                    RoleOption::BypassRLS(true),
+                    RoleOption::ConnectionLimit(Expr::Value(number("100"))),
+                    RoleOption::Password({
+                        Password::Password(Expr::Value(Value::SingleQuotedString("abcdef".into())))
+                    }),
+                    RoleOption::ValidUntil(Expr::Value(Value::SingleQuotedString(
+                        "2025-01-01".into(),
+                    )))
+                ]
+            },
+        }
+    );
+
+    let sql = "ALTER ROLE role_name WITH NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOLOGIN NOREPLICATION NOBYPASSRLS PASSWORD NULL";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::AlterRole {
+            name: Ident {
+                value: "role_name".into(),
+                quote_style: None
+            },
+            operation: AlterRoleOperation::WithOptions {
+                options: vec![
+                    RoleOption::SuperUser(false),
+                    RoleOption::CreateDB(false),
+                    RoleOption::CreateRole(false),
+                    RoleOption::Inherit(false),
+                    RoleOption::Login(false),
+                    RoleOption::Replication(false),
+                    RoleOption::BypassRLS(false),
+                    RoleOption::Password(Password::NullPassword),
+                ]
+            },
+        }
+    );
+
+    let sql = "ALTER ROLE role_name SET maintenance_work_mem FROM CURRENT";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::AlterRole {
+            name: Ident {
+                value: "role_name".into(),
+                quote_style: None
+            },
+            operation: AlterRoleOperation::Set {
+                config_name: ObjectName(vec![Ident {
+                    value: "maintenance_work_mem".into(),
+                    quote_style: None
+                }]),
+                config_value: SetConfigValue::FromCurrent,
+                in_database: None
+            },
+        }
+    );
+
+    let sql = "ALTER ROLE role_name IN DATABASE database_name SET maintenance_work_mem = 100000";
+    assert_eq!(
+        pg().parse_sql_statements(sql).unwrap(),
+        [Statement::AlterRole {
+            name: Ident {
+                value: "role_name".into(),
+                quote_style: None
+            },
+            operation: AlterRoleOperation::Set {
+                config_name: ObjectName(vec![Ident {
+                    value: "maintenance_work_mem".into(),
+                    quote_style: None
+                }]),
+                config_value: SetConfigValue::Value(Expr::Value(number("100000"))),
+                in_database: Some(ObjectName(vec![Ident {
+                    value: "database_name".into(),
+                    quote_style: None
+                }]))
+            },
+        }]
+    );
+
+    let sql = "ALTER ROLE role_name IN DATABASE database_name SET maintenance_work_mem TO 100000";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::AlterRole {
+            name: Ident {
+                value: "role_name".into(),
+                quote_style: None
+            },
+            operation: AlterRoleOperation::Set {
+                config_name: ObjectName(vec![Ident {
+                    value: "maintenance_work_mem".into(),
+                    quote_style: None
+                }]),
+                config_value: SetConfigValue::Value(Expr::Value(number("100000"))),
+                in_database: Some(ObjectName(vec![Ident {
+                    value: "database_name".into(),
+                    quote_style: None
+                }]))
+            },
+        }
+    );
+
+    let sql = "ALTER ROLE role_name IN DATABASE database_name SET maintenance_work_mem TO DEFAULT";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::AlterRole {
+            name: Ident {
+                value: "role_name".into(),
+                quote_style: None
+            },
+            operation: AlterRoleOperation::Set {
+                config_name: ObjectName(vec![Ident {
+                    value: "maintenance_work_mem".into(),
+                    quote_style: None
+                }]),
+                config_value: SetConfigValue::Default,
+                in_database: Some(ObjectName(vec![Ident {
+                    value: "database_name".into(),
+                    quote_style: None
+                }]))
+            },
+        }
+    );
+
+    let sql = "ALTER ROLE role_name RESET ALL";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::AlterRole {
+            name: Ident {
+                value: "role_name".into(),
+                quote_style: None
+            },
+            operation: AlterRoleOperation::Reset {
+                config_name: ResetConfig::ALL,
+                in_database: None
+            },
+        }
+    );
+
+    let sql = "ALTER ROLE role_name IN DATABASE database_name RESET maintenance_work_mem";
+    assert_eq!(
+        pg().verified_stmt(sql),
+        Statement::AlterRole {
+            name: Ident {
+                value: "role_name".into(),
+                quote_style: None
+            },
+            operation: AlterRoleOperation::Reset {
+                config_name: ResetConfig::ConfigName(ObjectName(vec![Ident {
+                    value: "maintenance_work_mem".into(),
+                    quote_style: None
+                }])),
+                in_database: Some(ObjectName(vec![Ident {
+                    value: "database_name".into(),
+                    quote_style: None
+                }]))
+            },
+        }
+    );
+}
+
+#[test]
 fn parse_delimited_identifiers() {
     // check that quoted identifiers in any position remain quoted after serialization
     let select = pg().verified_only_select(

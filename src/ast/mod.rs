@@ -28,6 +28,7 @@ use sqlparser_derive::{Visit, VisitMut};
 pub use self::data_type::{
     CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
 };
+pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue};
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
     ColumnOptionDef, GeneratedAs, IndexType, KeyOrIndexDisplay, ProcedureParam, ReferentialAction,
@@ -52,6 +53,7 @@ use crate::ast::helpers::stmt_data_loading::{
 pub use visitor::*;
 
 mod data_type;
+mod dcl;
 mod ddl;
 pub mod helpers;
 mod operator;
@@ -1398,6 +1400,11 @@ pub enum Statement {
         query: Box<Query>,
         with_options: Vec<SqlOption>,
     },
+    /// ALTER ROLE
+    AlterRole {
+        name: Ident,
+        operation: AlterRoleOperation,
+    },
     /// DROP
     Drop {
         /// The type of the object to drop: TABLE, VIEW, etc.
@@ -2584,6 +2591,9 @@ impl fmt::Display for Statement {
                     write!(f, " ({})", display_comma_separated(columns))?;
                 }
                 write!(f, " AS {query}")
+            }
+            Statement::AlterRole { name, operation } => {
+                write!(f, "ALTER ROLE {name} {operation}")
             }
             Statement::Drop {
                 object_type,

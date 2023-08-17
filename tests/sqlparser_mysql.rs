@@ -298,13 +298,17 @@ fn parse_create_table_auto_increment() {
 
 #[test]
 fn parse_create_table_comment() {
-    let sql = "CREATE TABLE foo (bar INT) COMMENT 'baz'";
-    match mysql().verified_stmt(sql) {
-        Statement::CreateTable { name, comment, .. } => {
-            assert_eq!(name.to_string(), "foo");
-            assert_eq!(comment.expect("Should exist").to_string(), "baz");
+    let canonical = "CREATE TABLE foo (bar INT) COMMENT 'baz'";
+    let with_equal = "CREATE TABLE foo (bar INT) COMMENT = 'baz'";
+
+    for sql in [canonical, with_equal] {
+        match mysql().one_statement_parses_to(sql, canonical) {
+            Statement::CreateTable { name, comment, .. } => {
+                assert_eq!(name.to_string(), "foo");
+                assert_eq!(comment.expect("Should exist").to_string(), "baz");
+            }
+            _ => unreachable!(),
         }
-        _ => unreachable!(),
     }
 }
 

@@ -313,6 +313,22 @@ fn parse_create_table_comment() {
 }
 
 #[test]
+fn parse_create_table_autoincrement_offset() {
+    let canonical = "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE=InnoDB AUTO_INCREMENT 123";
+    let with_equal = "CREATE TABLE foo (bar INT NOT NULL AUTO_INCREMENT) ENGINE=InnoDB AUTO_INCREMENT=123";
+
+    for sql in [canonical, with_equal] {
+        match mysql().one_statement_parses_to(sql, canonical) {
+            Statement::CreateTable { name, autoincrement_offset, .. } => {
+                assert_eq!(name.to_string(), "foo");
+                assert_eq!(autoincrement_offset.expect("Should exist").to_string(), "123");
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
 fn parse_create_table_set_enum() {
     let sql = "CREATE TABLE foo (bar SET('a', 'b'), baz ENUM('a', 'b'))";
     match mysql().verified_stmt(sql) {

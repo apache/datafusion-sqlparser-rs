@@ -2476,16 +2476,15 @@ impl fmt::Display for Statement {
             } => {
                 write!(
                     f,
-                    "CREATE {unique}INDEX {concurrently}{if_not_exists}{name}ON {table_name}",
+                    "CREATE {unique}INDEX {concurrently}{if_not_exists}",
                     unique = if *unique { "UNIQUE " } else { "" },
                     concurrently = if *concurrently { "CONCURRENTLY " } else { "" },
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                    name = match name {
-                        Some(name) => format!("{} ", name),
-                        None => "".to_string(),
-                    },
-                    table_name = table_name,
                 )?;
+                if let Some(value) = name {
+                    write!(f, "{value} ")?;
+                }
+                write!(f, "ON {table_name}")?;
                 if let Some(value) = using {
                     write!(f, " USING {value} ")?;
                 }

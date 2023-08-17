@@ -1357,7 +1357,7 @@ pub enum Statement {
         concurrently: bool,
         if_not_exists: bool,
         include: Vec<Ident>,
-        nulls_distinct: bool,
+        nulls_distinct: Option<bool>,
         predicate: Option<Expr>,
     },
     /// CREATE ROLE
@@ -2492,8 +2492,12 @@ impl fmt::Display for Statement {
                 if !include.is_empty() {
                     write!(f, " INCLUDE ({})", display_separated(include, ","))?;
                 }
-                if !nulls_distinct {
-                    write!(f, " NULLS NOT DISTINCT")?;
+                if let Some(value) = nulls_distinct {
+                    if *value {
+                        write!(f, " NULLS DISTINCT")?;
+                    } else {
+                        write!(f, " NULLS NOT DISTINCT")?;
+                    }
                 }
                 if let Some(predicate) = predicate {
                     write!(f, " WHERE {predicate}")?;

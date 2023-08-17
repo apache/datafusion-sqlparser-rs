@@ -6023,7 +6023,7 @@ fn test_create_index_with_using_function() {
             concurrently,
             if_not_exists,
             include,
-            nulls_distinct,
+            nulls_distinct: None,
             predicate: None,
         } => {
             assert_eq!("idx_name", name.to_string());
@@ -6034,7 +6034,6 @@ fn test_create_index_with_using_function() {
             assert!(!concurrently);
             assert!(if_not_exists);
             assert!(include.is_empty());
-            assert!(nulls_distinct)
         }
         _ => unreachable!(),
     }

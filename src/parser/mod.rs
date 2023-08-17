@@ -3401,9 +3401,9 @@ impl<'a> Parser<'a> {
         let nulls_distinct = if self.parse_keyword(Keyword::NULLS) {
             let not = self.parse_keyword(Keyword::NOT);
             self.expect_keyword(Keyword::DISTINCT)?;
-            !not
+            Some(!not)
         } else {
-            true
+            None
         };
 
         let predicate = if self.parse_keyword(Keyword::WHERE) {

@@ -34,4 +34,8 @@ impl Dialect for MsSqlDialect {
             || ch == '#'
             || ch == '_'
     }
+
+    fn supports_substring_from_for_expr(&self) -> bool {
+        false
+    }
 }

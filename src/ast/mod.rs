@@ -1319,6 +1319,7 @@ pub enum Statement {
         like: Option<ObjectName>,
         clone: Option<ObjectName>,
         engine: Option<String>,
+        comment: Option<String>,
         default_charset: Option<String>,
         collation: Option<String>,
         on_commit: Option<OnCommit>,
@@ -2250,6 +2251,7 @@ impl fmt::Display for Statement {
                 clone,
                 default_charset,
                 engine,
+                comment,
                 collation,
                 on_commit,
                 on_cluster,
@@ -2400,6 +2402,9 @@ impl fmt::Display for Statement {
                 }
                 if let Some(engine) = engine {
                     write!(f, " ENGINE={engine}")?;
+                }
+                if let Some(comment) = comment {
+                    write!(f, " COMMENT '{comment}'")?;
                 }
                 if let Some(order_by) = order_by {
                     write!(f, " ORDER BY ({})", display_comma_separated(order_by))?;

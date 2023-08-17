@@ -1242,7 +1242,7 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
                 substring_from: from_expr.map(Box::new),
                 substring_for: to_expr.map(Box::new),
-                special: true,
+                special: false,
             })
         } else {
             // PARSE SUBSTRING(EXPR, start, length)
@@ -1261,7 +1261,7 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
                 substring_from: from_expr.map(Box::new),
                 substring_for: to_expr.map(Box::new),
-                special: false,
+                special: true,
             })
         }
     }

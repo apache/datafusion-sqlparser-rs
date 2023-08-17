@@ -91,8 +91,6 @@ jobs:
         use-tool-cache: true
     - name: Checkout
       uses: actions/checkout@v2
-    - name: Test
-      run: cargo test --all-features
     - name: Coverage
       run: cargo tarpaulin -o Lcov --output-dir ./coverage
     - name: Coveralls

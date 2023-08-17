@@ -3370,9 +3370,15 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_create_index(&mut self, unique: bool) -> Result<Statement, ParserError> {
+        let concurrently = self.parse_keyword(Keyword::CONCURRENTLY);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let index_name = self.parse_object_name()?;
-        self.expect_keyword(Keyword::ON)?;
+        let index_name = if if_not_exists || !self.parse_keyword(Keyword::ON) {
+            let index_name = self.parse_object_name()?;
+            self.expect_keyword(Keyword::ON)?;
+            Some(index_name)
+        } else {
+            None
+        };
         let table_name = self.parse_object_name()?;
         let using = if self.parse_keyword(Keyword::USING) {
             Some(self.parse_identifier()?)
@@ -3382,13 +3388,41 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let columns = self.parse_comma_separated(Parser::parse_order_by_expr)?;
         self.expect_token(&Token::RParen)?;
+
+        let include = if self.parse_keyword(Keyword::INCLUDE) {
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(Parser::parse_identifier)?;
+            self.expect_token(&Token::RParen)?;
+            columns
+        } else {
+            vec![]
+        };
+
+        let nulls_distinct = if self.parse_keyword(Keyword::NULLS) {
+            let not = self.parse_keyword(Keyword::NOT);
+            self.expect_keyword(Keyword::DISTINCT)?;
+            Some(!not)
+        } else {
+            None
+        };
+
+        let predicate = if self.parse_keyword(Keyword::WHERE) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
         Ok(Statement::CreateIndex {
             name: index_name,
             table_name,
             using,
             columns,
             unique,
+            concurrently,
             if_not_exists,
+            include,
+            nulls_distinct,
+            predicate,
         })
     }
 

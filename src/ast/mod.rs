@@ -1348,13 +1348,17 @@ pub enum Statement {
     /// CREATE INDEX
     CreateIndex {
         /// index name
-        name: ObjectName,
+        name: Option<ObjectName>,
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         using: Option<Ident>,
         columns: Vec<OrderByExpr>,
         unique: bool,
+        concurrently: bool,
         if_not_exists: bool,
+        include: Vec<Ident>,
+        nulls_distinct: Option<bool>,
+        predicate: Option<Expr>,
     },
     /// CREATE ROLE
     /// See [postgres](https://www.postgresql.org/docs/current/sql-createrole.html)
@@ -2464,20 +2468,41 @@ impl fmt::Display for Statement {
                 using,
                 columns,
                 unique,
+                concurrently,
                 if_not_exists,
+                include,
+                nulls_distinct,
+                predicate,
             } => {
                 write!(
                     f,
-                    "CREATE {unique}INDEX {if_not_exists}{name} ON {table_name}",
+                    "CREATE {unique}INDEX {concurrently}{if_not_exists}",
                     unique = if *unique { "UNIQUE " } else { "" },
+                    concurrently = if *concurrently { "CONCURRENTLY " } else { "" },
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" },
-                    name = name,
-                    table_name = table_name
                 )?;
+                if let Some(value) = name {
+                    write!(f, "{value} ")?;
+                }
+                write!(f, "ON {table_name}")?;
                 if let Some(value) = using {
                     write!(f, " USING {value} ")?;
                 }
-                write!(f, "({})", display_separated(columns, ","))
+                write!(f, "({})", display_separated(columns, ","))?;
+                if !include.is_empty() {
+                    write!(f, " INCLUDE ({})", display_separated(include, ","))?;
+                }
+                if let Some(value) = nulls_distinct {
+                    if *value {
+                        write!(f, " NULLS DISTINCT")?;
+                    } else {
+                        write!(f, " NULLS NOT DISTINCT")?;
+                    }
+                }
+                if let Some(predicate) = predicate {
+                    write!(f, " WHERE {predicate}")?;
+                }
+                Ok(())
             }
             Statement::CreateRole {
                 names,

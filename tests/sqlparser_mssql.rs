@@ -43,6 +43,29 @@ fn parse_mssql_identifiers() {
 }
 
 #[test]
+fn parse_table_time_travel() {
+    let version = "2023-08-18 23:08:18".to_string();
+    let sql = format!("SELECT 1 FROM t1 FOR SYSTEM_TIME AS OF '{version}'");
+    let select = ms().verified_only_select(&sql);
+    assert_eq!(
+        select.from,
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident::new("t1")]),
+                alias: None,
+                args: None,
+                with_hints: vec![],
+                version: Some(TableVersion::Timestamp(version)),
+            },
+            joins: vec![]
+        },]
+    );
+
+    let sql = "SELECT 1 FROM t1 FOR SYSTEM TIME AS OF 'some_timestamp'".to_string();
+    assert!(ms().parse_sql_statements(&sql).is_err());
+}
+
+#[test]
 fn parse_mssql_single_quoted_aliases() {
     let _ = ms_and_generic().one_statement_parses_to("SELECT foo 'alias'", "SELECT foo AS 'alias'");
 }
@@ -283,11 +306,13 @@ fn parse_delimited_identifiers() {
             alias,
             args,
             with_hints,
+            version,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
             assert!(args.is_none());
             assert!(with_hints.is_empty());
+            assert!(version.is_none());
         }
         _ => panic!("Expecting TableFactor::Table"),
     }
@@ -465,7 +490,8 @@ fn parse_substring_in_select() {
                                 }]),
                                 alias: None,
                                 args: None,
-                                with_hints: vec![]
+                                with_hints: vec![],
+                                version: None,
                             },
                             joins: vec![]
                         }],

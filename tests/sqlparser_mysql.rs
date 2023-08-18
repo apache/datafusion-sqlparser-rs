@@ -1068,6 +1068,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                             alias: None,
                             args: None,
                             with_hints: vec![],
+                            version: None,
                         },
                         joins: vec![]
                     }],
@@ -1116,6 +1117,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                             alias: None,
                             args: None,
                             with_hints: vec![],
+                            version: None,
                         },
                         joins: vec![]
                     }],
@@ -1175,6 +1177,7 @@ fn parse_update_with_joins() {
                         }),
                         args: None,
                         with_hints: vec![],
+                        version: None,
                     },
                     joins: vec![Join {
                         relation: TableFactor::Table {
@@ -1185,6 +1188,7 @@ fn parse_update_with_joins() {
                             }),
                             args: None,
                             with_hints: vec![],
+                            version: None,
                         },
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
                             left: Box::new(Expr::CompoundIdentifier(vec![
@@ -1299,7 +1303,8 @@ fn parse_substring_in_select() {
                                 }]),
                                 alias: None,
                                 args: None,
-                                with_hints: vec![]
+                                with_hints: vec![],
+                                version: None,
                             },
                             joins: vec![]
                         }],

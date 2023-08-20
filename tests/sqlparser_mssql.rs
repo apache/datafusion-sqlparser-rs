@@ -325,6 +325,20 @@ fn parse_delimited_identifiers() {
 }
 
 #[test]
+fn parse_table_name_in_square_brackets() {
+    let select = ms().verified_only_select(r#"SELECT [a column] FROM [a table]"#);
+    if let TableFactor::Table { name, .. } = only(select.from).relation {
+        assert_eq!(vec![Ident::with_quote('[', "a table")], name.0);
+    } else {
+        panic!("Expecting TableFactor::Table");
+    }
+    assert_eq!(
+        &Expr::Identifier(Ident::with_quote('[', "a column")),
+        expr_from_projection(&select.projection[0]),
+    );
+}
+
+#[test]
 fn parse_like() {
     fn chk(negated: bool) {
         let sql = &format!(

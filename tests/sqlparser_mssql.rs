@@ -328,7 +328,13 @@ fn parse_delimited_identifiers() {
 fn parse_table_name_in_square_brackets() {
     let select = ms().verified_only_select(r#"SELECT [a column] FROM [a schema].[a table]"#);
     if let TableFactor::Table { name, .. } = only(select.from).relation {
-        assert_eq!(vec![Ident::with_quote('[', "a schema"), Ident::with_quote('[', "a table")], name.0);
+        assert_eq!(
+            vec![
+                Ident::with_quote('[', "a schema"),
+                Ident::with_quote('[', "a table")
+            ],
+            name.0
+        );
     } else {
         panic!("Expecting TableFactor::Table");
     }

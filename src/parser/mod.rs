@@ -3550,6 +3550,17 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let auto_increment_offset = if self.parse_keyword(Keyword::AUTO_INCREMENT) {
+            let _ = self.consume_token(&Token::Eq);
+            let next_token = self.next_token();
+            match next_token.token {
+                Token::Number(s, _) => Some(s.parse::<u32>().expect("literal int")),
+                _ => self.expected("literal int", next_token)?,
+            }
+        } else {
+            None
+        };
+
         let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
             if self.consume_token(&Token::LParen) {
                 let columns = if self.peek_token() != Token::RParen {
@@ -3631,6 +3642,7 @@ impl<'a> Parser<'a> {
             .clone_clause(clone)
             .engine(engine)
             .comment(comment)
+            .auto_increment_offset(auto_increment_offset)
             .order_by(order_by)
             .default_charset(default_charset)
             .collation(collation)

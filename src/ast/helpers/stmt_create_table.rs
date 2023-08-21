@@ -66,7 +66,7 @@ pub struct CreateTableBuilder {
     pub clone: Option<ObjectName>,
     pub engine: Option<String>,
     pub comment: Option<String>,
-    pub autoincrement_offset: Option<u32>,
+    pub auto_increment_offset: Option<u32>,
     pub default_charset: Option<String>,
     pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
@@ -99,7 +99,7 @@ impl CreateTableBuilder {
             clone: None,
             engine: None,
             comment: None,
-            autoincrement_offset: None,
+            auto_increment_offset: None,
             default_charset: None,
             collation: None,
             on_commit: None,
@@ -206,8 +206,8 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn autoincrement_offset(mut self, offset: Option<u32>) -> Self {
-        self.autoincrement_offset = offset;
+    pub fn auto_increment_offset(mut self, offset: Option<u32>) -> Self {
+        self.auto_increment_offset = offset;
         self
     }
 
@@ -264,7 +264,7 @@ impl CreateTableBuilder {
             clone: self.clone,
             engine: self.engine,
             comment: self.comment,
-            autoincrement_offset: self.autoincrement_offset,
+            auto_increment_offset: self.auto_increment_offset,
             default_charset: self.default_charset,
             collation: self.collation,
             on_commit: self.on_commit,
@@ -304,7 +304,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 clone,
                 engine,
                 comment,
-                autoincrement_offset,
+                auto_increment_offset,
                 default_charset,
                 collation,
                 on_commit,
@@ -333,7 +333,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 clone,
                 engine,
                 comment,
-                autoincrement_offset,
+                auto_increment_offset,
                 default_charset,
                 collation,
                 on_commit,

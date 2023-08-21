@@ -3550,7 +3550,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let autoincrement_offset = if self.parse_keyword(Keyword::AUTO_INCREMENT) {
+        let auto_increment_offset = if self.parse_keyword(Keyword::AUTO_INCREMENT) {
             let _ = self.consume_token(&Token::Eq);
             let next_token = self.next_token();
             match next_token.token {
@@ -3642,7 +3642,7 @@ impl<'a> Parser<'a> {
             .clone_clause(clone)
             .engine(engine)
             .comment(comment)
-            .autoincrement_offset(autoincrement_offset)
+            .auto_increment_offset(auto_increment_offset)
             .order_by(order_by)
             .default_charset(default_charset)
             .collation(collation)

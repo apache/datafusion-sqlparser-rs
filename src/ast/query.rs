@@ -847,15 +847,13 @@ impl fmt::Display for TableAlias {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum TableVersion {
-    Timestamp(String),
+    ForSystemTimeAsOf(Expr),
 }
 
 impl Display for TableVersion {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TableVersion::Timestamp(timestamp) => {
-                write!(f, " FOR SYSTEM_TIME AS OF '{timestamp}'")?
-            }
+            TableVersion::ForSystemTimeAsOf(e) => write!(f, " FOR SYSTEM_TIME AS OF {e}")?,
         }
         Ok(())
     }

@@ -55,7 +55,9 @@ fn parse_table_time_travel() {
                 alias: None,
                 args: None,
                 with_hints: vec![],
-                version: Some(TableVersion::Timestamp(version)),
+                version: Some(TableVersion::ForSystemTimeAsOf(Expr::Value(
+                    Value::SingleQuotedString(version)
+                ))),
             },
             joins: vec![]
         },]

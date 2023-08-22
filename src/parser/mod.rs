@@ -6243,16 +6243,8 @@ impl<'a> Parser<'a> {
         if dialect_of!(self is BigQueryDialect | MsSqlDialect)
             && self.parse_keywords(&[Keyword::FOR, Keyword::SYSTEM_TIME, Keyword::AS, Keyword::OF])
         {
-            let timestamp_token = self.next_token();
-            match timestamp_token.token {
-                Token::SingleQuotedString(timestamp) => {
-                    Ok(Some(TableVersion::Timestamp(timestamp)))
-                }
-                _ => self.expected(
-                    "Expected Token::SingleQuotedString after FOR SYSTEM_TIME AS OF",
-                    timestamp_token,
-                ),
-            }
+            let expr = self.parse_expr()?;
+            Ok(Some(TableVersion::ForSystemTimeAsOf(expr)))
         } else {
             Ok(None)
         }

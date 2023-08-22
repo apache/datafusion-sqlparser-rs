@@ -123,7 +123,6 @@ visit_noop!(bigdecimal::BigDecimal);
 ///
 /// These methods provide a more concise way of visiting nodes of a certain type:
 /// * [visit_relations]
-/// * [visit_table_factors]
 /// * [visit_expressions]
 /// * [visit_statements]
 ///
@@ -231,7 +230,6 @@ pub trait Visitor {
 ///
 /// These methods provide a more concise way of visiting nodes of a certain type:
 /// * [visit_relations_mut]
-/// * [visit_table_factors_mut]
 /// * [visit_expressions_mut]
 /// * [visit_statements_mut]
 ///

@@ -8,6 +8,25 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.37.0] 2023-08-22
+
+### Added
+* Support `FOR SYSTEM_TIME AS OF` table time travel clause support, `visit_table_factor` to Visitor (#951) - Thanks @gruuya
+* Support MySQL `auto_increment` offset in table definition (#950) - Thanks @ehoeve
+* Test for mssql table name in square brackets (#952) - Thanks @lovasoa
+* Support additional Postgres `CREATE INDEX` syntax (#943) - Thanks @ForbesLindesay
+* Support `ALTER ROLE` syntax of PostgreSQL and MS SQL Server (#942) - Thanks @r4ntix
+* Support table-level comments (#946) - Thanks @ehoeve
+* Support `DROP TEMPORARY TABLE`, MySQL syntax (#916) - Thanks @liadgiladi
+* Support posgres type alias (#933) - Thanks @Kikkon
+
+### Fixed
+* Clarify the value of the special flag (#948) - Thanks @alamb
+* Fix `SUBSTRING` from/to argument construction for mssql (#947) - Thanks @jmaness
+* Fix: use Rust idiomatic capitalization for newly added DataType enums (#939) - Thanks @Kikkon
+* Fix `BEGIN TRANSACTION` being serialized as `START TRANSACTION` (#935) - Thanks @lovasoa
+* Fix parsing of datetime functions without parenthesis (#930) - Thanks @lovasoa
+
 ## [0.36.1] 2023-07-19
 
 ### Fixed

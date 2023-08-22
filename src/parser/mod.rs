@@ -6210,6 +6210,9 @@ impl<'a> Parser<'a> {
         } else {
             let name = self.parse_object_name()?;
 
+            // Parse potential version qualifier
+            let version = self.parse_table_version()?;
+
             // Postgres, MSSQL: table-valued functions:
             let args = if self.consume_token(&Token::LParen) {
                 Some(self.parse_optional_args()?)
@@ -6240,7 +6243,22 @@ impl<'a> Parser<'a> {
                 alias,
                 args,
                 with_hints,
+                version,
             })
+        }
+    }
+
+    /// Parse a given table version specifier.
+    ///
+    /// For now it only supports timestamp versioning for BigQuery and MSSQL dialects.
+    pub fn parse_table_version(&mut self) -> Result<Option<TableVersion>, ParserError> {
+        if dialect_of!(self is BigQueryDialect | MsSqlDialect)
+            && self.parse_keywords(&[Keyword::FOR, Keyword::SYSTEM_TIME, Keyword::AS, Keyword::OF])
+        {
+            let expr = self.parse_expr()?;
+            Ok(Some(TableVersion::ForSystemTimeAsOf(expr)))
+        } else {
+            Ok(None)
         }
     }
 

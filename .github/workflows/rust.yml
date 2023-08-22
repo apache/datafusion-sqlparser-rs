@@ -75,11 +75,25 @@ jobs:
       uses: actions/checkout@v2
     - name: Test
       run: cargo test --all-features
+
+  test-coverage:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Setup Rust
+      uses: hecrj/setup-rust-action@v1
+      with:
+        rust-version: stable
+    - name: Install Tarpaulin
+      uses: actions-rs/install@v0.1
+      with:
+        crate: cargo-tarpaulin
+        version: 0.14.2
+        use-tool-cache: true
+    - name: Checkout
+      uses: actions/checkout@v2
     - name: Coverage
-      if: matrix.rust == 'stable'
       run: cargo tarpaulin -o Lcov --output-dir ./coverage
     - name: Coveralls
-      if: matrix.rust == 'stable'
       uses: coverallsapp/github-action@master
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}

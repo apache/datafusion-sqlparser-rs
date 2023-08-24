@@ -665,6 +665,8 @@ pub enum TableFactor {
         /// Optional version qualifier to facilitate table time-travel, as
         /// supported by BigQuery and MSSQL.
         version: Option<TableVersion>,
+        /// Partition selection, supported by MySQL.
+        partitions: Vec<Expr>,
     },
     Derived {
         lateral: bool,
@@ -725,8 +727,12 @@ impl fmt::Display for TableFactor {
                 args,
                 with_hints,
                 version,
+                partitions,
             } => {
                 write!(f, "{name}")?;
+                if !partitions.is_empty() {
+                    write!(f, "PARTITION ({})", display_comma_separated(partitions))?;
+                }
                 if let Some(args) = args {
                     write!(f, "({})", display_comma_separated(args))?;
                 }

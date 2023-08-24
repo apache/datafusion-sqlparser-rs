@@ -6210,6 +6210,20 @@ impl<'a> Parser<'a> {
         } else {
             let name = self.parse_object_name()?;
 
+            let partitions = if dialect_of!(self is MySqlDialect)
+                && self.parse_keyword(Keyword::PARTITION)
+            {
+                let mut partitions = self.parse_comma_separated(|p| p.parse_tuple(true, false))?;
+                if partitions.len() != 1 {
+                    return Err(ParserError::ParserError(format!(
+                        "Partition expect one tuple"
+                    )));
+                }
+                partitions.remove(0)
+            } else {
+                vec![]
+            };
+
             // Parse potential version qualifier
             let version = self.parse_table_version()?;
 
@@ -6244,6 +6258,7 @@ impl<'a> Parser<'a> {
                 args,
                 with_hints,
                 version,
+                partitions,
             })
         }
     }
@@ -8033,5 +8048,36 @@ mod tests {
             "schema.*",
             "sql parser error: Unexpected token following period in identifier: *",
         );
+    }
+
+    #[test]
+    fn test_mysql_partition_selection() {
+        let sql = "SELECT * FROM employees PARTITION (p0, p2)";
+        let expected = vec!["p0", "p2"];
+
+        let ast: Vec<Statement> = Parser::parse_sql(&MySqlDialect {}, sql).unwrap();
+        assert_eq!(ast.len(), 1);
+        if let Statement::Query(v) = &ast[0] {
+            if let SetExpr::Select(select) = &*v.body {
+                assert_eq!(select.from.len(), 1);
+                let from: &TableWithJoins = &select.from[0];
+                let table_factor = &from.relation;
+                if let TableFactor::Table { partitions, .. } = table_factor {
+                    let actual: Vec<&str> = partitions
+                        .iter()
+                        .map(|expr| {
+                            if let Expr::Identifier(ident) = &expr {
+                                ident.value.as_str()
+                            } else {
+                                ""
+                            }
+                        })
+                        .collect();
+                    assert_eq!(expected, actual);
+                }
+            }
+        } else {
+            panic!("fail to parse mysql partition selection");
+        }
     }
 }

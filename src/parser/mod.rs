@@ -5605,9 +5605,13 @@ impl<'a> Parser<'a> {
         };
 
         let group_by = if self.parse_keywords(&[Keyword::GROUP, Keyword::BY]) {
-            self.parse_comma_separated(Parser::parse_group_by_expr)?
+            if self.parse_keyword(Keyword::ALL) {
+                GroupByExpr::All
+            } else {
+                GroupByExpr::Expressions(self.parse_comma_separated(Parser::parse_group_by_expr)?)
+            }
         } else {
-            vec![]
+            GroupByExpr::Expressions(vec![])
         };
 
         let cluster_by = if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {

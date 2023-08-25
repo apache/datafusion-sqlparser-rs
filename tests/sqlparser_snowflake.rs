@@ -1004,7 +1004,7 @@ fn test_copy_into_copy_options() {
 
 #[test]
 fn test_snowflake_stage_object_names() {
-    let allowed_formatted_names = vec![
+    let allowed_formatted_names = [
         "my_company.emp_basic",
         "@namespace.%table_name",
         "@namespace.%table_name/path",

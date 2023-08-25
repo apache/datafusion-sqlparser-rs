@@ -55,7 +55,7 @@ fn parse_raw_literal() {
     let sql = r#"SELECT R'abc', R"abc", R'f\(abc,(.*),def\)', R"f\(abc,(.*),def\)""#;
     let stmt = bigquery().one_statement_parses_to(
         sql,
-        r#"SELECT R'abc', R'abc', R'f\(abc,(.*),def\)', R'f\(abc,(.*),def\)'"#,
+        r"SELECT R'abc', R'abc', R'f\(abc,(.*),def\)', R'f\(abc,(.*),def\)'",
     );
     if let Statement::Query(query) = stmt {
         if let SetExpr::Select(select) = *query.body {
@@ -69,11 +69,11 @@ fn parse_raw_literal() {
                 expr_from_projection(&select.projection[1])
             );
             assert_eq!(
-                &Expr::Value(Value::RawStringLiteral(r#"f\(abc,(.*),def\)"#.to_string())),
+                &Expr::Value(Value::RawStringLiteral(r"f\(abc,(.*),def\)".to_string())),
                 expr_from_projection(&select.projection[2])
             );
             assert_eq!(
-                &Expr::Value(Value::RawStringLiteral(r#"f\(abc,(.*),def\)"#.to_string())),
+                &Expr::Value(Value::RawStringLiteral(r"f\(abc,(.*),def\)".to_string())),
                 expr_from_projection(&select.projection[3])
             );
             return;

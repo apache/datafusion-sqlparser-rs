@@ -7212,7 +7212,7 @@ fn parse_with_recursion_limit() {
         .expect("tokenize to work")
         .parse_statements();
 
-    assert!(matches!(res, Ok(_)), "{res:?}");
+    assert!(res.is_ok(), "{res:?}");
 
     // limit recursion to something smaller, expect parsing to fail
     let res = Parser::new(&dialect)
@@ -7230,7 +7230,7 @@ fn parse_with_recursion_limit() {
         .with_recursion_limit(50)
         .parse_statements();
 
-    assert!(matches!(res, Ok(_)), "{res:?}");
+    assert!(res.is_ok(), "{res:?}");
 }
 
 #[test]

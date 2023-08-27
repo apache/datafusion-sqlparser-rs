@@ -368,8 +368,8 @@ impl<'a> Parser<'a> {
         debug!("Parsing sql '{}'...", sql);
         let tokens = Tokenizer::new(self.dialect, sql)
             .with_unescape(self.options.unescape)
-            .tokenize()?;
-        Ok(self.with_tokens(tokens))
+            .tokenize_with_location()?;
+        Ok(self.with_tokens_with_locations(tokens))
     }
 
     /// Parse potentially multiple statements
@@ -7962,14 +7962,12 @@ mod tests {
 
     #[test]
     fn test_parser_error_loc() {
-        // TODO: Once we thread token locations through the parser, we should update this
-        // test to assert the locations of the referenced token
         let sql = "SELECT this is a syntax error";
         let ast = Parser::parse_sql(&GenericDialect, sql);
         assert_eq!(
             ast,
             Err(ParserError::ParserError(
-                "Expected [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a"
+                "Expected [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a at Line: 1, Column 16"
                     .to_string()
             ))
         );

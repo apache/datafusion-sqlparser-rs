@@ -28,6 +28,7 @@ use core::fmt::Debug;
 
 use crate::dialect::*;
 use crate::parser::{Parser, ParserError};
+use crate::tokenizer::Tokenizer;
 use crate::{ast::*, parser::ParserOptions};
 
 /// Tests use the methods on this struct to invoke the parser on one or
@@ -82,8 +83,13 @@ impl TestedDialects {
     /// the result is the same for all tested dialects.
     pub fn parse_sql_statements(&self, sql: &str) -> Result<Vec<Statement>, ParserError> {
         self.one_of_identical_results(|dialect| {
+            let mut tokenizer = Tokenizer::new(dialect, sql);
+            if let Some(options) = &self.options {
+                tokenizer = tokenizer.with_unescape(options.unescape);
+            }
+            let tokens = tokenizer.tokenize()?;
             self.new_parser(dialect)
-                .try_with_sql(sql)?
+                .with_tokens(tokens)
                 .parse_statements()
         })
         // To fail the `ensure_multiple_dialects_are_tested` test:

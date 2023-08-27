@@ -44,8 +44,8 @@ pub enum ParserError {
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
-    ($MSG:expr) => {
-        Err(ParserError::ParserError($MSG.to_string()))
+    ($MSG:expr, $loc:expr) => {
+        Err(ParserError::ParserError(format!("{}{}", $MSG, $loc)))
     };
 }
 
@@ -724,6 +724,7 @@ impl<'a> Parser<'a> {
         // Note also that naively `SELECT date` looks like a syntax error because the `date` type
         // name is not followed by a string literal, but in fact in PostgreSQL it is a valid
         // expression that should parse as the column name "date".
+        let loc = self.peek_token().location;
         return_ok_if_some!(self.maybe_parse(|parser| {
             match parser.parse_data_type()? {
                 DataType::Interval => parser.parse_interval(),
@@ -734,7 +735,7 @@ impl<'a> Parser<'a> {
                 // name, resulting in `NOT 'a'` being recognized as a `TypedString` instead of
                 // an unary negation `NOT ('a' LIKE 'b')`. To solve this, we don't accept the
                 // `type 'string'` syntax for the custom data types at all.
-                DataType::Custom(..) => parser_err!("dummy"),
+                DataType::Custom(..) => parser_err!("dummy", loc),
                 data_type => Ok(Expr::TypedString {
                     data_type,
                     value: parser.parse_literal_string()?,
@@ -909,7 +910,12 @@ impl<'a> Parser<'a> {
                     let tok = self.next_token();
                     let key = match tok.token {
                         Token::Word(word) => word.to_ident(),
-                        _ => return parser_err!(format!("Expected identifier, found: {tok}")),
+                        _ => {
+                            return parser_err!(
+                                format!("Expected identifier, found: {tok}"),
+                                tok.location
+                            )
+                        }
                     };
                     Ok(Expr::CompositeAccess {
                         expr: Box::new(expr),
@@ -1220,7 +1226,10 @@ impl<'a> Parser<'a> {
                 r#in: Box::new(from),
             })
         } else {
-            parser_err!("Position function must include IN keyword".to_string())
+            parser_err!(
+                "Position function must include IN keyword".to_string(),
+                self.peek_token().location
+            )
         }
     }
 
@@ -1884,7 +1893,10 @@ impl<'a> Parser<'a> {
                     }
                 }
                 // Can only happen if `get_next_precedence` got out of sync with this function
-                _ => parser_err!(format!("No infix parser for token {:?}", tok.token)),
+                _ => parser_err!(
+                    format!("No infix parser for token {:?}", tok.token),
+                    tok.location
+                ),
             }
         } else if Token::DoubleColon == tok {
             self.parse_pg_cast(expr)
@@ -1935,7 +1947,10 @@ impl<'a> Parser<'a> {
             })
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
-            parser_err!(format!("No infix parser for token {:?}", tok.token))
+            parser_err!(
+                format!("No infix parser for token {:?}", tok.token),
+                tok.location
+            )
         }
     }
 
@@ -2213,7 +2228,10 @@ impl<'a> Parser<'a> {
 
     /// Report unexpected token
     pub fn expected<T>(&self, expected: &str, found: TokenWithLocation) -> Result<T, ParserError> {
-        parser_err!(format!("Expected {expected}, found: {found}"))
+        parser_err!(
+            format!("Expected {expected}, found: {found}"),
+            found.location
+        )
     }
 
     /// Look for an expected keyword and consume it if it exists
@@ -2378,13 +2396,14 @@ impl<'a> Parser<'a> {
     /// Parse either `ALL`, `DISTINCT` or `DISTINCT ON (...)`. Returns `None` if `ALL` is parsed
     /// and results in a `ParserError` if both `ALL` and `DISTINCT` are found.
     pub fn parse_all_or_distinct(&mut self) -> Result<Option<Distinct>, ParserError> {
+        let loc = self.peek_token().location;
         let all = self.parse_keyword(Keyword::ALL);
         let distinct = self.parse_keyword(Keyword::DISTINCT);
         if !distinct {
             return Ok(None);
         }
         if all {
-            return parser_err!("Cannot specify both ALL and DISTINCT".to_string());
+            return parser_err!("Cannot specify both ALL and DISTINCT".to_string(), loc);
         }
         let on = self.parse_keyword(Keyword::ON);
         if !on {
@@ -2986,10 +3005,14 @@ impl<'a> Parser<'a> {
         let mut admin = vec![];
 
         while let Some(keyword) = self.parse_one_of_keywords(&optional_keywords) {
+            let loc = self
+                .tokens
+                .get(self.index - 1)
+                .map_or(Location { line: 0, column: 0 }, |t| t.location);
             match keyword {
                 Keyword::AUTHORIZATION => {
                     if authorization_owner.is_some() {
-                        parser_err!("Found multiple AUTHORIZATION")
+                        parser_err!("Found multiple AUTHORIZATION", loc)
                     } else {
                         authorization_owner = Some(self.parse_object_name()?);
                         Ok(())
@@ -2997,7 +3020,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::LOGIN | Keyword::NOLOGIN => {
                     if login.is_some() {
-                        parser_err!("Found multiple LOGIN or NOLOGIN")
+                        parser_err!("Found multiple LOGIN or NOLOGIN", loc)
                     } else {
                         login = Some(keyword == Keyword::LOGIN);
                         Ok(())
@@ -3005,7 +3028,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::INHERIT | Keyword::NOINHERIT => {
                     if inherit.is_some() {
-                        parser_err!("Found multiple INHERIT or NOINHERIT")
+                        parser_err!("Found multiple INHERIT or NOINHERIT", loc)
                     } else {
                         inherit = Some(keyword == Keyword::INHERIT);
                         Ok(())
@@ -3013,7 +3036,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::BYPASSRLS | Keyword::NOBYPASSRLS => {
                     if bypassrls.is_some() {
-                        parser_err!("Found multiple BYPASSRLS or NOBYPASSRLS")
+                        parser_err!("Found multiple BYPASSRLS or NOBYPASSRLS", loc)
                     } else {
                         bypassrls = Some(keyword == Keyword::BYPASSRLS);
                         Ok(())
@@ -3021,7 +3044,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::CREATEDB | Keyword::NOCREATEDB => {
                     if create_db.is_some() {
-                        parser_err!("Found multiple CREATEDB or NOCREATEDB")
+                        parser_err!("Found multiple CREATEDB or NOCREATEDB", loc)
                     } else {
                         create_db = Some(keyword == Keyword::CREATEDB);
                         Ok(())
@@ -3029,7 +3052,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::CREATEROLE | Keyword::NOCREATEROLE => {
                     if create_role.is_some() {
-                        parser_err!("Found multiple CREATEROLE or NOCREATEROLE")
+                        parser_err!("Found multiple CREATEROLE or NOCREATEROLE", loc)
                     } else {
                         create_role = Some(keyword == Keyword::CREATEROLE);
                         Ok(())
@@ -3037,7 +3060,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::SUPERUSER | Keyword::NOSUPERUSER => {
                     if superuser.is_some() {
-                        parser_err!("Found multiple SUPERUSER or NOSUPERUSER")
+                        parser_err!("Found multiple SUPERUSER or NOSUPERUSER", loc)
                     } else {
                         superuser = Some(keyword == Keyword::SUPERUSER);
                         Ok(())
@@ -3045,7 +3068,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::REPLICATION | Keyword::NOREPLICATION => {
                     if replication.is_some() {
-                        parser_err!("Found multiple REPLICATION or NOREPLICATION")
+                        parser_err!("Found multiple REPLICATION or NOREPLICATION", loc)
                     } else {
                         replication = Some(keyword == Keyword::REPLICATION);
                         Ok(())
@@ -3053,7 +3076,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::PASSWORD => {
                     if password.is_some() {
-                        parser_err!("Found multiple PASSWORD")
+                        parser_err!("Found multiple PASSWORD", loc)
                     } else {
                         password = if self.parse_keyword(Keyword::NULL) {
                             Some(Password::NullPassword)
@@ -3066,7 +3089,7 @@ impl<'a> Parser<'a> {
                 Keyword::CONNECTION => {
                     self.expect_keyword(Keyword::LIMIT)?;
                     if connection_limit.is_some() {
-                        parser_err!("Found multiple CONNECTION LIMIT")
+                        parser_err!("Found multiple CONNECTION LIMIT", loc)
                     } else {
                         connection_limit = Some(Expr::Value(self.parse_number_value()?));
                         Ok(())
@@ -3075,7 +3098,7 @@ impl<'a> Parser<'a> {
                 Keyword::VALID => {
                     self.expect_keyword(Keyword::UNTIL)?;
                     if valid_until.is_some() {
-                        parser_err!("Found multiple VALID UNTIL")
+                        parser_err!("Found multiple VALID UNTIL", loc)
                     } else {
                         valid_until = Some(Expr::Value(self.parse_value()?));
                         Ok(())
@@ -3084,14 +3107,14 @@ impl<'a> Parser<'a> {
                 Keyword::IN => {
                     if self.parse_keyword(Keyword::ROLE) {
                         if !in_role.is_empty() {
-                            parser_err!("Found multiple IN ROLE")
+                            parser_err!("Found multiple IN ROLE", loc)
                         } else {
                             in_role = self.parse_comma_separated(Parser::parse_identifier)?;
                             Ok(())
                         }
                     } else if self.parse_keyword(Keyword::GROUP) {
                         if !in_group.is_empty() {
-                            parser_err!("Found multiple IN GROUP")
+                            parser_err!("Found multiple IN GROUP", loc)
                         } else {
                             in_group = self.parse_comma_separated(Parser::parse_identifier)?;
                             Ok(())
@@ -3102,7 +3125,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::ROLE => {
                     if !role.is_empty() {
-                        parser_err!("Found multiple ROLE")
+                        parser_err!("Found multiple ROLE", loc)
                     } else {
                         role = self.parse_comma_separated(Parser::parse_identifier)?;
                         Ok(())
@@ -3110,7 +3133,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::USER => {
                     if !user.is_empty() {
-                        parser_err!("Found multiple USER")
+                        parser_err!("Found multiple USER", loc)
                     } else {
                         user = self.parse_comma_separated(Parser::parse_identifier)?;
                         Ok(())
@@ -3118,7 +3141,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::ADMIN => {
                     if !admin.is_empty() {
-                        parser_err!("Found multiple ADMIN")
+                        parser_err!("Found multiple ADMIN", loc)
                     } else {
                         admin = self.parse_comma_separated(Parser::parse_identifier)?;
                         Ok(())
@@ -3181,14 +3204,19 @@ impl<'a> Parser<'a> {
         // specifying multiple objects to delete in a single statement
         let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let names = self.parse_comma_separated(Parser::parse_object_name)?;
+
+        let loc = self.peek_token().location;
         let cascade = self.parse_keyword(Keyword::CASCADE);
         let restrict = self.parse_keyword(Keyword::RESTRICT);
         let purge = self.parse_keyword(Keyword::PURGE);
         if cascade && restrict {
-            return parser_err!("Cannot specify both CASCADE and RESTRICT in DROP");
+            return parser_err!("Cannot specify both CASCADE and RESTRICT in DROP", loc);
         }
         if object_type == ObjectType::Role && (cascade || restrict || purge) {
-            return parser_err!("Cannot specify CASCADE, RESTRICT, or PURGE in DROP ROLE");
+            return parser_err!(
+                "Cannot specify CASCADE, RESTRICT, or PURGE in DROP ROLE",
+                loc
+            );
         }
         Ok(Statement::Drop {
             object_type,
@@ -4446,7 +4474,11 @@ impl<'a> Parser<'a> {
     fn parse_literal_char(&mut self) -> Result<char, ParserError> {
         let s = self.parse_literal_string()?;
         if s.len() != 1 {
-            return parser_err!(format!("Expect a char, found {s:?}"));
+            let loc = self
+                .tokens
+                .get(self.index - 1)
+                .map_or(Location { line: 0, column: 0 }, |t| t.location);
+            return parser_err!(format!("Expect a char, found {s:?}"), loc);
         }
         Ok(s.chars().next().unwrap())
     }
@@ -4525,7 +4557,7 @@ impl<'a> Parser<'a> {
             // (i.e., it returns the input string).
             Token::Number(ref n, l) => match n.parse() {
                 Ok(n) => Ok(Value::Number(n, l)),
-                Err(e) => parser_err!(format!("Could not parse '{n}' as number: {e}")),
+                Err(e) => parser_err!(format!("Could not parse '{n}' as number: {e}"), location),
             },
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
@@ -6465,10 +6497,11 @@ impl<'a> Parser<'a> {
             .parse_keywords(&[Keyword::GRANTED, Keyword::BY])
             .then(|| self.parse_identifier().unwrap());
 
+        let loc = self.peek_token().location;
         let cascade = self.parse_keyword(Keyword::CASCADE);
         let restrict = self.parse_keyword(Keyword::RESTRICT);
         if cascade && restrict {
-            return parser_err!("Cannot specify both CASCADE and RESTRICT in REVOKE");
+            return parser_err!("Cannot specify both CASCADE and RESTRICT in REVOKE", loc);
         }
 
         Ok(Statement::Revoke {

@@ -1824,7 +1824,7 @@ fn parse_select_group_by_all() {
     let sql = "SELECT id, fname, lname, SUM(order) FROM customer GROUP BY ALL";
     let select = verified_only_select(sql);
     assert_eq!(GroupByExpr::All, select.group_by);
-    
+
     one_statement_parses_to(
         "SELECT id, fname, lname, SUM(order) FROM customer GROUP BY ALL",
         "SELECT id, fname, lname, SUM(order) FROM customer GROUP BY ALL",

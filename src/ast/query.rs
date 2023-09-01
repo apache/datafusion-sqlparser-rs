@@ -259,7 +259,7 @@ impl fmt::Display for Select {
             GroupByExpr::All => write!(f, " GROUP BY ALL")?,
             GroupByExpr::Expressions(exprs) => {
                 if !exprs.is_empty() {
-                    write!(f, " GROUP BY {}", display_comma_separated(&exprs))?;
+                    write!(f, " GROUP BY {}", display_comma_separated(exprs))?;
                 }
             }
         }

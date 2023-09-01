@@ -223,11 +223,13 @@ fn parse_delimited_identifiers() {
             alias,
             args,
             with_hints,
+            version,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
             assert!(args.is_none());
             assert!(with_hints.is_empty());
+            assert!(version.is_none());
         }
         _ => panic!("Expecting TableFactor::Table"),
     }
@@ -1002,7 +1004,7 @@ fn test_copy_into_copy_options() {
 
 #[test]
 fn test_snowflake_stage_object_names() {
-    let allowed_formatted_names = vec![
+    let allowed_formatted_names = [
         "my_company.emp_basic",
         "@namespace.%table_name",
         "@namespace.%table_name/path",

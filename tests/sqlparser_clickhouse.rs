@@ -62,6 +62,7 @@ fn parse_map_access_expr() {
                     alias: None,
                     args: None,
                     with_hints: vec![],
+                    version: None,
                 },
                 joins: vec![]
             }],
@@ -169,11 +170,13 @@ fn parse_delimited_identifiers() {
             alias,
             args,
             with_hints,
+            version,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
             assert!(args.is_none());
             assert!(with_hints.is_empty());
+            assert!(version.is_none());
         }
         _ => panic!("Expecting TableFactor::Table"),
     }

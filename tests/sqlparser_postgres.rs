@@ -2332,8 +2332,7 @@ fn pg_and_generic() -> TestedDialects {
 
 #[test]
 fn parse_escaped_literal_string() {
-    let sql =
-        r#"SELECT E's1 \n s1', E's2 \\n s2', E's3 \\\n s3', E's4 \\\\n s4', E'\'', E'foo \\'"#;
+    let sql = r"SELECT E's1 \n s1', E's2 \\n s2', E's3 \\\n s3', E's4 \\\\n s4', E'\'', E'foo \\'";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(6, select.projection.len());
     assert_eq!(
@@ -2361,7 +2360,7 @@ fn parse_escaped_literal_string() {
         expr_from_projection(&select.projection[5])
     );
 
-    let sql = r#"SELECT E'\'"#;
+    let sql = r"SELECT E'\'";
     assert_eq!(
         pg_and_generic()
             .parse_sql_statements(sql)
@@ -2631,7 +2630,7 @@ fn parse_create_role() {
         err => panic!("Failed to parse CREATE ROLE test case: {err:?}"),
     }
 
-    let negatables = vec![
+    let negatables = [
         "BYPASSRLS",
         "CREATEDB",
         "CREATEROLE",
@@ -2855,11 +2854,13 @@ fn parse_delimited_identifiers() {
             alias,
             args,
             with_hints,
+            version,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
             assert!(args.is_none());
             assert!(with_hints.is_empty());
+            assert!(version.is_none());
         }
         _ => panic!("Expecting TableFactor::Table"),
     }

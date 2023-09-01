@@ -651,6 +651,7 @@ impl fmt::Display for TableWithJoins {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "visitor", visit(with = "visit_table_factor"))]
 pub enum TableFactor {
     Table {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
@@ -666,6 +667,9 @@ pub enum TableFactor {
         args: Option<Vec<FunctionArg>>,
         /// MSSQL-specific `WITH (...)` hints such as NOLOCK.
         with_hints: Vec<Expr>,
+        /// Optional version qualifier to facilitate table time-travel, as
+        /// supported by BigQuery and MSSQL.
+        version: Option<TableVersion>,
     },
     Derived {
         lateral: bool,
@@ -725,6 +729,7 @@ impl fmt::Display for TableFactor {
                 alias,
                 args,
                 with_hints,
+                version,
             } => {
                 write!(f, "{name}")?;
                 if let Some(args) = args {
@@ -735,6 +740,9 @@ impl fmt::Display for TableFactor {
                 }
                 if !with_hints.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_hints))?;
+                }
+                if let Some(version) = version {
+                    write!(f, "{version}")?;
                 }
                 Ok(())
             }
@@ -835,6 +843,22 @@ impl fmt::Display for TableAlias {
         write!(f, "{}", self.name)?;
         if !self.columns.is_empty() {
             write!(f, " ({})", display_comma_separated(&self.columns))?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableVersion {
+    ForSystemTimeAsOf(Expr),
+}
+
+impl Display for TableVersion {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TableVersion::ForSystemTimeAsOf(e) => write!(f, " FOR SYSTEM_TIME AS OF {e}")?,
         }
         Ok(())
     }

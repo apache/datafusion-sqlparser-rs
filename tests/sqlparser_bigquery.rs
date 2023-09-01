@@ -55,7 +55,7 @@ fn parse_raw_literal() {
     let sql = r#"SELECT R'abc', R"abc", R'f\(abc,(.*),def\)', R"f\(abc,(.*),def\)""#;
     let stmt = bigquery().one_statement_parses_to(
         sql,
-        r#"SELECT R'abc', R'abc', R'f\(abc,(.*),def\)', R'f\(abc,(.*),def\)'"#,
+        r"SELECT R'abc', R'abc', R'f\(abc,(.*),def\)', R'f\(abc,(.*),def\)'",
     );
     if let Statement::Query(query) = stmt {
         if let SetExpr::Select(select) = *query.body {
@@ -69,11 +69,11 @@ fn parse_raw_literal() {
                 expr_from_projection(&select.projection[1])
             );
             assert_eq!(
-                &Expr::Value(Value::RawStringLiteral(r#"f\(abc,(.*),def\)"#.to_string())),
+                &Expr::Value(Value::RawStringLiteral(r"f\(abc,(.*),def\)".to_string())),
                 expr_from_projection(&select.projection[2])
             );
             assert_eq!(
-                &Expr::Value(Value::RawStringLiteral(r#"f\(abc,(.*),def\)"#.to_string())),
+                &Expr::Value(Value::RawStringLiteral(r"f\(abc,(.*),def\)".to_string())),
                 expr_from_projection(&select.projection[3])
             );
             return;
@@ -95,6 +95,7 @@ fn parse_table_identifiers() {
                     alias: None,
                     args: None,
                     with_hints: vec![],
+                    version: None,
                 },
                 joins: vec![]
             },]
@@ -141,6 +142,31 @@ fn parse_table_identifiers() {
     // test_table_ident_err("GROUP.dataField");
 
     test_table_ident("abc5.GROUP", vec![Ident::new("abc5"), Ident::new("GROUP")]);
+}
+
+#[test]
+fn parse_table_time_travel() {
+    let version = "2023-08-18 23:08:18".to_string();
+    let sql = format!("SELECT 1 FROM t1 FOR SYSTEM_TIME AS OF '{version}'");
+    let select = bigquery().verified_only_select(&sql);
+    assert_eq!(
+        select.from,
+        vec![TableWithJoins {
+            relation: TableFactor::Table {
+                name: ObjectName(vec![Ident::new("t1")]),
+                alias: None,
+                args: None,
+                with_hints: vec![],
+                version: Some(TableVersion::ForSystemTimeAsOf(Expr::Value(
+                    Value::SingleQuotedString(version)
+                ))),
+            },
+            joins: vec![]
+        },]
+    );
+
+    let sql = "SELECT 1 FROM t1 FOR SYSTEM TIME AS OF 'some_timestamp'".to_string();
+    assert!(bigquery().parse_sql_statements(&sql).is_err());
 }
 
 #[test]

@@ -45,13 +45,6 @@ $ cargo install cargo-release
 
       Note that credentials for authoring in this way are securely stored in
       the (GitHub) repo secrets as `CRATE_TOKEN`.
-    * Bump the crate version again (to something like `0.8.1-alpha.0`) to
-      indicate the start of new development cycle.
-
-3. Push the updates to the `main` branch upstream:
-    ```
-    $ git push upstream
-    ```
 
 4. Check that the new version of the crate is available on crates.io:
     https://crates.io/crates/sqlparser

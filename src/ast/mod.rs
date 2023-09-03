@@ -420,16 +420,16 @@ pub enum Expr {
         escape_char: Option<char>,
     },
     /// Any operation e.g. `foo > ANY(bar)`, comparison operator is one of [=, >, <, =>, =<, !=]
-    AnyOp{
+    AnyOp {
         left: Box<Expr>,
         compare_op: BinaryOperator,
-        right: Box<Expr>
+        right: Box<Expr>,
     },
     /// ALL operation e.g. `foo > ALL(bar)`, comparison operator is one of [=, >, <, =>, =<, !=]
-    AllOp{
+    AllOp {
         left: Box<Expr>,
         compare_op: BinaryOperator,
-        right: Box<Expr>
+        right: Box<Expr>,
     },
     /// Unary operation e.g. `NOT foo`
     UnaryOp { op: UnaryOperator, expr: Box<Expr> },
@@ -732,8 +732,16 @@ impl fmt::Display for Expr {
                     pattern
                 ),
             },
-            Expr::AnyOp { left, compare_op, right } => write!(f, "{left} {compare_op} ANY({right})"),
-            Expr::AllOp { left, compare_op, right } => write!(f, "{left} {compare_op} ALL({right})"),
+            Expr::AnyOp {
+                left,
+                compare_op,
+                right,
+            } => write!(f, "{left} {compare_op} ANY({right})"),
+            Expr::AllOp {
+                left,
+                compare_op,
+                right,
+            } => write!(f, "{left} {compare_op} ALL({right})"),
             Expr::UnaryOp { op, expr } => {
                 if op == &UnaryOperator::PGPostfixFactorial {
                     write!(f, "{expr}{op}")

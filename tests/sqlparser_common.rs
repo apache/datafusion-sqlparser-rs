@@ -1553,10 +1553,10 @@ fn parse_bitwise_ops() {
 fn parse_binary_any() {
     let select = verified_only_select("SELECT a = ANY(b)");
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
+        SelectItem::UnnamedExpr(Expr::AnyOp {
             left: Box::new(Expr::Identifier(Ident::new("a"))),
-            op: BinaryOperator::Eq,
-            right: Box::new(Expr::AnyOp(Box::new(Expr::Identifier(Ident::new("b"))))),
+            compare_op: BinaryOperator::Eq,
+            right: Box::new(Expr::Identifier(Ident::new("b"))),
         }),
         select.projection[0]
     );
@@ -1566,10 +1566,10 @@ fn parse_binary_any() {
 fn parse_binary_all() {
     let select = verified_only_select("SELECT a = ALL(b)");
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
+        SelectItem::UnnamedExpr(Expr::AllOp {
             left: Box::new(Expr::Identifier(Ident::new("a"))),
-            op: BinaryOperator::Eq,
-            right: Box::new(Expr::AllOp(Box::new(Expr::Identifier(Ident::new("b"))))),
+            compare_op: BinaryOperator::Eq,
+            right: Box::new(Expr::Identifier(Ident::new("b"))),
         }),
         select.projection[0]
     );

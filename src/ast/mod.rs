@@ -1407,7 +1407,9 @@ pub enum Statement {
         /// Table name
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         name: ObjectName,
-        operation: AlterTableOperation,
+        if_exists: bool,
+        only: bool,
+        operations: Vec<AlterTableOperation>,
     },
     AlterIndex {
         name: ObjectName,
@@ -2618,8 +2620,24 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::AlterTable { name, operation } => {
-                write!(f, "ALTER TABLE {name} {operation}")
+            Statement::AlterTable {
+                name,
+                if_exists,
+                only,
+                operations,
+            } => {
+                write!(f, "ALTER TABLE ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                if *only {
+                    write!(f, "ONLY ")?;
+                }
+                write!(
+                    f,
+                    "{name} {operations}",
+                    operations = display_comma_separated(operations)
+                )
             }
             Statement::AlterIndex { name, operation } => {
                 write!(f, "ALTER INDEX {name} {operation}")

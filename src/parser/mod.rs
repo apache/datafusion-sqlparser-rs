@@ -4081,6 +4081,174 @@ impl<'a> Parser<'a> {
         Ok(SqlOption { name, value })
     }
 
+    pub fn parse_alter_table_operation(&mut self) -> Result<AlterTableOperation, ParserError> {
+        let operation = if self.parse_keyword(Keyword::ADD) {
+            if let Some(constraint) = self.parse_optional_table_constraint()? {
+                AlterTableOperation::AddConstraint(constraint)
+            } else {
+                let if_not_exists =
+                    self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+                if self.parse_keyword(Keyword::PARTITION) {
+                    self.expect_token(&Token::LParen)?;
+                    let partitions = self.parse_comma_separated(Parser::parse_expr)?;
+                    self.expect_token(&Token::RParen)?;
+                    AlterTableOperation::AddPartitions {
+                        if_not_exists,
+                        new_partitions: partitions,
+                    }
+                } else {
+                    let column_keyword = self.parse_keyword(Keyword::COLUMN);
+
+                    let if_not_exists = if dialect_of!(self is PostgreSqlDialect | BigQueryDialect | DuckDbDialect | GenericDialect)
+                    {
+                        self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS])
+                            || if_not_exists
+                    } else {
+                        false
+                    };
+
+                    let column_def = self.parse_column_def()?;
+                    AlterTableOperation::AddColumn {
+                        column_keyword,
+                        if_not_exists,
+                        column_def,
+                    }
+                }
+            }
+        } else if self.parse_keyword(Keyword::RENAME) {
+            if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::CONSTRAINT) {
+                let old_name = self.parse_identifier()?;
+                self.expect_keyword(Keyword::TO)?;
+                let new_name = self.parse_identifier()?;
+                AlterTableOperation::RenameConstraint { old_name, new_name }
+            } else if self.parse_keyword(Keyword::TO) {
+                let table_name = self.parse_object_name()?;
+                AlterTableOperation::RenameTable { table_name }
+            } else {
+                let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
+                let old_column_name = self.parse_identifier()?;
+                self.expect_keyword(Keyword::TO)?;
+                let new_column_name = self.parse_identifier()?;
+                AlterTableOperation::RenameColumn {
+                    old_column_name,
+                    new_column_name,
+                }
+            }
+        } else if self.parse_keyword(Keyword::DROP) {
+            if self.parse_keywords(&[Keyword::IF, Keyword::EXISTS, Keyword::PARTITION]) {
+                self.expect_token(&Token::LParen)?;
+                let partitions = self.parse_comma_separated(Parser::parse_expr)?;
+                self.expect_token(&Token::RParen)?;
+                AlterTableOperation::DropPartitions {
+                    partitions,
+                    if_exists: true,
+                }
+            } else if self.parse_keyword(Keyword::PARTITION) {
+                self.expect_token(&Token::LParen)?;
+                let partitions = self.parse_comma_separated(Parser::parse_expr)?;
+                self.expect_token(&Token::RParen)?;
+                AlterTableOperation::DropPartitions {
+                    partitions,
+                    if_exists: false,
+                }
+            } else if self.parse_keyword(Keyword::CONSTRAINT) {
+                let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+                let name = self.parse_identifier()?;
+                let cascade = self.parse_keyword(Keyword::CASCADE);
+                AlterTableOperation::DropConstraint {
+                    if_exists,
+                    name,
+                    cascade,
+                }
+            } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY])
+                && dialect_of!(self is MySqlDialect | GenericDialect)
+            {
+                AlterTableOperation::DropPrimaryKey
+            } else {
+                let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
+                let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+                let column_name = self.parse_identifier()?;
+                let cascade = self.parse_keyword(Keyword::CASCADE);
+                AlterTableOperation::DropColumn {
+                    column_name,
+                    if_exists,
+                    cascade,
+                }
+            }
+        } else if self.parse_keyword(Keyword::PARTITION) {
+            self.expect_token(&Token::LParen)?;
+            let before = self.parse_comma_separated(Parser::parse_expr)?;
+            self.expect_token(&Token::RParen)?;
+            self.expect_keyword(Keyword::RENAME)?;
+            self.expect_keywords(&[Keyword::TO, Keyword::PARTITION])?;
+            self.expect_token(&Token::LParen)?;
+            let renames = self.parse_comma_separated(Parser::parse_expr)?;
+            self.expect_token(&Token::RParen)?;
+            AlterTableOperation::RenamePartitions {
+                old_partitions: before,
+                new_partitions: renames,
+            }
+        } else if self.parse_keyword(Keyword::CHANGE) {
+            let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
+            let old_name = self.parse_identifier()?;
+            let new_name = self.parse_identifier()?;
+            let data_type = self.parse_data_type()?;
+            let mut options = vec![];
+            while let Some(option) = self.parse_optional_column_option()? {
+                options.push(option);
+            }
+
+            AlterTableOperation::ChangeColumn {
+                old_name,
+                new_name,
+                data_type,
+                options,
+            }
+        } else if self.parse_keyword(Keyword::ALTER) {
+            let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
+            let column_name = self.parse_identifier()?;
+            let is_postgresql = dialect_of!(self is PostgreSqlDialect);
+
+            let op = if self.parse_keywords(&[Keyword::SET, Keyword::NOT, Keyword::NULL]) {
+                AlterColumnOperation::SetNotNull {}
+            } else if self.parse_keywords(&[Keyword::DROP, Keyword::NOT, Keyword::NULL]) {
+                AlterColumnOperation::DropNotNull {}
+            } else if self.parse_keywords(&[Keyword::SET, Keyword::DEFAULT]) {
+                AlterColumnOperation::SetDefault {
+                    value: self.parse_expr()?,
+                }
+            } else if self.parse_keywords(&[Keyword::DROP, Keyword::DEFAULT]) {
+                AlterColumnOperation::DropDefault {}
+            } else if self.parse_keywords(&[Keyword::SET, Keyword::DATA, Keyword::TYPE])
+                || (is_postgresql && self.parse_keyword(Keyword::TYPE))
+            {
+                let data_type = self.parse_data_type()?;
+                let using = if is_postgresql && self.parse_keyword(Keyword::USING) {
+                    Some(self.parse_expr()?)
+                } else {
+                    None
+                };
+                AlterColumnOperation::SetDataType { data_type, using }
+            } else {
+                return self.expected(
+                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN",
+                    self.peek_token(),
+                );
+            };
+            AlterTableOperation::AlterColumn { column_name, op }
+        } else if self.parse_keyword(Keyword::SWAP) {
+            self.expect_keyword(Keyword::WITH)?;
+            let table_name = self.parse_object_name()?;
+            AlterTableOperation::SwapWith { table_name }
+        } else {
+            return self.expected(
+                "ADD, RENAME, PARTITION, SWAP or DROP after ALTER TABLE",
+                self.peek_token(),
+            );
+        };
+        Ok(operation)
+    }
+
     pub fn parse_alter(&mut self) -> Result<Statement, ParserError> {
         let object_type = self.expect_one_of_keywords(&[
             Keyword::VIEW,
@@ -4091,177 +4259,15 @@ impl<'a> Parser<'a> {
         match object_type {
             Keyword::VIEW => self.parse_alter_view(),
             Keyword::TABLE => {
-                let _ = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
+                let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+                let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
                 let table_name = self.parse_object_name()?;
-                let operation = if self.parse_keyword(Keyword::ADD) {
-                    if let Some(constraint) = self.parse_optional_table_constraint()? {
-                        AlterTableOperation::AddConstraint(constraint)
-                    } else {
-                        let if_not_exists =
-                            self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-                        if self.parse_keyword(Keyword::PARTITION) {
-                            self.expect_token(&Token::LParen)?;
-                            let partitions = self.parse_comma_separated(Parser::parse_expr)?;
-                            self.expect_token(&Token::RParen)?;
-                            AlterTableOperation::AddPartitions {
-                                if_not_exists,
-                                new_partitions: partitions,
-                            }
-                        } else {
-                            let column_keyword = self.parse_keyword(Keyword::COLUMN);
-
-                            let if_not_exists = if dialect_of!(self is PostgreSqlDialect | BigQueryDialect | DuckDbDialect | GenericDialect)
-                            {
-                                self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS])
-                                    || if_not_exists
-                            } else {
-                                false
-                            };
-
-                            let column_def = self.parse_column_def()?;
-                            AlterTableOperation::AddColumn {
-                                column_keyword,
-                                if_not_exists,
-                                column_def,
-                            }
-                        }
-                    }
-                } else if self.parse_keyword(Keyword::RENAME) {
-                    if dialect_of!(self is PostgreSqlDialect)
-                        && self.parse_keyword(Keyword::CONSTRAINT)
-                    {
-                        let old_name = self.parse_identifier()?;
-                        self.expect_keyword(Keyword::TO)?;
-                        let new_name = self.parse_identifier()?;
-                        AlterTableOperation::RenameConstraint { old_name, new_name }
-                    } else if self.parse_keyword(Keyword::TO) {
-                        let table_name = self.parse_object_name()?;
-                        AlterTableOperation::RenameTable { table_name }
-                    } else {
-                        let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
-                        let old_column_name = self.parse_identifier()?;
-                        self.expect_keyword(Keyword::TO)?;
-                        let new_column_name = self.parse_identifier()?;
-                        AlterTableOperation::RenameColumn {
-                            old_column_name,
-                            new_column_name,
-                        }
-                    }
-                } else if self.parse_keyword(Keyword::DROP) {
-                    if self.parse_keywords(&[Keyword::IF, Keyword::EXISTS, Keyword::PARTITION]) {
-                        self.expect_token(&Token::LParen)?;
-                        let partitions = self.parse_comma_separated(Parser::parse_expr)?;
-                        self.expect_token(&Token::RParen)?;
-                        AlterTableOperation::DropPartitions {
-                            partitions,
-                            if_exists: true,
-                        }
-                    } else if self.parse_keyword(Keyword::PARTITION) {
-                        self.expect_token(&Token::LParen)?;
-                        let partitions = self.parse_comma_separated(Parser::parse_expr)?;
-                        self.expect_token(&Token::RParen)?;
-                        AlterTableOperation::DropPartitions {
-                            partitions,
-                            if_exists: false,
-                        }
-                    } else if self.parse_keyword(Keyword::CONSTRAINT) {
-                        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-                        let name = self.parse_identifier()?;
-                        let cascade = self.parse_keyword(Keyword::CASCADE);
-                        AlterTableOperation::DropConstraint {
-                            if_exists,
-                            name,
-                            cascade,
-                        }
-                    } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY])
-                        && dialect_of!(self is MySqlDialect | GenericDialect)
-                    {
-                        AlterTableOperation::DropPrimaryKey
-                    } else {
-                        let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
-                        let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-                        let column_name = self.parse_identifier()?;
-                        let cascade = self.parse_keyword(Keyword::CASCADE);
-                        AlterTableOperation::DropColumn {
-                            column_name,
-                            if_exists,
-                            cascade,
-                        }
-                    }
-                } else if self.parse_keyword(Keyword::PARTITION) {
-                    self.expect_token(&Token::LParen)?;
-                    let before = self.parse_comma_separated(Parser::parse_expr)?;
-                    self.expect_token(&Token::RParen)?;
-                    self.expect_keyword(Keyword::RENAME)?;
-                    self.expect_keywords(&[Keyword::TO, Keyword::PARTITION])?;
-                    self.expect_token(&Token::LParen)?;
-                    let renames = self.parse_comma_separated(Parser::parse_expr)?;
-                    self.expect_token(&Token::RParen)?;
-                    AlterTableOperation::RenamePartitions {
-                        old_partitions: before,
-                        new_partitions: renames,
-                    }
-                } else if self.parse_keyword(Keyword::CHANGE) {
-                    let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
-                    let old_name = self.parse_identifier()?;
-                    let new_name = self.parse_identifier()?;
-                    let data_type = self.parse_data_type()?;
-                    let mut options = vec![];
-                    while let Some(option) = self.parse_optional_column_option()? {
-                        options.push(option);
-                    }
-
-                    AlterTableOperation::ChangeColumn {
-                        old_name,
-                        new_name,
-                        data_type,
-                        options,
-                    }
-                } else if self.parse_keyword(Keyword::ALTER) {
-                    let _ = self.parse_keyword(Keyword::COLUMN); // [ COLUMN ]
-                    let column_name = self.parse_identifier()?;
-                    let is_postgresql = dialect_of!(self is PostgreSqlDialect);
-
-                    let op = if self.parse_keywords(&[Keyword::SET, Keyword::NOT, Keyword::NULL]) {
-                        AlterColumnOperation::SetNotNull {}
-                    } else if self.parse_keywords(&[Keyword::DROP, Keyword::NOT, Keyword::NULL]) {
-                        AlterColumnOperation::DropNotNull {}
-                    } else if self.parse_keywords(&[Keyword::SET, Keyword::DEFAULT]) {
-                        AlterColumnOperation::SetDefault {
-                            value: self.parse_expr()?,
-                        }
-                    } else if self.parse_keywords(&[Keyword::DROP, Keyword::DEFAULT]) {
-                        AlterColumnOperation::DropDefault {}
-                    } else if self.parse_keywords(&[Keyword::SET, Keyword::DATA, Keyword::TYPE])
-                        || (is_postgresql && self.parse_keyword(Keyword::TYPE))
-                    {
-                        let data_type = self.parse_data_type()?;
-                        let using = if is_postgresql && self.parse_keyword(Keyword::USING) {
-                            Some(self.parse_expr()?)
-                        } else {
-                            None
-                        };
-                        AlterColumnOperation::SetDataType { data_type, using }
-                    } else {
-                        return self.expected(
-                            "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN",
-                            self.peek_token(),
-                        );
-                    };
-                    AlterTableOperation::AlterColumn { column_name, op }
-                } else if self.parse_keyword(Keyword::SWAP) {
-                    self.expect_keyword(Keyword::WITH)?;
-                    let table_name = self.parse_object_name()?;
-                    AlterTableOperation::SwapWith { table_name }
-                } else {
-                    return self.expected(
-                        "ADD, RENAME, PARTITION, SWAP or DROP after ALTER TABLE",
-                        self.peek_token(),
-                    );
-                };
+                let operations = self.parse_comma_separated(Parser::parse_alter_table_operation)?;
                 Ok(Statement::AlterTable {
                     name: table_name,
-                    operation,
+                    if_exists,
+                    only,
+                    operations,
                 })
             }
             Keyword::INDEX => {

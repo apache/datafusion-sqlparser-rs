@@ -546,12 +546,10 @@ fn parse_create_table_constraints_only() {
 
 #[test]
 fn parse_alter_table_constraints_rename() {
-    match pg().verified_stmt("ALTER TABLE tab RENAME CONSTRAINT old_name TO new_name") {
-        Statement::AlterTable {
-            name,
-            operation: AlterTableOperation::RenameConstraint { old_name, new_name },
-        } => {
-            assert_eq!("tab", name.to_string());
+    match alter_table_op(
+        pg().verified_stmt("ALTER TABLE tab RENAME CONSTRAINT old_name TO new_name"),
+    ) {
+        AlterTableOperation::RenameConstraint { old_name, new_name } => {
             assert_eq!(old_name.to_string(), "old_name");
             assert_eq!(new_name.to_string(), "new_name");
         }
@@ -566,14 +564,12 @@ fn parse_alter_table_alter_column() {
         "ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'",
     );
 
-    match pg()
-        .verified_stmt("ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'")
-    {
-        Statement::AlterTable {
-            name,
-            operation: AlterTableOperation::AlterColumn { column_name, op },
-        } => {
-            assert_eq!("tab", name.to_string());
+    match alter_table_op(
+        pg().verified_stmt(
+            "ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'",
+        ),
+    ) {
+        AlterTableOperation::AlterColumn { column_name, op } => {
             assert_eq!("is_active", column_name.to_string());
             let using_expr = Expr::Value(Value::SingleQuotedString("text".to_string()));
             assert_eq!(
@@ -582,6 +578,48 @@ fn parse_alter_table_alter_column() {
                     data_type: DataType::Text,
                     using: Some(using_expr),
                 }
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_add_columns() {
+    match pg().verified_stmt("ALTER TABLE IF EXISTS ONLY tab ADD COLUMN a TEXT, ADD COLUMN b INT") {
+        Statement::AlterTable {
+            name,
+            if_exists,
+            only,
+            operations,
+        } => {
+            assert_eq!(name.to_string(), "tab");
+            assert!(if_exists);
+            assert!(only);
+            assert_eq!(
+                operations,
+                vec![
+                    AlterTableOperation::AddColumn {
+                        column_keyword: true,
+                        if_not_exists: false,
+                        column_def: ColumnDef {
+                            name: "a".into(),
+                            data_type: DataType::Text,
+                            collation: None,
+                            options: vec![],
+                        },
+                    },
+                    AlterTableOperation::AddColumn {
+                        column_keyword: true,
+                        if_not_exists: false,
+                        column_def: ColumnDef {
+                            name: "b".into(),
+                            data_type: DataType::Int(None),
+                            collation: None,
+                            options: vec![],
+                        },
+                    },
+                ]
             );
         }
         _ => unreachable!(),

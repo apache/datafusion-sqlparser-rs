@@ -209,6 +209,26 @@ pub fn expr_from_projection(item: &SelectItem) -> &Expr {
     }
 }
 
+pub fn alter_table_op_with_name(stmt: Statement, expected_name: &str) -> AlterTableOperation {
+    match stmt {
+        Statement::AlterTable {
+            name,
+            if_exists,
+            only: is_only,
+            operations,
+        } => {
+            assert_eq!(name.to_string(), expected_name);
+            assert!(!if_exists);
+            assert!(!is_only);
+            only(operations)
+        }
+        _ => panic!("Expected ALTER TABLE statement"),
+    }
+}
+pub fn alter_table_op(stmt: Statement) -> AlterTableOperation {
+    alter_table_op_with_name(stmt, "tab")
+}
+
 /// Creates a `Value::Number`, panic'ing if n is not a number
 pub fn number(n: &str) -> Value {
     Value::Number(n.parse().unwrap(), false)

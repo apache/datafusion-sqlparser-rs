@@ -836,7 +836,12 @@ fn test_eof_after_as() {
 
 #[test]
 fn test_no_infix_error() {
-    let res = Parser::parse_sql(&ClickHouseDialect {}, "ASSERT-URA<<");
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(ClickHouseDialect {})],
+        options: None,
+    };
+
+    let res = dialects.parse_sql_statements("ASSERT-URA<<");
     assert_eq!(
         ParserError::ParserError("No infix parser for token ShiftLeft".to_string()),
         res.unwrap_err()
@@ -3238,19 +3243,21 @@ fn parse_alter_table_alter_column_type() {
         _ => unreachable!(),
     }
 
-    let res = Parser::parse_sql(
-        &GenericDialect {},
-        &format!("{alter_stmt} ALTER COLUMN is_active TYPE TEXT"),
-    );
+    let dialect = TestedDialects {
+        dialects: vec![Box::new(GenericDialect {})],
+        options: None,
+    };
+
+    let res =
+        dialect.parse_sql_statements(&format!("{alter_stmt} ALTER COLUMN is_active TYPE TEXT"));
     assert_eq!(
         ParserError::ParserError("Expected SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN, found: TYPE".to_string()),
         res.unwrap_err()
     );
 
-    let res = Parser::parse_sql(
-        &GenericDialect {},
-        &format!("{alter_stmt} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'"),
-    );
+    let res = dialect.parse_sql_statements(&format!(
+        "{alter_stmt} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'"
+    ));
     assert_eq!(
         ParserError::ParserError("Expected end of statement, found: USING".to_string()),
         res.unwrap_err()
@@ -3295,10 +3302,7 @@ fn parse_alter_table_drop_constraint() {
         _ => unreachable!(),
     }
 
-    let res = Parser::parse_sql(
-        &GenericDialect {},
-        &format!("{alter_stmt} DROP CONSTRAINT is_active TEXT"),
-    );
+    let res = parse_sql_statements(&format!("{alter_stmt} DROP CONSTRAINT is_active TEXT"));
     assert_eq!(
         ParserError::ParserError("Expected end of statement, found: TEXT".to_string()),
         res.unwrap_err()

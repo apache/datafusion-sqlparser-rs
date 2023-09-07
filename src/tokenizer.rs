@@ -350,12 +350,26 @@ impl fmt::Display for Whitespace {
 }
 
 /// Location in input string
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub struct Location {
     /// Line number, starting from 1
     pub line: u64,
     /// Line column, starting from 1
     pub column: u64,
+}
+
+impl fmt::Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.line == 0 {
+            return Ok(());
+        }
+        write!(
+            f,
+            // TODO: use standard compiler location syntax (<path>:<line>:<col>)
+            " at Line: {}, Column {}",
+            self.line, self.column,
+        )
+    }
 }
 
 /// A [Token] with [Location] attached to it
@@ -400,17 +414,12 @@ impl fmt::Display for TokenWithLocation {
 #[derive(Debug, PartialEq, Eq)]
 pub struct TokenizerError {
     pub message: String,
-    pub line: u64,
-    pub col: u64,
+    pub location: Location,
 }
 
 impl fmt::Display for TokenizerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{} at Line: {}, Column {}",
-            self.message, self.line, self.col
-        )
+        write!(f, "{}{}", self.message, self.location,)
     }
 }
 
@@ -546,10 +555,7 @@ impl<'a> Tokenizer<'a> {
 
         let mut location = state.location();
         while let Some(token) = self.next_token(&mut state)? {
-            tokens.push(TokenWithLocation {
-                token,
-                location: location.clone(),
-            });
+            tokens.push(TokenWithLocation { token, location });
 
             location = state.location();
         }
@@ -1122,8 +1128,7 @@ impl<'a> Tokenizer<'a> {
     ) -> Result<R, TokenizerError> {
         Err(TokenizerError {
             message: message.into(),
-            col: loc.column,
-            line: loc.line,
+            location: loc,
         })
     }
 
@@ -1368,8 +1373,7 @@ mod tests {
     fn tokenizer_error_impl() {
         let err = TokenizerError {
             message: "test".into(),
-            line: 1,
-            col: 1,
+            location: Location { line: 1, column: 1 },
         };
         #[cfg(feature = "std")]
         {
@@ -1694,8 +1698,7 @@ mod tests {
             tokenizer.tokenize(),
             Err(TokenizerError {
                 message: "Unterminated string literal".to_string(),
-                line: 1,
-                col: 8
+                location: Location { line: 1, column: 8 },
             })
         );
     }
@@ -1710,8 +1713,10 @@ mod tests {
             tokenizer.tokenize(),
             Err(TokenizerError {
                 message: "Unterminated string literal".to_string(),
-                line: 1,
-                col: 35
+                location: Location {
+                    line: 1,
+                    column: 35
+                }
             })
         );
     }
@@ -1873,8 +1878,7 @@ mod tests {
             tokenizer.tokenize(),
             Err(TokenizerError {
                 message: "Expected close delimiter '\"' before EOF.".to_string(),
-                line: 1,
-                col: 1
+                location: Location { line: 1, column: 1 },
             })
         );
     }

@@ -1782,16 +1782,32 @@ impl<'a> Parser<'a> {
                 let right = self.parse_subexpr(precedence)?;
                 self.expect_token(&Token::RParen)?;
 
-                let right = match keyword {
-                    Keyword::ALL => Box::new(Expr::AllOp(Box::new(right))),
-                    Keyword::ANY => Box::new(Expr::AnyOp(Box::new(right))),
-                    _ => unreachable!(),
+                if !matches!(
+                    op,
+                    BinaryOperator::Gt
+                        | BinaryOperator::Lt
+                        | BinaryOperator::GtEq
+                        | BinaryOperator::LtEq
+                        | BinaryOperator::Eq
+                        | BinaryOperator::NotEq
+                ) {
+                    return parser_err!(format!(
+                        "Expected one of [=, >, <, =>, =<, !=] as comparison operator, found: {op}"
+                    ));
                 };
 
-                Ok(Expr::BinaryOp {
-                    left: Box::new(expr),
-                    op,
-                    right,
+                Ok(match keyword {
+                    Keyword::ALL => Expr::AllOp {
+                        left: Box::new(expr),
+                        compare_op: op,
+                        right: Box::new(right),
+                    },
+                    Keyword::ANY => Expr::AnyOp {
+                        left: Box::new(expr),
+                        compare_op: op,
+                        right: Box::new(right),
+                    },
+                    _ => unreachable!(),
                 })
             } else {
                 Ok(Expr::BinaryOp {

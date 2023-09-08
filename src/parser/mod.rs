@@ -1791,9 +1791,12 @@ impl<'a> Parser<'a> {
                         | BinaryOperator::Eq
                         | BinaryOperator::NotEq
                 ) {
-                    return parser_err!(format!(
+                    return parser_err!(
+                        format!(
                         "Expected one of [=, >, <, =>, =<, !=] as comparison operator, found: {op}"
-                    ));
+                    ),
+                        tok.location
+                    );
                 };
 
                 Ok(match keyword {

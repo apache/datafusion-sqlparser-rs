@@ -502,12 +502,8 @@ fn test_select_wildcard_with_exclude_and_rename() {
 #[test]
 fn test_alter_table_swap_with() {
     let sql = "ALTER TABLE tab1 SWAP WITH tab2";
-    match snowflake_and_generic().verified_stmt(sql) {
-        Statement::AlterTable {
-            name,
-            operation: AlterTableOperation::SwapWith { table_name },
-        } => {
-            assert_eq!("tab1", name.to_string());
+    match alter_table_op_with_name(snowflake_and_generic().verified_stmt(sql), "tab1") {
+        AlterTableOperation::SwapWith { table_name } => {
             assert_eq!("tab2", table_name.to_string());
         }
         _ => unreachable!(),

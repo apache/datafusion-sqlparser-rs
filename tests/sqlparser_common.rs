@@ -30,8 +30,8 @@ use sqlparser::dialect::{
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
 use test_utils::{
-    all_dialects, assert_eq_vec, expr_from_projection, join, number, only, table, table_alias,
-    TestedDialects,
+    all_dialects, alter_table_op, assert_eq_vec, expr_from_projection, join, number, only, table,
+    table_alias, TestedDialects,
 };
 
 #[macro_use]
@@ -838,7 +838,12 @@ fn test_eof_after_as() {
 
 #[test]
 fn test_no_infix_error() {
-    let res = Parser::parse_sql(&ClickHouseDialect {}, "ASSERT-URA<<");
+    let dialects = TestedDialects {
+        dialects: vec![Box::new(ClickHouseDialect {})],
+        options: None,
+    };
+
+    let res = dialects.parse_sql_statements("ASSERT-URA<<");
     assert_eq!(
         ParserError::ParserError("No infix parser for token ShiftLeft".to_string()),
         res.unwrap_err()
@@ -1555,10 +1560,10 @@ fn parse_bitwise_ops() {
 fn parse_binary_any() {
     let select = verified_only_select("SELECT a = ANY(b)");
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
+        SelectItem::UnnamedExpr(Expr::AnyOp {
             left: Box::new(Expr::Identifier(Ident::new("a"))),
-            op: BinaryOperator::Eq,
-            right: Box::new(Expr::AnyOp(Box::new(Expr::Identifier(Ident::new("b"))))),
+            compare_op: BinaryOperator::Eq,
+            right: Box::new(Expr::Identifier(Ident::new("b"))),
         }),
         select.projection[0]
     );
@@ -1568,10 +1573,10 @@ fn parse_binary_any() {
 fn parse_binary_all() {
     let select = verified_only_select("SELECT a = ALL(b)");
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::BinaryOp {
+        SelectItem::UnnamedExpr(Expr::AllOp {
             left: Box::new(Expr::Identifier(Ident::new("a"))),
-            op: BinaryOperator::Eq,
-            right: Box::new(Expr::AllOp(Box::new(Expr::Identifier(Ident::new("b"))))),
+            compare_op: BinaryOperator::Eq,
+            right: Box::new(Expr::Identifier(Ident::new("b"))),
         }),
         select.projection[0]
     );
@@ -2929,19 +2934,17 @@ fn parse_create_external_table_lowercase() {
 #[test]
 fn parse_alter_table() {
     let add_column = "ALTER TABLE tab ADD COLUMN foo TEXT;";
-    match one_statement_parses_to(add_column, "ALTER TABLE tab ADD COLUMN foo TEXT") {
-        Statement::AlterTable {
-            name,
-            operation:
-                AlterTableOperation::AddColumn {
-                    column_keyword,
-                    if_not_exists,
-                    column_def,
-                },
+    match alter_table_op(one_statement_parses_to(
+        add_column,
+        "ALTER TABLE tab ADD COLUMN foo TEXT",
+    )) {
+        AlterTableOperation::AddColumn {
+            column_keyword,
+            if_not_exists,
+            column_def,
         } => {
             assert!(column_keyword);
             assert!(!if_not_exists);
-            assert_eq!("tab", name.to_string());
             assert_eq!("foo", column_def.name.to_string());
             assert_eq!("TEXT", column_def.data_type.to_string());
         }
@@ -2949,28 +2952,19 @@ fn parse_alter_table() {
     };
 
     let rename_table = "ALTER TABLE tab RENAME TO new_tab";
-    match verified_stmt(rename_table) {
-        Statement::AlterTable {
-            name,
-            operation: AlterTableOperation::RenameTable { table_name },
-        } => {
-            assert_eq!("tab", name.to_string());
-            assert_eq!("new_tab", table_name.to_string())
+    match alter_table_op(verified_stmt(rename_table)) {
+        AlterTableOperation::RenameTable { table_name } => {
+            assert_eq!("new_tab", table_name.to_string());
         }
         _ => unreachable!(),
     };
 
     let rename_column = "ALTER TABLE tab RENAME COLUMN foo TO new_foo";
-    match verified_stmt(rename_column) {
-        Statement::AlterTable {
-            name,
-            operation:
-                AlterTableOperation::RenameColumn {
-                    old_column_name,
-                    new_column_name,
-                },
+    match alter_table_op(verified_stmt(rename_column)) {
+        AlterTableOperation::RenameColumn {
+            old_column_name,
+            new_column_name,
         } => {
-            assert_eq!("tab", name.to_string());
             assert_eq!(old_column_name.to_string(), "foo");
             assert_eq!(new_column_name.to_string(), "new_foo");
         }
@@ -3056,21 +3050,15 @@ fn parse_alter_view_with_columns() {
 
 #[test]
 fn parse_alter_table_add_column() {
-    match verified_stmt("ALTER TABLE tab ADD foo TEXT") {
-        Statement::AlterTable {
-            operation: AlterTableOperation::AddColumn { column_keyword, .. },
-            ..
-        } => {
+    match alter_table_op(verified_stmt("ALTER TABLE tab ADD foo TEXT")) {
+        AlterTableOperation::AddColumn { column_keyword, .. } => {
             assert!(!column_keyword);
         }
         _ => unreachable!(),
     };
 
-    match verified_stmt("ALTER TABLE tab ADD COLUMN foo TEXT") {
-        Statement::AlterTable {
-            operation: AlterTableOperation::AddColumn { column_keyword, .. },
-            ..
-        } => {
+    match alter_table_op(verified_stmt("ALTER TABLE tab ADD COLUMN foo TEXT")) {
+        AlterTableOperation::AddColumn { column_keyword, .. } => {
             assert!(column_keyword);
         }
         _ => unreachable!(),
@@ -3089,24 +3077,19 @@ fn parse_alter_table_add_column_if_not_exists() {
         options: None,
     };
 
-    match dialects.verified_stmt("ALTER TABLE tab ADD IF NOT EXISTS foo TEXT") {
-        Statement::AlterTable {
-            operation: AlterTableOperation::AddColumn { if_not_exists, .. },
-            ..
-        } => {
+    match alter_table_op(dialects.verified_stmt("ALTER TABLE tab ADD IF NOT EXISTS foo TEXT")) {
+        AlterTableOperation::AddColumn { if_not_exists, .. } => {
             assert!(if_not_exists);
         }
         _ => unreachable!(),
     };
 
-    match dialects.verified_stmt("ALTER TABLE tab ADD COLUMN IF NOT EXISTS foo TEXT") {
-        Statement::AlterTable {
-            operation:
-                AlterTableOperation::AddColumn {
-                    column_keyword,
-                    if_not_exists,
-                    ..
-                },
+    match alter_table_op(
+        dialects.verified_stmt("ALTER TABLE tab ADD COLUMN IF NOT EXISTS foo TEXT"),
+    ) {
+        AlterTableOperation::AddColumn {
+            column_keyword,
+            if_not_exists,
             ..
         } => {
             assert!(column_keyword);
@@ -3132,12 +3115,10 @@ fn parse_alter_table_constraints() {
     check_one("CHECK (end_date > start_date OR end_date IS NULL)");
 
     fn check_one(constraint_text: &str) {
-        match verified_stmt(&format!("ALTER TABLE tab ADD {constraint_text}")) {
-            Statement::AlterTable {
-                name,
-                operation: AlterTableOperation::AddConstraint(constraint),
-            } => {
-                assert_eq!("tab", name.to_string());
+        match alter_table_op(verified_stmt(&format!(
+            "ALTER TABLE tab ADD {constraint_text}"
+        ))) {
+            AlterTableOperation::AddConstraint(constraint) => {
                 assert_eq!(constraint_text, constraint.to_string());
             }
             _ => unreachable!(),
@@ -3159,17 +3140,12 @@ fn parse_alter_table_drop_column() {
     );
 
     fn check_one(constraint_text: &str) {
-        match verified_stmt(&format!("ALTER TABLE tab {constraint_text}")) {
-            Statement::AlterTable {
-                name,
-                operation:
-                    AlterTableOperation::DropColumn {
-                        column_name,
-                        if_exists,
-                        cascade,
-                    },
+        match alter_table_op(verified_stmt(&format!("ALTER TABLE tab {constraint_text}"))) {
+            AlterTableOperation::DropColumn {
+                column_name,
+                if_exists,
+                cascade,
             } => {
-                assert_eq!("tab", name.to_string());
                 assert_eq!("is_active", column_name.to_string());
                 assert!(if_exists);
                 assert!(cascade);
@@ -3182,12 +3158,10 @@ fn parse_alter_table_drop_column() {
 #[test]
 fn parse_alter_table_alter_column() {
     let alter_stmt = "ALTER TABLE tab";
-    match verified_stmt(&format!("{alter_stmt} ALTER COLUMN is_active SET NOT NULL")) {
-        Statement::AlterTable {
-            name,
-            operation: AlterTableOperation::AlterColumn { column_name, op },
-        } => {
-            assert_eq!("tab", name.to_string());
+    match alter_table_op(verified_stmt(&format!(
+        "{alter_stmt} ALTER COLUMN is_active SET NOT NULL"
+    ))) {
+        AlterTableOperation::AlterColumn { column_name, op } => {
             assert_eq!("is_active", column_name.to_string());
             assert_eq!(op, AlterColumnOperation::SetNotNull {});
         }
@@ -3199,14 +3173,10 @@ fn parse_alter_table_alter_column() {
         "ALTER TABLE tab ALTER COLUMN is_active DROP NOT NULL",
     );
 
-    match verified_stmt(&format!(
+    match alter_table_op(verified_stmt(&format!(
         "{alter_stmt} ALTER COLUMN is_active SET DEFAULT false"
-    )) {
-        Statement::AlterTable {
-            name,
-            operation: AlterTableOperation::AlterColumn { column_name, op },
-        } => {
-            assert_eq!("tab", name.to_string());
+    ))) {
+        AlterTableOperation::AlterColumn { column_name, op } => {
             assert_eq!("is_active", column_name.to_string());
             assert_eq!(
                 op,
@@ -3218,12 +3188,10 @@ fn parse_alter_table_alter_column() {
         _ => unreachable!(),
     }
 
-    match verified_stmt(&format!("{alter_stmt} ALTER COLUMN is_active DROP DEFAULT")) {
-        Statement::AlterTable {
-            name,
-            operation: AlterTableOperation::AlterColumn { column_name, op },
-        } => {
-            assert_eq!("tab", name.to_string());
+    match alter_table_op(verified_stmt(&format!(
+        "{alter_stmt} ALTER COLUMN is_active DROP DEFAULT"
+    ))) {
+        AlterTableOperation::AlterColumn { column_name, op } => {
             assert_eq!("is_active", column_name.to_string());
             assert_eq!(op, AlterColumnOperation::DropDefault {});
         }
@@ -3234,12 +3202,10 @@ fn parse_alter_table_alter_column() {
 #[test]
 fn parse_alter_table_alter_column_type() {
     let alter_stmt = "ALTER TABLE tab";
-    match verified_stmt("ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT") {
-        Statement::AlterTable {
-            name,
-            operation: AlterTableOperation::AlterColumn { column_name, op },
-        } => {
-            assert_eq!("tab", name.to_string());
+    match alter_table_op(verified_stmt(
+        "ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT",
+    )) {
+        AlterTableOperation::AlterColumn { column_name, op } => {
             assert_eq!("is_active", column_name.to_string());
             assert_eq!(
                 op,
@@ -3252,19 +3218,21 @@ fn parse_alter_table_alter_column_type() {
         _ => unreachable!(),
     }
 
-    let res = Parser::parse_sql(
-        &GenericDialect {},
-        &format!("{alter_stmt} ALTER COLUMN is_active TYPE TEXT"),
-    );
+    let dialect = TestedDialects {
+        dialects: vec![Box::new(GenericDialect {})],
+        options: None,
+    };
+
+    let res =
+        dialect.parse_sql_statements(&format!("{alter_stmt} ALTER COLUMN is_active TYPE TEXT"));
     assert_eq!(
         ParserError::ParserError("Expected SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN, found: TYPE".to_string()),
         res.unwrap_err()
     );
 
-    let res = Parser::parse_sql(
-        &GenericDialect {},
-        &format!("{alter_stmt} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'"),
-    );
+    let res = dialect.parse_sql_statements(&format!(
+        "{alter_stmt} ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'"
+    ));
     assert_eq!(
         ParserError::ParserError("Expected end of statement, found: USING".to_string()),
         res.unwrap_err()
@@ -3274,34 +3242,28 @@ fn parse_alter_table_alter_column_type() {
 #[test]
 fn parse_alter_table_drop_constraint() {
     let alter_stmt = "ALTER TABLE tab";
-    match verified_stmt("ALTER TABLE tab DROP CONSTRAINT constraint_name CASCADE") {
-        Statement::AlterTable {
-            name,
-            operation:
-                AlterTableOperation::DropConstraint {
-                    name: constr_name,
-                    if_exists,
-                    cascade,
-                },
+    match alter_table_op(verified_stmt(
+        "ALTER TABLE tab DROP CONSTRAINT constraint_name CASCADE",
+    )) {
+        AlterTableOperation::DropConstraint {
+            name: constr_name,
+            if_exists,
+            cascade,
         } => {
-            assert_eq!("tab", name.to_string());
             assert_eq!("constraint_name", constr_name.to_string());
             assert!(!if_exists);
             assert!(cascade);
         }
         _ => unreachable!(),
     }
-    match verified_stmt("ALTER TABLE tab DROP CONSTRAINT IF EXISTS constraint_name") {
-        Statement::AlterTable {
-            name,
-            operation:
-                AlterTableOperation::DropConstraint {
-                    name: constr_name,
-                    if_exists,
-                    cascade,
-                },
+    match alter_table_op(verified_stmt(
+        "ALTER TABLE tab DROP CONSTRAINT IF EXISTS constraint_name",
+    )) {
+        AlterTableOperation::DropConstraint {
+            name: constr_name,
+            if_exists,
+            cascade,
         } => {
-            assert_eq!("tab", name.to_string());
             assert_eq!("constraint_name", constr_name.to_string());
             assert!(if_exists);
             assert!(!cascade);
@@ -3309,10 +3271,7 @@ fn parse_alter_table_drop_constraint() {
         _ => unreachable!(),
     }
 
-    let res = Parser::parse_sql(
-        &GenericDialect {},
-        &format!("{alter_stmt} DROP CONSTRAINT is_active TEXT"),
-    );
+    let res = parse_sql_statements(&format!("{alter_stmt} DROP CONSTRAINT is_active TEXT"));
     assert_eq!(
         ParserError::ParserError("Expected end of statement, found: TEXT".to_string()),
         res.unwrap_err()

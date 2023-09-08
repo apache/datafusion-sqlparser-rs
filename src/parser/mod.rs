@@ -3894,14 +3894,17 @@ impl<'a> Parser<'a> {
         match next_token.token {
             Token::Word(w) if w.keyword == Keyword::PRIMARY || w.keyword == Keyword::UNIQUE => {
                 let is_primary = w.keyword == Keyword::PRIMARY;
-                let name = if is_primary {
+                if is_primary {
                     self.expect_keyword(Keyword::KEY)?;
-                    name
-                } else if self.parse_keyword(Keyword::KEY) {
-                    self.maybe_parse(|parser| parser.parse_identifier())
-                } else {
-                    name
-                };
+                }
+
+                let name = self
+                    .maybe_parse(|parser| {
+                        let _ = parser.parse_keyword(Keyword::KEY);
+
+                        parser.parse_identifier()
+                    })
+                    .or(name);
 
                 let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
                 Ok(Some(TableConstraint::Unique {

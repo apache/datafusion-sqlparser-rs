@@ -298,6 +298,62 @@ fn parse_create_table_auto_increment() {
 }
 
 #[test]
+fn parse_create_table_unique_key() {
+    let sql = "CREATE TABLE foo (id INT PRIMARY KEY AUTO_INCREMENT, bar INT NOT NULL, UNIQUE KEY bar_key (bar))";
+    let canonical = "CREATE TABLE foo (id INT PRIMARY KEY AUTO_INCREMENT, bar INT NOT NULL, CONSTRAINT bar_key UNIQUE (bar))";
+    match mysql().one_statement_parses_to(sql, canonical) {
+        Statement::CreateTable {
+            name,
+            columns,
+            constraints,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![TableConstraint::Unique {
+                    name: Some(Ident::new("bar_key")),
+                    columns: vec![Ident::new("bar")],
+                    is_primary: false
+                }],
+                constraints
+            );
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::new("id"),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Unique { is_primary: true },
+                            },
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
+                                    "AUTO_INCREMENT"
+                                )]),
+                            },
+                        ],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar"),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull,
+                        },],
+                    },
+                ],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_comment() {
     let canonical = "CREATE TABLE foo (bar INT) COMMENT 'baz'";
     let with_equal = "CREATE TABLE foo (bar INT) COMMENT = 'baz'";

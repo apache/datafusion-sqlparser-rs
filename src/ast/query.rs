@@ -1230,8 +1230,8 @@ impl fmt::Display for SelectInto {
 pub enum GroupByExpr {
     /// ALL syntax of [Snowflake], and [DuckDB]
     ///
-    /// [Snowflake]: https://docs.snowflake.com/en/sql-reference/constructs/group-by#label-group-by-all-columns
-    /// [DuckDB]:  https://duckdb.org/docs/sql/query_syntax/groupby.html).) 
+    /// [Snowflake]: <https://docs.snowflake.com/en/sql-reference/constructs/group-by#label-group-by-all-columns>
+    /// [DuckDB]:  <https://duckdb.org/docs/sql/query_syntax/groupby.html>
     All,
 
     /// Expressions

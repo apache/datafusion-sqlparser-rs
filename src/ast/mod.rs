@@ -36,7 +36,7 @@ pub use self::ddl::{
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    Cte, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, IdentWithAlias, Join,
+    Cte, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, GroupByExpr, IdentWithAlias, Join,
     JoinConstraint, JoinOperator, LateralView, LockClause, LockType, NamedWindowDefinition,
     NonBlock, Offset, OffsetRows, OrderByExpr, Query, RenameSelectItem, ReplaceSelectElement,
     ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Table,

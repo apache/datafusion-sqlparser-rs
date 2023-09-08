@@ -97,7 +97,7 @@ fn parse_map_access_expr() {
                     right: Box::new(Expr::Value(Value::SingleQuotedString("foo".to_string())))
                 })
             }),
-            group_by: vec![],
+            group_by: GroupByExpr::Expressions(vec![]),
             cluster_by: vec![],
             distribute_by: vec![],
             sort_by: vec![],

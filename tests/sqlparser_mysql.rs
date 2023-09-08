@@ -14,6 +14,7 @@
 //! Test SQL syntax specific to MySQL. The parser based on the generic dialect
 //! is also tested (on the inputs it can handle).
 
+use matches::assert_matches;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Value;
 use sqlparser::ast::*;
@@ -1312,15 +1313,10 @@ fn parse_update_with_joins() {
 
 #[test]
 fn parse_alter_table_drop_primary_key() {
-    match mysql_and_generic().verified_stmt("ALTER TABLE tab DROP PRIMARY KEY") {
-        Statement::AlterTable {
-            name,
-            operation: AlterTableOperation::DropPrimaryKey,
-        } => {
-            assert_eq!("tab", name.to_string());
-        }
-        _ => unreachable!(),
-    }
+    assert_matches!(
+        alter_table_op(mysql_and_generic().verified_stmt("ALTER TABLE tab DROP PRIMARY KEY")),
+        AlterTableOperation::DropPrimaryKey
+    );
 }
 
 #[test]
@@ -1334,22 +1330,16 @@ fn parse_alter_table_change_column() {
     };
 
     let sql1 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL";
-    match mysql().verified_stmt(sql1) {
-        Statement::AlterTable { name, operation } => {
-            assert_eq!(expected_name, name);
-            assert_eq!(expected_operation, operation);
-        }
-        _ => unreachable!(),
-    }
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql1), &expected_name.to_string());
+    assert_eq!(expected_operation, operation);
 
     let sql2 = "ALTER TABLE orders CHANGE description desc TEXT NOT NULL";
-    match mysql().one_statement_parses_to(sql2, sql1) {
-        Statement::AlterTable { name, operation } => {
-            assert_eq!(expected_name, name);
-            assert_eq!(expected_operation, operation);
-        }
-        _ => unreachable!(),
-    }
+    let operation = alter_table_op_with_name(
+        mysql().one_statement_parses_to(sql2, sql1),
+        &expected_name.to_string(),
+    );
+    assert_eq!(expected_operation, operation);
 }
 
 #[test]

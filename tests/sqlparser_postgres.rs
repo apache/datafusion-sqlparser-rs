@@ -1741,7 +1741,7 @@ fn parse_array_index_expr() {
                     })],
                     named: true,
                 })),
-                data_type: DataType::Array(Some(Box::new(DataType::Array(Some(Box::new(
+                data_type: DataType::BracketArray(Some(Box::new(DataType::BracketArray(Some(Box::new(
                     DataType::Int(None)
                 ))))))
             }))),
@@ -1753,7 +1753,7 @@ fn parse_array_index_expr() {
     let sql = "SELECT ARRAY[]";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(
-        &Expr::Array(sqlparser::ast::Array {
+        &Expr::Array(Array {
             elem: vec![],
             named: true
         }),

@@ -20,7 +20,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::ObjectName;
+use crate::ast::{display_comma_separated, ObjectName};
+use crate::ast::ddl::StructField;
 
 use super::value::escape_single_quote_string;
 
@@ -198,10 +199,15 @@ pub enum DataType {
     Custom(ObjectName, Vec<String>),
     /// Arrays
     Array(Option<Box<DataType>>),
+    BracketArray(Option<Box<DataType>>),
     /// Enums
     Enum(Vec<String>),
     /// Set
     Set(Vec<String>),
+    /// Map
+    Map(Box<DataType>, Box<DataType>),
+    /// Struct
+    Struct(Vec<StructField>)
 }
 
 impl fmt::Display for DataType {
@@ -320,11 +326,17 @@ impl fmt::Display for DataType {
             DataType::Bytea => write!(f, "BYTEA"),
             DataType::Array(ty) => {
                 if let Some(t) = &ty {
-                    write!(f, "{t}[]")
+                    write!(f, "ARRAY<{t}>")
                 } else {
                     write!(f, "ARRAY")
                 }
             }
+            DataType::BracketArray(ty) => {
+                if let Some(t) = &ty {
+                    write!(f, "{t}[]")?
+                }
+                Ok(())
+             }
             DataType::Custom(ty, modifiers) => {
                 if modifiers.is_empty() {
                     write!(f, "{ty}")
@@ -351,6 +363,14 @@ impl fmt::Display for DataType {
                     write!(f, "'{}'", escape_single_quote_string(v))?;
                 }
                 write!(f, ")")
+            }
+            DataType::Map(key, value) => {
+                write!(f, "MAP<{}>", display_comma_separated(&[key, value]))
+            }
+            DataType::Struct(vals) => {
+                write!(f, "STRUCT<")?;
+                write!(f, "{}", display_comma_separated(vals))?;
+                write!(f, ">")
             }
         }
     }

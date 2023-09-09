@@ -678,6 +678,25 @@ impl fmt::Display for ColumnOption {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct StructField {
+    pub(crate) name: Ident,
+    pub(crate) data_type: DataType,
+    pub(crate) options: Option<ColumnOption>,
+}
+
+impl fmt::Display for StructField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.name, self.data_type)?;
+        if let Some(option) = self.options.as_ref() {
+            write!(f, "{option}")?;
+        }
+        Ok(())
+    }
+}
+
 /// `GeneratedAs`s are modifiers that follow a column option in a `generated`.
 /// 'ExpStored' is PostgreSQL specific
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

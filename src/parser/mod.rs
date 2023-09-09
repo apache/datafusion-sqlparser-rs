@@ -21,6 +21,7 @@ use alloc::{
     vec::Vec,
 };
 use core::fmt;
+use std::ops::Rem;
 
 use log::debug;
 
@@ -114,6 +115,7 @@ mod recursion {
             Self { remaining_depth }
         }
     }
+
     impl Drop for DepthGuard {
         fn drop(&mut self) {
             self.remaining_depth.fetch_add(1, Ordering::SeqCst);
@@ -257,6 +259,7 @@ pub struct Parser<'a> {
     options: ParserOptions,
     /// ensure the stack does not overflow by limiting recursion depth
     recursion_counter: RecursionCounter,
+    max_depth: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -282,6 +285,7 @@ impl<'a> Parser<'a> {
             dialect,
             recursion_counter: RecursionCounter::new(DEFAULT_REMAINING_DEPTH),
             options: ParserOptions::default(),
+            max_depth: 1,
         }
     }
 
@@ -2181,7 +2185,7 @@ impl<'a> Parser<'a> {
                 token => {
                     return token
                         .cloned()
-                        .unwrap_or_else(|| TokenWithLocation::wrap(Token::EOF))
+                        .unwrap_or_else(|| TokenWithLocation::wrap(Token::EOF));
                 }
             }
         }
@@ -4648,6 +4652,13 @@ impl<'a> Parser<'a> {
 
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)
     pub fn parse_data_type(&mut self) -> Result<DataType, ParserError> {
+        self.parse_data_type_with_depth(1)
+    }
+
+    pub fn parse_data_type_with_depth(&mut self, depth: usize) -> Result<DataType, ParserError> {
+        if depth > self.max_depth {
+            self.max_depth = depth - 1;
+        }
         let next_token = self.next_token();
         let mut data = match next_token.token {
             Token::Word(w) => match w.keyword {
@@ -4837,10 +4848,57 @@ impl<'a> Parser<'a> {
                         // that ends with > will fail due to "C++" problem - >> is parsed as
                         // Token::ShiftRight
                         self.expect_token(&Token::Lt)?;
-                        let inside_type = self.parse_data_type()?;
-                        self.expect_token(&Token::Gt)?;
-                        Ok(DataType::Array(Some(Box::new(inside_type))))
+
+                        let inside_type = self.parse_data_type_with_depth(depth + 1)?;
+                        dbg!(depth, self.max_depth);
+
+                        if depth <= 1 {
+                            dbg!("First Level");
+                            if (depth == 1 && self.max_depth == depth)
+                                || (self.peek_previous_token()? == &Token::ShiftRight
+                                    && self.max_depth.rem(2) != 0)
+                            {
+                                self.expect_token(&Token::Gt)?;
+                            }
+                        } else if depth.rem(2) == 0 && depth != self.max_depth {
+                        } else {
+                            dbg!("Else Level");
+                            self.expect_token(&Token::ShiftRight)?;
+                        }
+
+                        if dialect_of!(self is PostgreSqlDialect) {
+                            Ok(DataType::BracketArray(Some(Box::new(inside_type))))
+                        } else {
+                            Ok(DataType::Array(Some(Box::new(inside_type))))
+                        }
                     }
+                }
+                Keyword::MAP => {
+                    self.expect_token(&Token::Lt)?;
+                    let key = self.parse_data_type_with_depth(depth + 1)?;
+                    let tok = self.consume_token(&Token::Comma);
+                    debug!("Tok: {tok}");
+                    let value = self.parse_data_type_with_depth(depth + 1)?;
+                    let tok = self.peek_token().token;
+                    debug!("Next Tok: {tok}");
+                    if tok == Token::ShiftRight {
+                        self.expect_token(&Token::ShiftRight)?;
+                    } else if tok == Token::Gt {
+                        self.expect_token(&Token::Gt)?;
+                    }
+                    Ok(DataType::Map(Box::new(key), Box::new(value)))
+                }
+                Keyword::STRUCT => {
+                    self.expect_token(&Token::Lt)?;
+                    let fields = self.parse_comma_separated(Parser::parse_struct_fields)?;
+                    let tok = self.peek_token().token;
+                    debug!("Next Tok: {tok}");
+                    if tok == Token::ShiftRight {
+                        self.expect_token(&Token::ShiftRight)?;
+                    } else if tok == Token::Gt {
+                        self.expect_token(&Token::Gt)?;
+                    }
+                    Ok(DataType::Struct(fields))
                 }
                 _ => {
                     self.prev_token();
@@ -4859,9 +4917,25 @@ impl<'a> Parser<'a> {
         // Keyword::ARRAY syntax from above
         while self.consume_token(&Token::LBracket) {
             self.expect_token(&Token::RBracket)?;
-            data = DataType::Array(Some(Box::new(data)))
+            data = DataType::BracketArray(Some(Box::new(data)))
         }
         Ok(data)
+    }
+
+    pub fn peek_previous_token(&mut self) -> Result<&TokenWithLocation, ParserError> {
+        Ok(&self.tokens[self.index - 1])
+    }
+
+    pub fn parse_struct_fields(&mut self) -> Result<StructField, ParserError> {
+        let name = self.parse_identifier()?;
+        self.expect_token(&Token::Colon)?;
+        let data_type = self.parse_data_type()?;
+        let options = self.parse_optional_column_option()?;
+        Ok(StructField {
+            name,
+            data_type,
+            options,
+        })
     }
 
     pub fn parse_string_values(&mut self) -> Result<Vec<String>, ParserError> {
@@ -5028,12 +5102,12 @@ impl<'a> Parser<'a> {
             Token::EOF => {
                 return Err(ParserError::ParserError(
                     "Empty input when parsing identifier".to_string(),
-                ))?
+                ))?;
             }
             token => {
                 return Err(ParserError::ParserError(format!(
                     "Unexpected token in identifier: {token}"
-                )))?
+                )))?;
             }
         };
 
@@ -5046,19 +5120,19 @@ impl<'a> Parser<'a> {
                     Token::EOF => {
                         return Err(ParserError::ParserError(
                             "Trailing period in identifier".to_string(),
-                        ))?
+                        ))?;
                     }
                     token => {
                         return Err(ParserError::ParserError(format!(
                             "Unexpected token following period in identifier: {token}"
-                        )))?
+                        )))?;
                     }
                 },
                 Token::EOF => break,
                 token => {
                     return Err(ParserError::ParserError(format!(
                         "Unexpected token in identifier: {token}"
-                    )))?
+                    )))?;
                 }
             }
         }
@@ -6031,7 +6105,7 @@ impl<'a> Parser<'a> {
                             _ => {
                                 return Err(ParserError::ParserError(format!(
                                     "expected OUTER, SEMI, ANTI or JOIN after {kw:?}"
-                                )))
+                                )));
                             }
                         }
                     }

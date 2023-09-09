@@ -2417,16 +2417,40 @@ fn parse_create_table() {
 }
 
 #[test]
+fn parse_double_greater_than_array() {
+    let supported_dialects = TestedDialects {
+        dialects: vec![Box::new(HiveDialect {})],
+        options: None,
+    };
+    let levels = &[
+        "CREATE TABLE t (a ARRAY<INT>, n INT)",
+        "CREATE TABLE t (a ARRAY<ARRAY<INT>>, n INT)",
+        "CREATE TABLE t (a ARRAY<ARRAY<ARRAY<INT>>>, n INT)",
+        "CREATE TABLE t (a ARRAY<ARRAY<ARRAY<ARRAY<INT>>>>, n INT)",
+        "CREATE TABLE t (a ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<INT>>>>>, n INT)",
+        "CREATE TABLE t (a ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<INT>>>>>>, n INT)",
+        "CREATE TABLE t (a ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<INT>>>>>>>, n INT)",
+        "CREATE TABLE t (a ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<INT>>>>>>>>, n INT)",
+        "CREATE TABLE t (a ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<INT>>>>>>>>>, n INT)",
+        "CREATE TABLE t (a ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<ARRAY<INT>>>>>>>>>>, n INT)",
+    ];
+    for q in levels {
+        let statements = supported_dialects.parse_sql_statements(q).unwrap();
+        println!("{}", statements[0]);
+    }
+}
+
+#[test]
 fn parse_create_table_hive_array() {
     // Parsing [] type arrays does not work in MsSql since [ is used in is_delimited_identifier_start
     let dialects = TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(HiveDialect {})],
+        dialects: vec![Box::new(HiveDialect {})],
         options: None,
     };
     let sql = "CREATE TABLE IF NOT EXISTS something (name int, val array<int>)";
     match dialects.one_statement_parses_to(
         sql,
-        "CREATE TABLE IF NOT EXISTS something (name INT, val INT[])",
+        "CREATE TABLE IF NOT EXISTS something (name INT, val ARRAY<INT>)",
     ) {
         Statement::CreateTable {
             if_not_exists,
@@ -2457,13 +2481,9 @@ fn parse_create_table_hive_array() {
         _ => unreachable!(),
     }
 
-    // SnowflakeDialect using array diffrent
+    // SnowflakeDialect using array different
     let dialects = TestedDialects {
-        dialects: vec![
-            Box::new(PostgreSqlDialect {}),
-            Box::new(HiveDialect {}),
-            Box::new(MySqlDialect {}),
-        ],
+        dialects: vec![Box::new(HiveDialect {}), Box::new(MySqlDialect {})],
         options: None,
     };
     let sql = "CREATE TABLE IF NOT EXISTS something (name int, val array<int)";

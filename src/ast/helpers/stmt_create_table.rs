@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::{
-    ColumnDef, FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit, Query,
+    ColumnDef, FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName, EngineSpec, OnCommit, Query,
     SqlOption, Statement, TableConstraint,
 };
 use crate::parser::ParserError;
@@ -64,7 +64,7 @@ pub struct CreateTableBuilder {
     pub without_rowid: bool,
     pub like: Option<ObjectName>,
     pub clone: Option<ObjectName>,
-    pub engine: Option<String>,
+    pub engine: Option<EngineSpec>,
     pub default_charset: Option<String>,
     pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
@@ -190,7 +190,7 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn engine(mut self, engine: Option<String>) -> Self {
+    pub fn engine(mut self, engine: Option<EngineSpec>) -> Self {
         self.engine = engine;
         self
     }

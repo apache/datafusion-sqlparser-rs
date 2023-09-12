@@ -350,7 +350,7 @@ fn parse_create_table_engine_default_charset() {
                 },],
                 columns
             );
-            assert_eq!(engine, Some("InnoDB".to_string()));
+            assert_eq!(engine.unwrap().name, "InnoDB".to_string());
             assert_eq!(default_charset, Some("utf8mb3".to_string()));
         }
         _ => unreachable!(),

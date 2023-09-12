@@ -3474,10 +3474,22 @@ impl<'a> Parser<'a> {
         let engine = if self.parse_keyword(Keyword::ENGINE) {
             self.expect_token(&Token::Eq)?;
             let next_token = self.next_token();
-            match next_token.token {
-                Token::Word(w) => Some(w.value),
+            let engine_name = match next_token.token {
+                Token::Word(w) => w.value,
                 _ => self.expected("identifier", next_token)?,
-            }
+            };
+            let engine_options = if self.consume_token(&Token::LParen) {
+                let columns = if self.peek_token() != Token::RParen {
+                    self.parse_comma_separated(|p| p.parse_expr())?
+                } else {
+                    vec![]
+                };
+                self.expect_token(&Token::RParen)?;
+                Some(columns)
+            } else {
+                None
+            };
+            Some(EngineSpec{name: engine_name, options: engine_options})
         } else {
             None
         };

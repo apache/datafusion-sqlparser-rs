@@ -176,6 +176,25 @@ impl fmt::Display for ObjectName {
     }
 }
 
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct EngineSpec {
+    pub name: String,
+    pub options: Option<Vec<Expr>>,
+     }
+
+impl fmt::Display for EngineSpec {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(opts) = &self.options {
+            write!(f, "{}({})", self.name, display_comma_separated(&opts))
+        } else {
+            write!(f, "{}", self.name)
+        }
+    }
+}
+
 /// Represents an Array Expression, either
 /// `ARRAY[..]`, or `[..]`
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1410,7 +1429,7 @@ pub enum Statement {
         without_rowid: bool,
         like: Option<ObjectName>,
         clone: Option<ObjectName>,
-        engine: Option<String>,
+        engine: Option<EngineSpec>,
         default_charset: Option<String>,
         collation: Option<String>,
         on_commit: Option<OnCommit>,

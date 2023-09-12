@@ -344,6 +344,9 @@ fn parse_create_table() {
     clickhouse().verified_stmt(
         r#"CREATE TABLE "x" ("a" Nullable(DateTime64(8))) ENGINE=MergeTree ORDER BY ("x") AS SELECT * FROM "t" WHERE true"#,
     );
+    clickhouse().verified_stmt(
+        r#"CREATE TABLE default.runs_buffer (`workspace` LowCardinality(String), `id` String, `assets` Array(String), `asset_types` Array(Int32), `target` Array(String), `target_type` Array(Int32), `extra_references` Array(String) DEFAULT [], `extra_reference_types` Array(Int32) DEFAULT [], `run_type` Int32, `run_status` Int32, `message` String, `created_at` DateTime64(8,'UTC'), `started_at` DateTime64(8,'UTC'), `finished_at` DateTime64(8,'UTC'), `meta` String, `exclude_status_update` Bool, `ingested_at` DateTime64(8,'UTC'), `parent_ids` Array(String), `skipped` Bool DEFAULT false) ENGINE=Buffer('default', 'runs', 4, 2, 5, 10000, 1000000, 2500000, 10000000)"#,
+    );
 }
 
 #[test]

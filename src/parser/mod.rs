@@ -6210,16 +6210,10 @@ impl<'a> Parser<'a> {
         } else {
             let name = self.parse_object_name()?;
 
-            let partitions = if dialect_of!(self is MySqlDialect)
+            let partitions: Vec<Ident> = if dialect_of!(self is MySqlDialect | GenericDialect)
                 && self.parse_keyword(Keyword::PARTITION)
             {
-                let mut partitions = self.parse_comma_separated(|p| p.parse_tuple(true, false))?;
-                if partitions.len() != 1 {
-                    return Err(ParserError::ParserError(format!(
-                        "Partition expect one tuple"
-                    )));
-                }
-                partitions.remove(0)
+                self.parse_partitions()?
             } else {
                 vec![]
             };
@@ -7430,6 +7424,13 @@ impl<'a> Parser<'a> {
             representation: UserDefinedTypeRepresentation::Composite { attributes },
         })
     }
+
+    fn parse_partitions(&mut self) -> Result<Vec<Ident>, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let partitions = self.parse_comma_separated(Parser::parse_identifier)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(partitions)
+    }
 }
 
 impl Word {
@@ -8065,13 +8066,7 @@ mod tests {
                 if let TableFactor::Table { partitions, .. } = table_factor {
                     let actual: Vec<&str> = partitions
                         .iter()
-                        .map(|expr| {
-                            if let Expr::Identifier(ident) = &expr {
-                                ident.value.as_str()
-                            } else {
-                                ""
-                            }
-                        })
+                        .map(|ident| ident.value.as_str())
                         .collect();
                     assert_eq!(expected, actual);
                 }

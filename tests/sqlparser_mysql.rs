@@ -1201,6 +1201,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                             args: None,
                             with_hints: vec![],
                             version: None,
+                            partitions: vec![],
                         },
                         joins: vec![]
                     }],

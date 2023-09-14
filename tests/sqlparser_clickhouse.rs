@@ -63,15 +63,16 @@ fn parse_map_access_expr() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
-                joins: vec![]
+                joins: vec![],
             }],
             lateral_views: vec![],
             selection: Some(BinaryOp {
                 left: Box::new(BinaryOp {
                     left: Box::new(Identifier(Ident::new("id"))),
                     op: BinaryOperator::Eq,
-                    right: Box::new(Expr::Value(Value::SingleQuotedString("test".to_string())))
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("test".to_string()))),
                 }),
                 op: BinaryOperator::And,
                 right: Box::new(BinaryOp {
@@ -91,11 +92,11 @@ fn parse_map_access_expr() {
                             distinct: false,
                             special: false,
                             order_by: vec![],
-                        })]
+                        })],
                     }),
                     op: BinaryOperator::NotEq,
-                    right: Box::new(Expr::Value(Value::SingleQuotedString("foo".to_string())))
-                })
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("foo".to_string()))),
+                }),
             }),
             group_by: GroupByExpr::Expressions(vec![]),
             cluster_by: vec![],
@@ -103,7 +104,7 @@ fn parse_map_access_expr() {
             sort_by: vec![],
             having: None,
             named_window: vec![],
-            qualify: None
+            qualify: None,
         },
         select
     );
@@ -117,7 +118,7 @@ fn parse_array_expr() {
         &Expr::Array(Array {
             elem: vec![
                 Expr::Value(Value::SingleQuotedString("1".to_string())),
-                Expr::Value(Value::SingleQuotedString("2".to_string()))
+                Expr::Value(Value::SingleQuotedString("2".to_string())),
             ],
             named: false,
         }),
@@ -171,6 +172,7 @@ fn parse_delimited_identifiers() {
             args,
             with_hints,
             version,
+            partitions: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);

@@ -248,6 +248,7 @@ pub fn table(name: impl Into<String>) -> TableFactor {
         args: None,
         with_hints: vec![],
         version: None,
+        partitions: vec![],
     }
 }
 

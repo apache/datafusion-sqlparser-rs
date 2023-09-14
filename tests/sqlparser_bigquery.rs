@@ -96,6 +96,7 @@ fn parse_table_identifiers() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 joins: vec![]
             },]
@@ -160,6 +161,7 @@ fn parse_table_time_travel() {
                 version: Some(TableVersion::ForSystemTimeAsOf(Expr::Value(
                     Value::SingleQuotedString(version)
                 ))),
+                partitions: vec![],
             },
             joins: vec![]
         },]

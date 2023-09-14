@@ -58,6 +58,7 @@ fn parse_table_time_travel() {
                 version: Some(TableVersion::ForSystemTimeAsOf(Expr::Value(
                     Value::SingleQuotedString(version)
                 ))),
+                partitions: vec![],
             },
             joins: vec![]
         },]
@@ -309,6 +310,7 @@ fn parse_delimited_identifiers() {
             args,
             with_hints,
             version,
+            partitions: _,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
             assert_eq!(Ident::with_quote('"', "alias"), alias.unwrap().name);
@@ -514,6 +516,7 @@ fn parse_substring_in_select() {
                                 args: None,
                                 with_hints: vec![],
                                 version: None,
+                                partitions: vec![],
                             },
                             joins: vec![]
                         }],

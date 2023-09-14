@@ -215,6 +215,7 @@ fn parse_update_set_from() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 joins: vec![],
             },
@@ -242,6 +243,7 @@ fn parse_update_set_from() {
                                     args: None,
                                     with_hints: vec![],
                                     version: None,
+                                    partitions: vec![],
                                 },
                                 joins: vec![],
                             }],
@@ -306,6 +308,7 @@ fn parse_update_with_table_alias() {
                         args: None,
                         with_hints: vec![],
                         version: None,
+                        partitions: vec![],
                     },
                     joins: vec![],
                 },
@@ -369,6 +372,7 @@ fn parse_select_with_table_alias() {
                 args: None,
                 with_hints: vec![],
                 version: None,
+                partitions: vec![],
             },
             joins: vec![],
         }]
@@ -400,6 +404,7 @@ fn parse_delete_statement() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 from[0].relation
             );
@@ -428,6 +433,7 @@ fn parse_delete_statement_for_multi_tables() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 from[0].relation
             );
@@ -438,6 +444,7 @@ fn parse_delete_statement_for_multi_tables() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 from[0].joins[0].relation
             );
@@ -462,6 +469,7 @@ fn parse_delete_statement_for_multi_tables_with_using() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 from[0].relation
             );
@@ -472,6 +480,7 @@ fn parse_delete_statement_for_multi_tables_with_using() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 from[1].relation
             );
@@ -482,6 +491,7 @@ fn parse_delete_statement_for_multi_tables_with_using() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 using[0].relation
             );
@@ -492,6 +502,7 @@ fn parse_delete_statement_for_multi_tables_with_using() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 using[0].joins[0].relation
             );
@@ -520,6 +531,7 @@ fn parse_where_delete_statement() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 from[0].relation,
             );
@@ -562,6 +574,7 @@ fn parse_where_delete_with_alias_statement() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 from[0].relation,
             );
@@ -576,6 +589,7 @@ fn parse_where_delete_with_alias_statement() {
                         args: None,
                         with_hints: vec![],
                         version: None,
+                        partitions: vec![],
                     },
                     joins: vec![],
                 }]),
@@ -3579,6 +3593,7 @@ fn test_parse_named_window() {
                 args: None,
                 with_hints: vec![],
                 version: None,
+                partitions: vec![],
             },
             joins: vec![],
         }],
@@ -3918,6 +3933,7 @@ fn parse_interval_and_or_xor() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 joins: vec![],
             }],
@@ -4523,6 +4539,7 @@ fn parse_implicit_join() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 joins: vec![],
             },
@@ -4533,6 +4550,7 @@ fn parse_implicit_join() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 joins: vec![],
             },
@@ -4551,6 +4569,7 @@ fn parse_implicit_join() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 joins: vec![Join {
                     relation: TableFactor::Table {
@@ -4559,6 +4578,7 @@ fn parse_implicit_join() {
                         args: None,
                         with_hints: vec![],
                         version: None,
+                        partitions: vec![],
                     },
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
                 }],
@@ -4570,6 +4590,7 @@ fn parse_implicit_join() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 },
                 joins: vec![Join {
                     relation: TableFactor::Table {
@@ -4578,6 +4599,7 @@ fn parse_implicit_join() {
                         args: None,
                         with_hints: vec![],
                         version: None,
+                        partitions: vec![],
                     },
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
                 }],
@@ -4599,6 +4621,7 @@ fn parse_cross_join() {
                 args: None,
                 with_hints: vec![],
                 version: None,
+                partitions: vec![],
             },
             join_operator: JoinOperator::CrossJoin,
         },
@@ -4620,6 +4643,7 @@ fn parse_joins_on() {
                 args: None,
                 with_hints: vec![],
                 version: None,
+                partitions: vec![],
             },
             join_operator: f(JoinConstraint::On(Expr::BinaryOp {
                 left: Box::new(Expr::Identifier("c1".into())),
@@ -4690,6 +4714,7 @@ fn parse_joins_using() {
                 args: None,
                 with_hints: vec![],
                 version: None,
+                partitions: vec![],
             },
             join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
         }
@@ -4752,6 +4777,7 @@ fn parse_natural_join() {
                 args: None,
                 with_hints: vec![],
                 version: None,
+                partitions: vec![],
             },
             join_operator: f(JoinConstraint::Natural),
         }
@@ -5017,6 +5043,7 @@ fn parse_derived_tables() {
                         args: None,
                         with_hints: vec![],
                         version: None,
+                        partitions: vec![],
                     },
                     join_operator: JoinOperator::Inner(JoinConstraint::Natural),
                 }],
@@ -6345,6 +6372,7 @@ fn parse_merge() {
                     args: None,
                     with_hints: vec![],
                     version: None,
+                    partitions: vec![],
                 }
             );
             assert_eq!(table, table_no_into);
@@ -6369,6 +6397,7 @@ fn parse_merge() {
                                     args: None,
                                     with_hints: vec![],
                                     version: None,
+                                    partitions: vec![],
                                 },
                                 joins: vec![],
                             }],

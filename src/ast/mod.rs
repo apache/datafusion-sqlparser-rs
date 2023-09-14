@@ -36,7 +36,7 @@ pub use self::ddl::{
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    Cte, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, IdentWithAlias, Join,
+    Cte, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, GroupByExpr, IdentWithAlias, Join,
     JoinConstraint, JoinOperator, LateralView, LockClause, LockType, NamedWindowDefinition,
     NonBlock, Offset, OffsetRows, OrderByExpr, Query, RenameSelectItem, ReplaceSelectElement,
     ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Table,
@@ -419,10 +419,18 @@ pub enum Expr {
         pattern: Box<Expr>,
         escape_char: Option<char>,
     },
-    /// Any operation e.g. `1 ANY (1)` or `foo > ANY(bar)`, It will be wrapped in the right side of BinaryExpr
-    AnyOp(Box<Expr>),
-    /// ALL operation e.g. `1 ALL (1)` or `foo > ALL(bar)`, It will be wrapped in the right side of BinaryExpr
-    AllOp(Box<Expr>),
+    /// Any operation e.g. `foo > ANY(bar)`, comparison operator is one of [=, >, <, =>, =<, !=]
+    AnyOp {
+        left: Box<Expr>,
+        compare_op: BinaryOperator,
+        right: Box<Expr>,
+    },
+    /// ALL operation e.g. `foo > ALL(bar)`, comparison operator is one of [=, >, <, =>, =<, !=]
+    AllOp {
+        left: Box<Expr>,
+        compare_op: BinaryOperator,
+        right: Box<Expr>,
+    },
     /// Unary operation e.g. `NOT foo`
     UnaryOp { op: UnaryOperator, expr: Box<Expr> },
     /// CAST an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
@@ -724,8 +732,16 @@ impl fmt::Display for Expr {
                     pattern
                 ),
             },
-            Expr::AnyOp(expr) => write!(f, "ANY({expr})"),
-            Expr::AllOp(expr) => write!(f, "ALL({expr})"),
+            Expr::AnyOp {
+                left,
+                compare_op,
+                right,
+            } => write!(f, "{left} {compare_op} ANY({right})"),
+            Expr::AllOp {
+                left,
+                compare_op,
+                right,
+            } => write!(f, "{left} {compare_op} ALL({right})"),
             Expr::UnaryOp { op, expr } => {
                 if op == &UnaryOperator::PGPostfixFactorial {
                     write!(f, "{expr}{op}")
@@ -1391,7 +1407,9 @@ pub enum Statement {
         /// Table name
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         name: ObjectName,
-        operation: AlterTableOperation,
+        if_exists: bool,
+        only: bool,
+        operations: Vec<AlterTableOperation>,
     },
     AlterIndex {
         name: ObjectName,
@@ -2602,8 +2620,24 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::AlterTable { name, operation } => {
-                write!(f, "ALTER TABLE {name} {operation}")
+            Statement::AlterTable {
+                name,
+                if_exists,
+                only,
+                operations,
+            } => {
+                write!(f, "ALTER TABLE ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                if *only {
+                    write!(f, "ONLY ")?;
+                }
+                write!(
+                    f,
+                    "{name} {operations}",
+                    operations = display_comma_separated(operations)
+                )
             }
             Statement::AlterIndex { name, operation } => {
                 write!(f, "ALTER INDEX {name} {operation}")

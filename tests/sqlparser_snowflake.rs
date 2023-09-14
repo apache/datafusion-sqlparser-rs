@@ -503,12 +503,8 @@ fn test_select_wildcard_with_exclude_and_rename() {
 #[test]
 fn test_alter_table_swap_with() {
     let sql = "ALTER TABLE tab1 SWAP WITH tab2";
-    match snowflake_and_generic().verified_stmt(sql) {
-        Statement::AlterTable {
-            name,
-            operation: AlterTableOperation::SwapWith { table_name },
-        } => {
-            assert_eq!("tab1", name.to_string());
+    match alter_table_op_with_name(snowflake_and_generic().verified_stmt(sql), "tab1") {
+        AlterTableOperation::SwapWith { table_name } => {
             assert_eq!("tab2", table_name.to_string());
         }
         _ => unreachable!(),
@@ -1005,7 +1001,7 @@ fn test_copy_into_copy_options() {
 
 #[test]
 fn test_snowflake_stage_object_names() {
-    let allowed_formatted_names = vec![
+    let allowed_formatted_names = [
         "my_company.emp_basic",
         "@namespace.%table_name",
         "@namespace.%table_name/path",

@@ -28,6 +28,7 @@ use core::fmt::Debug;
 
 use crate::dialect::*;
 use crate::parser::{Parser, ParserError};
+use crate::tokenizer::Tokenizer;
 use crate::{ast::*, parser::ParserOptions};
 
 /// Tests use the methods on this struct to invoke the parser on one or
@@ -82,8 +83,13 @@ impl TestedDialects {
     /// the result is the same for all tested dialects.
     pub fn parse_sql_statements(&self, sql: &str) -> Result<Vec<Statement>, ParserError> {
         self.one_of_identical_results(|dialect| {
+            let mut tokenizer = Tokenizer::new(dialect, sql);
+            if let Some(options) = &self.options {
+                tokenizer = tokenizer.with_unescape(options.unescape);
+            }
+            let tokens = tokenizer.tokenize()?;
             self.new_parser(dialect)
-                .try_with_sql(sql)?
+                .with_tokens(tokens)
                 .parse_statements()
         })
         // To fail the `ensure_multiple_dialects_are_tested` test:
@@ -201,6 +207,26 @@ pub fn expr_from_projection(item: &SelectItem) -> &Expr {
         SelectItem::UnnamedExpr(expr) => expr,
         _ => panic!("Expected UnnamedExpr"),
     }
+}
+
+pub fn alter_table_op_with_name(stmt: Statement, expected_name: &str) -> AlterTableOperation {
+    match stmt {
+        Statement::AlterTable {
+            name,
+            if_exists,
+            only: is_only,
+            operations,
+        } => {
+            assert_eq!(name.to_string(), expected_name);
+            assert!(!if_exists);
+            assert!(!is_only);
+            only(operations)
+        }
+        _ => panic!("Expected ALTER TABLE statement"),
+    }
+}
+pub fn alter_table_op(stmt: Statement) -> AlterTableOperation {
+    alter_table_op_with_name(stmt, "tab")
 }
 
 /// Creates a `Value::Number`, panic'ing if n is not a number

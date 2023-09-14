@@ -546,12 +546,10 @@ fn parse_create_table_constraints_only() {
 
 #[test]
 fn parse_alter_table_constraints_rename() {
-    match pg().verified_stmt("ALTER TABLE tab RENAME CONSTRAINT old_name TO new_name") {
-        Statement::AlterTable {
-            name,
-            operation: AlterTableOperation::RenameConstraint { old_name, new_name },
-        } => {
-            assert_eq!("tab", name.to_string());
+    match alter_table_op(
+        pg().verified_stmt("ALTER TABLE tab RENAME CONSTRAINT old_name TO new_name"),
+    ) {
+        AlterTableOperation::RenameConstraint { old_name, new_name } => {
             assert_eq!(old_name.to_string(), "old_name");
             assert_eq!(new_name.to_string(), "new_name");
         }
@@ -566,14 +564,12 @@ fn parse_alter_table_alter_column() {
         "ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'",
     );
 
-    match pg()
-        .verified_stmt("ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'")
-    {
-        Statement::AlterTable {
-            name,
-            operation: AlterTableOperation::AlterColumn { column_name, op },
-        } => {
-            assert_eq!("tab", name.to_string());
+    match alter_table_op(
+        pg().verified_stmt(
+            "ALTER TABLE tab ALTER COLUMN is_active SET DATA TYPE TEXT USING 'text'",
+        ),
+    ) {
+        AlterTableOperation::AlterColumn { column_name, op } => {
             assert_eq!("is_active", column_name.to_string());
             let using_expr = Expr::Value(Value::SingleQuotedString("text".to_string()));
             assert_eq!(
@@ -582,6 +578,48 @@ fn parse_alter_table_alter_column() {
                     data_type: DataType::Text,
                     using: Some(using_expr),
                 }
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_alter_table_add_columns() {
+    match pg().verified_stmt("ALTER TABLE IF EXISTS ONLY tab ADD COLUMN a TEXT, ADD COLUMN b INT") {
+        Statement::AlterTable {
+            name,
+            if_exists,
+            only,
+            operations,
+        } => {
+            assert_eq!(name.to_string(), "tab");
+            assert!(if_exists);
+            assert!(only);
+            assert_eq!(
+                operations,
+                vec![
+                    AlterTableOperation::AddColumn {
+                        column_keyword: true,
+                        if_not_exists: false,
+                        column_def: ColumnDef {
+                            name: "a".into(),
+                            data_type: DataType::Text,
+                            collation: None,
+                            options: vec![],
+                        },
+                    },
+                    AlterTableOperation::AddColumn {
+                        column_keyword: true,
+                        if_not_exists: false,
+                        column_def: ColumnDef {
+                            name: "b".into(),
+                            data_type: DataType::Int(None),
+                            collation: None,
+                            options: vec![],
+                        },
+                    },
+                ]
             );
         }
         _ => unreachable!(),
@@ -952,7 +990,7 @@ fn parse_copy_to() {
                     from: vec![],
                     lateral_views: vec![],
                     selection: None,
-                    group_by: vec![],
+                    group_by: GroupByExpr::Expressions(vec![]),
                     having: None,
                     named_window: vec![],
                     cluster_by: vec![],
@@ -1981,7 +2019,7 @@ fn parse_array_subquery_expr() {
                     from: vec![],
                     lateral_views: vec![],
                     selection: None,
-                    group_by: vec![],
+                    group_by: GroupByExpr::Expressions(vec![]),
                     cluster_by: vec![],
                     distribute_by: vec![],
                     sort_by: vec![],
@@ -1997,7 +2035,7 @@ fn parse_array_subquery_expr() {
                     from: vec![],
                     lateral_views: vec![],
                     selection: None,
-                    group_by: vec![],
+                    group_by: GroupByExpr::Expressions(vec![]),
                     cluster_by: vec![],
                     distribute_by: vec![],
                     sort_by: vec![],
@@ -2332,8 +2370,7 @@ fn pg_and_generic() -> TestedDialects {
 
 #[test]
 fn parse_escaped_literal_string() {
-    let sql =
-        r#"SELECT E's1 \n s1', E's2 \\n s2', E's3 \\\n s3', E's4 \\\\n s4', E'\'', E'foo \\'"#;
+    let sql = r"SELECT E's1 \n s1', E's2 \\n s2', E's3 \\\n s3', E's4 \\\\n s4', E'\'', E'foo \\'";
     let select = pg_and_generic().verified_only_select(sql);
     assert_eq!(6, select.projection.len());
     assert_eq!(
@@ -2361,7 +2398,7 @@ fn parse_escaped_literal_string() {
         expr_from_projection(&select.projection[5])
     );
 
-    let sql = r#"SELECT E'\'"#;
+    let sql = r"SELECT E'\'";
     assert_eq!(
         pg_and_generic()
             .parse_sql_statements(sql)
@@ -2631,7 +2668,7 @@ fn parse_create_role() {
         err => panic!("Failed to parse CREATE ROLE test case: {err:?}"),
     }
 
-    let negatables = vec![
+    let negatables = [
         "BYPASSRLS",
         "CREATEDB",
         "CREATEROLE",
@@ -3285,14 +3322,14 @@ fn parse_select_group_by_grouping_sets() {
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, GROUPING SETS ((brand), (size), ())"
     );
     assert_eq!(
-        vec![
+        GroupByExpr::Expressions(vec![
             Expr::Identifier(Ident::new("size")),
             Expr::GroupingSets(vec![
                 vec![Expr::Identifier(Ident::new("brand"))],
                 vec![Expr::Identifier(Ident::new("size"))],
                 vec![],
             ]),
-        ],
+        ]),
         select.group_by
     );
 }
@@ -3303,13 +3340,13 @@ fn parse_select_group_by_rollup() {
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, ROLLUP (brand, size)",
     );
     assert_eq!(
-        vec![
+        GroupByExpr::Expressions(vec![
             Expr::Identifier(Ident::new("size")),
             Expr::Rollup(vec![
                 vec![Expr::Identifier(Ident::new("brand"))],
                 vec![Expr::Identifier(Ident::new("size"))],
             ]),
-        ],
+        ]),
         select.group_by
     );
 }
@@ -3320,13 +3357,13 @@ fn parse_select_group_by_cube() {
         "SELECT brand, size, sum(sales) FROM items_sold GROUP BY size, CUBE (brand, size)",
     );
     assert_eq!(
-        vec![
+        GroupByExpr::Expressions(vec![
             Expr::Identifier(Ident::new("size")),
             Expr::Cube(vec![
                 vec![Expr::Identifier(Ident::new("brand"))],
                 vec![Expr::Identifier(Ident::new("size"))],
             ]),
-        ],
+        ]),
         select.group_by
     );
 }

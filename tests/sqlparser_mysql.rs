@@ -14,6 +14,7 @@
 //! Test SQL syntax specific to MySQL. The parser based on the generic dialect
 //! is also tested (on the inputs it can handle).
 
+use matches::assert_matches;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Value;
 use sqlparser::ast::*;
@@ -297,6 +298,62 @@ fn parse_create_table_auto_increment() {
 }
 
 #[test]
+fn parse_create_table_unique_key() {
+    let sql = "CREATE TABLE foo (id INT PRIMARY KEY AUTO_INCREMENT, bar INT NOT NULL, UNIQUE KEY bar_key (bar))";
+    let canonical = "CREATE TABLE foo (id INT PRIMARY KEY AUTO_INCREMENT, bar INT NOT NULL, CONSTRAINT bar_key UNIQUE (bar))";
+    match mysql().one_statement_parses_to(sql, canonical) {
+        Statement::CreateTable {
+            name,
+            columns,
+            constraints,
+            ..
+        } => {
+            assert_eq!(name.to_string(), "foo");
+            assert_eq!(
+                vec![TableConstraint::Unique {
+                    name: Some(Ident::new("bar_key")),
+                    columns: vec![Ident::new("bar")],
+                    is_primary: false
+                }],
+                constraints
+            );
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::new("id"),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::Unique { is_primary: true },
+                            },
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::DialectSpecific(vec![Token::make_keyword(
+                                    "AUTO_INCREMENT"
+                                )]),
+                            },
+                        ],
+                    },
+                    ColumnDef {
+                        name: Ident::new("bar"),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::NotNull,
+                        },],
+                    },
+                ],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_comment() {
     let canonical = "CREATE TABLE foo (bar INT) COMMENT 'baz'";
     let with_equal = "CREATE TABLE foo (bar INT) COMMENT = 'baz'";
@@ -495,7 +552,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
                 from: vec![],
                 lateral_views: vec![],
                 selection: None,
-                group_by: vec![],
+                group_by: GroupByExpr::Expressions(vec![]),
                 cluster_by: vec![],
                 distribute_by: vec![],
                 sort_by: vec![],
@@ -537,7 +594,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
                 from: vec![],
                 lateral_views: vec![],
                 selection: None,
-                group_by: vec![],
+                group_by: GroupByExpr::Expressions(vec![]),
                 cluster_by: vec![],
                 distribute_by: vec![],
                 sort_by: vec![],
@@ -576,7 +633,7 @@ fn parse_escaped_backticks_with_escape() {
                 from: vec![],
                 lateral_views: vec![],
                 selection: None,
-                group_by: vec![],
+                group_by: GroupByExpr::Expressions(vec![]),
                 cluster_by: vec![],
                 distribute_by: vec![],
                 sort_by: vec![],
@@ -615,7 +672,7 @@ fn parse_escaped_backticks_with_no_escape() {
                 from: vec![],
                 lateral_views: vec![],
                 selection: None,
-                group_by: vec![],
+                group_by: GroupByExpr::Expressions(vec![]),
                 cluster_by: vec![],
                 distribute_by: vec![],
                 sort_by: vec![],
@@ -634,11 +691,11 @@ fn parse_escaped_backticks_with_no_escape() {
 
 #[test]
 fn parse_unterminated_escape() {
-    let sql = r#"SELECT 'I\'m not fine\'"#;
+    let sql = r"SELECT 'I\'m not fine\'";
     let result = std::panic::catch_unwind(|| mysql().one_statement_parses_to(sql, ""));
     assert!(result.is_err());
 
-    let sql = r#"SELECT 'I\\'m not fine'"#;
+    let sql = r"SELECT 'I\\'m not fine'";
     let result = std::panic::catch_unwind(|| mysql().one_statement_parses_to(sql, ""));
     assert!(result.is_err());
 }
@@ -666,7 +723,7 @@ fn parse_escaped_string_with_escape() {
             _ => unreachable!(),
         };
     }
-    let sql = r#"SELECT 'I\'m fine'"#;
+    let sql = r"SELECT 'I\'m fine'";
     assert_mysql_query_value(sql, "I'm fine");
 
     let sql = r#"SELECT 'I''m fine'"#;
@@ -675,7 +732,7 @@ fn parse_escaped_string_with_escape() {
     let sql = r#"SELECT 'I\"m fine'"#;
     assert_mysql_query_value(sql, "I\"m fine");
 
-    let sql = r#"SELECT 'Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ '"#;
+    let sql = r"SELECT 'Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ '";
     assert_mysql_query_value(sql, "Testing: \0 \\ % _ \u{8} \n \r \t \u{1a} a  ");
 }
 
@@ -702,8 +759,8 @@ fn parse_escaped_string_with_no_escape() {
             _ => unreachable!(),
         };
     }
-    let sql = r#"SELECT 'I\'m fine'"#;
-    assert_mysql_query_value(sql, r#"I\'m fine"#);
+    let sql = r"SELECT 'I\'m fine'";
+    assert_mysql_query_value(sql, r"I\'m fine");
 
     let sql = r#"SELECT 'I''m fine'"#;
     assert_mysql_query_value(sql, r#"I''m fine"#);
@@ -711,8 +768,8 @@ fn parse_escaped_string_with_no_escape() {
     let sql = r#"SELECT 'I\"m fine'"#;
     assert_mysql_query_value(sql, r#"I\"m fine"#);
 
-    let sql = r#"SELECT 'Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ '"#;
-    assert_mysql_query_value(sql, r#"Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ "#);
+    let sql = r"SELECT 'Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ '";
+    assert_mysql_query_value(sql, r"Testing: \0 \\ \% \_ \b \n \r \t \Z \a \ ");
 }
 
 #[test]
@@ -723,7 +780,7 @@ fn check_roundtrip_of_escaped_string() {
         dialects: vec![Box::new(MySqlDialect {})],
         options: options.clone(),
     }
-    .verified_stmt(r#"SELECT 'I\'m fine'"#);
+    .verified_stmt(r"SELECT 'I\'m fine'");
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],
         options: options.clone(),
@@ -733,12 +790,12 @@ fn check_roundtrip_of_escaped_string() {
         dialects: vec![Box::new(MySqlDialect {})],
         options: options.clone(),
     }
-    .verified_stmt(r#"SELECT 'I\\\'m fine'"#);
+    .verified_stmt(r"SELECT 'I\\\'m fine'");
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],
         options: options.clone(),
     }
-    .verified_stmt(r#"SELECT 'I\\\'m fine'"#);
+    .verified_stmt(r"SELECT 'I\\\'m fine'");
 
     TestedDialects {
         dialects: vec![Box::new(MySqlDialect {})],
@@ -1100,7 +1157,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                     }],
                     lateral_views: vec![],
                     selection: None,
-                    group_by: vec![],
+                    group_by: GroupByExpr::Expressions(vec![]),
                     cluster_by: vec![],
                     distribute_by: vec![],
                     sort_by: vec![],
@@ -1149,7 +1206,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                     }],
                     lateral_views: vec![],
                     selection: None,
-                    group_by: vec![],
+                    group_by: GroupByExpr::Expressions(vec![]),
                     cluster_by: vec![],
                     distribute_by: vec![],
                     sort_by: vec![],
@@ -1259,15 +1316,10 @@ fn parse_update_with_joins() {
 
 #[test]
 fn parse_alter_table_drop_primary_key() {
-    match mysql_and_generic().verified_stmt("ALTER TABLE tab DROP PRIMARY KEY") {
-        Statement::AlterTable {
-            name,
-            operation: AlterTableOperation::DropPrimaryKey,
-        } => {
-            assert_eq!("tab", name.to_string());
-        }
-        _ => unreachable!(),
-    }
+    assert_matches!(
+        alter_table_op(mysql_and_generic().verified_stmt("ALTER TABLE tab DROP PRIMARY KEY")),
+        AlterTableOperation::DropPrimaryKey
+    );
 }
 
 #[test]
@@ -1281,22 +1333,16 @@ fn parse_alter_table_change_column() {
     };
 
     let sql1 = "ALTER TABLE orders CHANGE COLUMN description desc TEXT NOT NULL";
-    match mysql().verified_stmt(sql1) {
-        Statement::AlterTable { name, operation } => {
-            assert_eq!(expected_name, name);
-            assert_eq!(expected_operation, operation);
-        }
-        _ => unreachable!(),
-    }
+    let operation =
+        alter_table_op_with_name(mysql().verified_stmt(sql1), &expected_name.to_string());
+    assert_eq!(expected_operation, operation);
 
     let sql2 = "ALTER TABLE orders CHANGE description desc TEXT NOT NULL";
-    match mysql().one_statement_parses_to(sql2, sql1) {
-        Statement::AlterTable { name, operation } => {
-            assert_eq!(expected_name, name);
-            assert_eq!(expected_operation, operation);
-        }
-        _ => unreachable!(),
-    }
+    let operation = alter_table_op_with_name(
+        mysql().one_statement_parses_to(sql2, sql1),
+        &expected_name.to_string(),
+    );
+    assert_eq!(expected_operation, operation);
 }
 
 #[test]
@@ -1339,7 +1385,7 @@ fn parse_substring_in_select() {
                         }],
                         lateral_views: vec![],
                         selection: None,
-                        group_by: vec![],
+                        group_by: GroupByExpr::Expressions(vec![]),
                         cluster_by: vec![],
                         distribute_by: vec![],
                         sort_by: vec![],
@@ -1618,7 +1664,7 @@ fn parse_hex_string_introducer() {
                 from: vec![],
                 lateral_views: vec![],
                 selection: None,
-                group_by: vec![],
+                group_by: GroupByExpr::Expressions(vec![]),
                 cluster_by: vec![],
                 distribute_by: vec![],
                 sort_by: vec![],

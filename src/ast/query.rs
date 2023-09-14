@@ -214,7 +214,7 @@ pub struct Select {
     /// WHERE
     pub selection: Option<Expr>,
     /// GROUP BY
-    pub group_by: Vec<Expr>,
+    pub group_by: GroupByExpr,
     /// CLUSTER BY (Hive)
     pub cluster_by: Vec<Expr>,
     /// DISTRIBUTE BY (Hive)
@@ -255,8 +255,13 @@ impl fmt::Display for Select {
         if let Some(ref selection) = self.selection {
             write!(f, " WHERE {selection}")?;
         }
-        if !self.group_by.is_empty() {
-            write!(f, " GROUP BY {}", display_comma_separated(&self.group_by))?;
+        match &self.group_by {
+            GroupByExpr::All => write!(f, " GROUP BY ALL")?,
+            GroupByExpr::Expressions(exprs) => {
+                if !exprs.is_empty() {
+                    write!(f, " GROUP BY {}", display_comma_separated(exprs))?;
+                }
+            }
         }
         if !self.cluster_by.is_empty() {
             write!(
@@ -1222,5 +1227,31 @@ impl fmt::Display for SelectInto {
         let table = if self.table { " TABLE" } else { "" };
 
         write!(f, "INTO{}{}{} {}", temporary, unlogged, table, self.name)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum GroupByExpr {
+    /// ALL syntax of [Snowflake], and [DuckDB]
+    ///
+    /// [Snowflake]: <https://docs.snowflake.com/en/sql-reference/constructs/group-by#label-group-by-all-columns>
+    /// [DuckDB]:  <https://duckdb.org/docs/sql/query_syntax/groupby.html>
+    All,
+
+    /// Expressions
+    Expressions(Vec<Expr>),
+}
+
+impl fmt::Display for GroupByExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GroupByExpr::All => write!(f, "GROUP BY ALL"),
+            GroupByExpr::Expressions(col_names) => {
+                let col_names = display_comma_separated(col_names);
+                write!(f, "GROUP BY ({col_names})")
+            }
+        }
     }
 }

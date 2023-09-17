@@ -490,6 +490,8 @@ impl<'a> Parser<'a> {
                 Keyword::EXECUTE => Ok(self.parse_execute()?),
                 Keyword::PREPARE => Ok(self.parse_prepare()?),
                 Keyword::MERGE => Ok(self.parse_merge()?),
+                // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
+                Keyword::PRAGMA => Ok(self.parse_pragma()?),
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -7295,6 +7297,32 @@ impl<'a> Parser<'a> {
             on: Box::new(on),
             clauses,
         })
+    }
+
+    // PRAGMA [schema-name '.'] pragma-name [('=' pragma-value) | '(' pragma-value ')']
+    pub fn parse_pragma(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name()?;
+        if self.consume_token(&Token::LParen) {
+            let value = self.parse_number_value()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Statement::Pragma {
+                name,
+                value: Some(value),
+                is_eq: false,
+            })
+        } else if self.consume_token(&Token::Eq) {
+            Ok(Statement::Pragma {
+                name,
+                value: Some(self.parse_number_value()?),
+                is_eq: true,
+            })
+        } else {
+            Ok(Statement::Pragma {
+                name,
+                value: None,
+                is_eq: false
+            })
+        }
     }
 
     /// ```sql

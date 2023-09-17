@@ -25,6 +25,63 @@ use sqlparser::dialect::{GenericDialect, SQLiteDialect};
 use sqlparser::tokenizer::Token;
 
 #[test]
+fn bool_equality() {
+    let sql = "SELECT a==b FROM t";
+    sqlite_and_generic().verified_stmt(sql);
+}
+
+#[test]
+fn pragma_no_value() {
+    let sql = "PRAGMA cache_size";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::Pragma {
+            name,
+            value: None,
+            is_eq: false,
+        } => {
+            assert_eq!("cache_size", name.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+#[test]
+fn pragma_eq_style() {
+    let sql = "PRAGMA cache_size = 10";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::Pragma {
+            name,
+            value: Some(val),
+            is_eq: true,
+        } => {
+            assert_eq!("cache_size", name.to_string());
+            assert_eq!("10", val.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+#[test]
+fn pragma_funciton_style() {
+    let sql = "PRAGMA cache_size(10)";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::Pragma {
+            name,
+            value: Some(val),
+            is_eq: false,
+        } => {
+            assert_eq!("cache_size", name.to_string());
+            assert_eq!("10", val.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn column_witout_type_affinity() {
+    let sql = "CREATE TABLE t1(x)";
+    sqlite_and_generic().verified_stmt(sql);
+}
+
+#[test]
 fn parse_create_table_without_rowid() {
     let sql = "CREATE TABLE t (a INT) WITHOUT ROWID";
     match sqlite_and_generic().verified_stmt(sql) {

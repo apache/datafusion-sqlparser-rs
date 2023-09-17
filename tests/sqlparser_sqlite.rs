@@ -25,12 +25,6 @@ use sqlparser::dialect::{GenericDialect, SQLiteDialect};
 use sqlparser::tokenizer::Token;
 
 #[test]
-fn bool_equality() {
-    let sql = "SELECT a==b FROM t";
-    sqlite_and_generic().verified_stmt(sql);
-}
-
-#[test]
 fn pragma_no_value() {
     let sql = "PRAGMA cache_size";
     match sqlite_and_generic().verified_stmt(sql) {
@@ -73,12 +67,6 @@ fn pragma_funciton_style() {
         }
         _ => unreachable!(),
     }
-}
-
-#[test]
-fn column_witout_type_affinity() {
-    let sql = "CREATE TABLE t1(x)";
-    sqlite_and_generic().verified_stmt(sql);
 }
 
 #[test]

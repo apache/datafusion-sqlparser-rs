@@ -885,6 +885,7 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('>') => self.consume_and_return(chars, Token::RArrow),
+                        Some('=') => self.consume_and_return(chars, Token::DoubleEq),
                         _ => Ok(Some(Token::Eq)),
                     }
                 }

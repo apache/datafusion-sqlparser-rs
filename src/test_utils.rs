@@ -159,6 +159,24 @@ impl TestedDialects {
         }
     }
 
+    /// Ensures that `sql` parses as a single [`Select`], and that additionally:
+    ///
+    /// 1. parsing `sql` results in the same [`Statement`] as parsing
+    /// `canonical`.
+    ///
+    /// 2. re-serializing the result of parsing `sql` produces the same
+    /// `canonical` sql string
+    pub fn verified_only_select_with_canonical(&self, query: &str, canonical: &str) -> Select {
+        let q = match self.one_statement_parses_to(query, canonical) {
+            Statement::Query(query) => *query,
+            _ => panic!("Expected Query"),
+        };
+        match *q.body {
+            SetExpr::Select(s) => *s,
+            _ => panic!("Expected SetExpr::Select"),
+        }
+    }
+
     /// Ensures that `sql` parses as an [`Expr`], and that
     /// re-serializing the parse result produces the same `sql`
     /// string (is not modified after a serialization round-trip).

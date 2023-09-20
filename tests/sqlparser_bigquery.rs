@@ -13,6 +13,8 @@
 #[macro_use]
 mod test_utils;
 
+use std::ops::Deref;
+
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 use test_utils::*;
@@ -84,9 +86,24 @@ fn parse_raw_literal() {
 
 #[test]
 fn parse_table_identifiers() {
-    fn test_table_ident(ident: &str, expected: Vec<Ident>) {
+    /// Parses a table identifier ident and verifies that re-serializing the
+    /// parsed identifier produces the original ident string.
+    ///
+    /// In some cases, re-serializing the result of the parsed ident is not
+    /// expected to produce the original ident string. canonical is provided
+    /// instead as the canonical representation of the identifier for comparison.
+    /// For example, re-serializing the result of ident `foo.bar` produces
+    /// the equivalent canonical representation `foo`.`bar`
+    fn test_table_ident(ident: &str, canonical: Option<&str>, expected: Vec<Ident>) {
         let sql = format!("SELECT 1 FROM {ident}");
-        let select = bigquery().verified_only_select(&sql);
+        let canonical = canonical.map(|ident| format!("SELECT 1 FROM {ident}"));
+
+        let select = if let Some(canonical) = canonical {
+            bigquery().verified_only_select_with_canonical(&sql, canonical.deref())
+        } else {
+            bigquery().verified_only_select(&sql)
+        };
+
         assert_eq!(
             select.from,
             vec![TableWithJoins {
@@ -102,26 +119,30 @@ fn parse_table_identifiers() {
             },]
         );
     }
+
     fn test_table_ident_err(ident: &str) {
         let sql = format!("SELECT 1 FROM {ident}");
         assert!(bigquery().parse_sql_statements(&sql).is_err());
     }
 
-    test_table_ident("da-sh-es", vec![Ident::new("da-sh-es")]);
+    test_table_ident("da-sh-es", None, vec![Ident::new("da-sh-es")]);
 
-    test_table_ident("`spa ce`", vec![Ident::with_quote('`', "spa ce")]);
+    test_table_ident("`spa ce`", None, vec![Ident::with_quote('`', "spa ce")]);
 
     test_table_ident(
         "`!@#$%^&*()-=_+`",
+        None,
         vec![Ident::with_quote('`', "!@#$%^&*()-=_+")],
     );
 
     test_table_ident(
         "_5abc.dataField",
+        None,
         vec![Ident::new("_5abc"), Ident::new("dataField")],
     );
     test_table_ident(
         "`5abc`.dataField",
+        None,
         vec![Ident::with_quote('`', "5abc"), Ident::new("dataField")],
     );
 
@@ -129,6 +150,7 @@ fn parse_table_identifiers() {
 
     test_table_ident(
         "abc5.dataField",
+        None,
         vec![Ident::new("abc5"), Ident::new("dataField")],
     );
 
@@ -136,13 +158,76 @@ fn parse_table_identifiers() {
 
     test_table_ident(
         "`GROUP`.dataField",
+        None,
         vec![Ident::with_quote('`', "GROUP"), Ident::new("dataField")],
     );
 
     // TODO: this should be error
     // test_table_ident_err("GROUP.dataField");
 
-    test_table_ident("abc5.GROUP", vec![Ident::new("abc5"), Ident::new("GROUP")]);
+    test_table_ident(
+        "abc5.GROUP",
+        None,
+        vec![Ident::new("abc5"), Ident::new("GROUP")],
+    );
+
+    test_table_ident(
+        "`foo.bar.baz`",
+        Some("`foo`.`bar`.`baz`"),
+        vec![
+            Ident::with_quote('`', "foo"),
+            Ident::with_quote('`', "bar"),
+            Ident::with_quote('`', "baz"),
+        ],
+    );
+
+    test_table_ident(
+        "`foo.bar`.`baz`",
+        Some("`foo`.`bar`.`baz`"),
+        vec![
+            Ident::with_quote('`', "foo"),
+            Ident::with_quote('`', "bar"),
+            Ident::with_quote('`', "baz"),
+        ],
+    );
+
+    test_table_ident(
+        "`foo`.`bar.baz`",
+        Some("`foo`.`bar`.`baz`"),
+        vec![
+            Ident::with_quote('`', "foo"),
+            Ident::with_quote('`', "bar"),
+            Ident::with_quote('`', "baz"),
+        ],
+    );
+
+    test_table_ident(
+        "`foo`.`bar`.`baz`",
+        Some("`foo`.`bar`.`baz`"),
+        vec![
+            Ident::with_quote('`', "foo"),
+            Ident::with_quote('`', "bar"),
+            Ident::with_quote('`', "baz"),
+        ],
+    );
+
+    test_table_ident(
+        "`5abc.dataField`",
+        Some("`5abc`.`dataField`"),
+        vec![
+            Ident::with_quote('`', "5abc"),
+            Ident::with_quote('`', "dataField"),
+        ],
+    );
+
+    test_table_ident(
+        "`_5abc.da-sh-es`",
+        Some("`_5abc`.`da-sh-es`"),
+        vec![
+            Ident::with_quote('`', "_5abc"),
+            Ident::with_quote('`', "da-sh-es"),
+        ],
+    );
 }
 
 #[test]

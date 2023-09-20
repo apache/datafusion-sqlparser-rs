@@ -62,6 +62,14 @@ fn parse_create_virtual_table() {
 }
 
 #[test]
+fn double_equality_operator() {
+    // Sqlite supports this operator: https://www.sqlite.org/lang_expr.html#binaryops
+    let input = "SELECT a==b FROM t";
+    let expected = "SELECT a = b FROM t";
+    let _ = sqlite_and_generic().one_statement_parses_to(input, expected);
+}
+
+#[test]
 fn parse_create_table_auto_increment() {
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTOINCREMENT)";
     match sqlite_and_generic().verified_stmt(sql) {

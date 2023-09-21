@@ -186,33 +186,45 @@ fn parse_json_using_colon() {
     let sql = "SELECT a:b FROM t";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
-            operator: JsonOperator::Colon,
-            right: Box::new(Expr::Value(Value::UnQuotedString("b".to_string()))),
-        }.empty_span()).empty_span(),
+        SelectItem::UnnamedExpr(
+            Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
+                operator: JsonOperator::Colon,
+                right: Box::new(Expr::Value(Value::UnQuotedString("b".to_string()))),
+            }
+            .empty_span()
+        )
+        .empty_span(),
         select.projection[0]
     );
 
     let sql = "SELECT a:type FROM t";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
-            operator: JsonOperator::Colon,
-            right: Box::new(Expr::Value(Value::UnQuotedString("type".to_string()))),
-        }.empty_span()).empty_span(),
+        SelectItem::UnnamedExpr(
+            Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
+                operator: JsonOperator::Colon,
+                right: Box::new(Expr::Value(Value::UnQuotedString("type".to_string()))),
+            }
+            .empty_span()
+        )
+        .empty_span(),
         select.projection[0]
     );
 
     let sql = "SELECT a:location FROM t";
     let select = snowflake().verified_only_select(sql);
     assert_eq!(
-        SelectItem::UnnamedExpr(Expr::JsonAccess {
-            left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
-            operator: JsonOperator::Colon,
-            right: Box::new(Expr::Value(Value::UnQuotedString("location".to_string()))),
-        }.empty_span()).empty_span(),
+        SelectItem::UnnamedExpr(
+            Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("a").empty_span())),
+                operator: JsonOperator::Colon,
+                right: Box::new(Expr::Value(Value::UnQuotedString("location".to_string()))),
+            }
+            .empty_span()
+        )
+        .empty_span(),
         select.projection[0]
     );
 
@@ -234,7 +246,10 @@ fn parse_delimited_identifiers() {
             with_hints,
         } => {
             assert_eq!(vec![Ident::with_quote('"', "a table")], name.0);
-            assert_eq!(Ident::with_quote('"', "alias").empty_span(), alias.unwrap().name);
+            assert_eq!(
+                Ident::with_quote('"', "alias").empty_span(),
+                alias.unwrap().name
+            );
             assert!(args.is_none());
             assert!(with_hints.is_empty());
         }
@@ -291,7 +306,8 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            }.empty_span(),
+            }
+            .empty_span(),
             select.selection.unwrap()
         );
 
@@ -307,7 +323,8 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            }.empty_span(),
+            }
+            .empty_span(),
             select.selection.unwrap()
         );
 
@@ -324,7 +341,8 @@ fn parse_like() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            })).empty_span(),
+            }))
+            .empty_span(),
             select.selection.unwrap()
         );
     }
@@ -346,7 +364,8 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: None,
-            }.empty_span(),
+            }
+            .empty_span(),
             select.selection.unwrap()
         );
 
@@ -362,7 +381,8 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            }.empty_span(),
+            }
+            .empty_span(),
             select.selection.unwrap()
         );
 
@@ -378,7 +398,8 @@ fn parse_similar_to() {
                 negated,
                 pattern: Box::new(Expr::Value(Value::SingleQuotedString("%a".to_string()))),
                 escape_char: Some('\\'),
-            })).empty_span(),
+            }))
+            .empty_span(),
             select.selection.unwrap()
         );
     }
@@ -425,7 +446,8 @@ fn test_select_wildcard_with_exclude() {
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_exclude: Some(ExcludeSelectItem::Multiple(vec![Ident::new("col_a")])),
         ..Default::default()
-    }).empty_span();
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = snowflake_and_generic()
@@ -436,7 +458,8 @@ fn test_select_wildcard_with_exclude() {
             opt_exclude: Some(ExcludeSelectItem::Single(Ident::new("department_id"))),
             ..Default::default()
         },
-    ).empty_span();
+    )
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = snowflake_and_generic()
@@ -447,7 +470,8 @@ fn test_select_wildcard_with_exclude() {
             Ident::new("employee_id"),
         ])),
         ..Default::default()
-    }).empty_span();
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 }
 
@@ -461,7 +485,8 @@ fn test_select_wildcard_with_rename() {
             alias: Ident::new("col_b"),
         })),
         ..Default::default()
-    }).empty_span();
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     let select = snowflake_and_generic().verified_only_select(
@@ -482,7 +507,8 @@ fn test_select_wildcard_with_rename() {
             ])),
             ..Default::default()
         },
-    ).empty_span();
+    )
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 }
 
@@ -497,7 +523,8 @@ fn test_select_wildcard_with_exclude_and_rename() {
             alias: Ident::new("col_b"),
         })),
         ..Default::default()
-    }).empty_span();
+    })
+    .empty_span();
     assert_eq!(expected, select.projection[0]);
 
     // rename cannot precede exclude
@@ -1052,4 +1079,10 @@ fn test_snowflake_stage_object_names() {
             _ => unreachable!(),
         }
     }
+}
+
+#[test]
+fn test_trim() {
+    let sql = "SELECT customer_id, TRIM(sub_items.value:item_price_id, '\"') AS item_price_id FROM SPX_DATAMART.MODELS_staging.stg_chargebee_subscriptions";
+    snowflake().verified_stmt(sql);
 }

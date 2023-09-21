@@ -8,6 +8,29 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.38.0] 2023-09-21
+
+### Added
+
+* Support `==`operator for Sqlite (#970) - Thanks @marhoily
+* Support mysql `PARTITION` to table selection (#959) - Thanks  @chunshao90
+* Support `UNNEST` as a table factor for PostgreSQL (#968) @hexedpackets
+* Support MySQL `UNIQUE KEY` syntax (#962) - Thanks @artorias1024
+* Support` `GROUP BY ALL` (#964) - @berkaysynnada
+* Support multiple actions in one ALTER TABLE statement (#960) - Thanks @ForbesLindesay
+* Add `--sqlite param` to CLI (#956) - Thanks @ddol
+
+### Fixed
+* Fix Rust 1.72 clippy lints (#957) - Thanks @alamb
+
+### Changed
+* Add missing token loc in parse err msg (#965) - Thanks @ding-young
+* Change how `ANY` and `ALL` expressions are represented in AST (#963) - Thanks @SeanTroyUWO
+* Show location info in parse errors (#958) - Thanks @MartinNowak
+* Update release documentation (#954) - Thanks @alamb
+* Break test and coverage test into separate jobs (#949) - Thanks @alamb
+
+
 ## [0.37.0] 2023-08-22
 
 ### Added

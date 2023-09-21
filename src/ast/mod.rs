@@ -18,8 +18,8 @@ use alloc::{
     vec::Vec,
 };
 
-use core::fmt::{self, Display};
 use core::borrow::Borrow;
+use core::fmt::{self, Display};
 use std::ops::Deref;
 
 #[cfg(feature = "serde")]
@@ -47,7 +47,6 @@ pub use self::query::{
 pub use self::value::{
     escape_quoted_string, DateTimeField, DollarQuotedString, TrimWhereField, Value,
 };
-
 
 use crate::ast::helpers::stmt_data_loading::{
     DataLoadingOptions, StageLoadSelectItem, StageParamsObject,
@@ -176,14 +175,13 @@ impl fmt::Display for ObjectName {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct EngineSpec {
     pub name: String,
     pub options: Option<Vec<Expr>>,
-     }
+}
 
 impl fmt::Display for EngineSpec {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -584,12 +582,14 @@ pub enum Expr {
     /// ```sql
     /// TRIM([BOTH | LEADING | TRAILING] [<expr> FROM] <expr>)
     /// TRIM(<expr>)
+    /// TRIM(<expr>, [, characters])
     /// ```
     Trim {
         expr: Box<Expr>,
         // ([BOTH | LEADING | TRAILING]
         trim_where: Option<TrimWhereField>,
         trim_what: Option<Box<Expr>>,
+        trim_characters: Option<Vec<Expr>>,
     },
     /// ```sql
     /// OVERLAY(<expr> PLACING <expr> FROM <expr>[ FOR <expr> ]
@@ -831,27 +831,39 @@ impl fmt::Display for Expr {
                     write!(f, "{op}{expr}")
                 }
             }
-            Expr::Cast { expr, data_type, format } => {
+            Expr::Cast {
+                expr,
+                data_type,
+                format,
+            } => {
                 if let Some(format) = format {
                     write!(f, "CAST({expr} AS {data_type} FORMAT {format})")
                 } else {
                     write!(f, "CAST({expr} AS {data_type})")
                 }
-            },
-            Expr::TryCast { expr, data_type, format } => {
+            }
+            Expr::TryCast {
+                expr,
+                data_type,
+                format,
+            } => {
                 if let Some(format) = format {
                     write!(f, "TRY_CAST({expr} AS {data_type} FORMAT {format})")
                 } else {
                     write!(f, "TRY_CAST({expr} AS {data_type})")
                 }
-            },
-            Expr::SafeCast { expr, data_type, format } => {
+            }
+            Expr::SafeCast {
+                expr,
+                data_type,
+                format,
+            } => {
                 if let Some(format) = format {
                     write!(f, "SAFE_CAST({expr} AS {data_type} FORMAT {format})")
                 } else {
                     write!(f, "SAFE_CAST({expr} AS {data_type})")
                 }
-            },
+            }
             Expr::Extract { field, expr } => write!(f, "EXTRACT({field} FROM {expr})"),
             Expr::Ceil { expr, field } => {
                 if field == &DateTimeField::NoDateTime {
@@ -984,6 +996,7 @@ impl fmt::Display for Expr {
                 expr,
                 trim_where,
                 trim_what,
+                trim_characters,
             } => {
                 write!(f, "TRIM(")?;
                 if let Some(ident) = trim_where {
@@ -991,6 +1004,9 @@ impl fmt::Display for Expr {
                 }
                 if let Some(trim_char) = trim_what {
                     write!(f, "{trim_char} FROM {expr}")?;
+                }
+                if let Some(characters) = trim_characters {
+                    write!(f, ",{}", display_comma_separated(characters))?;
                 } else {
                     write!(f, "{expr}")?;
                 }
@@ -2232,7 +2248,7 @@ impl fmt::Display for Statement {
                 cluster_by,
                 destination_table,
                 columns_with_types,
-                late_binding
+                late_binding,
             } => {
                 write!(
                     f,
@@ -2259,7 +2275,7 @@ impl fmt::Display for Statement {
                     write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
                 }
                 write!(f, " AS {query}")?;
-                if *late_binding{
+                if *late_binding {
                     write!(f, " WITH NO SCHEMA BINDING")?;
                 }
                 Ok(())

@@ -1086,7 +1086,8 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::AS)?;
         let data_type = self.parse_data_type()?;
 
-        let format = if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::FORMAT) {
+        let format = if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::FORMAT)
+        {
             Some(self.parse_value()?)
         } else {
             None
@@ -1107,7 +1108,8 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::AS)?;
         let data_type = self.parse_data_type()?;
 
-        let format = if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::FORMAT) {
+        let format = if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::FORMAT)
+        {
             Some(self.parse_value()?)
         } else {
             None
@@ -1128,7 +1130,8 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::AS)?;
         let data_type = self.parse_data_type()?;
 
-        let format = if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::FORMAT) {
+        let format = if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::FORMAT)
+        {
             Some(self.parse_value()?)
         } else {
             None
@@ -1275,6 +1278,7 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
                 trim_where,
                 trim_what: Some(trim_what),
+                trim_characters: None,
             })
         } else {
             self.expect_token(&Token::RParen)?;
@@ -1282,6 +1286,7 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
                 trim_where,
                 trim_what: None,
+                trim_characters: None,
             })
         }
     }
@@ -1932,7 +1937,11 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_clickhouse_array_index(&mut self, expr: Expr, ind: String) -> Result<Expr, ParserError> {
+    pub fn parse_clickhouse_array_index(
+        &mut self,
+        expr: Expr,
+        ind: String,
+    ) -> Result<Expr, ParserError> {
         let without_dot = ind[1..].to_string();
         let index = Expr::Value(Value::Number(without_dot, false));
         Ok(Expr::ArrayIndex {
@@ -2859,8 +2868,10 @@ impl<'a> Parser<'a> {
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let name = self.parse_object_name()?;
 
-
-        let destination_table = if dialect_of!(self is ClickHouseDialect) && materialized && self.parse_keyword(Keyword::TO) {
+        let destination_table = if dialect_of!(self is ClickHouseDialect)
+            && materialized
+            && self.parse_keyword(Keyword::TO)
+        {
             Some(self.parse_object_name()?)
         } else {
             None
@@ -2870,7 +2881,10 @@ impl<'a> Parser<'a> {
             let (cols, _) = self.parse_columns()?;
             (vec![], cols)
         } else {
-            (self.parse_parenthesized_column_list(Optional, false)?, vec![])
+            (
+                self.parse_parenthesized_column_list(Optional, false)?,
+                vec![],
+            )
         };
 
         let with_options = self.parse_options(Keyword::WITH)?;
@@ -2886,7 +2900,13 @@ impl<'a> Parser<'a> {
         let query = Box::new(self.parse_query()?);
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
 
-        let late_binding = dialect_of!(self is RedshiftSqlDialect) && self.parse_keywords(&[Keyword::WITH, Keyword::NO, Keyword::SCHEMA, Keyword::BINDING]);
+        let late_binding = dialect_of!(self is RedshiftSqlDialect)
+            && self.parse_keywords(&[
+                Keyword::WITH,
+                Keyword::NO,
+                Keyword::SCHEMA,
+                Keyword::BINDING,
+            ]);
 
         Ok(Statement::CreateView {
             name,
@@ -2898,7 +2918,7 @@ impl<'a> Parser<'a> {
             cluster_by,
             destination_table,
             columns_with_types,
-            late_binding
+            late_binding,
         })
     }
 
@@ -3489,7 +3509,10 @@ impl<'a> Parser<'a> {
             } else {
                 None
             };
-            Some(EngineSpec{name: engine_name, options: engine_options})
+            Some(EngineSpec {
+                name: engine_name,
+                options: engine_options,
+            })
         } else {
             None
         };
@@ -4533,9 +4556,8 @@ impl<'a> Parser<'a> {
                 Ok(DataType::Custom(type_name, modifiers))
             } else {
                 Ok(DataType::Custom(type_name, vec![]))
-            }
+            };
         }
-
 
         let next_token = self.next_token();
         let mut data = match next_token.token {
@@ -4789,9 +4811,13 @@ impl<'a> Parser<'a> {
             //    character. When it sees such a <literal>, your DBMS will
             //    ignore the <separator> and treat the multiple strings as
             //    a single <literal>."
-            Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s).spanning(next_token.span))),
+            Token::SingleQuotedString(s) => {
+                Ok(Some(Ident::with_quote('\'', s).spanning(next_token.span)))
+            }
             // Support for MySql dialect double quoted string, `AS "HOUR"` for example
-            Token::DoubleQuotedString(s) => Ok(Some(Ident::with_quote('\"', s).spanning(next_token.span))),
+            Token::DoubleQuotedString(s) => {
+                Ok(Some(Ident::with_quote('\"', s).spanning(next_token.span)))
+            }
             _ => {
                 if after_as {
                     return self.expected("an identifier after AS", next_token);
@@ -5085,13 +5111,11 @@ impl<'a> Parser<'a> {
             loop {
                 let next_token = self.next_token();
                 match next_token.token {
-                    Token::EOF => {
-                        return parser_err!(format!("unbalanced parens: {}", modifier))
-                    }
+                    Token::EOF => return parser_err!(format!("unbalanced parens: {}", modifier)),
                     Token::LParen => {
                         modifier.push_str(&next_token.to_string());
                         depth += 1;
-                    },
+                    }
                     Token::RParen => {
                         depth -= 1;
                         if depth == 0 {
@@ -5103,7 +5127,7 @@ impl<'a> Parser<'a> {
                 }
             }
             if depth != 0 {
-                return parser_err!(format!("unbalanced parens: {}", modifier))
+                return parser_err!(format!("unbalanced parens: {}", modifier));
             }
             Ok(Some(vec![modifier]))
         } else {
@@ -5278,11 +5302,12 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            let limit_by = if dialect_of!(self is ClickHouseDialect) && self.parse_keyword(Keyword::BY) {
-                self.parse_comma_separated(Parser::parse_expr)?
-            } else {
-                vec![]
-            };
+            let limit_by =
+                if dialect_of!(self is ClickHouseDialect) && self.parse_keyword(Keyword::BY) {
+                    self.parse_comma_separated(Parser::parse_expr)?
+                } else {
+                    vec![]
+                };
 
             let fetch = if self.parse_keyword(Keyword::FETCH) {
                 Some(self.parse_fetch()?)
@@ -5989,7 +6014,12 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::LParen)?;
                 let args = self.parse_optional_args()?;
                 let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
-                Ok(TableFactor::Function { lateral: true, name, args, alias })
+                Ok(TableFactor::Function {
+                    lateral: true,
+                    name,
+                    args,
+                    alias,
+                })
             }
         } else if self.parse_keyword(Keyword::TABLE) {
             // parse table function (SELECT * FROM TABLE (<expr>) [ AS <alias> ])
@@ -6168,17 +6198,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_array_join_table_factor(
-        &mut self
-    ) -> Result<TableFactor, ParserError> {
+    pub fn parse_array_join_table_factor(&mut self) -> Result<TableFactor, ParserError> {
         {
             let expr = self.parse_expr()?;
 
             let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
-            Ok(TableFactor::FieldAccessor {
-                expr,
-                alias,
-            })
+            Ok(TableFactor::FieldAccessor { expr, alias })
         }
     }
 
@@ -6613,7 +6638,7 @@ impl<'a> Parser<'a> {
                 Some(NullTreatment::IGNORE)
             } else if self.parse_keywords(&[Keyword::RESPECT, Keyword::NULLS]) {
                 Some(NullTreatment::RESPECT)
-            }else {
+            } else {
                 None
             };
             self.expect_token(&Token::RParen)?;
@@ -6652,10 +6677,8 @@ impl<'a> Parser<'a> {
                             alias,
                         }
                         .spanning(self.span_from_index(start_span)),
-                        None => {
-                            SelectItem::UnnamedExpr(expr_with_location)
-                                .spanning(self.span_from_index(start_span))
-                        }
+                        None => SelectItem::UnnamedExpr(expr_with_location)
+                            .spanning(self.span_from_index(start_span)),
                     })
             }
             WildcardExpr::QualifiedWildcard(prefix) => Ok(SelectItem::QualifiedWildcard(
@@ -7362,7 +7385,7 @@ impl<'a> Parser<'a> {
         }
         let start_span = start_token.span;
 
-        let mut idx = self.index.max(start_index).min(self.tokens.len()-1);
+        let mut idx = self.index.max(start_index).min(self.tokens.len() - 1);
         loop {
             if idx <= start_index || idx >= self.tokens.len() {
                 break;

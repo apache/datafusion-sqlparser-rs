@@ -517,12 +517,14 @@ pub enum Expr {
     /// ```sql
     /// TRIM([BOTH | LEADING | TRAILING] [<expr> FROM] <expr>)
     /// TRIM(<expr>)
+    /// TRIM(<expr>, [, characters]) -- only Snowflake
     /// ```
     Trim {
         expr: Box<Expr>,
         // ([BOTH | LEADING | TRAILING]
         trim_where: Option<TrimWhereField>,
         trim_what: Option<Box<Expr>>,
+        trim_characters: Option<Vec<Expr>>,
     },
     /// ```sql
     /// OVERLAY(<expr> PLACING <expr> FROM <expr>[ FOR <expr> ]
@@ -946,6 +948,7 @@ impl fmt::Display for Expr {
                 expr,
                 trim_where,
                 trim_what,
+                trim_characters,
             } => {
                 write!(f, "TRIM(")?;
                 if let Some(ident) = trim_where {
@@ -955,6 +958,9 @@ impl fmt::Display for Expr {
                     write!(f, "{trim_char} FROM {expr}")?;
                 } else {
                     write!(f, "{expr}")?;
+                }
+                if let Some(characters) = trim_characters {
+                    write!(f, ", {}", display_comma_separated(characters))?;
                 }
 
                 write!(f, ")")

@@ -5245,6 +5245,30 @@ fn parse_trim() {
         ParserError::ParserError("Expected ), found: 'xyz'".to_owned()),
         parse_sql_statements("SELECT TRIM(FOO 'xyz' FROM 'xyzfooxyz')").unwrap_err()
     );
+
+    //keep Snowflake TRIM syntax failing
+    let all_expected_snowflake = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(MsSqlDialect {}),
+            Box::new(AnsiDialect {}),
+            //Box::new(SnowflakeDialect {}),
+            Box::new(HiveDialect {}),
+            Box::new(RedshiftSqlDialect {}),
+            Box::new(MySqlDialect {}),
+            Box::new(BigQueryDialect {}),
+            Box::new(SQLiteDialect {}),
+            Box::new(DuckDbDialect {}),
+        ],
+        options: None,
+    };
+    assert_eq!(
+        ParserError::ParserError("Expected ), found: 'a'\nNear `SELECT TRIM('xyz',`".to_owned()),
+        all_expected_snowflake
+            .parse_sql_statements("SELECT TRIM('xyz', 'a')")
+            .unwrap_err()
+    );
 }
 
 #[test]

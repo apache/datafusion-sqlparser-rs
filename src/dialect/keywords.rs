@@ -201,6 +201,7 @@ define_keywords!(
     ESCAPE,
     EVERY,
     EXCEPT,
+    EXCLUDE,
     EXEC,
     EXECUTE,
     EXISTS,

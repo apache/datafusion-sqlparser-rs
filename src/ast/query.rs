@@ -228,6 +228,7 @@ pub enum SelectItem {
     Wildcard {
         prefix: Option<ObjectName>,
         except: Vec<Ident>,
+        exclude: Vec<Ident>, // Snowflake's flavor of EXCEPT
         replace: Vec<(Expr, Ident)>,
     },
 }
@@ -240,6 +241,7 @@ impl fmt::Display for SelectItem {
             SelectItem::Wildcard {
                 prefix,
                 except,
+                exclude,
                 replace,
             } => {
                 if let Some(pre) = prefix {
@@ -257,6 +259,19 @@ impl fmt::Display for SelectItem {
                     write!(f, ")")?;
                 }
                 delim = "";
+                if !exclude.is_empty() {
+                    write!(f, " EXCLUDE ")?;
+                    if exclude.len() == 1 {
+                        write!(f, "{}", exclude[0])?;
+                    } else {
+                        write!(f, "(")?;
+                        for col in exclude {
+                            write!(f, "{}{}", delim, col)?;
+                            delim = ", ";
+                        }
+                        write!(f, ")")?;
+                    }
+                }
                 if !replace.is_empty() {
                     write!(f, " REPLACE (")?;
                     for &(ref expr, ref alias) in replace.iter() {

@@ -1302,6 +1302,7 @@ impl<'a> Parser<'a> {
     /// ```sql
     /// TRIM ([WHERE] ['text' FROM] 'text')
     /// TRIM ('text')
+    /// TRIM(<expr>, [, characters]) -- only Snowflake
     /// ```
     pub fn parse_trim_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
@@ -1323,6 +1324,16 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
                 trim_where,
                 trim_what: Some(trim_what),
+                trim_characters: None,
+            })
+        } else if self.consume_token(&Token::Comma) && dialect_of!(self is SnowflakeDialect) {
+            let characters = self.parse_comma_separated(Parser::parse_expr)?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Expr::Trim {
+                expr: Box::new(expr),
+                trim_where: None,
+                trim_what: None,
+                trim_characters: Some(characters),
             })
         } else {
             self.expect_token(&Token::RParen)?;
@@ -1330,6 +1341,7 @@ impl<'a> Parser<'a> {
                 expr: Box::new(expr),
                 trim_where,
                 trim_what: None,
+                trim_characters: None,
             })
         }
     }

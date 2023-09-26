@@ -235,6 +235,14 @@ fn parse_json_using_colon() {
 }
 
 #[test]
+fn parse_json_using_colon_and_keyword() {
+    snowflake().one_statement_parses_to(
+        "select to_varchar(payload:status:error), reason:metadata, reason:error, reason:name::string as main_tag from foo where reason:group::string = 'helmet'",
+        "SELECT to_varchar(payload:status:error), reason:metadata, reason:error, CAST(reason:name AS STRING) AS main_tag FROM foo WHERE CAST(reason:group AS STRING) = 'helmet'"
+    );
+}
+
+#[test]
 fn parse_delimited_identifiers() {
     // check that quoted identifiers in any position remain quoted after serialization
     let select = snowflake().verified_only_select(

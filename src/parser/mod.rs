@@ -1894,7 +1894,7 @@ impl<'a> Parser<'a> {
             Ok(Expr::JsonAccess {
                 left: Box::new(expr),
                 operator: JsonOperator::Colon,
-                right: Box::new(Expr::Value(self.parse_value()?)),
+                right: Box::new(Expr::Value(self.parse_value_ignore_keywords()?)),
             })
         } else if Token::Arrow == tok
             || Token::LongArrow == tok
@@ -4653,6 +4653,50 @@ impl<'a> Parser<'a> {
                     },
                 ),
             },
+            // The call to n.parse() returns a bigdecimal when the
+            // bigdecimal feature is enabled, and is otherwise a no-op
+            // (i.e., it returns the input string).
+            Token::Number(ref n, l) => match n.parse() {
+                Ok(n) => Ok(Value::Number(n, l)),
+                Err(e) => parser_err!(
+                    format!("Could not parse '{n}' as number: {e}"),
+                    next_token.span.start
+                ),
+            },
+            Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
+            Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
+            Token::DollarQuotedString(ref s) => Ok(Value::DollarQuotedString(s.clone())),
+            Token::SingleQuotedByteStringLiteral(ref s) => {
+                Ok(Value::SingleQuotedByteStringLiteral(s.clone()))
+            }
+            Token::DoubleQuotedByteStringLiteral(ref s) => {
+                Ok(Value::DoubleQuotedByteStringLiteral(s.clone()))
+            }
+            Token::RawStringLiteral(ref s) => Ok(Value::RawStringLiteral(s.clone())),
+            Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
+            Token::EscapedStringLiteral(ref s) => Ok(Value::EscapedStringLiteral(s.to_string())),
+            Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
+            Token::Placeholder(ref s) => Ok(Value::Placeholder(s.to_string())),
+            tok @ Token::Colon | tok @ Token::AtSign => {
+                let ident = self.parse_identifier()?;
+                let placeholder = tok.to_string() + &ident.value;
+                Ok(Value::Placeholder(placeholder))
+            }
+            unexpected => self.expected(
+                "a value",
+                TokenWithLocation {
+                    token: unexpected,
+                    span,
+                },
+            ),
+        }
+    }
+
+    pub fn parse_value_ignore_keywords(&mut self) -> Result<Value, ParserError> {
+        let next_token = self.next_token();
+        let span = next_token.span;
+        match next_token.token {
+            Token::Word(w) => Ok(Value::UnQuotedString(w.value)),
             // The call to n.parse() returns a bigdecimal when the
             // bigdecimal feature is enabled, and is otherwise a no-op
             // (i.e., it returns the input string).

@@ -34,9 +34,6 @@ use test_utils::{
     table_alias, TestedDialects,
 };
 
-#[cfg(test)]
-use pretty_assertions::assert_eq;
-
 #[macro_use]
 mod test_utils;
 
@@ -916,6 +913,7 @@ fn parse_select_count_wildcard() {
             special: false,
             order_by: vec![],
             null_treatment: None,
+            within_group: None,
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -937,6 +935,7 @@ fn parse_select_count_distinct() {
             special: false,
             order_by: vec![],
             null_treatment: None,
+            within_group: None,
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -1973,6 +1972,7 @@ fn parse_select_having() {
                 special: false,
                 order_by: vec![],
                 null_treatment: None,
+                within_group: None,
             })),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Value(number("1"))),
@@ -2007,6 +2007,7 @@ fn parse_select_qualify() {
                 special: false,
                 order_by: vec![],
                 null_treatment: None,
+                within_group: None,
             })),
             op: BinaryOperator::Eq,
             right: Box::new(Expr::Value(number("1"))),
@@ -2346,6 +2347,7 @@ fn parse_listagg() {
             )))),
             on_overflow,
             within_group,
+            over: None,
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -3473,6 +3475,7 @@ fn parse_scalar_function_in_projection() {
                 special: false,
                 order_by: vec![],
                 null_treatment: None,
+                within_group: None,
             }),
             expr_from_projection(only(&select.projection))
         );
@@ -3593,6 +3596,7 @@ fn parse_named_argument_function() {
             special: false,
             order_by: vec![],
             null_treatment: None,
+            within_group: None,
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -3633,6 +3637,7 @@ fn parse_window_functions() {
             special: false,
             order_by: vec![],
             null_treatment: None,
+            within_group: None,
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -3678,6 +3683,7 @@ fn test_parse_named_window() {
                     special: false,
                     order_by: vec![],
                     null_treatment: None,
+                    within_group: None,
                 })
                 .empty_span(),
                 alias: Ident {
@@ -3713,6 +3719,7 @@ fn test_parse_named_window() {
                     special: false,
                     order_by: vec![],
                     null_treatment: None,
+                    within_group: None,
                 })
                 .empty_span(),
                 alias: Ident {
@@ -4218,6 +4225,7 @@ fn parse_at_timezone() {
                 special: false,
                 order_by: vec![],
                 null_treatment: None,
+                within_group: None,
             })),
             time_zone: "UTC-06:00".to_string(),
         },
@@ -4246,6 +4254,7 @@ fn parse_at_timezone() {
                             special: false,
                             order_by: vec![],
                             null_treatment: None,
+                            within_group: None,
                         },)),
                         time_zone: "UTC-06:00".to_string(),
                     },),),
@@ -4258,6 +4267,7 @@ fn parse_at_timezone() {
                 special: false,
                 order_by: vec![],
                 null_treatment: None,
+                within_group: None,
             },)
             .empty_span(),
             alias: Ident {
@@ -4420,6 +4430,7 @@ fn parse_table_function() {
                 special: false,
                 order_by: vec![],
                 null_treatment: None,
+                within_group: None,
             });
             assert_eq!(expr, expected_expr);
             assert_eq!(alias, table_alias("a"))
@@ -4574,6 +4585,7 @@ fn parse_unnest_in_from_clause() {
                     special: false,
                     order_by: vec![],
                     null_treatment: None,
+                    within_group: None,
                 })],
                 with_offset: false,
                 with_offset_alias: None,
@@ -4604,6 +4616,7 @@ fn parse_unnest_in_from_clause() {
                         special: false,
                         order_by: vec![],
                         null_treatment: None,
+                        within_group: None,
                     }),
                     Expr::Function(Function {
                         name: ObjectName(vec![Ident::new("make_array")]),
@@ -4616,6 +4629,7 @@ fn parse_unnest_in_from_clause() {
                         special: false,
                         order_by: vec![],
                         null_treatment: None,
+                        within_group: None,
                     }),
                 ],
                 with_offset: false,
@@ -7107,6 +7121,7 @@ fn parse_time_functions() {
             special: false,
             order_by: vec![],
             null_treatment: None,
+            within_group: None,
         };
         assert_eq!(
             &Expr::Function(select_localtime_func_call_ast.clone()),
@@ -7602,6 +7617,7 @@ fn parse_pivot_table() {
                 special: false,
                 order_by: vec![],
                 null_treatment: None,
+                within_group: None,
             }),
             value_column: vec![Ident::new("a"), Ident::new("MONTH")],
             pivot_values: vec![
@@ -7638,6 +7654,33 @@ fn parse_pivot_table() {
         verified_stmt(sql_without_table_alias).to_string(),
         sql_without_table_alias
     );
+}
+
+#[test]
+fn parse_within_group() {
+    let sql = "SELECT percentile_disc(fractions) WITHIN GROUP (ORDER BY sort_expression) FROM monthly_sales GROUP BY id";
+    let select = verified_only_select(sql);
+
+    assert_eq!(
+        expr_from_projection(only(&select.projection)),
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("percentile_disc")]),
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                Expr::Identifier(Ident::new("fractions").empty_span())
+            ))],
+            over: None,
+            distinct: false,
+            special: false,
+            order_by: vec![],
+            null_treatment: None,
+            within_group: Some(vec![OrderByExpr {
+                expr: Expr::Identifier(Ident::new("sort_expression").empty_span()),
+                asc: None,
+                nulls_first: None,
+            }]),
+        })
+    );
+    assert_eq!(verified_stmt(sql).to_string(), sql);
 }
 
 /// Makes a predicate that looks like ((user_id = $id) OR user_id = $2...)

@@ -2369,6 +2369,7 @@ fn test_composite_value() {
                     special: false,
                     order_by: vec![],
                     null_treatment: None,
+                    within_group: None,
                 }))))
             }
             .empty_span()
@@ -2533,6 +2534,7 @@ fn parse_current_functions() {
             special: true,
             order_by: vec![],
             null_treatment: None,
+            within_group: None,
         }),
         expr_from_projection(&select.projection[0])
     );
@@ -2545,6 +2547,7 @@ fn parse_current_functions() {
             special: true,
             order_by: vec![],
             null_treatment: None,
+            within_group: None,
         }),
         expr_from_projection(&select.projection[1])
     );
@@ -2557,6 +2560,7 @@ fn parse_current_functions() {
             special: true,
             order_by: vec![],
             null_treatment: None,
+            within_group: None,
         }),
         expr_from_projection(&select.projection[2])
     );
@@ -2569,6 +2573,7 @@ fn parse_current_functions() {
             special: true,
             order_by: vec![],
             null_treatment: None,
+            within_group: None,
         }),
         expr_from_projection(&select.projection[3])
     );
@@ -3041,6 +3046,7 @@ fn parse_delimited_identifiers() {
             special: false,
             order_by: vec![],
             null_treatment: None,
+            within_group: None,
         }),
         expr_from_projection(&select.projection[1]),
     );

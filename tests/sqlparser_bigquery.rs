@@ -507,6 +507,7 @@ fn parse_map_access_offset() {
                     special: false,
                     order_by: vec![],
                     null_treatment: None,
+                    within_group: None,
                 })],
             }
             .empty_span()

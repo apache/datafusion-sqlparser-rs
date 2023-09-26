@@ -61,6 +61,7 @@ fn parse_array_access_expr() {
                         special: false,
                         order_by: vec![],
                         null_treatment: None,
+                        within_group: None,
                     })],
                 }
                 .empty_span()
@@ -105,6 +106,7 @@ fn parse_array_access_expr() {
                                 special: false,
                                 order_by: vec![],
                                 null_treatment: None,
+                                within_group: None,
                             })],
                         }),
                         op: BinaryOperator::NotEq,
@@ -161,6 +163,7 @@ fn parse_array_fn() {
             special: false,
             order_by: vec![],
             null_treatment: None,
+            within_group: None,
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -223,6 +226,7 @@ fn parse_delimited_identifiers() {
             special: false,
             order_by: vec![],
             null_treatment: None,
+            within_group: None,
         }),
         expr_from_projection(&select.projection[1]),
     );

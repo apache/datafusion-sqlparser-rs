@@ -3754,6 +3754,8 @@ impl fmt::Display for CloseCursor {
 pub struct Function {
     pub name: ObjectName,
     pub args: Vec<FunctionArg>,
+    // WITHIN GROUP (ORDER BY <order_by_expr>)
+    pub within_group: Option<Vec<OrderByExpr>>,
     pub over: Option<WindowType>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
@@ -3814,13 +3816,20 @@ impl fmt::Display for Function {
             };
             write!(
                 f,
-                "{}({}{}{order_by}{}){}",
+                "{}({}{}{order_by}{}){null_treatment}",
                 self.name,
                 if self.distinct { "DISTINCT " } else { "" },
                 display_comma_separated(&self.args),
                 display_comma_separated(&self.order_by),
-                null_treatment
             )?;
+
+            if let Some(within_group) = &self.within_group {
+                write!(
+                    f,
+                    " WITHIN GROUP (ORDER BY {})",
+                    display_comma_separated(within_group)
+                )?;
+            }
 
             if let Some(o) = &self.over {
                 write!(f, " OVER {o}")?;
@@ -3871,6 +3880,7 @@ pub struct ListAgg {
     pub separator: Option<Box<Expr>>,
     pub on_overflow: Option<ListAggOnOverflow>,
     pub within_group: Vec<OrderByExpr>,
+    pub over: Option<WindowType>,
 }
 
 impl fmt::Display for ListAgg {
@@ -3894,6 +3904,9 @@ impl fmt::Display for ListAgg {
                 " WITHIN GROUP (ORDER BY {})",
                 display_comma_separated(&self.within_group)
             )?;
+        }
+        if let Some(o) = &self.over {
+            write!(f, " OVER {o}")?;
         }
         Ok(())
     }

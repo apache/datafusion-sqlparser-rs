@@ -180,6 +180,11 @@ fn parse_lateral_flatten() {
 }
 
 #[test]
+fn parse_within_group() {
+    snowflake().verified_only_select(r#"SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ride_duration) AS median_ride_duration FROM rides"#);
+}
+
+#[test]
 fn parse_json_using_colon() {
     let sql = "SELECT a:b FROM t";
     let select = snowflake().verified_only_select(sql);
@@ -274,6 +279,7 @@ fn parse_delimited_identifiers() {
             special: false,
             order_by: vec![],
             null_treatment: None,
+            within_group: None,
         }),
         expr_from_projection(&select.projection[1]),
     );

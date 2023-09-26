@@ -156,6 +156,7 @@ fn parse_delimited_identifiers() {
             special: false,
             order_by: vec![],
             null_treatment: None,
+            within_group: None,
         }),
         expr_from_projection(&select.projection[1]),
     );
@@ -318,4 +319,14 @@ fn test_select_ignore_nulls() {
 fn test_create_view_late_binding() {
     redshift()
         .verified_stmt("CREATE VIEW myevent AS SELECT eventname FROM event WITH NO SCHEMA BINDING");
+}
+
+#[test]
+fn parse_within_group() {
+    redshift().verified_only_select(r#"SELECT SOMEAGGFUNC(sellerid, ', ') WITHIN GROUP (ORDER BY sellerid) FROM sales WHERE eventid = 4337"#);
+}
+
+#[test]
+fn parse_listagg() {
+    redshift().verified_only_select(r#"SELECT LISTAGG(a.attname, '|') WITHIN GROUP (ORDER BY a.attsortkeyord) OVER (PARTITION BY n.nspname, c.relname) AS sort_keys FROM bar"#);
 }

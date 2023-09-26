@@ -791,6 +791,7 @@ impl<'a> Parser<'a> {
                 Keyword::SUBSTRING => self.parse_substring_expr(),
                 Keyword::OVERLAY => self.parse_overlay_expr(),
                 Keyword::TRIM => self.parse_trim_expr(),
+                Keyword::PERCENTILE_CONT => self.parse_percentile_cont_expr(),
                 Keyword::INTERVAL => self.parse_interval(),
                 Keyword::LISTAGG => self.parse_listagg_expr(),
                 // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as subquery or a function call
@@ -1339,6 +1340,43 @@ impl<'a> Parser<'a> {
             overlay_what: Box::new(what_expr),
             overlay_from: Box::new(from_expr),
             overlay_for: for_expr.map(Box::new),
+        })
+    }
+    ///
+    /// ```sql
+    /// SELECT PERCENTILE_CONT(<percentile>) WITHIN GROUP (ORDER BY <expr>) OVER (PARTITION BY <expr>)
+    /// ```
+    pub fn parse_percentile_cont_expr(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let percentile = self.parse_number_value()?;
+        self.expect_token(&Token::RParen)?;
+
+        let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
+            self.expect_token(&Token::LParen)?;
+            self.expect_keyword(Keyword::ORDER)?;
+            self.expect_keyword(Keyword::BY)?;
+            let order_by = self.parse_order_by_expr()?;
+            self.expect_token(&Token::RParen)?;
+            Some(Box::new(order_by))
+        } else {
+            None
+        };
+
+        let window_spec = if self.parse_keywords(&[Keyword::OVER]) {
+            self.expect_token(&Token::LParen)?;
+            let window = self.parse_window_spec()?;
+            Some(window)
+        } else {
+            None
+        };
+
+        let alias = self.parse_optional_alias(keywords::RESERVED_FOR_COLUMN_ALIAS)?;
+
+        Ok(Expr::PercentileCont {
+            percentile,
+            within_group,
+            window_spec,
+            alias,
         })
     }
 

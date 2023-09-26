@@ -7733,3 +7733,43 @@ fn parse_create_type() {
         create_type
     );
 }
+
+#[test]
+fn parse_percentile_cont() {
+    let statements = vec![
+        r#"SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY metric) OVER (PARTITION BY team) AS median FROM metric_sample"#,
+        r#"SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY metric ASC) OVER (PARTITION BY team) FROM metric_sample"#,
+        r#"SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY metric) FROM metric_sample"#,
+    ];
+
+    for statement in statements {
+        //println!("statement: {:#?}", statement);
+        assert_eq!(verified_stmt(statement).to_string(), statement);
+    }
+
+    let select_sql = r#"SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY metric)"#;
+    let select = verified_only_select(select_sql);
+    println!("res: {:#?}", expr_from_projection(only(&select.projection)));
+
+    assert_eq!(
+        &Expr::PercentileCont {
+            percentile: Value::Number("0.5".into(), false),
+            within_group: Some(Box::new(OrderByExpr {
+                expr: Expr::Identifier(Ident::new("metric").empty_span()),
+                asc: None,
+                nulls_first: None,
+            })),
+            window_spec: None,
+            alias: None
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    let bad_sql = r#"SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (BY metric) FROM metric_sample"#;
+    assert_eq!(
+        parse_sql_statements(bad_sql).unwrap_err(),
+        ParserError::ParserError(
+            "Expected ORDER, found: BY\nNear `PERCENTILE_CONT(0.5) WITHIN GROUP (`".to_owned()
+        )
+    );
+}

@@ -606,6 +606,16 @@ pub enum Expr {
         trim_what: Option<Box<Expr>>,
         trim_characters: Option<Vec<Expr>>,
     },
+    ///
+    /// ```sql
+    /// SELECT PERCENTILE_CONT(<percentile>) WITHIN GROUP (ORDER BY <expr>) OVER (PARTITION BY <expr>)
+    /// ```
+    PercentileCont {
+        percentile: Value,
+        within_group: Option<Box<OrderByExpr>>,
+        window_spec: Option<WindowSpec>,
+        alias: Option<WithSpan<Ident>>,
+    },
     /// ```sql
     /// OVERLAY(<expr> PLACING <expr> FROM <expr>[ FOR <expr> ]
     /// ```
@@ -1044,6 +1054,24 @@ impl fmt::Display for Expr {
                 }
 
                 write!(f, ")")
+            }
+            Expr::PercentileCont {
+                percentile,
+                within_group,
+                window_spec,
+                alias,
+            } => {
+                write!(f, "PERCENTILE_CONT({percentile})")?;
+                if let Some(group) = within_group {
+                    write!(f, " WITHIN GROUP (ORDER BY {})", group)?;
+                };
+                if let Some(partition) = window_spec {
+                    write!(f, " OVER ({partition})")?;
+                }
+                if let Some(a) = alias {
+                    write!(f, " AS {a}")?;
+                }
+                Ok(())
             }
             Expr::Tuple(exprs) => {
                 write!(f, "({})", display_comma_separated(exprs))

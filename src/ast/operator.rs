@@ -131,6 +131,10 @@ pub enum BinaryOperator {
     PGRegexNotMatch,
     /// String does not match regular expression (case insensitively), e.g. `a !~* b` (PostgreSQL-specific)
     PGRegexNotIMatch,
+    /// is left argument an ancestor right (or equal)?, e.g. `a @> b` (PostgreSQL-specific)
+    PGLTreeAncestor,
+    /// is left argument an desendant of right (or equal)?, e.g. `a <@ b` (PostgreSQL-specific)
+    PGLTreeDescendant,
     /// PostgreSQL-specific custom operator.
     ///
     /// See [CREATE OPERATOR](https://www.postgresql.org/docs/current/sql-createoperator.html)
@@ -172,6 +176,8 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::PGRegexIMatch => f.write_str("~*"),
             BinaryOperator::PGRegexNotMatch => f.write_str("!~"),
             BinaryOperator::PGRegexNotIMatch => f.write_str("!~*"),
+            BinaryOperator::PGLTreeAncestor => f.write_str("@>"),
+            BinaryOperator::PGLTreeDescendant => f.write_str("<@"),
             BinaryOperator::PGCustomBinaryOperator(idents) => {
                 write!(f, "OPERATOR({})", display_separated(idents, "."))
             }

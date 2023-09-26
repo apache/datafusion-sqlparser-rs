@@ -1488,6 +1488,9 @@ pub enum Statement {
         /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
         /// then strict typing rules apply to that table.
         strict: bool,
+
+        // SETTINGS k = v, k2 = v2...
+        clickhouse_settings: Option<Vec<SqlOption>>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
     CreateVirtualTable {
@@ -2438,6 +2441,7 @@ impl fmt::Display for Statement {
                 on_cluster,
                 order_by,
                 strict,
+                clickhouse_settings,
             } => {
                 // We want to allow the following options
                 // Empty column list, allowed by PostgreSQL:
@@ -2614,6 +2618,13 @@ impl fmt::Display for Statement {
                 }
                 if *strict {
                     write!(f, " STRICT")?;
+                }
+                if let Some(clickhouse_settings) = clickhouse_settings {
+                    write!(
+                        f,
+                        " SETTINGS {}",
+                        display_comma_separated(clickhouse_settings)
+                    )?;
                 }
                 Ok(())
             }

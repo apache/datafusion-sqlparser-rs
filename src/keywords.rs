@@ -551,6 +551,7 @@ define_keywords!(
     SESSION_USER,
     SET,
     SETS,
+    SETTINGS,
     SHARE,
     SHOW,
     SIMILAR,

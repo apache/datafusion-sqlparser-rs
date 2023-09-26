@@ -73,6 +73,7 @@ pub struct CreateTableBuilder {
     pub on_cluster: Option<String>,
     pub order_by: Option<Vec<Ident>>,
     pub strict: bool,
+    pub clickhouse_settings: Option<Vec<SqlOption>>,
 }
 
 impl CreateTableBuilder {
@@ -106,6 +107,7 @@ impl CreateTableBuilder {
             on_cluster: None,
             order_by: None,
             strict: false,
+            clickhouse_settings: None,
         }
     }
     pub fn or_replace(mut self, or_replace: bool) -> Self {
@@ -241,6 +243,11 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn clickhouse_settings(mut self, clickhouse_settings: Option<Vec<SqlOption>>) -> Self {
+        self.clickhouse_settings = clickhouse_settings;
+        self
+    }
+
     pub fn build(self) -> Statement {
         Statement::CreateTable {
             or_replace: self.or_replace,
@@ -271,6 +278,7 @@ impl CreateTableBuilder {
             on_cluster: self.on_cluster,
             order_by: self.order_by,
             strict: self.strict,
+            clickhouse_settings: self.clickhouse_settings,
         }
     }
 }
@@ -311,6 +319,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 on_cluster,
                 order_by,
                 strict,
+                clickhouse_settings,
             } => Ok(Self {
                 or_replace,
                 temporary,
@@ -340,6 +349,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 on_cluster,
                 order_by,
                 strict,
+                clickhouse_settings,
             }),
             _ => Err(ParserError::ParserError(format!(
                 "Expected create table statement, but received: {stmt}"

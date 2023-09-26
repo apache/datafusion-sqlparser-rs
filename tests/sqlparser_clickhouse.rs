@@ -385,6 +385,9 @@ fn parse_create_table() {
     clickhouse().verified_stmt(
         r#"CREATE TABLE default.runs_buffer (`workspace` LowCardinality(String), `id` String, `assets` Array(String), `asset_types` Array(Int32), `target` Array(String), `target_type` Array(Int32), `extra_references` Array(String) DEFAULT [], `extra_reference_types` Array(Int32) DEFAULT [], `run_type` Int32, `run_status` Int32, `message` String, `created_at` DateTime64(8,'UTC'), `started_at` DateTime64(8,'UTC'), `finished_at` DateTime64(8,'UTC'), `meta` String, `exclude_status_update` Bool, `ingested_at` DateTime64(8,'UTC'), `parent_ids` Array(String), `skipped` Bool DEFAULT false) ENGINE=Buffer('default', 'runs', 4, 2, 5, 10000, 1000000, 2500000, 10000000)"#,
     );
+    clickhouse().verified_stmt(
+        r#"CREATE TABLE schema.schema_migrations (`version` Int64, `dirty` UInt8, `sequence` UInt64) ENGINE=ReplicatedReplacingMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}') ORDER BY (sequence) SETTINGS index_granularity = 8192"#,
+    );
 }
 
 #[test]

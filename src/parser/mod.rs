@@ -3685,6 +3685,12 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let clickhouse_settings = if self.parse_keyword(Keyword::SETTINGS) {
+            Some(self.parse_comma_separated(Parser::parse_sql_option)?)
+        } else {
+            None
+        };
+
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
             Some(Box::new(self.parse_query()?))
@@ -3757,6 +3763,7 @@ impl<'a> Parser<'a> {
             .on_commit(on_commit)
             .on_cluster(on_cluster)
             .strict(strict)
+            .clickhouse_settings(clickhouse_settings)
             .build())
     }
 

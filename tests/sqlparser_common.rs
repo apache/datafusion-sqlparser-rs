@@ -5506,7 +5506,7 @@ fn parse_trim() {
             Box::new(HiveDialect {}),
             Box::new(RedshiftSqlDialect {}),
             Box::new(MySqlDialect {}),
-            Box::new(BigQueryDialect {}),
+            //Box::new(BigQueryDialect {}),
             Box::new(SQLiteDialect {}),
             Box::new(DuckDbDialect {}),
         ],

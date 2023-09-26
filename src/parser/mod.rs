@@ -1382,7 +1382,7 @@ impl<'a> Parser<'a> {
                 trim_what: Some(trim_what),
                 trim_characters: None,
             })
-        } else if self.consume_token(&Token::Comma) && dialect_of!(self is SnowflakeDialect) {
+        } else if self.consume_token(&Token::Comma) && dialect_of!(self is SnowflakeDialect | BigQueryDialect) {
             let characters = self.parse_comma_separated(Parser::parse_expr)?;
             self.expect_token(&Token::RParen)?;
             Ok(Expr::Trim {

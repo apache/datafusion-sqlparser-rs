@@ -532,3 +532,10 @@ fn test_array_agg_over() {
     let sql = r"SELECT array_agg(account_combined_id) OVER (PARTITION BY shareholder_id ORDER BY date_from ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS previous_combined_id FROM foo";
     bigquery().verified_only_select(sql);
 }
+
+#[test]
+fn test_trim() {
+    bigquery().verified_only_select(r#"SELECT CAST(TRIM(NULLIF(TRIM(JSON_QUERY(json_dump, "$.email_verified")), ''), '\"') AS BOOL) AS is_email_verified FROM foo"#);
+    bigquery().verified_only_select(r#"SELECT CAST(LTRIM(NULLIF(TRIM(JSON_QUERY(json_dump, "$.email_verified")), ''), '\"') AS BOOL) AS is_email_verified FROM foo"#);
+    bigquery().verified_only_select(r#"SELECT CAST(RTRIM(NULLIF(TRIM(JSON_QUERY(json_dump, "$.email_verified")), ''), '\"') AS BOOL) AS is_email_verified FROM foo"#);
+}

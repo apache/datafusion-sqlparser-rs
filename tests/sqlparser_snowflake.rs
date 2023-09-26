@@ -278,6 +278,8 @@ fn parse_delimited_identifiers() {
             distinct: false,
             special: false,
             order_by: vec![],
+            limit: None,
+            on_overflow: None,
             null_treatment: None,
             within_group: None,
         }),
@@ -419,18 +421,10 @@ fn test_array_agg_func() {
     for sql in [
         "SELECT ARRAY_AGG(x) WITHIN GROUP (ORDER BY x) AS a FROM T",
         "SELECT ARRAY_AGG(DISTINCT x) WITHIN GROUP (ORDER BY x ASC) FROM tbl",
+        "SELECT ARRAY_AGG(x ORDER BY x) AS a FROM T",
     ] {
         snowflake().verified_stmt(sql);
     }
-
-    let sql = "select array_agg(x order by x) as a from T";
-    let result = snowflake().parse_sql_statements(sql);
-    assert_eq!(
-        result,
-        Err(ParserError::ParserError(String::from(
-            "Expected ), found: order\nNear `select array_agg(x`"
-        )))
-    )
 }
 
 fn snowflake() -> TestedDialects {

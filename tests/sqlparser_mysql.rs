@@ -1103,6 +1103,8 @@ fn parse_insert_with_on_duplicate_update() {
                             distinct: false,
                             special: false,
                             order_by: vec![],
+                            limit: None,
+                            on_overflow: None,
                             null_treatment: None,
                             within_group: None,
                         })
@@ -1118,6 +1120,8 @@ fn parse_insert_with_on_duplicate_update() {
                             distinct: false,
                             special: false,
                             order_by: vec![],
+                            limit: None,
+                            on_overflow: None,
                             null_treatment: None,
                             within_group: None,
                         })
@@ -1133,6 +1137,8 @@ fn parse_insert_with_on_duplicate_update() {
                             distinct: false,
                             special: false,
                             order_by: vec![],
+                            limit: None,
+                            on_overflow: None,
                             null_treatment: None,
                             within_group: None,
                         })
@@ -1148,6 +1154,8 @@ fn parse_insert_with_on_duplicate_update() {
                             distinct: false,
                             special: false,
                             order_by: vec![],
+                            limit: None,
+                            on_overflow: None,
                             null_treatment: None,
                             within_group: None,
                         })
@@ -1163,6 +1171,8 @@ fn parse_insert_with_on_duplicate_update() {
                             distinct: false,
                             special: false,
                             order_by: vec![],
+                            limit: None,
+                            on_overflow: None,
                             null_treatment: None,
                             within_group: None,
                         })
@@ -1523,6 +1533,8 @@ fn parse_table_colum_option_on_update() {
                             distinct: false,
                             special: false,
                             order_by: vec![],
+                            limit: None,
+                            on_overflow: None,
                             null_treatment: None,
                             within_group: None,
                         })),

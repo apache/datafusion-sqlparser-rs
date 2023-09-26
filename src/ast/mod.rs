@@ -189,7 +189,7 @@ pub struct EngineSpec {
 impl fmt::Display for EngineSpec {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(opts) = &self.options {
-            write!(f, "{}({})", self.name, display_comma_separated(&opts))
+            write!(f, "{}({})", self.name, display_comma_separated(opts))
         } else {
             write!(f, "{}", self.name)
         }
@@ -658,10 +658,6 @@ pub enum Expr {
     Subquery(Box<Query>),
     /// An array subquery constructor, e.g. `SELECT ARRAY(SELECT 1 UNION SELECT 2)`
     ArraySubquery(Box<Query>),
-    /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
-    ListAgg(ListAgg),
-    /// The `ARRAY_AGG` function `SELECT ARRAY_AGG(... ORDER BY ...)`
-    ArrayAgg(ArrayAgg),
     /// The `GROUPING SETS` expr.
     GroupingSets(Vec<Vec<Expr>>),
     /// The `CUBE` expr.
@@ -942,8 +938,6 @@ impl fmt::Display for Expr {
             ),
             Expr::Subquery(s) => write!(f, "({s})"),
             Expr::ArraySubquery(s) => write!(f, "ARRAY({s})"),
-            Expr::ListAgg(listagg) => write!(f, "{listagg}"),
-            Expr::ArrayAgg(arrayagg) => write!(f, "{arrayagg}"),
             Expr::GroupingSets(sets) => {
                 write!(f, "GROUPING SETS (")?;
                 let mut sep = "";
@@ -3764,6 +3758,8 @@ pub struct Function {
     pub special: bool,
     // Required ordering for the function (if empty, there is no requirement).
     pub order_by: Vec<OrderByExpr>,
+    pub limit: Option<Box<Expr>>,
+    pub on_overflow: Option<OnOverflow>,
     // IGNORE NULLS or RESPECT NULLS
     pub null_treatment: Option<NullTreatment>,
 }
@@ -3814,9 +3810,22 @@ impl fmt::Display for Function {
             } else {
                 ""
             };
+
+            let limit = if let Some(ref limit) = self.limit {
+                format!(" LIMIT {limit}")
+            } else {
+                "".to_string()
+            };
+
+            let on_overflow = if let Some(on_overflow) = &self.on_overflow {
+                format!(" ON OVERFLOW {on_overflow}")
+            } else {
+                "".to_string()
+            };
+
             write!(
                 f,
-                "{}({}{}{order_by}{}){null_treatment}",
+                "{}({}{}{order_by}{}{limit}{on_overflow}){null_treatment}",
                 self.name,
                 if self.distinct { "DISTINCT " } else { "" },
                 display_comma_separated(&self.args),
@@ -3869,54 +3878,11 @@ impl fmt::Display for FileFormat {
     }
 }
 
-/// A `LISTAGG` invocation `LISTAGG( [ DISTINCT ] <expr>[, <separator> ] [ON OVERFLOW <on_overflow>] ) )
-/// [ WITHIN GROUP (ORDER BY <within_group1>[, ...] ) ]`
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ListAgg {
-    pub distinct: bool,
-    pub expr: Box<Expr>,
-    pub separator: Option<Box<Expr>>,
-    pub on_overflow: Option<ListAggOnOverflow>,
-    pub within_group: Vec<OrderByExpr>,
-    pub over: Option<WindowType>,
-}
-
-impl fmt::Display for ListAgg {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "LISTAGG({}{}",
-            if self.distinct { "DISTINCT " } else { "" },
-            self.expr
-        )?;
-        if let Some(separator) = &self.separator {
-            write!(f, ", {separator}")?;
-        }
-        if let Some(on_overflow) = &self.on_overflow {
-            write!(f, "{on_overflow}")?;
-        }
-        write!(f, ")")?;
-        if !self.within_group.is_empty() {
-            write!(
-                f,
-                " WITHIN GROUP (ORDER BY {})",
-                display_comma_separated(&self.within_group)
-            )?;
-        }
-        if let Some(o) = &self.over {
-            write!(f, " OVER {o}")?;
-        }
-        Ok(())
-    }
-}
-
 /// The `ON OVERFLOW` clause of a LISTAGG invocation
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum ListAggOnOverflow {
+pub enum OnOverflow {
     /// `ON OVERFLOW ERROR`
     Error,
 
@@ -3927,13 +3893,12 @@ pub enum ListAggOnOverflow {
     },
 }
 
-impl fmt::Display for ListAggOnOverflow {
+impl fmt::Display for OnOverflow {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, " ON OVERFLOW")?;
         match self {
-            ListAggOnOverflow::Error => write!(f, " ERROR"),
-            ListAggOnOverflow::Truncate { filler, with_count } => {
-                write!(f, " TRUNCATE")?;
+            OnOverflow::Error => write!(f, "ERROR"),
+            OnOverflow::Truncate { filler, with_count } => {
+                write!(f, "TRUNCATE")?;
                 if let Some(filler) = filler {
                     write!(f, " {filler}")?;
                 }
@@ -3945,50 +3910,6 @@ impl fmt::Display for ListAggOnOverflow {
                 write!(f, " COUNT")
             }
         }
-    }
-}
-
-/// An `ARRAY_AGG` invocation `ARRAY_AGG( [ DISTINCT ] <expr> [ORDER BY <expr>] [LIMIT <n>] )`
-/// Or `ARRAY_AGG( [ DISTINCT ] <expr> ) [ WITHIN GROUP ( ORDER BY <expr> ) ]`
-/// ORDER BY position is defined differently for BigQuery, Postgres and Snowflake.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct ArrayAgg {
-    pub distinct: bool,
-    pub expr: Box<Expr>,
-    pub order_by: Option<Vec<OrderByExpr>>,
-    pub limit: Option<Box<Expr>>,
-    pub within_group: bool, // order by is used inside a within group or not
-}
-
-impl fmt::Display for ArrayAgg {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "ARRAY_AGG({}{}",
-            if self.distinct { "DISTINCT " } else { "" },
-            self.expr
-        )?;
-        if !self.within_group {
-            if let Some(order_by) = &self.order_by {
-                write!(f, " ORDER BY {}", display_comma_separated(order_by))?;
-            }
-            if let Some(limit) = &self.limit {
-                write!(f, " LIMIT {limit}")?;
-            }
-        }
-        write!(f, ")")?;
-        if self.within_group {
-            if let Some(order_by) = &self.order_by {
-                write!(
-                    f,
-                    " WITHIN GROUP (ORDER BY {})",
-                    display_comma_separated(order_by)
-                )?;
-            }
-        }
-        Ok(())
     }
 }
 

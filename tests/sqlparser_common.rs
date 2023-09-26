@@ -912,6 +912,8 @@ fn parse_select_count_wildcard() {
             distinct: false,
             special: false,
             order_by: vec![],
+            limit: None,
+            on_overflow: None,
             null_treatment: None,
             within_group: None,
         }),
@@ -934,6 +936,8 @@ fn parse_select_count_distinct() {
             distinct: true,
             special: false,
             order_by: vec![],
+            limit: None,
+            on_overflow: None,
             null_treatment: None,
             within_group: None,
         }),
@@ -1971,6 +1975,8 @@ fn parse_select_having() {
                 distinct: false,
                 special: false,
                 order_by: vec![],
+                limit: None,
+                on_overflow: None,
                 null_treatment: None,
                 within_group: None,
             })),
@@ -2006,6 +2012,8 @@ fn parse_select_qualify() {
                 distinct: false,
                 special: false,
                 order_by: vec![],
+                limit: None,
+                on_overflow: None,
                 null_treatment: None,
                 within_group: None,
             })),
@@ -2307,8 +2315,7 @@ fn parse_listagg() {
     verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE N'...' WITH COUNT)");
     verified_stmt("SELECT LISTAGG(dateid ON OVERFLOW TRUNCATE X'deadbeef' WITH COUNT)");
 
-    let expr = Box::new(Expr::Identifier(Ident::new("dateid").empty_span()));
-    let on_overflow = Some(ListAggOnOverflow::Truncate {
+    let on_overflow = Some(OnOverflow::Truncate {
         filler: Some(Box::new(Expr::Value(Value::SingleQuotedString(
             "%".to_string(),
         )))),
@@ -2339,15 +2346,24 @@ fn parse_listagg() {
         },
     ];
     assert_eq!(
-        &Expr::ListAgg(ListAgg {
-            distinct: true,
-            expr,
-            separator: Some(Box::new(Expr::Value(Value::SingleQuotedString(
-                ", ".to_string()
-            )))),
-            on_overflow,
-            within_group,
+        &Expr::Function(Function {
+            name: ObjectName(vec![Ident::new("LISTAGG")]),
+            args: vec![
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                    Ident::new("dateid").empty_span()
+                ))),
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                    Value::SingleQuotedString(", ".to_string())
+                )))
+            ],
+            within_group: Some(within_group),
             over: None,
+            distinct: true,
+            special: false,
+            order_by: vec![],
+            limit: None,
+            on_overflow,
+            null_treatment: None,
         }),
         expr_from_projection(only(&select.projection))
     );
@@ -3474,6 +3490,8 @@ fn parse_scalar_function_in_projection() {
                 distinct: false,
                 special: false,
                 order_by: vec![],
+                limit: None,
+                on_overflow: None,
                 null_treatment: None,
                 within_group: None,
             }),
@@ -3595,6 +3613,8 @@ fn parse_named_argument_function() {
             distinct: false,
             special: false,
             order_by: vec![],
+            limit: None,
+            on_overflow: None,
             null_treatment: None,
             within_group: None,
         }),
@@ -3636,6 +3656,8 @@ fn parse_window_functions() {
             distinct: false,
             special: false,
             order_by: vec![],
+            limit: None,
+            on_overflow: None,
             null_treatment: None,
             within_group: None,
         }),
@@ -3682,6 +3704,8 @@ fn test_parse_named_window() {
                     distinct: false,
                     special: false,
                     order_by: vec![],
+                    limit: None,
+                    on_overflow: None,
                     null_treatment: None,
                     within_group: None,
                 })
@@ -3718,6 +3742,8 @@ fn test_parse_named_window() {
                     distinct: false,
                     special: false,
                     order_by: vec![],
+                    limit: None,
+                    on_overflow: None,
                     null_treatment: None,
                     within_group: None,
                 })
@@ -4224,6 +4250,8 @@ fn parse_at_timezone() {
                 distinct: false,
                 special: false,
                 order_by: vec![],
+                limit: None,
+                on_overflow: None,
                 null_treatment: None,
                 within_group: None,
             })),
@@ -4253,6 +4281,8 @@ fn parse_at_timezone() {
                             distinct: false,
                             special: false,
                             order_by: vec![],
+                            limit: None,
+                            on_overflow: None,
                             null_treatment: None,
                             within_group: None,
                         },)),
@@ -4266,6 +4296,8 @@ fn parse_at_timezone() {
                 distinct: false,
                 special: false,
                 order_by: vec![],
+                limit: None,
+                on_overflow: None,
                 null_treatment: None,
                 within_group: None,
             },)
@@ -4429,6 +4461,8 @@ fn parse_table_function() {
                 distinct: false,
                 special: false,
                 order_by: vec![],
+                limit: None,
+                on_overflow: None,
                 null_treatment: None,
                 within_group: None,
             });
@@ -4584,6 +4618,8 @@ fn parse_unnest_in_from_clause() {
                     distinct: false,
                     special: false,
                     order_by: vec![],
+                    limit: None,
+                    on_overflow: None,
                     null_treatment: None,
                     within_group: None,
                 })],
@@ -4615,6 +4651,8 @@ fn parse_unnest_in_from_clause() {
                         distinct: false,
                         special: false,
                         order_by: vec![],
+                        limit: None,
+                        on_overflow: None,
                         null_treatment: None,
                         within_group: None,
                     }),
@@ -4628,6 +4666,8 @@ fn parse_unnest_in_from_clause() {
                         distinct: false,
                         special: false,
                         order_by: vec![],
+                        limit: None,
+                        on_overflow: None,
                         null_treatment: None,
                         within_group: None,
                     }),
@@ -7120,6 +7160,8 @@ fn parse_time_functions() {
             distinct: false,
             special: false,
             order_by: vec![],
+            limit: None,
+            on_overflow: None,
             null_treatment: None,
             within_group: None,
         };
@@ -7616,6 +7658,8 @@ fn parse_pivot_table() {
                 distinct: false,
                 special: false,
                 order_by: vec![],
+                limit: None,
+                on_overflow: None,
                 null_treatment: None,
                 within_group: None,
             }),
@@ -7672,6 +7716,8 @@ fn parse_within_group() {
             distinct: false,
             special: false,
             order_by: vec![],
+            limit: None,
+            on_overflow: None,
             null_treatment: None,
             within_group: Some(vec![OrderByExpr {
                 expr: Expr::Identifier(Ident::new("sort_expression").empty_span()),

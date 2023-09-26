@@ -155,6 +155,8 @@ fn parse_delimited_identifiers() {
             distinct: false,
             special: false,
             order_by: vec![],
+            limit: None,
+            on_overflow: None,
             null_treatment: None,
             within_group: None,
         }),

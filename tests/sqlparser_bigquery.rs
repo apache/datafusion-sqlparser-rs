@@ -419,7 +419,7 @@ fn test_select_wildcard_with_except() {
 fn test_select_ignore_nulls() {
     bigquery().one_statement_parses_to(
         "SELECT last_value(user_id IGNORE NULLS) OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1",
-    "SELECT last_value(user_id) IGNORE NULLS OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1"
+        "SELECT last_value(user_id) IGNORE NULLS OVER (PARTITION BY anonymous_id ORDER BY tstamp ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS user_id FROM table1"
     );
 }
 
@@ -506,6 +506,8 @@ fn parse_map_access_offset() {
                     distinct: false,
                     special: false,
                     order_by: vec![],
+                    limit: None,
+                    on_overflow: None,
                     null_treatment: None,
                     within_group: None,
                 })],
@@ -523,4 +525,10 @@ fn parse_map_access_offset() {
     ] {
         bigquery().verified_only_select(sql);
     }
+}
+
+#[test]
+fn test_array_agg_over() {
+    let sql = r"SELECT array_agg(account_combined_id) OVER (PARTITION BY shareholder_id ORDER BY date_from ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS previous_combined_id FROM foo";
+    bigquery().verified_only_select(sql);
 }

@@ -30,7 +30,7 @@ impl Dialect for ClickHouseDialect {
     fn get_next_precedence(&self, _parser: &Parser) -> Option<Result<u8, ParserError>> {
         let token = _parser.peek_token();
         match token.token {
-            Token::Number(s, _) if s.starts_with(".") => Some(Ok(50)),
+            Token::Number(s, _) if s.starts_with('.') => Some(Ok(50)),
             _ => None,
         }
     }

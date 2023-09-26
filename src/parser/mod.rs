@@ -195,7 +195,7 @@ impl fmt::Display for ParserError {
 impl std::error::Error for ParserError {}
 
 // By default, allow expressions up to this deep before erroring
-const DEFAULT_REMAINING_DEPTH: usize = 44;
+const DEFAULT_REMAINING_DEPTH: usize = 41;
 
 /// Options that control how the [`Parser`] parses SQL text
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -769,6 +769,8 @@ impl<'a> Parser<'a> {
                         distinct: false,
                         special: true,
                         order_by: vec![],
+                        limit: None,
+                        on_overflow: None,
                         null_treatment: None,
                         within_group: None,
                     }))
@@ -793,7 +795,6 @@ impl<'a> Parser<'a> {
                 Keyword::OVERLAY => self.parse_overlay_expr(),
                 Keyword::TRIM => self.parse_trim_expr(),
                 Keyword::INTERVAL => self.parse_interval(),
-                Keyword::LISTAGG => self.parse_listagg_expr(),
                 // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as subquery or a function call
                 Keyword::ARRAY if self.peek_token() == Token::LBracket => {
                     self.expect_token(&Token::LBracket)?;
@@ -806,7 +807,6 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::LParen)?;
                     self.parse_array_subquery()
                 }
-                Keyword::ARRAY_AGG => self.parse_array_agg_expr(),
                 Keyword::NOT => self.parse_not(),
                 Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
                     self.parse_match_against()
@@ -951,7 +951,8 @@ impl<'a> Parser<'a> {
     pub fn parse_function(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let distinct = self.parse_all_or_distinct()?.is_some();
-        let (args, order_by, mut null_treatment) = self.parse_optional_args_with_orderby()?;
+        let (args, on_overflow, order_by, limit, mut null_treatment) =
+            self.parse_optional_args_with_orderby()?;
 
         if self.parse_keywords(&[Keyword::IGNORE, Keyword::NULLS]) {
             null_treatment = Some(NullTreatment::IGNORE)
@@ -978,18 +979,23 @@ impl<'a> Parser<'a> {
             distinct,
             special: false,
             order_by,
+            limit,
+            on_overflow,
             null_treatment,
             within_group,
         }))
     }
 
     pub fn parse_time_functions(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
-        let (args, order_by, special, null_treatment) = if self.consume_token(&Token::LParen) {
-            let (args, order_by, null_treatment) = self.parse_optional_args_with_orderby()?;
-            (args, order_by, false, null_treatment)
-        } else {
-            (vec![], vec![], true, None)
-        };
+        let (args, on_overflow, order_by, limit, special, null_treatment) =
+            if self.consume_token(&Token::LParen) {
+                let (args, on_overflow, order_by, limit, null_treatment) =
+                    self.parse_optional_args_with_orderby()?;
+                (args, on_overflow, order_by, limit, false, null_treatment)
+            } else {
+                (vec![], None, vec![], None, true, None)
+            };
+
         Ok(Expr::Function(Function {
             name,
             args,
@@ -997,6 +1003,8 @@ impl<'a> Parser<'a> {
             distinct: false,
             special,
             order_by,
+            limit,
+            on_overflow,
             null_treatment,
             within_group: None,
         }))
@@ -1428,123 +1436,6 @@ impl<'a> Parser<'a> {
         let query = self.parse_query()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::ArraySubquery(Box::new(query)))
-    }
-
-    /// Parse a SQL LISTAGG expression, e.g. `LISTAGG(...) WITHIN GROUP (ORDER BY ...)`.
-    pub fn parse_listagg_expr(&mut self) -> Result<Expr, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let distinct = self.parse_all_or_distinct()?.is_some();
-        let expr = Box::new(self.parse_expr()?);
-        // While ANSI SQL would would require the separator, Redshift makes this optional. Here we
-        // choose to make the separator optional as this provides the more general implementation.
-        let separator = if self.consume_token(&Token::Comma) {
-            Some(Box::new(self.parse_expr()?))
-        } else {
-            None
-        };
-        let on_overflow = if self.parse_keywords(&[Keyword::ON, Keyword::OVERFLOW]) {
-            if self.parse_keyword(Keyword::ERROR) {
-                Some(ListAggOnOverflow::Error)
-            } else {
-                self.expect_keyword(Keyword::TRUNCATE)?;
-                let filler = match self.peek_token().token {
-                    Token::Word(w)
-                        if w.keyword == Keyword::WITH || w.keyword == Keyword::WITHOUT =>
-                    {
-                        None
-                    }
-                    Token::SingleQuotedString(_)
-                    | Token::EscapedStringLiteral(_)
-                    | Token::NationalStringLiteral(_)
-                    | Token::HexStringLiteral(_) => Some(Box::new(self.parse_expr()?)),
-                    _ => self.expected(
-                        "either filler, WITH, or WITHOUT in LISTAGG",
-                        self.peek_token(),
-                    )?,
-                };
-                let with_count = self.parse_keyword(Keyword::WITH);
-                if !with_count && !self.parse_keyword(Keyword::WITHOUT) {
-                    self.expected("either WITH or WITHOUT in LISTAGG", self.peek_token())?;
-                }
-                self.expect_keyword(Keyword::COUNT)?;
-                Some(ListAggOnOverflow::Truncate { filler, with_count })
-            }
-        } else {
-            None
-        };
-        self.expect_token(&Token::RParen)?;
-        // Once again ANSI SQL requires WITHIN GROUP, but Redshift does not. Again we choose the
-        // more general implementation.
-        let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
-            self.expect_token(&Token::LParen)?;
-            self.expect_keywords(&[Keyword::ORDER, Keyword::BY])?;
-            let order_by_expr = self.parse_comma_separated(Parser::parse_order_by_expr)?;
-            self.expect_token(&Token::RParen)?;
-            order_by_expr
-        } else {
-            vec![]
-        };
-
-        let over = self.parse_over()?;
-
-        Ok(Expr::ListAgg(ListAgg {
-            distinct,
-            expr,
-            separator,
-            on_overflow,
-            within_group,
-            over,
-        }))
-    }
-
-    pub fn parse_array_agg_expr(&mut self) -> Result<Expr, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let distinct = self.parse_keyword(Keyword::DISTINCT);
-        let expr = Box::new(self.parse_expr()?);
-        // ANSI SQL and BigQuery define ORDER BY inside function.
-        if !self.dialect.supports_within_after_array_aggregation() {
-            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                Some(self.parse_comma_separated(Parser::parse_order_by_expr)?)
-            } else {
-                None
-            };
-            let limit = if self.parse_keyword(Keyword::LIMIT) {
-                self.parse_limit()?.map(Box::new)
-            } else {
-                None
-            };
-            self.expect_token(&Token::RParen)?;
-            return Ok(Expr::ArrayAgg(ArrayAgg {
-                distinct,
-                expr,
-                order_by,
-                limit,
-                within_group: false,
-            }));
-        }
-        // Snowflake defines ORDERY BY in within group instead of inside the function like
-        // ANSI SQL.
-        self.expect_token(&Token::RParen)?;
-        let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
-            self.expect_token(&Token::LParen)?;
-            let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
-                Some(self.parse_comma_separated(Parser::parse_order_by_expr)?)
-            } else {
-                None
-            };
-            self.expect_token(&Token::RParen)?;
-            order_by
-        } else {
-            None
-        };
-
-        Ok(Expr::ArrayAgg(ArrayAgg {
-            distinct,
-            expr,
-            order_by: within_group,
-            limit: None,
-            within_group: true,
-        }))
     }
 
     // This function parses date/time fields for the EXTRACT function-like
@@ -2078,7 +1969,7 @@ impl<'a> Parser<'a> {
         ind: String,
     ) -> Result<Expr, ParserError> {
         let without_dot = ind[1..].to_string();
-        let index = Expr::Value(Value::Number(without_dot, false));
+        let index = Expr::Value(Value::Number(without_dot.parse().unwrap(), false));
         Ok(Expr::ArrayIndex {
             obj: Box::new(expr),
             indexes: vec![index],
@@ -7045,16 +6936,62 @@ impl<'a> Parser<'a> {
 
     pub fn parse_optional_args_with_orderby(
         &mut self,
-    ) -> Result<(Vec<FunctionArg>, Vec<OrderByExpr>, Option<NullTreatment>), ParserError> {
+    ) -> Result<
+        (
+            Vec<FunctionArg>,
+            Option<OnOverflow>,
+            Vec<OrderByExpr>,
+            Option<Box<Expr>>,
+            Option<NullTreatment>,
+        ),
+        ParserError,
+    > {
         if self.consume_token(&Token::RParen) {
-            Ok((vec![], vec![], None))
+            Ok((vec![], None, vec![], None, None))
         } else {
             let args = self.parse_comma_separated(Parser::parse_function_args)?;
+            let on_overflow = if self.parse_keywords(&[Keyword::ON, Keyword::OVERFLOW]) {
+                if self.parse_keyword(Keyword::ERROR) {
+                    Some(OnOverflow::Error)
+                } else {
+                    self.expect_keyword(Keyword::TRUNCATE)?;
+                    let filler = match self.peek_token().token {
+                        Token::Word(w)
+                            if w.keyword == Keyword::WITH || w.keyword == Keyword::WITHOUT =>
+                        {
+                            None
+                        }
+                        Token::SingleQuotedString(_)
+                        | Token::EscapedStringLiteral(_)
+                        | Token::NationalStringLiteral(_)
+                        | Token::HexStringLiteral(_) => Some(Box::new(self.parse_expr()?)),
+                        _ => self.expected(
+                            "either filler, WITH, or WITHOUT in LISTAGG",
+                            self.peek_token(),
+                        )?,
+                    };
+                    let with_count = self.parse_keyword(Keyword::WITH);
+                    if !with_count && !self.parse_keyword(Keyword::WITHOUT) {
+                        self.expected("either WITH or WITHOUT in LISTAGG", self.peek_token())?;
+                    }
+                    self.expect_keyword(Keyword::COUNT)?;
+                    Some(OnOverflow::Truncate { filler, with_count })
+                }
+            } else {
+                None
+            };
+
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
                 self.parse_comma_separated(Parser::parse_order_by_expr)?
             } else {
                 vec![]
             };
+            let limit = if self.parse_keyword(Keyword::LIMIT) {
+                self.parse_limit()?.map(Box::new)
+            } else {
+                None
+            };
+
             let null_treatment = if self.parse_keywords(&[Keyword::IGNORE, Keyword::NULLS]) {
                 Some(NullTreatment::IGNORE)
             } else if self.parse_keywords(&[Keyword::RESPECT, Keyword::NULLS]) {
@@ -7063,7 +7000,7 @@ impl<'a> Parser<'a> {
                 None
             };
             self.expect_token(&Token::RParen)?;
-            Ok((args, order_by, null_treatment))
+            Ok((args, on_overflow, order_by, limit, null_treatment))
         }
     }
 

@@ -259,6 +259,24 @@ fn parse_create_table_with_strict() {
     }
 }
 
+#[test]
+fn parse_attach_to() {
+    let sql = "ATTACH DATABASE 'test.db' AS test";
+    let verified_stmt = sqlite().verified_stmt(sql);
+    assert_eq!(sql, format!("{}", verified_stmt));
+    match verified_stmt {
+        Statement::AttachDatabase {
+            schema_name,
+            database_file_name: Expr::Value(Value::SingleQuotedString(literal_name)),
+            database: true,
+        } => {
+            assert_eq!(schema_name.value, "test");
+            assert_eq!(literal_name, "test.db");
+        }
+        _ => unreachable!(),
+    }
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SQLiteDialect {})],

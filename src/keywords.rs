@@ -95,6 +95,7 @@ define_keywords!(
     ASYMMETRIC,
     AT,
     ATOMIC,
+    ATTACH,
     AUTHORIZATION,
     AUTOINCREMENT,
     AUTO_INCREMENT,

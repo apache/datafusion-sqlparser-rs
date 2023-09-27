@@ -260,7 +260,7 @@ fn parse_create_table_with_strict() {
 }
 
 #[test]
-fn parse_attach_to() {
+fn parse_attach_database() {
     let sql = "ATTACH DATABASE 'test.db' AS test";
     let verified_stmt = sqlite().verified_stmt(sql);
     assert_eq!(sql, format!("{}", verified_stmt));

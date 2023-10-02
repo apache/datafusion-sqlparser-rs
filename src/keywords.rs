@@ -110,6 +110,7 @@ define_keywords!(
     BIGINT,
     BIGNUMERIC,
     BINARY,
+    BINDING,
     BLOB,
     BLOOMFILTER,
     BOOL,

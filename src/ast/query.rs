@@ -826,18 +826,12 @@ impl fmt::Display for TableFactor {
             } => {
                 write!(
                     f,
-                    "{} PIVOT({} FOR {} IN (",
+                    "{} PIVOT({} FOR {} IN ({}))",
                     table,
                     aggregate_function,
-                    Expr::CompoundIdentifier(value_column.to_vec())
+                    Expr::CompoundIdentifier(value_column.to_vec()),
+                    display_comma_separated(pivot_values)
                 )?;
-                for (idx, value) in pivot_values.iter().enumerate() {
-                    if idx > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{}", value)?;
-                }
-                write!(f, "))")?;
                 if alias.is_some() {
                     write!(f, " AS {}", alias.as_ref().unwrap())?;
                 }
@@ -850,14 +844,14 @@ impl fmt::Display for TableFactor {
                 columns,
                 alias,
             } => {
-                write!(f, "{} UNPIVOT({} FOR {} IN (", table, value, name)?;
-                for (idx, column) in columns.iter().enumerate() {
-                    if idx > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{}", column)?;
-                }
-                write!(f, "))")?;
+                write!(
+                    f,
+                    "{} UNPIVOT({} FOR {} IN ({}))",
+                    table,
+                    value,
+                    name,
+                    display_comma_separated(columns)
+                )?;
                 if alias.is_some() {
                     write!(f, " AS {}", alias.as_ref().unwrap())?;
                 }

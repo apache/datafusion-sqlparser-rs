@@ -2069,6 +2069,8 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(MONTH FROM d)");
     verified_stmt("SELECT EXTRACT(WEEK FROM d)");
     verified_stmt("SELECT EXTRACT(DAY FROM d)");
+    verified_stmt("SELECT EXTRACT(DAYOFWEEK FROM d)");
+    verified_stmt("SELECT EXTRACT(DAYOFYEAR FROM d)");
     verified_stmt("SELECT EXTRACT(DATE FROM d)");
     verified_stmt("SELECT EXTRACT(HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(MINUTE FROM d)");
@@ -2082,6 +2084,7 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(DOY FROM d)");
     verified_stmt("SELECT EXTRACT(EPOCH FROM d)");
     verified_stmt("SELECT EXTRACT(ISODOW FROM d)");
+    verified_stmt("SELECT EXTRACT(ISOWEEK FROM d)");
     verified_stmt("SELECT EXTRACT(ISOYEAR FROM d)");
     verified_stmt("SELECT EXTRACT(JULIAN FROM d)");
     verified_stmt("SELECT EXTRACT(MICROSECOND FROM d)");
@@ -2094,6 +2097,7 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(TIMEZONE FROM d)");
     verified_stmt("SELECT EXTRACT(TIMEZONE_HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(TIMEZONE_MINUTE FROM d)");
+    verified_stmt("SELECT EXTRACT(TIME FROM d)");
 
     let res = parse_sql_statements("SELECT EXTRACT(JIFFY FROM d)");
     assert_eq!(

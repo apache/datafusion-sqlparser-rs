@@ -456,6 +456,7 @@ impl<'a> Parser<'a> {
                     Ok(Statement::Query(Box::new(self.parse_query()?)))
                 }
                 Keyword::TRUNCATE => Ok(self.parse_truncate()?),
+                Keyword::ATTACH => Ok(self.parse_attach_database()?),
                 Keyword::MSCK => Ok(self.parse_msck()?),
                 Keyword::CREATE => Ok(self.parse_create()?),
                 Keyword::CACHE => Ok(self.parse_cache_table()?),
@@ -540,6 +541,18 @@ impl<'a> Parser<'a> {
             table_name,
             partitions,
             table,
+        })
+    }
+
+    pub fn parse_attach_database(&mut self) -> Result<Statement, ParserError> {
+        let database = self.parse_keyword(Keyword::DATABASE);
+        let database_file_name = self.parse_expr()?;
+        self.expect_keyword(Keyword::AS)?;
+        let schema_name = self.parse_identifier()?;
+        Ok(Statement::AttachDatabase {
+            database,
+            schema_name,
+            database_file_name,
         })
     }
 

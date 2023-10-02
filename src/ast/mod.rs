@@ -1429,6 +1429,16 @@ pub enum Statement {
         name: Ident,
         operation: AlterRoleOperation,
     },
+    /// ATTACH DATABASE 'path/to/file' AS alias
+    /// (SQLite-specific)
+    AttachDatabase {
+        /// The name to bind to the newly attached database
+        schema_name: Ident,
+        /// An expression that indicates the path to the database file
+        database_file_name: Expr,
+        /// true if the syntax is 'ATTACH DATABASE', false if it's just 'ATTACH'
+        database: bool,
+    },
     /// DROP
     Drop {
         /// The type of the object to drop: TABLE, VIEW, etc.
@@ -1968,6 +1978,14 @@ impl fmt::Display for Statement {
                     }
                 }
                 Ok(())
+            }
+            Statement::AttachDatabase {
+                schema_name,
+                database_file_name,
+                database,
+            } => {
+                let keyword = if *database { "DATABASE " } else { "" };
+                write!(f, "ATTACH {keyword}{database_file_name} AS {schema_name}")
             }
             Statement::Analyze {
                 table_name,

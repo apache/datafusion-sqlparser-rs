@@ -7114,7 +7114,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_except = if dialect_of!(self is GenericDialect | BigQueryDialect) {
+        let opt_except = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect) {
             self.parse_optional_select_item_except()?
         } else {
             None
@@ -7125,7 +7125,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect) {
+        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect) {
             self.parse_optional_select_item_replace()?
         } else {
             None

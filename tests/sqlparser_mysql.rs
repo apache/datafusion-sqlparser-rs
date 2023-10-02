@@ -1316,6 +1316,38 @@ fn parse_update_with_joins() {
 }
 
 #[test]
+fn parse_delete_with_order_by() {
+    let sql = "DELETE FROM customers ORDER BY id DESC";
+    match mysql().verified_stmt(sql) {
+        Statement::Delete { order_by, .. } => {
+            assert_eq!(
+                vec![OrderByExpr {
+                    expr: Expr::Identifier(Ident {
+                        value: "id".to_owned(),
+                        quote_style: None
+                    }),
+                    asc: Some(false),
+                    nulls_first: None,
+                }],
+                order_by
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_delete_with_limit() {
+    let sql = "DELETE FROM customers LIMIT 100";
+    match mysql().verified_stmt(sql) {
+        Statement::Delete { limit, .. } => {
+            assert_eq!(Some(Expr::Value(number("100"))), limit);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_alter_table_drop_primary_key() {
     assert_matches!(
         alter_table_op(mysql_and_generic().verified_stmt("ALTER TABLE tab DROP PRIMARY KEY")),

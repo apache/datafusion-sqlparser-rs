@@ -5306,9 +5306,18 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-
         let returning = if self.parse_keyword(Keyword::RETURNING) {
             Some(self.parse_comma_separated(Parser::parse_select_item)?)
+        } else {
+            None
+        };
+        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_order_by_expr)?
+        } else {
+            vec![]
+        };
+        let limit = if self.parse_keyword(Keyword::LIMIT) {
+            self.parse_limit()?
         } else {
             None
         };
@@ -5319,6 +5328,8 @@ impl<'a> Parser<'a> {
             using,
             selection,
             returning,
+            order_by,
+            limit,
         })
     }
 

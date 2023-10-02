@@ -525,6 +525,7 @@ fn parse_where_delete_statement() {
             using,
             selection,
             returning,
+            ..
         } => {
             assert_eq!(
                 TableFactor::Table {
@@ -565,6 +566,7 @@ fn parse_where_delete_with_alias_statement() {
             using,
             selection,
             returning,
+            ..
         } => {
             assert_eq!(
                 TableFactor::Table {

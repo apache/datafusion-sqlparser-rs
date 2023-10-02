@@ -1301,6 +1301,10 @@ pub enum Statement {
         selection: Option<Expr>,
         /// RETURNING
         returning: Option<Vec<SelectItem>>,
+        /// ORDER BY (MySQL)
+        order_by: Vec<OrderByExpr>,
+        /// LIMIT (MySQL)
+        limit: Option<Expr>,
     },
     /// CREATE VIEW
     CreateView {
@@ -2141,6 +2145,8 @@ impl fmt::Display for Statement {
                 using,
                 selection,
                 returning,
+                order_by,
+                limit,
             } => {
                 write!(f, "DELETE ")?;
                 if !tables.is_empty() {
@@ -2155,6 +2161,12 @@ impl fmt::Display for Statement {
                 }
                 if let Some(returning) = returning {
                     write!(f, " RETURNING {}", display_comma_separated(returning))?;
+                }
+                if !order_by.is_empty() {
+                    write!(f, " ORDER BY {}", display_comma_separated(order_by))?;
+                }
+                if let Some(limit) = limit {
+                    write!(f, " LIMIT {limit}")?;
                 }
                 Ok(())
             }

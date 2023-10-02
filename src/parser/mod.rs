@@ -5041,6 +5041,27 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
+
+        // BigQuery accepts any number of quoted identifiers of a table name.
+        // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_identifiers
+        if dialect_of!(self is BigQueryDialect)
+            && idents.iter().any(|ident| ident.value.contains('.'))
+        {
+            idents = idents
+                .into_iter()
+                .flat_map(|ident| {
+                    ident
+                        .value
+                        .split('.')
+                        .map(|value| Ident {
+                            value: value.into(),
+                            quote_style: ident.quote_style,
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        }
+
         Ok(ObjectName(idents))
     }
 

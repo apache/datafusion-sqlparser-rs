@@ -6792,10 +6792,10 @@ fn parse_time_functions() {
 
         // Validating Parenthesis
         let sql_without_parens = format!("SELECT {}", func_name);
-        let mut ast_without_parens = select_localtime_func_call_ast.clone();
+        let mut ast_without_parens = select_localtime_func_call_ast;
         ast_without_parens.special = true;
         assert_eq!(
-            &Expr::Function(ast_without_parens.clone()),
+            &Expr::Function(ast_without_parens),
             expr_from_projection(&verified_only_select(&sql_without_parens).projection[0])
         );
     }

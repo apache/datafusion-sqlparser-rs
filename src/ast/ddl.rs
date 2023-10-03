@@ -20,7 +20,7 @@ use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use sqlparser::ast::WithSpan;
+use sqlparser::ast::{Value, WithSpan};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -319,6 +319,12 @@ pub enum TableConstraint {
         /// Referred column identifier list.
         columns: Vec<Ident>,
     },
+    ClickhouseIndex {
+        index_expr: Expr,
+        column: Option<WithSpan<Ident>>,
+        index_type: Option<ObjectName>,
+        granularity: Option<Value>,
+    },
     /// MySQLs [fulltext][1] definition. Since the [`SPATIAL`][2] definition is exactly the same,
     /// and MySQL displays both the same way, it is part of this definition as well.
     ///
@@ -400,6 +406,24 @@ impl fmt::Display for TableConstraint {
                 }
                 write!(f, " ({})", display_comma_separated(columns))?;
 
+                Ok(())
+            }
+            TableConstraint::ClickhouseIndex {
+                index_expr,
+                column,
+                index_type,
+                granularity,
+            } => {
+                write!(f, "INDEX {index_expr}")?;
+                if let Some(column) = column {
+                    write!(f, " {column}")?;
+                }
+                if let Some(index_type) = index_type {
+                    write!(f, " TYPE {index_type}")?;
+                }
+                if let Some(granularity) = granularity {
+                    write!(f, " GRANULARITY {granularity}")?;
+                }
                 Ok(())
             }
             Self::FulltextOrSpatial {

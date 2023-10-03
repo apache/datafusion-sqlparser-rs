@@ -203,6 +203,11 @@ fn parse_create_table_ttl() {
 }
 
 #[test]
+fn parse_create_table_index() {
+    clickhouse().verified_stmt("CREATE TABLE default.runs (`workspace` LowCardinality(String), `id` String, `comment` String, INDEX bloom_filter_id_index_4 id TYPE bloom_filter GRANULARITY 4, INDEX comment_lowercase(lower(comment)) TYPE inverted) ENGINE=ReplacingMergeTree(ingested_at) ORDER BY (workspace, created_at, id) SETTINGS index_granularity = 2048");
+}
+
+#[test]
 fn parse_delimited_identifiers() {
     // check that quoted identifiers in any position remain quoted after serialization
     let select = clickhouse().verified_only_select(

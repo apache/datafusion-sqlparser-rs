@@ -4103,6 +4103,36 @@ impl<'a> Parser<'a> {
                 }))
             }
             Token::Word(w)
+                if (w.keyword == Keyword::INDEX || w.keyword == Keyword::KEY)
+                    && dialect_of!(self is ClickHouseDialect) =>
+            {
+                let index_expr = self.parse_expr()?;
+
+                let column = match self.peek_token().token {
+                    Token::Word(word) if word.keyword == Keyword::TYPE => None,
+                    _ => Some(self.parse_identifier()?),
+                };
+
+                let index_type = if self.parse_keyword(Keyword::TYPE) {
+                    Some(self.parse_object_name()?)
+                } else {
+                    None
+                };
+
+                let granularity = if self.parse_keyword(Keyword::GRANULARITY) {
+                    Some(self.parse_number_value()?)
+                } else {
+                    None
+                };
+
+                Ok(Some(TableConstraint::ClickhouseIndex {
+                    index_expr,
+                    column,
+                    index_type,
+                    granularity,
+                }))
+            }
+            Token::Word(w)
                 if (w.keyword == Keyword::FULLTEXT || w.keyword == Keyword::SPATIAL)
                     && dialect_of!(self is GenericDialect | MySqlDialect) =>
             {

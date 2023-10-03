@@ -296,6 +296,7 @@ define_keywords!(
     GLOBAL,
     GRANT,
     GRANTED,
+    GRANULARITY,
     GRAPHVIZ,
     GROUP,
     GROUPING,

@@ -188,6 +188,14 @@ fn parse_kill() {
 }
 
 #[test]
+fn parse_create_table_order_by() {
+    clickhouse().one_statement_parses_to(
+        "CREATE TABLE analytics.int_user_stats (`user_id` String, `num_events` UInt64) ENGINE=ReplicatedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}') ORDER BY tuple() SETTINGS index_granularity = 8192",
+        "CREATE TABLE analytics.int_user_stats (`user_id` String, `num_events` UInt64) ENGINE=ReplicatedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}') ORDER BY () SETTINGS index_granularity = 8192"
+    );
+}
+
+#[test]
 fn parse_delimited_identifiers() {
     // check that quoted identifiers in any position remain quoted after serialization
     let select = clickhouse().verified_only_select(

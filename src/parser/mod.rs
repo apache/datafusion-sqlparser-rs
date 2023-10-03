@@ -1382,7 +1382,9 @@ impl<'a> Parser<'a> {
                 trim_what: Some(trim_what),
                 trim_characters: None,
             })
-        } else if self.consume_token(&Token::Comma) && dialect_of!(self is SnowflakeDialect | BigQueryDialect) {
+        } else if self.consume_token(&Token::Comma)
+            && dialect_of!(self is SnowflakeDialect | BigQueryDialect)
+        {
             let characters = self.parse_comma_separated(Parser::parse_expr)?;
             self.expect_token(&Token::RParen)?;
             Ok(Expr::Trim {
@@ -3679,7 +3681,13 @@ impl<'a> Parser<'a> {
                 self.expect_token(&Token::RParen)?;
                 Some(columns)
             } else {
-                Some(vec![self.parse_identifier()?.unwrap()])
+                if self.parse_keyword(Keyword::TUPLE) && dialect_of!(self is ClickHouseDialect) {
+                    self.expect_token(&Token::LParen)?;
+                    self.expect_token(&Token::RParen)?;
+                    Some(vec![])
+                } else {
+                    Some(vec![self.parse_identifier()?.unwrap()])
+                }
             }
         } else {
             None
@@ -7114,7 +7122,8 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_except = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect) {
+        let opt_except = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect)
+        {
             self.parse_optional_select_item_except()?
         } else {
             None
@@ -7125,7 +7134,8 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect) {
+        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect)
+        {
             self.parse_optional_select_item_replace()?
         } else {
             None

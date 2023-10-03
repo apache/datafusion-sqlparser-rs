@@ -3693,6 +3693,14 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let table_ttl = if self.parse_keyword(Keyword::TTL)
+            && dialect_of!(self is ClickHouseDialect | GenericDialect)
+        {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
         let clickhouse_settings = if self.parse_keyword(Keyword::SETTINGS) {
             Some(self.parse_comma_separated(Parser::parse_sql_option)?)
         } else {
@@ -3771,6 +3779,7 @@ impl<'a> Parser<'a> {
             .on_commit(on_commit)
             .on_cluster(on_cluster)
             .strict(strict)
+            .table_ttl(table_ttl)
             .clickhouse_settings(clickhouse_settings)
             .build())
     }

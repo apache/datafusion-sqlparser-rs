@@ -627,6 +627,7 @@ define_keywords!(
     TRUE,
     TRUNCATE,
     TRY_CAST,
+    TTL,
     TUPLE,
     TYPE,
     UESCAPE,

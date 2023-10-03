@@ -1489,7 +1489,9 @@ pub enum Statement {
         /// then strict typing rules apply to that table.
         strict: bool,
 
-        // SETTINGS k = v, k2 = v2...
+        /// TTL <expr>
+        table_ttl: Option<Expr>,
+        /// SETTINGS k = v, k2 = v2...
         clickhouse_settings: Option<Vec<SqlOption>>,
     },
     /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
@@ -2441,6 +2443,7 @@ impl fmt::Display for Statement {
                 on_cluster,
                 order_by,
                 strict,
+                table_ttl,
                 clickhouse_settings,
             } => {
                 // We want to allow the following options
@@ -2596,6 +2599,9 @@ impl fmt::Display for Statement {
                 }
                 if let Some(order_by) = order_by {
                     write!(f, " ORDER BY ({})", display_comma_separated(order_by))?;
+                }
+                if let Some(table_ttl) = table_ttl {
+                    write!(f, " TTL {table_ttl}")?;
                 }
                 if let Some(query) = query {
                     write!(f, " AS {query}")?;

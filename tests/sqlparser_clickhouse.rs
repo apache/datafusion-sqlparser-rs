@@ -196,6 +196,13 @@ fn parse_create_table_order_by() {
 }
 
 #[test]
+fn parse_create_table_ttl() {
+    clickhouse().verified_stmt(
+        "CREATE TABLE analytics.int_user_stats (`user_id` String, `num_events` UInt64) ENGINE=ReplicatedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}') ORDER BY (user_id) TTL toDateTime(state_at) + toIntervalHour(12) SETTINGS index_granularity = 8192",
+    );
+}
+
+#[test]
 fn parse_delimited_identifiers() {
     // check that quoted identifiers in any position remain quoted after serialization
     let select = clickhouse().verified_only_select(

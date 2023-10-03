@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::{
-    ColumnDef, EngineSpec, FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName,
+    ColumnDef, EngineSpec, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName,
     OnCommit, Query, SqlOption, Statement, TableConstraint,
 };
 use crate::parser::ParserError;
@@ -73,6 +73,7 @@ pub struct CreateTableBuilder {
     pub on_cluster: Option<String>,
     pub order_by: Option<Vec<Ident>>,
     pub strict: bool,
+    pub table_ttl: Option<Expr>,
     pub clickhouse_settings: Option<Vec<SqlOption>>,
 }
 
@@ -107,6 +108,7 @@ impl CreateTableBuilder {
             on_cluster: None,
             order_by: None,
             strict: false,
+            table_ttl: None,
             clickhouse_settings: None,
         }
     }
@@ -243,6 +245,11 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn table_ttl(mut self, table_ttl: Option<Expr>) -> Self {
+        self.table_ttl = table_ttl;
+        self
+    }
+
     pub fn clickhouse_settings(mut self, clickhouse_settings: Option<Vec<SqlOption>>) -> Self {
         self.clickhouse_settings = clickhouse_settings;
         self
@@ -278,6 +285,7 @@ impl CreateTableBuilder {
             on_cluster: self.on_cluster,
             order_by: self.order_by,
             strict: self.strict,
+            table_ttl: self.table_ttl,
             clickhouse_settings: self.clickhouse_settings,
         }
     }
@@ -319,6 +327,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 on_cluster,
                 order_by,
                 strict,
+                table_ttl,
                 clickhouse_settings,
             } => Ok(Self {
                 or_replace,
@@ -349,6 +358,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 on_cluster,
                 order_by,
                 strict,
+                table_ttl,
                 clickhouse_settings,
             }),
             _ => Err(ParserError::ParserError(format!(

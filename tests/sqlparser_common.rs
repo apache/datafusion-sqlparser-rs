@@ -5321,6 +5321,8 @@ fn parse_create_view() {
             with_options,
             cluster_by,
             with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<Ident>::new(), columns);
@@ -5330,6 +5332,8 @@ fn parse_create_view() {
             assert_eq!(with_options, vec![]);
             assert_eq!(cluster_by, vec![]);
             assert!(!late_binding);
+            assert!(!if_not_exists);
+            assert!(!temporary);
         }
         _ => unreachable!(),
     }
@@ -5371,6 +5375,8 @@ fn parse_create_view_with_columns() {
             materialized,
             cluster_by,
             with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![Ident::new("has"), Ident::new("cols")]);
@@ -5380,6 +5386,39 @@ fn parse_create_view_with_columns() {
             assert!(!or_replace);
             assert_eq!(cluster_by, vec![]);
             assert!(!late_binding);
+            assert!(!if_not_exists);
+            assert!(!temporary);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_view_temporary() {
+    let sql = "CREATE TEMPORARY VIEW myschema.myview AS SELECT foo FROM bar";
+    match verified_stmt(sql) {
+        Statement::CreateView {
+            name,
+            columns,
+            query,
+            or_replace,
+            materialized,
+            with_options,
+            cluster_by,
+            with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
+        } => {
+            assert_eq!("myschema.myview", name.to_string());
+            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!("SELECT foo FROM bar", query.to_string());
+            assert!(!materialized);
+            assert!(!or_replace);
+            assert_eq!(with_options, vec![]);
+            assert_eq!(cluster_by, vec![]);
+            assert!(!late_binding);
+            assert!(!if_not_exists);
+            assert!(temporary);
         }
         _ => unreachable!(),
     }
@@ -5398,6 +5437,8 @@ fn parse_create_or_replace_view() {
             materialized,
             cluster_by,
             with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -5407,6 +5448,8 @@ fn parse_create_or_replace_view() {
             assert!(or_replace);
             assert_eq!(cluster_by, vec![]);
             assert!(!late_binding);
+            assert!(!if_not_exists);
+            assert!(!temporary);
         }
         _ => unreachable!(),
     }
@@ -5429,6 +5472,8 @@ fn parse_create_or_replace_materialized_view() {
             materialized,
             cluster_by,
             with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -5438,6 +5483,8 @@ fn parse_create_or_replace_materialized_view() {
             assert!(or_replace);
             assert_eq!(cluster_by, vec![]);
             assert!(!late_binding);
+            assert!(!if_not_exists);
+            assert!(!temporary);
         }
         _ => unreachable!(),
     }
@@ -5456,6 +5503,8 @@ fn parse_create_materialized_view() {
             with_options,
             cluster_by,
             with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<Ident>::new(), columns);
@@ -5465,6 +5514,8 @@ fn parse_create_materialized_view() {
             assert!(!or_replace);
             assert_eq!(cluster_by, vec![]);
             assert!(!late_binding);
+            assert!(!if_not_exists);
+            assert!(!temporary);
         }
         _ => unreachable!(),
     }
@@ -5483,6 +5534,8 @@ fn parse_create_materialized_view_with_cluster_by() {
             with_options,
             cluster_by,
             with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<Ident>::new(), columns);
@@ -5492,6 +5545,8 @@ fn parse_create_materialized_view_with_cluster_by() {
             assert!(!or_replace);
             assert_eq!(cluster_by, vec![Ident::new("foo")]);
             assert!(!late_binding);
+            assert!(!if_not_exists);
+            assert!(!temporary);
         }
         _ => unreachable!(),
     }

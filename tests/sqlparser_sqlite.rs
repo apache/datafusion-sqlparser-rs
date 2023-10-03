@@ -62,6 +62,37 @@ fn parse_create_virtual_table() {
 }
 
 #[test]
+fn parse_create_view_temporary_if_not_exists() {
+    let sql = "CREATE TEMPORARY VIEW IF NOT EXISTS myschema.myview AS SELECT foo FROM bar";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::CreateView {
+            name,
+            columns,
+            query,
+            or_replace,
+            materialized,
+            with_options,
+            cluster_by,
+            with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
+        } => {
+            assert_eq!("myschema.myview", name.to_string());
+            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!("SELECT foo FROM bar", query.to_string());
+            assert!(!materialized);
+            assert!(!or_replace);
+            assert_eq!(with_options, vec![]);
+            assert_eq!(cluster_by, vec![]);
+            assert!(!late_binding);
+            assert!(if_not_exists);
+            assert!(temporary);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn double_equality_operator() {
     // Sqlite supports this operator: https://www.sqlite.org/lang_expr.html#binaryops
     let input = "SELECT a==b FROM t";

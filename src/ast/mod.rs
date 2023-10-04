@@ -471,6 +471,14 @@ pub enum Expr {
         list: Vec<Expr>,
         negated: bool,
     },
+    /// `[ NOT ] IN fn(val1, val2, ...)`
+    InFunction {
+        expr: Box<Expr>,
+        function_name: ObjectName,
+        args: Vec<FunctionArg>,
+        negated: bool,
+    },
+
     /// `[ NOT ] IN (SELECT ...)`
     InSubquery {
         expr: Box<Expr>,
@@ -728,6 +736,18 @@ impl fmt::Display for Expr {
                 expr,
                 if *negated { "NOT " } else { "" },
                 display_comma_separated(list)
+            ),
+            Expr::InFunction {
+                expr,
+                function_name,
+                args,
+                negated,
+            } => write!(
+                f,
+                "{} {}IN {function_name}({})",
+                expr,
+                if *negated { "NOT " } else { "" },
+                display_comma_separated(args)
             ),
             Expr::InSubquery {
                 expr,

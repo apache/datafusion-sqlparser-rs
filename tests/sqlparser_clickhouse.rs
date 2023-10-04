@@ -472,6 +472,34 @@ fn parse_select_star_replace() {
     clickhouse().verified_stmt("SELECT * REPLACE (i + 1 AS i) FROM columns_transformers");
 }
 
+#[test]
+fn parse_in_array() {
+    clickhouse()
+        .verified_stmt("SELECT * FROM latest_schemas WHERE workspace IN array('synq-ops', 'test')");
+    clickhouse().verified_stmt("SELECT * FROM latest_schemas WHERE workspace IN array()");
+}
+
+#[test]
+fn parse_in_nested() {
+    clickhouse().verified_stmt("SELECT (CounterID, UserID) IN ((34, 123), (101500, 456)) FROM foo");
+}
+
+#[test]
+fn parse_in_array_square_syntax() {
+    clickhouse().one_statement_parses_to(
+        "SELECT * FROM latest_schemas WHERE workspace IN ['synq-ops', 'test']",
+        "SELECT * FROM latest_schemas WHERE workspace IN array('synq-ops', 'test')",
+    );
+}
+
+#[test]
+fn parse_in_array_square_syntax_empty() {
+    clickhouse().one_statement_parses_to(
+        "SELECT * FROM latest_schemas WHERE workspace IN []",
+        "SELECT * FROM latest_schemas WHERE workspace IN array()",
+    );
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],

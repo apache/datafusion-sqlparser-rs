@@ -2012,6 +2012,42 @@ impl<'a> Parser<'a> {
                 negated,
             });
         }
+
+        if dialect_of!(self is ClickHouseDialect | GenericDialect) {
+            if self.consume_token(&Token::LBracket) {
+                let function_name = ObjectName(vec![Ident::new("array")]);
+                let args = if self.consume_token(&Token::RBracket) {
+                    vec![]
+                } else {
+                    let list = self.parse_comma_separated(Parser::parse_function_args)?;
+                    self.expect_token(&Token::RBracket)?;
+                    list
+                };
+                return Ok(Expr::InFunction {
+                    expr: Box::new(expr),
+                    function_name,
+                    args,
+                    negated,
+                });
+            } else {
+                let token_0 = self.peek_nth_token(0);
+                let token_1 = self.peek_nth_token(1);
+                if token_1.token == Token::LParen
+                    && matches!(token_0.token, Token::Word(w) if w.keyword == Keyword::ARRAY)
+                {
+                    let function_name = self.parse_object_name()?;
+                    self.expect_token(&Token::LParen)?;
+                    let args = self.parse_optional_args()?;
+                    return Ok(Expr::InFunction {
+                        expr: Box::new(expr),
+                        function_name,
+                        args,
+                        negated,
+                    });
+                }
+            }
+        }
+
         self.expect_token(&Token::LParen)?;
         let in_op = if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
             self.prev_token();

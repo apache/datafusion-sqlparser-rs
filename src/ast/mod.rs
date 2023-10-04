@@ -496,7 +496,7 @@ pub enum Expr {
     /// ```sql
     /// TRIM([BOTH | LEADING | TRAILING] [<expr> FROM] <expr>)
     /// TRIM(<expr>)
-    /// TRIM(<expr>, [, characters]) -- only Snowflake
+    /// TRIM(<expr>, [, characters]) -- only Snowflake or Bigquery
     /// ```
     Trim {
         expr: Box<Expr>,

@@ -3009,11 +3009,79 @@ impl<'a> Parser<'a> {
 
         let with_options = self.parse_options(Keyword::WITH)?;
 
+        let engine = if self.parse_keyword(Keyword::ENGINE) {
+            self.expect_token(&Token::Eq)?;
+            let next_token = self.next_token();
+            let engine_name = match next_token.token {
+                Token::Word(w) => w.value,
+                _ => self.expected("identifier", next_token)?,
+            };
+            let engine_options = if self.consume_token(&Token::LParen) {
+                let columns = if self.peek_token() != Token::RParen {
+                    self.parse_comma_separated(|p| p.parse_expr())?
+                } else {
+                    vec![]
+                };
+                self.expect_token(&Token::RParen)?;
+                Some(columns)
+            } else {
+                None
+            };
+            Some(EngineSpec {
+                name: engine_name,
+                options: engine_options,
+            })
+        } else {
+            None
+        };
+
         let cluster_by = if self.parse_keyword(Keyword::CLUSTER) {
             self.expect_keyword(Keyword::BY)?;
             self.parse_parenthesized_column_list(Optional, false)?
         } else {
             vec![]
+        };
+
+        let primary_key = if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY]) {
+            Some(self.parse_parenthesized_column_list(Optional, false)?)
+        } else {
+            None
+        };
+
+        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+            if self.consume_token(&Token::LParen) {
+                let columns = if self.peek_token() != Token::RParen {
+                    self.parse_comma_separated(|p| p.parse_identifier().map(WithSpan::unwrap))?
+                } else {
+                    vec![]
+                };
+                self.expect_token(&Token::RParen)?;
+                Some(columns)
+            } else {
+                if self.parse_keyword(Keyword::TUPLE) && dialect_of!(self is ClickHouseDialect) {
+                    self.expect_token(&Token::LParen)?;
+                    self.expect_token(&Token::RParen)?;
+                    Some(vec![])
+                } else {
+                    Some(vec![self.parse_identifier()?.unwrap()])
+                }
+            }
+        } else {
+            None
+        };
+
+        let table_ttl = if self.parse_keyword(Keyword::TTL)
+            && dialect_of!(self is ClickHouseDialect | GenericDialect)
+        {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        let clickhouse_settings = if self.parse_keyword(Keyword::SETTINGS) {
+            Some(self.parse_comma_separated(Parser::parse_sql_option)?)
+        } else {
+            None
         };
 
         self.expect_keyword(Keyword::AS)?;
@@ -3035,7 +3103,12 @@ impl<'a> Parser<'a> {
             materialized,
             or_replace,
             with_options,
+            engine,
             cluster_by,
+            primary_key,
+            order_by,
+            table_ttl,
+            clickhouse_settings,
             destination_table,
             columns_with_types,
             late_binding,

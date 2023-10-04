@@ -438,6 +438,13 @@ fn parse_create_view() {
 }
 
 #[test]
+fn parse_create_materialized_view() {
+    clickhouse().verified_stmt(
+        r#"CREATE MATERIALIZED VIEW foo (`baz` String) ENGINE=ReplicatedReplacingMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}', created_at) ORDER BY (workspace, asset) SETTINGS index_granularity = 8192 AS SELECT bar AS baz FROM in"#,
+    );
+}
+
+#[test]
 fn parse_limit_by() {
     clickhouse().verified_stmt(
         r#"SELECT * FROM default.last_asset_runs_mv ORDER BY created_at DESC LIMIT 1 BY asset"#,

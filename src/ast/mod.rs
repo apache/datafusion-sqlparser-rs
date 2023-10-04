@@ -1462,7 +1462,20 @@ pub enum Statement {
         columns: Vec<Ident>,
         query: Box<Query>,
         with_options: Vec<SqlOption>,
+        engine: Option<EngineSpec>,
         cluster_by: Vec<Ident>,
+        /// ClickHouse "PRIMARY KEY" clause. Note that omitted PRIMARY KEY is different
+        /// than empty (represented as ()), the latter meaning "no sorting".
+        /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
+        primary_key: Option<Vec<Ident>>,
+        /// ClickHouse "ORDER BY " clause. Note that omitted ORDER BY is different
+        /// than empty (represented as ()), the latter meaning "no sorting".
+        /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
+        order_by: Option<Vec<Ident>>,
+        /// TTL <expr>
+        table_ttl: Option<Expr>,
+        /// SETTINGS k = v, k2 = v2...
+        clickhouse_settings: Option<Vec<SqlOption>>,
         destination_table: Option<ObjectName>,
         columns_with_types: Vec<ColumnDef>,
         late_binding: bool,
@@ -2403,7 +2416,12 @@ impl fmt::Display for Statement {
                 query,
                 materialized,
                 with_options,
+                engine,
                 cluster_by,
+                primary_key,
+                order_by,
+                table_ttl,
+                clickhouse_settings,
                 destination_table,
                 columns_with_types,
                 late_binding,
@@ -2432,7 +2450,27 @@ impl fmt::Display for Statement {
                 if !cluster_by.is_empty() {
                     write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
                 }
+                if let Some(engine) = engine {
+                    write!(f, " ENGINE={engine}")?;
+                }
+                if let Some(primary_key) = primary_key {
+                    write!(f, " PRIMARY KEY ({})", display_comma_separated(primary_key))?;
+                }
+                if let Some(order_by) = order_by {
+                    write!(f, " ORDER BY ({})", display_comma_separated(order_by))?;
+                }
+                if let Some(table_ttl) = table_ttl {
+                    write!(f, " TTL {table_ttl}")?;
+                }
+                if let Some(clickhouse_settings) = clickhouse_settings {
+                    write!(
+                        f,
+                        " SETTINGS {}",
+                        display_comma_separated(clickhouse_settings)
+                    )?;
+                }
                 write!(f, " AS {query}")?;
+
                 if *late_binding {
                     write!(f, " WITH NO SCHEMA BINDING")?;
                 }

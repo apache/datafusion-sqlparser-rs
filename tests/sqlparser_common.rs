@@ -5626,7 +5626,12 @@ fn parse_create_view() {
             or_replace,
             materialized,
             with_options,
+            engine,
             cluster_by,
+            primary_key,
+            order_by,
+            table_ttl,
+            clickhouse_settings,
             destination_table,
             columns_with_types,
             late_binding,
@@ -5637,7 +5642,12 @@ fn parse_create_view() {
             assert!(!materialized);
             assert!(!or_replace);
             assert_eq!(with_options, vec![]);
+            assert_eq!(engine, None);
             assert_eq!(cluster_by, vec![]);
+            assert_eq!(primary_key, None);
+            assert_eq!(order_by, None);
+            assert_eq!(table_ttl, None);
+            assert_eq!(clickhouse_settings, None);
             assert_eq!(destination_table, None);
             assert_eq!(columns_with_types, vec![]);
             assert_eq!(late_binding, false);
@@ -5680,7 +5690,12 @@ fn parse_create_view_with_columns() {
             with_options,
             query,
             materialized,
+            engine,
             cluster_by,
+            primary_key,
+            order_by,
+            table_ttl,
+            clickhouse_settings,
             destination_table,
             columns_with_types,
             late_binding,
@@ -5691,7 +5706,12 @@ fn parse_create_view_with_columns() {
             assert_eq!("SELECT 1, 2", query.to_string());
             assert!(!materialized);
             assert!(!or_replace);
+            assert_eq!(engine, None);
             assert_eq!(cluster_by, vec![]);
+            assert_eq!(primary_key, None);
+            assert_eq!(order_by, None);
+            assert_eq!(table_ttl, None);
+            assert_eq!(clickhouse_settings, None);
             assert_eq!(destination_table, None);
             assert_eq!(columns_with_types, vec![]);
             assert_eq!(late_binding, false);
@@ -5711,7 +5731,12 @@ fn parse_create_or_replace_view() {
             with_options,
             query,
             materialized,
+            engine,
             cluster_by,
+            primary_key,
+            order_by,
+            table_ttl,
+            clickhouse_settings,
             destination_table,
             columns_with_types,
             late_binding,
@@ -5722,7 +5747,12 @@ fn parse_create_or_replace_view() {
             assert_eq!("SELECT 1", query.to_string());
             assert!(!materialized);
             assert!(or_replace);
+            assert_eq!(engine, None);
             assert_eq!(cluster_by, vec![]);
+            assert_eq!(primary_key, None);
+            assert_eq!(order_by, None);
+            assert_eq!(table_ttl, None);
+            assert_eq!(clickhouse_settings, None);
             assert_eq!(destination_table, None);
             assert_eq!(columns_with_types, vec![]);
             assert_eq!(late_binding, false);
@@ -5746,7 +5776,12 @@ fn parse_create_or_replace_materialized_view() {
             with_options,
             query,
             materialized,
+            engine,
             cluster_by,
+            primary_key,
+            order_by,
+            table_ttl,
+            clickhouse_settings,
             destination_table,
             columns_with_types,
             late_binding,
@@ -5757,7 +5792,12 @@ fn parse_create_or_replace_materialized_view() {
             assert_eq!("SELECT 1", query.to_string());
             assert!(materialized);
             assert!(or_replace);
+            assert_eq!(engine, None);
             assert_eq!(cluster_by, vec![]);
+            assert_eq!(primary_key, None);
+            assert_eq!(order_by, None);
+            assert_eq!(table_ttl, None);
+            assert_eq!(clickhouse_settings, None);
             assert_eq!(destination_table, None);
             assert_eq!(columns_with_types, vec![]);
             assert_eq!(late_binding, false);
@@ -5777,7 +5817,12 @@ fn parse_create_materialized_view() {
             query,
             materialized,
             with_options,
+            engine,
             cluster_by,
+            primary_key,
+            order_by,
+            table_ttl,
+            clickhouse_settings,
             destination_table,
             columns_with_types,
             late_binding,
@@ -5788,7 +5833,12 @@ fn parse_create_materialized_view() {
             assert!(materialized);
             assert_eq!(with_options, vec![]);
             assert!(!or_replace);
+            assert_eq!(engine, None);
             assert_eq!(cluster_by, vec![]);
+            assert_eq!(primary_key, None);
+            assert_eq!(order_by, None);
+            assert_eq!(table_ttl, None);
+            assert_eq!(clickhouse_settings, None);
             assert_eq!(destination_table, None);
             assert_eq!(columns_with_types, vec![]);
             assert_eq!(late_binding, false);
@@ -5808,7 +5858,12 @@ fn parse_create_materialized_view_with_cluster_by() {
             query,
             materialized,
             with_options,
+            engine,
             cluster_by,
+            primary_key,
+            order_by,
+            table_ttl,
+            clickhouse_settings,
             destination_table,
             columns_with_types,
             late_binding,
@@ -5819,7 +5874,12 @@ fn parse_create_materialized_view_with_cluster_by() {
             assert!(materialized);
             assert_eq!(with_options, vec![]);
             assert!(!or_replace);
+            assert_eq!(engine, None);
             assert_eq!(cluster_by, vec![Ident::new("foo")]);
+            assert_eq!(primary_key, None);
+            assert_eq!(order_by, None);
+            assert_eq!(table_ttl, None);
+            assert_eq!(clickhouse_settings, None);
             assert_eq!(destination_table, None);
             assert_eq!(columns_with_types, vec![]);
             assert_eq!(late_binding, false);

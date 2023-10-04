@@ -897,7 +897,7 @@ impl fmt::Display for Expr {
                 expr,
                 trim_where,
                 trim_what,
-                trim_characters
+                trim_characters,
             } => {
                 write!(f, "TRIM(")?;
                 if let Some(ident) = trim_where {

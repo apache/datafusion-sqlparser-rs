@@ -1060,7 +1060,7 @@ fn test_snowflake_trim() {
     // missing comma separation
     let error_sql = "SELECT TRIM('xyz' 'a')";
     assert_eq!(
-        ParserError::ParserError("Expected ), found: 'a'\nNear `SELECT TRIM('xyz'`".to_owned()),
+        ParserError::ParserError("Expected ), found: 'a'".to_owned()),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }

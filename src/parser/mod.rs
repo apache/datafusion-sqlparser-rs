@@ -6991,18 +6991,27 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<Option<ExceptSelectItem>, ParserError> {
         let opt_except = if self.parse_keyword(Keyword::EXCEPT) {
-            let idents = self.parse_parenthesized_column_list(Mandatory, false)?;
-            match &idents[..] {
-                [] => {
-                    return self.expected(
-                        "at least one column should be parsed by the expect clause",
-                        self.peek_token(),
-                    )?;
+            if self.peek_token().token == Token::LParen {
+                let idents = self.parse_parenthesized_column_list(Mandatory, false)?;
+                match &idents[..] {
+                    [] => {
+                        return self.expected(
+                            "at least one column should be parsed by the expect clause",
+                            self.peek_token(),
+                        )?;
+                    }
+                    [first, idents @ ..] => Some(ExceptSelectItem {
+                        first_element: first.clone(),
+                        additional_elements: idents.to_vec(),
+                    }),
                 }
-                [first, idents @ ..] => Some(ExceptSelectItem {
-                    first_element: first.clone(),
-                    additional_elements: idents.to_vec(),
-                }),
+            } else {
+                // Clickhouse allows EXCEPT column_name
+                let ident = self.parse_identifier()?;
+                Some(ExceptSelectItem {
+                    first_element: ident,
+                    additional_elements: vec![],
+                })
             }
         } else {
             None

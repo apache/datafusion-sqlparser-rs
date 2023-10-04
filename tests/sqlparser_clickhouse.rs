@@ -193,6 +193,13 @@ fn parse_create_table_order_by() {
 }
 
 #[test]
+fn parse_create_table_primary_key() {
+    clickhouse().verified_stmt(
+        "CREATE TABLE analytics.int_user_stats (`user_id` String, `num_events` UInt64) ENGINE=ReplicatedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}') PRIMARY KEY (user_id) SETTINGS index_granularity = 8192",
+    );
+}
+
+#[test]
 fn parse_create_table_ttl() {
     clickhouse().verified_stmt(
         "CREATE TABLE analytics.int_user_stats (`user_id` String, `num_events` UInt64) ENGINE=ReplicatedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}') ORDER BY (user_id) TTL toDateTime(state_at) + toIntervalHour(12) SETTINGS index_granularity = 8192",

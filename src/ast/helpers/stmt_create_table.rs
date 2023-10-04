@@ -71,6 +71,7 @@ pub struct CreateTableBuilder {
     pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
     pub on_cluster: Option<String>,
+    pub primary_key: Option<Vec<Ident>>,
     pub order_by: Option<Vec<Ident>>,
     pub strict: bool,
     pub table_ttl: Option<Expr>,
@@ -106,6 +107,7 @@ impl CreateTableBuilder {
             collation: None,
             on_commit: None,
             on_cluster: None,
+            primary_key: None,
             order_by: None,
             strict: false,
             table_ttl: None,
@@ -235,6 +237,11 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn primary_key(mut self, primary_key: Option<Vec<Ident>>) -> Self {
+        self.primary_key = primary_key;
+        self
+    }
+
     pub fn order_by(mut self, order_by: Option<Vec<Ident>>) -> Self {
         self.order_by = order_by;
         self
@@ -283,6 +290,7 @@ impl CreateTableBuilder {
             collation: self.collation,
             on_commit: self.on_commit,
             on_cluster: self.on_cluster,
+            primary_key: self.primary_key,
             order_by: self.order_by,
             strict: self.strict,
             table_ttl: self.table_ttl,
@@ -325,6 +333,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 collation,
                 on_commit,
                 on_cluster,
+                primary_key,
                 order_by,
                 strict,
                 table_ttl,
@@ -356,6 +365,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 collation,
                 on_commit,
                 on_cluster,
+                primary_key,
                 order_by,
                 strict,
                 table_ttl,

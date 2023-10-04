@@ -3707,6 +3707,12 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let primary_key = if self.parse_keywords(&[Keyword::PRIMARY, Keyword::KEY]) {
+            Some(self.parse_parenthesized_column_list(Optional, false)?)
+        } else {
+            None
+        };
+
         let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
             if self.consume_token(&Token::LParen) {
                 let columns = if self.peek_token() != Token::RParen {
@@ -3809,6 +3815,7 @@ impl<'a> Parser<'a> {
             .engine(engine)
             .comment(comment)
             .auto_increment_offset(auto_increment_offset)
+            .primary_key(primary_key)
             .order_by(order_by)
             .default_charset(default_charset)
             .collation(collation)

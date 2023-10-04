@@ -1500,6 +1500,10 @@ pub enum Statement {
         /// ClickHouse "ON CLUSTER" clause:
         /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
         on_cluster: Option<String>,
+        /// ClickHouse "PRIMARY KEY" clause. Note that omitted PRIMARY KEY is different
+        /// than empty (represented as ()), the latter meaning "no sorting".
+        /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
+        primary_key: Option<Vec<Ident>>,
         /// ClickHouse "ORDER BY " clause. Note that omitted ORDER BY is different
         /// than empty (represented as ()), the latter meaning "no sorting".
         /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
@@ -2461,6 +2465,7 @@ impl fmt::Display for Statement {
                 collation,
                 on_commit,
                 on_cluster,
+                primary_key,
                 order_by,
                 strict,
                 table_ttl,
@@ -2616,6 +2621,9 @@ impl fmt::Display for Statement {
                 }
                 if let Some(auto_increment_offset) = auto_increment_offset {
                     write!(f, " AUTO_INCREMENT {auto_increment_offset}")?;
+                }
+                if let Some(primary_key) = primary_key {
+                    write!(f, " PRIMARY KEY ({})", display_comma_separated(primary_key))?;
                 }
                 if let Some(order_by) = order_by {
                     write!(f, " ORDER BY ({})", display_comma_separated(order_by))?;

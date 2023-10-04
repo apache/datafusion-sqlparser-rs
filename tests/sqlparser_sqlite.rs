@@ -80,6 +80,7 @@ fn parse_create_table_auto_increment() {
                     name: "bar".into(),
                     data_type: DataType::Int(None),
                     collation: None,
+                    codec: None,
                     options: vec![
                         ColumnOptionDef {
                             name: None,
@@ -112,12 +113,14 @@ fn parse_create_sqlite_quote() {
                         name: Ident::with_quote('"', "KEY"),
                         data_type: DataType::Int(None),
                         collation: None,
+                        codec: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::with_quote('[', "INDEX"),
                         data_type: DataType::Int(None),
                         collation: None,
+                        codec: None,
                         options: vec![],
                     },
                 ],

@@ -3883,6 +3883,22 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        let codec = if self.parse_keyword(Keyword::CODEC)
+            && dialect_of!(self is ClickHouseDialect | GenericDialect)
+        {
+            self.expect_token(&Token::LParen)?;
+            let args = if self.consume_token(&Token::RParen) {
+                vec![]
+            } else {
+                let args = self.parse_comma_separated(Parser::parse_expr)?;
+                self.expect_token(&Token::RParen)?;
+                args
+            };
+
+            Some(args)
+        } else {
+            None
+        };
         let mut options = vec![];
         loop {
             if self.parse_keyword(Keyword::CONSTRAINT) {
@@ -3905,6 +3921,7 @@ impl<'a> Parser<'a> {
             name,
             data_type,
             collation,
+            codec,
             options,
         })
     }

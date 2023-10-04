@@ -331,6 +331,7 @@ fn parse_create_table_with_defaults() {
                         name: "customer_id".into(),
                         data_type: DataType::Integer(None),
                         collation: None,
+                        codec: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Default(
@@ -342,6 +343,7 @@ fn parse_create_table_with_defaults() {
                         name: "store_id".into(),
                         data_type: DataType::SmallInt(None),
                         collation: None,
+                        codec: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -354,6 +356,7 @@ fn parse_create_table_with_defaults() {
                             unit: None
                         })),
                         collation: None,
+                        codec: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -366,6 +369,7 @@ fn parse_create_table_with_defaults() {
                             unit: None
                         })),
                         collation: Some(ObjectName(vec![Ident::with_quote('"', "es_ES")])),
+                        codec: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -378,12 +382,14 @@ fn parse_create_table_with_defaults() {
                             unit: None
                         })),
                         collation: None,
+                        codec: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: "address_id".into(),
                         data_type: DataType::SmallInt(None),
                         collation: None,
+                        codec: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull
@@ -393,6 +399,7 @@ fn parse_create_table_with_defaults() {
                         name: "activebool".into(),
                         data_type: DataType::Boolean,
                         collation: None,
+                        codec: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -408,6 +415,7 @@ fn parse_create_table_with_defaults() {
                         name: "create_date".into(),
                         data_type: DataType::Date,
                         collation: None,
+                        codec: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -425,6 +433,7 @@ fn parse_create_table_with_defaults() {
                         name: "last_update".into(),
                         data_type: DataType::Timestamp(None, TimezoneInfo::WithoutTimeZone),
                         collation: None,
+                        codec: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -440,6 +449,7 @@ fn parse_create_table_with_defaults() {
                         name: "active".into(),
                         data_type: DataType::Int(None),
                         collation: None,
+                        codec: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull
@@ -606,6 +616,7 @@ fn parse_alter_table_add_columns() {
                             name: "a".into(),
                             data_type: DataType::Text,
                             collation: None,
+                            codec: None,
                             options: vec![],
                         },
                     },
@@ -616,6 +627,7 @@ fn parse_alter_table_add_columns() {
                             name: "b".into(),
                             data_type: DataType::Int(None),
                             collation: None,
+                            codec: None,
                             options: vec![],
                         },
                     },
@@ -3562,36 +3574,42 @@ fn parse_create_table_with_alias() {
                         name: "int8_col".into(),
                         data_type: DataType::Int8(None),
                         collation: None,
+                        codec: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "int4_col".into(),
                         data_type: DataType::Int4(None),
                         collation: None,
+                        codec: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "int2_col".into(),
                         data_type: DataType::Int2(None),
                         collation: None,
+                        codec: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "float8_col".into(),
                         data_type: DataType::Float8,
                         collation: None,
+                        codec: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "float4_col".into(),
                         data_type: DataType::Float4,
                         collation: None,
+                        codec: None,
                         options: vec![]
                     },
                     ColumnDef {
                         name: "bool_col".into(),
                         data_type: DataType::Bool,
                         collation: None,
+                        codec: None,
                         options: vec![]
                     },
                 ]

@@ -13,21 +13,18 @@
 #![warn(clippy::all)]
 //! Test SQL syntax specific to ClickHouse.
 
-#[macro_use]
-mod test_utils;
-
-use test_utils::*;
-
+#[cfg(test)]
+use pretty_assertions::assert_eq;
 use sqlparser::ast::Expr::{ArrayIndex, BinaryOp, Identifier};
 use sqlparser::ast::Ident;
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::Table;
 use sqlparser::ast::*;
-
 use sqlparser::dialect::ClickHouseDialect;
+use test_utils::*;
 
-#[cfg(test)]
-use pretty_assertions::assert_eq;
+#[macro_use]
+mod test_utils;
 
 #[test]
 fn parse_array_access_expr() {
@@ -200,6 +197,11 @@ fn parse_create_table_ttl() {
     clickhouse().verified_stmt(
         "CREATE TABLE analytics.int_user_stats (`user_id` String, `num_events` UInt64) ENGINE=ReplicatedMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}') ORDER BY (user_id) TTL toDateTime(state_at) + toIntervalHour(12) SETTINGS index_granularity = 8192",
     );
+}
+
+#[test]
+fn parse_create_table_column_codec() {
+    clickhouse().verified_stmt("CREATE TABLE anomalies.metrics_volume (`ingested_at` DateTime64(8,'UTC') CODEC(DoubleDelta, ZSTD(1))) ENGINE=ReplicatedReplacingMergeTree('/clickhouse/tables/{uuid}/{shard}', '{replica}', ingested_at) ORDER BY (workspace, integration_id, path, segment, scheduled_at) SETTINGS index_granularity = 8192");
 }
 
 #[test]

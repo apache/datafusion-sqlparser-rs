@@ -2468,6 +2468,7 @@ fn parse_create_table() {
                             unit: None,
                         })),
                         collation: None,
+                        codec: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -2477,6 +2478,7 @@ fn parse_create_table() {
                         name: "lat".into(),
                         data_type: DataType::Double,
                         collation: None,
+                        codec: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Null,
@@ -2486,12 +2488,14 @@ fn parse_create_table() {
                         name: "lng".into(),
                         data_type: DataType::Double,
                         collation: None,
+                        codec: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: "constrained".into(),
                         data_type: DataType::Int(None),
                         collation: None,
+                        codec: None,
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
@@ -2519,6 +2523,7 @@ fn parse_create_table() {
                         name: "ref".into(),
                         data_type: DataType::Int(None),
                         collation: None,
+                        codec: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::ForeignKey {
@@ -2533,6 +2538,7 @@ fn parse_create_table() {
                         name: "ref2".into(),
                         data_type: DataType::Int(None),
                         collation: None,
+                        codec: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::ForeignKey {
@@ -2627,12 +2633,14 @@ fn parse_create_table_hive_array() {
                         name: Ident::new("name"),
                         data_type: DataType::Int(None),
                         collation: None,
+                        codec: None,
                         options: vec![],
                     },
                     ColumnDef {
                         name: Ident::new("val"),
                         data_type: DataType::Array(Some(Box::new(DataType::Int(None)))),
                         collation: None,
+                        codec: None,
                         options: vec![],
                     },
                 ],
@@ -2991,6 +2999,7 @@ fn parse_create_external_table() {
                             unit: None,
                         })),
                         collation: None,
+                        codec: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::NotNull,
@@ -3000,6 +3009,7 @@ fn parse_create_external_table() {
                         name: "lat".into(),
                         data_type: DataType::Double,
                         collation: None,
+                        codec: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::Null,
@@ -3009,6 +3019,7 @@ fn parse_create_external_table() {
                         name: "lng".into(),
                         data_type: DataType::Double,
                         collation: None,
+                        codec: None,
                         options: vec![],
                     },
                 ]
@@ -3062,6 +3073,7 @@ fn parse_create_or_replace_external_table() {
                         unit: None,
                     })),
                     collation: None,
+                    codec: None,
                     options: vec![ColumnOptionDef {
                         name: None,
                         option: ColumnOption::NotNull,

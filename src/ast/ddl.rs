@@ -536,12 +536,16 @@ pub struct ColumnDef {
     pub name: Ident,
     pub data_type: DataType,
     pub collation: Option<ObjectName>,
+    pub codec: Option<Vec<Expr>>,
     pub options: Vec<ColumnOptionDef>,
 }
 
 impl fmt::Display for ColumnDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {}", self.name, self.data_type)?;
+        if let Some(codec) = &self.codec {
+            write!(f, " CODEC({})", display_comma_separated(&codec))?;
+        }
         for option in &self.options {
             write!(f, " {option}")?;
         }

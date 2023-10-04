@@ -144,6 +144,7 @@ define_keywords!(
     CLOSE,
     CLUSTER,
     COALESCE,
+    CODEC,
     COLLATE,
     COLLATION,
     COLLECT,

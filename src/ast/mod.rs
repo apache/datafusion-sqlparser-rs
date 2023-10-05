@@ -155,7 +155,7 @@ impl fmt::Display for Ident {
                 let escaped = value::escape_quoted_string(&self.value, q);
                 write!(f, "{q}{escaped}{q}")
             }
-            Some(q) if q == '[' => write!(f, "[{}]", self.value),
+            Some('[') => write!(f, "[{}]", self.value),
             None => f.write_str(&self.value),
             _ => panic!("unexpected quote style"),
         }

@@ -1318,6 +1318,10 @@ pub enum Statement {
         cluster_by: Vec<Ident>,
         /// if true, has RedShift [`WITH NO SCHEMA BINDING`] clause <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_VIEW.html>
         with_no_schema_binding: bool,
+        /// if true, has SQLite `IF NOT EXISTS` clause <https://www.sqlite.org/lang_createview.html>
+        if_not_exists: bool,
+        /// if true, has SQLite `TEMP` or `TEMPORARY` clause <https://www.sqlite.org/lang_createview.html>
+        temporary: bool,
     },
     /// CREATE TABLE
     CreateTable {
@@ -2274,13 +2278,17 @@ impl fmt::Display for Statement {
                 with_options,
                 cluster_by,
                 with_no_schema_binding,
+                if_not_exists,
+                temporary,
             } => {
                 write!(
                     f,
-                    "CREATE {or_replace}{materialized}VIEW {name}",
+                    "CREATE {or_replace}{materialized}{temporary}VIEW {if_not_exists}{name}",
                     or_replace = if *or_replace { "OR REPLACE " } else { "" },
                     materialized = if *materialized { "MATERIALIZED " } else { "" },
-                    name = name
+                    name = name,
+                    temporary = if *temporary { "TEMPORARY " } else { "" },
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" }
                 )?;
                 if !with_options.is_empty() {
                     write!(f, " WITH ({})", display_comma_separated(with_options))?;

@@ -2478,7 +2478,7 @@ impl<'a> Parser<'a> {
             self.parse_create_table(or_replace, temporary, global, transient)
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
-            self.parse_create_view(or_replace)
+            self.parse_create_view(or_replace, temporary)
         } else if self.parse_keyword(Keyword::EXTERNAL) {
             self.parse_create_external_table(or_replace)
         } else if self.parse_keyword(Keyword::FUNCTION) {
@@ -2955,9 +2955,15 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_create_view(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
+    pub fn parse_create_view(
+        &mut self,
+        or_replace: bool,
+        temporary: bool,
+    ) -> Result<Statement, ParserError> {
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         self.expect_keyword(Keyword::VIEW)?;
+        let if_not_exists = dialect_of!(self is SQLiteDialect|GenericDialect)
+            && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let name = self.parse_object_name()?;
@@ -2992,6 +2998,8 @@ impl<'a> Parser<'a> {
             with_options,
             cluster_by,
             with_no_schema_binding,
+            if_not_exists,
+            temporary,
         })
     }
 

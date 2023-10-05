@@ -2271,7 +2271,7 @@ impl<'a> Parser<'a> {
     }
 
     /// If the current token is the `expected` keyword, consume it and returns
-    /// true. Otherwise, no tokens are consumed and returns false [must_use].
+    /// true. Otherwise, no tokens are consumed and returns false.
     #[must_use]
     pub fn parse_keyword(&mut self, expected: Keyword) -> bool {
         match self.peek_token().token {

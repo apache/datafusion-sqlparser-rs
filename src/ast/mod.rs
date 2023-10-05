@@ -1826,9 +1826,8 @@ pub enum Statement {
     Pragma {
         name: ObjectName,
         value: Option<Value>,
-        is_eq: bool
-    }
-
+        is_eq: bool,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -3187,11 +3186,7 @@ impl fmt::Display for Statement {
             } => {
                 write!(f, "CREATE TYPE {name} AS {representation}")
             }
-            Statement::Pragma {
-                name,
-                value,
-                is_eq
-            } => {
+            Statement::Pragma { name, value, is_eq } => {
                 write!(f, "PRAGMA {name}")?;
                 if value.is_some() {
                     let val = value.as_ref().unwrap();

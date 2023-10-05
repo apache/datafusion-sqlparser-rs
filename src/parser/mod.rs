@@ -7418,7 +7418,7 @@ impl<'a> Parser<'a> {
             Ok(Statement::Pragma {
                 name,
                 value: None,
-                is_eq: false
+                is_eq: false,
             })
         }
     }

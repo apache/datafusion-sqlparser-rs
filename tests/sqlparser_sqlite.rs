@@ -107,6 +107,14 @@ fn parse_create_virtual_table() {
 }
 
 #[test]
+fn double_equality_operator() {
+    // Sqlite supports this operator: https://www.sqlite.org/lang_expr.html#binaryops
+    let input = "SELECT a==b FROM t";
+    let expected = "SELECT a = b FROM t";
+    let _ = sqlite_and_generic().one_statement_parses_to(input, expected);
+}
+
+#[test]
 fn parse_create_table_auto_increment() {
     let sql = "CREATE TABLE foo (bar INT PRIMARY KEY AUTOINCREMENT)";
     match sqlite_and_generic().verified_stmt(sql) {
@@ -293,6 +301,24 @@ fn parse_create_table_with_strict() {
     if let Statement::CreateTable { name, strict, .. } = sqlite().verified_stmt(sql) {
         assert_eq!(name.to_string(), "Fruits");
         assert!(strict);
+    }
+}
+
+#[test]
+fn parse_attach_database() {
+    let sql = "ATTACH DATABASE 'test.db' AS test";
+    let verified_stmt = sqlite().verified_stmt(sql);
+    assert_eq!(sql, format!("{}", verified_stmt));
+    match verified_stmt {
+        Statement::AttachDatabase {
+            schema_name,
+            database_file_name: Expr::Value(Value::SingleQuotedString(literal_name)),
+            database: true,
+        } => {
+            assert_eq!(schema_name.value, "test");
+            assert_eq!(literal_name, "test.db");
+        }
+        _ => unreachable!(),
     }
 }
 

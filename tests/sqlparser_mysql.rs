@@ -562,6 +562,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
             }))),
             order_by: vec![],
             limit: None,
+            limit_by: vec![],
             offset: None,
             fetch: None,
             locks: vec![],
@@ -604,6 +605,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
             }))),
             order_by: vec![],
             limit: None,
+            limit_by: vec![],
             offset: None,
             fetch: None,
             locks: vec![],
@@ -643,6 +645,7 @@ fn parse_escaped_backticks_with_escape() {
             }))),
             order_by: vec![],
             limit: None,
+            limit_by: vec![],
             offset: None,
             fetch: None,
             locks: vec![],
@@ -682,6 +685,7 @@ fn parse_escaped_backticks_with_no_escape() {
             }))),
             order_by: vec![],
             limit: None,
+            limit_by: vec![],
             offset: None,
             fetch: None,
             locks: vec![],
@@ -956,6 +960,7 @@ fn parse_simple_insert() {
                     })),
                     order_by: vec![],
                     limit: None,
+                    limit_by: vec![],
                     offset: None,
                     fetch: None,
                     locks: vec![],
@@ -991,6 +996,7 @@ fn parse_empty_row_insert() {
                     })),
                     order_by: vec![],
                     limit: None,
+                    limit_by: vec![],
                     offset: None,
                     fetch: None,
                     locks: vec![],
@@ -1049,6 +1055,7 @@ fn parse_insert_with_on_duplicate_update() {
                     })),
                     order_by: vec![],
                     limit: None,
+                    limit_by: vec![],
                     offset: None,
                     fetch: None,
                     locks: vec![],
@@ -1316,6 +1323,38 @@ fn parse_update_with_joins() {
 }
 
 #[test]
+fn parse_delete_with_order_by() {
+    let sql = "DELETE FROM customers ORDER BY id DESC";
+    match mysql().verified_stmt(sql) {
+        Statement::Delete { order_by, .. } => {
+            assert_eq!(
+                vec![OrderByExpr {
+                    expr: Expr::Identifier(Ident {
+                        value: "id".to_owned(),
+                        quote_style: None
+                    }),
+                    asc: Some(false),
+                    nulls_first: None,
+                }],
+                order_by
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_delete_with_limit() {
+    let sql = "DELETE FROM customers LIMIT 100";
+    match mysql().verified_stmt(sql) {
+        Statement::Delete { limit, .. } => {
+            assert_eq!(Some(Expr::Value(number("100"))), limit);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_alter_table_drop_primary_key() {
     assert_matches!(
         alter_table_op(mysql_and_generic().verified_stmt("ALTER TABLE tab DROP PRIMARY KEY")),
@@ -1396,6 +1435,7 @@ fn parse_substring_in_select() {
                     }))),
                     order_by: vec![],
                     limit: None,
+                    limit_by: vec![],
                     offset: None,
                     fetch: None,
                     locks: vec![],
@@ -1676,6 +1716,7 @@ fn parse_hex_string_introducer() {
             }))),
             order_by: vec![],
             limit: None,
+            limit_by: vec![],
             offset: None,
             fetch: None,
             locks: vec![],

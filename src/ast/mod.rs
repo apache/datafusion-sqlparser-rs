@@ -155,7 +155,7 @@ impl fmt::Display for Ident {
                 let escaped = value::escape_quoted_string(&self.value, q);
                 write!(f, "{q}{escaped}{q}")
             }
-            Some(q) if q == '[' => write!(f, "[{}]", self.value),
+            Some('[') => write!(f, "[{}]", self.value),
             None => f.write_str(&self.value),
             _ => panic!("unexpected quote style"),
         }
@@ -577,7 +577,7 @@ pub enum Expr {
     ///
     /// Syntax:
     /// ```sql
-    /// MARCH (<col>, <col>, ...) AGAINST (<expr> [<search modifier>])
+    /// MATCH (<col>, <col>, ...) AGAINST (<expr> [<search modifier>])
     ///
     /// <col> = CompoundIdentifier
     /// <expr> = String literal
@@ -1301,6 +1301,10 @@ pub enum Statement {
         selection: Option<Expr>,
         /// RETURNING
         returning: Option<Vec<SelectItem>>,
+        /// ORDER BY (MySQL)
+        order_by: Vec<OrderByExpr>,
+        /// LIMIT (MySQL)
+        limit: Option<Expr>,
     },
     /// CREATE VIEW
     CreateView {
@@ -1312,6 +1316,8 @@ pub enum Statement {
         query: Box<Query>,
         with_options: Vec<SqlOption>,
         cluster_by: Vec<Ident>,
+        /// if true, has RedShift [`WITH NO SCHEMA BINDING`] clause <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_VIEW.html>
+        with_no_schema_binding: bool,
     },
     /// CREATE TABLE
     CreateTable {
@@ -1428,6 +1434,16 @@ pub enum Statement {
     AlterRole {
         name: Ident,
         operation: AlterRoleOperation,
+    },
+    /// ATTACH DATABASE 'path/to/file' AS alias
+    /// (SQLite-specific)
+    AttachDatabase {
+        /// The name to bind to the newly attached database
+        schema_name: Ident,
+        /// An expression that indicates the path to the database file
+        database_file_name: Expr,
+        /// true if the syntax is 'ATTACH DATABASE', false if it's just 'ATTACH'
+        database: bool,
     },
     /// DROP
     Drop {
@@ -1976,6 +1992,14 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
+            Statement::AttachDatabase {
+                schema_name,
+                database_file_name,
+                database,
+            } => {
+                let keyword = if *database { "DATABASE " } else { "" };
+                write!(f, "ATTACH {keyword}{database_file_name} AS {schema_name}")
+            }
             Statement::Analyze {
                 table_name,
                 partitions,
@@ -2130,6 +2154,8 @@ impl fmt::Display for Statement {
                 using,
                 selection,
                 returning,
+                order_by,
+                limit,
             } => {
                 write!(f, "DELETE ")?;
                 if !tables.is_empty() {
@@ -2144,6 +2170,12 @@ impl fmt::Display for Statement {
                 }
                 if let Some(returning) = returning {
                     write!(f, " RETURNING {}", display_comma_separated(returning))?;
+                }
+                if !order_by.is_empty() {
+                    write!(f, " ORDER BY {}", display_comma_separated(order_by))?;
+                }
+                if let Some(limit) = limit {
+                    write!(f, " LIMIT {limit}")?;
                 }
                 Ok(())
             }
@@ -2248,6 +2280,7 @@ impl fmt::Display for Statement {
                 materialized,
                 with_options,
                 cluster_by,
+                with_no_schema_binding,
             } => {
                 write!(
                     f,
@@ -2265,7 +2298,11 @@ impl fmt::Display for Statement {
                 if !cluster_by.is_empty() {
                     write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
                 }
-                write!(f, " AS {query}")
+                write!(f, " AS {query}")?;
+                if *with_no_schema_binding {
+                    write!(f, " WITH NO SCHEMA BINDING")?;
+                }
+                Ok(())
             }
             Statement::CreateTable {
                 name,

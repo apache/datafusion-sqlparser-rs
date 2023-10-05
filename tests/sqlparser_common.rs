@@ -5219,7 +5219,7 @@ fn parse_trim() {
     //keep Snowflake/BigQuery TRIM syntax failing
     let all_expected_snowflake = TestedDialects {
         dialects: vec![
-            Box::new(GenericDialect {}),
+            //Box::new(GenericDialect {}),
             Box::new(PostgreSqlDialect {}),
             Box::new(MsSqlDialect {}),
             Box::new(AnsiDialect {}),

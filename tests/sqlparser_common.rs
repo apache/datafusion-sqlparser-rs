@@ -20,7 +20,7 @@
 
 use matches::assert_matches;
 use sqlparser::ast::SelectItem::UnnamedExpr;
-use sqlparser::ast::TableFactor::Pivot;
+use sqlparser::ast::TableFactor::{Pivot, Unpivot};
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, DuckDbDialect, GenericDialect, HiveDialect,
@@ -261,6 +261,7 @@ fn parse_update_set_from() {
                         }))),
                         order_by: vec![],
                         limit: None,
+                        limit_by: vec![],
                         offset: None,
                         fetch: None,
                         locks: vec![],
@@ -525,6 +526,7 @@ fn parse_where_delete_statement() {
             using,
             selection,
             returning,
+            ..
         } => {
             assert_eq!(
                 TableFactor::Table {
@@ -565,6 +567,7 @@ fn parse_where_delete_with_alias_statement() {
             using,
             selection,
             returning,
+            ..
         } => {
             assert_eq!(
                 TableFactor::Table {
@@ -2069,6 +2072,8 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(MONTH FROM d)");
     verified_stmt("SELECT EXTRACT(WEEK FROM d)");
     verified_stmt("SELECT EXTRACT(DAY FROM d)");
+    verified_stmt("SELECT EXTRACT(DAYOFWEEK FROM d)");
+    verified_stmt("SELECT EXTRACT(DAYOFYEAR FROM d)");
     verified_stmt("SELECT EXTRACT(DATE FROM d)");
     verified_stmt("SELECT EXTRACT(HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(MINUTE FROM d)");
@@ -2082,6 +2087,7 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(DOY FROM d)");
     verified_stmt("SELECT EXTRACT(EPOCH FROM d)");
     verified_stmt("SELECT EXTRACT(ISODOW FROM d)");
+    verified_stmt("SELECT EXTRACT(ISOWEEK FROM d)");
     verified_stmt("SELECT EXTRACT(ISOYEAR FROM d)");
     verified_stmt("SELECT EXTRACT(JULIAN FROM d)");
     verified_stmt("SELECT EXTRACT(MICROSECOND FROM d)");
@@ -2094,6 +2100,7 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(TIMEZONE FROM d)");
     verified_stmt("SELECT EXTRACT(TIMEZONE_HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(TIMEZONE_MINUTE FROM d)");
+    verified_stmt("SELECT EXTRACT(TIME FROM d)");
 
     let res = parse_sql_statements("SELECT EXTRACT(JIFFY FROM d)");
     assert_eq!(
@@ -2656,6 +2663,7 @@ fn parse_create_table_as_table() {
         }))),
         order_by: vec![],
         limit: None,
+        limit_by: vec![],
         offset: None,
         fetch: None,
         locks: vec![],
@@ -2679,6 +2687,7 @@ fn parse_create_table_as_table() {
         }))),
         order_by: vec![],
         limit: None,
+        limit_by: vec![],
         offset: None,
         fetch: None,
         locks: vec![],
@@ -3970,6 +3979,7 @@ fn parse_interval_and_or_xor() {
         }))),
         order_by: vec![],
         limit: None,
+        limit_by: vec![],
         offset: None,
         fetch: None,
         locks: vec![],
@@ -5334,6 +5344,9 @@ fn parse_create_view() {
             materialized,
             with_options,
             cluster_by,
+            with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<Ident>::new(), columns);
@@ -5342,6 +5355,9 @@ fn parse_create_view() {
             assert!(!or_replace);
             assert_eq!(with_options, vec![]);
             assert_eq!(cluster_by, vec![]);
+            assert!(!late_binding);
+            assert!(!if_not_exists);
+            assert!(!temporary);
         }
         _ => unreachable!(),
     }
@@ -5382,6 +5398,9 @@ fn parse_create_view_with_columns() {
             query,
             materialized,
             cluster_by,
+            with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![Ident::new("has"), Ident::new("cols")]);
@@ -5390,6 +5409,40 @@ fn parse_create_view_with_columns() {
             assert!(!materialized);
             assert!(!or_replace);
             assert_eq!(cluster_by, vec![]);
+            assert!(!late_binding);
+            assert!(!if_not_exists);
+            assert!(!temporary);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_view_temporary() {
+    let sql = "CREATE TEMPORARY VIEW myschema.myview AS SELECT foo FROM bar";
+    match verified_stmt(sql) {
+        Statement::CreateView {
+            name,
+            columns,
+            query,
+            or_replace,
+            materialized,
+            with_options,
+            cluster_by,
+            with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
+        } => {
+            assert_eq!("myschema.myview", name.to_string());
+            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!("SELECT foo FROM bar", query.to_string());
+            assert!(!materialized);
+            assert!(!or_replace);
+            assert_eq!(with_options, vec![]);
+            assert_eq!(cluster_by, vec![]);
+            assert!(!late_binding);
+            assert!(!if_not_exists);
+            assert!(temporary);
         }
         _ => unreachable!(),
     }
@@ -5407,6 +5460,9 @@ fn parse_create_or_replace_view() {
             query,
             materialized,
             cluster_by,
+            with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -5415,6 +5471,9 @@ fn parse_create_or_replace_view() {
             assert!(!materialized);
             assert!(or_replace);
             assert_eq!(cluster_by, vec![]);
+            assert!(!late_binding);
+            assert!(!if_not_exists);
+            assert!(!temporary);
         }
         _ => unreachable!(),
     }
@@ -5436,6 +5495,9 @@ fn parse_create_or_replace_materialized_view() {
             query,
             materialized,
             cluster_by,
+            with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
@@ -5444,6 +5506,9 @@ fn parse_create_or_replace_materialized_view() {
             assert!(materialized);
             assert!(or_replace);
             assert_eq!(cluster_by, vec![]);
+            assert!(!late_binding);
+            assert!(!if_not_exists);
+            assert!(!temporary);
         }
         _ => unreachable!(),
     }
@@ -5461,6 +5526,9 @@ fn parse_create_materialized_view() {
             materialized,
             with_options,
             cluster_by,
+            with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<Ident>::new(), columns);
@@ -5469,6 +5537,9 @@ fn parse_create_materialized_view() {
             assert_eq!(with_options, vec![]);
             assert!(!or_replace);
             assert_eq!(cluster_by, vec![]);
+            assert!(!late_binding);
+            assert!(!if_not_exists);
+            assert!(!temporary);
         }
         _ => unreachable!(),
     }
@@ -5486,6 +5557,9 @@ fn parse_create_materialized_view_with_cluster_by() {
             materialized,
             with_options,
             cluster_by,
+            with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
             assert_eq!(Vec::<Ident>::new(), columns);
@@ -5494,6 +5568,9 @@ fn parse_create_materialized_view_with_cluster_by() {
             assert_eq!(with_options, vec![]);
             assert!(!or_replace);
             assert_eq!(cluster_by, vec![Ident::new("foo")]);
+            assert!(!late_binding);
+            assert!(!if_not_exists);
+            assert!(!temporary);
         }
         _ => unreachable!(),
     }
@@ -6410,6 +6487,7 @@ fn parse_merge() {
                         }))),
                         order_by: vec![],
                         limit: None,
+                        limit_by: vec![],
                         offset: None,
                         fetch: None,
                         locks: vec![],
@@ -6812,10 +6890,10 @@ fn parse_time_functions() {
 
         // Validating Parenthesis
         let sql_without_parens = format!("SELECT {}", func_name);
-        let mut ast_without_parens = select_localtime_func_call_ast.clone();
+        let mut ast_without_parens = select_localtime_func_call_ast;
         ast_without_parens.special = true;
         assert_eq!(
-            &Expr::Function(ast_without_parens.clone()),
+            &Expr::Function(ast_without_parens),
             expr_from_projection(&verified_only_select(&sql_without_parens).projection[0])
         );
     }
@@ -7270,10 +7348,16 @@ fn parse_pivot_table() {
     assert_eq!(
         verified_only_select(sql).from[0].relation,
         Pivot {
-            name: ObjectName(vec![Ident::new("monthly_sales")]),
-            table_alias: Some(TableAlias {
-                name: Ident::new("a"),
-                columns: vec![]
+            table: Box::new(TableFactor::Table {
+                name: ObjectName(vec![Ident::new("monthly_sales")]),
+                alias: Some(TableAlias {
+                    name: Ident::new("a"),
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                partitions: vec![],
             }),
             aggregate_function: Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("SUM")]),
@@ -7292,7 +7376,7 @@ fn parse_pivot_table() {
                 Value::SingleQuotedString("MAR".to_string()),
                 Value::SingleQuotedString("APR".to_string()),
             ],
-            pivot_alias: Some(TableAlias {
+            alias: Some(TableAlias {
                 name: Ident {
                     value: "p".to_string(),
                     quote_style: None
@@ -7303,22 +7387,149 @@ fn parse_pivot_table() {
     );
     assert_eq!(verified_stmt(sql).to_string(), sql);
 
+    // parsing should succeed with empty alias
     let sql_without_table_alias = concat!(
         "SELECT * FROM monthly_sales ",
         "PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ",
         "ORDER BY EMPID"
     );
     assert_matches!(
-        verified_only_select(sql_without_table_alias).from[0].relation,
-        Pivot {
-            table_alias: None, // parsing should succeed with empty alias
-            ..
-        }
+        &verified_only_select(sql_without_table_alias).from[0].relation,
+        Pivot { table, .. } if matches!(&**table, TableFactor::Table { alias: None, .. })
     );
     assert_eq!(
         verified_stmt(sql_without_table_alias).to_string(),
         sql_without_table_alias
     );
+}
+
+#[test]
+fn parse_unpivot_table() {
+    let sql = concat!(
+        "SELECT * FROM sales AS s ",
+        "UNPIVOT(quantity FOR quarter IN (Q1, Q2, Q3, Q4)) AS u (product, quarter, quantity)"
+    );
+
+    pretty_assertions::assert_eq!(
+        verified_only_select(sql).from[0].relation,
+        Unpivot {
+            table: Box::new(TableFactor::Table {
+                name: ObjectName(vec![Ident::new("sales")]),
+                alias: Some(TableAlias {
+                    name: Ident::new("s"),
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                partitions: vec![],
+            }),
+            value: Ident {
+                value: "quantity".to_string(),
+                quote_style: None
+            },
+
+            name: Ident {
+                value: "quarter".to_string(),
+                quote_style: None
+            },
+            columns: ["Q1", "Q2", "Q3", "Q4"]
+                .into_iter()
+                .map(Ident::new)
+                .collect(),
+            alias: Some(TableAlias {
+                name: Ident::new("u"),
+                columns: ["product", "quarter", "quantity"]
+                    .into_iter()
+                    .map(Ident::new)
+                    .collect()
+            }),
+        }
+    );
+    assert_eq!(verified_stmt(sql).to_string(), sql);
+
+    let sql_without_aliases = concat!(
+        "SELECT * FROM sales ",
+        "UNPIVOT(quantity FOR quarter IN (Q1, Q2, Q3, Q4))"
+    );
+
+    assert_matches!(
+        &verified_only_select(sql_without_aliases).from[0].relation,
+        Unpivot {
+            table,
+            alias: None,
+            ..
+        } if matches!(&**table, TableFactor::Table { alias: None, .. })
+    );
+    assert_eq!(
+        verified_stmt(sql_without_aliases).to_string(),
+        sql_without_aliases
+    );
+}
+
+#[test]
+fn parse_pivot_unpivot_table() {
+    let sql = concat!(
+        "SELECT * FROM census AS c ",
+        "UNPIVOT(population FOR year IN (population_2000, population_2010)) AS u ",
+        "PIVOT(sum(population) FOR year IN ('population_2000', 'population_2010')) AS p"
+    );
+
+    pretty_assertions::assert_eq!(
+        verified_only_select(sql).from[0].relation,
+        Pivot {
+            table: Box::new(Unpivot {
+                table: Box::new(TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("census")]),
+                    alias: Some(TableAlias {
+                        name: Ident::new("c"),
+                        columns: vec![]
+                    }),
+                    args: None,
+                    with_hints: vec![],
+                    version: None,
+                    partitions: vec![],
+                }),
+                value: Ident {
+                    value: "population".to_string(),
+                    quote_style: None
+                },
+
+                name: Ident {
+                    value: "year".to_string(),
+                    quote_style: None
+                },
+                columns: ["population_2000", "population_2010"]
+                    .into_iter()
+                    .map(Ident::new)
+                    .collect(),
+                alias: Some(TableAlias {
+                    name: Ident::new("u"),
+                    columns: vec![]
+                }),
+            }),
+            aggregate_function: Expr::Function(Function {
+                name: ObjectName(vec![Ident::new("sum")]),
+                args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                    Expr::Identifier(Ident::new("population"))
+                ))]),
+                over: None,
+                distinct: false,
+                special: false,
+                order_by: vec![],
+            }),
+            value_column: vec![Ident::new("year")],
+            pivot_values: vec![
+                Value::SingleQuotedString("population_2000".to_string()),
+                Value::SingleQuotedString("population_2010".to_string())
+            ],
+            alias: Some(TableAlias {
+                name: Ident::new("p"),
+                columns: vec![]
+            }),
+        }
+    );
+    assert_eq!(verified_stmt(sql).to_string(), sql);
 }
 
 /// Makes a predicate that looks like ((user_id = $id) OR user_id = $2...)

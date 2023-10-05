@@ -31,6 +31,9 @@ use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Tokenizer;
 use crate::{ast::*, parser::ParserOptions};
 
+#[cfg(test)]
+use pretty_assertions::assert_eq;
+
 /// Tests use the methods on this struct to invoke the parser on one or
 /// multiple dialects.
 pub struct TestedDialects {
@@ -154,6 +157,24 @@ impl TestedDialects {
     /// string (is not modified after a serialization round-trip).
     pub fn verified_only_select(&self, query: &str) -> Select {
         match *self.verified_query(query).body {
+            SetExpr::Select(s) => *s,
+            _ => panic!("Expected SetExpr::Select"),
+        }
+    }
+
+    /// Ensures that `sql` parses as a single [`Select`], and that additionally:
+    ///
+    /// 1. parsing `sql` results in the same [`Statement`] as parsing
+    /// `canonical`.
+    ///
+    /// 2. re-serializing the result of parsing `sql` produces the same
+    /// `canonical` sql string
+    pub fn verified_only_select_with_canonical(&self, query: &str, canonical: &str) -> Select {
+        let q = match self.one_statement_parses_to(query, canonical) {
+            Statement::Query(query) => *query,
+            _ => panic!("Expected Query"),
+        };
+        match *q.body {
             SetExpr::Select(s) => *s,
             _ => panic!("Expected SetExpr::Select"),
         }

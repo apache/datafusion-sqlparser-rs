@@ -490,7 +490,7 @@ where
 ///
 /// This demonstrates how to effectively replace an expression with another more complicated one
 /// that references the original. This example avoids unnecessary allocations by using the
-/// [`std::mem`](std::mem) family of functions.
+/// [`std::mem`] family of functions.
 ///
 /// ```
 /// # use sqlparser::parser::Parser;

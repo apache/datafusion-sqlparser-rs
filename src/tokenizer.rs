@@ -1368,7 +1368,7 @@ fn peeking_take_while(chars: &mut State, mut predicate: impl FnMut(char) -> bool
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dialect::{GenericDialect, MsSqlDialect};
+    use crate::dialect::{ClickHouseDialect, GenericDialect, MsSqlDialect};
 
     #[test]
     fn tokenizer_error_impl() {
@@ -1409,6 +1409,28 @@ mod tests {
             Token::make_keyword("SELECT"),
             Token::Whitespace(Whitespace::Space),
             Token::Number(String::from(".1"), false),
+        ];
+
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_clickhouse_double_equal() {
+        let sql = String::from("SELECT foo=='1'");
+        let dialect = ClickHouseDialect {};
+        let mut tokenizer = Tokenizer::new(&dialect, &sql);
+        let tokens = tokenizer.tokenize().unwrap();
+
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::Word(Word {
+                value: "foo".to_string(),
+                quote_style: None,
+                keyword: Keyword::NoKeyword,
+            }),
+            Token::DoubleEq,
+            Token::SingleQuotedString("1".to_string()),
         ];
 
         compare(expected, tokens);

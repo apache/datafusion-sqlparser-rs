@@ -456,6 +456,7 @@ impl<'a> Parser<'a> {
                     Ok(Statement::Query(Box::new(self.parse_query()?)))
                 }
                 Keyword::TRUNCATE => Ok(self.parse_truncate()?),
+                Keyword::ATTACH => Ok(self.parse_attach_database()?),
                 Keyword::MSCK => Ok(self.parse_msck()?),
                 Keyword::CREATE => Ok(self.parse_create()?),
                 Keyword::CACHE => Ok(self.parse_cache_table()?),
@@ -540,6 +541,18 @@ impl<'a> Parser<'a> {
             table_name,
             partitions,
             table,
+        })
+    }
+
+    pub fn parse_attach_database(&mut self) -> Result<Statement, ParserError> {
+        let database = self.parse_keyword(Keyword::DATABASE);
+        let database_file_name = self.parse_expr()?;
+        self.expect_keyword(Keyword::AS)?;
+        let schema_name = self.parse_identifier()?;
+        Ok(Statement::AttachDatabase {
+            database,
+            schema_name,
+            database_file_name,
         })
     }
 
@@ -1509,6 +1522,8 @@ impl<'a> Parser<'a> {
                 Keyword::MONTH => Ok(DateTimeField::Month),
                 Keyword::WEEK => Ok(DateTimeField::Week),
                 Keyword::DAY => Ok(DateTimeField::Day),
+                Keyword::DAYOFWEEK => Ok(DateTimeField::DayOfWeek),
+                Keyword::DAYOFYEAR => Ok(DateTimeField::DayOfYear),
                 Keyword::DATE => Ok(DateTimeField::Date),
                 Keyword::HOUR => Ok(DateTimeField::Hour),
                 Keyword::MINUTE => Ok(DateTimeField::Minute),
@@ -1520,6 +1535,7 @@ impl<'a> Parser<'a> {
                 Keyword::EPOCH => Ok(DateTimeField::Epoch),
                 Keyword::ISODOW => Ok(DateTimeField::Isodow),
                 Keyword::ISOYEAR => Ok(DateTimeField::Isoyear),
+                Keyword::ISOWEEK => Ok(DateTimeField::IsoWeek),
                 Keyword::JULIAN => Ok(DateTimeField::Julian),
                 Keyword::MICROSECOND => Ok(DateTimeField::Microsecond),
                 Keyword::MICROSECONDS => Ok(DateTimeField::Microseconds),
@@ -1530,6 +1546,7 @@ impl<'a> Parser<'a> {
                 Keyword::NANOSECOND => Ok(DateTimeField::Nanosecond),
                 Keyword::NANOSECONDS => Ok(DateTimeField::Nanoseconds),
                 Keyword::QUARTER => Ok(DateTimeField::Quarter),
+                Keyword::TIME => Ok(DateTimeField::Time),
                 Keyword::TIMEZONE => Ok(DateTimeField::Timezone),
                 Keyword::TIMEZONE_HOUR => Ok(DateTimeField::TimezoneHour),
                 Keyword::TIMEZONE_MINUTE => Ok(DateTimeField::TimezoneMinute),
@@ -2475,7 +2492,7 @@ impl<'a> Parser<'a> {
             self.parse_create_table(or_replace, temporary, global, transient)
         } else if self.parse_keyword(Keyword::MATERIALIZED) || self.parse_keyword(Keyword::VIEW) {
             self.prev_token();
-            self.parse_create_view(or_replace)
+            self.parse_create_view(or_replace, temporary)
         } else if self.parse_keyword(Keyword::EXTERNAL) {
             self.parse_create_external_table(or_replace)
         } else if self.parse_keyword(Keyword::FUNCTION) {
@@ -2952,9 +2969,15 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_create_view(&mut self, or_replace: bool) -> Result<Statement, ParserError> {
+    pub fn parse_create_view(
+        &mut self,
+        or_replace: bool,
+        temporary: bool,
+    ) -> Result<Statement, ParserError> {
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         self.expect_keyword(Keyword::VIEW)?;
+        let if_not_exists = dialect_of!(self is SQLiteDialect|GenericDialect)
+            && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let name = self.parse_object_name()?;
@@ -2971,6 +2994,15 @@ impl<'a> Parser<'a> {
         self.expect_keyword(Keyword::AS)?;
         let query = Box::new(self.parse_query()?);
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
+
+        let with_no_schema_binding = dialect_of!(self is RedshiftSqlDialect | GenericDialect)
+            && self.parse_keywords(&[
+                Keyword::WITH,
+                Keyword::NO,
+                Keyword::SCHEMA,
+                Keyword::BINDING,
+            ]);
+
         Ok(Statement::CreateView {
             name,
             columns,
@@ -2979,6 +3011,9 @@ impl<'a> Parser<'a> {
             or_replace,
             with_options,
             cluster_by,
+            with_no_schema_binding,
+            if_not_exists,
+            temporary,
         })
     }
 
@@ -4688,7 +4723,11 @@ impl<'a> Parser<'a> {
     pub fn parse_literal_string(&mut self) -> Result<String, ParserError> {
         let next_token = self.next_token();
         match next_token.token {
-            Token::Word(Word { value, keyword, .. }) if keyword == Keyword::NoKeyword => Ok(value),
+            Token::Word(Word {
+                value,
+                keyword: Keyword::NoKeyword,
+                ..
+            }) => Ok(value),
             Token::SingleQuotedString(s) => Ok(s),
             Token::DoubleQuotedString(s) => Ok(s),
             Token::EscapedStringLiteral(s) if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
@@ -5038,6 +5077,27 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
+
+        // BigQuery accepts any number of quoted identifiers of a table name.
+        // https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#quoted_identifiers
+        if dialect_of!(self is BigQueryDialect)
+            && idents.iter().any(|ident| ident.value.contains('.'))
+        {
+            idents = idents
+                .into_iter()
+                .flat_map(|ident| {
+                    ident
+                        .value
+                        .split('.')
+                        .map(|value| Ident {
+                            value: value.into(),
+                            quote_style: ident.quote_style,
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        }
+
         Ok(ObjectName(idents))
     }
 
@@ -5303,9 +5363,18 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-
         let returning = if self.parse_keyword(Keyword::RETURNING) {
             Some(self.parse_comma_separated(Parser::parse_select_item)?)
+        } else {
+            None
+        };
+        let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
+            self.parse_comma_separated(Parser::parse_order_by_expr)?
+        } else {
+            vec![]
+        };
+        let limit = if self.parse_keyword(Keyword::LIMIT) {
+            self.parse_limit()?
         } else {
             None
         };
@@ -5316,6 +5385,8 @@ impl<'a> Parser<'a> {
             using,
             selection,
             returning,
+            order_by,
+            limit,
         })
     }
 
@@ -5396,6 +5467,7 @@ impl<'a> Parser<'a> {
                 with,
                 body: Box::new(SetExpr::Insert(insert)),
                 limit: None,
+                limit_by: vec![],
                 order_by: vec![],
                 offset: None,
                 fetch: None,
@@ -5407,6 +5479,7 @@ impl<'a> Parser<'a> {
                 with,
                 body: Box::new(SetExpr::Update(update)),
                 limit: None,
+                limit_by: vec![],
                 order_by: vec![],
                 offset: None,
                 fetch: None,
@@ -5433,7 +5506,7 @@ impl<'a> Parser<'a> {
                     offset = Some(self.parse_offset()?)
                 }
 
-                if dialect_of!(self is GenericDialect | MySqlDialect)
+                if dialect_of!(self is GenericDialect | MySqlDialect | ClickHouseDialect)
                     && limit.is_some()
                     && offset.is_none()
                     && self.consume_token(&Token::Comma)
@@ -5447,6 +5520,14 @@ impl<'a> Parser<'a> {
                     limit = Some(self.parse_expr()?);
                 }
             }
+
+            let limit_by = if dialect_of!(self is ClickHouseDialect | GenericDialect)
+                && self.parse_keyword(Keyword::BY)
+            {
+                self.parse_comma_separated(Parser::parse_expr)?
+            } else {
+                vec![]
+            };
 
             let fetch = if self.parse_keyword(Keyword::FETCH) {
                 Some(self.parse_fetch()?)
@@ -5464,6 +5545,7 @@ impl<'a> Parser<'a> {
                 body,
                 order_by,
                 limit,
+                limit_by,
                 offset,
                 fetch,
                 locks,
@@ -5797,8 +5879,8 @@ impl<'a> Parser<'a> {
             self.expect_token(&Token::Colon)?;
         } else if self.parse_keyword(Keyword::ROLE) {
             let context_modifier = match modifier {
-                Some(keyword) if keyword == Keyword::LOCAL => ContextModifier::Local,
-                Some(keyword) if keyword == Keyword::SESSION => ContextModifier::Session,
+                Some(Keyword::LOCAL) => ContextModifier::Local,
+                Some(Keyword::SESSION) => ContextModifier::Session,
                 _ => ContextModifier::None,
             };
 
@@ -6230,9 +6312,8 @@ impl<'a> Parser<'a> {
                         | TableFactor::Table { alias, .. }
                         | TableFactor::UNNEST { alias, .. }
                         | TableFactor::TableFunction { alias, .. }
-                        | TableFactor::Pivot {
-                            pivot_alias: alias, ..
-                        }
+                        | TableFactor::Pivot { alias, .. }
+                        | TableFactor::Unpivot { alias, .. }
                         | TableFactor::NestedJoin { alias, .. } => {
                             // but not `FROM (mytable AS alias1) AS alias2`.
                             if let Some(inner_alias) = alias {
@@ -6311,11 +6392,6 @@ impl<'a> Parser<'a> {
 
             let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
 
-            // Pivot
-            if self.parse_keyword(Keyword::PIVOT) {
-                return self.parse_pivot_table_factor(name, alias);
-            }
-
             // MSSQL-specific table hints:
             let mut with_hints = vec![];
             if self.parse_keyword(Keyword::WITH) {
@@ -6327,14 +6403,25 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                 }
             };
-            Ok(TableFactor::Table {
+
+            let mut table = TableFactor::Table {
                 name,
                 alias,
                 args,
                 with_hints,
                 version,
                 partitions,
-            })
+            };
+
+            while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT]) {
+                table = match kw {
+                    Keyword::PIVOT => self.parse_pivot_table_factor(table)?,
+                    Keyword::UNPIVOT => self.parse_unpivot_table_factor(table)?,
+                    _ => unreachable!(),
+                }
+            }
+
+            Ok(table)
         }
     }
 
@@ -6371,8 +6458,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_pivot_table_factor(
         &mut self,
-        name: ObjectName,
-        table_alias: Option<TableAlias>,
+        table: TableFactor,
     ) -> Result<TableFactor, ParserError> {
         self.expect_token(&Token::LParen)?;
         let function_name = match self.next_token().token {
@@ -6389,12 +6475,32 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::RParen)?;
         let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
         Ok(TableFactor::Pivot {
-            name,
-            table_alias,
+            table: Box::new(table),
             aggregate_function: function,
             value_column,
             pivot_values,
-            pivot_alias: alias,
+            alias,
+        })
+    }
+
+    pub fn parse_unpivot_table_factor(
+        &mut self,
+        table: TableFactor,
+    ) -> Result<TableFactor, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let value = self.parse_identifier()?;
+        self.expect_keyword(Keyword::FOR)?;
+        let name = self.parse_identifier()?;
+        self.expect_keyword(Keyword::IN)?;
+        let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+        self.expect_token(&Token::RParen)?;
+        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        Ok(TableFactor::Unpivot {
+            table: Box::new(table),
+            value,
+            name,
+            columns,
+            alias,
         })
     }
 
@@ -6817,7 +6923,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse an [`WildcardAdditionalOptions`](WildcardAdditionalOptions) information for wildcard select items.
+    /// Parse an [`WildcardAdditionalOptions`] information for wildcard select items.
     ///
     /// If it is not possible to parse it, will return an option.
     pub fn parse_wildcard_additional_options(

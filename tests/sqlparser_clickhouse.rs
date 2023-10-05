@@ -25,6 +25,7 @@ use sqlparser::ast::TableFactor::Table;
 use sqlparser::ast::*;
 
 use sqlparser::dialect::ClickHouseDialect;
+use sqlparser::dialect::GenericDialect;
 
 #[test]
 fn parse_map_access_expr() {
@@ -336,9 +337,34 @@ fn parse_create_table() {
     );
 }
 
+#[test]
+fn parse_double_equal() {
+    clickhouse().one_statement_parses_to(
+        r#"SELECT foo FROM bar WHERE buz == 'buz'"#,
+        r#"SELECT foo FROM bar WHERE buz = 'buz'"#,
+    );
+}
+
+#[test]
+fn parse_limit_by() {
+    clickhouse_and_generic().verified_stmt(
+        r#"SELECT * FROM default.last_asset_runs_mv ORDER BY created_at DESC LIMIT 1 BY asset"#,
+    );
+    clickhouse_and_generic().verified_stmt(
+        r#"SELECT * FROM default.last_asset_runs_mv ORDER BY created_at DESC LIMIT 1 BY asset, toStartOfDay(created_at)"#,
+    );
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],
+        options: None,
+    }
+}
+
+fn clickhouse_and_generic() -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(ClickHouseDialect {}), Box::new(GenericDialect {})],
         options: None,
     }
 }

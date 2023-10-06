@@ -7186,6 +7186,27 @@ impl<'a> Parser<'a> {
         if self.consume_token(&Token::RParen) {
             Ok((vec![], None, vec![], None, None))
         } else {
+            // Snowflake permits a subquery to be passed as an argument without
+            // an enclosing set of parens if it's the only argument.
+            if dialect_of!(self is SnowflakeDialect)
+                && self
+                    .parse_one_of_keywords(&[Keyword::WITH, Keyword::SELECT])
+                    .is_some()
+            {
+                self.prev_token();
+                let subquery = self.parse_query()?;
+                self.expect_token(&Token::RParen)?;
+                return Ok((
+                    vec![FunctionArg::Unnamed(FunctionArgExpr::from(
+                        WildcardExpr::Expr(Expr::Subquery(Box::new(subquery))),
+                    ))],
+                    None,
+                    vec![],
+                    None,
+                    None,
+                ));
+            }
+
             let args = self.parse_comma_separated(Parser::parse_function_args)?;
             let on_overflow = if self.parse_keywords(&[Keyword::ON, Keyword::OVERFLOW]) {
                 if self.parse_keyword(Keyword::ERROR) {

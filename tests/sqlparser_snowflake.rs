@@ -1129,3 +1129,23 @@ fn parse_position_not_function_columns() {
     snowflake_and_generic()
         .verified_stmt("SELECT position FROM tbl1 WHERE position NOT IN ('first', 'last')");
 }
+
+#[test]
+fn parse_subquery_function_argument() {
+    // Snowflake allows passing an unparenthesized subquery as the single
+    // argument to a function.
+    snowflake().one_statement_parses_to(
+        "SELECT parse_json(SELECT '{}')",
+        "SELECT parse_json((SELECT '{}'))",
+    );
+
+    // Subqueries that begin with WITH work too.
+    snowflake().one_statement_parses_to(
+        "SELECT parse_json(WITH q AS (SELECT '{}' AS foo) SELECT foo FROM q)",
+        "SELECT parse_json((WITH q AS (SELECT '{}' AS foo) SELECT foo FROM q))",
+    );
+
+    // Commas are parsed as part of the subquery, not additional arguments to
+    // the function.
+    snowflake().one_statement_parses_to("SELECT func(SELECT 1, 2)", "SELECT func((SELECT 1, 2))");
+}

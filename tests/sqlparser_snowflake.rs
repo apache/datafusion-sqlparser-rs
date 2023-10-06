@@ -151,6 +151,44 @@ fn test_single_table_in_parenthesis_with_alias() {
     );
 }
 
+
+#[test]
+fn parse_select_as_func_argument() {
+    // subquery without parantheses in function call should work
+    snowflake().one_statement_parses_to(
+        "SELECT parse_json(SELECT column2 FROM values(1, 'null'))",
+        "SELECT parse_json((SELECT column2 FROM values(1, 'null')))",
+    );
+    // subquery with parantheses in function call should also work
+    snowflake().one_statement_parses_to(
+        "SELECT parse_json((SELECT column2 FROM values(1, 'null')))",
+        "SELECT parse_json((SELECT column2 FROM values(1, 'null')))",
+    );
+     // subquery with comma in function call should be interpreted as function with one argument
+     // Ex: func(select 1, 2) === fun((select 1, 2))
+    snowflake().one_statement_parses_to(
+        "SELECT func(SELECT 1, 2)",
+        "SELECT func((SELECT 1, 2))",
+    );
+
+    // subquery starting with WITH should also work
+    snowflake().one_statement_parses_to(
+        "SELECT func(WITH foo AS (SELECT 1) SELECT 1)",
+        "SELECT func((WITH foo AS (SELECT 1) SELECT 1))",
+    );
+
+    // named function arguments should not work
+    let res = snowflake().parse_sql_statements(
+        "SELECT func(expr => SELECT 1)",
+    );
+    assert_eq!(
+        res.unwrap_err(),
+        ParserError::ParserError(
+            "SELECT func(expr => SELECT".to_string(),
+            "Expected ), found: 1".to_string()
+    ));
+}
+
 fn snowflake() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SnowflakeDialect {})],

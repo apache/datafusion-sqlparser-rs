@@ -787,6 +787,9 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CAST => self.parse_cast_expr(),
+                Keyword::LAG | Keyword::FIRST_VALUE | Keyword::LAST_VALUE | Keyword::LEAD => {
+                    self.parse_rank_functions(ObjectName(vec![w.to_ident()]))
+                }
                 Keyword::TRY_CAST => self.parse_try_cast_expr(),
                 Keyword::SAFE_CAST => self.parse_safe_cast_expr(),
                 Keyword::EXISTS => self.parse_exists_expr(false),
@@ -7395,6 +7398,47 @@ impl<'a> Parser<'a> {
             );
         }
         Ok(clauses)
+    }
+
+    pub fn parse_rank_functions(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let expr = self.parse_expr()?;
+        let offset = if self.consume_token(&Token::Comma) {
+            Some(self.parse_number_value()?)
+        } else {
+            None
+        };
+        let default = if self.consume_token(&Token::Comma) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+        self.expect_token(&Token::RParen)?;
+
+        let respect_nulls;
+        if self.parse_keyword(Keyword::IGNORE) {
+            self.expect_keyword(Keyword::NULLS)?;
+            respect_nulls = Some(false)
+        } else if self.parse_keyword(Keyword::RESPECT) {
+            self.expect_keyword(Keyword::NULLS)?;
+            respect_nulls = Some(true)
+        } else {
+            respect_nulls = None
+        }
+
+        self.expect_keyword(Keyword::OVER)?;
+        self.expect_token(&Token::LParen)?;
+
+        let window = self.parse_window_spec()?;
+
+        Ok(Expr::RankFunction {
+            name,
+            expr: Box::new(expr),
+            offset,
+            default: default.map(Box::new),
+            respect_nulls,
+            window,
+        })
     }
 
     pub fn parse_merge(&mut self) -> Result<Statement, ParserError> {

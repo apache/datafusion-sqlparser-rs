@@ -595,6 +595,14 @@ pub enum Expr {
         /// `<search modifier>`
         opt_search_modifier: Option<SearchModifier>,
     },
+    RankFunction {
+        name: ObjectName,
+        expr: Box<Expr>,
+        offset: Option<Value>,
+        default: Option<Box<Expr>>,
+        respect_nulls: Option<bool>,
+        window: WindowSpec,
+    },
 }
 
 impl fmt::Display for Expr {
@@ -963,6 +971,32 @@ impl fmt::Display for Expr {
                     write!(f, "({match_expr})")?;
                 }
 
+                Ok(())
+            }
+            Expr::RankFunction {
+                name,
+                expr,
+                offset,
+                default,
+                respect_nulls,
+                window,
+            } => {
+                write!(f, "{name}({expr}")?;
+                if let Some(offset_value) = offset {
+                    write!(f, ",{offset_value}")?;
+                }
+                if let Some(default_value) = default {
+                    write!(f, ",{default_value}")?;
+                }
+                write!(f, ") ")?;
+                if let Some(respect_nulls_value) = respect_nulls {
+                    if *respect_nulls_value {
+                        write!(f, "RESPECT NULLS ")?;
+                    } else {
+                        write!(f, "IGNORE NULLS ")?;
+                    }
+                }
+                write!(f, "OVER ({window})")?;
                 Ok(())
             }
         }

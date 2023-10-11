@@ -787,7 +787,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CAST => self.parse_cast_expr(),
-                Keyword::LAG | Keyword::FIRST_VALUE | Keyword::LAST_VALUE | Keyword::LEAD => {
+                Keyword::LAG | Keyword::FIRST_VALUE | Keyword::LAST_VALUE | Keyword::LEAD if dialect_of!(self is SnowflakeDialect) => {
                     self.parse_rank_functions(ObjectName(vec![w.to_ident()]))
                 }
                 Keyword::TRY_CAST => self.parse_try_cast_expr(),

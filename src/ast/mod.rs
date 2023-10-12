@@ -595,14 +595,6 @@ pub enum Expr {
         /// `<search modifier>`
         opt_search_modifier: Option<SearchModifier>,
     },
-    RankFunction {
-        name: ObjectName,
-        expr: Box<Expr>,
-        offset: Option<Value>,
-        default: Option<Box<Expr>>,
-        nulls_clause: Option<WindowFunctionOption>,
-        window: WindowSpec,
-    },
 }
 
 impl fmt::Display for Expr {
@@ -973,28 +965,6 @@ impl fmt::Display for Expr {
 
                 Ok(())
             }
-            Expr::RankFunction {
-                name,
-                expr,
-                offset,
-                default,
-                nulls_clause,
-                window,
-            } => {
-                write!(f, "{name}({expr}")?;
-                if let Some(offset_value) = offset {
-                    write!(f, ",{offset_value}")?;
-                }
-                if let Some(default_value) = default {
-                    write!(f, ",{default_value}")?;
-                }
-                write!(f, ") ")?;
-                if let Some(o) = nulls_clause {
-                    write!(f, "{o} ")?;
-                }
-                write!(f, "OVER ({window})")?;
-                Ok(())
-            }
         }
     }
 }
@@ -1010,7 +980,7 @@ pub enum WindowType {
 impl Display for WindowType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WindowType::WindowSpec(spec) => write!(f, "({})", spec),
+            WindowType::WindowSpec(spec) => write!(f, "{}", spec),
             WindowType::NamedWindow(name) => write!(f, "{}", name),
         }
     }
@@ -1021,6 +991,7 @@ impl Display for WindowType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WindowSpec {
+    pub nulls_clause: Option<WindowFunctionOption>,
     pub partition_by: Vec<Expr>,
     pub order_by: Vec<OrderByExpr>,
     pub window_frame: Option<WindowFrame>,
@@ -1029,6 +1000,10 @@ pub struct WindowSpec {
 impl fmt::Display for WindowSpec {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut delim = "";
+        if let Some(o) = &self.nulls_clause {
+            write!(f, "{o}")?;
+        }
+        write!(f, "OVER (")?;
         if !self.partition_by.is_empty() {
             delim = " ";
             write!(
@@ -1054,6 +1029,7 @@ impl fmt::Display for WindowSpec {
                 write!(f, "{} {}", window_frame.units, window_frame.start_bound)?;
             }
         }
+        write!(f, ")")?;
         Ok(())
     }
 }
@@ -1119,8 +1095,8 @@ pub enum WindowFunctionOption {
 impl fmt::Display for WindowFunctionOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
-            WindowFunctionOption::IgnoreNulls => "IGNORE NULLS",
-            WindowFunctionOption::RespectNulls => "RESPECT NULLS",
+            WindowFunctionOption::IgnoreNulls => "IGNORE NULLS ",
+            WindowFunctionOption::RespectNulls => "RESPECT NULLS ",
         })
     }
 }
@@ -3746,7 +3722,7 @@ impl fmt::Display for Function {
             )?;
 
             if let Some(o) = &self.over {
-                write!(f, " OVER {o}")?;
+                write!(f, " {o}")?;
             }
         }
 

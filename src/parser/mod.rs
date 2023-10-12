@@ -787,10 +787,7 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CAST => self.parse_cast_expr(),
-                // Keyword::LAG | Keyword::FIRST_VALUE | Keyword::LAST_VALUE | Keyword::LEAD if dialect_of!(self is SnowflakeDialect) => {
-                Keyword::LAG | Keyword::FIRST_VALUE | Keyword::LAST_VALUE | Keyword::LEAD => {
-                    self.parse_rank_functions(ObjectName(vec![w.to_ident()]))
-                }
+
                 Keyword::TRY_CAST => self.parse_try_cast_expr(),
                 Keyword::SAFE_CAST => self.parse_safe_cast_expr(),
                 Keyword::EXISTS => self.parse_exists_expr(false),
@@ -961,9 +958,21 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let distinct = self.parse_all_or_distinct()?.is_some();
         let (args, order_by) = self.parse_optional_args_with_orderby()?;
+        let nulls_clause = match self.parse_one_of_keywords(&[Keyword::RESPECT, Keyword::IGNORE]) {
+            Some(keyword) => {
+                self.expect_keyword(Keyword::NULLS)?;
+
+                match keyword {
+                    Keyword::RESPECT => Some(WindowFunctionOption::RespectNulls),
+                    Keyword::IGNORE => Some(WindowFunctionOption::IgnoreNulls),
+                    _ => None,
+                }
+            }
+            None => None,
+        };
         let over = if self.parse_keyword(Keyword::OVER) {
             if self.consume_token(&Token::LParen) {
-                let window_spec = self.parse_window_spec()?;
+                let window_spec = self.parse_window_spec(nulls_clause)?;
                 Some(WindowType::WindowSpec(window_spec))
             } else {
                 Some(WindowType::NamedWindow(self.parse_identifier()?))
@@ -7401,47 +7410,6 @@ impl<'a> Parser<'a> {
         Ok(clauses)
     }
 
-    pub fn parse_rank_functions(&mut self, name: ObjectName) -> Result<Expr, ParserError> {
-        self.expect_token(&Token::LParen)?;
-        let expr = self.parse_expr()?;
-        let offset = if self.consume_token(&Token::Comma) {
-            Some(self.parse_number_value()?)
-        } else {
-            None
-        };
-        let default = if self.consume_token(&Token::Comma) {
-            Some(self.parse_expr()?)
-        } else {
-            None
-        };
-        self.expect_token(&Token::RParen)?;
-
-        let nulls_clause;
-        if self.parse_keyword(Keyword::IGNORE) {
-            self.expect_keyword(Keyword::NULLS)?;
-            nulls_clause = Some(WindowFunctionOption::IgnoreNulls)
-        } else if self.parse_keyword(Keyword::RESPECT) {
-            self.expect_keyword(Keyword::NULLS)?;
-            nulls_clause = Some(WindowFunctionOption::RespectNulls)
-        } else {
-            nulls_clause = None
-        }
-
-        self.expect_keyword(Keyword::OVER)?;
-        self.expect_token(&Token::LParen)?;
-
-        let window = self.parse_window_spec()?;
-
-        Ok(Expr::RankFunction {
-            name,
-            expr: Box::new(expr),
-            offset,
-            default: default.map(Box::new),
-            nulls_clause,
-            window,
-        })
-    }
-
     pub fn parse_merge(&mut self) -> Result<Statement, ParserError> {
         let into = self.parse_keyword(Keyword::INTO);
 
@@ -7574,7 +7542,7 @@ impl<'a> Parser<'a> {
         let ident = self.parse_identifier()?;
         self.expect_keyword(Keyword::AS)?;
         self.expect_token(&Token::LParen)?;
-        let window_spec = self.parse_window_spec()?;
+        let window_spec = self.parse_window_spec(None)?;
         Ok(NamedWindowDefinition(ident, window_spec))
     }
 
@@ -7593,7 +7561,10 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_window_spec(&mut self) -> Result<WindowSpec, ParserError> {
+    pub fn parse_window_spec(
+        &mut self,
+        nulls_clause: Option<WindowFunctionOption>,
+    ) -> Result<WindowSpec, ParserError> {
         let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
             self.parse_comma_separated(Parser::parse_expr)?
         } else {
@@ -7612,6 +7583,7 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(WindowSpec {
+            nulls_clause,
             partition_by,
             order_by,
             window_frame,

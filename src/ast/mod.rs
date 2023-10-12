@@ -980,7 +980,7 @@ pub enum WindowType {
 impl Display for WindowType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WindowType::WindowSpec(spec) => write!(f, "{}", spec),
+            WindowType::WindowSpec(spec) => write!(f, "({})", spec),
             WindowType::NamedWindow(name) => write!(f, "{}", name),
         }
     }
@@ -991,7 +991,6 @@ impl Display for WindowType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WindowSpec {
-    pub nulls_clause: Option<WindowFunctionOption>,
     pub partition_by: Vec<Expr>,
     pub order_by: Vec<OrderByExpr>,
     pub window_frame: Option<WindowFrame>,
@@ -1000,10 +999,6 @@ pub struct WindowSpec {
 impl fmt::Display for WindowSpec {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut delim = "";
-        if let Some(o) = &self.nulls_clause {
-            write!(f, "{o}")?;
-        }
-        write!(f, "OVER (")?;
         if !self.partition_by.is_empty() {
             delim = " ";
             write!(
@@ -1029,7 +1024,6 @@ impl fmt::Display for WindowSpec {
                 write!(f, "{} {}", window_frame.units, window_frame.start_bound)?;
             }
         }
-        write!(f, ")")?;
         Ok(())
     }
 }
@@ -1095,8 +1089,8 @@ pub enum WindowFunctionOption {
 impl fmt::Display for WindowFunctionOption {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
-            WindowFunctionOption::IgnoreNulls => "IGNORE NULLS ",
-            WindowFunctionOption::RespectNulls => "RESPECT NULLS ",
+            WindowFunctionOption::IgnoreNulls => "IGNORE NULLS",
+            WindowFunctionOption::RespectNulls => "RESPECT NULLS",
         })
     }
 }
@@ -3673,6 +3667,7 @@ impl fmt::Display for CloseCursor {
 pub struct Function {
     pub name: ObjectName,
     pub args: Vec<FunctionArg>,
+    pub nulls_clause: Option<WindowFunctionOption>,
     pub over: Option<WindowType>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
@@ -3721,8 +3716,12 @@ impl fmt::Display for Function {
                 display_comma_separated(&self.order_by),
             )?;
 
-            if let Some(o) = &self.over {
+            if let Some(o) = &self.nulls_clause {
                 write!(f, " {o}")?;
+            }
+
+            if let Some(o) = &self.over {
+                write!(f, " OVER {o}")?;
             }
         }
 

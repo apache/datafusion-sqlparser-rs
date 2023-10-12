@@ -1071,6 +1071,7 @@ fn parse_insert_with_on_duplicate_update() {
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                 Expr::Identifier(Ident::new("description"))
                             ))],
+                            nulls_clause: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -1084,6 +1085,7 @@ fn parse_insert_with_on_duplicate_update() {
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                 Expr::Identifier(Ident::new("perm_create"))
                             ))],
+                            nulls_clause: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -1097,6 +1099,7 @@ fn parse_insert_with_on_duplicate_update() {
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                 Expr::Identifier(Ident::new("perm_read"))
                             ))],
+                            nulls_clause: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -1110,6 +1113,7 @@ fn parse_insert_with_on_duplicate_update() {
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                 Expr::Identifier(Ident::new("perm_update"))
                             ))],
+                            nulls_clause: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -1123,6 +1127,7 @@ fn parse_insert_with_on_duplicate_update() {
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                 Expr::Identifier(Ident::new("perm_delete"))
                             ))],
+                            nulls_clause: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -1500,6 +1505,7 @@ fn parse_table_colum_option_on_update() {
                         option: ColumnOption::OnUpdate(Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]),
                             args: vec![],
+                            nulls_clause: None,
                             over: None,
                             distinct: false,
                             special: false,

@@ -772,6 +772,7 @@ impl<'a> Parser<'a> {
                     Ok(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident()]),
                         args: vec![],
+                        nulls_clause: None,
                         over: None,
                         distinct: false,
                         special: true,
@@ -971,7 +972,7 @@ impl<'a> Parser<'a> {
         };
         let over = if self.parse_keyword(Keyword::OVER) {
             if self.consume_token(&Token::LParen) {
-                let window_spec = self.parse_window_spec(nulls_clause)?;
+                let window_spec = self.parse_window_spec()?;
                 Some(WindowType::WindowSpec(window_spec))
             } else {
                 Some(WindowType::NamedWindow(self.parse_identifier()?))
@@ -982,6 +983,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::Function(Function {
             name,
             args,
+            nulls_clause,
             over,
             distinct,
             special: false,
@@ -999,6 +1001,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::Function(Function {
             name,
             args,
+            nulls_clause: None,
             over: None,
             distinct: false,
             special,
@@ -7541,7 +7544,7 @@ impl<'a> Parser<'a> {
         let ident = self.parse_identifier()?;
         self.expect_keyword(Keyword::AS)?;
         self.expect_token(&Token::LParen)?;
-        let window_spec = self.parse_window_spec(None)?;
+        let window_spec = self.parse_window_spec()?;
         Ok(NamedWindowDefinition(ident, window_spec))
     }
 
@@ -7562,7 +7565,6 @@ impl<'a> Parser<'a> {
 
     pub fn parse_window_spec(
         &mut self,
-        nulls_clause: Option<WindowFunctionOption>,
     ) -> Result<WindowSpec, ParserError> {
         let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
             self.parse_comma_separated(Parser::parse_expr)?
@@ -7582,7 +7584,6 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(WindowSpec {
-            nulls_clause,
             partition_by,
             order_by,
             window_frame,

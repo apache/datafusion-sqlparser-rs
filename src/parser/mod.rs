@@ -5208,6 +5208,7 @@ impl<'a> Parser<'a> {
         let next_token = self.next_token();
         match next_token.token {
             Token::Word(w) => Ok(w.to_ident()),
+            Token::Number(w, false) => Ok(Ident::new(w)),
             Token::SingleQuotedString(s) => Ok(Ident::with_quote('\'', s)),
             Token::DoubleQuotedString(s) => Ok(Ident::with_quote('\"', s)),
             _ => self.expected("identifier", next_token),

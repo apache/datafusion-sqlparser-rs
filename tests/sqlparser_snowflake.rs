@@ -1064,3 +1064,13 @@ fn test_snowflake_trim() {
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
+
+#[test]
+fn test_number_placehilder() {
+    let sql_only_select = "SELECT :1";
+    let select = snowflake().verified_only_select(sql_only_select);
+    assert_eq!(
+        &Expr::Value(Value::Placeholder(":1".into())),
+        expr_from_projection(only(&select.projection))
+    );
+}

@@ -787,7 +787,6 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CAST => self.parse_cast_expr(),
-
                 Keyword::TRY_CAST => self.parse_try_cast_expr(),
                 Keyword::SAFE_CAST => self.parse_safe_cast_expr(),
                 Keyword::EXISTS => self.parse_exists_expr(false),

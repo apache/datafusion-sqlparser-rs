@@ -1888,6 +1888,7 @@ fn parse_select_qualify() {
                 name: ObjectName(vec![Ident::new("ROW_NUMBER")]),
                 args: vec![],
                 over: Some(WindowType::WindowSpec(WindowSpec {
+                    nulls_clause: None,
                     partition_by: vec![Expr::Identifier(Ident::new("p"))],
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident::new("o")),
@@ -3499,6 +3500,7 @@ fn parse_window_functions() {
             name: ObjectName(vec![Ident::new("row_number")]),
             args: vec![],
             over: Some(WindowType::WindowSpec(WindowSpec {
+                nulls_clause: None,
                 partition_by: vec![],
                 order_by: vec![OrderByExpr {
                     expr: Expr::Identifier(Ident::new("dt")),
@@ -3609,6 +3611,7 @@ fn test_parse_named_window() {
                     quote_style: None,
                 },
                 WindowSpec {
+                    nulls_clause: None,
                     partition_by: vec![],
                     order_by: vec![OrderByExpr {
                         expr: Expr::Identifier(Ident {
@@ -3627,6 +3630,7 @@ fn test_parse_named_window() {
                     quote_style: None,
                 },
                 WindowSpec {
+                    nulls_clause: None,
                     partition_by: vec![Expr::Identifier(Ident {
                         value: "C11".to_string(),
                         quote_style: None,

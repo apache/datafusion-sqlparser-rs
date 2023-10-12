@@ -1193,10 +1193,10 @@ pub enum Statement {
         noscan: bool,
         compute_statistics: bool,
     },
-    /// Truncate (Hive)
+    /// Truncate (Hive and PostgreSQL)
     Truncate {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        table_name: ObjectName,
+        table_names: Vec<ObjectName>,
         partitions: Option<Vec<Expr>>,
         /// TABLE - optional keyword;
         table: bool,
@@ -1982,12 +1982,20 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Truncate {
-                table_name,
+                table_names,
                 partitions,
                 table,
             } => {
                 let table = if *table { "TABLE " } else { "" };
-                write!(f, "TRUNCATE {table}{table_name}")?;
+                write!(
+                    f,
+                    "TRUNCATE {table}{}",
+                    table_names
+                        .iter()
+                        .map(|t| t.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )?;
                 if let Some(ref parts) = partitions {
                     if !parts.is_empty() {
                         write!(f, " PARTITION ({})", display_comma_separated(parts))?;

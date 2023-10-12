@@ -3375,9 +3375,22 @@ fn parse_truncate() {
     let truncate = pg_and_generic().verified_stmt("TRUNCATE db.table_name");
     assert_eq!(
         Statement::Truncate {
-            table_name: ObjectName(vec![Ident::new("db"), Ident::new("table_name")]),
+            table_names: vec![ObjectName(vec![Ident::new("db"), Ident::new("table_name")])],
             partitions: None,
             table: false
+        },
+        truncate
+    );
+
+    let truncate = pg_and_generic().verified_stmt("TRUNCATE TABLE tbl1, db.tbl2");
+    assert_eq!(
+        Statement::Truncate {
+            table_names: vec![
+                ObjectName(vec![Ident::new("tbl1")]),
+                ObjectName(vec![Ident::new("db"), Ident::new("tbl2")])
+            ],
+            partitions: None,
+            table: true
         },
         truncate
     );

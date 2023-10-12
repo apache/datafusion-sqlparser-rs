@@ -330,10 +330,13 @@ fn parse_delimited_identifiers() {
     // check SELECT
     assert_eq!(3, select.projection.len());
     assert_eq!(
-        &Expr::CompoundIdentifier(vec![
-            Ident::with_quote('"', "alias"),
-            Ident::with_quote('"', "bar baz"),
-        ]),
+        &Expr::CompoundIdentifier(
+            vec![
+                Ident::with_quote('"', "alias"),
+                Ident::with_quote('"', "bar baz"),
+            ]
+            .empty_span()
+        ),
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(

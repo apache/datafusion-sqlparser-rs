@@ -226,7 +226,9 @@ fn parse_update_set_from() {
             },
             assignments: vec![Assignment {
                 id: vec![Ident::new("name")],
-                value: Expr::CompoundIdentifier(vec![Ident::new("t2"), Ident::new("name")])
+                value: Expr::CompoundIdentifier(
+                    vec![Ident::new("t2"), Ident::new("name")].empty_span()
+                )
             }],
             from: Some(TableWithJoins {
                 relation: TableFactor::Derived {
@@ -285,15 +287,13 @@ fn parse_update_set_from() {
                 joins: vec![],
             }),
             selection: Some(Expr::BinaryOp {
-                left: Box::new(Expr::CompoundIdentifier(vec![
-                    Ident::new("t1"),
-                    Ident::new("id")
-                ])),
+                left: Box::new(Expr::CompoundIdentifier(
+                    vec![Ident::new("t1"), Ident::new("id")].empty_span()
+                )),
                 op: BinaryOperator::Eq,
-                right: Box::new(Expr::CompoundIdentifier(vec![
-                    Ident::new("t2"),
-                    Ident::new("id")
-                ])),
+                right: Box::new(Expr::CompoundIdentifier(
+                    vec![Ident::new("t2"), Ident::new("id")].empty_span()
+                )),
             }),
             returning: None,
         }
@@ -337,10 +337,9 @@ fn parse_update_with_table_alias() {
             );
             assert_eq!(
                 Some(Expr::BinaryOp {
-                    left: Box::new(Expr::CompoundIdentifier(vec![
-                        Ident::new("u"),
-                        Ident::new("username"),
-                    ])),
+                    left: Box::new(Expr::CompoundIdentifier(
+                        vec![Ident::new("u"), Ident::new("username"),].empty_span()
+                    )),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString(
                         "old_user".to_string()
@@ -614,15 +613,13 @@ fn parse_where_delete_with_alias_statement() {
             );
             assert_eq!(
                 Expr::BinaryOp {
-                    left: Box::new(Expr::CompoundIdentifier(vec![
-                        Ident::new("a"),
-                        Ident::new("id"),
-                    ])),
+                    left: Box::new(Expr::CompoundIdentifier(
+                        vec![Ident::new("a"), Ident::new("id"),].empty_span()
+                    )),
                     op: Lt,
-                    right: Box::new(Expr::CompoundIdentifier(vec![
-                        Ident::new("b"),
-                        Ident::new("id"),
-                    ])),
+                    right: Box::new(Expr::CompoundIdentifier(
+                        vec![Ident::new("b"), Ident::new("id"),].empty_span()
+                    )),
                 },
                 selection.unwrap(),
             );
@@ -6823,27 +6820,23 @@ fn parse_merge() {
                 on,
                 Box::new(Expr::BinaryOp {
                     left: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::CompoundIdentifier(vec![
-                            Ident::new("dest"),
-                            Ident::new("D"),
-                        ])),
+                        left: Box::new(Expr::CompoundIdentifier(
+                            vec![Ident::new("dest"), Ident::new("D"),].empty_span()
+                        )),
                         op: BinaryOperator::Eq,
-                        right: Box::new(Expr::CompoundIdentifier(vec![
-                            Ident::new("stg"),
-                            Ident::new("D"),
-                        ])),
+                        right: Box::new(Expr::CompoundIdentifier(
+                            vec![Ident::new("stg"), Ident::new("D"),].empty_span()
+                        )),
                     }),
                     op: BinaryOperator::And,
                     right: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::CompoundIdentifier(vec![
-                            Ident::new("dest"),
-                            Ident::new("E"),
-                        ])),
+                        left: Box::new(Expr::CompoundIdentifier(
+                            vec![Ident::new("dest"), Ident::new("E"),].empty_span()
+                        )),
                         op: BinaryOperator::Eq,
-                        right: Box::new(Expr::CompoundIdentifier(vec![
-                            Ident::new("stg"),
-                            Ident::new("E"),
-                        ])),
+                        right: Box::new(Expr::CompoundIdentifier(
+                            vec![Ident::new("stg"), Ident::new("E"),].empty_span()
+                        )),
                     }),
                 })
             );
@@ -6858,18 +6851,23 @@ fn parse_merge() {
                         values: Values {
                             explicit_row: false,
                             rows: vec![vec![
-                                Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("A")]),
-                                Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("B")]),
-                                Expr::CompoundIdentifier(vec![Ident::new("stg"), Ident::new("C")]),
+                                Expr::CompoundIdentifier(
+                                    vec![Ident::new("stg"), Ident::new("A")].empty_span()
+                                ),
+                                Expr::CompoundIdentifier(
+                                    vec![Ident::new("stg"), Ident::new("B")].empty_span()
+                                ),
+                                Expr::CompoundIdentifier(
+                                    vec![Ident::new("stg"), Ident::new("C")].empty_span()
+                                ),
                             ]]
                         },
                     },
                     MergeClause::MatchedUpdate {
                         predicate: Some(Expr::BinaryOp {
-                            left: Box::new(Expr::CompoundIdentifier(vec![
-                                Ident::new("dest"),
-                                Ident::new("A"),
-                            ])),
+                            left: Box::new(Expr::CompoundIdentifier(
+                                vec![Ident::new("dest"), Ident::new("A"),].empty_span()
+                            )),
                             op: BinaryOperator::Eq,
                             right: Box::new(Expr::Value(Value::SingleQuotedString(
                                 "a".to_string()
@@ -6878,17 +6876,15 @@ fn parse_merge() {
                         assignments: vec![
                             Assignment {
                                 id: vec![Ident::new("dest"), Ident::new("F")],
-                                value: Expr::CompoundIdentifier(vec![
-                                    Ident::new("stg"),
-                                    Ident::new("F"),
-                                ]),
+                                value: Expr::CompoundIdentifier(
+                                    vec![Ident::new("stg"), Ident::new("F"),].empty_span()
+                                ),
                             },
                             Assignment {
                                 id: vec![Ident::new("dest"), Ident::new("G")],
-                                value: Expr::CompoundIdentifier(vec![
-                                    Ident::new("stg"),
-                                    Ident::new("G"),
-                                ]),
+                                value: Expr::CompoundIdentifier(
+                                    vec![Ident::new("stg"), Ident::new("G"),].empty_span()
+                                ),
                             },
                         ],
                     },
@@ -7724,7 +7720,9 @@ fn parse_pivot_table() {
             aggregate_function: Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("SUM")]),
                 args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                    Expr::CompoundIdentifier(vec![Ident::new("a"), Ident::new("amount"),])
+                    Expr::CompoundIdentifier(
+                        vec![Ident::new("a"), Ident::new("amount"),].empty_span()
+                    )
                 ))]),
                 over: None,
                 distinct: false,

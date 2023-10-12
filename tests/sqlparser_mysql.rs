@@ -1357,15 +1357,13 @@ fn parse_update_with_joins() {
                             partitions: vec![],
                         },
                         join_operator: JoinOperator::Inner(JoinConstraint::On(Expr::BinaryOp {
-                            left: Box::new(Expr::CompoundIdentifier(vec![
-                                Ident::new("o"),
-                                Ident::new("customer_id")
-                            ])),
+                            left: Box::new(Expr::CompoundIdentifier(
+                                vec![Ident::new("o"), Ident::new("customer_id")].empty_span()
+                            )),
                             op: BinaryOperator::Eq,
-                            right: Box::new(Expr::CompoundIdentifier(vec![
-                                Ident::new("c"),
-                                Ident::new("id")
-                            ]))
+                            right: Box::new(Expr::CompoundIdentifier(
+                                vec![Ident::new("c"), Ident::new("id")].empty_span()
+                            ))
                         })),
                     }]
                 },
@@ -1380,10 +1378,9 @@ fn parse_update_with_joins() {
             );
             assert_eq!(
                 Some(Expr::BinaryOp {
-                    left: Box::new(Expr::CompoundIdentifier(vec![
-                        Ident::new("c"),
-                        Ident::new("firstname")
-                    ])),
+                    left: Box::new(Expr::CompoundIdentifier(
+                        vec![Ident::new("c"), Ident::new("firstname")].empty_span()
+                    )),
                     op: BinaryOperator::Eq,
                     right: Box::new(Expr::Value(Value::SingleQuotedString("Peter".to_string())))
                 }),

@@ -864,7 +864,7 @@ impl fmt::Display for TableFactor {
                     f,
                     " PIVOT({} FOR {} IN (",
                     aggregate_function,
-                    Expr::CompoundIdentifier(value_column.to_vec())
+                    Expr::CompoundIdentifier(value_column.to_vec().empty_span())
                 )?;
                 for value in pivot_values {
                     write!(f, "{}", value)?;

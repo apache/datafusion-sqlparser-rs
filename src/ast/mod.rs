@@ -436,7 +436,7 @@ pub enum Expr {
     /// Identifier e.g. table name or column name
     Identifier(WithSpan<Ident>),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
-    CompoundIdentifier(Vec<Ident>),
+    CompoundIdentifier(WithSpan<Vec<Ident>>),
     /// JSON access (postgres)  eg: data->'tags'
     JsonAccess {
         left: Box<Expr>,

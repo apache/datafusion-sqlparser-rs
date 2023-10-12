@@ -749,6 +749,7 @@ impl<'a> Parser<'a> {
             }
         }));
 
+        let start_idx = self.index;
         let next_token = self.next_token();
         let expr = match next_token.token {
             Token::Word(w) => match w.keyword {
@@ -831,7 +832,9 @@ impl<'a> Parser<'a> {
                             self.prev_token();
                             self.parse_function(ObjectName(id_parts))
                         } else {
-                            Ok(Expr::CompoundIdentifier(id_parts))
+                            Ok(Expr::CompoundIdentifier(
+                                id_parts.spanning(self.span_from_index(start_idx)),
+                            ))
                         }
                     }
                     // string introducer https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html

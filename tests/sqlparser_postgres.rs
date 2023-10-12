@@ -1473,7 +1473,9 @@ fn parse_pg_on_conflict() {
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
                         id: vec!["dname".into()],
-                        value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "dname".into()])
+                        value: Expr::CompoundIdentifier(
+                            vec!["EXCLUDED".into(), "dname".into()].empty_span()
+                        )
                     },],
                     selection: None
                 }),
@@ -1504,14 +1506,15 @@ fn parse_pg_on_conflict() {
                     assignments: vec![
                         Assignment {
                             id: vec!["dname".into()],
-                            value: Expr::CompoundIdentifier(vec![
-                                "EXCLUDED".into(),
-                                "dname".into()
-                            ])
+                            value: Expr::CompoundIdentifier(
+                                vec!["EXCLUDED".into(), "dname".into()].empty_span()
+                            )
                         },
                         Assignment {
                             id: vec!["area".into()],
-                            value: Expr::CompoundIdentifier(vec!["EXCLUDED".into(), "area".into()])
+                            value: Expr::CompoundIdentifier(
+                                vec!["EXCLUDED".into(), "area".into()].empty_span()
+                            )
                         },
                     ],
                     selection: None
@@ -2328,10 +2331,9 @@ fn test_composite_value() {
         SelectItem::UnnamedExpr(
             Expr::CompositeAccess {
                 key: Ident::new("name"),
-                expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
-                    Ident::new("on_hand"),
-                    Ident::new("item")
-                ]))))
+                expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(
+                    vec![Ident::new("on_hand"), Ident::new("item")].empty_span()
+                ))))
             }
             .empty_span()
         ),
@@ -2344,10 +2346,9 @@ fn test_composite_value() {
             Expr::BinaryOp {
                 left: Box::new(Expr::CompositeAccess {
                     key: Ident::new("price"),
-                    expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(vec![
-                        Ident::new("on_hand"),
-                        Ident::new("item")
-                    ]))))
+                    expr: Box::new(Expr::Nested(Box::new(Expr::CompoundIdentifier(
+                        vec![Ident::new("on_hand"), Ident::new("item")].empty_span()
+                    ))))
                 }),
                 op: BinaryOperator::Gt,
                 right: Box::new(Expr::Value(number("9")))
@@ -3053,10 +3054,13 @@ fn parse_delimited_identifiers() {
     // check SELECT
     assert_eq!(3, select.projection.len());
     assert_eq!(
-        &Expr::CompoundIdentifier(vec![
-            Ident::with_quote('"', "alias"),
-            Ident::with_quote('"', "bar baz"),
-        ]),
+        &Expr::CompoundIdentifier(
+            vec![
+                Ident::with_quote('"', "alias"),
+                Ident::with_quote('"', "bar baz"),
+            ]
+            .empty_span()
+        ),
         expr_from_projection(&select.projection[0]),
     );
     assert_eq!(
@@ -3631,10 +3635,9 @@ fn parse_join_constraint_unnest_alias() {
         vec![Join {
             relation: TableFactor::UNNEST {
                 alias: table_alias("f"),
-                array_exprs: vec![Expr::CompoundIdentifier(vec![
-                    Ident::new("t1"),
-                    Ident::new("a")
-                ])],
+                array_exprs: vec![Expr::CompoundIdentifier(
+                    vec![Ident::new("t1"), Ident::new("a")].empty_span()
+                )],
                 with_offset: false,
                 with_offset_alias: None
             },

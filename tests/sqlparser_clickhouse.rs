@@ -50,7 +50,7 @@ fn parse_map_access_expr() {
                             Value::SingleQuotedString("endpoint".to_string())
                         ))),
                     ],
-                    nulls_clause: None,
+                    null_treatment: None,
                     over: None,
                     distinct: false,
                     special: false,
@@ -90,7 +90,7 @@ fn parse_map_access_expr() {
                                     Value::SingleQuotedString("app".to_string())
                                 ))),
                             ],
-                            nulls_clause: None,
+                            null_treatment: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -140,7 +140,7 @@ fn parse_array_fn() {
                 FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new("x1")))),
                 FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new("x2")))),
             ],
-            nulls_clause: None,
+            null_treatment: None,
             over: None,
             distinct: false,
             special: false,
@@ -199,7 +199,7 @@ fn parse_delimited_identifiers() {
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
             args: vec![],
-            nulls_clause: None,
+            null_treatment: None,
             over: None,
             distinct: false,
             special: false,

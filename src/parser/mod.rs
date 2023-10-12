@@ -772,7 +772,7 @@ impl<'a> Parser<'a> {
                     Ok(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident()]),
                         args: vec![],
-                        nulls_clause: None,
+                        null_treatment: None,
                         over: None,
                         distinct: false,
                         special: true,
@@ -958,13 +958,14 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let distinct = self.parse_all_or_distinct()?.is_some();
         let (args, order_by) = self.parse_optional_args_with_orderby()?;
-        let nulls_clause = match self.parse_one_of_keywords(&[Keyword::RESPECT, Keyword::IGNORE]) {
+        let null_treatment = match self.parse_one_of_keywords(&[Keyword::RESPECT, Keyword::IGNORE])
+        {
             Some(keyword) => {
                 self.expect_keyword(Keyword::NULLS)?;
 
                 match keyword {
-                    Keyword::RESPECT => Some(WindowFunctionOption::RespectNulls),
-                    Keyword::IGNORE => Some(WindowFunctionOption::IgnoreNulls),
+                    Keyword::RESPECT => Some(NullTreatment::RespectNulls),
+                    Keyword::IGNORE => Some(NullTreatment::IgnoreNulls),
                     _ => None,
                 }
             }
@@ -983,7 +984,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::Function(Function {
             name,
             args,
-            nulls_clause,
+            null_treatment,
             over,
             distinct,
             special: false,
@@ -1001,7 +1002,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::Function(Function {
             name,
             args,
-            nulls_clause: None,
+            null_treatment: None,
             over: None,
             distinct: false,
             special,

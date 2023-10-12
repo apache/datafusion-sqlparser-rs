@@ -1081,16 +1081,16 @@ impl fmt::Display for WindowFrameUnits {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum WindowFunctionOption {
+pub enum NullTreatment {
     IgnoreNulls,
     RespectNulls,
 }
 
-impl fmt::Display for WindowFunctionOption {
+impl fmt::Display for NullTreatment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
-            WindowFunctionOption::IgnoreNulls => "IGNORE NULLS",
-            WindowFunctionOption::RespectNulls => "RESPECT NULLS",
+            NullTreatment::IgnoreNulls => "IGNORE NULLS",
+            NullTreatment::RespectNulls => "RESPECT NULLS",
         })
     }
 }
@@ -3667,7 +3667,7 @@ impl fmt::Display for CloseCursor {
 pub struct Function {
     pub name: ObjectName,
     pub args: Vec<FunctionArg>,
-    pub nulls_clause: Option<WindowFunctionOption>,
+    pub null_treatment: Option<NullTreatment>,
     pub over: Option<WindowType>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
@@ -3716,7 +3716,7 @@ impl fmt::Display for Function {
                 display_comma_separated(&self.order_by),
             )?;
 
-            if let Some(o) = &self.nulls_clause {
+            if let Some(o) = &self.null_treatment {
                 write!(f, " {o}")?;
             }
 

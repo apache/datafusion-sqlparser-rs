@@ -533,7 +533,7 @@ fn parse_map_access_offset() {
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                     number("0")
                 ))),],
-                nulls_clause: None,
+                null_treatment: None,
                 over: None,
                 distinct: false,
                 special: false,

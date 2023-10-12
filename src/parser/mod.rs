@@ -7563,9 +7563,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_window_spec(
-        &mut self,
-    ) -> Result<WindowSpec, ParserError> {
+    pub fn parse_window_spec(&mut self) -> Result<WindowSpec, ParserError> {
         let partition_by = if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
             self.parse_comma_separated(Parser::parse_expr)?
         } else {

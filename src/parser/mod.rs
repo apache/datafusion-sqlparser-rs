@@ -787,7 +787,8 @@ impl<'a> Parser<'a> {
                 }
                 Keyword::CASE => self.parse_case_expr(),
                 Keyword::CAST => self.parse_cast_expr(),
-                Keyword::LAG | Keyword::FIRST_VALUE | Keyword::LAST_VALUE | Keyword::LEAD if dialect_of!(self is SnowflakeDialect) => {
+                // Keyword::LAG | Keyword::FIRST_VALUE | Keyword::LAST_VALUE | Keyword::LEAD if dialect_of!(self is SnowflakeDialect) => {
+                Keyword::LAG | Keyword::FIRST_VALUE | Keyword::LAST_VALUE | Keyword::LEAD => {
                     self.parse_rank_functions(ObjectName(vec![w.to_ident()]))
                 }
                 Keyword::TRY_CAST => self.parse_try_cast_expr(),
@@ -7415,15 +7416,15 @@ impl<'a> Parser<'a> {
         };
         self.expect_token(&Token::RParen)?;
 
-        let respect_nulls;
+        let nulls_clause;
         if self.parse_keyword(Keyword::IGNORE) {
             self.expect_keyword(Keyword::NULLS)?;
-            respect_nulls = Some(false)
+            nulls_clause = Some(WindowFunctionOption::IgnoreNulls)
         } else if self.parse_keyword(Keyword::RESPECT) {
             self.expect_keyword(Keyword::NULLS)?;
-            respect_nulls = Some(true)
+            nulls_clause = Some(WindowFunctionOption::RespectNulls)
         } else {
-            respect_nulls = None
+            nulls_clause = None
         }
 
         self.expect_keyword(Keyword::OVER)?;
@@ -7436,7 +7437,7 @@ impl<'a> Parser<'a> {
             expr: Box::new(expr),
             offset,
             default: default.map(Box::new),
-            respect_nulls,
+            nulls_clause,
             window,
         })
     }

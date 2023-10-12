@@ -2259,18 +2259,62 @@ fn parse_agg_with_order_by() {
             Box::new(MsSqlDialect {}),
             Box::new(AnsiDialect {}),
             Box::new(HiveDialect {}),
+            Box::new(SnowflakeDialect {}),
         ],
         options: None,
     };
 
     for sql in [
-        "SELECT FIRST_VALUE(x ORDER BY x) AS a FROM T",
-        "SELECT FIRST_VALUE(x ORDER BY x) FROM tbl",
-        "SELECT LAST_VALUE(x ORDER BY x, y) AS a FROM T",
-        "SELECT LAST_VALUE(x ORDER BY x ASC, y DESC) AS a FROM T",
+        "SELECT column1, column2, FIRST_VALUE(column2) OVER (PARTITION BY column1 ORDER BY column2 NULLS LAST) AS column2_first FROM t1",
+        "SELECT column1, column2, FIRST_VALUE(column2) OVER (ORDER BY column2 NULLS LAST) AS column2_first FROM t1",
+        "SELECT col_1, col_2, LAG(col_2) OVER (ORDER BY col_1) FROM t1",
+        "SELECT LAG(col_2,1,0) OVER (ORDER BY col_1) FROM t1",
+        "SELECT LAG(col_2,1,0) OVER (PARTITION BY col_3 ORDER BY col_1)",
     ] {
         supported_dialects.verified_stmt(sql);
     }
+
+    let supported_dialects_nulls = TestedDialects {
+        dialects: vec![Box::new(MsSqlDialect {}), Box::new(SnowflakeDialect {})],
+        options: None,
+    };
+
+    for sql in [
+        "SELECT column1, column2, FIRST_VALUE(column2) IGNORE NULLS OVER (PARTITION BY column1 ORDER BY column2 NULLS LAST) AS column2_first FROM t1",
+        "SELECT column1, column2, FIRST_VALUE(column2) RESPECT NULLS OVER (PARTITION BY column1 ORDER BY column2 NULLS LAST) AS column2_first FROM t1",
+        "SELECT LAG(col_2,1,0) IGNORE NULLS OVER (ORDER BY col_1) FROM t1",
+        "SELECT LAG(col_2,1,0) RESPECT NULLS OVER (ORDER BY col_1) FROM t1",
+    ] {
+        supported_dialects_nulls.verified_stmt(sql);
+    }
+
+    let sql_only_select = "SELECT LAG(col_2,1,0) IGNORE NULLS OVER (PARTITION BY col_3 ORDER BY col_1)";
+    let select = supported_dialects_nulls.verified_only_select(sql_only_select);
+    assert_eq!(
+        &Expr::RankFunction {
+            name: ObjectName(vec![Ident::new("LAG")]),
+            expr: Box::new(Expr::Identifier(Ident::new("col_2"))),
+            offset: Some(Value::Number("1".parse().unwrap(), false)),
+            default: Some(Box::new(Expr::Value(number("0")))),
+            nulls_clause: None,
+            window: WindowSpec {
+                partition_by: vec![Expr::Identifier(Ident {
+                    value: "col_3".to_string(),
+                    quote_style: None,
+                })],
+                order_by: vec![OrderByExpr {
+                    expr: Expr::Identifier(Ident {
+                        value: "col_1".to_string(),
+                        quote_style: None,
+                    }),
+                    asc: None,
+                    nulls_first: None,
+                }],
+                window_frame: None
+            }
+        },
+        expr_from_projection(only(&select.projection))
+    );
 }
 
 #[test]

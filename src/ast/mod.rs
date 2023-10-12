@@ -600,7 +600,7 @@ pub enum Expr {
         expr: Box<Expr>,
         offset: Option<Value>,
         default: Option<Box<Expr>>,
-        respect_nulls: Option<bool>,
+        nulls_clause: Option<WindowFunctionOption>,
         window: WindowSpec,
     },
 }
@@ -978,7 +978,7 @@ impl fmt::Display for Expr {
                 expr,
                 offset,
                 default,
-                respect_nulls,
+                nulls_clause,
                 window,
             } => {
                 write!(f, "{name}({expr}")?;
@@ -989,12 +989,8 @@ impl fmt::Display for Expr {
                     write!(f, ",{default_value}")?;
                 }
                 write!(f, ") ")?;
-                if let Some(respect_nulls_value) = respect_nulls {
-                    if *respect_nulls_value {
-                        write!(f, "RESPECT NULLS ")?;
-                    } else {
-                        write!(f, "IGNORE NULLS ")?;
-                    }
+                if let Some(o) = nulls_clause {
+                    write!(f, "{o} ")?;
                 }
                 write!(f, "OVER ({window})")?;
                 Ok(())
@@ -1108,6 +1104,23 @@ impl fmt::Display for WindowFrameUnits {
             WindowFrameUnits::Rows => "ROWS",
             WindowFrameUnits::Range => "RANGE",
             WindowFrameUnits::Groups => "GROUPS",
+        })
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum WindowFunctionOption {
+    IgnoreNulls,
+    RespectNulls,
+}
+
+impl fmt::Display for WindowFunctionOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            WindowFunctionOption::IgnoreNulls => "IGNORE NULLS",
+            WindowFunctionOption::RespectNulls => "RESPECT NULLS",
         })
     }
 }

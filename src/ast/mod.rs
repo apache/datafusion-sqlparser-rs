@@ -47,8 +47,9 @@ pub use self::value::{
     escape_quoted_string, DateTimeField, DollarQuotedString, TrimWhereField, Value,
 };
 
-use crate::ast::helpers::stmt_data_loading::{
-    DataLoadingOptions, StageLoadSelectItem, StageParamsObject,
+use crate::{
+    ast::helpers::stmt_data_loading::{DataLoadingOptions, StageLoadSelectItem, StageParamsObject},
+    keywords::Keyword,
 };
 #[cfg(feature = "visitor")]
 pub use visitor::*;
@@ -1832,6 +1833,11 @@ pub enum Statement {
         name: ObjectName,
         representation: UserDefinedTypeRepresentation,
     },
+
+    Vacuum {
+        options: Vec<(Keyword, Option<String>)>,
+        table_and_columns: Vec<(ObjectName, Vec<ObjectName>)>,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -3193,6 +3199,46 @@ impl fmt::Display for Statement {
                 representation,
             } => {
                 write!(f, "CREATE TYPE {name} AS {representation}")
+            }
+            Statement::Vacuum {
+                options,
+                table_and_columns,
+            } => {
+                write!(f, "VACUUM")?;
+                if !options.is_empty() {
+                    let options = options
+                        .iter()
+                        .map(|o| {
+                            format!(
+                                "{:?}{}",
+                                o.0,
+                                match &o.1 {
+                                    Some(v) => format!(" {}", v),
+                                    None => "".to_string(),
+                                }
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    write!(f, " ({})", display_comma_separated(&options))?;
+                }
+                if !table_and_columns.is_empty() {
+                    let table_and_columns = table_and_columns
+                        .iter()
+                        .map(|tc| {
+                            format!(
+                                "{}{}",
+                                tc.0,
+                                if tc.1.is_empty() {
+                                    "".to_string()
+                                } else {
+                                    format!(" ({})", display_comma_separated(&tc.1))
+                                }
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    write!(f, " {}", display_comma_separated(&table_and_columns))?;
+                }
+                Ok(())
             }
         }
     }

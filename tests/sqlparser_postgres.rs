@@ -3480,3 +3480,81 @@ fn parse_join_constraint_unnest_alias() {
         }]
     );
 }
+
+#[test]
+fn parse_vacuum() {
+    pg().verified_stmt("VACUUM");
+
+    let res = pg().parse_sql_statements("VACUUM ()");
+    assert_eq!(
+        ParserError::ParserError("Expected vacuum option, found: EOF".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("VACUUM (");
+    assert_eq!(
+        ParserError::ParserError("Expected ')', found: EOF".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements("VACUUM (CREATE)");
+    assert_eq!(
+        ParserError::ParserError("Expected one of FULL or FREEZE or VERBOSE or ANALYZE or DISABLE_PAGE_SKIPPING or SKIP_LOCKED or INDEX_CLEANUP or PROCESS_MAIN or PROCESS_TOAST or TRUNCATE or PARALLEL or SKIP_DATABASE_STATS or ONLY_DATABASE_STATS or BUFFER_USAGE_LIMIT, found: CREATE".to_string()),
+        res.unwrap_err()
+    );
+
+    pg().verified_stmt("VACUUM (FREEZE)");
+    pg().verified_stmt("VACUUM (VERBOSE TRUE)");
+    pg().verified_stmt("VACUUM (ANALYZE FALSE)");
+    pg().one_statement_parses_to("VACUUM FREEZE", "VACUUM (FREEZE)");
+    pg().one_statement_parses_to("VACUUM VERBOSE ANALYZE", "VACUUM (VERBOSE, ANALYZE)");
+
+    let res = pg().parse_sql_statements("VACUUM ANALYZE VERBOSE");
+    assert_eq!(
+        ParserError::ParserError("Found an out-of-order vacuum option: VERBOSE".to_string()),
+        res.unwrap_err()
+    );
+
+    pg().one_statement_parses_to(
+        "VACUUM (DISABLE_PAGE_SKIPPING 'ON')",
+        "VACUUM (DISABLE_PAGE_SKIPPING TRUE)",
+    );
+    pg().one_statement_parses_to("VACUUM (SKIP_LOCKED 'true')", "VACUUM (SKIP_LOCKED TRUE)");
+    pg().one_statement_parses_to(
+        "VACUUM (PROCESS_MAIN off, PROCESS_TOAST 'off')",
+        "VACUUM (PROCESS_MAIN FALSE, PROCESS_TOAST FALSE)",
+    );
+    pg().verified_stmt("VACUUM (INDEX_CLEANUP AUTO)");
+    pg().verified_stmt("VACUUM (PARALLEL 100)");
+    pg().verified_stmt("VACUUM (BUFFER_USAGE_LIMIT 1900L)");
+    pg().verified_stmt("VACUUM (INDEX_CLEANUP OFF, PARALLEL 100L, BUFFER_USAGE_LIMIT 1912)");
+
+    let res = pg().parse_sql_statements("VACUUM FREEZE FREEZE");
+    assert_eq!(
+        ParserError::ParserError("Found an out-of-order vacuum option: FREEZE".to_string()),
+        res.unwrap_err()
+    );
+
+    pg().verified_stmt("VACUUM (FREEZE, FREEZE)");
+    pg().one_statement_parses_to(
+        "VACUUM (FREEZE ON, FREEZE OFF)",
+        "VACUUM (FREEZE TRUE, FREEZE FALSE)",
+    );
+    pg().one_statement_parses_to(
+        "VACUUM (FREEZE OFF, FREEZE ON)",
+        "VACUUM (FREEZE FALSE, FREEZE TRUE)",
+    );
+
+    pg().verified_stmt("VACUUM tbl1");
+    pg().verified_stmt("VACUUM tbl2 (x)");
+    pg().verified_stmt("VACUUM tbl3 (abc, def)");
+    pg().verified_stmt("VACUUM db1.tbl4 (abc, def, ghi)");
+
+    let res = pg().parse_sql_statements("VACUUM tbl5 ()");
+    assert_eq!(
+        ParserError::ParserError("Expected column name, found: EOF".to_string()),
+        res.unwrap_err()
+    );
+
+    pg().verified_stmt("VACUUM (VERBOSE, ANALYZE) tbl6 (a, b, c, d)");
+}

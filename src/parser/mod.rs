@@ -30,7 +30,7 @@ use IsOptional::*;
 use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
 use crate::ast::*;
 use crate::dialect::*;
-use crate::keywords::{self, Keyword};
+use crate::keywords::{self, Keyword, ALL_KEYWORDS};
 use crate::tokenizer::*;
 
 mod alter;
@@ -196,6 +196,26 @@ impl std::error::Error for ParserError {}
 
 // By default, allow expressions up to this deep before erroring
 const DEFAULT_REMAINING_DEPTH: usize = 50;
+
+/// Composite types declarations using angle brackets syntax can be arbitrary
+/// nested such that the following declaration is possible:
+///      `ARRAY<ARRAY<INT>>`
+/// But the tokenizer recognizes the `>>` as a ShiftRight token.
+/// We work-around that limitation when parsing a data type by accepting
+/// either a `>` or `>>` token in such cases, remembering which variant we
+/// matched.
+/// In the latter case having matched a `>>`, the parent type will not look to
+/// match its closing `>` as a result since that will have taken place at the
+/// child type.
+///
+/// See [Parser::parse_data_type] for details
+struct MatchedTrailingBracket(bool);
+
+impl From<bool> for MatchedTrailingBracket {
+    fn from(value: bool) -> Self {
+        Self(value)
+    }
+}
 
 /// Options that control how the [`Parser`] parses SQL text
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -815,6 +835,10 @@ impl<'a> Parser<'a> {
                 Keyword::NOT => self.parse_not(),
                 Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
                     self.parse_match_against()
+                }
+                Keyword::STRUCT if dialect_of!(self is BigQueryDialect) => {
+                    self.prev_token();
+                    self.parse_bigquery_struct_literal()
                 }
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
@@ -1726,6 +1750,165 @@ impl<'a> Parser<'a> {
             last_field,
             fractional_seconds_precision: fsec_precision,
         }))
+    }
+
+    /// Bigquery specific: Parse a struct literal
+    /// Syntax
+    /// ```sql
+    /// -- typed
+    /// STRUCT<[field_name] field_type, ...>( expr1 [, ... ])
+    /// -- typeless
+    /// STRUCT( expr1 [AS field_name] [, ... ])
+    /// ```
+    fn parse_bigquery_struct_literal(&mut self) -> Result<Expr, ParserError> {
+        let (fields, trailing_bracket) =
+            self.parse_struct_type_def(Self::parse_big_query_struct_field_def)?;
+        if trailing_bracket.0 {
+            return parser_err!("unmatched > in STRUCT literal", self.peek_token().location);
+        }
+
+        self.expect_token(&Token::LParen)?;
+        let values = self
+            .parse_comma_separated(|parser| parser.parse_struct_field_expr(!fields.is_empty()))?;
+        self.expect_token(&Token::RParen)?;
+
+        Ok(Expr::Struct { values, fields })
+    }
+
+    /// Parse an expression value for a bigquery struct [1]
+    /// Syntax
+    /// ```sql
+    /// expr [AS name]
+    /// ```
+    /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#constructing_a_struct
+    pub fn parse_struct_field_expr(&mut self, typed_syntax: bool) -> Result<Expr, ParserError> {
+        let expr = self.parse_expr()?;
+        if self.parse_keyword(Keyword::AS) {
+            if typed_syntax {
+                return parser_err!("Typed syntax does not allow AS", {
+                    self.prev_token();
+                    self.peek_token().location
+                });
+            }
+            let field_name = self.parse_identifier()?;
+            Ok(Expr::Named {
+                expr: expr.into(),
+                name: field_name,
+            })
+        } else {
+            Ok(expr)
+        }
+    }
+
+    /// Parse a Struct type definition as a sequence of field-value pairs.
+    /// The syntax of the Struct elem differs by dialect so it is customised
+    /// by the `elem_parser` argument.
+    ///
+    /// Syntax
+    /// ```sql
+    /// Hive:
+    /// STRUCT<field_name: field_type>
+    ///
+    /// BigQuery:
+    /// STRUCT<[field_name] field_type>
+    /// ```
+    fn parse_struct_type_def<F>(
+        &mut self,
+        mut elem_parser: F,
+    ) -> Result<(Vec<StructField>, MatchedTrailingBracket), ParserError>
+    where
+        F: FnMut(&mut Parser<'a>) -> Result<(StructField, MatchedTrailingBracket), ParserError>,
+    {
+        let start_token = self.peek_token();
+        self.expect_keyword(Keyword::STRUCT)?;
+
+        // Nothing to do if we have no type information.
+        if Token::Lt != self.peek_token() {
+            return Ok((Default::default(), false.into()));
+        }
+        self.next_token();
+
+        let mut field_defs = vec![];
+        let trailing_bracket = loop {
+            let (def, trailing_bracket) = elem_parser(self)?;
+            field_defs.push(def);
+            if !self.consume_token(&Token::Comma) {
+                break trailing_bracket;
+            }
+
+            // Angle brackets are balanced so we only expect the trailing `>>` after
+            // we've matched all field types for the current struct.
+            // e.g. this is invalid syntax `STRUCT<STRUCT<INT>>>, INT>(NULL)`
+            if trailing_bracket.0 {
+                return parser_err!("unmatched > in STRUCT definition", start_token.location);
+            }
+        };
+
+        Ok((
+            field_defs,
+            self.expect_closing_angle_bracket(trailing_bracket)?,
+        ))
+    }
+
+    /// Parse a field definition in a BigQuery struct.
+    /// Syntax:
+    ///
+    /// ```sql
+    /// [field_name] field_type
+    /// ```
+    fn parse_big_query_struct_field_def(
+        &mut self,
+    ) -> Result<(StructField, MatchedTrailingBracket), ParserError> {
+        let is_anonymous_field = if let Token::Word(w) = self.peek_token().token {
+            ALL_KEYWORDS
+                .binary_search(&w.value.to_uppercase().as_str())
+                .is_ok()
+        } else {
+            false
+        };
+
+        let field_name = if is_anonymous_field {
+            None
+        } else {
+            Some(self.parse_identifier()?)
+        };
+
+        let (field_type, trailing_bracket) = self.parse_data_type_helper()?;
+
+        Ok((
+            StructField {
+                field_name,
+                field_type,
+            },
+            trailing_bracket,
+        ))
+    }
+
+    /// For nested types that use the angle bracket syntax, this matches either
+    /// `>`, `>>` or nothing depending on which variant is expected (specified by the previously
+    /// matched `trailing_bracket` argument). It returns whether there is a trailing
+    /// left to be matched - (i.e. if '>>' was matched).
+    fn expect_closing_angle_bracket(
+        &mut self,
+        trailing_bracket: MatchedTrailingBracket,
+    ) -> Result<MatchedTrailingBracket, ParserError> {
+        let trailing_bracket = if !trailing_bracket.0 {
+            match self.peek_token().token {
+                Token::Gt => {
+                    self.next_token();
+                    false.into()
+                }
+                Token::ShiftRight => {
+                    self.next_token();
+                    true.into()
+                }
+                _ => return self.expected(">", self.peek_token()),
+            }
+        } else {
+            false.into()
+        };
+
+        Ok(trailing_bracket)
     }
 
     /// Parse an operator following an expression
@@ -4764,7 +4947,22 @@ impl<'a> Parser<'a> {
 
     /// Parse a SQL datatype (in the context of a CREATE TABLE statement for example)
     pub fn parse_data_type(&mut self) -> Result<DataType, ParserError> {
+        let (ty, trailing_bracket) = self.parse_data_type_helper()?;
+        if trailing_bracket.0 {
+            return parser_err!(
+                format!("unmatched > after parsing data type {ty}"),
+                self.peek_token()
+            );
+        }
+
+        Ok(ty)
+    }
+
+    fn parse_data_type_helper(
+        &mut self,
+    ) -> Result<(DataType, MatchedTrailingBracket), ParserError> {
         let next_token = self.next_token();
+        let mut trailing_bracket = false.into();
         let mut data = match next_token.token {
             Token::Word(w) => match w.keyword {
                 Keyword::BOOLEAN => Ok(DataType::Boolean),
@@ -4772,6 +4970,7 @@ impl<'a> Parser<'a> {
                 Keyword::FLOAT => Ok(DataType::Float(self.parse_optional_precision()?)),
                 Keyword::REAL => Ok(DataType::Real),
                 Keyword::FLOAT4 => Ok(DataType::Float4),
+                Keyword::FLOAT64 => Ok(DataType::Float64),
                 Keyword::FLOAT8 => Ok(DataType::Float8),
                 Keyword::DOUBLE => {
                     if self.parse_keyword(Keyword::PRECISION) {
@@ -4828,6 +5027,7 @@ impl<'a> Parser<'a> {
                         Ok(DataType::Int4(optional_precision?))
                     }
                 }
+                Keyword::INT64 => Ok(DataType::Int64),
                 Keyword::INTEGER => {
                     let optional_precision = self.parse_optional_precision();
                     if self.parse_keyword(Keyword::UNSIGNED) {
@@ -4882,6 +5082,7 @@ impl<'a> Parser<'a> {
                 Keyword::BINARY => Ok(DataType::Binary(self.parse_optional_precision()?)),
                 Keyword::VARBINARY => Ok(DataType::Varbinary(self.parse_optional_precision()?)),
                 Keyword::BLOB => Ok(DataType::Blob(self.parse_optional_precision()?)),
+                Keyword::BYTES => Ok(DataType::Bytes(self.parse_optional_precision()?)),
                 Keyword::UUID => Ok(DataType::Uuid),
                 Keyword::DATE => Ok(DataType::Date),
                 Keyword::DATETIME => Ok(DataType::Datetime(self.parse_optional_precision()?)),
@@ -4925,7 +5126,7 @@ impl<'a> Parser<'a> {
                 Keyword::INTERVAL => Ok(DataType::Interval),
                 Keyword::JSON => Ok(DataType::JSON),
                 Keyword::REGCLASS => Ok(DataType::Regclass),
-                Keyword::STRING => Ok(DataType::String),
+                Keyword::STRING => Ok(DataType::String(self.parse_optional_precision()?)),
                 Keyword::TEXT => Ok(DataType::Text),
                 Keyword::BYTEA => Ok(DataType::Bytea),
                 Keyword::NUMERIC => Ok(DataType::Numeric(
@@ -4947,16 +5148,22 @@ impl<'a> Parser<'a> {
                 Keyword::SET => Ok(DataType::Set(self.parse_string_values()?)),
                 Keyword::ARRAY => {
                     if dialect_of!(self is SnowflakeDialect) {
-                        Ok(DataType::Array(None))
+                        Ok(DataType::Array(ArrayElemTypeDef::None))
                     } else {
-                        // Hive array syntax. Note that nesting arrays - or other Hive syntax
-                        // that ends with > will fail due to "C++" problem - >> is parsed as
-                        // Token::ShiftRight
                         self.expect_token(&Token::Lt)?;
-                        let inside_type = self.parse_data_type()?;
-                        self.expect_token(&Token::Gt)?;
-                        Ok(DataType::Array(Some(Box::new(inside_type))))
+                        let (inside_type, _trailing_bracket) = self.parse_data_type_helper()?;
+                        trailing_bracket = self.expect_closing_angle_bracket(_trailing_bracket)?;
+                        Ok(DataType::Array(ArrayElemTypeDef::AngleBracket(Box::new(
+                            inside_type,
+                        ))))
                     }
+                }
+                Keyword::STRUCT if dialect_of!(self is BigQueryDialect) => {
+                    self.prev_token();
+                    let (field_defs, _trailing_bracket) =
+                        self.parse_struct_type_def(Self::parse_big_query_struct_field_def)?;
+                    trailing_bracket = _trailing_bracket;
+                    Ok(DataType::Struct(field_defs))
                 }
                 _ => {
                     self.prev_token();
@@ -4975,9 +5182,9 @@ impl<'a> Parser<'a> {
         // Keyword::ARRAY syntax from above
         while self.consume_token(&Token::LBracket) {
             self.expect_token(&Token::RBracket)?;
-            data = DataType::Array(Some(Box::new(data)))
+            data = DataType::Array(ArrayElemTypeDef::SquareBracket(Box::new(data)))
         }
-        Ok(data)
+        Ok((data, trailing_bracket))
     }
 
     pub fn parse_string_values(&mut self) -> Result<Vec<String>, ParserError> {

@@ -385,7 +385,7 @@ fn test_select_wildcard_with_except() {
     let select = bigquery_and_generic().verified_only_select("SELECT * EXCEPT (col_a) FROM data");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_except: Some(ExceptSelectItem {
-            first_element: Ident::new("col_a"),
+            first_element: Ident::new("col_a").empty_span(),
             additional_elements: vec![],
         }),
         ..Default::default()
@@ -397,8 +397,8 @@ fn test_select_wildcard_with_except() {
         .verified_only_select("SELECT * EXCEPT (department_id, employee_id) FROM employee_table");
     let expected = SelectItem::Wildcard(WildcardAdditionalOptions {
         opt_except: Some(ExceptSelectItem {
-            first_element: Ident::new("department_id"),
-            additional_elements: vec![Ident::new("employee_id")],
+            first_element: Ident::new("department_id").empty_span(),
+            additional_elements: vec![Ident::new("employee_id").empty_span()],
         }),
         ..Default::default()
     })

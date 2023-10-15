@@ -328,7 +328,7 @@ fn parse_create_table_with_defaults() {
                 columns,
                 vec![
                     ColumnDef {
-                        name: "customer_id".into(),
+                        name: Ident::new("customer_id").empty_span(),
                         data_type: DataType::Integer(None),
                         collation: None,
                         codec: None,
@@ -340,7 +340,7 @@ fn parse_create_table_with_defaults() {
                         }],
                     },
                     ColumnDef {
-                        name: "store_id".into(),
+                        name: Ident::new("store_id").empty_span(),
                         data_type: DataType::SmallInt(None),
                         collation: None,
                         codec: None,
@@ -350,7 +350,7 @@ fn parse_create_table_with_defaults() {
                         }],
                     },
                     ColumnDef {
-                        name: "first_name".into(),
+                        name: Ident::new("first_name").empty_span(),
                         data_type: DataType::CharacterVarying(Some(CharacterLength {
                             length: 45,
                             unit: None
@@ -363,7 +363,7 @@ fn parse_create_table_with_defaults() {
                         }],
                     },
                     ColumnDef {
-                        name: "last_name".into(),
+                        name: Ident::new("last_name").empty_span(),
                         data_type: DataType::CharacterVarying(Some(CharacterLength {
                             length: 45,
                             unit: None
@@ -376,7 +376,7 @@ fn parse_create_table_with_defaults() {
                         }],
                     },
                     ColumnDef {
-                        name: "email".into(),
+                        name: Ident::new("email").empty_span(),
                         data_type: DataType::CharacterVarying(Some(CharacterLength {
                             length: 50,
                             unit: None
@@ -386,7 +386,7 @@ fn parse_create_table_with_defaults() {
                         options: vec![],
                     },
                     ColumnDef {
-                        name: "address_id".into(),
+                        name: Ident::new("address_id").empty_span(),
                         data_type: DataType::SmallInt(None),
                         collation: None,
                         codec: None,
@@ -396,7 +396,7 @@ fn parse_create_table_with_defaults() {
                         }],
                     },
                     ColumnDef {
-                        name: "activebool".into(),
+                        name: Ident::new("activebool").empty_span(),
                         data_type: DataType::Boolean,
                         collation: None,
                         codec: None,
@@ -412,7 +412,7 @@ fn parse_create_table_with_defaults() {
                         ],
                     },
                     ColumnDef {
-                        name: "create_date".into(),
+                        name: Ident::new("create_date").empty_span(),
                         data_type: DataType::Date,
                         collation: None,
                         codec: None,
@@ -430,7 +430,7 @@ fn parse_create_table_with_defaults() {
                         ],
                     },
                     ColumnDef {
-                        name: "last_update".into(),
+                        name: Ident::new("last_update").empty_span(),
                         data_type: DataType::Timestamp(None, TimezoneInfo::WithoutTimeZone),
                         collation: None,
                         codec: None,
@@ -446,7 +446,7 @@ fn parse_create_table_with_defaults() {
                         ],
                     },
                     ColumnDef {
-                        name: "active".into(),
+                        name: Ident::new("active").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         codec: None,
@@ -462,15 +462,15 @@ fn parse_create_table_with_defaults() {
                 with_options,
                 vec![
                     SqlOption {
-                        name: "fillfactor".into(),
+                        name: Ident::new("fillfactor").empty_span(),
                         value: number("20")
                     },
                     SqlOption {
-                        name: "user_catalog_table".into(),
+                        name: Ident::new("user_catalog_table").empty_span(),
                         value: Value::Boolean(true)
                     },
                     SqlOption {
-                        name: "autovacuum_vacuum_threshold".into(),
+                        name: Ident::new("autovacuum_vacuum_threshold").empty_span(),
                         value: number("100")
                     },
                 ]
@@ -613,7 +613,7 @@ fn parse_alter_table_add_columns() {
                         column_keyword: true,
                         if_not_exists: false,
                         column_def: ColumnDef {
-                            name: "a".into(),
+                            name: Ident::new("a").empty_span(),
                             data_type: DataType::Text,
                             collation: None,
                             codec: None,
@@ -624,7 +624,7 @@ fn parse_alter_table_add_columns() {
                         column_keyword: true,
                         if_not_exists: false,
                         column_def: ColumnDef {
-                            name: "b".into(),
+                            name: Ident::new("b").empty_span(),
                             data_type: DataType::Int(None),
                             collation: None,
                             codec: None,
@@ -888,11 +888,11 @@ fn parse_copy_from() {
         Statement::Copy {
             source: CopySource::Table {
                 table_name: ObjectName(vec!["table".into()]),
-                columns: vec!["a".into(), "b".into()],
+                columns: vec![Ident::new("a").empty_span(), Ident::new("b").empty_span()],
             },
             to: false,
             target: CopyTarget::File {
-                filename: "file.csv".into()
+                filename: "file.csv".to_string(),
             },
             options: vec![
                 CopyOption::Format("CSV".into()),
@@ -906,9 +906,12 @@ fn parse_copy_from() {
                 CopyOption::Header(false),
                 CopyOption::Quote('"'),
                 CopyOption::Escape('\\'),
-                CopyOption::ForceQuote(vec!["a".into(), "b".into()]),
-                CopyOption::ForceNotNull(vec!["a".into()]),
-                CopyOption::ForceNull(vec!["b".into()]),
+                CopyOption::ForceQuote(vec![
+                    Ident::new("a").empty_span(),
+                    Ident::new("b").empty_span()
+                ]),
+                CopyOption::ForceNotNull(vec![Ident::new("a").empty_span()]),
+                CopyOption::ForceNull(vec![Ident::new("b").empty_span()]),
                 CopyOption::Encoding("utf8".into()),
             ],
             legacy_options: vec![],
@@ -1032,7 +1035,7 @@ fn parse_copy_to() {
             })),
             to: true,
             target: CopyTarget::File {
-                filename: "query.csv".into(),
+                filename: "query.csv".to_string(),
             },
             options: vec![],
             legacy_options: vec![],
@@ -1327,7 +1330,7 @@ fn parse_deallocate() {
     assert_eq!(
         stmt,
         Statement::Deallocate {
-            name: "a".into(),
+            name: Ident::new("a").empty_span(),
             prepare: false,
         }
     );
@@ -1336,7 +1339,7 @@ fn parse_deallocate() {
     assert_eq!(
         stmt,
         Statement::Deallocate {
-            name: "ALL".into(),
+            name: Ident::new("ALL").empty_span(),
             prepare: false,
         }
     );
@@ -1345,7 +1348,7 @@ fn parse_deallocate() {
     assert_eq!(
         stmt,
         Statement::Deallocate {
-            name: "a".into(),
+            name: Ident::new("a").empty_span(),
             prepare: true,
         }
     );
@@ -1354,7 +1357,7 @@ fn parse_deallocate() {
     assert_eq!(
         stmt,
         Statement::Deallocate {
-            name: "ALL".into(),
+            name: Ident::new("ALL").empty_span(),
             prepare: true,
         }
     );
@@ -1366,7 +1369,7 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: "a".into(),
+            name: Ident::new("a").empty_span(),
             parameters: vec![],
         }
     );
@@ -1375,7 +1378,7 @@ fn parse_execute() {
     assert_eq!(
         stmt,
         Statement::Execute {
-            name: "a".into(),
+            name: Ident::new("a").empty_span(),
             parameters: vec![
                 Expr::Value(number("1")),
                 Expr::Value(Value::SingleQuotedString("t".to_string()))
@@ -1468,7 +1471,7 @@ fn parse_pg_on_conflict() {
                 })),
             ..
         } => {
-            assert_eq!(vec![Ident::from("did")], cols);
+            assert_eq!(vec![Ident::from("did").empty_span()], cols);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
@@ -1500,7 +1503,13 @@ fn parse_pg_on_conflict() {
                 })),
             ..
         } => {
-            assert_eq!(vec![Ident::from("did"), Ident::from("area"),], cols);
+            assert_eq!(
+                vec![
+                    Ident::from("did").empty_span(),
+                    Ident::from("area").empty_span(),
+                ],
+                cols
+            );
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![
@@ -1559,7 +1568,7 @@ fn parse_pg_on_conflict() {
                 })),
             ..
         } => {
-            assert_eq!(vec![Ident::from("did")], cols);
+            assert_eq!(vec![Ident::from("did").empty_span()], cols);
             assert_eq!(
                 OnConflictAction::DoUpdate(DoUpdate {
                     assignments: vec![Assignment {
@@ -3575,42 +3584,42 @@ fn parse_create_table_with_alias() {
                 columns,
                 vec![
                     ColumnDef {
-                        name: "int8_col".into(),
+                        name: Ident::new("int8_col").empty_span(),
                         data_type: DataType::Int8(None),
                         collation: None,
                         codec: None,
                         options: vec![]
                     },
                     ColumnDef {
-                        name: "int4_col".into(),
+                        name: Ident::new("int4_col").empty_span(),
                         data_type: DataType::Int4(None),
                         collation: None,
                         codec: None,
                         options: vec![]
                     },
                     ColumnDef {
-                        name: "int2_col".into(),
+                        name: Ident::new("int2_col").empty_span(),
                         data_type: DataType::Int2(None),
                         collation: None,
                         codec: None,
                         options: vec![]
                     },
                     ColumnDef {
-                        name: "float8_col".into(),
+                        name: Ident::new("float8_col").empty_span(),
                         data_type: DataType::Float8,
                         collation: None,
                         codec: None,
                         options: vec![]
                     },
                     ColumnDef {
-                        name: "float4_col".into(),
+                        name: Ident::new("float4_col").empty_span(),
                         data_type: DataType::Float4,
                         collation: None,
                         codec: None,
                         options: vec![]
                     },
                     ColumnDef {
-                        name: "bool_col".into(),
+                        name: Ident::new("bool_col").empty_span(),
                         data_type: DataType::Bool,
                         collation: None,
                         codec: None,

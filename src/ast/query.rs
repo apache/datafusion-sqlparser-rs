@@ -555,9 +555,9 @@ impl fmt::Display for RenameSelectItem {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ExceptSelectItem {
     /// First guaranteed column.
-    pub first_element: Ident,
+    pub first_element: WithSpan<Ident>,
     /// Additional columns. This list can be empty.
-    pub additional_elements: Vec<Ident>,
+    pub additional_elements: Vec<WithSpan<Ident>>,
 }
 
 impl fmt::Display for ExceptSelectItem {
@@ -887,7 +887,7 @@ impl fmt::Display for TableFactor {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct TableAlias {
     pub name: WithSpan<Ident>,
-    pub columns: Vec<Ident>,
+    pub columns: Vec<WithSpan<Ident>>,
 }
 
 impl fmt::Display for TableAlias {
@@ -1042,7 +1042,7 @@ pub enum JoinOperator {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum JoinConstraint {
     On(Expr),
-    Using(Vec<Ident>),
+    Using(Vec<WithSpan<Ident>>),
     Natural,
     None,
 }

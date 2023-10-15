@@ -274,7 +274,7 @@ fn parse_create_table_auto_increment() {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
-                    name: Ident::new("bar"),
+                    name: Ident::new("bar").empty_span(),
                     data_type: DataType::Int(None),
                     collation: None,
                     codec: None,
@@ -313,7 +313,7 @@ fn parse_create_table_unique_key() {
             assert_eq!(
                 vec![TableConstraint::Unique {
                     name: Some(Ident::new("bar_key")),
-                    columns: vec![Ident::new("bar")],
+                    columns: vec![Ident::new("bar").empty_span()],
                     is_primary: false
                 }],
                 constraints
@@ -321,7 +321,7 @@ fn parse_create_table_unique_key() {
             assert_eq!(
                 vec![
                     ColumnDef {
-                        name: Ident::new("id"),
+                        name: Ident::new("id").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         codec: None,
@@ -339,7 +339,7 @@ fn parse_create_table_unique_key() {
                         ],
                     },
                     ColumnDef {
-                        name: Ident::new("bar"),
+                        name: Ident::new("bar").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         codec: None,
@@ -406,14 +406,14 @@ fn parse_create_table_set_enum() {
             assert_eq!(
                 vec![
                     ColumnDef {
-                        name: Ident::new("bar"),
+                        name: Ident::new("bar").empty_span(),
                         data_type: DataType::Set(vec!["a".to_string(), "b".to_string()]),
                         collation: None,
                         codec: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("baz"),
+                        name: Ident::new("baz").empty_span(),
                         data_type: DataType::Enum(vec!["a".to_string(), "b".to_string()]),
                         collation: None,
                         codec: None,
@@ -441,7 +441,7 @@ fn parse_create_table_engine_default_charset() {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
-                    name: Ident::new("id"),
+                    name: Ident::new("id").empty_span(),
                     data_type: DataType::Int(Some(11)),
                     collation: None,
                     codec: None,
@@ -469,7 +469,7 @@ fn parse_create_table_collate() {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
-                    name: Ident::new("id"),
+                    name: Ident::new("id").empty_span(),
                     data_type: DataType::Int(Some(11)),
                     collation: None,
                     codec: None,
@@ -491,7 +491,7 @@ fn parse_create_table_comment_character_set() {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
-                    name: Ident::new("s"),
+                    name: Ident::new("s").empty_span(),
                     data_type: DataType::Text,
                     collation: None,
                     codec: None,
@@ -523,7 +523,7 @@ fn parse_quote_identifiers() {
             assert_eq!(name.to_string(), "`PRIMARY`");
             assert_eq!(
                 vec![ColumnDef {
-                    name: Ident::with_quote('`', "BEGIN"),
+                    name: Ident::with_quote('`', "BEGIN").empty_span(),
                     data_type: DataType::Int(None),
                     collation: None,
                     codec: None,
@@ -875,35 +875,35 @@ fn parse_create_table_with_minimum_display_width() {
             assert_eq!(
                 vec![
                     ColumnDef {
-                        name: Ident::new("bar_tinyint"),
+                        name: Ident::new("bar_tinyint").empty_span(),
                         data_type: DataType::TinyInt(Some(3)),
                         collation: None,
                         codec: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_smallint"),
+                        name: Ident::new("bar_smallint").empty_span(),
                         data_type: DataType::SmallInt(Some(5)),
                         collation: None,
                         codec: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_mediumint"),
+                        name: Ident::new("bar_mediumint").empty_span(),
                         data_type: DataType::MediumInt(Some(6)),
                         collation: None,
                         codec: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_int"),
+                        name: Ident::new("bar_int").empty_span(),
                         data_type: DataType::Int(Some(11)),
                         collation: None,
                         codec: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_bigint"),
+                        name: Ident::new("bar_bigint").empty_span(),
                         data_type: DataType::BigInt(Some(20)),
                         collation: None,
                         codec: None,
@@ -926,35 +926,35 @@ fn parse_create_table_unsigned() {
             assert_eq!(
                 vec![
                     ColumnDef {
-                        name: Ident::new("bar_tinyint"),
+                        name: Ident::new("bar_tinyint").empty_span(),
                         data_type: DataType::UnsignedTinyInt(Some(3)),
                         collation: None,
                         codec: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_smallint"),
+                        name: Ident::new("bar_smallint").empty_span(),
                         data_type: DataType::UnsignedSmallInt(Some(5)),
                         collation: None,
                         codec: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_mediumint"),
+                        name: Ident::new("bar_mediumint").empty_span(),
                         data_type: DataType::UnsignedMediumInt(Some(13)),
                         collation: None,
                         codec: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_int"),
+                        name: Ident::new("bar_int").empty_span(),
                         data_type: DataType::UnsignedInt(Some(11)),
                         collation: None,
                         codec: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("bar_bigint"),
+                        name: Ident::new("bar_bigint").empty_span(),
                         data_type: DataType::UnsignedBigInt(Some(20)),
                         collation: None,
                         codec: None,
@@ -981,7 +981,13 @@ fn parse_simple_insert() {
             ..
         } => {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
-            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert_eq!(
+                vec![
+                    Ident::new("title").empty_span(),
+                    Ident::new("priority").empty_span()
+                ],
+                columns
+            );
             assert!(on.is_none());
             assert_eq!(
                 Box::new(Query {
@@ -1073,12 +1079,12 @@ fn parse_insert_with_on_duplicate_update() {
             );
             assert_eq!(
                 vec![
-                    Ident::new("name"),
-                    Ident::new("description"),
-                    Ident::new("perm_create"),
-                    Ident::new("perm_read"),
-                    Ident::new("perm_update"),
-                    Ident::new("perm_delete")
+                    Ident::new("name").empty_span(),
+                    Ident::new("description").empty_span(),
+                    Ident::new("perm_create").empty_span(),
+                    Ident::new("perm_read").empty_span(),
+                    Ident::new("perm_update").empty_span(),
+                    Ident::new("perm_delete").empty_span()
                 ],
                 columns
             );
@@ -1314,7 +1320,7 @@ fn parse_insert_with_numeric_prefix_column_name() {
                 ObjectName(vec![Ident::new("s1"), Ident::new("t1")]),
                 table_name
             );
-            assert_eq!(vec![Ident::new("123col_$@length123")], columns);
+            assert_eq!(vec![Ident::new("123col_$@length123").empty_span()], columns);
         }
         _ => unreachable!(),
     }
@@ -1537,7 +1543,7 @@ fn parse_table_colum_option_on_update() {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
-                    name: Ident::with_quote('`', "modification_time"),
+                    name: Ident::with_quote('`', "modification_time").empty_span(),
                     data_type: DataType::Datetime(None),
                     collation: None,
                     codec: None,

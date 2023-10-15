@@ -49,7 +49,10 @@ fn parse_create_virtual_table() {
             module_name,
             module_args,
         } => {
-            let args = vec![Ident::new("arg1"), Ident::new("arg2")];
+            let args = vec![
+                Ident::new("arg1").empty_span(),
+                Ident::new("arg2").empty_span(),
+            ];
             assert_eq!("t", name.to_string());
             assert_eq!("module_name", module_name.to_string());
             assert_eq!(args, module_args);
@@ -77,7 +80,7 @@ fn parse_create_table_auto_increment() {
             assert_eq!(name.to_string(), "foo");
             assert_eq!(
                 vec![ColumnDef {
-                    name: "bar".into(),
+                    name: Ident::new("bar").empty_span(),
                     data_type: DataType::Int(None),
                     collation: None,
                     codec: None,
@@ -110,14 +113,14 @@ fn parse_create_sqlite_quote() {
             assert_eq!(
                 vec![
                     ColumnDef {
-                        name: Ident::with_quote('"', "KEY"),
+                        name: Ident::with_quote('"', "KEY").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         codec: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::with_quote('[', "INDEX"),
+                        name: Ident::with_quote('[', "INDEX").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         codec: None,

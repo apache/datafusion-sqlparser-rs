@@ -1,6 +1,8 @@
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, format, string::String, vec, vec::Vec};
 
+use crate::ast::WithSpan;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -71,8 +73,8 @@ pub struct CreateTableBuilder {
     pub collation: Option<String>,
     pub on_commit: Option<OnCommit>,
     pub on_cluster: Option<String>,
-    pub primary_key: Option<Vec<Ident>>,
-    pub order_by: Option<Vec<Ident>>,
+    pub primary_key: Option<Vec<WithSpan<Ident>>>,
+    pub order_by: Option<Vec<WithSpan<Ident>>>,
     pub strict: bool,
     pub table_ttl: Option<Expr>,
     pub clickhouse_settings: Option<Vec<SqlOption>>,
@@ -237,12 +239,12 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn primary_key(mut self, primary_key: Option<Vec<Ident>>) -> Self {
+    pub fn primary_key(mut self, primary_key: Option<Vec<WithSpan<Ident>>>) -> Self {
         self.primary_key = primary_key;
         self
     }
 
-    pub fn order_by(mut self, order_by: Option<Vec<Ident>>) -> Self {
+    pub fn order_by(mut self, order_by: Option<Vec<WithSpan<Ident>>>) -> Self {
         self.order_by = order_by;
         self
     }

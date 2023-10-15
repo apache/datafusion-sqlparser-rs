@@ -2664,7 +2664,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::CreateVirtualTable {
             name: table_name,
             if_not_exists,
-            module_name: module_name.unwrap(),
+            module_name,
             module_args,
         })
     }
@@ -3054,7 +3054,7 @@ impl<'a> Parser<'a> {
         let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
             if self.consume_token(&Token::LParen) {
                 let columns = if self.peek_token() != Token::RParen {
-                    self.parse_comma_separated(|p| p.parse_identifier().map(WithSpan::unwrap))?
+                    self.parse_comma_separated(|p| p.parse_identifier())?
                 } else {
                     vec![]
                 };
@@ -3066,7 +3066,7 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::RParen)?;
                     Some(vec![])
                 } else {
-                    Some(vec![self.parse_identifier()?.unwrap()])
+                    Some(vec![self.parse_identifier()?])
                 }
             }
         } else {
@@ -3792,7 +3792,7 @@ impl<'a> Parser<'a> {
         let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
             if self.consume_token(&Token::LParen) {
                 let columns = if self.peek_token() != Token::RParen {
-                    self.parse_comma_separated(|p| p.parse_identifier().map(WithSpan::unwrap))?
+                    self.parse_comma_separated(|p| p.parse_identifier())?
                 } else {
                     vec![]
                 };
@@ -3804,7 +3804,7 @@ impl<'a> Parser<'a> {
                     self.expect_token(&Token::RParen)?;
                     Some(vec![])
                 } else {
-                    Some(vec![self.parse_identifier()?.unwrap()])
+                    Some(vec![self.parse_identifier()?])
                 }
             }
         } else {
@@ -3959,7 +3959,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
-        let name = self.parse_identifier()?.unwrap();
+        let name = self.parse_identifier()?;
         let data_type = self.parse_data_type()?;
         let collation = if self.parse_keyword(Keyword::COLLATE) {
             Some(self.parse_object_name()?)
@@ -4337,7 +4337,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_sql_option(&mut self) -> Result<SqlOption, ParserError> {
-        let name = self.parse_identifier()?.unwrap();
+        let name = self.parse_identifier()?;
         self.expect_token(&Token::Eq)?;
         let value = self.parse_value()?;
         Ok(SqlOption { name, value })
@@ -5480,14 +5480,13 @@ impl<'a> Parser<'a> {
         &mut self,
         optional: IsOptional,
         allow_empty: bool,
-    ) -> Result<Vec<Ident>, ParserError> {
+    ) -> Result<Vec<WithSpan<Ident>>, ParserError> {
         if self.consume_token(&Token::LParen) {
             if allow_empty && self.peek_token().token == Token::RParen {
                 self.next_token();
                 Ok(vec![])
             } else {
-                let cols =
-                    self.parse_comma_separated(|p| p.parse_identifier().map(WithSpan::unwrap))?;
+                let cols = self.parse_comma_separated(|p| p.parse_identifier())?;
                 self.expect_token(&Token::RParen)?;
                 Ok(cols)
             }
@@ -6915,7 +6914,9 @@ impl<'a> Parser<'a> {
         Ok((privileges, objects))
     }
 
-    pub fn parse_grant_permission(&mut self) -> Result<(Keyword, Option<Vec<Ident>>), ParserError> {
+    pub fn parse_grant_permission(
+        &mut self,
+    ) -> Result<(Keyword, Option<Vec<WithSpan<Ident>>>), ParserError> {
         if let Some(kw) = self.parse_one_of_keywords(&[
             Keyword::CONNECT,
             Keyword::CREATE,
@@ -7371,7 +7372,7 @@ impl<'a> Parser<'a> {
                 }
             } else {
                 // Clickhouse allows EXCEPT column_name
-                let ident = self.parse_identifier()?.unwrap();
+                let ident = self.parse_identifier()?;
                 Some(ExceptSelectItem {
                     first_element: ident,
                     additional_elements: vec![],
@@ -7660,12 +7661,12 @@ impl<'a> Parser<'a> {
 
     pub fn parse_deallocate(&mut self) -> Result<Statement, ParserError> {
         let prepare = self.parse_keyword(Keyword::PREPARE);
-        let name = self.parse_identifier()?.unwrap();
+        let name = self.parse_identifier()?;
         Ok(Statement::Deallocate { name, prepare })
     }
 
     pub fn parse_execute(&mut self) -> Result<Statement, ParserError> {
-        let name = self.parse_identifier()?.unwrap();
+        let name = self.parse_identifier()?;
 
         let mut parameters = vec![];
         if self.consume_token(&Token::LParen) {
@@ -8487,7 +8488,7 @@ mod tests {
                 display_as_key: false,
                 name: None,
                 index_type: None,
-                columns: vec![Ident::new("c1")],
+                columns: vec![Ident::new("c1").empty_span()],
             }
         );
 
@@ -8498,7 +8499,7 @@ mod tests {
                 display_as_key: true,
                 name: None,
                 index_type: None,
-                columns: vec![Ident::new("c1")],
+                columns: vec![Ident::new("c1").empty_span()],
             }
         );
 
@@ -8509,7 +8510,7 @@ mod tests {
                 display_as_key: false,
                 name: Some(Ident::with_quote('\'', "index")),
                 index_type: None,
-                columns: vec![Ident::new("c1"), Ident::new("c2")],
+                columns: vec![Ident::new("c1").empty_span(), Ident::new("c2").empty_span()],
             }
         );
 
@@ -8520,7 +8521,7 @@ mod tests {
                 display_as_key: false,
                 name: None,
                 index_type: Some(IndexType::BTree),
-                columns: vec![Ident::new("c1")],
+                columns: vec![Ident::new("c1").empty_span()],
             }
         );
 
@@ -8531,7 +8532,7 @@ mod tests {
                 display_as_key: false,
                 name: None,
                 index_type: Some(IndexType::Hash),
-                columns: vec![Ident::new("c1")],
+                columns: vec![Ident::new("c1").empty_span()],
             }
         );
 
@@ -8542,7 +8543,7 @@ mod tests {
                 display_as_key: false,
                 name: Some(Ident::new("idx_name")),
                 index_type: Some(IndexType::BTree),
-                columns: vec![Ident::new("c1")],
+                columns: vec![Ident::new("c1").empty_span()],
             }
         );
 
@@ -8553,7 +8554,7 @@ mod tests {
                 display_as_key: false,
                 name: Some(Ident::new("idx_name")),
                 index_type: Some(IndexType::Hash),
-                columns: vec![Ident::new("c1")],
+                columns: vec![Ident::new("c1").empty_span()],
             }
         );
     }

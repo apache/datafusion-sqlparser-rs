@@ -86,7 +86,10 @@ fn parse_insert_values() {
                 assert_eq!(table_name.to_string(), expected_table_name);
                 assert_eq!(columns.len(), expected_columns.len());
                 for (index, column) in columns.iter().enumerate() {
-                    assert_eq!(column, &Ident::new(expected_columns[index].clone()));
+                    assert_eq!(
+                        column,
+                        &Ident::new(expected_columns[index].clone()).empty_span()
+                    );
                 }
                 match &*source.body {
                     SetExpr::Values(Values { rows, .. }) => {
@@ -383,7 +386,11 @@ fn parse_select_with_table_alias() {
                 name: ObjectName(vec![Ident::new("lineitem")]),
                 alias: Some(TableAlias {
                     name: Ident::new("l").empty_span(),
-                    columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C"),],
+                    columns: vec![
+                        Ident::new("A").empty_span(),
+                        Ident::new("B").empty_span(),
+                        Ident::new("C").empty_span(),
+                    ],
                 }),
                 args: None,
                 with_hints: vec![],
@@ -2459,7 +2466,7 @@ fn parse_create_table() {
                 columns,
                 vec![
                     ColumnDef {
-                        name: "name".into(),
+                        name: Ident::new("name").empty_span(),
                         data_type: DataType::Varchar(Some(CharacterLength {
                             length: 100,
                             unit: None,
@@ -2472,7 +2479,7 @@ fn parse_create_table() {
                         }],
                     },
                     ColumnDef {
-                        name: "lat".into(),
+                        name: Ident::new("lat").empty_span(),
                         data_type: DataType::Double,
                         collation: None,
                         codec: None,
@@ -2482,14 +2489,14 @@ fn parse_create_table() {
                         }],
                     },
                     ColumnDef {
-                        name: "lng".into(),
+                        name: Ident::new("lng").empty_span(),
                         data_type: DataType::Double,
                         collation: None,
                         codec: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: "constrained".into(),
+                        name: Ident::new("constrained").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         codec: None,
@@ -2517,7 +2524,7 @@ fn parse_create_table() {
                         ],
                     },
                     ColumnDef {
-                        name: "ref".into(),
+                        name: Ident::new("ref").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         codec: None,
@@ -2525,21 +2532,24 @@ fn parse_create_table() {
                             name: None,
                             option: ColumnOption::ForeignKey {
                                 foreign_table: ObjectName(vec!["othertable".into()]),
-                                referred_columns: vec!["a".into(), "b".into()],
+                                referred_columns: vec![
+                                    Ident::new("a").empty_span(),
+                                    Ident::new("b").empty_span()
+                                ],
                                 on_delete: None,
                                 on_update: None,
                             },
                         }],
                     },
                     ColumnDef {
-                        name: "ref2".into(),
+                        name: Ident::new("ref2").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         codec: None,
                         options: vec![ColumnOptionDef {
                             name: None,
                             option: ColumnOption::ForeignKey {
-                                foreign_table: ObjectName(vec!["othertable2".into()]),
+                                foreign_table: ObjectName(vec![Ident::new("othertable2")]),
                                 referred_columns: vec![],
                                 on_delete: Some(ReferentialAction::Cascade),
                                 on_update: Some(ReferentialAction::NoAction),
@@ -2553,33 +2563,33 @@ fn parse_create_table() {
                 vec![
                     TableConstraint::ForeignKey {
                         name: Some("fkey".into()),
-                        columns: vec!["lat".into()],
+                        columns: vec![Ident::new("lat").empty_span()],
                         foreign_table: ObjectName(vec!["othertable3".into()]),
-                        referred_columns: vec!["lat".into()],
+                        referred_columns: vec![Ident::new("lat").empty_span()],
                         on_delete: Some(ReferentialAction::Restrict),
                         on_update: None,
                     },
                     TableConstraint::ForeignKey {
                         name: Some("fkey2".into()),
-                        columns: vec!["lat".into()],
+                        columns: vec![Ident::new("lat").empty_span()],
                         foreign_table: ObjectName(vec!["othertable4".into()]),
-                        referred_columns: vec!["lat".into()],
+                        referred_columns: vec![Ident::new("lat").empty_span()],
                         on_delete: Some(ReferentialAction::NoAction),
                         on_update: Some(ReferentialAction::Restrict),
                     },
                     TableConstraint::ForeignKey {
                         name: None,
-                        columns: vec!["lat".into()],
+                        columns: vec![Ident::new("lat").empty_span()],
                         foreign_table: ObjectName(vec!["othertable4".into()]),
-                        referred_columns: vec!["lat".into()],
+                        referred_columns: vec![Ident::new("lat").empty_span()],
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: Some(ReferentialAction::SetDefault),
                     },
                     TableConstraint::ForeignKey {
                         name: None,
-                        columns: vec!["lng".into()],
+                        columns: vec![Ident::new("lng").empty_span()],
                         foreign_table: ObjectName(vec!["othertable4".into()]),
-                        referred_columns: vec!["longitude".into()],
+                        referred_columns: vec![Ident::new("longitude").empty_span()],
                         on_delete: None,
                         on_update: Some(ReferentialAction::SetNull),
                     },
@@ -2627,14 +2637,14 @@ fn parse_create_table_hive_array() {
                 columns,
                 vec![
                     ColumnDef {
-                        name: Ident::new("name"),
+                        name: Ident::new("name").empty_span(),
                         data_type: DataType::Int(None),
                         collation: None,
                         codec: None,
                         options: vec![],
                     },
                     ColumnDef {
-                        name: Ident::new("val"),
+                        name: Ident::new("val").empty_span(),
                         data_type: DataType::Array(Some(Box::new(DataType::Int(None)))),
                         collation: None,
                         codec: None,
@@ -2925,11 +2935,11 @@ fn parse_create_table_with_options() {
             assert_eq!(
                 vec![
                     SqlOption {
-                        name: "foo".into(),
+                        name: Ident::new("foo").empty_span(),
                         value: Value::SingleQuotedString("bar".into()),
                     },
                     SqlOption {
-                        name: "a".into(),
+                        name: Ident::new("a").empty_span(),
                         value: number("123"),
                     },
                 ],
@@ -2990,7 +3000,7 @@ fn parse_create_external_table() {
                 columns,
                 vec![
                     ColumnDef {
-                        name: "name".into(),
+                        name: Ident::new("name").empty_span(),
                         data_type: DataType::Varchar(Some(CharacterLength {
                             length: 100,
                             unit: None,
@@ -3003,7 +3013,7 @@ fn parse_create_external_table() {
                         }],
                     },
                     ColumnDef {
-                        name: "lat".into(),
+                        name: Ident::new("lat").empty_span(),
                         data_type: DataType::Double,
                         collation: None,
                         codec: None,
@@ -3013,7 +3023,7 @@ fn parse_create_external_table() {
                         }],
                     },
                     ColumnDef {
-                        name: "lng".into(),
+                        name: Ident::new("lng").empty_span(),
                         data_type: DataType::Double,
                         collation: None,
                         codec: None,
@@ -3064,7 +3074,7 @@ fn parse_create_or_replace_external_table() {
             assert_eq!(
                 columns,
                 vec![ColumnDef {
-                    name: "name".into(),
+                    name: Ident::new("name").empty_span(),
                     data_type: DataType::Varchar(Some(CharacterLength {
                         length: 100,
                         unit: None,
@@ -3176,7 +3186,7 @@ fn parse_alter_view() {
             with_options,
         } => {
             assert_eq!("myschema.myview", name.to_string());
-            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!(Vec::<WithSpan<Ident>>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert_eq!(with_options, vec![]);
         }
@@ -3192,11 +3202,11 @@ fn parse_alter_view_with_options() {
             assert_eq!(
                 vec![
                     SqlOption {
-                        name: "foo".into(),
+                        name: Ident::new("foo").empty_span(),
                         value: Value::SingleQuotedString("bar".into()),
                     },
                     SqlOption {
-                        name: "a".into(),
+                        name: Ident::new("a").empty_span(),
                         value: number("123"),
                     },
                 ],
@@ -3218,7 +3228,13 @@ fn parse_alter_view_with_columns() {
             with_options,
         } => {
             assert_eq!("v", name.to_string());
-            assert_eq!(columns, vec![Ident::new("has"), Ident::new("cols")]);
+            assert_eq!(
+                columns,
+                vec![
+                    Ident::new("has").empty_span(),
+                    Ident::new("cols").empty_span()
+                ]
+            );
             assert_eq!("SELECT 1, 2", query.to_string());
             assert_eq!(with_options, vec![]);
         }
@@ -4968,7 +4984,7 @@ fn parse_joins_using() {
                 version: None,
                 partitions: vec![],
             },
-            join_operator: f(JoinConstraint::Using(vec!["c1".into()])),
+            join_operator: f(JoinConstraint::Using(vec![Ident::new("c1").empty_span()])),
         }
     }
     // Test parsing of aliases
@@ -5218,7 +5234,10 @@ fn parse_cte_renamed_columns() {
     let sql = "WITH cte (col1, col2) AS (SELECT foo, bar FROM baz) SELECT * FROM cte";
     let query = all_dialects().verified_query(sql);
     assert_eq!(
-        vec![Ident::new("col1"), Ident::new("col2")],
+        vec![
+            Ident::new("col1").empty_span(),
+            Ident::new("col2").empty_span()
+        ],
         query
             .with
             .unwrap()
@@ -5251,7 +5270,8 @@ fn parse_recursive_cte() {
             columns: vec![Ident {
                 value: "val".to_string(),
                 quote_style: None,
-            }],
+            }
+            .empty_span()],
         },
         query: Box::new(cte_query),
         from: None,
@@ -5634,7 +5654,7 @@ fn parse_create_view() {
             late_binding,
         } => {
             assert_eq!("myschema.myview", name.to_string());
-            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!(Vec::<WithSpan<Ident>>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(!materialized);
             assert!(!or_replace);
@@ -5661,11 +5681,11 @@ fn parse_create_view_with_options() {
             assert_eq!(
                 vec![
                     SqlOption {
-                        name: "foo".into(),
+                        name: Ident::new("foo").empty_span(),
                         value: Value::SingleQuotedString("bar".into()),
                     },
                     SqlOption {
-                        name: "a".into(),
+                        name: Ident::new("a").empty_span(),
                         value: number("123"),
                     },
                 ],
@@ -5698,7 +5718,13 @@ fn parse_create_view_with_columns() {
             late_binding,
         } => {
             assert_eq!("v", name.to_string());
-            assert_eq!(columns, vec![Ident::new("has"), Ident::new("cols")]);
+            assert_eq!(
+                columns,
+                vec![
+                    Ident::new("has").empty_span(),
+                    Ident::new("cols").empty_span()
+                ]
+            );
             assert_eq!(with_options, vec![]);
             assert_eq!("SELECT 1, 2", query.to_string());
             assert!(!materialized);
@@ -5825,7 +5851,7 @@ fn parse_create_materialized_view() {
             late_binding,
         } => {
             assert_eq!("myschema.myview", name.to_string());
-            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!(Vec::<WithSpan<Ident>>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(materialized);
             assert_eq!(with_options, vec![]);
@@ -5866,13 +5892,13 @@ fn parse_create_materialized_view_with_cluster_by() {
             late_binding,
         } => {
             assert_eq!("myschema.myview", name.to_string());
-            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!(Vec::<WithSpan<Ident>>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(materialized);
             assert_eq!(with_options, vec![]);
             assert!(!or_replace);
             assert_eq!(engine, None);
-            assert_eq!(cluster_by, vec![Ident::new("foo")]);
+            assert_eq!(cluster_by, vec![Ident::new("foo").empty_span()]);
             assert_eq!(primary_key, None);
             assert_eq!(order_by, None);
             assert_eq!(table_ttl, None);
@@ -6571,14 +6597,8 @@ fn parse_grant() {
                         Action::Insert { columns: None },
                         Action::Update {
                             columns: Some(vec![
-                                Ident {
-                                    value: "shape".into(),
-                                    quote_style: None,
-                                },
-                                Ident {
-                                    value: "size".into(),
-                                    quote_style: None,
-                                },
+                                Ident::new("shape").empty_span(),
+                                Ident::new("size").empty_span(),
                             ])
                         },
                         Action::Usage,
@@ -6847,7 +6867,11 @@ fn parse_merge() {
                 vec![
                     MergeClause::NotMatched {
                         predicate: None,
-                        columns: vec![Ident::new("A"), Ident::new("B"), Ident::new("C")],
+                        columns: vec![
+                            Ident::new("A").empty_span(),
+                            Ident::new("B").empty_span(),
+                            Ident::new("C").empty_span()
+                        ],
                         values: Values {
                             explicit_row: false,
                             rows: vec![vec![
@@ -7446,11 +7470,11 @@ fn parse_cache_table() {
             has_as: false,
             options: vec![
                 SqlOption {
-                    name: Ident::with_quote('\'', "K1"),
+                    name: Ident::with_quote('\'', "K1").empty_span(),
                     value: Value::SingleQuotedString("V1".into()),
                 },
                 SqlOption {
-                    name: Ident::with_quote('\'', "K2"),
+                    name: Ident::with_quote('\'', "K2").empty_span(),
                     value: number("0.88"),
                 },
             ],
@@ -7471,11 +7495,11 @@ fn parse_cache_table() {
             has_as: false,
             options: vec![
                 SqlOption {
-                    name: Ident::with_quote('\'', "K1"),
+                    name: Ident::with_quote('\'', "K1").empty_span(),
                     value: Value::SingleQuotedString("V1".into()),
                 },
                 SqlOption {
-                    name: Ident::with_quote('\'', "K2"),
+                    name: Ident::with_quote('\'', "K2").empty_span(),
                     value: number("0.88"),
                 },
             ],
@@ -7496,11 +7520,11 @@ fn parse_cache_table() {
             has_as: true,
             options: vec![
                 SqlOption {
-                    name: Ident::with_quote('\'', "K1"),
+                    name: Ident::with_quote('\'', "K1").empty_span(),
                     value: Value::SingleQuotedString("V1".into()),
                 },
                 SqlOption {
-                    name: Ident::with_quote('\'', "K2"),
+                    name: Ident::with_quote('\'', "K2").empty_span(),
                     value: number("0.88"),
                 },
             ],
@@ -7746,7 +7770,7 @@ fn parse_pivot_table() {
                     quote_style: None
                 }
                 .empty_span(),
-                columns: vec![Ident::new("c"), Ident::new("d")],
+                columns: vec![Ident::new("c").empty_span(), Ident::new("d").empty_span()],
             }),
         }
     );

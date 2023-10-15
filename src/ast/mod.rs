@@ -694,7 +694,7 @@ pub enum Expr {
     /// [(1)]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-search.html#function_match
     MatchAgainst {
         /// `(<col>, <col>, ...)`.
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
         /// `<expr>`.
         match_value: Value,
         /// `<search modifier>`
@@ -1365,7 +1365,7 @@ pub enum Statement {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         /// COLUMNS
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
         /// Overwrite (Hive)
         overwrite: bool,
         /// A SQL query that specifies what to insert
@@ -1373,7 +1373,7 @@ pub enum Statement {
         /// partitioned insert (Hive)
         partitioned: Option<Vec<Expr>>,
         /// Columns defined after PARTITION
-        after_columns: Vec<Ident>,
+        after_columns: Vec<WithSpan<Ident>>,
         /// whether the insert has the table keyword (Hive)
         table: bool,
         on: Option<OnInsert>,
@@ -1459,19 +1459,19 @@ pub enum Statement {
         materialized: bool,
         /// View name
         name: ObjectName,
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
         query: Box<Query>,
         with_options: Vec<SqlOption>,
         engine: Option<EngineSpec>,
-        cluster_by: Vec<Ident>,
+        cluster_by: Vec<WithSpan<Ident>>,
         /// ClickHouse "PRIMARY KEY" clause. Note that omitted PRIMARY KEY is different
         /// than empty (represented as ()), the latter meaning "no sorting".
         /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
-        primary_key: Option<Vec<Ident>>,
+        primary_key: Option<Vec<WithSpan<Ident>>>,
         /// ClickHouse "ORDER BY " clause. Note that omitted ORDER BY is different
         /// than empty (represented as ()), the latter meaning "no sorting".
         /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
-        order_by: Option<Vec<Ident>>,
+        order_by: Option<Vec<WithSpan<Ident>>>,
         /// TTL <expr>
         table_ttl: Option<Expr>,
         /// SETTINGS k = v, k2 = v2...
@@ -1516,11 +1516,11 @@ pub enum Statement {
         /// ClickHouse "PRIMARY KEY" clause. Note that omitted PRIMARY KEY is different
         /// than empty (represented as ()), the latter meaning "no sorting".
         /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
-        primary_key: Option<Vec<Ident>>,
+        primary_key: Option<Vec<WithSpan<Ident>>>,
         /// ClickHouse "ORDER BY " clause. Note that omitted ORDER BY is different
         /// than empty (represented as ()), the latter meaning "no sorting".
         /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
-        order_by: Option<Vec<Ident>>,
+        order_by: Option<Vec<WithSpan<Ident>>>,
         /// SQLite "STRICT" clause.
         /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
         /// then strict typing rules apply to that table.
@@ -1536,8 +1536,8 @@ pub enum Statement {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         name: ObjectName,
         if_not_exists: bool,
-        module_name: Ident,
-        module_args: Vec<Ident>,
+        module_name: WithSpan<Ident>,
+        module_args: Vec<WithSpan<Ident>>,
     },
     /// CREATE INDEX
     CreateIndex {
@@ -1596,7 +1596,7 @@ pub enum Statement {
         /// View name
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         name: ObjectName,
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
         query: Box<Query>,
         with_options: Vec<SqlOption>,
     },
@@ -1883,11 +1883,17 @@ pub enum Statement {
     /// `DEALLOCATE [ PREPARE ] { name | ALL }`
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Deallocate { name: Ident, prepare: bool },
+    Deallocate {
+        name: WithSpan<Ident>,
+        prepare: bool,
+    },
     /// `EXECUTE name [ ( parameter [, ...] ) ]`
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Execute { name: Ident, parameters: Vec<Expr> },
+    Execute {
+        name: WithSpan<Ident>,
+        parameters: Vec<Expr>,
+    },
     /// `PREPARE name [ ( data_type [, ...] ) ] AS statement`
     ///
     /// Note: this is a PostgreSQL-specific statement.
@@ -3484,7 +3490,7 @@ pub struct OnConflict {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum ConflictTarget {
-    Columns(Vec<Ident>),
+    Columns(Vec<WithSpan<Ident>>),
     OnConstraint(ObjectName),
 }
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -3666,13 +3672,21 @@ pub enum Action {
     Create,
     Delete,
     Execute,
-    Insert { columns: Option<Vec<Ident>> },
-    References { columns: Option<Vec<Ident>> },
-    Select { columns: Option<Vec<Ident>> },
+    Insert {
+        columns: Option<Vec<WithSpan<Ident>>>,
+    },
+    References {
+        columns: Option<Vec<WithSpan<Ident>>>,
+    },
+    Select {
+        columns: Option<Vec<WithSpan<Ident>>>,
+    },
     Temporary,
     Trigger,
     Truncate,
-    Update { columns: Option<Vec<Ident>> },
+    Update {
+        columns: Option<Vec<WithSpan<Ident>>>,
+    },
     Usage,
 }
 
@@ -4099,7 +4113,7 @@ pub struct HiveFormat {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct SqlOption {
-    pub name: Ident,
+    pub name: WithSpan<Ident>,
     pub value: Value,
 }
 
@@ -4224,7 +4238,7 @@ pub enum CopySource {
         table_name: ObjectName,
         /// A list of column names to copy. Empty list means that all columns
         /// are copied.
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
     },
     Query(Box<Query>),
 }
@@ -4292,11 +4306,11 @@ pub enum CopyOption {
     /// ESCAPE 'escape_character'
     Escape(char),
     /// FORCE_QUOTE { ( column_name [, ...] ) | * }
-    ForceQuote(Vec<Ident>),
+    ForceQuote(Vec<WithSpan<Ident>>),
     /// FORCE_NOT_NULL ( column_name [, ...] )
-    ForceNotNull(Vec<Ident>),
+    ForceNotNull(Vec<WithSpan<Ident>>),
     /// FORCE_NULL ( column_name [, ...] )
-    ForceNull(Vec<Ident>),
+    ForceNull(Vec<WithSpan<Ident>>),
     /// ENCODING 'encoding_name'
     Encoding(String),
 }
@@ -4399,7 +4413,7 @@ pub enum MergeClause {
     MatchedDelete(Option<Expr>),
     NotMatched {
         predicate: Option<Expr>,
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
         values: Values,
     },
 }

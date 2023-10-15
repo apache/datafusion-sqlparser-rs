@@ -279,7 +279,7 @@ pub enum TableConstraint {
     /// `[ CONSTRAINT <name> ] { PRIMARY KEY | UNIQUE } (<columns>)`
     Unique {
         name: Option<Ident>,
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
         /// Whether this is a `PRIMARY KEY` or just a `UNIQUE` constraint
         is_primary: bool,
     },
@@ -290,9 +290,9 @@ pub enum TableConstraint {
     /// }`).
     ForeignKey {
         name: Option<Ident>,
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
         foreign_table: ObjectName,
-        referred_columns: Vec<Ident>,
+        referred_columns: Vec<WithSpan<Ident>>,
         on_delete: Option<ReferentialAction>,
         on_update: Option<ReferentialAction>,
     },
@@ -317,7 +317,7 @@ pub enum TableConstraint {
         /// [1]: IndexType
         index_type: Option<IndexType>,
         /// Referred column identifier list.
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
     },
     ClickhouseIndex {
         index_expr: Expr,
@@ -346,7 +346,7 @@ pub enum TableConstraint {
         /// Optional index name.
         opt_index_name: Option<Ident>,
         /// Referred column identifier list.
-        columns: Vec<Ident>,
+        columns: Vec<WithSpan<Ident>>,
     },
 }
 
@@ -533,7 +533,7 @@ impl fmt::Display for ProcedureParam {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ColumnDef {
-    pub name: Ident,
+    pub name: WithSpan<Ident>,
     pub data_type: DataType,
     pub collation: Option<ObjectName>,
     pub codec: Option<Vec<Expr>>,
@@ -609,7 +609,7 @@ pub enum ColumnOption {
     /// }`).
     ForeignKey {
         foreign_table: ObjectName,
-        referred_columns: Vec<Ident>,
+        referred_columns: Vec<WithSpan<Ident>>,
         on_delete: Option<ReferentialAction>,
         on_update: Option<ReferentialAction>,
     },

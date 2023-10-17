@@ -172,6 +172,16 @@ impl fmt::Display for Ident {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ObjectName(pub Vec<Ident>);
 
+impl ObjectName {
+    pub fn to_lowercase_dotted_name(&self) -> String {
+        self.0
+            .iter()
+            .map(|x| x.value.to_lowercase())
+            .collect::<Vec<String>>()
+            .join(".")
+    }
+}
+
 impl fmt::Display for ObjectName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", display_separated(&self.0, "."))

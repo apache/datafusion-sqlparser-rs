@@ -1214,6 +1214,8 @@ pub enum Statement {
     Insert {
         /// Only for Sqlite
         or: Option<SqliteOnConflict>,
+        /// Only for mysql
+        ignore: bool,
         /// INTO - optional keyword
         into: bool,
         /// TABLE
@@ -2038,6 +2040,7 @@ impl fmt::Display for Statement {
             }
             Statement::Insert {
                 or,
+                ignore,
                 into,
                 table_name,
                 overwrite,
@@ -2054,8 +2057,9 @@ impl fmt::Display for Statement {
                 } else {
                     write!(
                         f,
-                        "INSERT{over}{int}{tbl} {table_name} ",
+                        "INSERT{ignore}{over}{int}{tbl} {table_name} ",
                         table_name = table_name,
+                        ignore = if *ignore { " IGNORE" } else { "" },
                         over = if *overwrite { " OVERWRITE" } else { "" },
                         int = if *into { " INTO" } else { "" },
                         tbl = if *table { " TABLE" } else { "" }

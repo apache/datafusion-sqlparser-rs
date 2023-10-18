@@ -991,8 +991,11 @@ impl Display for WindowType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WindowSpec {
+    // OVER (PARTITION BY ...)
     pub partition_by: Vec<Expr>,
+    // OVER (ORDER BY ...)
     pub order_by: Vec<OrderByExpr>,
+    // OVER (window frame)
     pub window_frame: Option<WindowFrame>,
 }
 
@@ -3650,6 +3653,8 @@ impl fmt::Display for CloseCursor {
 pub struct Function {
     pub name: ObjectName,
     pub args: Vec<FunctionArg>,
+    // e.g. `x > 5` in `COUNT(x) FILTER (WHERE x > 5)`
+    pub filter: Option<Box<Expr>>,
     pub over: Option<WindowType>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
@@ -3697,6 +3702,10 @@ impl fmt::Display for Function {
                 display_comma_separated(&self.args),
                 display_comma_separated(&self.order_by),
             )?;
+
+            if let Some(filter_cond) = &self.filter {
+                write!(f, " FILTER (WHERE {filter_cond})")?;
+            }
 
             if let Some(o) = &self.over {
                 write!(f, " OVER {o}")?;

@@ -35,6 +35,10 @@ impl Dialect for SQLiteDialect {
             || ('\u{007f}'..='\u{ffff}').contains(&ch)
     }
 
+    fn supports_filter_during_aggregation(&self) -> bool {
+        true
+    }
+
     fn is_identifier_part(&self, ch: char) -> bool {
         self.is_identifier_start(ch) || ch.is_ascii_digit()
     }

@@ -47,4 +47,8 @@ impl Dialect for SQLiteDialect {
             None
         }
     }
+
+    fn supports_in_empty_list(&self) -> bool {
+        true
+    }
 }

@@ -308,6 +308,17 @@ fn parse_attach_database() {
     }
 }
 
+#[test]
+fn parse_where_in_empty_list() {
+    let sql = "SELECT * FROM t1 WHERE a IN ()";
+    let select = sqlite().verified_only_select(sql);
+    if let Expr::InList { list, .. } = select.selection.as_ref().unwrap() {
+        assert_eq!(list.len(), 0);
+    } else {
+        unreachable!()
+    }
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SQLiteDialect {})],

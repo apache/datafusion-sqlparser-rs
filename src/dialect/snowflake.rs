@@ -34,7 +34,7 @@ pub struct SnowflakeDialect;
 impl Dialect for SnowflakeDialect {
     // see https://docs.snowflake.com/en/sql-reference/identifiers-syntax.html
     fn is_identifier_start(&self, ch: char) -> bool {
-        ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_' || ch == '@' || ch == '%'
+        ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
@@ -43,8 +43,6 @@ impl Dialect for SnowflakeDialect {
             || ch.is_ascii_digit()
             || ch == '$'
             || ch == '_'
-            || ch == '/'
-            || ch == '~'
     }
 
     fn supports_within_after_array_aggregation(&self) -> bool {

@@ -1004,6 +1004,18 @@ impl<'a> Tokenizer<'a> {
                             }
                         }
                         Some(' ') => Ok(Some(Token::AtSign)),
+                        // Snowflake stage identifier, this should be consumed as multiple dot separated word tokens
+                        Some(_) if dialect_of!(self is SnowflakeDialect) => {
+                            let mut s = "@".to_string();
+                            s.push_str(&peeking_take_while(chars, |ch| {
+                                self.dialect.is_identifier_part(ch)
+                                    || ch == '/'
+                                    || ch == '~'
+                                    || ch == '%'
+                                    || ch == '.'
+                            }));
+                            Ok(Some(Token::make_word(&s, None)))
+                        }
                         Some(sch) if self.dialect.is_identifier_start('@') => {
                             self.tokenize_identifier_or_keyword([ch, *sch], chars)
                         }
@@ -1997,6 +2009,19 @@ mod tests {
             Token::Whitespace(Whitespace::Space),
             Token::make_word(r#"c """#, Some('"')),
             Token::Whitespace(Whitespace::Space),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_snowflake_div() {
+        let sql = r#"field/1000"#;
+        let dialect = SnowflakeDialect {};
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_word(r#"field"#, None),
+            Token::Div,
+            Token::Number("1000".to_string(), false),
         ];
         compare(expected, tokens);
     }

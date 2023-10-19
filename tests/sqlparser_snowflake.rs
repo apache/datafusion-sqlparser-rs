@@ -26,6 +26,9 @@ use test_utils::*;
 #[macro_use]
 mod test_utils;
 
+#[cfg(test)]
+use pretty_assertions::assert_eq;
+
 #[test]
 fn test_snowflake_create_table() {
     let sql = "CREATE TABLE _my_$table (am00unt number)";
@@ -917,7 +920,7 @@ fn test_copy_into_with_transformations() {
         } => {
             assert_eq!(
                 from_stage,
-                ObjectName(vec![Ident::new("@schema"), Ident::new("general_finished")])
+                ObjectName(vec![Ident::new("@schema.general_finished")])
             );
             assert_eq!(
                 from_transformations.as_ref().unwrap()[0],
@@ -1024,15 +1027,9 @@ fn test_snowflake_stage_object_names() {
     ];
     let mut allowed_object_names = vec![
         ObjectName(vec![Ident::new("my_company"), Ident::new("emp_basic")]),
-        ObjectName(vec![Ident::new("@namespace"), Ident::new("%table_name")]),
-        ObjectName(vec![
-            Ident::new("@namespace"),
-            Ident::new("%table_name/path"),
-        ]),
-        ObjectName(vec![
-            Ident::new("@namespace"),
-            Ident::new("stage_name/path"),
-        ]),
+        ObjectName(vec![Ident::new("@namespace.%table_name")]),
+        ObjectName(vec![Ident::new("@namespace.%table_name/path")]),
+        ObjectName(vec![Ident::new("@namespace.stage_name/path")]),
         ObjectName(vec![Ident::new("@~/path")]),
     ];
 
@@ -1117,4 +1114,17 @@ fn parse_subquery_function_argument() {
     // Commas are parsed as part of the subquery, not additional arguments to
     // the function.
     snowflake().one_statement_parses_to("SELECT func(SELECT 1, 2)", "SELECT func((SELECT 1, 2))");
+}
+
+#[test]
+fn parse_division_correctly() {
+    snowflake_and_generic().one_statement_parses_to(
+        "SELECT field/1000 FROM tbl1",
+        "SELECT field / 1000 FROM tbl1",
+    );
+
+    snowflake_and_generic().one_statement_parses_to(
+        "SELECT tbl1.field/tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
+        "SELECT tbl1.field / tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
+    );
 }

@@ -429,6 +429,14 @@ pub enum Expr {
         pattern: Box<Expr>,
         escape_char: Option<char>,
     },
+    /// MySQL: RLIKE regex or REGEXP regex
+    RLike {
+        negated: bool,
+        expr: Box<Expr>,
+        pattern: Box<Expr>,
+        // true for REGEXP, false for RLIKE (no difference in semantics)
+        regexp: bool,
+    },
     /// Any operation e.g. `foo > ANY(bar)`, comparison operator is one of [=, >, <, =>, =<, !=]
     AnyOp {
         left: Box<Expr>,
@@ -740,6 +748,19 @@ impl fmt::Display for Expr {
                     pattern
                 ),
             },
+            Expr::RLike {
+                negated,
+                expr,
+                pattern,
+                regexp,
+            } => write!(
+                f,
+                "{} {}{} {}",
+                expr,
+                if *negated { "NOT " } else { "" },
+                if *regexp { "REGEXP" } else { "RLIKE" },
+                pattern
+            ),
             Expr::SimilarTo {
                 negated,
                 expr,

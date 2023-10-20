@@ -12,7 +12,7 @@
 
 use crate::dialect::Dialect;
 
-/// A permissive, general purpose dialect, which parses a wide variety of SQL
+/// A permissive, general purpose [`Dialect`], which parses a wide variety of SQL
 /// statements, from many different dialects.
 #[derive(Debug, Default)]
 pub struct GenericDialect;

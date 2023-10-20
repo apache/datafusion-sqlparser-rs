@@ -132,7 +132,7 @@ The most commonly accepted PRs add support for or fix a bug in a feature in the
 SQL standard, or a a popular RDBMS, such as Microsoft SQL
 Server or PostgreSQL, will likely be accepted after a brief
 review.  Any SQL feature that is dialect specific should be parsed by *both* the relevant [`Dialect`] 
-as well as the omnibsus [`GenericDialect`].
+as well as [`GenericDialect`].
 
 ### Major API Changes
 

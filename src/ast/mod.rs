@@ -993,9 +993,9 @@ impl Display for WindowType {
 pub struct WindowSpec {
     /// `OVER (PARTITION BY ...)`
     pub partition_by: Vec<Expr>,
-    // OVER (ORDER BY ...)
+    /// `OVER (ORDER BY ...)`
     pub order_by: Vec<OrderByExpr>,
-    // OVER (window frame)
+    /// `OVER (window frame)`
     pub window_frame: Option<WindowFrame>,
 }
 

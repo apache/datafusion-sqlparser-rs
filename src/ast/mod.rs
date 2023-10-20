@@ -322,6 +322,16 @@ impl fmt::Display for JsonOperator {
     }
 }
 
+/// Options for `CAST` / `TRY_CAST`
+/// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CastFormat {
+    Value(Value),
+    ValueAtTimeZone(Value, Value),
+}
+
 /// An SQL expression of any type.
 ///
 /// The parser does not distinguish between expressions of different types
@@ -437,12 +447,18 @@ pub enum Expr {
     Cast {
         expr: Box<Expr>,
         data_type: DataType,
+        // Optional CAST(string_expression AS type FORMAT format_string_expression) as used by BigQuery
+        // https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
+        format: Option<CastFormat>,
     },
     /// TRY_CAST an expression to a different data type e.g. `TRY_CAST(foo AS VARCHAR(123))`
     //  this differs from CAST in the choice of how to implement invalid conversions
     TryCast {
         expr: Box<Expr>,
         data_type: DataType,
+        // Optional CAST(string_expression AS type FORMAT format_string_expression) as used by BigQuery
+        // https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
+        format: Option<CastFormat>,
     },
     /// SAFE_CAST an expression to a different data type e.g. `SAFE_CAST(foo AS FLOAT64)`
     //  only available for BigQuery: https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-and-operators#safe_casting
@@ -450,6 +466,9 @@ pub enum Expr {
     SafeCast {
         expr: Box<Expr>,
         data_type: DataType,
+        // Optional CAST(string_expression AS type FORMAT format_string_expression) as used by BigQuery
+        // https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
+        format: Option<CastFormat>,
     },
     /// AT a timestamp to a different timezone e.g. `FROM_UNIXTIME(0) AT TIME ZONE 'UTC-06:00'`
     AtTimeZone {
@@ -595,6 +614,15 @@ pub enum Expr {
         /// `<search modifier>`
         opt_search_modifier: Option<SearchModifier>,
     },
+}
+
+impl fmt::Display for CastFormat {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CastFormat::Value(v) => write!(f, "{v}"),
+            CastFormat::ValueAtTimeZone(v, tz) => write!(f, "{v} AT TIME ZONE {tz}"),
+        }
+    }
 }
 
 impl fmt::Display for Expr {
@@ -753,9 +781,39 @@ impl fmt::Display for Expr {
                     write!(f, "{op}{expr}")
                 }
             }
-            Expr::Cast { expr, data_type } => write!(f, "CAST({expr} AS {data_type})"),
-            Expr::TryCast { expr, data_type } => write!(f, "TRY_CAST({expr} AS {data_type})"),
-            Expr::SafeCast { expr, data_type } => write!(f, "SAFE_CAST({expr} AS {data_type})"),
+            Expr::Cast {
+                expr,
+                data_type,
+                format,
+            } => {
+                if let Some(format) = format {
+                    write!(f, "CAST({expr} AS {data_type} FORMAT {format})")
+                } else {
+                    write!(f, "CAST({expr} AS {data_type})")
+                }
+            }
+            Expr::TryCast {
+                expr,
+                data_type,
+                format,
+            } => {
+                if let Some(format) = format {
+                    write!(f, "TRY_CAST({expr} AS {data_type} FORMAT {format})")
+                } else {
+                    write!(f, "TRY_CAST({expr} AS {data_type})")
+                }
+            }
+            Expr::SafeCast {
+                expr,
+                data_type,
+                format,
+            } => {
+                if let Some(format) = format {
+                    write!(f, "SAFE_CAST({expr} AS {data_type} FORMAT {format})")
+                } else {
+                    write!(f, "SAFE_CAST({expr} AS {data_type})")
+                }
+            }
             Expr::Extract { field, expr } => write!(f, "EXTRACT({field} FROM {expr})"),
             Expr::Ceil { expr, field } => {
                 if field == &DateTimeField::NoDateTime {

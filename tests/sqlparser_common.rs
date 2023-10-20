@@ -7635,3 +7635,8 @@ fn parse_create_type() {
         create_type
     );
 }
+
+#[test]
+fn parse_create_table_collate() {
+    pg_and_generic().verified_stmt("CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\")");
+}

@@ -124,28 +124,36 @@ parser](docs/custom_sql_parser.md).
 ## Contributing
 
 Contributions are highly encouraged! However, the bandwidth we have to
-maintain this crate is fairly limited.
+maintain this crate is limited. Please read the following sections carefully.
 
-Pull requests that add support for or fix a bug in a feature in the
-SQL standard, or a feature in a popular RDBMS, like Microsoft SQL
+### New Syntax
+
+The most commonly accepted PRs add support for or fix a bug in a feature in the
+SQL standard, or a a popular RDBMS, such as Microsoft SQL
 Server or PostgreSQL, will likely be accepted after a brief
-review.
+review.  Any SQL feature that is dialect specific should be parsed by *both* the relevant [`Dialect`] 
+as well as the omnibsus [`GenericDialect`].
+
+### Major API Changes
 
 The current maintainers do not plan for any substantial changes to
-this crate's API at this time. And thus, PRs proposing major refactors
+this crate's API. PRs proposing major refactors
 are not likely to be accepted.
 
-Please be aware that, while we hope to review PRs in a reasonably
-timely fashion, it may take a while. In order to speed the process,
+### Testing
+
+While we hope to review PRs in a reasonably
+timely fashion, it may take a week or more. In order to speed the process,
 please make sure the PR passes all CI checks, and includes tests
 demonstrating your code works as intended (and to avoid
 regressions). Remember to also test error paths.
 
 PRs without tests will not be reviewed or merged.  Since the CI
 ensures that `cargo test`, `cargo fmt`, and `cargo clippy`, pass you
-will likely want to run all three commands locally before submitting
+should likely to run all three commands locally before submitting
 your PR.
 
+### Filing Issues
 
 If you are unable to submit a patch, feel free to file an issue instead. Please
 try to include:
@@ -156,8 +164,9 @@ try to include:
   * links to documentation for the feature for a few of the most popular
     databases that support it.
 
-If you need support for a feature, you will likely need to implement
-it yourself. Our goal as maintainers is to facilitate the integration
+Unfortunately, if you need support for a feature, you will likely need to implement
+it yourself, or file a well enough described ticket that another member of the community can do so.
+Our goal as maintainers is to facilitate the integration
 of various features from various contributors, but not to provide the
 implementations ourselves, as we simply don't have the resources.
 
@@ -183,3 +192,5 @@ licensed as above, without any additional terms or conditions.
 [Pratt Parser]: https://tdop.github.io/
 [sql-2016-grammar]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html
 [sql-standard]: https://en.wikipedia.org/wiki/ISO/IEC_9075
+[`Dialect`]: https://docs.rs/sqlparser/latest/sqlparser/dialect/trait.Dialect.html
+[`GenericDialect`]: https://docs.rs/sqlparser/latest/sqlparser/dialect/struct.GenericDialect.html

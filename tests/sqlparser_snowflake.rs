@@ -1064,3 +1064,9 @@ fn test_snowflake_trim() {
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
+
+#[test]
+fn parse_position_not_function_columns() {
+    snowflake_and_generic()
+        .verified_stmt("SELECT position FROM tbl1 WHERE position NOT IN ('first', 'last')");
+}

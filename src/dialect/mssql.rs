@@ -12,7 +12,7 @@
 
 use crate::dialect::Dialect;
 
-// [Microsoft SQL Server](https://www.microsoft.com/en-us/sql-server/) dialect
+/// A [`Dialect`] for [Microsoft SQL Server](https://www.microsoft.com/en-us/sql-server/)
 #[derive(Debug)]
 pub struct MsSqlDialect {}
 

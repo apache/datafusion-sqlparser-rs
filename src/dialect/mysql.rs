@@ -19,10 +19,11 @@ use crate::{
     keywords::Keyword,
 };
 
-/// [MySQL](https://www.mysql.com/)
+/// A [`Dialect`] for [MySQL](https://www.mysql.com/)
 #[derive(Debug)]
 pub struct MySqlDialect {}
 
+// A [`Dialect`] for [MySql](https://www.mysql.com/).
 impl Dialect for MySqlDialect {
     fn is_identifier_start(&self, ch: char) -> bool {
         // See https://dev.mysql.com/doc/refman/8.0/en/identifiers.html.

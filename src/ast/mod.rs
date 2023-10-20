@@ -991,7 +991,7 @@ impl Display for WindowType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WindowSpec {
-    // OVER (PARTITION BY ...)
+    /// `OVER (PARTITION BY ...)`
     pub partition_by: Vec<Expr>,
     // OVER (ORDER BY ...)
     pub order_by: Vec<OrderByExpr>,

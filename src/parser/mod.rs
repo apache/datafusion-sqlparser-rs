@@ -1910,10 +1910,21 @@ impl<'a> Parser<'a> {
                 | Keyword::BETWEEN
                 | Keyword::LIKE
                 | Keyword::ILIKE
-                | Keyword::SIMILAR => {
+                | Keyword::SIMILAR
+                | Keyword::REGEXP
+                | Keyword::RLIKE => {
                     self.prev_token();
                     let negated = self.parse_keyword(Keyword::NOT);
-                    if self.parse_keyword(Keyword::IN) {
+                    let regexp = self.parse_keyword(Keyword::REGEXP);
+                    let rlike = self.parse_keyword(Keyword::RLIKE);
+                    if regexp || rlike {
+                        Ok(Expr::RLike {
+                            negated,
+                            expr: Box::new(expr),
+                            pattern: Box::new(self.parse_subexpr(Self::LIKE_PREC)?),
+                            regexp,
+                        })
+                    } else if self.parse_keyword(Keyword::IN) {
                         self.parse_in(expr, negated)
                     } else if self.parse_keyword(Keyword::BETWEEN) {
                         self.parse_between(expr, negated)
@@ -2155,6 +2166,8 @@ impl<'a> Parser<'a> {
                 Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
                 Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::LIKE_PREC),
                 Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
+                Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(Self::LIKE_PREC),
+                Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(Self::LIKE_PREC),
                 Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
                 _ => Ok(0),
             },
@@ -2163,6 +2176,8 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
+            Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(Self::LIKE_PREC),
+            Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::DIV => Ok(Self::MUL_DIV_MOD_OP_PREC),

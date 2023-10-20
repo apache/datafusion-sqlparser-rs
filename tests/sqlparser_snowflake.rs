@@ -1123,3 +1123,9 @@ fn parse_division_correctly() {
         "SELECT tbl1.field / tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
     );
 }
+
+#[test]
+fn parse_position_not_function_columns() {
+    snowflake_and_generic()
+        .verified_stmt("SELECT position FROM tbl1 WHERE position NOT IN ('first', 'last')");
+}

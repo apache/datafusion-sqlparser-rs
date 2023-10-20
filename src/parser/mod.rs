@@ -791,7 +791,9 @@ impl<'a> Parser<'a> {
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::CEIL => self.parse_ceil_floor_expr(true),
                 Keyword::FLOOR => self.parse_ceil_floor_expr(false),
-                Keyword::POSITION => self.parse_position_expr(),
+                Keyword::POSITION if self.peek_token().token == Token::LParen => {
+                    self.parse_position_expr()
+                }
                 Keyword::SUBSTRING => self.parse_substring_expr(),
                 Keyword::OVERLAY => self.parse_overlay_expr(),
                 Keyword::TRIM => self.parse_trim_expr(),

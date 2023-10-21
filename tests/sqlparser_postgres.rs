@@ -3384,6 +3384,13 @@ fn parse_truncate() {
 }
 
 #[test]
+fn parse_select_regexp_as_column_name() {
+    pg_and_generic().verified_only_select(
+        "SELECT REGEXP.REGEXP AS REGEXP FROM REGEXP AS REGEXP WHERE REGEXP.REGEXP",
+    );
+}
+
+#[test]
 fn parse_create_table_with_alias() {
     let sql = "CREATE TABLE public.datatype_aliases
     (

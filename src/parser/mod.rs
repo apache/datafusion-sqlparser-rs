@@ -4364,8 +4364,7 @@ impl<'a> Parser<'a> {
                 let if_exists = self.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
                 let only = self.parse_keyword(Keyword::ONLY); // [ ONLY ]
                 let table_name = self.parse_object_name()?;
-                let operations =
-                    self.parse_comma_separated(Parser::parse_alter_table_operation)?;
+                let operations = self.parse_comma_separated(Parser::parse_alter_table_operation)?;
                 Ok(Statement::AlterTable {
                     name: table_name,
                     if_exists,

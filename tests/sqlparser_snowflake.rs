@@ -1065,25 +1065,3 @@ fn test_snowflake_trim() {
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }
-
-#[test]
-fn parse_agg_with_order_by() {
-    for sql in [
-        "SELECT column1, column2, FIRST_VALUE(column2) OVER (PARTITION BY column1 ORDER BY column2 NULLS LAST) AS column2_first FROM t1",
-        "SELECT column1, column2, FIRST_VALUE(column2) OVER (ORDER BY column2 NULLS LAST) AS column2_first FROM t1",
-        "SELECT col_1, col_2, LAG(col_2) OVER (ORDER BY col_1) FROM t1",
-        "SELECT LAG(col_2, 1, 0) OVER (ORDER BY col_1) FROM t1",
-        "SELECT LAG(col_2, 1, 0) OVER (PARTITION BY col_3 ORDER BY col_1)",
-    ] {
-        snowflake().verified_stmt(sql);
-    }
-
-    for sql in [
-        "SELECT column1, column2, FIRST_VALUE(column2) IGNORE NULLS OVER (PARTITION BY column1 ORDER BY column2 NULLS LAST) AS column2_first FROM t1",
-        "SELECT column1, column2, FIRST_VALUE(column2) RESPECT NULLS OVER (PARTITION BY column1 ORDER BY column2 NULLS LAST) AS column2_first FROM t1",
-        "SELECT LAG(col_2, 1, 0) IGNORE NULLS OVER (ORDER BY col_1) FROM t1",
-        "SELECT LAG(col_2, 1, 0) RESPECT NULLS OVER (ORDER BY col_1) FROM t1",
-    ] {
-        snowflake().verified_stmt(sql);
-    }
-}

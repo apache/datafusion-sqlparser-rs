@@ -1507,7 +1507,7 @@ impl<'a> Parser<'a> {
                 within_group: false,
             }));
         }
-        // Snowflake defines ORDERY BY in within group instead of inside the function like
+        // Snowflake defines ORDER BY in within group instead of inside the function like
         // ANSI SQL.
         self.expect_token(&Token::RParen)?;
         let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
@@ -6914,6 +6914,24 @@ impl<'a> Parser<'a> {
         if self.consume_token(&Token::RParen) {
             Ok((vec![], vec![]))
         } else {
+            // Snowflake permits a subquery to be passed as an argument without
+            // an enclosing set of parens if it's the only argument.
+            if dialect_of!(self is SnowflakeDialect)
+                && self
+                    .parse_one_of_keywords(&[Keyword::WITH, Keyword::SELECT])
+                    .is_some()
+            {
+                self.prev_token();
+                let subquery = self.parse_query()?;
+                self.expect_token(&Token::RParen)?;
+                return Ok((
+                    vec![FunctionArg::Unnamed(FunctionArgExpr::from(
+                        WildcardExpr::Expr(Expr::Subquery(Box::new(subquery))),
+                    ))],
+                    vec![],
+                ));
+            }
+
             let args = self.parse_comma_separated(Parser::parse_function_args)?;
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
                 self.parse_comma_separated(Parser::parse_order_by_expr)?

@@ -2288,8 +2288,8 @@ impl<'a> Parser<'a> {
     pub fn peek_keyword(&mut self, expected: Keyword) -> bool {
         let token_with_location = self.peek_token();
         match token_with_location.token {
-            Token::Word(w) if (expected==w.keyword) => true,
-            _ => false
+            Token::Word(w) if (expected == w.keyword) => true,
+            _ => false,
         }
     }
 

@@ -291,6 +291,39 @@ fn parse_create_table_with_strict() {
 }
 
 #[test]
+fn parse_window_function_with_filter() {
+    for func_name in [
+        "row_number",
+        "rank",
+        "max",
+        "count",
+        "user_defined_function",
+    ] {
+        let sql = format!("SELECT {}(x) FILTER (WHERE y) OVER () FROM t", func_name);
+        let select = sqlite().verified_only_select(&sql);
+        assert_eq!(select.to_string(), sql);
+        assert_eq!(
+            select.projection,
+            vec![SelectItem::UnnamedExpr(Expr::Function(Function {
+                name: ObjectName(vec![Ident::new(func_name)]),
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                    Expr::Identifier(Ident::new("x"))
+                ))],
+                over: Some(WindowType::WindowSpec(WindowSpec {
+                    partition_by: vec![],
+                    order_by: vec![],
+                    window_frame: None,
+                })),
+                filter: Some(Box::new(Expr::Identifier(Ident::new("y")))),
+                distinct: false,
+                special: false,
+                order_by: vec![]
+            }))]
+        );
+    }
+}
+
+#[test]
 fn parse_attach_database() {
     let sql = "ATTACH DATABASE 'test.db' AS test";
     let verified_stmt = sqlite().verified_stmt(sql);

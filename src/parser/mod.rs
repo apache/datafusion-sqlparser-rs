@@ -772,6 +772,7 @@ impl<'a> Parser<'a> {
                     Ok(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident()]),
                         args: vec![],
+                        filter: None,
                         over: None,
                         distinct: false,
                         special: true,
@@ -957,6 +958,17 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let distinct = self.parse_all_or_distinct()?.is_some();
         let (args, order_by) = self.parse_optional_args_with_orderby()?;
+        let filter = if self.dialect.supports_filter_during_aggregation()
+            && self.parse_keyword(Keyword::FILTER)
+            && self.consume_token(&Token::LParen)
+            && self.parse_keyword(Keyword::WHERE)
+        {
+            let filter = Some(Box::new(self.parse_expr()?));
+            self.expect_token(&Token::RParen)?;
+            filter
+        } else {
+            None
+        };
         let over = if self.parse_keyword(Keyword::OVER) {
             if self.consume_token(&Token::LParen) {
                 let window_spec = self.parse_window_spec()?;
@@ -970,6 +982,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::Function(Function {
             name,
             args,
+            filter,
             over,
             distinct,
             special: false,
@@ -987,6 +1000,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::Function(Function {
             name,
             args,
+            filter: None,
             over: None,
             distinct: false,
             special,

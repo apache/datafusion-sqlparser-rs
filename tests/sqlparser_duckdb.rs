@@ -143,7 +143,7 @@ fn test_select_union_by_name() {
     ] {
         let expected = Box::<SetExpr>::new(SetExpr::SetOperation {
             op: SetOperator::Union,
-            set_quantifier: expected_quantifier,
+            set_quantifier: *expected_quantifier,
             left: Box::<SetExpr>::new(SetExpr::Select(Box::new(Select {
                 distinct: None,
                 top: None,

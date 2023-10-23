@@ -107,8 +107,6 @@ fn parse_table_identifiers() {
         assert!(bigquery().parse_sql_statements(&sql).is_err());
     }
 
-    test_table_ident("da-sh-es", vec![Ident::new("da-sh-es")]);
-
     test_table_ident("`spa ce`", vec![Ident::with_quote('`', "spa ce")]);
 
     test_table_ident(

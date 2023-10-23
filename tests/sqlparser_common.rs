@@ -7921,3 +7921,61 @@ fn parse_create_type() {
 fn parse_create_table_collate() {
     pg_and_generic().verified_stmt("CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\")");
 }
+
+#[test]
+fn parse_binary_operators_without_whitespace() {
+    // x + y
+    all_dialects().one_statement_parses_to(
+        "SELECT field+1000 FROM tbl1",
+        "SELECT field + 1000 FROM tbl1",
+    );
+
+    all_dialects().one_statement_parses_to(
+        "SELECT tbl1.field+tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
+        "SELECT tbl1.field + tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
+    );
+
+    // x - y
+    all_dialects().one_statement_parses_to(
+        "SELECT field-1000 FROM tbl1",
+        "SELECT field - 1000 FROM tbl1",
+    );
+
+    all_dialects().one_statement_parses_to(
+        "SELECT tbl1.field-tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
+        "SELECT tbl1.field - tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
+    );
+
+    // x * y
+    all_dialects().one_statement_parses_to(
+        "SELECT field*1000 FROM tbl1",
+        "SELECT field * 1000 FROM tbl1",
+    );
+
+    all_dialects().one_statement_parses_to(
+        "SELECT tbl1.field*tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
+        "SELECT tbl1.field * tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
+    );
+
+    // x / y
+    all_dialects().one_statement_parses_to(
+        "SELECT field/1000 FROM tbl1",
+        "SELECT field / 1000 FROM tbl1",
+    );
+
+    all_dialects().one_statement_parses_to(
+        "SELECT tbl1.field/tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
+        "SELECT tbl1.field / tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
+    );
+
+    // x % y
+    all_dialects().one_statement_parses_to(
+        "SELECT field%1000 FROM tbl1",
+        "SELECT field % 1000 FROM tbl1",
+    );
+
+    all_dialects().one_statement_parses_to(
+        "SELECT tbl1.field%tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
+        "SELECT tbl1.field % tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
+    );
+}

@@ -12,6 +12,7 @@
 
 use crate::dialect::Dialect;
 
+/// A [`Dialect`] for [Hive](https://hive.apache.org/).
 #[derive(Debug)]
 pub struct HiveDialect {}
 

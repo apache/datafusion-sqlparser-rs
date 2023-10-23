@@ -64,6 +64,9 @@ macro_rules! dialect_of {
 /// custom extensions or various historical reasons. This trait
 /// encapsulates the parsing differences between dialects.
 ///
+/// [`GenericDialect`] is the most permissive dialect, and parses the union of
+/// all the other dialects, when there is no ambiguity.
+///
 /// # Examples
 /// Most users create a [`Dialect`] directly, as shown on the [module
 /// level documentation]:

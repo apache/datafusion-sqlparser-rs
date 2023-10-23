@@ -15,6 +15,7 @@ use crate::dialect::Dialect;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 
+/// A [`Dialect`] for [SQLite](https://www.sqlite.org)
 #[derive(Debug)]
 pub struct SQLiteDialect {}
 

@@ -1149,3 +1149,28 @@ fn parse_subquery_function_argument() {
     // the function.
     snowflake().one_statement_parses_to("SELECT func(SELECT 1, 2)", "SELECT func((SELECT 1, 2))");
 }
+
+#[test]
+fn parse_semi_structured_single() {
+    snowflake().verified_only_select("SELECT src:salesperson FROM car_sales");
+}
+
+#[test]
+fn parse_semi_structured_dot_notation() {
+    snowflake().verified_only_select("SELECT src:salesperson.name FROM car_sales");
+}
+
+#[test]
+fn parse_semi_structured_bracket_notation() {
+    snowflake().verified_only_select("SELECT src['salesperson']['name'] FROM car_sales");
+}
+
+#[test]
+fn parse_semi_structured_from_repeating() {
+    snowflake().verified_only_select("SELECT src:vehicle[0] FROM car_sales");
+}
+
+#[test]
+fn parse_semi_structured_from_repeating_dot() {
+    snowflake().verified_only_select("SELECT src:vehicle[0].make FROM car_sales");
+}

@@ -719,11 +719,7 @@ impl fmt::Display for Expr {
             Expr::MapAccess { column, keys } => {
                 write!(f, "{column}")?;
                 for k in keys {
-                    match k {
-                        k @ Expr::Value(Value::Number(_, _)) => write!(f, "[{k}]")?,
-                        Expr::Value(Value::SingleQuotedString(s)) => write!(f, "[\"{s}\"]")?,
-                        _ => write!(f, "[{k}]")?,
-                    }
+                    write!(f, "[{k}]")?;
                 }
                 Ok(())
             }

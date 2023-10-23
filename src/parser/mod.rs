@@ -22,6 +22,7 @@ use alloc::{
 };
 use core::fmt;
 use std::cmp::max;
+use std::fmt::Write;
 
 use log::debug;
 
@@ -1901,7 +1902,7 @@ impl<'a> Parser<'a> {
             Ok(Expr::JsonAccess {
                 left: Box::new(expr),
                 operator: JsonOperator::Colon,
-                right: Box::new(Expr::Value(self.parse_value_ignore_keywords()?)),
+                right: Box::new(Expr::Value(self.parse_snowflake_json_path()?)),
             })
         } else if Token::Arrow == tok
             || Token::LongArrow == tok
@@ -4877,48 +4878,30 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_value_ignore_keywords(&mut self) -> Result<Value, ParserError> {
-        let next_token = self.next_token();
-        let span = next_token.span;
-        match next_token.token {
-            Token::Word(w) => Ok(Value::UnQuotedString(w.value)),
-            // The call to n.parse() returns a bigdecimal when the
-            // bigdecimal feature is enabled, and is otherwise a no-op
-            // (i.e., it returns the input string).
-            Token::Number(ref n, l) => match n.parse() {
-                Ok(n) => Ok(Value::Number(n, l)),
-                Err(e) => parser_err!(
-                    format!("Could not parse '{n}' as number: {e}"),
-                    next_token.span.start
-                ),
-            },
-            Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
-            Token::DoubleQuotedString(ref s) => Ok(Value::DoubleQuotedString(s.to_string())),
-            Token::DollarQuotedString(ref s) => Ok(Value::DollarQuotedString(s.clone())),
-            Token::SingleQuotedByteStringLiteral(ref s) => {
-                Ok(Value::SingleQuotedByteStringLiteral(s.clone()))
-            }
-            Token::DoubleQuotedByteStringLiteral(ref s) => {
-                Ok(Value::DoubleQuotedByteStringLiteral(s.clone()))
-            }
-            Token::RawStringLiteral(ref s) => Ok(Value::RawStringLiteral(s.clone())),
-            Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
-            Token::EscapedStringLiteral(ref s) => Ok(Value::EscapedStringLiteral(s.to_string())),
-            Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
-            Token::Placeholder(ref s) => Ok(Value::Placeholder(s.to_string())),
-            tok @ Token::Colon | tok @ Token::AtSign => {
-                let ident = self.parse_identifier()?;
-                let placeholder = tok.to_string() + &ident.value;
-                Ok(Value::Placeholder(placeholder))
-            }
-            unexpected => self.expected(
-                "a value",
-                TokenWithLocation {
-                    token: unexpected,
-                    span,
-                },
-            ),
+    pub fn parse_snowflake_json_path(&mut self) -> Result<Value, ParserError> {
+        let mut buf = String::new();
+
+        let mut next_next_token = Some(self.next_token());
+        while let Some(next_token) = next_next_token {
+            match next_token.token {
+                Token::Word(w) => buf.push_str(&w.value),
+                Token::Number(ref n, _) => buf.push_str(n),
+                Token::Period => buf.push('.'),
+                Token::LBracket => buf.push('['),
+                Token::RBracket => buf.push(']'),
+                Token::Colon => buf.push(':'),
+                Token::DoubleQuotedString(ref s) => write!(buf, "\"{}\"", s).unwrap(),
+                Token::Whitespace(_) => {
+                    break;
+                }
+                _ => {
+                    self.prev_token();
+                    break;
+                }
+            };
+            next_next_token = self.next_token_no_skip().cloned();
         }
+        Ok(Value::UnQuotedString(buf))
     }
 
     pub fn parse_number_value(&mut self) -> Result<Value, ParserError> {

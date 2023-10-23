@@ -472,6 +472,7 @@ define_keywords!(
     POSITION,
     POSITION_REGEX,
     POWER,
+    PRAGMA,
     PRECEDES,
     PRECEDING,
     PRECISION,

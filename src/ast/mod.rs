@@ -1914,6 +1914,12 @@ pub enum Statement {
         name: ObjectName,
         representation: UserDefinedTypeRepresentation,
     },
+    // PRAGMA <schema-name>.<pragma-name> = <pragma-value>
+    Pragma {
+        name: ObjectName,
+        value: Option<Value>,
+        is_eq: bool,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -3275,6 +3281,18 @@ impl fmt::Display for Statement {
                 representation,
             } => {
                 write!(f, "CREATE TYPE {name} AS {representation}")
+            }
+            Statement::Pragma { name, value, is_eq } => {
+                write!(f, "PRAGMA {name}")?;
+                if value.is_some() {
+                    let val = value.as_ref().unwrap();
+                    if *is_eq {
+                        write!(f, " = {val}")?;
+                    } else {
+                        write!(f, "({val})")?;
+                    }
+                }
+                Ok(())
             }
         }
     }

@@ -988,7 +988,7 @@ fn parse_ignore_insert() {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
-            assert_eq!(ignore, true);
+            assert!(ignore);
             assert_eq!(
                 Box::new(Query {
                     with: None,

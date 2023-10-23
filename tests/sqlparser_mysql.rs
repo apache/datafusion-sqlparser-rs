@@ -976,7 +976,7 @@ fn parse_simple_insert() {
 fn parse_ignore_insert() {
     let sql = r"INSERT IGNORE INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
 
-    match mysql().verified_stmt(sql) {
+    match mysql_and_generic().verified_stmt(sql) {
         Statement::Insert {
             table_name,
             columns,

@@ -309,6 +309,8 @@ pub enum JsonOperator {
     HashLongArrow,
     /// : Colon is used by Snowflake (Which is similar to LongArrow)
     Colon,
+    /// . Period is used by Snowflake (Which is similar to Colon)
+    Period,
     /// jsonb @> jsonb -> boolean: Test whether left json contains the right json
     AtArrow,
     /// jsonb <@ jsonb -> boolean: Test whether right json contains the left json
@@ -342,6 +344,9 @@ impl fmt::Display for JsonOperator {
             }
             JsonOperator::Colon => {
                 write!(f, ":")
+            }
+            JsonOperator::Period => {
+                write!(f, ".")
             }
             JsonOperator::AtArrow => {
                 write!(f, "@>")
@@ -1083,7 +1088,7 @@ impl fmt::Display for Expr {
                 operator,
                 right,
             } => {
-                if operator == &JsonOperator::Colon {
+                if operator == &JsonOperator::Colon || operator == &JsonOperator::Period {
                     write!(f, "{left}{operator}{right}")
                 } else {
                     write!(f, "{left} {operator} {right}")

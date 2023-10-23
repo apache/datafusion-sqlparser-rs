@@ -17,6 +17,7 @@
 use sqlparser::ast::helpers::stmt_data_loading::{
     DataLoadingOption, DataLoadingOptionType, StageLoadSelectItem,
 };
+use sqlparser::ast::Expr::MapAccess;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SnowflakeDialect};
 use sqlparser::parser::ParserError;
@@ -1173,4 +1174,45 @@ fn parse_semi_structured_from_repeating() {
 #[test]
 fn parse_semi_structured_from_repeating_dot() {
     snowflake().verified_only_select("SELECT src:vehicle[0].make FROM car_sales");
+}
+
+#[test]
+fn parse_array_index() {
+    snowflake().verified_only_select("SELECT src[0] FROM car_sales");
+}
+
+#[test]
+fn parse_array_index_json_colon() {
+    snowflake().verified_only_select("SELECT src[0]:order_number FROM car_sales");
+}
+
+#[test]
+fn parse_array_index_json_dot() {
+    let stmt = snowflake().verified_only_select("SELECT src[0].order_number FROM car_sales");
+
+    assert_eq!(
+        stmt.projection[0],
+        SelectItem::UnnamedExpr(
+            Expr::JsonAccess {
+                left: Box::new(MapAccess {
+                    column: Box::new(Expr::Identifier(Ident::new("src").empty_span())),
+                    keys: vec![Expr::Value(Value::Number("0".to_string(), false)),],
+                }),
+                operator: JsonOperator::Period,
+                right: Box::new(Expr::Value(Value::UnQuotedString(
+                    "order_number".to_string()
+                ))),
+            }
+            .empty_span()
+        )
+        .empty_span()
+    );
+}
+
+#[test]
+fn parse_array_index_json_with_cast() {
+    snowflake().one_statement_parses_to(
+        "SELECT src[0]:order_number::string FROM car_sales",
+        "SELECT CAST(src[0]:order_number AS STRING) FROM car_sales",
+    );
 }

@@ -1455,6 +1455,18 @@ fn parse_show_variables() {
 }
 
 #[test]
+fn parse_rlike_and_regexp() {
+    for s in &[
+        "SELECT 1 WHERE 'a' RLIKE '^a$'",
+        "SELECT 1 WHERE 'a' REGEXP '^a$'",
+        "SELECT 1 WHERE 'a' NOT RLIKE '^a$'",
+        "SELECT 1 WHERE 'a' NOT REGEXP '^a$'",
+    ] {
+        mysql_and_generic().verified_only_select(s);
+    }
+}
+
+#[test]
 fn parse_kill() {
     let stmt = mysql_and_generic().verified_stmt("KILL CONNECTION 5");
     assert_eq!(

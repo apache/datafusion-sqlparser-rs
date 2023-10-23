@@ -1072,6 +1072,7 @@ fn parse_position_not_function_columns() {
         .verified_stmt("SELECT position FROM tbl1 WHERE position NOT IN ('first', 'last')");
 }
 
+#[test]
 fn parse_subquery_function_argument() {
     // Snowflake allows passing an unparenthesized subquery as the single
     // argument to a function.

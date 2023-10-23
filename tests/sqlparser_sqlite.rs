@@ -291,6 +291,12 @@ fn parse_create_table_with_strict() {
 }
 
 #[test]
+fn parse_single_quoted_identified() {
+    sqlite().verified_only_select("SELECT 't'.*, t.'x' FROM 't'");
+    // TODO: add support for select 't'.x
+}
+
+#[test]
 fn parse_attach_database() {
     let sql = "ATTACH DATABASE 'test.db' AS test";
     let verified_stmt = sqlite().verified_stmt(sql);

@@ -618,18 +618,29 @@ impl<'a> Parser<'a> {
 
         let next_token = self.next_token();
         match next_token.token {
-            Token::Word(w) if self.peek_token().token == Token::Period => {
-                let mut id_parts: Vec<Ident> = vec![w.to_ident()];
+            t @ (Token::Word(_) | Token::SingleQuotedString(_)) => {
+                if self.peek_token().token == Token::Period {
+                    let mut id_parts: Vec<Ident> = vec![match t {
+                        Token::Word(w) => w.to_ident(),
+                        Token::SingleQuotedString(s) => Ident::with_quote('\'', s),
+                        _ => unreachable!(), // We matched above
+                    }];
 
-                while self.consume_token(&Token::Period) {
-                    let next_token = self.next_token();
-                    match next_token.token {
-                        Token::Word(w) => id_parts.push(w.to_ident()),
-                        Token::Mul => {
-                            return Ok(WildcardExpr::QualifiedWildcard(ObjectName(id_parts)));
-                        }
-                        _ => {
-                            return self.expected("an identifier or a '*' after '.'", next_token);
+                    while self.consume_token(&Token::Period) {
+                        let next_token = self.next_token();
+                        match next_token.token {
+                            Token::Word(w) => id_parts.push(w.to_ident()),
+                            Token::SingleQuotedString(s) => {
+                                // SQLite has single-quoted identifiers
+                                id_parts.push(Ident::with_quote('\'', s))
+                            }
+                            Token::Mul => {
+                                return Ok(WildcardExpr::QualifiedWildcard(ObjectName(id_parts)));
+                            }
+                            _ => {
+                                return self
+                                    .expected("an identifier or a '*' after '.'", next_token);
+                            }
                         }
                     }
                 }
@@ -825,6 +836,9 @@ impl<'a> Parser<'a> {
                             let next_token = self.next_token();
                             match next_token.token {
                                 Token::Word(w) => id_parts.push(w.to_ident()),
+                                Token::SingleQuotedString(s) => {
+                                    id_parts.push(Ident::with_quote('\'', s))
+                                }
                                 _ => {
                                     return self
                                         .expected("an identifier or a '*' after '.'", next_token);

@@ -355,6 +355,24 @@ fn parse_limit_by() {
     );
 }
 
+#[test]
+fn parse_select_star_except() {
+    clickhouse().verified_stmt("SELECT * EXCEPT (prev_status) FROM anomalies");
+}
+
+#[test]
+fn parse_select_star_except_no_parens() {
+    clickhouse().one_statement_parses_to(
+        "SELECT * EXCEPT prev_status FROM anomalies",
+        "SELECT * EXCEPT (prev_status) FROM anomalies",
+    );
+}
+
+#[test]
+fn parse_select_star_replace() {
+    clickhouse().verified_stmt("SELECT * REPLACE (i + 1 AS i) FROM columns_transformers");
+}
+
 fn clickhouse() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(ClickHouseDialect {})],

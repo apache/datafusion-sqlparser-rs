@@ -6993,7 +6993,8 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_except = if dialect_of!(self is GenericDialect | BigQueryDialect) {
+        let opt_except = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect)
+        {
             self.parse_optional_select_item_except()?
         } else {
             None
@@ -7004,7 +7005,8 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect) {
+        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect)
+        {
             self.parse_optional_select_item_replace()?
         } else {
             None
@@ -7047,18 +7049,27 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<Option<ExceptSelectItem>, ParserError> {
         let opt_except = if self.parse_keyword(Keyword::EXCEPT) {
-            let idents = self.parse_parenthesized_column_list(Mandatory, false)?;
-            match &idents[..] {
-                [] => {
-                    return self.expected(
-                        "at least one column should be parsed by the expect clause",
-                        self.peek_token(),
-                    )?;
+            if self.peek_token().token == Token::LParen {
+                let idents = self.parse_parenthesized_column_list(Mandatory, false)?;
+                match &idents[..] {
+                    [] => {
+                        return self.expected(
+                            "at least one column should be parsed by the expect clause",
+                            self.peek_token(),
+                        )?;
+                    }
+                    [first, idents @ ..] => Some(ExceptSelectItem {
+                        first_element: first.clone(),
+                        additional_elements: idents.to_vec(),
+                    }),
                 }
-                [first, idents @ ..] => Some(ExceptSelectItem {
-                    first_element: first.clone(),
-                    additional_elements: idents.to_vec(),
-                }),
+            } else {
+                // Clickhouse allows EXCEPT column_name
+                let ident = self.parse_identifier()?;
+                Some(ExceptSelectItem {
+                    first_element: ident,
+                    additional_elements: vec![],
+                })
             }
         } else {
             None

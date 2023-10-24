@@ -2277,6 +2277,29 @@ fn parse_agg_with_order_by() {
             Box::new(MsSqlDialect {}),
             Box::new(AnsiDialect {}),
             Box::new(HiveDialect {}),
+        ],
+        options: None,
+    };
+
+    for sql in [
+        "SELECT FIRST_VALUE(x ORDER BY x) AS a FROM T",
+        "SELECT FIRST_VALUE(x ORDER BY x) FROM tbl",
+        "SELECT LAST_VALUE(x ORDER BY x, y) AS a FROM T",
+        "SELECT LAST_VALUE(x ORDER BY x ASC, y DESC) AS a FROM T",
+    ] {
+        supported_dialects.verified_stmt(sql);
+    }
+}
+
+#[test]
+fn parse_window_rank_function() {
+    let supported_dialects = TestedDialects {
+        dialects: vec![
+            Box::new(GenericDialect {}),
+            Box::new(PostgreSqlDialect {}),
+            Box::new(MsSqlDialect {}),
+            Box::new(AnsiDialect {}),
+            Box::new(HiveDialect {}),
             Box::new(SnowflakeDialect {}),
         ],
         options: None,

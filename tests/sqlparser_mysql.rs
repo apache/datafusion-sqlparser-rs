@@ -976,7 +976,7 @@ fn parse_simple_insert() {
 fn parse_ignore_insert() {
     let sql = r"INSERT IGNORE INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
 
-    match mysql().verified_stmt(sql) {
+    match mysql_and_generic().verified_stmt(sql) {
         Statement::Insert {
             table_name,
             columns,
@@ -988,7 +988,7 @@ fn parse_ignore_insert() {
             assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
-            assert_eq!(ignore, true);
+            assert!(ignore);
             assert_eq!(
                 Box::new(Query {
                     with: None,

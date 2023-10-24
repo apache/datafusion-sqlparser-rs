@@ -4195,6 +4195,13 @@ impl<'a> Parser<'a> {
         Ok(SqlOption { name, value })
     }
 
+    pub fn parse_partition(&mut self) -> Result<Partition, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let partitions = self.parse_comma_separated(Parser::parse_expr)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Partition { partitions })
+    }
+
     pub fn parse_alter_table_operation(&mut self) -> Result<AlterTableOperation, ParserError> {
         let operation = if self.parse_keyword(Keyword::ADD) {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
@@ -4202,13 +4209,18 @@ impl<'a> Parser<'a> {
             } else {
                 let if_not_exists =
                     self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-                if self.parse_keyword(Keyword::PARTITION) {
-                    self.expect_token(&Token::LParen)?;
-                    let partitions = self.parse_comma_separated(Parser::parse_expr)?;
-                    self.expect_token(&Token::RParen)?;
+                let mut new_partitions = vec![];
+                loop {
+                    if self.parse_keyword(Keyword::PARTITION) {
+                        new_partitions.push(self.parse_partition()?);
+                    } else {
+                        break;
+                    }
+                }
+                if !new_partitions.is_empty() {
                     AlterTableOperation::AddPartitions {
                         if_not_exists,
-                        new_partitions: partitions,
+                        new_partitions,
                     }
                 } else {
                     let column_keyword = self.parse_keyword(Keyword::COLUMN);

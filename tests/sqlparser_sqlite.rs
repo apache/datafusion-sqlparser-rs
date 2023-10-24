@@ -336,6 +336,11 @@ fn parse_create_table_with_strict() {
 }
 
 #[test]
+fn parse_single_quoted_identified() {
+    sqlite().verified_only_select("SELECT 't'.*, t.'x' FROM 't'");
+    // TODO: add support for select 't'.x
+}
+#[test]
 fn parse_window_function_with_filter() {
     for func_name in [
         "row_number",

@@ -1161,6 +1161,26 @@ impl fmt::Display for WindowFrameUnits {
     }
 }
 
+/// Specifies Ignore / Respect NULL within window functions.
+/// For example
+/// `FIRST_VALUE(column2) IGNORE NULLS OVER (PARTITION BY column1)`
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum NullTreatment {
+    IgnoreNulls,
+    RespectNulls,
+}
+
+impl fmt::Display for NullTreatment {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            NullTreatment::IgnoreNulls => "IGNORE NULLS",
+            NullTreatment::RespectNulls => "RESPECT NULLS",
+        })
+    }
+}
+
 /// Specifies [WindowFrame]'s `start_bound` and `end_bound`
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -3757,6 +3777,8 @@ pub struct Function {
     pub args: Vec<FunctionArg>,
     /// e.g. `x > 5` in `COUNT(x) FILTER (WHERE x > 5)`
     pub filter: Option<Box<Expr>>,
+    // Snowflake/MSSQL supports diffrent options for null treatment in rank functions
+    pub null_treatment: Option<NullTreatment>,
     pub over: Option<WindowType>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
@@ -3807,6 +3829,10 @@ impl fmt::Display for Function {
 
             if let Some(filter_cond) = &self.filter {
                 write!(f, " FILTER (WHERE {filter_cond})")?;
+            }
+
+            if let Some(o) = &self.null_treatment {
+                write!(f, " {o}")?;
             }
 
             if let Some(o) = &self.over {

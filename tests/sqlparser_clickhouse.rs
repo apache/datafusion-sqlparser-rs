@@ -50,6 +50,7 @@ fn parse_map_access_expr() {
                             Value::SingleQuotedString("endpoint".to_string())
                         ))),
                     ],
+                    null_treatment: None,
                     filter: None,
                     over: None,
                     distinct: false,
@@ -90,6 +91,7 @@ fn parse_map_access_expr() {
                                     Value::SingleQuotedString("app".to_string())
                                 ))),
                             ],
+                            null_treatment: None,
                             filter: None,
                             over: None,
                             distinct: false,
@@ -140,6 +142,7 @@ fn parse_array_fn() {
                 FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new("x1")))),
                 FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new("x2")))),
             ],
+            null_treatment: None,
             filter: None,
             over: None,
             distinct: false,
@@ -199,6 +202,7 @@ fn parse_delimited_identifiers() {
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
             args: vec![],
+            null_treatment: None,
             filter: None,
             over: None,
             distinct: false,

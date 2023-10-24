@@ -2346,7 +2346,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Report unexpected token
+    /// Report `found` was encountered instead of `expected`
     pub fn expected<T>(&self, expected: &str, found: TokenWithLocation) -> Result<T, ParserError> {
         parser_err!(
             format!("Expected {expected}, found: {found}"),
@@ -2354,7 +2354,8 @@ impl<'a> Parser<'a> {
         )
     }
 
-    /// Look for an expected keyword and consume it if it exists
+    /// If the current token is the `expected` keyword, consume it and returns
+    /// true. Otherwise, no tokens are consumed and returns false.
     #[must_use]
     pub fn parse_keyword(&mut self, expected: Keyword) -> bool {
         match self.peek_token().token {
@@ -2366,7 +2367,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Look for an expected sequence of keywords and consume them if they exist
+    /// If the current and subsequent tokens exactly match the `keywords`
+    /// sequence, consume them and returns true. Otherwise, no tokens are
+    /// consumed and returns false
     #[must_use]
     pub fn parse_keywords(&mut self, keywords: &[Keyword]) -> bool {
         let index = self.index;
@@ -2381,7 +2384,9 @@ impl<'a> Parser<'a> {
         true
     }
 
-    /// Look for one of the given keywords and return the one that matches.
+    /// If the current token is one of the given `keywords`, consume the token
+    /// and return the keyword that matches. Otherwise, no tokens are consumed
+    /// and returns `None`.
     #[must_use]
     pub fn parse_one_of_keywords(&mut self, keywords: &[Keyword]) -> Option<Keyword> {
         match self.peek_token().token {
@@ -2398,7 +2403,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Bail out if the current token is not one of the expected keywords, or consume it if it is
+    /// If the current token is one of the expected keywords, consume the token
+    /// and return the keyword that matches. Otherwise, return an error.
     pub fn expect_one_of_keywords(&mut self, keywords: &[Keyword]) -> Result<Keyword, ParserError> {
         if let Some(keyword) = self.parse_one_of_keywords(keywords) {
             Ok(keyword)
@@ -2411,7 +2417,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Bail out if the current token is not an expected keyword, or consume it if it is
+    /// If the current token is the `expected` keyword, consume the token.
+    /// Otherwise return an error.
     pub fn expect_keyword(&mut self, expected: Keyword) -> Result<(), ParserError> {
         if self.parse_keyword(expected) {
             Ok(())
@@ -2420,8 +2427,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Bail out if the following tokens are not the expected sequence of
-    /// keywords, or consume them if they are.
+    /// If the current and subsequent tokens exactly match the `keywords`
+    /// sequence, consume them and returns Ok. Otherwise, return an Error.
     pub fn expect_keywords(&mut self, expected: &[Keyword]) -> Result<(), ParserError> {
         for &kw in expected {
             self.expect_keyword(kw)?;

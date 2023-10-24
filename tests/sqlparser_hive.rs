@@ -20,7 +20,7 @@ use sqlparser::ast::{
     SelectItem, Statement, TableFactor, UnaryOperator, Value,
 };
 use sqlparser::dialect::{GenericDialect, HiveDialect};
-use sqlparser::parser::ParserError;
+use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::test_utils::*;
 
 #[test]
@@ -30,6 +30,20 @@ fn parse_table_create() {
 
     hive().verified_stmt(sql);
     hive().verified_stmt(iof);
+}
+
+fn generic(options: Option<ParserOptions>) -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(GenericDialect {})],
+        options,
+    }
+}
+
+#[test]
+fn parse_describe() {
+    let describe = r#"DESCRIBE namespace.`table`"#;
+    hive().verified_stmt(describe);
+    generic(None).verified_stmt(describe);
 }
 
 #[test]
@@ -265,13 +279,8 @@ fn parse_create_function() {
         _ => unreachable!(),
     }
 
-    let generic = TestedDialects {
-        dialects: vec![Box::new(GenericDialect {})],
-        options: None,
-    };
-
     assert_eq!(
-        generic.parse_sql_statements(sql).unwrap_err(),
+        generic(None).parse_sql_statements(sql).unwrap_err(),
         ParserError::ParserError(
             "Expected an object type after CREATE, found: FUNCTION".to_string()
         )

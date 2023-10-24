@@ -12,6 +12,7 @@
 
 use crate::dialect::Dialect;
 
+/// A [`Dialect`] for [DuckDB](https://duckdb.org/)
 #[derive(Debug, Default)]
 pub struct DuckDbDialect;
 

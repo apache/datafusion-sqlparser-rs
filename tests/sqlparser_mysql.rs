@@ -1112,6 +1112,7 @@ fn parse_insert_with_on_duplicate_update() {
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                 Expr::Identifier(Ident::new("description"))
                             ))],
+                            filter: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -1125,6 +1126,7 @@ fn parse_insert_with_on_duplicate_update() {
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                 Expr::Identifier(Ident::new("perm_create"))
                             ))],
+                            filter: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -1138,6 +1140,7 @@ fn parse_insert_with_on_duplicate_update() {
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                 Expr::Identifier(Ident::new("perm_read"))
                             ))],
+                            filter: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -1151,6 +1154,7 @@ fn parse_insert_with_on_duplicate_update() {
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                 Expr::Identifier(Ident::new("perm_update"))
                             ))],
+                            filter: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -1164,6 +1168,7 @@ fn parse_insert_with_on_duplicate_update() {
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                 Expr::Identifier(Ident::new("perm_delete"))
                             ))],
+                            filter: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -1496,6 +1501,18 @@ fn parse_show_variables() {
 }
 
 #[test]
+fn parse_rlike_and_regexp() {
+    for s in &[
+        "SELECT 1 WHERE 'a' RLIKE '^a$'",
+        "SELECT 1 WHERE 'a' REGEXP '^a$'",
+        "SELECT 1 WHERE 'a' NOT RLIKE '^a$'",
+        "SELECT 1 WHERE 'a' NOT REGEXP '^a$'",
+    ] {
+        mysql_and_generic().verified_only_select(s);
+    }
+}
+
+#[test]
 fn parse_kill() {
     let stmt = mysql_and_generic().verified_stmt("KILL CONNECTION 5");
     assert_eq!(
@@ -1541,6 +1558,7 @@ fn parse_table_colum_option_on_update() {
                         option: ColumnOption::OnUpdate(Expr::Function(Function {
                             name: ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]),
                             args: vec![],
+                            filter: None,
                             over: None,
                             distinct: false,
                             special: false,

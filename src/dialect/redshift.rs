@@ -16,6 +16,7 @@ use core::str::Chars;
 
 use super::PostgreSqlDialect;
 
+/// A [`Dialect`] for [RedShift](https://aws.amazon.com/redshift/)
 #[derive(Debug)]
 pub struct RedshiftSqlDialect {}
 

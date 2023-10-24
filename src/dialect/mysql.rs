@@ -19,7 +19,7 @@ use crate::{
     keywords::Keyword,
 };
 
-/// [MySQL](https://www.mysql.com/)
+/// A [`Dialect`] for [MySQL](https://www.mysql.com/)
 #[derive(Debug)]
 pub struct MySqlDialect {}
 

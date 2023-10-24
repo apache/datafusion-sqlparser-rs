@@ -8426,6 +8426,16 @@ mod tests {
             .try_with_sql(sql)
             .unwrap()
             .parse_comma_separated0(Parser::parse_expr);
+        #[cfg(feature = "bigdecimal")]
+        assert_eq!(
+            ast,
+            Ok(vec![
+                Expr::Value(Value::Number(bigdecimal::BigDecimal::from(1), false)),
+                Expr::Value(Value::Number(bigdecimal::BigDecimal::from(2), false)),
+                Expr::Value(Value::Number(bigdecimal::BigDecimal::from(3), false)),
+            ])
+        );
+        #[cfg(not(feature = "bigdecimal"))]
         assert_eq!(
             ast,
             Ok(vec![
@@ -8480,6 +8490,15 @@ mod tests {
             .try_with_sql(sql)
             .unwrap()
             .parse_comma_separated0(Parser::parse_expr);
+        #[cfg(feature = "bigdecimal")]
+        assert_eq!(
+            ast,
+            Ok(vec![Expr::Value(Value::Number(
+                bigdecimal::BigDecimal::from(1),
+                false
+            )),])
+        );
+        #[cfg(not(feature = "bigdecimal"))]
         assert_eq!(
             ast,
             Ok(vec![Expr::Value(Value::Number("1".to_string(), false)),])

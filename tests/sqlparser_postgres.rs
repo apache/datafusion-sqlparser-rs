@@ -1782,7 +1782,8 @@ fn parse_array_index_expr() {
                 })),
                 data_type: DataType::Array(Some(Box::new(DataType::Array(Some(Box::new(
                     DataType::Int(None)
-                ))))))
+                )))))),
+                format: None,
             }))),
             indexes: vec![num[1].clone(), num[2].clone()],
         },
@@ -2274,6 +2275,7 @@ fn test_composite_value() {
                         named: true
                     }
                 )))],
+                filter: None,
                 over: None,
                 distinct: false,
                 special: false,
@@ -2435,6 +2437,7 @@ fn parse_current_functions() {
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("CURRENT_CATALOG")]),
             args: vec![],
+            filter: None,
             over: None,
             distinct: false,
             special: true,
@@ -2446,6 +2449,7 @@ fn parse_current_functions() {
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("CURRENT_USER")]),
             args: vec![],
+            filter: None,
             over: None,
             distinct: false,
             special: true,
@@ -2457,6 +2461,7 @@ fn parse_current_functions() {
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("SESSION_USER")]),
             args: vec![],
+            filter: None,
             over: None,
             distinct: false,
             special: true,
@@ -2468,6 +2473,7 @@ fn parse_current_functions() {
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::new("USER")]),
             args: vec![],
+            filter: None,
             over: None,
             distinct: false,
             special: true,
@@ -2918,6 +2924,7 @@ fn parse_delimited_identifiers() {
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
             args: vec![],
+            filter: None,
             over: None,
             distinct: false,
             special: false,

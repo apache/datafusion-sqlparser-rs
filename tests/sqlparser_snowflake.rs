@@ -167,6 +167,7 @@ fn parse_array() {
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("a"))),
             data_type: DataType::Array(None),
+            format: None,
         },
         expr_from_projection(only(&select.projection))
     );
@@ -247,6 +248,7 @@ fn parse_delimited_identifiers() {
         &Expr::Function(Function {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
             args: vec![],
+            filter: None,
             over: None,
             distinct: false,
             special: false,
@@ -1038,4 +1040,55 @@ fn test_snowflake_stage_object_names() {
             _ => unreachable!(),
         }
     }
+}
+
+#[test]
+fn test_snowflake_trim() {
+    let real_sql = r#"SELECT customer_id, TRIM(sub_items.value:item_price_id, '"', "a") AS item_price_id FROM models_staging.subscriptions"#;
+    assert_eq!(snowflake().verified_stmt(real_sql).to_string(), real_sql);
+
+    let sql_only_select = "SELECT TRIM('xyz', 'a')";
+    let select = snowflake().verified_only_select(sql_only_select);
+    assert_eq!(
+        &Expr::Trim {
+            expr: Box::new(Expr::Value(Value::SingleQuotedString("xyz".to_owned()))),
+            trim_where: None,
+            trim_what: None,
+            trim_characters: Some(vec![Expr::Value(Value::SingleQuotedString("a".to_owned()))]),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    // missing comma separation
+    let error_sql = "SELECT TRIM('xyz' 'a')";
+    assert_eq!(
+        ParserError::ParserError("Expected ), found: 'a'".to_owned()),
+        snowflake().parse_sql_statements(error_sql).unwrap_err()
+    );
+}
+
+#[test]
+fn parse_position_not_function_columns() {
+    snowflake_and_generic()
+        .verified_stmt("SELECT position FROM tbl1 WHERE position NOT IN ('first', 'last')");
+}
+
+#[test]
+fn parse_subquery_function_argument() {
+    // Snowflake allows passing an unparenthesized subquery as the single
+    // argument to a function.
+    snowflake().one_statement_parses_to(
+        "SELECT parse_json(SELECT '{}')",
+        "SELECT parse_json((SELECT '{}'))",
+    );
+
+    // Subqueries that begin with WITH work too.
+    snowflake().one_statement_parses_to(
+        "SELECT parse_json(WITH q AS (SELECT '{}' AS foo) SELECT foo FROM q)",
+        "SELECT parse_json((WITH q AS (SELECT '{}' AS foo) SELECT foo FROM q))",
+    );
+
+    // Commas are parsed as part of the subquery, not additional arguments to
+    // the function.
+    snowflake().one_statement_parses_to("SELECT func(SELECT 1, 2)", "SELECT func((SELECT 1, 2))");
 }

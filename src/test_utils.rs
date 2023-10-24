@@ -111,7 +111,7 @@ impl TestedDialects {
     /// 2. re-serializing the result of parsing `sql` produces the same
     /// `canonical` sql string
     pub fn one_statement_parses_to(&self, sql: &str, canonical: &str) -> Statement {
-        let mut statements = self.parse_sql_statements(sql).unwrap();
+        let mut statements = self.parse_sql_statements(sql).expect(sql);
         assert_eq!(statements.len(), 1);
 
         if !canonical.is_empty() && sql != canonical {

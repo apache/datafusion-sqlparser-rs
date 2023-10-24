@@ -25,6 +25,51 @@ use sqlparser::dialect::{GenericDialect, SQLiteDialect};
 use sqlparser::tokenizer::Token;
 
 #[test]
+fn pragma_no_value() {
+    let sql = "PRAGMA cache_size";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::Pragma {
+            name,
+            value: None,
+            is_eq: false,
+        } => {
+            assert_eq!("cache_size", name.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+#[test]
+fn pragma_eq_style() {
+    let sql = "PRAGMA cache_size = 10";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::Pragma {
+            name,
+            value: Some(val),
+            is_eq: true,
+        } => {
+            assert_eq!("cache_size", name.to_string());
+            assert_eq!("10", val.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+#[test]
+fn pragma_funciton_style() {
+    let sql = "PRAGMA cache_size(10)";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::Pragma {
+            name,
+            value: Some(val),
+            is_eq: false,
+        } => {
+            assert_eq!("cache_size", name.to_string());
+            assert_eq!("10", val.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_without_rowid() {
     let sql = "CREATE TABLE t (a INT) WITHOUT ROWID";
     match sqlite_and_generic().verified_stmt(sql) {
@@ -59,6 +104,37 @@ fn parse_create_virtual_table() {
 
     let sql = "CREATE VIRTUAL TABLE t USING module_name";
     sqlite_and_generic().verified_stmt(sql);
+}
+
+#[test]
+fn parse_create_view_temporary_if_not_exists() {
+    let sql = "CREATE TEMPORARY VIEW IF NOT EXISTS myschema.myview AS SELECT foo FROM bar";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::CreateView {
+            name,
+            columns,
+            query,
+            or_replace,
+            materialized,
+            with_options,
+            cluster_by,
+            with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
+        } => {
+            assert_eq!("myschema.myview", name.to_string());
+            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!("SELECT foo FROM bar", query.to_string());
+            assert!(!materialized);
+            assert!(!or_replace);
+            assert_eq!(with_options, vec![]);
+            assert_eq!(cluster_by, vec![]);
+            assert!(!late_binding);
+            assert!(if_not_exists);
+            assert!(temporary);
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]
@@ -256,6 +332,44 @@ fn parse_create_table_with_strict() {
     if let Statement::CreateTable { name, strict, .. } = sqlite().verified_stmt(sql) {
         assert_eq!(name.to_string(), "Fruits");
         assert!(strict);
+    }
+}
+
+#[test]
+fn parse_single_quoted_identified() {
+    sqlite().verified_only_select("SELECT 't'.*, t.'x' FROM 't'");
+    // TODO: add support for select 't'.x
+}
+#[test]
+fn parse_window_function_with_filter() {
+    for func_name in [
+        "row_number",
+        "rank",
+        "max",
+        "count",
+        "user_defined_function",
+    ] {
+        let sql = format!("SELECT {}(x) FILTER (WHERE y) OVER () FROM t", func_name);
+        let select = sqlite().verified_only_select(&sql);
+        assert_eq!(select.to_string(), sql);
+        assert_eq!(
+            select.projection,
+            vec![SelectItem::UnnamedExpr(Expr::Function(Function {
+                name: ObjectName(vec![Ident::new(func_name)]),
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                    Expr::Identifier(Ident::new("x"))
+                ))],
+                over: Some(WindowType::WindowSpec(WindowSpec {
+                    partition_by: vec![],
+                    order_by: vec![],
+                    window_frame: None,
+                })),
+                filter: Some(Box::new(Expr::Identifier(Ident::new("y")))),
+                distinct: false,
+                special: false,
+                order_by: vec![]
+            }))]
+        );
     }
 }
 

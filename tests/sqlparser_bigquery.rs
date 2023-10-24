@@ -17,6 +17,7 @@ use std::ops::Deref;
 
 use sqlparser::ast::*;
 use sqlparser::dialect::{BigQueryDialect, GenericDialect};
+use sqlparser::parser::ParserError;
 use test_utils::*;
 
 #[test]
@@ -303,8 +304,39 @@ fn parse_trailing_comma() {
 
 #[test]
 fn parse_cast_type() {
-    let sql = r#"SELECT SAFE_CAST(1 AS INT64)"#;
-    bigquery().verified_only_select(sql);
+    let sql = r"SELECT SAFE_CAST(1 AS INT64)";
+    bigquery_and_generic().verified_only_select(sql);
+}
+
+#[test]
+fn parse_cast_date_format() {
+    let sql =
+        r"SELECT CAST(date_valid_from AS DATE FORMAT 'YYYY-MM-DD') AS date_valid_from FROM foo";
+    bigquery_and_generic().verified_only_select(sql);
+}
+
+#[test]
+fn parse_cast_time_format() {
+    let sql = r"SELECT CAST(TIME '21:30:00' AS STRING FORMAT 'PM') AS date_time_to_string";
+    bigquery_and_generic().verified_only_select(sql);
+}
+
+#[test]
+fn parse_cast_timestamp_format_tz() {
+    let sql = r"SELECT CAST(TIMESTAMP '2008-12-25 00:00:00+00:00' AS STRING FORMAT 'TZH' AT TIME ZONE 'Asia/Kolkata') AS date_time_to_string";
+    bigquery_and_generic().verified_only_select(sql);
+}
+
+#[test]
+fn parse_cast_string_to_bytes_format() {
+    let sql = r"SELECT CAST('Hello' AS BYTES FORMAT 'ASCII') AS string_to_bytes";
+    bigquery_and_generic().verified_only_select(sql);
+}
+
+#[test]
+fn parse_cast_bytes_to_string_format() {
+    let sql = r"SELECT CAST(B'\x48\x65\x6c\x6c\x6f' AS STRING FORMAT 'ASCII') AS bytes_to_string";
+    bigquery_and_generic().verified_only_select(sql);
 }
 
 #[test]
@@ -532,6 +564,7 @@ fn parse_map_access_offset() {
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
                     number("0")
                 ))),],
+                filter: None,
                 over: None,
                 distinct: false,
                 special: false,
@@ -548,4 +581,29 @@ fn parse_map_access_offset() {
     ] {
         bigquery().verified_only_select(sql);
     }
+}
+
+#[test]
+fn test_bigquery_trim() {
+    let real_sql = r#"SELECT customer_id, TRIM(item_price_id, '"', "a") AS item_price_id FROM models_staging.subscriptions"#;
+    assert_eq!(bigquery().verified_stmt(real_sql).to_string(), real_sql);
+
+    let sql_only_select = "SELECT TRIM('xyz', 'a')";
+    let select = bigquery().verified_only_select(sql_only_select);
+    assert_eq!(
+        &Expr::Trim {
+            expr: Box::new(Expr::Value(Value::SingleQuotedString("xyz".to_owned()))),
+            trim_where: None,
+            trim_what: None,
+            trim_characters: Some(vec![Expr::Value(Value::SingleQuotedString("a".to_owned()))]),
+        },
+        expr_from_projection(only(&select.projection))
+    );
+
+    // missing comma separation
+    let error_sql = "SELECT TRIM('xyz' 'a')";
+    assert_eq!(
+        ParserError::ParserError("Expected ), found: 'a'".to_owned()),
+        bigquery().parse_sql_statements(error_sql).unwrap_err()
+    );
 }

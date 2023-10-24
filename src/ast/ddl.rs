@@ -69,7 +69,7 @@ pub enum AlterTableOperation {
     /// Add Partitions
     AddPartitions {
         if_not_exists: bool,
-        new_partitions: Vec<Expr>,
+        new_partitions: Vec<Partition>,
     },
     DropPartitions {
         partitions: Vec<Expr>,
@@ -119,8 +119,8 @@ impl fmt::Display for AlterTableOperation {
                 new_partitions,
             } => write!(
                 f,
-                "ADD{ine} PARTITION ({})",
-                display_comma_separated(new_partitions),
+                "ADD{ine} {}",
+                display_separated(new_partitions, " "),
                 ine = if *if_not_exists { " IF NOT EXISTS" } else { "" }
             ),
             AlterTableOperation::AddConstraint(c) => write!(f, "ADD {c}"),
@@ -517,6 +517,9 @@ pub struct ColumnDef {
 impl fmt::Display for ColumnDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {}", self.name, self.data_type)?;
+        if let Some(collation) = &self.collation {
+            write!(f, " COLLATE {collation}")?;
+        }
         for option in &self.options {
             write!(f, " {option}")?;
         }
@@ -766,5 +769,23 @@ impl fmt::Display for UserDefinedTypeCompositeAttributeDef {
             write!(f, " COLLATE {collation}")?;
         }
         Ok(())
+    }
+}
+
+/// PARTITION statement used in ALTER TABLE et al. such as in Hive SQL
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Partition {
+    pub partitions: Vec<Expr>,
+}
+
+impl fmt::Display for Partition {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "PARTITION ({})",
+            display_comma_separated(&self.partitions)
+        )
     }
 }

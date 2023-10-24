@@ -12,6 +12,7 @@
 
 use crate::dialect::Dialect;
 
+/// A [`Dialect`] for [Google Bigquery](https://cloud.google.com/bigquery/)
 #[derive(Debug, Default)]
 pub struct BigQueryDialect;
 

@@ -2340,15 +2340,6 @@ impl<'a> Parser<'a> {
         )
     }
 
-    /// Peek at the next token to see if it's the expected keyword
-    pub fn peek_keyword(&mut self, expected: Keyword) -> bool {
-        let token_with_location = self.peek_token();
-        match token_with_location.token {
-            Token::Word(w) if (expected == w.keyword) => true,
-            _ => false,
-        }
-    }
-
     /// Look for an expected keyword and consume it if it exists
     #[must_use]
     pub fn parse_keyword(&mut self, expected: Keyword) -> bool {
@@ -4218,19 +4209,18 @@ impl<'a> Parser<'a> {
             } else {
                 let if_not_exists =
                     self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-                if self.peek_keyword(Keyword::PARTITION) {
-                    let mut partitions = vec![];
-                    loop {
-                        if self.parse_keyword(Keyword::PARTITION) {
-                            let new_partitions = self.parse_partition()?;
-                            partitions.push(new_partitions);
-                        } else {
-                            break;
-                        }
+                let mut new_partitions = vec![];
+                loop {
+                    if self.parse_keyword(Keyword::PARTITION) {
+                        new_partitions.push(self.parse_partition()?);
+                    } else {
+                        break;
                     }
+                }
+                if !new_partitions.is_empty() {
                     AlterTableOperation::AddPartitions {
                         if_not_exists,
-                        new_partitions: partitions,
+                        new_partitions,
                     }
                 } else {
                     let column_keyword = self.parse_keyword(Keyword::COLUMN);

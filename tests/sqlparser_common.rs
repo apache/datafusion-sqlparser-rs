@@ -876,6 +876,7 @@ fn parse_select_count_wildcard() {
             name: ObjectName(vec![Ident::new("COUNT")]),
             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
             null_treatment: None,
+            filter: None,
             over: None,
             distinct: false,
             special: false,
@@ -897,6 +898,7 @@ fn parse_select_count_distinct() {
                 expr: Box::new(Expr::Identifier(Ident::new("x"))),
             }))],
             null_treatment: None,
+            filter: None,
             over: None,
             distinct: true,
             special: false,
@@ -1865,6 +1867,7 @@ fn parse_select_having() {
                 name: ObjectName(vec![Ident::new("COUNT")]),
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
                 null_treatment: None,
+                filter: None,
                 over: None,
                 distinct: false,
                 special: false,
@@ -1891,6 +1894,7 @@ fn parse_select_qualify() {
                 name: ObjectName(vec![Ident::new("ROW_NUMBER")]),
                 args: vec![],
                 null_treatment: None,
+                filter: None,
                 over: Some(WindowType::WindowSpec(WindowSpec {
                     partition_by: vec![Expr::Identifier(Ident::new("p"))],
                     order_by: vec![OrderByExpr {
@@ -1938,6 +1942,7 @@ fn parse_cast() {
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None),
+            format: None,
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1948,6 +1953,7 @@ fn parse_cast() {
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::TinyInt(None),
+            format: None,
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1974,6 +1980,7 @@ fn parse_cast() {
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Nvarchar(Some(50)),
+            format: None,
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1984,6 +1991,7 @@ fn parse_cast() {
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Clob(None),
+            format: None,
         },
         expr_from_projection(only(&select.projection))
     );
@@ -1994,6 +2002,7 @@ fn parse_cast() {
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Clob(Some(50)),
+            format: None,
         },
         expr_from_projection(only(&select.projection))
     );
@@ -2004,6 +2013,7 @@ fn parse_cast() {
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Binary(Some(50)),
+            format: None,
         },
         expr_from_projection(only(&select.projection))
     );
@@ -2014,6 +2024,7 @@ fn parse_cast() {
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Varbinary(Some(50)),
+            format: None,
         },
         expr_from_projection(only(&select.projection))
     );
@@ -2024,6 +2035,7 @@ fn parse_cast() {
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Blob(None),
+            format: None,
         },
         expr_from_projection(only(&select.projection))
     );
@@ -2034,6 +2046,7 @@ fn parse_cast() {
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::Blob(Some(50)),
+            format: None,
         },
         expr_from_projection(only(&select.projection))
     );
@@ -2047,6 +2060,7 @@ fn parse_try_cast() {
         &Expr::TryCast {
             expr: Box::new(Expr::Identifier(Ident::new("id"))),
             data_type: DataType::BigInt(None),
+            format: None,
         },
         expr_from_projection(only(&select.projection))
     );
@@ -3353,6 +3367,7 @@ fn parse_scalar_function_in_projection() {
                     Expr::Identifier(Ident::new("id"))
                 ))],
                 null_treatment: None,
+                filter: None,
                 over: None,
                 distinct: false,
                 special: false,
@@ -3473,6 +3488,7 @@ fn parse_named_argument_function() {
                 },
             ],
             null_treatment: None,
+            filter: None,
             over: None,
             distinct: false,
             special: false,
@@ -3505,6 +3521,7 @@ fn parse_window_functions() {
             name: ObjectName(vec![Ident::new("row_number")]),
             args: vec![],
             null_treatment: None,
+            filter: None,
             over: Some(WindowType::WindowSpec(WindowSpec {
                 partition_by: vec![],
                 order_by: vec![OrderByExpr {
@@ -3549,6 +3566,7 @@ fn test_parse_named_window() {
                         }),
                     ))],
                     null_treatment: None,
+                    filter: None,
                     over: Some(WindowType::NamedWindow(Ident {
                         value: "window1".to_string(),
                         quote_style: None,
@@ -3575,6 +3593,7 @@ fn test_parse_named_window() {
                         }),
                     ))],
                     null_treatment: None,
+                    filter: None,
                     over: Some(WindowType::NamedWindow(Ident {
                         value: "window2".to_string(),
                         quote_style: None,
@@ -4045,6 +4064,7 @@ fn parse_at_timezone() {
                 }]),
                 args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(zero.clone()))],
                 null_treatment: None,
+                filter: None,
                 over: None,
                 distinct: false,
                 special: false,
@@ -4073,6 +4093,7 @@ fn parse_at_timezone() {
                             },],),
                             args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(zero))],
                             null_treatment: None,
+                            filter: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -4085,6 +4106,7 @@ fn parse_at_timezone() {
                     ),),),
                 ],
                 null_treatment: None,
+                filter: None,
                 over: None,
                 distinct: false,
                 special: false,
@@ -4244,6 +4266,7 @@ fn parse_table_function() {
                     Value::SingleQuotedString("1".to_owned()),
                 )))],
                 null_treatment: None,
+                filter: None,
                 over: None,
                 distinct: false,
                 special: false,
@@ -4396,6 +4419,7 @@ fn parse_unnest_in_from_clause() {
                         FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("3")))),
                     ],
                     null_treatment: None,
+                    filter: None,
                     over: None,
                     distinct: false,
                     special: false,
@@ -4426,6 +4450,7 @@ fn parse_unnest_in_from_clause() {
                             FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("3")))),
                         ],
                         null_treatment: None,
+                        filter: None,
                         over: None,
                         distinct: false,
                         special: false,
@@ -4438,6 +4463,7 @@ fn parse_unnest_in_from_clause() {
                             FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(number("6")))),
                         ],
                         null_treatment: None,
+                        filter: None,
                         over: None,
                         distinct: false,
                         special: false,
@@ -6911,6 +6937,7 @@ fn parse_time_functions() {
             name: ObjectName(vec![Ident::new(func_name)]),
             args: vec![],
             null_treatment: None,
+            filter: None,
             over: None,
             distinct: false,
             special: false,
@@ -7398,6 +7425,7 @@ fn parse_pivot_table() {
                     Expr::CompoundIdentifier(vec![Ident::new("a"), Ident::new("amount"),])
                 ))]),
                 null_treatment: None,
+                filter: None,
                 over: None,
                 distinct: false,
                 special: false,
@@ -7548,6 +7576,7 @@ fn parse_pivot_unpivot_table() {
                     Expr::Identifier(Ident::new("population"))
                 ))]),
                 null_treatment: None,
+                filter: None,
                 over: None,
                 distinct: false,
                 special: false,
@@ -7659,4 +7688,9 @@ fn parse_create_type() {
         },
         create_type
     );
+}
+
+#[test]
+fn parse_create_table_collate() {
+    pg_and_generic().verified_stmt("CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\")");
 }

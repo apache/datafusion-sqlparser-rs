@@ -973,6 +973,47 @@ fn parse_simple_insert() {
 }
 
 #[test]
+fn parse_ignore_insert() {
+    let sql = r"INSERT IGNORE INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
+
+    match mysql_and_generic().verified_stmt(sql) {
+        Statement::Insert {
+            table_name,
+            columns,
+            source,
+            on,
+            ignore,
+            ..
+        } => {
+            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
+            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert!(on.is_none());
+            assert!(ignore);
+            assert_eq!(
+                Box::new(Query {
+                    with: None,
+                    body: Box::new(SetExpr::Values(Values {
+                        explicit_row: false,
+                        rows: vec![vec![
+                            Expr::Value(Value::SingleQuotedString("Test Some Inserts".to_string())),
+                            Expr::Value(number("1"))
+                        ]]
+                    })),
+                    order_by: vec![],
+                    limit: None,
+                    limit_by: vec![],
+                    offset: None,
+                    fetch: None,
+                    locks: vec![]
+                }),
+                source
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_empty_row_insert() {
     let sql = "INSERT INTO tb () VALUES (), ()";
 
@@ -1072,6 +1113,7 @@ fn parse_insert_with_on_duplicate_update() {
                                 Expr::Identifier(Ident::new("description"))
                             ))],
                             null_treatment: None,
+                            filter: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -1086,6 +1128,7 @@ fn parse_insert_with_on_duplicate_update() {
                                 Expr::Identifier(Ident::new("perm_create"))
                             ))],
                             null_treatment: None,
+                            filter: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -1100,6 +1143,7 @@ fn parse_insert_with_on_duplicate_update() {
                                 Expr::Identifier(Ident::new("perm_read"))
                             ))],
                             null_treatment: None,
+                            filter: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -1114,6 +1158,7 @@ fn parse_insert_with_on_duplicate_update() {
                                 Expr::Identifier(Ident::new("perm_update"))
                             ))],
                             null_treatment: None,
+                            filter: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -1128,6 +1173,7 @@ fn parse_insert_with_on_duplicate_update() {
                                 Expr::Identifier(Ident::new("perm_delete"))
                             ))],
                             null_treatment: None,
+                            filter: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -1460,6 +1506,18 @@ fn parse_show_variables() {
 }
 
 #[test]
+fn parse_rlike_and_regexp() {
+    for s in &[
+        "SELECT 1 WHERE 'a' RLIKE '^a$'",
+        "SELECT 1 WHERE 'a' REGEXP '^a$'",
+        "SELECT 1 WHERE 'a' NOT RLIKE '^a$'",
+        "SELECT 1 WHERE 'a' NOT REGEXP '^a$'",
+    ] {
+        mysql_and_generic().verified_only_select(s);
+    }
+}
+
+#[test]
 fn parse_kill() {
     let stmt = mysql_and_generic().verified_stmt("KILL CONNECTION 5");
     assert_eq!(
@@ -1506,6 +1564,7 @@ fn parse_table_colum_option_on_update() {
                             name: ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]),
                             args: vec![],
                             null_treatment: None,
+                            filter: None,
                             over: None,
                             distinct: false,
                             special: false,

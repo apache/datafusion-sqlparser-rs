@@ -138,6 +138,7 @@ fn parse_delimited_identifiers() {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
             args: vec![],
             null_treatment: None,
+            filter: None,
             over: None,
             distinct: false,
             special: false,

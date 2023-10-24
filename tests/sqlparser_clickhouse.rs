@@ -51,6 +51,7 @@ fn parse_map_access_expr() {
                         ))),
                     ],
                     null_treatment: None,
+                    filter: None,
                     over: None,
                     distinct: false,
                     special: false,
@@ -91,6 +92,7 @@ fn parse_map_access_expr() {
                                 ))),
                             ],
                             null_treatment: None,
+                            filter: None,
                             over: None,
                             distinct: false,
                             special: false,
@@ -141,6 +143,7 @@ fn parse_array_fn() {
                 FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new("x2")))),
             ],
             null_treatment: None,
+            filter: None,
             over: None,
             distinct: false,
             special: false,
@@ -200,6 +203,7 @@ fn parse_delimited_identifiers() {
             name: ObjectName(vec![Ident::with_quote('"', "myfun")]),
             args: vec![],
             null_treatment: None,
+            filter: None,
             over: None,
             distinct: false,
             special: false,
@@ -357,6 +361,24 @@ fn parse_limit_by() {
     clickhouse_and_generic().verified_stmt(
         r#"SELECT * FROM default.last_asset_runs_mv ORDER BY created_at DESC LIMIT 1 BY asset, toStartOfDay(created_at)"#,
     );
+}
+
+#[test]
+fn parse_select_star_except() {
+    clickhouse().verified_stmt("SELECT * EXCEPT (prev_status) FROM anomalies");
+}
+
+#[test]
+fn parse_select_star_except_no_parens() {
+    clickhouse().one_statement_parses_to(
+        "SELECT * EXCEPT prev_status FROM anomalies",
+        "SELECT * EXCEPT (prev_status) FROM anomalies",
+    );
+}
+
+#[test]
+fn parse_select_star_replace() {
+    clickhouse().verified_stmt("SELECT * REPLACE (i + 1 AS i) FROM columns_transformers");
 }
 
 fn clickhouse() -> TestedDialects {

@@ -31,8 +31,9 @@ pub use self::data_type::{
 pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue};
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
-    ColumnOptionDef, GeneratedAs, IndexType, KeyOrIndexDisplay, ProcedureParam, ReferentialAction,
-    TableConstraint, UserDefinedTypeCompositeAttributeDef, UserDefinedTypeRepresentation,
+    ColumnOptionDef, GeneratedAs, IndexType, KeyOrIndexDisplay, Partition, ProcedureParam,
+    ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeRepresentation,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
@@ -322,6 +323,16 @@ impl fmt::Display for JsonOperator {
     }
 }
 
+/// Options for `CAST` / `TRY_CAST`
+/// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CastFormat {
+    Value(Value),
+    ValueAtTimeZone(Value, Value),
+}
+
 /// An SQL expression of any type.
 ///
 /// The parser does not distinguish between expressions of different types
@@ -419,6 +430,14 @@ pub enum Expr {
         pattern: Box<Expr>,
         escape_char: Option<char>,
     },
+    /// MySQL: RLIKE regex or REGEXP regex
+    RLike {
+        negated: bool,
+        expr: Box<Expr>,
+        pattern: Box<Expr>,
+        // true for REGEXP, false for RLIKE (no difference in semantics)
+        regexp: bool,
+    },
     /// Any operation e.g. `foo > ANY(bar)`, comparison operator is one of [=, >, <, =>, =<, !=]
     AnyOp {
         left: Box<Expr>,
@@ -437,12 +456,18 @@ pub enum Expr {
     Cast {
         expr: Box<Expr>,
         data_type: DataType,
+        // Optional CAST(string_expression AS type FORMAT format_string_expression) as used by BigQuery
+        // https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
+        format: Option<CastFormat>,
     },
     /// TRY_CAST an expression to a different data type e.g. `TRY_CAST(foo AS VARCHAR(123))`
     //  this differs from CAST in the choice of how to implement invalid conversions
     TryCast {
         expr: Box<Expr>,
         data_type: DataType,
+        // Optional CAST(string_expression AS type FORMAT format_string_expression) as used by BigQuery
+        // https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
+        format: Option<CastFormat>,
     },
     /// SAFE_CAST an expression to a different data type e.g. `SAFE_CAST(foo AS FLOAT64)`
     //  only available for BigQuery: https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-and-operators#safe_casting
@@ -450,6 +475,9 @@ pub enum Expr {
     SafeCast {
         expr: Box<Expr>,
         data_type: DataType,
+        // Optional CAST(string_expression AS type FORMAT format_string_expression) as used by BigQuery
+        // https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
+        format: Option<CastFormat>,
     },
     /// AT a timestamp to a different timezone e.g. `FROM_UNIXTIME(0) AT TIME ZONE 'UTC-06:00'`
     AtTimeZone {
@@ -597,6 +625,15 @@ pub enum Expr {
     },
 }
 
+impl fmt::Display for CastFormat {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CastFormat::Value(v) => write!(f, "{v}"),
+            CastFormat::ValueAtTimeZone(v, tz) => write!(f, "{v} AT TIME ZONE {tz}"),
+        }
+    }
+}
+
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -712,6 +749,19 @@ impl fmt::Display for Expr {
                     pattern
                 ),
             },
+            Expr::RLike {
+                negated,
+                expr,
+                pattern,
+                regexp,
+            } => write!(
+                f,
+                "{} {}{} {}",
+                expr,
+                if *negated { "NOT " } else { "" },
+                if *regexp { "REGEXP" } else { "RLIKE" },
+                pattern
+            ),
             Expr::SimilarTo {
                 negated,
                 expr,
@@ -753,9 +803,39 @@ impl fmt::Display for Expr {
                     write!(f, "{op}{expr}")
                 }
             }
-            Expr::Cast { expr, data_type } => write!(f, "CAST({expr} AS {data_type})"),
-            Expr::TryCast { expr, data_type } => write!(f, "TRY_CAST({expr} AS {data_type})"),
-            Expr::SafeCast { expr, data_type } => write!(f, "SAFE_CAST({expr} AS {data_type})"),
+            Expr::Cast {
+                expr,
+                data_type,
+                format,
+            } => {
+                if let Some(format) = format {
+                    write!(f, "CAST({expr} AS {data_type} FORMAT {format})")
+                } else {
+                    write!(f, "CAST({expr} AS {data_type})")
+                }
+            }
+            Expr::TryCast {
+                expr,
+                data_type,
+                format,
+            } => {
+                if let Some(format) = format {
+                    write!(f, "TRY_CAST({expr} AS {data_type} FORMAT {format})")
+                } else {
+                    write!(f, "TRY_CAST({expr} AS {data_type})")
+                }
+            }
+            Expr::SafeCast {
+                expr,
+                data_type,
+                format,
+            } => {
+                if let Some(format) = format {
+                    write!(f, "SAFE_CAST({expr} AS {data_type} FORMAT {format})")
+                } else {
+                    write!(f, "SAFE_CAST({expr} AS {data_type})")
+                }
+            }
             Expr::Extract { field, expr } => write!(f, "EXTRACT({field} FROM {expr})"),
             Expr::Ceil { expr, field } => {
                 if field == &DateTimeField::NoDateTime {
@@ -991,8 +1071,11 @@ impl Display for WindowType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct WindowSpec {
+    /// `OVER (PARTITION BY ...)`
     pub partition_by: Vec<Expr>,
+    /// `OVER (ORDER BY ...)`
     pub order_by: Vec<OrderByExpr>,
+    /// `OVER (window frame)`
     pub window_frame: Option<WindowFrame>,
 }
 
@@ -1079,7 +1162,7 @@ impl fmt::Display for WindowFrameUnits {
 }
 
 /// Specifies Ignore / Respect NULL within window functions.
-/// For example 
+/// For example
 /// `FIRST_VALUE(column2) IGNORE NULLS OVER (PARTITION BY column1)`
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -1234,6 +1317,8 @@ pub enum Statement {
     Insert {
         /// Only for Sqlite
         or: Option<SqliteOnConflict>,
+        /// Only for mysql
+        ignore: bool,
         /// INTO - optional keyword
         into: bool,
         /// TABLE
@@ -1852,6 +1937,12 @@ pub enum Statement {
         name: ObjectName,
         representation: UserDefinedTypeRepresentation,
     },
+    // PRAGMA <schema-name>.<pragma-name> = <pragma-value>
+    Pragma {
+        name: ObjectName,
+        value: Option<Value>,
+        is_eq: bool,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -2058,6 +2149,7 @@ impl fmt::Display for Statement {
             }
             Statement::Insert {
                 or,
+                ignore,
                 into,
                 table_name,
                 overwrite,
@@ -2074,8 +2166,9 @@ impl fmt::Display for Statement {
                 } else {
                     write!(
                         f,
-                        "INSERT{over}{int}{tbl} {table_name} ",
+                        "INSERT{ignore}{over}{int}{tbl} {table_name} ",
                         table_name = table_name,
+                        ignore = if *ignore { " IGNORE" } else { "" },
                         over = if *overwrite { " OVERWRITE" } else { "" },
                         int = if *into { " INTO" } else { "" },
                         tbl = if *table { " TABLE" } else { "" }
@@ -3214,6 +3307,18 @@ impl fmt::Display for Statement {
             } => {
                 write!(f, "CREATE TYPE {name} AS {representation}")
             }
+            Statement::Pragma { name, value, is_eq } => {
+                write!(f, "PRAGMA {name}")?;
+                if value.is_some() {
+                    let val = value.as_ref().unwrap();
+                    if *is_eq {
+                        write!(f, " = {val}")?;
+                    } else {
+                        write!(f, "({val})")?;
+                    }
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -3670,6 +3775,8 @@ impl fmt::Display for CloseCursor {
 pub struct Function {
     pub name: ObjectName,
     pub args: Vec<FunctionArg>,
+    /// e.g. `x > 5` in `COUNT(x) FILTER (WHERE x > 5)`
+    pub filter: Option<Box<Expr>>,
     // Snowflake/MSSQL supports diffrent options for null treatment in rank functions
     pub null_treatment: Option<NullTreatment>,
     pub over: Option<WindowType>,
@@ -3719,6 +3826,10 @@ impl fmt::Display for Function {
                 display_comma_separated(&self.args),
                 display_comma_separated(&self.order_by),
             )?;
+
+            if let Some(filter_cond) = &self.filter {
+                write!(f, " FILTER (WHERE {filter_cond})")?;
+            }
 
             if let Some(o) = &self.null_treatment {
                 write!(f, " {o}")?;

@@ -1078,7 +1078,9 @@ impl fmt::Display for WindowFrameUnits {
     }
 }
 
-/// Specifies Ignore / Respect NULL wihtin rank functions
+/// Specifies Ignore / Respect NULL within window functions.
+/// For example 
+/// `FIRST_VALUE(column2) IGNORE NULLS OVER (PARTITION BY column1)`
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

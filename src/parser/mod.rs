@@ -2464,12 +2464,11 @@ impl<'a> Parser<'a> {
         let mut values = vec![];
         loop {
             values.push(f(self)?);
-            if !self.consume_token(&Token::Comma) {
+            if !self.consume_token(&Token::Comma)
+                || self.options.trailing_commas
+                    && Self::is_comma_separated_end(&self.peek_token().token)
+            {
                 break;
-            } else if self.options.trailing_commas {
-                if Self::is_comma_separated_end(&self.peek_token().token) {
-                    break;
-                }
             }
         }
         Ok(values)
@@ -2502,10 +2501,10 @@ impl<'a> Parser<'a> {
             if !self.consume_token(&Token::Comma) {
                 break;
             } else {
-                if self.options.trailing_commas {
-                    if Self::is_comma_separated_end(&self.peek_token().token) {
-                        break;
-                    }
+                if self.options.trailing_commas
+                    && Self::is_comma_separated_end(&self.peek_token().token)
+                {
+                    break;
                 }
                 values.push(f(self)?);
             }

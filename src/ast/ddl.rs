@@ -775,6 +775,7 @@ impl fmt::Display for UserDefinedTypeCompositeAttributeDef {
 /// PARTITION statement used in ALTER TABLE et al. such as in Hive SQL
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Partition {
     pub partitions: Vec<Expr>,
 }

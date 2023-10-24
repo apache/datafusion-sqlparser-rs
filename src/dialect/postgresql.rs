@@ -16,6 +16,7 @@ use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 use crate::tokenizer::Token;
 
+/// A [`Dialect`] for [PostgreSQL](https://www.postgresql.org/)
 #[derive(Debug)]
 pub struct PostgreSqlDialect {}
 

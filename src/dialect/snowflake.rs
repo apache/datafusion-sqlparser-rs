@@ -28,6 +28,7 @@ use alloc::vec::Vec;
 #[cfg(not(feature = "std"))]
 use alloc::{format, vec};
 
+/// A [`Dialect`] for [Snowflake](https://www.snowflake.com/)
 #[derive(Debug, Default)]
 pub struct SnowflakeDialect;
 

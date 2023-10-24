@@ -12,6 +12,7 @@
 
 use crate::dialect::Dialect;
 
+/// A [`Dialect`] for [ANSI SQL](https://en.wikipedia.org/wiki/SQL:2011).
 #[derive(Debug)]
 pub struct AnsiDialect {}
 

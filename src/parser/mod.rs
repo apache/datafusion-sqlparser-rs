@@ -853,7 +853,7 @@ impl<'a> Parser<'a> {
                 Keyword::MATCH if dialect_of!(self is MySqlDialect | GenericDialect) => {
                     self.parse_match_against()
                 }
-                Keyword::STRUCT if dialect_of!(self is BigQueryDialect) => {
+                Keyword::STRUCT if dialect_of!(self is BigQueryDialect | GenericDialect) => {
                     self.prev_token();
                     self.parse_bigquery_struct_literal()
                 }
@@ -1850,8 +1850,15 @@ impl<'a> Parser<'a> {
     /// ```sql
     /// expr [AS name]
     /// ```
+    ///
+    /// Parameter typed_syntax is set to true if the expression
+    /// is to be parsed as a field expression declared using typed
+    /// struct syntax [2], and false if using typeless struct syntax [3].
+    ///
     /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#constructing_a_struct
-    pub fn parse_struct_field_expr(&mut self, typed_syntax: bool) -> Result<Expr, ParserError> {
+    /// [2]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#typed_struct_syntax
+    /// [3]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#typeless_struct_syntax
+    fn parse_struct_field_expr(&mut self, typed_syntax: bool) -> Result<Expr, ParserError> {
         let expr = self.parse_expr()?;
         if self.parse_keyword(Keyword::AS) {
             if typed_syntax {

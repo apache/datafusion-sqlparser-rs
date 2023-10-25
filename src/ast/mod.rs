@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 pub use self::data_type::{
-    CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
+    ArrayElemTypeDef, CharLengthUnits, CharacterLength, DataType, ExactNumberInfo, TimezoneInfo,
 };
 pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue};
 pub use self::ddl::{
@@ -323,6 +323,27 @@ impl fmt::Display for JsonOperator {
     }
 }
 
+/// A field definition within a struct.
+///
+/// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct StructField {
+    pub field_name: Option<Ident>,
+    pub field_type: DataType,
+}
+
+impl fmt::Display for StructField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(name) = &self.field_name {
+            write!(f, "{name} {}", self.field_type)
+        } else {
+            write!(f, "{}", self.field_type)
+        }
+    }
+}
+
 /// Options for `CAST` / `TRY_CAST`
 /// BigQuery: <https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax>
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -597,6 +618,26 @@ pub enum Expr {
     Rollup(Vec<Vec<Expr>>),
     /// ROW / TUPLE a single value, such as `SELECT (1, 2)`
     Tuple(Vec<Expr>),
+    /// `BigQuery` specific `Struct` literal expression [1]
+    /// Syntax:
+    /// ```sql
+    /// STRUCT<[field_name] field_type, ...>( expr1 [, ... ])
+    /// ```
+    /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
+    Struct {
+        /// Struct values.
+        values: Vec<Expr>,
+        /// Struct field definitions.
+        fields: Vec<StructField>,
+    },
+    /// `BigQuery` specific: An named expression in a typeless struct [1]
+    ///
+    /// Syntax
+    /// ```sql
+    /// 1 AS A
+    /// ```
+    /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
+    Named { expr: Box<Expr>, name: Ident },
     /// An array index expression e.g. `(ARRAY[1, 2])[1]` or `(current_schemas(FALSE))[1]`
     ArrayIndex { obj: Box<Expr>, indexes: Vec<Expr> },
     /// An array expression e.g. `ARRAY[1, 2]`
@@ -996,6 +1037,21 @@ impl fmt::Display for Expr {
             }
             Expr::Tuple(exprs) => {
                 write!(f, "({})", display_comma_separated(exprs))
+            }
+            Expr::Struct { values, fields } => {
+                if !fields.is_empty() {
+                    write!(
+                        f,
+                        "STRUCT<{}>({})",
+                        display_comma_separated(fields),
+                        display_comma_separated(values)
+                    )
+                } else {
+                    write!(f, "STRUCT({})", display_comma_separated(values))
+                }
+            }
+            Expr::Named { expr, name } => {
+                write!(f, "{} AS {}", expr, name)
             }
             Expr::ArrayIndex { obj, indexes } => {
                 write!(f, "{obj}")?;

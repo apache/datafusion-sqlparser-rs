@@ -166,7 +166,7 @@ fn parse_array() {
     assert_eq!(
         &Expr::Cast {
             expr: Box::new(Expr::Identifier(Ident::new("a"))),
-            data_type: DataType::Array(None),
+            data_type: DataType::Array(ArrayElemTypeDef::None),
             format: None,
         },
         expr_from_projection(only(&select.projection))

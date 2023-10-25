@@ -4759,7 +4759,14 @@ impl<'a> Parser<'a> {
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
             Token::Placeholder(ref s) => Ok(Value::Placeholder(s.to_string())),
             tok @ Token::Colon | tok @ Token::AtSign => {
-                let ident = self.parse_identifier()?;
+                // Not calling self.parse_identifier()? because only in placeholder we want to check numbers as idfentifies
+                // This because snowflake allows numbers as placeholders
+                let next_token = self.next_token();
+                let ident = match next_token.token {
+                    Token::Word(w) => Ok(w.to_ident()),
+                    Token::Number(w, false) => Ok(Ident::new(w)),
+                    _ => self.expected("placeholder", next_token),
+                }?;
                 let placeholder = tok.to_string() + &ident.value;
                 Ok(Value::Placeholder(placeholder))
             }

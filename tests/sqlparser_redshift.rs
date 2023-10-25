@@ -335,3 +335,8 @@ fn parse_within_group() {
 fn parse_listagg() {
     redshift().verified_only_select(r#"SELECT LISTAGG(a.attname, '|') WITHIN GROUP (ORDER BY a.attsortkeyord) OVER (PARTITION BY n.nspname, c.relname) AS sort_keys FROM bar"#);
 }
+
+#[test]
+fn parse_quoted_identifier() {
+    redshift().verified_only_select(r#"SELECT 'foo' AS "123_col""#);
+}

@@ -15,6 +15,7 @@ use crate::dialect::Dialect;
 use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 
+/// A [`Dialect`] for [SQLite](https://www.sqlite.org)
 #[derive(Debug)]
 pub struct SQLiteDialect {}
 
@@ -33,6 +34,10 @@ impl Dialect for SQLiteDialect {
             || ch == '_'
             || ch == '$'
             || ('\u{007f}'..='\u{ffff}').contains(&ch)
+    }
+
+    fn supports_filter_during_aggregation(&self) -> bool {
+        true
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {

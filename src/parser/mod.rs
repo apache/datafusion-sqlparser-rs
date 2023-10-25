@@ -491,6 +491,8 @@ impl<'a> Parser<'a> {
                 Keyword::EXECUTE => Ok(self.parse_execute()?),
                 Keyword::PREPARE => Ok(self.parse_prepare()?),
                 Keyword::MERGE => Ok(self.parse_merge()?),
+                // `PRAGMA` is sqlite specific https://www.sqlite.org/pragma.html
+                Keyword::PRAGMA => Ok(self.parse_pragma()?),
                 _ => self.expected("an SQL statement", next_token),
             },
             Token::LParen => {
@@ -618,18 +620,29 @@ impl<'a> Parser<'a> {
 
         let next_token = self.next_token();
         match next_token.token {
-            Token::Word(w) if self.peek_token().token == Token::Period => {
-                let mut id_parts: Vec<Ident> = vec![w.to_ident()];
+            t @ (Token::Word(_) | Token::SingleQuotedString(_)) => {
+                if self.peek_token().token == Token::Period {
+                    let mut id_parts: Vec<Ident> = vec![match t {
+                        Token::Word(w) => w.to_ident(),
+                        Token::SingleQuotedString(s) => Ident::with_quote('\'', s),
+                        _ => unreachable!(), // We matched above
+                    }];
 
-                while self.consume_token(&Token::Period) {
-                    let next_token = self.next_token();
-                    match next_token.token {
-                        Token::Word(w) => id_parts.push(w.to_ident()),
-                        Token::Mul => {
-                            return Ok(WildcardExpr::QualifiedWildcard(ObjectName(id_parts)));
-                        }
-                        _ => {
-                            return self.expected("an identifier or a '*' after '.'", next_token);
+                    while self.consume_token(&Token::Period) {
+                        let next_token = self.next_token();
+                        match next_token.token {
+                            Token::Word(w) => id_parts.push(w.to_ident()),
+                            Token::SingleQuotedString(s) => {
+                                // SQLite has single-quoted identifiers
+                                id_parts.push(Ident::with_quote('\'', s))
+                            }
+                            Token::Mul => {
+                                return Ok(WildcardExpr::QualifiedWildcard(ObjectName(id_parts)));
+                            }
+                            _ => {
+                                return self
+                                    .expected("an identifier or a '*' after '.'", next_token);
+                            }
                         }
                     }
                 }
@@ -772,6 +785,8 @@ impl<'a> Parser<'a> {
                     Ok(Expr::Function(Function {
                         name: ObjectName(vec![w.to_ident()]),
                         args: vec![],
+                        null_treatment: None,
+                        filter: None,
                         over: None,
                         distinct: false,
                         special: true,
@@ -793,7 +808,9 @@ impl<'a> Parser<'a> {
                 Keyword::EXTRACT => self.parse_extract_expr(),
                 Keyword::CEIL => self.parse_ceil_floor_expr(true),
                 Keyword::FLOOR => self.parse_ceil_floor_expr(false),
-                Keyword::POSITION => self.parse_position_expr(),
+                Keyword::POSITION if self.peek_token().token == Token::LParen => {
+                    self.parse_position_expr()
+                }
                 Keyword::SUBSTRING => self.parse_substring_expr(),
                 Keyword::OVERLAY => self.parse_overlay_expr(),
                 Keyword::TRIM => self.parse_trim_expr(),
@@ -825,6 +842,9 @@ impl<'a> Parser<'a> {
                             let next_token = self.next_token();
                             match next_token.token {
                                 Token::Word(w) => id_parts.push(w.to_ident()),
+                                Token::SingleQuotedString(s) => {
+                                    id_parts.push(Ident::with_quote('\'', s))
+                                }
                                 _ => {
                                     return self
                                         .expected("an identifier or a '*' after '.'", next_token);
@@ -957,6 +977,30 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let distinct = self.parse_all_or_distinct()?.is_some();
         let (args, order_by) = self.parse_optional_args_with_orderby()?;
+        let filter = if self.dialect.supports_filter_during_aggregation()
+            && self.parse_keyword(Keyword::FILTER)
+            && self.consume_token(&Token::LParen)
+            && self.parse_keyword(Keyword::WHERE)
+        {
+            let filter = Some(Box::new(self.parse_expr()?));
+            self.expect_token(&Token::RParen)?;
+            filter
+        } else {
+            None
+        };
+        let null_treatment = match self.parse_one_of_keywords(&[Keyword::RESPECT, Keyword::IGNORE])
+        {
+            Some(keyword) => {
+                self.expect_keyword(Keyword::NULLS)?;
+
+                match keyword {
+                    Keyword::RESPECT => Some(NullTreatment::RespectNulls),
+                    Keyword::IGNORE => Some(NullTreatment::IgnoreNulls),
+                    _ => None,
+                }
+            }
+            None => None,
+        };
         let over = if self.parse_keyword(Keyword::OVER) {
             if self.consume_token(&Token::LParen) {
                 let window_spec = self.parse_window_spec()?;
@@ -970,6 +1014,8 @@ impl<'a> Parser<'a> {
         Ok(Expr::Function(Function {
             name,
             args,
+            null_treatment,
+            filter,
             over,
             distinct,
             special: false,
@@ -987,6 +1033,8 @@ impl<'a> Parser<'a> {
         Ok(Expr::Function(Function {
             name,
             args,
+            null_treatment: None,
+            filter: None,
             over: None,
             distinct: false,
             special,
@@ -1139,16 +1187,34 @@ impl<'a> Parser<'a> {
         })
     }
 
+    pub fn parse_optional_cast_format(&mut self) -> Result<Option<CastFormat>, ParserError> {
+        if self.parse_keyword(Keyword::FORMAT) {
+            let value = self.parse_value()?;
+            if self.parse_keywords(&[Keyword::AT, Keyword::TIME, Keyword::ZONE]) {
+                Ok(Some(CastFormat::ValueAtTimeZone(
+                    value,
+                    self.parse_value()?,
+                )))
+            } else {
+                Ok(Some(CastFormat::Value(value)))
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
     pub fn parse_cast_expr(&mut self) -> Result<Expr, ParserError> {
         self.expect_token(&Token::LParen)?;
         let expr = self.parse_expr()?;
         self.expect_keyword(Keyword::AS)?;
         let data_type = self.parse_data_type()?;
+        let format = self.parse_optional_cast_format()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::Cast {
             expr: Box::new(expr),
             data_type,
+            format,
         })
     }
 
@@ -1158,10 +1224,12 @@ impl<'a> Parser<'a> {
         let expr = self.parse_expr()?;
         self.expect_keyword(Keyword::AS)?;
         let data_type = self.parse_data_type()?;
+        let format = self.parse_optional_cast_format()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::TryCast {
             expr: Box::new(expr),
             data_type,
+            format,
         })
     }
 
@@ -1171,10 +1239,12 @@ impl<'a> Parser<'a> {
         let expr = self.parse_expr()?;
         self.expect_keyword(Keyword::AS)?;
         let data_type = self.parse_data_type()?;
+        let format = self.parse_optional_cast_format()?;
         self.expect_token(&Token::RParen)?;
         Ok(Expr::SafeCast {
             expr: Box::new(expr),
             data_type,
+            format,
         })
     }
 
@@ -1485,7 +1555,7 @@ impl<'a> Parser<'a> {
                 within_group: false,
             }));
         }
-        // Snowflake defines ORDERY BY in within group instead of inside the function like
+        // Snowflake defines ORDER BY in within group instead of inside the function like
         // ANSI SQL.
         self.expect_token(&Token::RParen)?;
         let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
@@ -1910,10 +1980,21 @@ impl<'a> Parser<'a> {
                 | Keyword::BETWEEN
                 | Keyword::LIKE
                 | Keyword::ILIKE
-                | Keyword::SIMILAR => {
+                | Keyword::SIMILAR
+                | Keyword::REGEXP
+                | Keyword::RLIKE => {
                     self.prev_token();
                     let negated = self.parse_keyword(Keyword::NOT);
-                    if self.parse_keyword(Keyword::IN) {
+                    let regexp = self.parse_keyword(Keyword::REGEXP);
+                    let rlike = self.parse_keyword(Keyword::RLIKE);
+                    if regexp || rlike {
+                        Ok(Expr::RLike {
+                            negated,
+                            expr: Box::new(expr),
+                            pattern: Box::new(self.parse_subexpr(Self::LIKE_PREC)?),
+                            regexp,
+                        })
+                    } else if self.parse_keyword(Keyword::IN) {
                         self.parse_in(expr, negated)
                     } else if self.parse_keyword(Keyword::BETWEEN) {
                         self.parse_between(expr, negated)
@@ -2101,6 +2182,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::Cast {
             expr: Box::new(expr),
             data_type: self.parse_data_type()?,
+            format: None,
         })
     }
 
@@ -2155,6 +2237,8 @@ impl<'a> Parser<'a> {
                 Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
                 Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::LIKE_PREC),
                 Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
+                Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(Self::LIKE_PREC),
+                Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(Self::LIKE_PREC),
                 Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
                 _ => Ok(0),
             },
@@ -2163,6 +2247,8 @@ impl<'a> Parser<'a> {
             Token::Word(w) if w.keyword == Keyword::BETWEEN => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::LIKE => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::ILIKE => Ok(Self::LIKE_PREC),
+            Token::Word(w) if w.keyword == Keyword::RLIKE => Ok(Self::LIKE_PREC),
+            Token::Word(w) if w.keyword == Keyword::REGEXP => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::SIMILAR => Ok(Self::LIKE_PREC),
             Token::Word(w) if w.keyword == Keyword::OPERATOR => Ok(Self::BETWEEN_PREC),
             Token::Word(w) if w.keyword == Keyword::DIV => Ok(Self::MUL_DIV_MOD_OP_PREC),
@@ -2276,7 +2362,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Report unexpected token
+    /// Report `found` was encountered instead of `expected`
     pub fn expected<T>(&self, expected: &str, found: TokenWithLocation) -> Result<T, ParserError> {
         parser_err!(
             format!("Expected {expected}, found: {found}"),
@@ -2284,7 +2370,8 @@ impl<'a> Parser<'a> {
         )
     }
 
-    /// Look for an expected keyword and consume it if it exists
+    /// If the current token is the `expected` keyword, consume it and returns
+    /// true. Otherwise, no tokens are consumed and returns false.
     #[must_use]
     pub fn parse_keyword(&mut self, expected: Keyword) -> bool {
         match self.peek_token().token {
@@ -2296,7 +2383,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Look for an expected sequence of keywords and consume them if they exist
+    /// If the current and subsequent tokens exactly match the `keywords`
+    /// sequence, consume them and returns true. Otherwise, no tokens are
+    /// consumed and returns false
     #[must_use]
     pub fn parse_keywords(&mut self, keywords: &[Keyword]) -> bool {
         let index = self.index;
@@ -2311,7 +2400,9 @@ impl<'a> Parser<'a> {
         true
     }
 
-    /// Look for one of the given keywords and return the one that matches.
+    /// If the current token is one of the given `keywords`, consume the token
+    /// and return the keyword that matches. Otherwise, no tokens are consumed
+    /// and returns `None`.
     #[must_use]
     pub fn parse_one_of_keywords(&mut self, keywords: &[Keyword]) -> Option<Keyword> {
         match self.peek_token().token {
@@ -2328,7 +2419,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Bail out if the current token is not one of the expected keywords, or consume it if it is
+    /// If the current token is one of the expected keywords, consume the token
+    /// and return the keyword that matches. Otherwise, return an error.
     pub fn expect_one_of_keywords(&mut self, keywords: &[Keyword]) -> Result<Keyword, ParserError> {
         if let Some(keyword) = self.parse_one_of_keywords(keywords) {
             Ok(keyword)
@@ -2341,7 +2433,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Bail out if the current token is not an expected keyword, or consume it if it is
+    /// If the current token is the `expected` keyword, consume the token.
+    /// Otherwise return an error.
     pub fn expect_keyword(&mut self, expected: Keyword) -> Result<(), ParserError> {
         if self.parse_keyword(expected) {
             Ok(())
@@ -2350,8 +2443,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Bail out if the following tokens are not the expected sequence of
-    /// keywords, or consume them if they are.
+    /// If the current and subsequent tokens exactly match the `keywords`
+    /// sequence, consume them and returns Ok. Otherwise, return an Error.
     pub fn expect_keywords(&mut self, expected: &[Keyword]) -> Result<(), ParserError> {
         for &kw in expected {
             self.expect_keyword(kw)?;
@@ -4139,6 +4232,13 @@ impl<'a> Parser<'a> {
         Ok(SqlOption { name, value })
     }
 
+    pub fn parse_partition(&mut self) -> Result<Partition, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let partitions = self.parse_comma_separated(Parser::parse_expr)?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Partition { partitions })
+    }
+
     pub fn parse_alter_table_operation(&mut self) -> Result<AlterTableOperation, ParserError> {
         let operation = if self.parse_keyword(Keyword::ADD) {
             if let Some(constraint) = self.parse_optional_table_constraint()? {
@@ -4146,13 +4246,18 @@ impl<'a> Parser<'a> {
             } else {
                 let if_not_exists =
                     self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-                if self.parse_keyword(Keyword::PARTITION) {
-                    self.expect_token(&Token::LParen)?;
-                    let partitions = self.parse_comma_separated(Parser::parse_expr)?;
-                    self.expect_token(&Token::RParen)?;
+                let mut new_partitions = vec![];
+                loop {
+                    if self.parse_keyword(Keyword::PARTITION) {
+                        new_partitions.push(self.parse_partition()?);
+                    } else {
+                        break;
+                    }
+                }
+                if !new_partitions.is_empty() {
                     AlterTableOperation::AddPartitions {
                         if_not_exists,
-                        new_partitions: partitions,
+                        new_partitions,
                     }
                 } else {
                     let column_keyword = self.parse_keyword(Keyword::COLUMN);
@@ -4621,7 +4726,7 @@ impl<'a> Parser<'a> {
                     )?,
                 },
                 // Case when Snowflake Semi-structured data like key:value
-                Keyword::NoKeyword | Keyword::LOCATION | Keyword::TYPE if dialect_of!(self is SnowflakeDialect | GenericDialect) => {
+                Keyword::NoKeyword | Keyword::LOCATION | Keyword::TYPE | Keyword::DATE if dialect_of!(self is SnowflakeDialect | GenericDialect) => {
                     Ok(Value::UnQuotedString(w.value))
                 }
                 _ => self.expected(
@@ -5665,7 +5770,9 @@ impl<'a> Parser<'a> {
     pub fn parse_set_quantifier(&mut self, op: &Option<SetOperator>) -> SetQuantifier {
         match op {
             Some(SetOperator::Union) => {
-                if self.parse_keywords(&[Keyword::BY, Keyword::NAME]) {
+                if self.parse_keywords(&[Keyword::DISTINCT, Keyword::BY, Keyword::NAME]) {
+                    SetQuantifier::DistinctByName
+                } else if self.parse_keywords(&[Keyword::BY, Keyword::NAME]) {
                     SetQuantifier::ByName
                 } else if self.parse_keyword(Keyword::ALL) {
                     if self.parse_keywords(&[Keyword::BY, Keyword::NAME]) {
@@ -6704,6 +6811,9 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let ignore = dialect_of!(self is MySqlDialect | GenericDialect)
+            && self.parse_keyword(Keyword::IGNORE);
+
         let action = self.parse_one_of_keywords(&[Keyword::INTO, Keyword::OVERWRITE]);
         let into = action == Some(Keyword::INTO);
         let overwrite = action == Some(Keyword::OVERWRITE);
@@ -6801,6 +6911,7 @@ impl<'a> Parser<'a> {
             Ok(Statement::Insert {
                 or,
                 table_name,
+                ignore,
                 into,
                 overwrite,
                 partitioned,
@@ -6881,6 +6992,24 @@ impl<'a> Parser<'a> {
         if self.consume_token(&Token::RParen) {
             Ok((vec![], vec![]))
         } else {
+            // Snowflake permits a subquery to be passed as an argument without
+            // an enclosing set of parens if it's the only argument.
+            if dialect_of!(self is SnowflakeDialect)
+                && self
+                    .parse_one_of_keywords(&[Keyword::WITH, Keyword::SELECT])
+                    .is_some()
+            {
+                self.prev_token();
+                let subquery = self.parse_query()?;
+                self.expect_token(&Token::RParen)?;
+                return Ok((
+                    vec![FunctionArg::Unnamed(FunctionArgExpr::from(
+                        WildcardExpr::Expr(Expr::Subquery(Box::new(subquery))),
+                    ))],
+                    vec![],
+                ));
+            }
+
             let args = self.parse_comma_separated(Parser::parse_function_args)?;
             let order_by = if self.parse_keywords(&[Keyword::ORDER, Keyword::BY]) {
                 self.parse_comma_separated(Parser::parse_order_by_expr)?
@@ -6942,7 +7071,8 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let opt_except = if dialect_of!(self is GenericDialect | BigQueryDialect) {
+        let opt_except = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect)
+        {
             self.parse_optional_select_item_except()?
         } else {
             None
@@ -6953,7 +7083,8 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect) {
+        let opt_replace = if dialect_of!(self is GenericDialect | BigQueryDialect | ClickHouseDialect)
+        {
             self.parse_optional_select_item_replace()?
         } else {
             None
@@ -6996,18 +7127,27 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<Option<ExceptSelectItem>, ParserError> {
         let opt_except = if self.parse_keyword(Keyword::EXCEPT) {
-            let idents = self.parse_parenthesized_column_list(Mandatory, false)?;
-            match &idents[..] {
-                [] => {
-                    return self.expected(
-                        "at least one column should be parsed by the expect clause",
-                        self.peek_token(),
-                    )?;
+            if self.peek_token().token == Token::LParen {
+                let idents = self.parse_parenthesized_column_list(Mandatory, false)?;
+                match &idents[..] {
+                    [] => {
+                        return self.expected(
+                            "at least one column should be parsed by the expect clause",
+                            self.peek_token(),
+                        )?;
+                    }
+                    [first, idents @ ..] => Some(ExceptSelectItem {
+                        first_element: first.clone(),
+                        additional_elements: idents.to_vec(),
+                    }),
                 }
-                [first, idents @ ..] => Some(ExceptSelectItem {
-                    first_element: first.clone(),
-                    additional_elements: idents.to_vec(),
-                }),
+            } else {
+                // Clickhouse allows EXCEPT column_name
+                let ident = self.parse_identifier()?;
+                Some(ExceptSelectItem {
+                    first_element: ident,
+                    additional_elements: vec![],
+                })
             }
         } else {
             None
@@ -7422,6 +7562,32 @@ impl<'a> Parser<'a> {
             on: Box::new(on),
             clauses,
         })
+    }
+
+    // PRAGMA [schema-name '.'] pragma-name [('=' pragma-value) | '(' pragma-value ')']
+    pub fn parse_pragma(&mut self) -> Result<Statement, ParserError> {
+        let name = self.parse_object_name()?;
+        if self.consume_token(&Token::LParen) {
+            let value = self.parse_number_value()?;
+            self.expect_token(&Token::RParen)?;
+            Ok(Statement::Pragma {
+                name,
+                value: Some(value),
+                is_eq: false,
+            })
+        } else if self.consume_token(&Token::Eq) {
+            Ok(Statement::Pragma {
+                name,
+                value: Some(self.parse_number_value()?),
+                is_eq: true,
+            })
+        } else {
+            Ok(Statement::Pragma {
+                name,
+                value: None,
+                is_eq: false,
+            })
+        }
     }
 
     /// ```sql

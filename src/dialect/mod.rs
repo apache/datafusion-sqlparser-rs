@@ -64,6 +64,9 @@ macro_rules! dialect_of {
 /// custom extensions or various historical reasons. This trait
 /// encapsulates the parsing differences between dialects.
 ///
+/// [`GenericDialect`] is the most permissive dialect, and parses the union of
+/// all the other dialects, when there is no ambiguity.
+///
 /// # Examples
 /// Most users create a [`Dialect`] directly, as shown on the [module
 /// level documentation]:
@@ -92,7 +95,7 @@ pub trait Dialect: Debug + Any {
     /// MySQL, MS SQL, and sqlite). You can accept one of characters listed
     /// in `Word::matching_end_quote` here
     fn is_delimited_identifier_start(&self, ch: char) -> bool {
-        ch == '"'
+        ch == '"' || ch == '`'
     }
     /// Determine if quoted characters are proper for identifier
     fn is_proper_identifier_inside_quotes(&self, mut _chars: Peekable<Chars<'_>>) -> bool {

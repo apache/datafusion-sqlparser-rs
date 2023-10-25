@@ -1066,11 +1066,15 @@ fn test_snowflake_trim() {
 }
 
 #[test]
-fn test_number_placehilder() {
+fn test_number_placeholder() {
     let sql_only_select = "SELECT :1";
     let select = snowflake().verified_only_select(sql_only_select);
     assert_eq!(
         &Expr::Value(Value::Placeholder(":1".into())),
         expr_from_projection(only(&select.projection))
     );
+
+    snowflake()
+        .parse_sql_statements("alter role 1 with name = 'foo'")
+        .expect_err("should have failed");
 }

@@ -23,8 +23,8 @@ use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::TableFactor::{Pivot, Unpivot};
 use sqlparser::ast::*;
 use sqlparser::dialect::{
-    AnsiDialect, BigQueryDialect, ClickHouseDialect, DuckDbDialect, GenericDialect, HiveDialect,
-    MsSqlDialect, MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect,
+    AnsiDialect, BigQueryDialect, ClickHouseDialect, Dialect, DuckDbDialect, GenericDialect,
+    HiveDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, RedshiftSqlDialect, SQLiteDialect,
     SnowflakeDialect,
 };
 use sqlparser::keywords::ALL_KEYWORDS;
@@ -2619,47 +2619,74 @@ fn parse_create_table() {
 #[test]
 fn parse_create_table_hive_array() {
     // Parsing [] type arrays does not work in MsSql since [ is used in is_delimited_identifier_start
-    let dialects = TestedDialects {
-        dialects: vec![Box::new(PostgreSqlDialect {}), Box::new(HiveDialect {})],
-        options: None,
-    };
-    let sql = "CREATE TABLE IF NOT EXISTS something (name int, val array<int>)";
-    match dialects.one_statement_parses_to(
-        sql,
-        "CREATE TABLE IF NOT EXISTS something (name INT, val INT[])",
-    ) {
-        Statement::CreateTable {
-            if_not_exists,
-            name,
-            columns,
-            ..
-        } => {
-            assert!(if_not_exists);
-            assert_eq!(name, ObjectName(vec!["something".into()]));
-            assert_eq!(
+    for (dialects, angle_bracket_syntax) in [
+        (
+            vec![Box::new(PostgreSqlDialect {}) as Box<dyn Dialect>],
+            false,
+        ),
+        (
+            vec![
+                Box::new(HiveDialect {}) as Box<dyn Dialect>,
+                Box::new(BigQueryDialect {}) as Box<dyn Dialect>,
+            ],
+            true,
+        ),
+    ] {
+        let dialects = TestedDialects {
+            dialects,
+            options: None,
+        };
+
+        let sql = format!(
+            "CREATE TABLE IF NOT EXISTS something (name INT, val {})",
+            if angle_bracket_syntax {
+                "ARRAY<INT>"
+            } else {
+                "INT[]"
+            }
+        );
+
+        let expected = Box::new(DataType::Int(None));
+        let expected = if angle_bracket_syntax {
+            ArrayElemTypeDef::AngleBracket(expected)
+        } else {
+            ArrayElemTypeDef::SquareBracket(expected)
+        };
+
+        match dialects.one_statement_parses_to(sql.as_str(), sql.as_str()) {
+            Statement::CreateTable {
+                if_not_exists,
+                name,
                 columns,
-                vec![
-                    ColumnDef {
-                        name: Ident::new("name").empty_span(),
-                        data_type: DataType::Int(None),
-                        collation: None,
-                        codec: None,
-                        options: vec![],
-                    },
-                    ColumnDef {
-                        name: Ident::new("val").empty_span(),
-                        data_type: DataType::Array(Some(Box::new(DataType::Int(None)))),
-                        collation: None,
-                        codec: None,
-                        options: vec![],
-                    },
-                ],
-            )
+                ..
+            } => {
+                assert!(if_not_exists);
+                assert_eq!(name, ObjectName(vec!["something".into()]));
+                assert_eq!(
+                    columns,
+                    vec![
+                        ColumnDef {
+                            name: Ident::new("name").empty_span(),
+                            data_type: DataType::Int(None),
+                            collation: None,
+                            codec: None,
+                            options: vec![],
+                        },
+                        ColumnDef {
+                            name: Ident::new("val").empty_span(),
+                            data_type: DataType::Array(expected),
+                            collation: None,
+                            codec: None,
+                            options: vec![],
+                        },
+                    ],
+                )
+            }
+            _ => unreachable!(),
         }
-        _ => unreachable!(),
     }
 
-    // SnowflakeDialect using array diffrent
+    // SnowflakeDialect using array different
     let dialects = TestedDialects {
         dialects: vec![
             Box::new(PostgreSqlDialect {}),

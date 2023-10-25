@@ -1092,3 +1092,11 @@ fn parse_subquery_function_argument() {
     // the function.
     snowflake().one_statement_parses_to("SELECT func(SELECT 1, 2)", "SELECT func((SELECT 1, 2))");
 }
+
+#[test]
+fn parse_flatten_with_lateral() {
+    snowflake().one_statement_parses_to(
+        "SELECT f.value AS Contact FROM t1, lateral flatten(input => p.c, path => 'contact') AS f",
+        "SELECT f.value AS Contact FROM t1, flatten(input => p.c, path => 'contact') AS f",
+    );
+}

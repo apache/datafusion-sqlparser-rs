@@ -6317,7 +6317,14 @@ impl<'a> Parser<'a> {
 
     /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
     pub fn parse_table_factor(&mut self) -> Result<TableFactor, ParserError> {
-        if self.parse_keyword(Keyword::LATERAL) {
+        // Allow Support in Snowflake: "FROM lateral flatten(input => f.value:business) f1;"
+        // Snowflake also supports LATERAL (query) so we need to idenitify this exact case
+        let flatten = match self.peek_nth_token(1).token {
+            Token::Word(w) if w.keyword == Keyword::FLATTEN => true,
+            _ => false,
+        };
+
+        if self.parse_keyword(Keyword::LATERAL) && !flatten {
             // LATERAL must always be followed by a subquery.
             if !self.consume_token(&Token::LParen) {
                 self.expected("subquery after LATERAL", self.peek_token())?;

@@ -268,6 +268,7 @@ define_keywords!(
     FILTER,
     FIRST,
     FIRST_VALUE,
+    FLATTEN,
     FLOAT,
     FLOAT4,
     FLOAT8,

@@ -920,7 +920,7 @@ fn test_copy_into_with_transformations() {
         } => {
             assert_eq!(
                 from_stage,
-                ObjectName(vec![Ident::new("@schema.general_finished")])
+                ObjectName(vec![Ident::new("@schema"), Ident::new("general_finished")])
             );
             assert_eq!(
                 from_transformations.as_ref().unwrap()[0],
@@ -1027,9 +1027,15 @@ fn test_snowflake_stage_object_names() {
     ];
     let mut allowed_object_names = vec![
         ObjectName(vec![Ident::new("my_company"), Ident::new("emp_basic")]),
-        ObjectName(vec![Ident::new("@namespace.%table_name")]),
-        ObjectName(vec![Ident::new("@namespace.%table_name/path")]),
-        ObjectName(vec![Ident::new("@namespace.stage_name/path")]),
+        ObjectName(vec![Ident::new("@namespace"), Ident::new("%table_name")]),
+        ObjectName(vec![
+            Ident::new("@namespace"),
+            Ident::new("%table_name/path"),
+        ]),
+        ObjectName(vec![
+            Ident::new("@namespace"),
+            Ident::new("stage_name/path"),
+        ]),
         ObjectName(vec![Ident::new("@~/path")]),
     ];
 

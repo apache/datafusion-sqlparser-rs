@@ -146,8 +146,48 @@ pub fn parse_create_stage(
     })
 }
 
+pub fn parse_stage_name_identifier(parser: &mut Parser) -> Result<Ident, ParserError> {
+    let mut ident = String::new();
+    while let Some(next_token) = parser.next_token_no_skip() {
+        match &next_token.token {
+            Token::Whitespace(_) => break,
+            Token::Period => {
+                parser.prev_token();
+                break;
+            }
+            Token::AtSign => ident.push('@'),
+            Token::Tilde => ident.push('~'),
+            Token::Mod => ident.push('%'),
+            Token::Div => ident.push('/'),
+            Token::Word(w) => ident.push_str(&w.value),
+            _ => return parser.expected("stage name identifier", parser.peek_token()),
+        }
+    }
+    Ok(Ident::new(ident))
+}
+
+pub fn parse_snowflake_stage_name(parser: &mut Parser) -> Result<ObjectName, ParserError> {
+    match parser.next_token().token {
+        Token::AtSign => {
+            parser.prev_token();
+            let mut idents = vec![];
+            loop {
+                idents.push(parse_stage_name_identifier(parser)?);
+                if !parser.consume_token(&Token::Period) {
+                    break;
+                }
+            }
+            Ok(ObjectName(idents))
+        }
+        _ => {
+            parser.prev_token();
+            Ok(parser.parse_object_name()?)
+        }
+    }
+}
+
 pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
-    let into: ObjectName = parser.parse_object_name()?;
+    let into: ObjectName = parse_snowflake_stage_name(parser)?;
     let mut files: Vec<String> = vec![];
     let mut from_transformations: Option<Vec<StageLoadSelectItem>> = None;
     let from_stage_alias;
@@ -163,7 +203,7 @@ pub fn parse_copy_into(parser: &mut Parser) -> Result<Statement, ParserError> {
             from_transformations = parse_select_items_for_data_load(parser)?;
 
             parser.expect_keyword(Keyword::FROM)?;
-            from_stage = parser.parse_object_name()?;
+            from_stage = parse_snowflake_stage_name(parser)?;
             stage_params = parse_stage_params(parser)?;
 
             // as

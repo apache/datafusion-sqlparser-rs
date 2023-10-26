@@ -2002,6 +2002,19 @@ mod tests {
     }
 
     #[test]
+    fn tokenize_snowflake_div() {
+        let sql = r#"field/1000"#;
+        let dialect = SnowflakeDialect {};
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_word(r#"field"#, None),
+            Token::Div,
+            Token::Number("1000".to_string(), false),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
     fn tokenize_quoted_identifier_with_no_escape() {
         let sql = r#" "a "" b" "a """ "c """"" "#;
         let dialect = GenericDialect {};

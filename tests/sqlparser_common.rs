@@ -20,7 +20,7 @@
 
 use matches::assert_matches;
 use sqlparser::ast::SelectItem::UnnamedExpr;
-use sqlparser::ast::TableFactor::Pivot;
+use sqlparser::ast::TableFactor::{Pivot, Unpivot};
 use sqlparser::ast::*;
 use sqlparser::dialect::{
     AnsiDialect, BigQueryDialect, ClickHouseDialect, DuckDbDialect, GenericDialect, HiveDialect,
@@ -7736,10 +7736,16 @@ fn parse_pivot_table() {
     assert_eq!(
         verified_only_select(sql).from[0].relation,
         Pivot {
-            name: ObjectName(vec![Ident::new("monthly_sales")]),
-            table_alias: Some(TableAlias {
-                name: Ident::new("a").empty_span(),
-                columns: vec![]
+            table: Box::new(TableFactor::Table {
+                name: ObjectName(vec![Ident::new("monthly_sales")]),
+                alias: Some(TableAlias {
+                    name: Ident::new("a").empty_span(),
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                partitions: vec![],
             }),
             aggregate_function: Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("SUM")]),
@@ -7764,7 +7770,7 @@ fn parse_pivot_table() {
                 Value::SingleQuotedString("MAR".to_string()),
                 Value::SingleQuotedString("APR".to_string()),
             ],
-            pivot_alias: Some(TableAlias {
+            alias: Some(TableAlias {
                 name: Ident {
                     value: "p".to_string(),
                     quote_style: None
@@ -7776,17 +7782,15 @@ fn parse_pivot_table() {
     );
     assert_eq!(verified_stmt(sql).to_string(), sql);
 
+    // parsing should succeed with empty alias
     let sql_without_table_alias = concat!(
         "SELECT * FROM monthly_sales ",
         "PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ",
         "ORDER BY EMPID"
     );
     assert_matches!(
-        verified_only_select(sql_without_table_alias).from[0].relation,
-        Pivot {
-            table_alias: None, // parsing should succeed with empty alias
-            ..
-        }
+        &verified_only_select(sql_without_table_alias).from[0].relation,
+        Pivot { table, .. } if matches!(&**table, TableFactor::Table { alias: None, .. })
     );
     assert_eq!(
         verified_stmt(sql_without_table_alias).to_string(),
@@ -7819,6 +7823,125 @@ fn parse_within_group() {
                 nulls_first: None,
             }]),
         })
+    );
+}
+
+#[test]
+fn parse_unpivot_table() {
+    let sql = concat!(
+        "SELECT * FROM sales AS s ",
+        "UNPIVOT(quantity FOR quarter IN (Q1, Q2, Q3, Q4)) AS u (product, quarter, quantity)"
+    );
+
+    pretty_assertions::assert_eq!(
+        verified_only_select(sql).from[0].relation,
+        Unpivot {
+            table: Box::new(TableFactor::Table {
+                name: ObjectName(vec![Ident::new("sales")]),
+                alias: Some(TableAlias {
+                    name: Ident::new("s").empty_span(),
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                partitions: vec![],
+            }),
+            value: Ident::new("quantity").empty_span(),
+
+            name: Ident::new("quarter").empty_span(),
+            columns: ["Q1", "Q2", "Q3", "Q4"]
+                .into_iter()
+                .map(|f| Ident::new(f).empty_span())
+                .collect(),
+            alias: Some(TableAlias {
+                name: Ident::new("u").empty_span(),
+                columns: ["product", "quarter", "quantity"]
+                    .into_iter()
+                    .map(|f| Ident::new(f).empty_span())
+                    .collect()
+            }),
+        }
+    );
+    assert_eq!(verified_stmt(sql).to_string(), sql);
+
+    let sql_without_aliases = concat!(
+        "SELECT * FROM sales ",
+        "UNPIVOT(quantity FOR quarter IN (Q1, Q2, Q3, Q4))"
+    );
+
+    assert_matches!(
+        &verified_only_select(sql_without_aliases).from[0].relation,
+        Unpivot {
+            table,
+            alias: None,
+            ..
+        } if matches!(&**table, TableFactor::Table { alias: None, .. })
+    );
+    assert_eq!(
+        verified_stmt(sql_without_aliases).to_string(),
+        sql_without_aliases
+    );
+}
+
+#[test]
+fn parse_pivot_unpivot_table() {
+    let sql = concat!(
+        "SELECT * FROM census AS c ",
+        "UNPIVOT(population FOR year IN (population_2000, population_2010)) AS u ",
+        "PIVOT(sum(population) FOR year IN ('population_2000', 'population_2010')) AS p"
+    );
+
+    pretty_assertions::assert_eq!(
+        verified_only_select(sql).from[0].relation,
+        Pivot {
+            table: Box::new(Unpivot {
+                table: Box::new(TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("census")]),
+                    alias: Some(TableAlias {
+                        name: Ident::new("c").empty_span(),
+                        columns: vec![]
+                    }),
+                    args: None,
+                    with_hints: vec![],
+                    version: None,
+                    partitions: vec![],
+                }),
+                value: Ident::new("population").empty_span(),
+                name: Ident::new("year").empty_span(),
+                columns: ["population_2000", "population_2010"]
+                    .into_iter()
+                    .map(|f| Ident::new(f).empty_span())
+                    .collect(),
+                alias: Some(TableAlias {
+                    name: Ident::new("u").empty_span(),
+                    columns: vec![]
+                }),
+            }),
+            aggregate_function: Expr::Function(Function {
+                name: ObjectName(vec![Ident::new("sum")]),
+                args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                    Expr::Identifier(Ident::new("population").empty_span())
+                ))]),
+                within_group: None,
+                over: None,
+                distinct: false,
+                special: false,
+                order_by: vec![],
+                limit: None,
+                on_overflow: None,
+                null_treatment: None,
+            }),
+            value_column: vec![Ident::new("year")],
+            pivot_values: vec![
+                Value::SingleQuotedString("population_2000".to_string()),
+                Value::SingleQuotedString("population_2010".to_string())
+            ],
+            alias: Some(TableAlias {
+                name: Ident::new("p").empty_span(),
+                columns: vec![]
+            }),
+        }
     );
     assert_eq!(verified_stmt(sql).to_string(), sql);
 }

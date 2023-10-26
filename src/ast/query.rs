@@ -736,13 +736,28 @@ pub enum TableFactor {
     /// For example `FROM monthly_sales PIVOT(sum(amount) FOR MONTH IN ('JAN', 'FEB'))`
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/pivot>
     Pivot {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-        name: ObjectName,
-        table_alias: Option<TableAlias>,
+        #[cfg_attr(feature = "visitor", visit(with = "visit_table_factor"))]
+        table: Box<TableFactor>,
         aggregate_function: Expr, // Function expression
         value_column: Vec<Ident>,
         pivot_values: Vec<Value>,
-        pivot_alias: Option<TableAlias>,
+        alias: Option<TableAlias>,
+    },
+    /// An UNPIVOT operation on a table.
+    ///
+    /// Syntax:
+    /// ```sql
+    /// table UNPIVOT(value FOR name IN (column1, [ column2, ... ])) [ alias ]
+    /// ```
+    ///
+    /// See <https://docs.snowflake.com/en/sql-reference/constructs/unpivot>.
+    Unpivot {
+        #[cfg_attr(feature = "visitor", visit(with = "visit_table_factor"))]
+        table: Box<TableFactor>,
+        value: WithSpan<Ident>,
+        name: WithSpan<Ident>,
+        columns: Vec<WithSpan<Ident>>,
+        alias: Option<TableAlias>,
     },
 }
 
@@ -849,32 +864,42 @@ impl fmt::Display for TableFactor {
                 Ok(())
             }
             TableFactor::Pivot {
-                name,
-                table_alias,
+                table,
                 aggregate_function,
                 value_column,
                 pivot_values,
-                pivot_alias,
+                alias,
             } => {
-                write!(f, "{}", name)?;
-                if table_alias.is_some() {
-                    write!(f, " AS {}", table_alias.as_ref().unwrap())?;
-                }
                 write!(
                     f,
-                    " PIVOT({} FOR {} IN (",
+                    "{} PIVOT({} FOR {} IN ({}))",
+                    table,
                     aggregate_function,
-                    Expr::CompoundIdentifier(value_column.to_vec().empty_span())
+                    Expr::CompoundIdentifier(value_column.to_vec().empty_span()),
+                    display_comma_separated(pivot_values)
                 )?;
-                for value in pivot_values {
-                    write!(f, "{}", value)?;
-                    if !value.eq(pivot_values.last().unwrap()) {
-                        write!(f, ", ")?;
-                    }
+                if alias.is_some() {
+                    write!(f, " AS {}", alias.as_ref().unwrap())?;
                 }
-                write!(f, "))")?;
-                if pivot_alias.is_some() {
-                    write!(f, " AS {}", pivot_alias.as_ref().unwrap())?;
+                Ok(())
+            }
+            TableFactor::Unpivot {
+                table,
+                value,
+                name,
+                columns,
+                alias,
+            } => {
+                write!(
+                    f,
+                    "{} UNPIVOT({} FOR {} IN ({}))",
+                    table,
+                    value,
+                    name,
+                    display_comma_separated(columns)
+                )?;
+                if alias.is_some() {
+                    write!(f, " AS {}", alias.as_ref().unwrap())?;
                 }
                 Ok(())
             }

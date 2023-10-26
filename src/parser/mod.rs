@@ -6615,9 +6615,8 @@ impl<'a> Parser<'a> {
                         | TableFactor::UNNEST { alias, .. }
                         | TableFactor::TableFunction { alias, .. }
                         | TableFactor::FieldAccessor { alias, .. }
-                        | TableFactor::Pivot {
-                            pivot_alias: alias, ..
-                        }
+                        | TableFactor::Pivot { alias, .. }
+                        | TableFactor::Unpivot { alias, .. }
                         | TableFactor::NestedJoin { alias, .. } => {
                             // but not `FROM (mytable AS alias1) AS alias2`.
                             if let Some(inner_alias) = alias {
@@ -6696,11 +6695,6 @@ impl<'a> Parser<'a> {
 
             let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
 
-            // Pivot
-            if self.parse_keyword(Keyword::PIVOT) {
-                return self.parse_pivot_table_factor(name, alias);
-            }
-
             // MSSQL-specific table hints:
             let mut with_hints = vec![];
             if self.parse_keyword(Keyword::WITH) {
@@ -6712,14 +6706,25 @@ impl<'a> Parser<'a> {
                     self.prev_token();
                 }
             };
-            Ok(TableFactor::Table {
+
+            let mut table = TableFactor::Table {
                 name,
                 alias,
                 args,
                 with_hints,
                 version,
                 partitions,
-            })
+            };
+
+            while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT]) {
+                table = match kw {
+                    Keyword::PIVOT => self.parse_pivot_table_factor(table)?,
+                    Keyword::UNPIVOT => self.parse_unpivot_table_factor(table)?,
+                    _ => unreachable!(),
+                }
+            }
+
+            Ok(table)
         }
     }
 
@@ -6765,8 +6770,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_pivot_table_factor(
         &mut self,
-        name: ObjectName,
-        table_alias: Option<TableAlias>,
+        table: TableFactor,
     ) -> Result<TableFactor, ParserError> {
         self.expect_token(&Token::LParen)?;
         let function_name = match self.next_token().token {
@@ -6783,12 +6787,32 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::RParen)?;
         let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
         Ok(TableFactor::Pivot {
-            name,
-            table_alias,
+            table: Box::new(table),
             aggregate_function: function,
             value_column,
             pivot_values,
-            pivot_alias: alias,
+            alias,
+        })
+    }
+
+    pub fn parse_unpivot_table_factor(
+        &mut self,
+        table: TableFactor,
+    ) -> Result<TableFactor, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let value = self.parse_identifier()?;
+        self.expect_keyword(Keyword::FOR)?;
+        let name = self.parse_identifier()?;
+        self.expect_keyword(Keyword::IN)?;
+        let columns = self.parse_parenthesized_column_list(Mandatory, false)?;
+        self.expect_token(&Token::RParen)?;
+        let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+        Ok(TableFactor::Unpivot {
+            table: Box::new(table),
+            value,
+            name,
+            columns,
+            alias,
         })
     }
 

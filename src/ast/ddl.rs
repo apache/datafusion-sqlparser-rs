@@ -547,7 +547,7 @@ impl fmt::Display for ColumnDef {
             write!(f, " COLLATE {collation}")?;
         }
         if let Some(codec) = &self.codec {
-            write!(f, " CODEC({})", display_comma_separated(&codec))?;
+            write!(f, " CODEC({})", display_comma_separated(codec))?;
         }
         for option in &self.options {
             write!(f, " {option}")?;

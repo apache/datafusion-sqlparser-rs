@@ -3073,14 +3073,12 @@ impl<'a> Parser<'a> {
                 };
                 self.expect_token(&Token::RParen)?;
                 Some(columns)
+            } else if self.parse_keyword(Keyword::TUPLE) && dialect_of!(self is ClickHouseDialect) {
+                self.expect_token(&Token::LParen)?;
+                self.expect_token(&Token::RParen)?;
+                Some(vec![])
             } else {
-                if self.parse_keyword(Keyword::TUPLE) && dialect_of!(self is ClickHouseDialect) {
-                    self.expect_token(&Token::LParen)?;
-                    self.expect_token(&Token::RParen)?;
-                    Some(vec![])
-                } else {
-                    Some(vec![self.parse_identifier()?])
-                }
+                Some(vec![self.parse_identifier()?])
             }
         } else {
             None
@@ -3811,14 +3809,12 @@ impl<'a> Parser<'a> {
                 };
                 self.expect_token(&Token::RParen)?;
                 Some(columns)
+            } else if self.parse_keyword(Keyword::TUPLE) && dialect_of!(self is ClickHouseDialect) {
+                self.expect_token(&Token::LParen)?;
+                self.expect_token(&Token::RParen)?;
+                Some(vec![])
             } else {
-                if self.parse_keyword(Keyword::TUPLE) && dialect_of!(self is ClickHouseDialect) {
-                    self.expect_token(&Token::LParen)?;
-                    self.expect_token(&Token::RParen)?;
-                    Some(vec![])
-                } else {
-                    Some(vec![self.parse_identifier()?])
-                }
+                Some(vec![self.parse_identifier()?])
             }
         } else {
             None
@@ -8044,18 +8040,13 @@ impl<'a> Parser<'a> {
 
     fn span_from_index(&mut self, mut start_index: usize) -> Span {
         let mut start_token = &self.tokens[start_index];
-        loop {
-            match start_token {
-                TokenWithLocation {
-                    token: Token::Whitespace(_),
-                    span: _,
-                } => {
-                    start_index += 1;
-                    start_token = &self.tokens[start_index];
-                    continue;
-                }
-                _ => break,
-            }
+        while let TokenWithLocation {
+            token: Token::Whitespace(_),
+            span: _,
+        } = start_token
+        {
+            start_index += 1;
+            start_token = &self.tokens[start_index];
         }
         let start_span = start_token.span;
 
@@ -8090,7 +8081,7 @@ impl<'a> Parser<'a> {
                 non_whitespace => return non_whitespace.span.union(start_span),
             }
         }
-        return start_span;
+        start_span
     }
 
     fn parse_partitions(&mut self) -> Result<Vec<Ident>, ParserError> {

@@ -356,7 +356,7 @@ pub type ColumnPosition = u64;
 pub type LineColumn = (LineNumber, ColumnPosition);
 
 /// Location in input string
-#[derive(Debug, Eq, PartialEq, Clone, Copy, Ord, PartialOrd, Hash)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, Ord, PartialOrd, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Location {
@@ -390,12 +390,6 @@ impl fmt::Display for Location {
             " at Line: {}, Column {}",
             self.line, self.column,
         )
-    }
-}
-
-impl Default for Location {
-    fn default() -> Self {
-        Self { line: 0, column: 0 }
     }
 }
 

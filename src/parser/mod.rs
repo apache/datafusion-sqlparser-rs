@@ -2344,7 +2344,11 @@ impl<'a> Parser<'a> {
         } else {
             Expr::InList {
                 expr: Box::new(expr),
-                list: self.parse_comma_separated(Parser::parse_expr)?,
+                list: if self.dialect.supports_in_empty_list() {
+                    self.parse_comma_separated0(Parser::parse_expr)?
+                } else {
+                    self.parse_comma_separated(Parser::parse_expr)?
+                },
                 negated,
             }
         };
@@ -2708,6 +2712,27 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(values)
+    }
+
+    /// Parse a comma-separated list of 0+ items accepted by `F`
+    pub fn parse_comma_separated0<T, F>(&mut self, f: F) -> Result<Vec<T>, ParserError>
+    where
+        F: FnMut(&mut Parser<'a>) -> Result<T, ParserError>,
+    {
+        // ()
+        if matches!(self.peek_token().token, Token::RParen) {
+            return Ok(vec![]);
+        }
+        // (,)
+        if self.options.trailing_commas
+            && matches!(self.peek_nth_token(0).token, Token::Comma)
+            && matches!(self.peek_nth_token(1).token, Token::RParen)
+        {
+            let _ = self.consume_token(&Token::Comma);
+            return Ok(vec![]);
+        }
+
+        self.parse_comma_separated(f)
     }
 
     /// Run a parser method `f`, reverting back to the current position

@@ -8,6 +8,49 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.39.0] 2023-10-27
+
+### Added
+* Support for `LATERAL FLATTEN` and similar (#1026) - Thanks @lustefaniak
+* Support BigQuery struct, array and bytes , int64, `float64` datatypes (#1003) - Thanks @iffyio
+* Support numbers as placeholders in Snowflake (e.g. `:1)` (#1001) - Thanks @yuval-illumex
+* Support date 'key' when using semi structured data (#1023) @yuval-illumex
+* Support IGNORE|RESPECT NULLs clause in window functions (#998) - Thanks @yuval-illumex
+* Support for single-quoted identifiers (#1021) - Thanks @lovasoa
+* Support multiple PARTITION statements in ALTER TABLE ADD statement (#1011) - Thanks @bitemyapp
+* Support "with" identifiers surrounded by backticks in GenericDialect (#1010) - Thanks @bitemyapp
+* Support INSERT IGNORE in MySql and GenericDialect (#1004) - Thanks @emin100
+* Support SQLite `pragma` statement (#969) - Thanks @marhoily
+* Support `position` as a column name (#1022) - Thanks @lustefaniak
+* Support `FILTER` in Functions (for `OVER`) clause (#1007) - Thanks @lovasoa
+* Support `SELECT * EXCEPT/REPLACE` syntax from ClickHouse (#1013) - Thanks @lustefaniak
+* Support subquery as function arg w/o parens in Snowflake dialect (#996) - Thanks @jmhain
+* Support `UNION DISTINCT BY NAME` syntax (#997) - Thanks @alexander-beedie
+* Support mysql `RLIKE` and `REGEXP` binary operators (#1017) - Thanks @lovasoa
+* Support bigquery `CAST AS x [STRING|DATE] FORMAT` syntax (#978) - Thanks @lustefaniak
+* Support Snowflake/BigQuery `TRIM`. (#975) - Thanks @zdenal
+* Support `CREATE [TEMPORARY|TEMP] VIEW [IF NOT EXISTS] `(#993) - Thanks @gabivlj
+* Support for `CREATE VIEW … WITH NO SCHEMA BINDING` Redshift (#979) - Thanks @lustefaniak
+* Support `UNPIVOT` and a fix for chained PIVOTs (#983) - @jmhain
+* Support for `LIMIT BY` (#977) - Thanks @lustefaniak
+* Support for mixed BigQuery table name quoting (#971) - Thanks @iffyio
+* Support `DELETE` with `ORDER BY` and `LIMIT` (MySQL) (#992) - Thanks @ulrichsg
+* Support `EXTRACT` for `DAYOFWEEK`, `DAYOFYEAR`, `ISOWEEK`, `TIME` (#980) - Thanks @lustefaniak
+* Support `ATTACH DATABASE` (#989) - Thanks @lovasoa
+
+### Fixed
+* Fix handling of `/~%` in Snowflake stage name (#1009) - Thanks @lustefaniak
+* Fix column `COLLATE` not displayed (#1012) - Thanks @lustefaniak
+* Fix for clippy 1.73 (#995) - Thanks @alamb
+
+### Changed
+* Test to ensure `+ - * / %` binary operators work the same in all dialects (#1025)  - Thanks @lustefaniak
+* Improve documentation on Parser::consume_token and friends (#994) - Thanks @alamb
+* Test that regexp can be used as an identifier in postgres (#1018) - Thanks @lovasoa
+* Add docstrings for Dialects, update README (#1016) - Thanks @alamb
+* Add JumpWire to users in README (#990) - Thanks @hexedpackets
+* Add tests for clickhouse: `tokenize == as Token::DoubleEq` (#981)- Thanks @lustefaniak
+
 ## [0.38.0] 2023-09-21
 
 ### Added

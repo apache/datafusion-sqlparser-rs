@@ -6558,9 +6558,20 @@ impl<'a> Parser<'a> {
             // `parse_derived_table_factor` below will return success after parsing the
             // subquery, followed by the closing ')', and the alias of the derived table.
             // In the example above this is case (3).
-            return_ok_if_some!(
+            if let Some(mut table) =
                 self.maybe_parse(|parser| parser.parse_derived_table_factor(NotLateral))
-            );
+            {
+                while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT])
+                {
+                    table = match kw {
+                        Keyword::PIVOT => self.parse_pivot_table_factor(table)?,
+                        Keyword::UNPIVOT => self.parse_unpivot_table_factor(table)?,
+                        _ => unreachable!(),
+                    }
+                }
+                return Ok(table);
+            }
+
             // A parsing error from `parse_derived_table_factor` indicates that the '(' we've
             // recently consumed does not start a derived table (cases 1, 2, or 4).
             // `maybe_parse` will ignore such an error and rewind to be after the opening '('.

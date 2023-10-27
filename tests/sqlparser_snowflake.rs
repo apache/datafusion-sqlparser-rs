@@ -1216,3 +1216,10 @@ fn parse_array_index_json_with_cast() {
         "SELECT CAST(src[0]:order_number AS STRING) FROM car_sales",
     );
 }
+
+#[test]
+fn parse_pivot_of_table_factor_derived() {
+    snowflake().verified_stmt(
+        "SELECT * FROM (SELECT place_id, weekday, open FROM times AS p) PIVOT(max(open) FOR weekday IN (0, 1, 2, 3, 4, 5, 6)) AS p (place_id, open_sun, open_mon, open_tue, open_wed, open_thu, open_fri, open_sat)"
+    );
+}

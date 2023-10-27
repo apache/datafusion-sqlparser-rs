@@ -2488,9 +2488,10 @@ impl<'a> Parser<'a> {
                 // might eat tokens even thought it fails.
                 self.index = index;
                 let peek_token = &self.peek_token().token;
-                return if Self::is_comma_separated_end(peek_token)
-                    || matches!(peek_token, Token::Comma) && self.options.trailing_commas
-                {
+                return if Self::is_comma_separated_end(peek_token) {
+                    Ok(values)
+                } else if matches!(peek_token, Token::Comma) && self.options.trailing_commas {
+                    let _ = self.consume_token(&Token::Comma);
                     Ok(values)
                 } else {
                     Err(e)

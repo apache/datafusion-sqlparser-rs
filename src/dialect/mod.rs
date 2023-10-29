@@ -124,6 +124,10 @@ pub trait Dialect: Debug + Any {
     fn supports_substring_from_for_expr(&self) -> bool {
         true
     }
+    /// Returns true if the dialect supports `(NOT) IN ()` expressions
+    fn supports_in_empty_list(&self) -> bool {
+        false
+    }
     /// Dialect-specific prefix parser override
     fn parse_prefix(&self, _parser: &mut Parser) -> Option<Result<Expr, ParserError>> {
         // return None to fall back to the default behavior

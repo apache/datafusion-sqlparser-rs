@@ -22,6 +22,7 @@ use test_utils::*;
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SQLiteDialect};
+use sqlparser::parser::ParserOptions;
 use sqlparser::tokenizer::Token;
 
 #[test]
@@ -392,10 +393,43 @@ fn parse_attach_database() {
     }
 }
 
+#[test]
+fn parse_where_in_empty_list() {
+    let sql = "SELECT * FROM t1 WHERE a IN ()";
+    let select = sqlite().verified_only_select(sql);
+    if let Expr::InList { list, .. } = select.selection.as_ref().unwrap() {
+        assert_eq!(list.len(), 0);
+    } else {
+        unreachable!()
+    }
+
+    sqlite_with_options(ParserOptions::new().with_trailing_commas(true)).one_statement_parses_to(
+        "SELECT * FROM t1 WHERE a IN (,)",
+        "SELECT * FROM t1 WHERE a IN ()",
+    );
+}
+
+#[test]
+fn invalid_empty_list() {
+    let sql = "SELECT * FROM t1 WHERE a IN (,,)";
+    let sqlite = sqlite_with_options(ParserOptions::new().with_trailing_commas(true));
+    assert_eq!(
+        "sql parser error: Expected an expression:, found: ,",
+        sqlite.parse_sql_statements(sql).unwrap_err().to_string()
+    );
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SQLiteDialect {})],
         options: None,
+    }
+}
+
+fn sqlite_with_options(options: ParserOptions) -> TestedDialects {
+    TestedDialects {
+        dialects: vec![Box::new(SQLiteDialect {})],
+        options: Some(options),
     }
 }
 

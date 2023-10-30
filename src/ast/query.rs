@@ -659,6 +659,61 @@ impl fmt::Display for TableWithJoins {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SamplingMethod {
+    Bernoulli,
+    Row,
+    System,
+    Block,
+}
+
+impl Display for SamplingMethod {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SamplingMethod::Bernoulli => write!(f, "BERNOULLI"),
+            SamplingMethod::Row => write!(f, "ROW"),
+            SamplingMethod::System => write!(f, "SYSTEM"),
+            SamplingMethod::Block => write!(f, "BLOCK"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum SelectionCount {
+    FractionBased(Value),
+    FixedSizeRows(Value),
+}
+
+impl Display for SelectionCount {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SelectionCount::FractionBased(v) => write!(f, "{}", v),
+            SelectionCount::FixedSizeRows(v) => write!(f, "{} ROWS", v),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableSampleSeed {
+    Repeatable(Value),
+    Seed(Value),
+}
+
+impl Display for TableSampleSeed {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TableSampleSeed::Repeatable(v) => write!(f, "REPEATABLE ({})", v),
+            TableSampleSeed::Seed(v) => write!(f, "SEED ({})", v),
+        }
+    }
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -758,6 +813,26 @@ pub enum TableFactor {
         name: WithSpan<Ident>,
         columns: Vec<WithSpan<Ident>>,
         alias: Option<TableAlias>,
+    },
+
+    /// An SAMPLE | TABLESAMPLE operation on a TableFactor as allowed in Snowflake.
+    ///
+    /// Syntax:
+    /// ```sql
+    /// SELECT ...
+    /// FROM ...
+    ///   { SAMPLE | TABLESAMPLE } [ samplingMethod ] ( { <probability> | <num> ROWS } ) [ { REPEATABLE | SEED } ( <seed> ) ]
+    /// [ ... ]
+    /// ```
+    ///
+    /// See <https://docs.snowflake.com/en/sql-reference/constructs/sample>.
+    TableSample {
+        #[cfg_attr(feature = "visitor", visit(with = "visit_table_factor"))]
+        table: Box<TableFactor>,
+        sample: bool,
+        sampling_method: Option<SamplingMethod>,
+        to_return: SelectionCount,
+        seed: Option<TableSampleSeed>,
     },
 }
 
@@ -900,6 +975,29 @@ impl fmt::Display for TableFactor {
                 )?;
                 if alias.is_some() {
                     write!(f, " AS {}", alias.as_ref().unwrap())?;
+                }
+                Ok(())
+            }
+
+            TableFactor::TableSample {
+                table,
+                sample,
+                sampling_method,
+                to_return,
+                seed,
+            } => {
+                write!(f, "{}", table)?;
+                if *sample {
+                    write!(f, " SAMPLE")?;
+                } else {
+                    write!(f, " TABLESAMPLE")?;
+                }
+                if let Some(sampling_method) = sampling_method {
+                    write!(f, " {}", sampling_method)?;
+                }
+                write!(f, " ({})", to_return)?;
+                if let Some(seed) = seed {
+                    write!(f, " {}", seed)?;
                 }
                 Ok(())
             }

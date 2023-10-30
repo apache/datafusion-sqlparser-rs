@@ -14,6 +14,8 @@
 //! Test SQL syntax specific to Snowflake. The parser based on the
 //! generic dialect is also tested (on the inputs it can handle).
 
+#[cfg(test)]
+use pretty_assertions::assert_eq;
 use sqlparser::ast::helpers::stmt_data_loading::{
     DataLoadingOption, DataLoadingOptionType, StageLoadSelectItem,
 };
@@ -26,9 +28,6 @@ use test_utils::*;
 
 #[macro_use]
 mod test_utils;
-
-#[cfg(test)]
-use pretty_assertions::assert_eq;
 
 #[test]
 fn test_snowflake_create_table() {
@@ -1222,4 +1221,61 @@ fn parse_pivot_of_table_factor_derived() {
     snowflake().verified_stmt(
         "SELECT * FROM (SELECT place_id, weekday, open FROM times AS p) PIVOT(max(open) FOR weekday IN (0, 1, 2, 3, 4, 5, 6)) AS p (place_id, open_sun, open_mon, open_tue, open_wed, open_thu, open_fri, open_sat)"
     );
+}
+
+#[test]
+fn parse_tablesample() {
+    snowflake().verified_stmt("SELECT * FROM testtable SAMPLE (10)");
+    snowflake().verified_stmt("SELECT * FROM testtable TABLESAMPLE BERNOULLI (20.3)");
+    snowflake().verified_stmt("SELECT * FROM testtable TABLESAMPLE (100)");
+    snowflake().verified_stmt("SELECT * FROM (SELECT * FROM example_table) SAMPLE (1) SEED (99)");
+    snowflake().verified_stmt("SELECT * FROM testtable SAMPLE ROW (0)");
+    snowflake().verified_stmt(
+        "SELECT i, j FROM table1 AS t1 SAMPLE (25) JOIN table2 AS t2 SAMPLE (50) WHERE t2.j = t1.i",
+    );
+    snowflake().verified_stmt(
+        "SELECT i, j FROM table1 AS t1 JOIN table2 AS t2 SAMPLE (50) WHERE t2.j = t1.i",
+    );
+    snowflake().verified_stmt("SELECT * FROM testtable SAMPLE (10 ROWS)");
+    let actual_select_only = snowflake()
+        .verified_only_select("SELECT * FROM testtable SAMPLE BLOCK (0.012) REPEATABLE (99992)");
+    let expected = Select {
+        distinct: None,
+        top: None,
+        projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions {
+            opt_exclude: None,
+            opt_except: None,
+            opt_rename: None,
+            opt_replace: None,
+        })
+        .empty_span()],
+        into: None,
+        from: vec![TableWithJoins {
+            relation: TableFactor::TableSample {
+                table: Box::new(TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("testtable")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                    version: None,
+                    partitions: vec![],
+                }),
+                sample: true,
+                sampling_method: Some(SamplingMethod::Block),
+                to_return: SelectionCount::FractionBased(number("0.012")),
+                seed: Some(TableSampleSeed::Repeatable(number("99992"))),
+            },
+            joins: vec![],
+        }],
+        lateral_views: vec![],
+        selection: None,
+        group_by: GroupByExpr::Expressions(vec![]),
+        cluster_by: vec![],
+        distribute_by: vec![],
+        sort_by: vec![],
+        having: None,
+        named_window: vec![],
+        qualify: None,
+    };
+    assert_eq!(actual_select_only, expected);
 }

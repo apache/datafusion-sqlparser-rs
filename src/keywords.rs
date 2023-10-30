@@ -104,6 +104,7 @@ define_keywords!(
     BEGIN,
     BEGIN_FRAME,
     BEGIN_PARTITION,
+    BERNOULLI,
     BETWEEN,
     BIGDECIMAL,
     BIGINT,
@@ -111,6 +112,7 @@ define_keywords!(
     BINARY,
     BINDING,
     BLOB,
+    BLOCK,
     BLOOMFILTER,
     BOOL,
     BOOLEAN,
@@ -535,12 +537,14 @@ define_keywords!(
     ROW_NUMBER,
     RUN,
     SAFE_CAST,
+    SAMPLE,
     SAVEPOINT,
     SCHEMA,
     SCOPE,
     SCROLL,
     SEARCH,
     SECOND,
+    SEED,
     SELECT,
     SEMI,
     SENSITIVE,
@@ -731,6 +735,9 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::END,
     // for MYSQL PARTITION SELECTION
     Keyword::PARTITION,
+    // for Snowflake TABLESAMPLE
+    Keyword::TABLESAMPLE,
+    Keyword::SAMPLE,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`

@@ -6561,11 +6561,19 @@ impl<'a> Parser<'a> {
             if let Some(mut table) =
                 self.maybe_parse(|parser| parser.parse_derived_table_factor(NotLateral))
             {
-                while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT])
-                {
+                while let Some(kw) = self.parse_one_of_keywords(&[
+                    Keyword::PIVOT,
+                    Keyword::UNPIVOT,
+                    Keyword::TABLESAMPLE,
+                    Keyword::SAMPLE,
+                ]) {
                     table = match kw {
                         Keyword::PIVOT => self.parse_pivot_table_factor(table)?,
                         Keyword::UNPIVOT => self.parse_unpivot_table_factor(table)?,
+                        Keyword::TABLESAMPLE => {
+                            self.parse_tablesample_table_factor(table, false)?
+                        }
+                        Keyword::SAMPLE => self.parse_tablesample_table_factor(table, true)?,
                         _ => unreachable!(),
                     }
                 }
@@ -6636,6 +6644,7 @@ impl<'a> Parser<'a> {
                             // `(mytable AS alias)`
                             alias.replace(outer_alias);
                         }
+                        TableFactor::TableSample { .. } => {}
                     };
                 }
                 // Do not store the extra set of parens in the AST
@@ -6723,10 +6732,17 @@ impl<'a> Parser<'a> {
                 partitions,
             };
 
-            while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT]) {
+            while let Some(kw) = self.parse_one_of_keywords(&[
+                Keyword::PIVOT,
+                Keyword::UNPIVOT,
+                Keyword::TABLESAMPLE,
+                Keyword::SAMPLE,
+            ]) {
                 table = match kw {
                     Keyword::PIVOT => self.parse_pivot_table_factor(table)?,
                     Keyword::UNPIVOT => self.parse_unpivot_table_factor(table)?,
+                    Keyword::TABLESAMPLE => self.parse_tablesample_table_factor(table, false)?,
+                    Keyword::SAMPLE => self.parse_tablesample_table_factor(table, true)?,
                     _ => unreachable!(),
                 }
             }
@@ -6820,6 +6836,61 @@ impl<'a> Parser<'a> {
             name,
             columns,
             alias,
+        })
+    }
+
+    pub fn parse_tablesample_table_factor(
+        &mut self,
+        table: TableFactor,
+        sample: bool,
+    ) -> Result<TableFactor, ParserError> {
+        let sampling_method: Option<SamplingMethod> = if let Some(kw) =
+            self.parse_one_of_keywords(&[
+                Keyword::BERNOULLI,
+                Keyword::ROW,
+                Keyword::SYSTEM,
+                Keyword::BLOCK,
+            ]) {
+            Some(match kw {
+                Keyword::BERNOULLI => SamplingMethod::Bernoulli,
+                Keyword::ROW => SamplingMethod::Row,
+                Keyword::SYSTEM => SamplingMethod::System,
+                Keyword::BLOCK => SamplingMethod::Block,
+                _ => unreachable!(),
+            })
+        } else {
+            None
+        };
+
+        self.expect_token(&Token::LParen)?;
+        let num = self.parse_value()?;
+        let to_return = if self.parse_keyword(Keyword::ROWS) {
+            SelectionCount::FixedSizeRows(num)
+        } else {
+            SelectionCount::FractionBased(num)
+        };
+        self.expect_token(&Token::RParen)?;
+
+        let seed: Option<TableSampleSeed> =
+            if let Some(kw) = self.parse_one_of_keywords(&[Keyword::REPEATABLE, Keyword::SEED]) {
+                self.expect_token(&Token::LParen)?;
+                let seed_value = self.parse_value()?;
+                self.expect_token(&Token::RParen)?;
+                Some(match kw {
+                    Keyword::REPEATABLE => TableSampleSeed::Repeatable(seed_value),
+                    Keyword::SEED => TableSampleSeed::Seed(seed_value),
+                    _ => unreachable!(),
+                })
+            } else {
+                None
+            };
+
+        Ok(TableFactor::TableSample {
+            table: Box::new(table),
+            sample,
+            sampling_method,
+            to_return,
+            seed,
         })
     }
 

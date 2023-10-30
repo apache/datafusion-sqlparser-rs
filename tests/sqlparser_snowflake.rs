@@ -1248,6 +1248,15 @@ fn parse_create_table_cluster_by() {
 }
 
 #[test]
+fn parse_create_table_comment() {
+    snowflake().verified_stmt("CREATE TABLE my_table (my_column STRING COMMENT 'column comment')");
+    snowflake().one_statement_parses_to(
+        "CREATE TABLE my_table (my_column STRING COMMENT 'column comment') COMMENT='table comment'",
+        "CREATE TABLE my_table (my_column STRING COMMENT 'column comment') COMMENT 'table comment'",
+    );
+}
+
+#[test]
 fn parse_tablesample() {
     snowflake().verified_stmt("SELECT * FROM testtable SAMPLE (10)");
     snowflake().verified_stmt("SELECT * FROM testtable TABLESAMPLE BERNOULLI (20.3)");

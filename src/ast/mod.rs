@@ -1532,6 +1532,11 @@ pub enum Statement {
         /// than empty (represented as ()), the latter meaning "no sorting".
         /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
         order_by: Option<Vec<WithSpan<Ident>>>,
+
+        /// Snowflake CLUSTER BY
+        /// CREATE TABLE <name> ... CLUSTER BY ( <expr1> [ , <expr2> ... ] )
+        /// <https://docs.snowflake.com/en/user-guide/tables-clustering-keys#defining-a-clustering-key-for-a-table>
+        cluster_by: Option<Vec<Expr>>,
         /// SQLite "STRICT" clause.
         /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
         /// then strict typing rules apply to that table.
@@ -2522,6 +2527,7 @@ impl fmt::Display for Statement {
                 on_cluster,
                 primary_key,
                 order_by,
+                cluster_by,
                 strict,
                 table_ttl,
                 clickhouse_settings,
@@ -2682,6 +2688,9 @@ impl fmt::Display for Statement {
                 }
                 if let Some(order_by) = order_by {
                     write!(f, " ORDER BY ({})", display_comma_separated(order_by))?;
+                }
+                if let Some(cluster_by) = cluster_by {
+                    write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
                 }
                 if let Some(table_ttl) = table_ttl {
                     write!(f, " TTL {table_ttl}")?;

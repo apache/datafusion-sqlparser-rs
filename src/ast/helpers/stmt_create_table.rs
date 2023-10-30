@@ -75,6 +75,7 @@ pub struct CreateTableBuilder {
     pub on_cluster: Option<String>,
     pub primary_key: Option<Vec<WithSpan<Ident>>>,
     pub order_by: Option<Vec<WithSpan<Ident>>>,
+    pub cluster_by: Option<Vec<Expr>>,
     pub strict: bool,
     pub table_ttl: Option<Expr>,
     pub clickhouse_settings: Option<Vec<SqlOption>>,
@@ -111,6 +112,7 @@ impl CreateTableBuilder {
             on_cluster: None,
             primary_key: None,
             order_by: None,
+            cluster_by: None,
             strict: false,
             table_ttl: None,
             clickhouse_settings: None,
@@ -249,6 +251,11 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn cluster_by(mut self, cluster_by: Option<Vec<Expr>>) -> Self {
+        self.cluster_by = cluster_by;
+        self
+    }
+
     pub fn strict(mut self, strict: bool) -> Self {
         self.strict = strict;
         self
@@ -294,6 +301,7 @@ impl CreateTableBuilder {
             on_cluster: self.on_cluster,
             primary_key: self.primary_key,
             order_by: self.order_by,
+            cluster_by: self.cluster_by,
             strict: self.strict,
             table_ttl: self.table_ttl,
             clickhouse_settings: self.clickhouse_settings,
@@ -337,6 +345,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 on_cluster,
                 primary_key,
                 order_by,
+                cluster_by,
                 strict,
                 table_ttl,
                 clickhouse_settings,
@@ -369,6 +378,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 on_cluster,
                 primary_key,
                 order_by,
+                cluster_by,
                 strict,
                 table_ttl,
                 clickhouse_settings,

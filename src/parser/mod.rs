@@ -3710,6 +3710,20 @@ impl<'a> Parser<'a> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name()?;
 
+        // Snowflake allows defining `CLUSTER BY` after the name of the table or after columns
+        let mut cluster_by = if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
+            self.expect_token(&Token::LParen)?;
+            let exprs = if self.peek_token() != Token::RParen {
+                self.parse_comma_separated(|p| p.parse_expr())?
+            } else {
+                vec![]
+            };
+            self.expect_token(&Token::RParen)?;
+            Some(exprs)
+        } else {
+            None
+        };
+
         // Clickhouse has `ON CLUSTER 'cluster'` syntax for DDLs
         let on_cluster = if self.parse_keywords(&[Keyword::ON, Keyword::CLUSTER]) {
             let next_token = self.next_token();
@@ -3820,6 +3834,18 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // In Snowflake CLUSTER BY can be also defined after columns
+        if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
+            self.expect_token(&Token::LParen)?;
+            let exprs = if self.peek_token() != Token::RParen {
+                self.parse_comma_separated(|p| p.parse_expr())?
+            } else {
+                vec![]
+            };
+            self.expect_token(&Token::RParen)?;
+            cluster_by = Some(exprs)
+        };
+
         let table_ttl = if self.parse_keyword(Keyword::TTL)
             && dialect_of!(self is ClickHouseDialect | GenericDialect)
         {
@@ -3902,6 +3928,7 @@ impl<'a> Parser<'a> {
             .auto_increment_offset(auto_increment_offset)
             .primary_key(primary_key)
             .order_by(order_by)
+            .cluster_by(cluster_by)
             .default_charset(default_charset)
             .collation(collation)
             .on_commit(on_commit)

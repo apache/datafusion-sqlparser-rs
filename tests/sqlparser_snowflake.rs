@@ -1224,6 +1224,30 @@ fn parse_pivot_of_table_factor_derived() {
 }
 
 #[test]
+fn parse_create_table_cluster_by() {
+    snowflake().verified_stmt(
+        "CREATE OR REPLACE TABLE t3 (vc VARCHAR) CLUSTER BY (SUBSTRING(vc FROM 5 FOR 5))",
+    );
+    snowflake().verified_stmt(
+        "CREATE OR REPLACE TABLE t1 (c1 DATE, c2 STRING, c3 NUMBER) CLUSTER BY (c1, c2)",
+    );
+    snowflake().verified_stmt("CREATE OR REPLACE TABLE t2 (c1 TIMESTAMP, c2 STRING, c3 NUMBER) CLUSTER BY (TO_DATE(C1), SUBSTRING(c2 FROM 0 FOR 10))");
+    snowflake().verified_stmt(r#"CREATE OR REPLACE TABLE T3 (t TIMESTAMP, v variant) CLUSTER BY (CAST(v:Data:id AS number))"#);
+
+    snowflake().verified_stmt(
+            "CREATE OR REPLACE TRANSIENT TABLE clustered_table (locker_number NUMBER(38, 0), MONTH DATE, CAPACITY NUMBER(38, 0)) CLUSTER BY (locker_number)"
+    );
+
+    snowflake().one_statement_parses_to(
+        "create or replace TRANSIENT TABLE clustered_table cluster by (locker_number)(
+	locker_number NUMBER(38,0),
+	MONTH DATE,
+	CAPACITY NUMBER(38,0))",
+        "CREATE OR REPLACE TRANSIENT TABLE clustered_table (locker_number NUMBER(38, 0), MONTH DATE, CAPACITY NUMBER(38, 0)) CLUSTER BY (locker_number)"
+    );
+}
+
+#[test]
 fn parse_tablesample() {
     snowflake().verified_stmt("SELECT * FROM testtable SAMPLE (10)");
     snowflake().verified_stmt("SELECT * FROM testtable TABLESAMPLE BERNOULLI (20.3)");

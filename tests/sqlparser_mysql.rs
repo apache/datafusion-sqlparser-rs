@@ -1503,6 +1503,12 @@ fn parse_show_variables() {
     mysql_and_generic().verified_stmt("SHOW VARIABLES");
     mysql_and_generic().verified_stmt("SHOW VARIABLES LIKE 'admin%'");
     mysql_and_generic().verified_stmt("SHOW VARIABLES WHERE value = '3306'");
+    mysql_and_generic().verified_stmt("SHOW GLOBAL VARIABLES");
+    mysql_and_generic().verified_stmt("SHOW GLOBAL VARIABLES LIKE 'admin%'");
+    mysql_and_generic().verified_stmt("SHOW GLOBAL VARIABLES WHERE value = '3306'");
+    mysql_and_generic().verified_stmt("SHOW SESSION VARIABLES");
+    mysql_and_generic().verified_stmt("SHOW SESSION VARIABLES LIKE 'admin%'");
+    mysql_and_generic().verified_stmt("SHOW GLOBAL VARIABLES WHERE value = '3306'");
 }
 
 #[test]

@@ -1739,7 +1739,11 @@ pub enum Statement {
     /// SHOW VARIABLES
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowVariables { filter: Option<ShowStatementFilter> },
+    ShowVariables {
+        filter: Option<ShowStatementFilter>,
+        global: bool,
+        session: bool,
+    },
     /// SHOW CREATE TABLE
     ///
     /// Note: this is a MySQL-specific statement.
@@ -2977,8 +2981,17 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::ShowVariables { filter } => {
-                write!(f, "SHOW VARIABLES")?;
+            Statement::ShowVariables {
+                filter,
+                global,
+                session,
+            } => {
+                write!(
+                    f,
+                    "SHOW {global}{session}VARIABLES",
+                    global = if *global { "GLOBAL " } else { "" },
+                    session = if *session { "SESSION " } else { "" }
+                )?;
                 if filter.is_some() {
                     write!(f, " {}", filter.as_ref().unwrap())?;
                 }

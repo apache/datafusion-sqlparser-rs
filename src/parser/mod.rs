@@ -1928,11 +1928,7 @@ impl<'a> Parser<'a> {
                 Token::AtAt => JsonOperator::AtAt,
                 _ => unreachable!(),
             };
-            Ok(Expr::JsonAccess {
-                left: Box::new(expr),
-                operator,
-                right: Box::new(self.parse_expr()?),
-            })
+            return self.parse_json_access(expr, operator);
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
             parser_err!(format!("No infix parser for token {:?}", tok.token))
@@ -1981,6 +1977,36 @@ impl<'a> Parser<'a> {
             }),
             _ => Ok(expr),
         }
+    }
+
+    pub fn parse_json_access(&mut self, base_expr: Expr, operation: JsonOperator) -> Result<Expr, ParserError> {
+        debug!("Entering parse_json_access, expr {:?}, operation {:?}", base_expr, operation);
+        let index = self.parse_prefix()?;
+        debug!("index {:?}", index);
+        let mut indexes: Vec<Expr> = vec![index];
+        let mut json_accesses: Vec<Expr> = vec![
+            Expr::JsonAccess {
+                left: Box::new(base_expr),
+                operator: operation,
+                right: Box::new(indexes[0].clone()),
+            }
+        ];
+        //TODO: support different types of operators
+        while self.consume_token(&Token::Arrow) {
+            let index = self.parse_prefix()?;
+
+            indexes.push(index);
+        }
+        for i in 1..indexes.len() {
+            json_accesses.push(
+                Expr::JsonAccess {
+                    left: Box::new(json_accesses[i - 1].clone()),
+                    operator: JsonOperator::Arrow,
+                    right: Box::new(indexes[i].clone()),
+                }
+            );
+        }
+        Ok(json_accesses.pop().unwrap())
     }
 
     /// Parses the parens following the `[ NOT ] IN` operator

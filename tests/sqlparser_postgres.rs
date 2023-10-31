@@ -2237,6 +2237,38 @@ fn test_json() {
         }),
         select.projection[0]
     );
+
+    // test access in the where clause
+    let sql = "SELECT * FROM json_table WHERE text(json -> 'b' -> 'c') = '3'";
+    let select = pg().verified_only_select(sql);
+    assert_eq!(
+        Expr::BinaryOp {
+            left: Box::new(Expr::Function(Function {
+                name: ObjectName(vec![Ident::new("text")]),
+                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::JsonAccess {
+                    left: Box::new(Expr::JsonAccess {
+                        left: Box::new(Expr::Identifier(Ident::new("json"))),
+                        operator: JsonOperator::Arrow,
+                        right: Box::new(Expr::Value(Value::SingleQuotedString(
+                            "b".to_string()
+                        ))),
+                    }),
+                    operator: JsonOperator::Arrow,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "c".to_string()
+                    ))),
+                }))],
+                over: None,
+                distinct: false,
+                special: false,
+                order_by: vec![],
+            })),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::Value(Value::SingleQuotedString("3".to_string()))),
+        },
+        select.selection.unwrap(),
+    );
+
 }
 
 #[test]

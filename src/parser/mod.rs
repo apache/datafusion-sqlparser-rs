@@ -8983,6 +8983,13 @@ impl<'a> Parser<'a> {
         })
     }
 
+    pub fn parse_end(&mut self) -> Result<Statement, ParserError> {
+        // let _ = self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]);
+        Ok(Statement::Commit {
+            chain: self.parse_commit_rollback_chain()?,
+        })
+    }
+
     pub fn parse_transaction_modes(&mut self) -> Result<Vec<TransactionMode>, ParserError> {
         let mut modes = vec![];
         let mut required = false;

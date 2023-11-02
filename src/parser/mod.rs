@@ -420,7 +420,11 @@ impl<'a> Parser<'a> {
                 Token::EOF => break,
 
                 // end of statement
-                Token::Word(word) if word.keyword == Keyword::END => break,
+                Token::Word(word) => {
+                    if expecting_statement_delimiter && word.keyword == Keyword::END {
+                        break;
+                    }
+                }
                 _ => {}
             }
 
@@ -501,6 +505,10 @@ impl<'a> Parser<'a> {
                 // standard `START TRANSACTION` statement. It is supported
                 // by at least PostgreSQL and MySQL.
                 Keyword::BEGIN => Ok(self.parse_begin()?),
+                // `END` is a nonstandard but common alias for the
+                // standard `COMMIT TRANSACTION` statement. It is supported
+                // by PostgreSQL.
+                Keyword::END => Ok(self.parse_end()?),
                 Keyword::SAVEPOINT => Ok(self.parse_savepoint()?),
                 Keyword::COMMIT => Ok(self.parse_commit()?),
                 Keyword::ROLLBACK => Ok(self.parse_rollback()?),
@@ -7618,6 +7626,13 @@ impl<'a> Parser<'a> {
         Ok(Statement::StartTransaction {
             modes: self.parse_transaction_modes()?,
             begin: true,
+        })
+    }
+
+    pub fn parse_end(&mut self) -> Result<Statement, ParserError> {
+        // let _ = self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]);
+        Ok(Statement::Commit {
+            chain: self.parse_commit_rollback_chain()?,
         })
     }
 

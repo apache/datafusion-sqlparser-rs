@@ -7090,7 +7090,14 @@ impl<'a> Parser<'a> {
             let table = self.parse_keyword(Keyword::TABLE);
             let table_name = self.parse_object_name()?;
             let is_mysql = dialect_of!(self is MySqlDialect);
-            let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
+
+            let is_default_values = self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]);
+
+            let columns = if is_default_values {
+                vec![]
+            } else {
+                self.parse_parenthesized_column_list(Optional, is_mysql)?
+            };
 
             let partitioned = if self.parse_keyword(Keyword::PARTITION) {
                 self.expect_token(&Token::LParen)?;
@@ -7104,7 +7111,12 @@ impl<'a> Parser<'a> {
             // Hive allows you to specify columns after partitions as well if you want.
             let after_columns = self.parse_parenthesized_column_list(Optional, false)?;
 
-            let source = Box::new(self.parse_query()?);
+            let source = if is_default_values {
+                None
+            } else {
+                Some(Box::new(self.parse_query()?))
+            };
+
             let on = if self.parse_keyword(Keyword::ON) {
                 if self.parse_keyword(Keyword::CONFLICT) {
                     let conflict_target =

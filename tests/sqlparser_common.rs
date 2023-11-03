@@ -85,7 +85,7 @@ fn parse_insert_values() {
             Statement::Insert {
                 table_name,
                 columns,
-                source,
+                source: Some(source),
                 ..
             } => {
                 assert_eq!(table_name.to_string(), expected_table_name);
@@ -93,7 +93,7 @@ fn parse_insert_values() {
                 for (index, column) in columns.iter().enumerate() {
                     assert_eq!(column, &Ident::new(expected_columns[index].clone()));
                 }
-                match &*source.body {
+                match *source.body {
                     SetExpr::Values(Values { rows, .. }) => {
                         assert_eq!(rows.as_slice(), expected_rows)
                     }
@@ -105,6 +105,71 @@ fn parse_insert_values() {
     }
 
     verified_stmt("INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)");
+}
+
+#[test]
+fn parse_insert_default_values() {
+    let insert_with_default_values = verified_stmt("INSERT INTO test_table DEFAULT VALUES");
+
+    match insert_with_default_values {
+        Statement::Insert {
+            columns,
+            on,
+            returning,
+            source,
+            table_name,
+            ..
+        } => {
+            assert_eq!(columns, vec![]);
+            assert_eq!(on, None);
+            assert_eq!(returning, None);
+            assert_eq!(source, None);
+            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+        }
+        _ => unreachable!(),
+    }
+
+    let insert_with_default_values_and_returning =
+        verified_stmt("INSERT INTO test_table DEFAULT VALUES RETURNING test_column");
+
+    match insert_with_default_values_and_returning {
+        Statement::Insert {
+            columns,
+            on,
+            returning,
+            source,
+            table_name,
+            ..
+        } => {
+            assert_eq!(columns, vec![]);
+            assert_eq!(on, None);
+            assert!(returning.is_some());
+            assert_eq!(source, None);
+            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+        }
+        _ => unreachable!(),
+    }
+
+    let insert_with_default_values_and_on_conflict =
+        verified_stmt("INSERT INTO test_table DEFAULT VALUES  ON CONFLICT DO NOTHING");
+
+    match insert_with_default_values_and_on_conflict {
+        Statement::Insert {
+            columns,
+            on,
+            returning,
+            source,
+            table_name,
+            ..
+        } => {
+            assert_eq!(columns, vec![]);
+            assert!(on.is_some());
+            assert_eq!(returning, None);
+            assert_eq!(source, None);
+            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]

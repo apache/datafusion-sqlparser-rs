@@ -1257,6 +1257,16 @@ fn parse_create_table_comment() {
 }
 
 #[test]
+fn parse_interval_as_alias() {
+    snowflake().verified_stmt("SELECT interval.start FROM intervals AS interval");
+    snowflake().verified_stmt("SELECT interval.interval FROM intervals AS interval");
+    snowflake().verified_stmt("SELECT interval, foo FROM intervals");
+    snowflake().verified_stmt("SELECT * FROM intervals AS i JOIN interval_id_join AS interval ON intervals.interval_id = interval.interval_id");
+    //FIXME:
+    //snowflake().verified_stmt("SELECT interval FROM intervals");
+}
+
+#[test]
 fn parse_tablesample() {
     snowflake().verified_stmt("SELECT * FROM testtable SAMPLE (10)");
     snowflake().verified_stmt("SELECT * FROM testtable TABLESAMPLE BERNOULLI (20.3)");

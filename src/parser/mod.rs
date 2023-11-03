@@ -798,7 +798,13 @@ impl<'a> Parser<'a> {
                 Keyword::SUBSTRING => self.parse_substring_expr(),
                 Keyword::OVERLAY => self.parse_overlay_expr(),
                 Keyword::TRIM => self.parse_trim_expr(),
-                Keyword::INTERVAL => self.parse_interval(),
+                Keyword::INTERVAL
+                    if self.peek_token().token != Token::Period
+                        && self.peek_token().token != Token::Comma
+                        && self.maybe_parse(|parser| parser.parse_interval()).is_some() =>
+                {
+                    self.parse_interval()
+                }
                 // Treat ARRAY[1,2,3] as an array [1,2,3], otherwise try as subquery or a function call
                 Keyword::ARRAY if self.peek_token() == Token::LBracket => {
                     self.expect_token(&Token::LBracket)?;

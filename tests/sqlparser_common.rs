@@ -6228,6 +6228,17 @@ fn parse_commit() {
 }
 
 #[test]
+fn parse_end() {
+    one_statement_parses_to("END AND NO CHAIN", "COMMIT");
+    one_statement_parses_to("END WORK AND NO CHAIN", "COMMIT");
+    one_statement_parses_to("END TRANSACTION AND NO CHAIN", "COMMIT");
+    one_statement_parses_to("END WORK AND CHAIN", "COMMIT AND CHAIN");
+    one_statement_parses_to("END TRANSACTION AND CHAIN", "COMMIT AND CHAIN");
+    one_statement_parses_to("END WORK", "COMMIT");
+    one_statement_parses_to("END TRANSACTION", "COMMIT");
+}
+
+#[test]
 fn parse_rollback() {
     match verified_stmt("ROLLBACK") {
         Statement::Rollback { chain: false } => (),

@@ -7680,6 +7680,14 @@ impl<'a> Parser<'a> {
             let table_name = self.parse_object_name()?;
             let is_mysql = dialect_of!(self is MySqlDialect);
 
+            let is_default_values = self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]);
+
+            let columns = if is_default_values {
+                vec![]
+            } else {
+                self.parse_parenthesized_column_list(Optional, is_mysql)?
+            };
+
             let (columns, partitioned, after_columns, source) =
                 if self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]) {
                     (vec![], None, vec![], None)

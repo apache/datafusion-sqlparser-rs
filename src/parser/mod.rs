@@ -8373,6 +8373,15 @@ impl<'a> Parser<'a> {
             // Hive lets you put table here regardless
             let table = self.parse_keyword(Keyword::TABLE);
             let table_name = self.parse_object_name(false)?;
+            let is_mysql = dialect_of!(self is MySqlDialect);
+
+            let is_default_values = self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]);
+
+            let columns = if is_default_values {
+                vec![]
+            } else {
+                self.parse_parenthesized_column_list(Optional, is_mysql)?
+            };
 
             let table_alias =
                 if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::AS) {
@@ -8410,6 +8419,15 @@ impl<'a> Parser<'a> {
                 })
             } else {
                 None
+            };
+
+            // Hive allows you to specify columns after partitions as well if you want.
+            let after_columns = self.parse_parenthesized_column_list(Optional, false)?;
+
+            let source = if is_default_values {
+                None
+            } else {
+                Some(Box::new(self.parse_query()?))
             };
 
             let on = if self.parse_keyword(Keyword::ON) {

@@ -1372,7 +1372,7 @@ fn parse_prepare() {
         Statement::Insert {
             table_name,
             columns,
-            source,
+            source: Some(source),
             ..
         } => {
             assert_eq!(table_name.to_string(), "customers");

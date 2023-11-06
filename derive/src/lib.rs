@@ -2,8 +2,8 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::spanned::Spanned;
 use syn::{
-    parse_macro_input, parse_quote, Attribute, Data, DeriveInput, Fields, GenericParam, Generics,
-    Ident, Index, Lit, Meta, MetaNameValue, NestedMeta,
+    parse_macro_input, parse_quote, Attribute, Data, DeriveInput, Expr, ExprLit, ExprPath,
+    Fields, GenericParam, Generics, Ident, Index, Lit, Meta, MetaNameValue,
 };
 
 
@@ -81,33 +81,33 @@ struct Attributes {
 impl Attributes {
     fn parse(attrs: &[Attribute]) -> Self {
         let mut out = Self::default();
-        for attr in attrs.iter().filter(|a| a.path.is_ident("visit")) {
-            let meta = attr.parse_meta().expect("visit attribute");
-            match meta {
-                Meta::List(l) => {
-                    for nested in &l.nested {
-                        match nested {
-                            NestedMeta::Meta(Meta::NameValue(v)) => out.parse_name_value(v),
-                            _ => panic!("Expected #[visit(key = \"value\")]"),
-                        }
-                    }
+        for attr in attrs {
+            if let Meta::NameValue(ref namevalue) = attr.meta {
+                if namevalue.path.is_ident("visit") {
+                    out.parse_name_value(namevalue);
                 }
-                _ => panic!("Expected #[visit(...)]"),
             }
+        }
+        if out.with.is_none() {
+            panic!("Expected #[visit(...)]");
         }
         out
     }
 
     /// Updates self with a name value attribute
     fn parse_name_value(&mut self, v: &MetaNameValue) {
-        if v.path.is_ident("with") {
-            match &v.lit {
-                Lit::Str(s) => self.with = Some(format_ident!("{}", s.value(), span = s.span())),
-                _ => panic!("Expected a string value, got {}", v.lit.to_token_stream()),
+        if let Expr::Assign(ref assign) = v.value {
+            if let Expr::Path(ExprPath { ref path, .. }) = *assign.left {
+                if path.is_ident("with") {
+                    match *assign.right {
+                        Expr::Lit(ExprLit { lit: Lit::Str(ref s), .. }) => self.with = Some(format_ident!("{}", s.value(), span = s.span())),
+                        _ => panic!("Expected a string value, got {}", v.value.to_token_stream()),
+                    }
+                    return;
+                }
             }
-            return;
         }
-        panic!("Unrecognised kv attribute {}", v.path.to_token_stream())
+        panic!("Unrecognised kv attribute {}", v.to_token_stream())
     }
 
     /// Returns the pre and post visit token streams

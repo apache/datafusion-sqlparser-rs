@@ -525,6 +525,7 @@ pub enum CharacterLength {
         /// Optional unit. If not informed, the ANSI handles it as CHARACTERS implicitly
         unit: Option<CharLengthUnits>,
     },
+    /// VARCHAR(MAX) or NVARCHAR(MAX), used in T-SQL (Miscrosoft SQL Server)
     Max,
 }
 

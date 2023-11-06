@@ -621,3 +621,10 @@ fn test_trim() {
     bigquery().verified_only_select(r#"SELECT CAST(LTRIM(NULLIF(TRIM(JSON_QUERY(json_dump, "$.email_verified")), ''), '\"') AS BOOL) AS is_email_verified FROM foo"#);
     bigquery().verified_only_select(r#"SELECT CAST(RTRIM(NULLIF(TRIM(JSON_QUERY(json_dump, "$.email_verified")), ''), '\"') AS BOOL) AS is_email_verified FROM foo"#);
 }
+
+#[test]
+fn test_external_query() {
+    bigquery().verified_only_select("SELECT * FROM EXTERNAL_QUERY(\"projects/bq-proj/locations/EU/connections/connection_name\",\"SELECT * FROM public.auth0_user \")");
+    bigquery().verified_only_select("SELECT * FROM EXTERNAL_QUERY(\"projects/bq-proj/locations/EU/connections/connection_name\",\"SELECT * FROM public.auth0_user \", '{\"default_type_for_decimal_columns\":\"numeric\"}')");
+    bigquery().verified_only_select("SELECT * FROM EXTERNAL_QUERY('connection_id','''SELECT * FROM customers AS c ORDER BY c.customer_id''')");
+}

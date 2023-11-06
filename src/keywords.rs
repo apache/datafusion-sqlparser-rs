@@ -259,6 +259,7 @@ define_keywords!(
     EXPLAIN,
     EXTENDED,
     EXTERNAL,
+    EXTERNAL_QUERY,
     EXTRACT,
     FAIL,
     FALSE,

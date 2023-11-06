@@ -777,6 +777,14 @@ pub enum TableFactor {
         with_offset: bool,
         with_offset_alias: Option<WithSpan<Ident>>,
     },
+    /// ```sql
+    /// EXTERNAL_QUERY('connection_id', '''external_database_query'''[, 'options'])
+    /// ```
+    ExternalQuery {
+        connection_id: Value,
+        external_database_query: Value,
+        options: Option<Value>,
+    },
     /// Represents a parenthesized table factor. The SQL spec only allows a
     /// join expression (`(foo <JOIN> bar [ <JOIN> baz ... ])`) to be nested,
     /// possibly several times.
@@ -919,6 +927,23 @@ impl fmt::Display for TableFactor {
                 if let Some(alias) = with_offset_alias {
                     write!(f, " AS {alias}")?;
                 }
+                Ok(())
+            }
+            TableFactor::ExternalQuery {
+                connection_id,
+                external_database_query,
+                options,
+            } => {
+                write!(
+                    f,
+                    "EXTERNAL_QUERY({},{}",
+                    connection_id, external_database_query
+                )?;
+
+                if let Some(options) = options {
+                    write!(f, ", {options}")?;
+                }
+                write!(f, ")")?;
                 Ok(())
             }
             TableFactor::NestedJoin {

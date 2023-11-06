@@ -6567,7 +6567,23 @@ impl<'a> Parser<'a> {
 
     /// A table name or a parenthesized subquery, followed by optional `[AS] alias`
     pub fn parse_table_factor(&mut self) -> Result<TableFactor, ParserError> {
-        if self.parse_keyword(Keyword::LATERAL) {
+        if dialect_of!(self is BigQueryDialect) && self.parse_keyword(Keyword::EXTERNAL_QUERY) {
+            self.expect_token(&Token::LParen)?;
+            let connection_id = self.parse_value()?;
+            self.expect_token(&Token::Comma)?;
+            let external_database_query = self.parse_value()?;
+            let options = if self.consume_token(&Token::Comma) {
+                Some(self.parse_value()?)
+            } else {
+                None
+            };
+            self.expect_token(&Token::RParen)?;
+            Ok(TableFactor::ExternalQuery {
+                connection_id,
+                external_database_query,
+                options,
+            })
+        } else if self.parse_keyword(Keyword::LATERAL) {
             // LATERAL must always be followed by a subquery or table function.
             if self.consume_token(&Token::LParen) {
                 self.parse_derived_table_factor(Lateral)
@@ -6699,6 +6715,7 @@ impl<'a> Parser<'a> {
                             alias.replace(outer_alias);
                         }
                         TableFactor::TableSample { .. } => {}
+                        TableFactor::ExternalQuery { .. } => {}
                     };
                 }
                 // Do not store the extra set of parens in the AST

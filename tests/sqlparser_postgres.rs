@@ -351,10 +351,12 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: Ident::new("first_name").empty_span(),
-                        data_type: DataType::CharacterVarying(Some(CharacterLength {
-                            length: 45,
-                            unit: None
-                        })),
+                        data_type: DataType::CharacterVarying(Some(
+                            CharacterLength::IntegerLength {
+                                length: 45,
+                                unit: None
+                            }
+                        )),
                         collation: None,
                         codec: None,
                         options: vec![ColumnOptionDef {
@@ -364,10 +366,12 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: Ident::new("last_name").empty_span(),
-                        data_type: DataType::CharacterVarying(Some(CharacterLength {
-                            length: 45,
-                            unit: None
-                        })),
+                        data_type: DataType::CharacterVarying(Some(
+                            CharacterLength::IntegerLength {
+                                length: 45,
+                                unit: None
+                            }
+                        )),
                         collation: Some(ObjectName(vec![Ident::with_quote('"', "es_ES")])),
                         codec: None,
                         options: vec![ColumnOptionDef {
@@ -377,10 +381,12 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: Ident::new("email").empty_span(),
-                        data_type: DataType::CharacterVarying(Some(CharacterLength {
-                            length: 50,
-                            unit: None
-                        })),
+                        data_type: DataType::CharacterVarying(Some(
+                            CharacterLength::IntegerLength {
+                                length: 50,
+                                unit: None
+                            }
+                        )),
                         collation: None,
                         codec: None,
                         options: vec![],

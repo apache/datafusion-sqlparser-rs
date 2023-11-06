@@ -5572,6 +5572,9 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_character_length(&mut self) -> Result<CharacterLength, ParserError> {
+        if self.parse_keyword(Keyword::MAX) {
+            return Ok(CharacterLength::Max);
+        }
         let length = self.parse_literal_uint()?;
         let unit = if self.parse_keyword(Keyword::CHARACTERS) {
             Some(CharLengthUnits::Characters)
@@ -5580,8 +5583,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-
-        Ok(CharacterLength { length, unit })
+        Ok(CharacterLength::IntegerLength { length, unit })
     }
 
     pub fn parse_optional_precision_scale(
@@ -8312,7 +8314,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHARACTER(20)",
-                DataType::Character(Some(CharacterLength {
+                DataType::Character(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: None
                 }))
@@ -8321,7 +8323,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHARACTER(20 CHARACTERS)",
-                DataType::Character(Some(CharacterLength {
+                DataType::Character(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Characters)
                 }))
@@ -8330,7 +8332,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHARACTER(20 OCTETS)",
-                DataType::Character(Some(CharacterLength {
+                DataType::Character(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Octets)
                 }))
@@ -8341,7 +8343,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHAR(20)",
-                DataType::Char(Some(CharacterLength {
+                DataType::Char(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: None
                 }))
@@ -8350,7 +8352,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHAR(20 CHARACTERS)",
-                DataType::Char(Some(CharacterLength {
+                DataType::Char(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Characters)
                 }))
@@ -8359,7 +8361,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHAR(20 OCTETS)",
-                DataType::Char(Some(CharacterLength {
+                DataType::Char(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Octets)
                 }))
@@ -8368,7 +8370,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHARACTER VARYING(20)",
-                DataType::CharacterVarying(Some(CharacterLength {
+                DataType::CharacterVarying(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: None
                 }))
@@ -8377,7 +8379,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHARACTER VARYING(20 CHARACTERS)",
-                DataType::CharacterVarying(Some(CharacterLength {
+                DataType::CharacterVarying(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Characters)
                 }))
@@ -8386,7 +8388,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHARACTER VARYING(20 OCTETS)",
-                DataType::CharacterVarying(Some(CharacterLength {
+                DataType::CharacterVarying(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Octets)
                 }))
@@ -8395,7 +8397,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHAR VARYING(20)",
-                DataType::CharVarying(Some(CharacterLength {
+                DataType::CharVarying(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: None
                 }))
@@ -8404,7 +8406,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHAR VARYING(20 CHARACTERS)",
-                DataType::CharVarying(Some(CharacterLength {
+                DataType::CharVarying(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Characters)
                 }))
@@ -8413,7 +8415,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHAR VARYING(20 OCTETS)",
-                DataType::CharVarying(Some(CharacterLength {
+                DataType::CharVarying(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Octets)
                 }))
@@ -8422,7 +8424,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "VARCHAR(20)",
-                DataType::Varchar(Some(CharacterLength {
+                DataType::Varchar(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: None
                 }))

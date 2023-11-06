@@ -2467,7 +2467,7 @@ fn parse_create_table() {
                 vec![
                     ColumnDef {
                         name: Ident::new("name").empty_span(),
-                        data_type: DataType::Varchar(Some(CharacterLength {
+                        data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                             length: 100,
                             unit: None,
                         })),
@@ -3001,7 +3001,7 @@ fn parse_create_external_table() {
                 vec![
                     ColumnDef {
                         name: Ident::new("name").empty_span(),
-                        data_type: DataType::Varchar(Some(CharacterLength {
+                        data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                             length: 100,
                             unit: None,
                         })),
@@ -3075,7 +3075,7 @@ fn parse_create_or_replace_external_table() {
                 columns,
                 vec![ColumnDef {
                     name: Ident::new("name").empty_span(),
-                    data_type: DataType::Varchar(Some(CharacterLength {
+                    data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                         length: 100,
                         unit: None,
                     })),

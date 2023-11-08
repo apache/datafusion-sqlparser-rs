@@ -406,6 +406,16 @@ pub enum SelectItem {
     Wildcard(WildcardAdditionalOptions),
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AggregateItem {
+    /// Any expression, not followed by `[ AS ] alias`
+    UnnamedExpr(Expr),
+    /// An expression, followed by `[ AS ] alias`
+    ExprWithAlias { expr: Expr, alias: Ident },
+}
+
 /// Single aliased identifier
 ///
 /// # Syntax
@@ -641,6 +651,15 @@ impl fmt::Display for SelectItem {
     }
 }
 
+impl fmt::Display for AggregateItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self {
+            AggregateItem::UnnamedExpr(expr) => write!(f, "{expr}"),
+            AggregateItem::ExprWithAlias { expr, alias } => write!(f, "{expr} AS {alias}"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -801,7 +820,7 @@ pub enum TableFactor {
     Pivot {
         #[cfg_attr(feature = "visitor", visit(with = "visit_table_factor"))]
         table: Box<TableFactor>,
-        aggregate_function: Expr, // Function expression
+        aggregates: Vec<AggregateItem>,
         value_column: Vec<Ident>,
         pivot_values: Vec<Value>,
         alias: Option<TableAlias>,
@@ -965,7 +984,7 @@ impl fmt::Display for TableFactor {
             }
             TableFactor::Pivot {
                 table,
-                aggregate_function,
+                aggregates: aggregate_projections,
                 value_column,
                 pivot_values,
                 alias,
@@ -974,7 +993,7 @@ impl fmt::Display for TableFactor {
                     f,
                     "{} PIVOT({} FOR {} IN ({}))",
                     table,
-                    aggregate_function,
+                    display_comma_separated(aggregate_projections),
                     Expr::CompoundIdentifier(value_column.to_vec().empty_span()),
                     display_comma_separated(pivot_values)
                 )?;

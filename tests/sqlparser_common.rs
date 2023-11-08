@@ -34,6 +34,9 @@ use test_utils::{
     table_alias, TestedDialects,
 };
 
+#[cfg(test)]
+use pretty_assertions::assert_eq;
+
 #[macro_use]
 mod test_utils;
 
@@ -7747,7 +7750,7 @@ fn parse_pivot_table() {
                 version: None,
                 partitions: vec![],
             }),
-            aggregate_function: Expr::Function(Function {
+            aggregates: vec![AggregateItem::UnnamedExpr(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("SUM")]),
                 args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                     Expr::CompoundIdentifier(
@@ -7762,7 +7765,7 @@ fn parse_pivot_table() {
                 on_overflow: None,
                 null_treatment: None,
                 within_group: None,
-            }),
+            }))],
             value_column: vec![Ident::new("a"), Ident::new("MONTH")],
             pivot_values: vec![
                 Value::SingleQuotedString("JAN".to_string()),
@@ -7796,6 +7799,88 @@ fn parse_pivot_table() {
         verified_stmt(sql_without_table_alias).to_string(),
         sql_without_table_alias
     );
+}
+
+#[test]
+fn parse_pivot_table_aliases() {
+    let sql = concat!(
+        "SELECT * FROM monthly_sales AS a ",
+        "PIVOT(COUNT(a.EMPID) AS number_of_sales, SUM(a.amount) AS total FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ",
+        "ORDER BY EMPID"
+        );
+
+    assert_eq!(
+        verified_only_select(sql).from[0].relation,
+        Pivot {
+            table: Box::new(TableFactor::Table {
+                name: ObjectName(vec![Ident::new("monthly_sales")]),
+                alias: Some(TableAlias {
+                    name: Ident::new("a").empty_span(),
+                    columns: vec![]
+                }),
+                args: None,
+                with_hints: vec![],
+                version: None,
+                partitions: vec![],
+            }),
+            aggregates: vec![
+                AggregateItem::ExprWithAlias {
+                    expr: Expr::Function(Function {
+                        name: ObjectName(vec![Ident::new("COUNT")]),
+                        args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                            Expr::CompoundIdentifier(
+                                vec![Ident::new("a"), Ident::new("EMPID"),].empty_span()
+                            )
+                        ))]),
+                        over: None,
+                        distinct: false,
+                        special: false,
+                        order_by: vec![],
+                        limit: None,
+                        on_overflow: None,
+                        null_treatment: None,
+                        within_group: None,
+                    }),
+                    alias: Ident::new("number_of_sales")
+                },
+                AggregateItem::ExprWithAlias {
+                    expr: Expr::Function(Function {
+                        name: ObjectName(vec![Ident::new("SUM")]),
+                        args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                            Expr::CompoundIdentifier(
+                                vec![Ident::new("a"), Ident::new("amount"),].empty_span()
+                            )
+                        ))]),
+                        over: None,
+                        distinct: false,
+                        special: false,
+                        order_by: vec![],
+                        limit: None,
+                        on_overflow: None,
+                        null_treatment: None,
+                        within_group: None,
+                    }),
+                    alias: Ident::new("total")
+                }
+            ],
+            value_column: vec![Ident::new("a"), Ident::new("MONTH")],
+            pivot_values: vec![
+                Value::SingleQuotedString("JAN".to_string()),
+                Value::SingleQuotedString("FEB".to_string()),
+                Value::SingleQuotedString("MAR".to_string()),
+                Value::SingleQuotedString("APR".to_string()),
+            ],
+            alias: Some(TableAlias {
+                name: Ident {
+                    value: "p".to_string(),
+                    quote_style: None
+                }
+                .empty_span(),
+                columns: vec![Ident::new("c").empty_span(), Ident::new("d").empty_span()],
+            }),
+        }
+    );
+    assert_eq!(verified_stmt(sql).to_string(), sql);
 }
 
 #[test]
@@ -7918,7 +8003,7 @@ fn parse_pivot_unpivot_table() {
                     columns: vec![]
                 }),
             }),
-            aggregate_function: Expr::Function(Function {
+            aggregates: vec![AggregateItem::UnnamedExpr(Expr::Function(Function {
                 name: ObjectName(vec![Ident::new("sum")]),
                 args: (vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
                     Expr::Identifier(Ident::new("population").empty_span())
@@ -7931,7 +8016,7 @@ fn parse_pivot_unpivot_table() {
                 limit: None,
                 on_overflow: None,
                 null_treatment: None,
-            }),
+            }))],
             value_column: vec![Ident::new("year")],
             pivot_values: vec![
                 Value::SingleQuotedString("population_2000".to_string()),

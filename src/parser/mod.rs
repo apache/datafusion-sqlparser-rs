@@ -6869,11 +6869,9 @@ impl<'a> Parser<'a> {
         table: TableFactor,
     ) -> Result<TableFactor, ParserError> {
         self.expect_token(&Token::LParen)?;
-        let function_name = match self.next_token().token {
-            Token::Word(w) => Ok(w.value),
-            _ => self.expected("an aggregate function name", self.peek_token()),
-        }?;
-        let function = self.parse_function(ObjectName(vec![Ident::new(function_name)]))?;
+
+        let aggregates = self.parse_comma_separated(|p| p.parse_aggregate_item(&[Keyword::FOR]))?;
+
         self.expect_keyword(Keyword::FOR)?;
         let value_column = self.parse_object_name()?.0;
         self.expect_keyword(Keyword::IN)?;
@@ -6884,7 +6882,7 @@ impl<'a> Parser<'a> {
         let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
         Ok(TableFactor::Pivot {
             table: Box::new(table),
-            aggregate_function: function,
+            aggregates,
             value_column,
             pivot_values,
             alias,
@@ -7475,6 +7473,41 @@ impl<'a> Parser<'a> {
             )
             .spanning(self.span_from_index(start_span))),
         }
+    }
+
+    /// Parse a comma-delimited list of aggregations after PIVOT
+    pub fn parse_aggregate_item(
+        &mut self,
+        reserved_kwds: &[Keyword],
+    ) -> Result<AggregateItem, ParserError> {
+        let expr = self.parse_expr()?;
+        let expr: Expr = if self.dialect.supports_filter_during_aggregation()
+            && self.parse_keyword(Keyword::FILTER)
+        {
+            let i = self.index - 1;
+            if self.consume_token(&Token::LParen) && self.parse_keyword(Keyword::WHERE) {
+                let filter = self.parse_expr()?;
+                self.expect_token(&Token::RParen)?;
+                Expr::AggregateExpressionWithFilter {
+                    expr: Box::new(expr),
+                    filter: Box::new(filter),
+                }
+            } else {
+                self.index = i;
+                expr
+            }
+        } else {
+            expr
+        };
+        let expr_with_location = expr;
+        self.parse_optional_alias(reserved_kwds)
+            .map(|alias| match alias {
+                Some(alias) => AggregateItem::ExprWithAlias {
+                    expr: expr_with_location,
+                    alias: alias.unwrap(),
+                },
+                None => AggregateItem::UnnamedExpr(expr_with_location),
+            })
     }
 
     /// Parse an [`WildcardAdditionalOptions`](WildcardAdditionalOptions) information for wildcard select items.

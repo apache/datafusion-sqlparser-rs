@@ -1004,6 +1004,7 @@ fn parse_copy_to() {
                 offset: None,
                 fetch: None,
                 locks: vec![],
+                for_clause: None,
             })),
             to: true,
             target: CopyTarget::File {
@@ -2054,6 +2055,7 @@ fn parse_array_subquery_expr() {
             offset: None,
             fetch: None,
             locks: vec![],
+            for_clause: None,
         })),
         expr_from_projection(only(&select.projection)),
     );

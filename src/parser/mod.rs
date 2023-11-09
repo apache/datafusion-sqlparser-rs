@@ -502,6 +502,7 @@ impl<'a> Parser<'a> {
                 // by at least PostgreSQL and MySQL.
                 Keyword::BEGIN => Ok(self.parse_begin()?),
                 Keyword::SAVEPOINT => Ok(self.parse_savepoint()?),
+                Keyword::RELEASE => Ok(self.parse_release()?),
                 Keyword::COMMIT => Ok(self.parse_commit()?),
                 Keyword::ROLLBACK => Ok(self.parse_rollback()?),
                 Keyword::ASSERT => Ok(self.parse_assert()?),
@@ -745,6 +746,13 @@ impl<'a> Parser<'a> {
     pub fn parse_savepoint(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_identifier()?;
         Ok(Statement::Savepoint { name })
+    }
+
+    pub fn parse_release(&mut self) -> Result<Statement, ParserError> {
+        let _ = self.parse_keyword(Keyword::SAVEPOINT);
+        let name = self.parse_identifier()?;
+
+        Ok(Statement::ReleaseSavepoint { name })
     }
 
     /// Parse an expression prefix
@@ -7664,9 +7672,10 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_rollback(&mut self) -> Result<Statement, ParserError> {
-        Ok(Statement::Rollback {
-            chain: self.parse_commit_rollback_chain()?,
-        })
+        let chain = self.parse_commit_rollback_chain()?;
+        let savepoint = self.parse_rollback_savepoint()?;
+
+        Ok(Statement::Rollback { chain, savepoint })
     }
 
     pub fn parse_commit_rollback_chain(&mut self) -> Result<bool, ParserError> {
@@ -7677,6 +7686,17 @@ impl<'a> Parser<'a> {
             Ok(chain)
         } else {
             Ok(false)
+        }
+    }
+
+    pub fn parse_rollback_savepoint(&mut self) -> Result<Option<Ident>, ParserError> {
+        if self.parse_keyword(Keyword::TO) {
+            let _ = self.parse_keyword(Keyword::SAVEPOINT);
+            let savepoint = self.parse_identifier()?;
+
+            Ok(Some(savepoint))
+        } else {
+            Ok(None)
         }
     }
 

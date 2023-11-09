@@ -1802,8 +1802,11 @@ pub enum Statement {
     },
     /// `COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
     Commit { chain: bool },
-    /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
-    Rollback { chain: bool },
+    /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ] [ TO [ SAVEPOINT ] savepoint_name ]`
+    Rollback {
+        chain: bool,
+        savepoint: Option<Ident>,
+    },
     /// CREATE SCHEMA
     CreateSchema {
         /// `<schema name> | AUTHORIZATION <schema authorization identifier>  | <schema name>  AUTHORIZATION <schema authorization identifier>`
@@ -1940,6 +1943,8 @@ pub enum Statement {
     },
     /// SAVEPOINT -- define a new savepoint within the current transaction
     Savepoint { name: Ident },
+    /// RELEASE [ SAVEPOINT ] savepoint_name
+    ReleaseSavepoint { name: Ident },
     // MERGE INTO statement, based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
     Merge {
         // optional INTO keyword
@@ -3086,8 +3091,18 @@ impl fmt::Display for Statement {
             Statement::Commit { chain } => {
                 write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" },)
             }
-            Statement::Rollback { chain } => {
-                write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" },)
+            Statement::Rollback { chain, savepoint } => {
+                write!(f, "ROLLBACK")?;
+
+                if *chain {
+                    write!(f, " AND CHAIN")?;
+                }
+
+                if let Some(savepoint) = savepoint {
+                    write!(f, " TO SAVEPOINT {savepoint}")?;
+                }
+
+                Ok(())
             }
             Statement::CreateSchema {
                 schema_name,
@@ -3183,6 +3198,9 @@ impl fmt::Display for Statement {
             Statement::Savepoint { name } => {
                 write!(f, "SAVEPOINT ")?;
                 write!(f, "{name}")
+            }
+            Statement::ReleaseSavepoint { name } => {
+                write!(f, "RELEASE SAVEPOINT {name}")
             }
             Statement::Merge {
                 into,

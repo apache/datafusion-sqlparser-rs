@@ -7091,31 +7091,21 @@ impl<'a> Parser<'a> {
             let table_name = self.parse_object_name()?;
             let is_mysql = dialect_of!(self is MySqlDialect);
 
-            let is_default_values = self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]);
+            let (columns, partitioned, after_columns, source) =
+                if self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]) {
+                    (vec![], None, vec![], None)
+                } else {
+                    let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
 
-            let columns = if is_default_values {
-                vec![]
-            } else {
-                self.parse_parenthesized_column_list(Optional, is_mysql)?
-            };
+                    let partitioned = self.parse_insert_partition()?;
 
-            let partitioned = if self.parse_keyword(Keyword::PARTITION) {
-                self.expect_token(&Token::LParen)?;
-                let r = Some(self.parse_comma_separated(Parser::parse_expr)?);
-                self.expect_token(&Token::RParen)?;
-                r
-            } else {
-                None
-            };
+                    // Hive allows you to specify columns after partitions as well if you want.
+                    let after_columns = self.parse_parenthesized_column_list(Optional, false)?;
 
-            // Hive allows you to specify columns after partitions as well if you want.
-            let after_columns = self.parse_parenthesized_column_list(Optional, false)?;
+                    let source = Some(Box::new(self.parse_query()?));
 
-            let source = if is_default_values {
-                None
-            } else {
-                Some(Box::new(self.parse_query()?))
-            };
+                    (columns, partitioned, after_columns, source)
+                };
 
             let on = if self.parse_keyword(Keyword::ON) {
                 if self.parse_keyword(Keyword::CONFLICT) {
@@ -7184,6 +7174,17 @@ impl<'a> Parser<'a> {
                 on,
                 returning,
             })
+        }
+    }
+
+    pub fn parse_insert_partition(&mut self) -> Result<Option<Vec<Expr>>, ParserError> {
+        if self.parse_keyword(Keyword::PARTITION) {
+            self.expect_token(&Token::LParen)?;
+            let partition_cols = Some(self.parse_comma_separated(Parser::parse_expr)?);
+            self.expect_token(&Token::RParen)?;
+            Ok(partition_cols)
+        } else {
+            Ok(None)
         }
     }
 

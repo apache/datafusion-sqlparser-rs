@@ -127,7 +127,7 @@ fn parse_create_procedure() {
                         value: "@bar".into(),
                         quote_style: None
                     },
-                    data_type: DataType::Varchar(Some(CharacterLength {
+                    data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                         length: 256,
                         unit: None
                     }))
@@ -429,6 +429,11 @@ fn parse_like() {
     }
     chk(false);
     chk(true);
+}
+
+#[test]
+fn parse_cast_varchar_max() {
+    ms_and_generic().verified_expr("CAST('foo' AS VARCHAR(MAX))");
 }
 
 #[test]

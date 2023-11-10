@@ -559,6 +559,8 @@ pub const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
     Keyword::USING,
     // for MSSQL-specific OUTER APPLY (seems reserved in most dialects)
     Keyword::OUTER,
+    // for Snowflake QUALIFY
+    Keyword::QUALIFY,
 ];
 
 /// Can't be used as a column alias, so that `SELECT <expr> alias`

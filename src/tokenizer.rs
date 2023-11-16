@@ -411,7 +411,7 @@ impl fmt::Display for TokenWithLocation {
 }
 
 /// Tokenizer error
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokenizerError {
     pub message: String,
     pub location: Location,

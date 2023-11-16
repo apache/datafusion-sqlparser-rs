@@ -90,9 +90,9 @@ impl TestedDialects {
             if let Some(options) = &self.options {
                 tokenizer = tokenizer.with_unescape(options.unescape);
             }
-            let tokens = tokenizer.tokenize()?;
+            let tokens = tokenizer.tokenize_with_location()?;
             self.new_parser(dialect)
-                .with_tokens(tokens)
+                .with_tokens_with_locations(tokens)
                 .parse_statements()
         })
         // To fail the `ensure_multiple_dialects_are_tested` test:

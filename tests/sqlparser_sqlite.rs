@@ -414,7 +414,7 @@ fn invalid_empty_list() {
     let sql = "SELECT * FROM t1 WHERE a IN (,,)";
     let sqlite = sqlite_with_options(ParserOptions::new().with_trailing_commas(true));
     assert_eq!(
-        "sql parser error: Expected an expression:, found: ,",
+        "sql parser error: Expected an expression:, found: , at Line: 1, Column 30",
         sqlite.parse_sql_statements(sql).unwrap_err().to_string()
     );
 }

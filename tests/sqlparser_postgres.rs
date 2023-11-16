@@ -16,6 +16,8 @@
 
 #[macro_use]
 mod test_utils;
+
+use sqlparser::tokenizer::Location;
 use test_utils::*;
 
 use sqlparser::ast::*;
@@ -652,25 +654,49 @@ fn parse_create_table_if_not_exists() {
 fn parse_bad_if_not_exists() {
     let res = pg().parse_sql_statements("CREATE TABLE NOT EXISTS uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: EXISTS".to_string()),
+        ParserError::new_parser_error_with_location(
+            "Expected end of statement, found: EXISTS".to_string(),
+            Location {
+                line: 1,
+                column: 18
+            }
+        ),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF EXISTS uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: EXISTS".to_string()),
+        ParserError::new_parser_error_with_location(
+            "Expected end of statement, found: EXISTS".to_string(),
+            Location {
+                line: 1,
+                column: 17
+            }
+        ),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: uk_cities".to_string()),
+        ParserError::new_parser_error_with_location(
+            "Expected end of statement, found: uk_cities".to_string(),
+            Location {
+                line: 1,
+                column: 17
+            }
+        ),
         res.unwrap_err()
     );
 
     let res = pg().parse_sql_statements("CREATE TABLE IF NOT uk_cities ()");
     assert_eq!(
-        ParserError::ParserError("Expected end of statement, found: NOT".to_string()),
+        ParserError::new_parser_error_with_location(
+            "Expected end of statement, found: NOT".to_string(),
+            Location {
+                line: 1,
+                column: 17
+            },
+        ),
         res.unwrap_err()
     );
 }
@@ -907,7 +933,9 @@ fn parse_copy_from() {
 fn parse_copy_from_error() {
     let res = pg().parse_sql_statements("COPY (SELECT 42 AS a, 'hello' AS b) FROM 'query.csv'");
     assert_eq!(
-        ParserError::ParserError("COPY ... FROM does not support query as a source".to_string()),
+        ParserError::new_parser_error(
+            "COPY ... FROM does not support query as a source".to_string()
+        ),
         res.unwrap_err()
     );
 }
@@ -1212,22 +1240,25 @@ fn parse_set() {
 
     assert_eq!(
         pg_and_generic().parse_sql_statements("SET"),
-        Err(ParserError::ParserError(
-            "Expected identifier, found: EOF".to_string()
+        Err(ParserError::new_parser_error_with_location(
+            "Expected identifier, found: EOF".to_string(),
+            Location { line: 0, column: 0 }
         )),
     );
 
     assert_eq!(
         pg_and_generic().parse_sql_statements("SET a b"),
-        Err(ParserError::ParserError(
-            "Expected equals sign or TO, found: b".to_string()
+        Err(ParserError::new_parser_error_with_location(
+            "Expected equals sign or TO, found: b".to_string(),
+            Location { line: 1, column: 7 }
         )),
     );
 
     assert_eq!(
         pg_and_generic().parse_sql_statements("SET a ="),
-        Err(ParserError::ParserError(
-            "Expected variable value, found: EOF".to_string()
+        Err(ParserError::new_parser_error_with_location(
+            "Expected variable value, found: EOF".to_string(),
+            Location { line: 0, column: 0 }
         )),
     );
 }

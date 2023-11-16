@@ -37,17 +37,73 @@ mod alter;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParserError {
-    TokenizerError(String),
-    ParserError(String),
+    TokenizerError(TokenizerError),
+    ParserError {
+        message: String,
+        location: Option<Location>,
+    },
     RecursionLimitExceeded,
 }
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
     ($MSG:expr, $loc:expr) => {
-        Err(ParserError::ParserError(format!("{}{}", $MSG, $loc)))
+        Err(ParserError::ParserError {
+            message: $MSG.to_owned(),
+            location: Some($loc),
+        })
     };
 }
+
+impl ParserError {
+    /// Create a new `ParserError::ParserError` with the given message.
+    pub fn new_parser_error(msg: impl Into<String>) -> Self {
+        ParserError::ParserError {
+            message: msg.into(),
+            location: None,
+        }
+    }
+
+    /// Create a new `ParserError::ParserError` with the given message and
+    /// location.
+    pub fn new_parser_error_with_location(
+        msg: impl Into<String>,
+        loc: impl Into<Location>,
+    ) -> Self {
+        ParserError::ParserError {
+            message: msg.into(),
+            location: Some(loc.into()),
+        }
+    }
+}
+
+impl From<TokenizerError> for ParserError {
+    fn from(e: TokenizerError) -> Self {
+        ParserError::TokenizerError(e)
+    }
+}
+
+impl fmt::Display for ParserError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        const PREFIX: &str = "sql parser error";
+        match self {
+            ParserError::TokenizerError(e) => write!(f, "{PREFIX}: {}", e),
+            ParserError::ParserError { message, location } => {
+                write!(f, "{PREFIX}: {message}")?;
+                if let Some(loc) = location {
+                    write!(f, "{loc}")?;
+                }
+                Ok(())
+            }
+            ParserError::RecursionLimitExceeded => {
+                write!(f, "{PREFIX}: recursion limit exceeded")
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ParserError {}
 
 // Returns a successful result if the optional expression is some
 macro_rules! return_ok_if_some {
@@ -170,29 +226,6 @@ impl From<WildcardExpr> for FunctionArgExpr {
         }
     }
 }
-
-impl From<TokenizerError> for ParserError {
-    fn from(e: TokenizerError) -> Self {
-        ParserError::TokenizerError(e.to_string())
-    }
-}
-
-impl fmt::Display for ParserError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "sql parser error: {}",
-            match self {
-                ParserError::TokenizerError(s) => s,
-                ParserError::ParserError(s) => s,
-                ParserError::RecursionLimitExceeded => "recursion limit exceeded",
-            }
-        )
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for ParserError {}
 
 // By default, allow expressions up to this deep before erroring
 const DEFAULT_REMAINING_DEPTH: usize = 50;
@@ -3134,7 +3167,7 @@ impl<'a> Parser<'a> {
         loop {
             fn ensure_not_set<T>(field: &Option<T>, name: &str) -> Result<(), ParserError> {
                 if field.is_some() {
-                    return Err(ParserError::ParserError(format!(
+                    return Err(ParserError::new_parser_error(format!(
                         "{name} specified more than once",
                     )));
                 }
@@ -4712,8 +4745,8 @@ impl<'a> Parser<'a> {
             // Use a separate if statement to prevent Rust compiler from complaining about
             // "if statement in this position is unstable: https://github.com/rust-lang/rust/issues/53667"
             if let CopySource::Query(_) = source {
-                return Err(ParserError::ParserError(
-                    "COPY ... FROM does not support query as a source".to_string(),
+                return Err(ParserError::new_parser_error(
+                    "COPY ... FROM does not support query as a source",
                 ));
             }
         }
@@ -5028,7 +5061,7 @@ impl<'a> Parser<'a> {
         let next_token = self.next_token();
         match next_token.token {
             Token::Number(s, _) => s.parse::<u64>().map_err(|e| {
-                ParserError::ParserError(format!("Could not parse '{s}' as u64: {e}"))
+                ParserError::new_parser_error(format!("Could not parse '{s}' as u64: {e}"))
             }),
             _ => self.expected("literal int", next_token),
         }
@@ -5095,7 +5128,7 @@ impl<'a> Parser<'a> {
         if trailing_bracket.0 {
             return parser_err!(
                 format!("unmatched > after parsing data type {ty}"),
-                self.peek_token()
+                self.peek_token().location
             );
         }
 
@@ -5514,12 +5547,12 @@ impl<'a> Parser<'a> {
         match self.next_token().token {
             Token::Word(w) => idents.push(w.to_ident()),
             Token::EOF => {
-                return Err(ParserError::ParserError(
-                    "Empty input when parsing identifier".to_string(),
+                return Err(ParserError::new_parser_error(
+                    "Empty input when parsing identifier",
                 ))?
             }
             token => {
-                return Err(ParserError::ParserError(format!(
+                return Err(ParserError::new_parser_error(format!(
                     "Unexpected token in identifier: {token}"
                 )))?
             }
@@ -5532,19 +5565,19 @@ impl<'a> Parser<'a> {
                 Token::Period => match self.next_token().token {
                     Token::Word(w) => idents.push(w.to_ident()),
                     Token::EOF => {
-                        return Err(ParserError::ParserError(
-                            "Trailing period in identifier".to_string(),
+                        return Err(ParserError::new_parser_error(
+                            "Trailing period in identifier",
                         ))?
                     }
                     token => {
-                        return Err(ParserError::ParserError(format!(
+                        return Err(ParserError::new_parser_error(format!(
                             "Unexpected token following period in identifier: {token}"
                         )))?
                     }
                 },
                 Token::EOF => break,
                 token => {
-                    return Err(ParserError::ParserError(format!(
+                    return Err(ParserError::new_parser_error(format!(
                         "Unexpected token in identifier: {token}"
                     )))?
                 }
@@ -5779,7 +5812,7 @@ impl<'a> Parser<'a> {
 
         match self.maybe_parse(|parser| parser.parse_statement()) {
             Some(Statement::Explain { .. }) | Some(Statement::ExplainTable { .. }) => Err(
-                ParserError::ParserError("Explain must be root of the plan".to_string()),
+                ParserError::new_parser_error("Explain must be root of the plan"),
             ),
             Some(statement) => Ok(Statement::Explain {
                 describe_alias,
@@ -6342,8 +6375,8 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::FUNCTIONS) {
             Ok(self.parse_show_functions()?)
         } else if extended || full {
-            Err(ParserError::ParserError(
-                "EXTENDED/FULL are not supported with this type of SHOW query".to_string(),
+            Err(ParserError::new_parser_error(
+                "EXTENDED/FULL are not supported with this type of SHOW query",
             ))
         } else if self.parse_one_of_keywords(&[Keyword::CREATE]).is_some() {
             Ok(self.parse_show_create()?)
@@ -6378,7 +6411,7 @@ impl<'a> Parser<'a> {
             Keyword::PROCEDURE => Ok(ShowCreateObject::Procedure),
             Keyword::EVENT => Ok(ShowCreateObject::Event),
             Keyword::VIEW => Ok(ShowCreateObject::View),
-            keyword => Err(ParserError::ParserError(format!(
+            keyword => Err(ParserError::new_parser_error(format!(
                 "Unable to map keyword to ShowCreateObject: {keyword:?}"
             ))),
         }?;
@@ -6547,7 +6580,7 @@ impl<'a> Parser<'a> {
                                 }
                             }
                             _ => {
-                                return Err(ParserError::ParserError(format!(
+                                return Err(ParserError::new_parser_error(format!(
                                     "expected OUTER, SEMI, ANTI or JOIN after {kw:?}"
                                 )))
                             }
@@ -6683,7 +6716,7 @@ impl<'a> Parser<'a> {
                         | TableFactor::NestedJoin { alias, .. } => {
                             // but not `FROM (mytable AS alias1) AS alias2`.
                             if let Some(inner_alias) = alias {
-                                return Err(ParserError::ParserError(format!(
+                                return Err(ParserError::new_parser_error(format!(
                                     "duplicate alias {inner_alias}"
                                 )));
                             }
@@ -6941,8 +6974,8 @@ impl<'a> Parser<'a> {
 
             if !err.is_empty() {
                 let errors: Vec<Keyword> = err.into_iter().filter_map(|x| x.err()).collect();
-                return Err(ParserError::ParserError(format!(
-                    "INTERNAL ERROR: GRANT/REVOKE unexpected keyword(s) - {errors:?}"
+                return Err(ParserError::new_parser_error(format!(
+                    "INTERNAL ERROR: GRANT/REVOKE unexpected keyword(s) - {errors:?}",
                 )));
             }
             let act = actions.into_iter().filter_map(|x| x.ok()).collect();
@@ -7745,7 +7778,7 @@ impl<'a> Parser<'a> {
                 ]) {
                     Some(Keyword::UPDATE) => {
                         if is_not_matched {
-                            return Err(ParserError::ParserError(
+                            return Err(ParserError::new_parser_error(
                                 "UPDATE in NOT MATCHED merge clause".to_string(),
                             ));
                         }
@@ -7758,7 +7791,7 @@ impl<'a> Parser<'a> {
                     }
                     Some(Keyword::DELETE) => {
                         if is_not_matched {
-                            return Err(ParserError::ParserError(
+                            return Err(ParserError::new_parser_error(
                                 "DELETE in NOT MATCHED merge clause".to_string(),
                             ));
                         }
@@ -7766,7 +7799,7 @@ impl<'a> Parser<'a> {
                     }
                     Some(Keyword::INSERT) => {
                         if !is_not_matched {
-                            return Err(ParserError::ParserError(
+                            return Err(ParserError::new_parser_error(
                                 "INSERT in MATCHED merge clause".to_string(),
                             ));
                         }
@@ -7781,12 +7814,12 @@ impl<'a> Parser<'a> {
                         }
                     }
                     Some(_) => {
-                        return Err(ParserError::ParserError(
+                        return Err(ParserError::new_parser_error(
                             "expected UPDATE, DELETE or INSERT in merge clause".to_string(),
                         ));
                     }
                     None => {
-                        return Err(ParserError::ParserError(
+                        return Err(ParserError::new_parser_error(
                             "expected UPDATE, DELETE or INSERT in merge clause".to_string(),
                         ));
                     }
@@ -8550,10 +8583,17 @@ mod tests {
         let ast = Parser::parse_sql(&GenericDialect, sql);
         assert_eq!(
             ast,
-            Err(ParserError::TokenizerError(
-                "Unterminated string literal at Line: 1, Column 5".to_string()
-            ))
+            Err(ParserError::TokenizerError(TokenizerError {
+                message: "Unterminated string literal".to_string(),
+                location: Location { line: 1, column: 5 }
+            }))
         );
+
+        let err = ast.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "sql parser error: Unterminated string literal at Line: 1, Column 5".to_string()
+        )
     }
 
     #[test]
@@ -8562,9 +8602,12 @@ mod tests {
         let ast = Parser::parse_sql(&GenericDialect, sql);
         assert_eq!(
             ast,
-            Err(ParserError::ParserError(
-                "Expected [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a at Line: 1, Column 16"
-                    .to_string()
+            Err(ParserError::new_parser_error_with_location(
+                "Expected [NOT] NULL or TRUE|FALSE or [NOT] DISTINCT FROM after IS, found: a",
+                Location {
+                    line: 1,
+                    column: 16
+                }
             ))
         );
     }
@@ -8575,7 +8618,7 @@ mod tests {
         let ast = Parser::parse_sql(&GenericDialect, sql);
         assert_eq!(
             ast,
-            Err(ParserError::ParserError(
+            Err(ParserError::new_parser_error(
                 "Explain must be root of the plan".to_string()
             ))
         );

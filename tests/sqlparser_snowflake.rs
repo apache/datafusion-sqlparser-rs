@@ -157,7 +157,7 @@ fn test_single_table_in_parenthesis_with_alias() {
 
     let res = snowflake().parse_sql_statements("SELECT * FROM (a b) c");
     assert_eq!(
-        ParserError::ParserError("duplicate alias b".to_string()),
+        ParserError::new_parser_error("duplicate alias b".to_string()),
         res.unwrap_err()
     );
 }
@@ -412,9 +412,13 @@ fn test_array_agg_func() {
     let result = snowflake().parse_sql_statements(sql);
     assert_eq!(
         result,
-        Err(ParserError::ParserError(String::from(
-            "Expected ), found: order"
-        )))
+        Err(ParserError::new_parser_error_with_location(
+            "Expected ), found: order",
+            Location {
+                line: 1,
+                column: 20,
+            },
+        ))
     )
 }
 
@@ -519,7 +523,7 @@ fn test_select_wildcard_with_exclude_and_rename() {
             .parse_sql_statements("SELECT * RENAME col_a AS col_b EXCLUDE col_z FROM data")
             .unwrap_err()
             .to_string(),
-        "sql parser error: Expected end of statement, found: EXCLUDE"
+        "sql parser error: Expected end of statement, found: EXCLUDE at Line: 1, Column 32"
     );
 }
 
@@ -1083,7 +1087,13 @@ fn test_snowflake_trim() {
     // missing comma separation
     let error_sql = "SELECT TRIM('xyz' 'a')";
     assert_eq!(
-        ParserError::ParserError("Expected ), found: 'a'".to_owned()),
+        ParserError::new_parser_error_with_location(
+            "Expected ), found: 'a'",
+            Location {
+                line: 1,
+                column: 19,
+            }
+        ),
         snowflake().parse_sql_statements(error_sql).unwrap_err()
     );
 }

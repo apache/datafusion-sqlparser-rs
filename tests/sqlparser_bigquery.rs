@@ -14,6 +14,7 @@
 mod test_utils;
 
 use sqlparser::ast;
+use sqlparser::tokenizer::Location;
 use std::ops::Deref;
 
 use sqlparser::ast::*;
@@ -135,20 +136,36 @@ fn parse_invalid_brackets() {
     let sql = "SELECT STRUCT<INT64>>(NULL)";
     assert_eq!(
         bigquery().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("unmatched > in STRUCT literal".to_string())
+        ParserError::new_parser_error_with_location(
+            "unmatched > in STRUCT literal",
+            Location {
+                line: 1,
+                column: 22,
+            }
+        )
     );
 
     let sql = "SELECT STRUCT<STRUCT<INT64>>>(NULL)";
     assert_eq!(
         bigquery().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("Expected (, found: >".to_string())
+        ParserError::new_parser_error_with_location(
+            "Expected (, found: >",
+            Location{
+                line: 1,
+                column: 29,
+            }
+        )
     );
 
     let sql = "CREATE TABLE table (x STRUCT<STRUCT<INT64>>>)";
     assert_eq!(
         bigquery().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError(
-            "Expected ',' or ')' after column definition, found: >".to_string()
+        ParserError::new_parser_error_with_location(
+            "Expected ',' or ')' after column definition, found: >",
+            Location {
+                line: 1,
+                column: 44,
+            }
         )
     );
 }
@@ -974,7 +991,7 @@ fn test_select_wildcard_with_except() {
             .parse_sql_statements("SELECT * EXCEPT () FROM employee_table")
             .unwrap_err()
             .to_string(),
-        "sql parser error: Expected identifier, found: )"
+        "sql parser error: Expected identifier, found: ) at Line: 1, Column 18"
     );
 }
 
@@ -1091,7 +1108,13 @@ fn test_bigquery_trim() {
     // missing comma separation
     let error_sql = "SELECT TRIM('xyz' 'a')";
     assert_eq!(
-        ParserError::ParserError("Expected ), found: 'a'".to_owned()),
+        ParserError::new_parser_error_with_location(
+            "Expected ), found: 'a'",
+            Location{
+                line: 1,
+                column: 19,
+            }
+        ),
         bigquery().parse_sql_statements(error_sql).unwrap_err()
     );
 }

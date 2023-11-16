@@ -22,6 +22,7 @@ use sqlparser::ast::{
 use sqlparser::dialect::{GenericDialect, HiveDialect};
 use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::test_utils::*;
+use sqlparser::tokenizer::Location;
 
 #[test]
 fn parse_table_create() {
@@ -251,8 +252,9 @@ fn set_statement_with_minus() {
 
     assert_eq!(
         hive().parse_sql_statements("SET hive.tez.java.opts = -"),
-        Err(ParserError::ParserError(
-            "Expected variable value, found: EOF".to_string()
+        Err(ParserError::new_parser_error_with_location(
+            "Expected variable value, found: EOF".to_string(),
+            Location { line: 0, column: 0 }
         ))
     )
 }
@@ -287,15 +289,22 @@ fn parse_create_function() {
 
     assert_eq!(
         generic(None).parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError(
-            "Expected an object type after CREATE, found: FUNCTION".to_string()
+        ParserError::new_parser_error_with_location(
+            "Expected an object type after CREATE, found: FUNCTION".to_string(),
+            Location {
+                line: 1,
+                column: 18
+            }
         )
     );
 
     let sql = "CREATE TEMPORARY FUNCTION mydb.myfunc AS 'org.random.class.Name' USING JAR";
     assert_eq!(
         hive().parse_sql_statements(sql).unwrap_err(),
-        ParserError::ParserError("Expected literal string, found: EOF".to_string()),
+        ParserError::new_parser_error_with_location(
+            "Expected literal string, found: EOF".to_string(),
+            Location { line: 0, column: 0 }
+        ),
     );
 }
 

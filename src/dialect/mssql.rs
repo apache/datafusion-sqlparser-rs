@@ -35,6 +35,12 @@ impl Dialect for MsSqlDialect {
             || ch == '_'
     }
 
+    /// SQL Server has `CONVERT(type, value)` instead of `CONVERT(value, type)`
+    /// <https://learn.microsoft.com/en-us/sql/t-sql/functions/cast-and-convert-transact-sql?view=sql-server-ver16>
+    fn convert_type_before_value(&self) -> bool {
+        true
+    }
+
     fn supports_substring_from_for_expr(&self) -> bool {
         false
     }

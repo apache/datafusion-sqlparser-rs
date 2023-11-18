@@ -534,13 +534,7 @@ impl<'a> Tokenizer<'a> {
     /// Tokenize the statement and produce a vector of tokens
     pub fn tokenize(&mut self) -> Result<Vec<Token>, TokenizerError> {
         let twl = self.tokenize_with_location()?;
-
-        let mut tokens: Vec<Token> = vec![];
-        tokens.reserve(twl.len());
-        for token_with_location in twl {
-            tokens.push(token_with_location.token);
-        }
-        Ok(tokens)
+        Ok(twl.into_iter().map(|t| t.token).collect())
     }
 
     /// Tokenize the statement and produce a vector of tokens with location information

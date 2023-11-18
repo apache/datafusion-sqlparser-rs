@@ -5825,6 +5825,7 @@ impl<'a> Parser<'a> {
                 offset: None,
                 fetch: None,
                 locks: vec![],
+                for_clause: None,
             })
         } else if self.parse_keyword(Keyword::UPDATE) {
             let update = self.parse_update()?;
@@ -5837,6 +5838,7 @@ impl<'a> Parser<'a> {
                 offset: None,
                 fetch: None,
                 locks: vec![],
+                for_clause: None,
             })
         } else {
             let body = Box::new(self.parse_query_body(0)?);
@@ -5888,9 +5890,15 @@ impl<'a> Parser<'a> {
                 None
             };
 
+            let mut for_clause = None;
             let mut locks = Vec::new();
             while self.parse_keyword(Keyword::FOR) {
-                locks.push(self.parse_lock()?);
+                if let Some(parsed_for_clause) = self.parse_for_clause()? {
+                    for_clause = Some(parsed_for_clause);
+                    break;
+                } else {
+                    locks.push(self.parse_lock()?);
+                }
             }
 
             Ok(Query {
@@ -5902,8 +5910,111 @@ impl<'a> Parser<'a> {
                 offset,
                 fetch,
                 locks,
+                for_clause,
             })
         }
+    }
+
+    /// Parse a mssql `FOR [XML | JSON | BROWSE]` clause
+    pub fn parse_for_clause(&mut self) -> Result<Option<ForClause>, ParserError> {
+        if self.parse_keyword(Keyword::XML) {
+            Ok(Some(self.parse_for_xml()?))
+        } else if self.parse_keyword(Keyword::JSON) {
+            Ok(Some(self.parse_for_json()?))
+        } else if self.parse_keyword(Keyword::BROWSE) {
+            Ok(Some(ForClause::Browse))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse a mssql `FOR XML` clause
+    pub fn parse_for_xml(&mut self) -> Result<ForClause, ParserError> {
+        let for_xml = if self.parse_keyword(Keyword::RAW) {
+            let mut element_name = None;
+            if self.peek_token().token == Token::LParen {
+                self.expect_token(&Token::LParen)?;
+                element_name = Some(self.parse_literal_string()?);
+                self.expect_token(&Token::RParen)?;
+            }
+            ForXml::Raw(element_name)
+        } else if self.parse_keyword(Keyword::AUTO) {
+            ForXml::Auto
+        } else if self.parse_keyword(Keyword::EXPLICIT) {
+            ForXml::Explicit
+        } else if self.parse_keyword(Keyword::PATH) {
+            let mut element_name = None;
+            if self.peek_token().token == Token::LParen {
+                self.expect_token(&Token::LParen)?;
+                element_name = Some(self.parse_literal_string()?);
+                self.expect_token(&Token::RParen)?;
+            }
+            ForXml::Path(element_name)
+        } else {
+            return Err(ParserError::ParserError(
+                "Expected FOR XML [RAW | AUTO | EXPLICIT | PATH ]".to_string(),
+            ));
+        };
+        let mut elements = false;
+        let mut binary_base64 = false;
+        let mut root = None;
+        let mut r#type = false;
+        while self.peek_token().token == Token::Comma {
+            self.next_token();
+            if self.parse_keyword(Keyword::ELEMENTS) {
+                elements = true;
+            } else if self.parse_keyword(Keyword::BINARY) {
+                self.expect_keyword(Keyword::BASE64)?;
+                binary_base64 = true;
+            } else if self.parse_keyword(Keyword::ROOT) {
+                self.expect_token(&Token::LParen)?;
+                root = Some(self.parse_literal_string()?);
+                self.expect_token(&Token::RParen)?;
+            } else if self.parse_keyword(Keyword::TYPE) {
+                r#type = true;
+            }
+        }
+        Ok(ForClause::Xml {
+            for_xml,
+            elements,
+            binary_base64,
+            root,
+            r#type,
+        })
+    }
+
+    /// Parse a mssql `FOR JSON` clause
+    pub fn parse_for_json(&mut self) -> Result<ForClause, ParserError> {
+        let for_json = if self.parse_keyword(Keyword::AUTO) {
+            ForJson::Auto
+        } else if self.parse_keyword(Keyword::PATH) {
+            ForJson::Path
+        } else {
+            return Err(ParserError::ParserError(
+                "Expected FOR JSON [AUTO | PATH ]".to_string(),
+            ));
+        };
+        let mut root = None;
+        let mut include_null_values = false;
+        let mut without_array_wrapper = false;
+        while self.peek_token().token == Token::Comma {
+            self.next_token();
+            if self.parse_keyword(Keyword::ROOT) {
+                self.expect_token(&Token::LParen)?;
+                root = Some(self.parse_literal_string()?);
+                self.expect_token(&Token::RParen)?;
+            } else if self.parse_keyword(Keyword::INCLUDE_NULL_VALUES) {
+                include_null_values = true;
+            } else if self.parse_keyword(Keyword::WITHOUT_ARRAY_WRAPPER) {
+                without_array_wrapper = true;
+            }
+        }
+        Ok(ForClause::Json {
+            for_json,
+            root,
+            include_null_values,
+            without_array_wrapper,
+        })
     }
 
     /// Parse a CTE (`alias [( col1, col2, ... )] AS (subquery)`)

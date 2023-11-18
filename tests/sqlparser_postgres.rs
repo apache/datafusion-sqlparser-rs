@@ -349,10 +349,12 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "first_name".into(),
-                        data_type: DataType::CharacterVarying(Some(CharacterLength {
-                            length: 45,
-                            unit: None
-                        })),
+                        data_type: DataType::CharacterVarying(Some(
+                            CharacterLength::IntegerLength {
+                                length: 45,
+                                unit: None
+                            }
+                        )),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -361,10 +363,12 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "last_name".into(),
-                        data_type: DataType::CharacterVarying(Some(CharacterLength {
-                            length: 45,
-                            unit: None
-                        })),
+                        data_type: DataType::CharacterVarying(Some(
+                            CharacterLength::IntegerLength {
+                                length: 45,
+                                unit: None
+                            }
+                        )),
                         collation: Some(ObjectName(vec![Ident::with_quote('"', "es_ES")])),
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -373,10 +377,12 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "email".into(),
-                        data_type: DataType::CharacterVarying(Some(CharacterLength {
-                            length: 50,
-                            unit: None
-                        })),
+                        data_type: DataType::CharacterVarying(Some(
+                            CharacterLength::IntegerLength {
+                                length: 50,
+                                unit: None
+                            }
+                        )),
                         collation: None,
                         options: vec![],
                     },
@@ -1004,6 +1010,7 @@ fn parse_copy_to() {
                 offset: None,
                 fetch: None,
                 locks: vec![],
+                for_clause: None,
             })),
             to: true,
             target: CopyTarget::File {
@@ -2054,6 +2061,7 @@ fn parse_array_subquery_expr() {
             offset: None,
             fetch: None,
             locks: vec![],
+            for_clause: None,
         })),
         expr_from_projection(only(&select.projection)),
     );

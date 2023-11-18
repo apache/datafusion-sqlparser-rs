@@ -45,6 +45,10 @@ pub struct Query {
     pub fetch: Option<Fetch>,
     /// `FOR { UPDATE | SHARE } [ OF table_name ] [ SKIP LOCKED | NOWAIT ]`
     pub locks: Vec<LockClause>,
+    /// `FOR XML { RAW | AUTO | EXPLICIT | PATH } [ , ELEMENTS ]`
+    /// `FOR JSON { AUTO | PATH } [ , INCLUDE_NULL_VALUES ]`
+    /// (MSSQL-specific)
+    pub for_clause: Option<ForClause>,
 }
 
 impl fmt::Display for Query {
@@ -70,6 +74,9 @@ impl fmt::Display for Query {
         }
         if !self.locks.is_empty() {
             write!(f, " {}", display_separated(&self.locks, " "))?;
+        }
+        if let Some(ref for_clause) = self.for_clause {
+            write!(f, " {}", for_clause)?;
         }
         Ok(())
     }
@@ -1312,6 +1319,128 @@ impl fmt::Display for GroupByExpr {
                 let col_names = display_comma_separated(col_names);
                 write!(f, "GROUP BY ({col_names})")
             }
+        }
+    }
+}
+
+/// FOR XML or FOR JSON clause, specific to MSSQL
+/// (formats the output of a query as XML or JSON)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ForClause {
+    Browse,
+    Json {
+        for_json: ForJson,
+        root: Option<String>,
+        include_null_values: bool,
+        without_array_wrapper: bool,
+    },
+    Xml {
+        for_xml: ForXml,
+        elements: bool,
+        binary_base64: bool,
+        root: Option<String>,
+        r#type: bool,
+    },
+}
+
+impl fmt::Display for ForClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ForClause::Browse => write!(f, "FOR BROWSE"),
+            ForClause::Json {
+                for_json,
+                root,
+                include_null_values,
+                without_array_wrapper,
+            } => {
+                write!(f, "FOR JSON ")?;
+                write!(f, "{}", for_json)?;
+                if let Some(root) = root {
+                    write!(f, ", ROOT('{}')", root)?;
+                }
+                if *include_null_values {
+                    write!(f, ", INCLUDE_NULL_VALUES")?;
+                }
+                if *without_array_wrapper {
+                    write!(f, ", WITHOUT_ARRAY_WRAPPER")?;
+                }
+                Ok(())
+            }
+            ForClause::Xml {
+                for_xml,
+                elements,
+                binary_base64,
+                root,
+                r#type,
+            } => {
+                write!(f, "FOR XML ")?;
+                write!(f, "{}", for_xml)?;
+                if *binary_base64 {
+                    write!(f, ", BINARY BASE64")?;
+                }
+                if *r#type {
+                    write!(f, ", TYPE")?;
+                }
+                if let Some(root) = root {
+                    write!(f, ", ROOT('{}')", root)?;
+                }
+                if *elements {
+                    write!(f, ", ELEMENTS")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ForXml {
+    Raw(Option<String>),
+    Auto,
+    Explicit,
+    Path(Option<String>),
+}
+
+impl fmt::Display for ForXml {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ForXml::Raw(root) => {
+                write!(f, "RAW")?;
+                if let Some(root) = root {
+                    write!(f, "('{}')", root)?;
+                }
+                Ok(())
+            }
+            ForXml::Auto => write!(f, "AUTO"),
+            ForXml::Explicit => write!(f, "EXPLICIT"),
+            ForXml::Path(root) => {
+                write!(f, "PATH")?;
+                if let Some(root) = root {
+                    write!(f, "('{}')", root)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ForJson {
+    Auto,
+    Path,
+}
+
+impl fmt::Display for ForJson {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ForJson::Auto => write!(f, "AUTO"),
+            ForJson::Path => write!(f, "PATH"),
         }
     }
 }

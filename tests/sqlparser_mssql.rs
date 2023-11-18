@@ -96,6 +96,7 @@ fn parse_create_procedure() {
                 offset: None,
                 fetch: None,
                 locks: vec![],
+                for_clause: None,
                 order_by: vec![],
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
@@ -127,7 +128,7 @@ fn parse_create_procedure() {
                         value: "@bar".into(),
                         quote_style: None
                     },
-                    data_type: DataType::Varchar(Some(CharacterLength {
+                    data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
                         length: 256,
                         unit: None
                     }))
@@ -432,6 +433,49 @@ fn parse_like() {
 }
 
 #[test]
+fn parse_for_clause() {
+    ms_and_generic().verified_stmt("SELECT a FROM t FOR JSON PATH");
+    ms_and_generic().verified_stmt("SELECT b FROM t FOR JSON AUTO");
+    ms_and_generic().verified_stmt("SELECT c FROM t FOR JSON AUTO, WITHOUT_ARRAY_WRAPPER");
+    ms_and_generic().verified_stmt("SELECT 1 FROM t FOR JSON PATH, ROOT('x'), INCLUDE_NULL_VALUES");
+    ms_and_generic().verified_stmt("SELECT 2 FROM t FOR XML AUTO");
+    ms_and_generic().verified_stmt("SELECT 3 FROM t FOR XML AUTO, TYPE, ELEMENTS");
+    ms_and_generic().verified_stmt("SELECT * FROM t WHERE x FOR XML AUTO, ELEMENTS");
+    ms_and_generic().verified_stmt("SELECT x FROM t ORDER BY y FOR XML AUTO, ELEMENTS");
+    ms_and_generic().verified_stmt("SELECT y FROM t FOR XML PATH('x'), ROOT('y'), ELEMENTS");
+    ms_and_generic().verified_stmt("SELECT z FROM t FOR XML EXPLICIT, BINARY BASE64");
+    ms_and_generic().verified_stmt("SELECT * FROM t FOR XML RAW('x')");
+    ms_and_generic().verified_stmt("SELECT * FROM t FOR BROWSE");
+}
+
+#[test]
+fn dont_parse_trailing_for() {
+    assert!(ms()
+        .run_parser_method("SELECT * FROM foo FOR", |p| p.parse_query())
+        .is_err());
+}
+
+#[test]
+fn parse_for_json_expect_ast() {
+    assert_eq!(
+        ms().verified_query("SELECT * FROM t FOR JSON PATH, ROOT('root')")
+            .for_clause
+            .unwrap(),
+        ForClause::Json {
+            for_json: ForJson::Path,
+            root: Some("root".into()),
+            without_array_wrapper: false,
+            include_null_values: false,
+        }
+    );
+}
+
+#[test]
+fn parse_cast_varchar_max() {
+    ms_and_generic().verified_expr("CAST('foo' AS VARCHAR(MAX))");
+}
+
+#[test]
 fn parse_similar_to() {
     fn chk(negated: bool) {
         let sql = &format!(
@@ -540,6 +584,7 @@ fn parse_substring_in_select() {
                     offset: None,
                     fetch: None,
                     locks: vec![],
+                    for_clause: None,
                 }),
                 query
             );

@@ -206,6 +206,12 @@ fn parse_create_sqlite_quote() {
 }
 
 #[test]
+fn parse_create_table_gencol_virtual() {
+    let sql = "CREATE TABLE t1 (a INT, b INT GENERATED ALWAYS AS (a * 2) VIRTUAL)";
+    sqlite_and_generic().verified_stmt(sql);
+}
+
+#[test]
 fn test_placeholder() {
     // In postgres, this would be the absolute value operator '@' applied to the column 'xxx'
     // But in sqlite, this is a named parameter.

@@ -4252,9 +4252,18 @@ impl<'a> Parser<'a> {
             if self.expect_token(&Token::LParen).is_ok() {
                 let expr = self.parse_expr()?;
                 self.expect_token(&Token::RParen)?;
-                let _ = self.parse_keywords(&[Keyword::STORED]);
+                let gen_as = if self.parse_keywords(&[Keyword::STORED]) {
+                    Ok(GeneratedAs::ExpStored)
+                } else if dialect_of!(self is PostgreSqlDialect) {
+                    // Postgres' AS IDENTITY branches are above, this one needs STORED
+                    self.expected("STORED", self.peek_token())
+                } else {
+                    let _ = self.parse_keywords(&[Keyword::VIRTUAL]);
+                    Ok(GeneratedAs::Always)
+                }?;
+
                 Ok(Some(ColumnOption::Generated {
-                    generated_as: GeneratedAs::ExpStored,
+                    generated_as: gen_as,
                     sequence_options: None,
                     generation_expr: Some(expr),
                 }))

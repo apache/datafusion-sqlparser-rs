@@ -476,6 +476,13 @@ fn parse_cast_varchar_max() {
 }
 
 #[test]
+fn parse_convert() {
+    ms().verified_expr("CONVERT(VARCHAR(MAX), 'foo')");
+    ms().verified_expr("CONVERT(VARCHAR(10), 'foo')");
+    ms().verified_expr("CONVERT(DECIMAL(10,5), 12.55)");
+}
+
+#[test]
 fn parse_similar_to() {
     fn chk(negated: bool) {
         let sql = &format!(

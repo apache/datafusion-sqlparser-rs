@@ -1843,3 +1843,18 @@ fn parse_drop_temporary_table() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_convert_using() {
+    // https://dev.mysql.com/doc/refman/8.0/en/cast-functions.html#function_convert
+
+    // CONVERT(expr USING transcoding_name)
+    mysql().verified_only_select("SELECT CONVERT('x' USING latin1)");
+    mysql().verified_only_select("SELECT CONVERT(my_column USING utf8mb4) FROM my_table");
+
+    // CONVERT(expr, type)
+    mysql().verified_only_select("SELECT CONVERT('abc', CHAR(60))");
+    mysql().verified_only_select("SELECT CONVERT(123.456, DECIMAL(5,2))");
+    // with a type + a charset
+    mysql().verified_only_select("SELECT CONVERT('test', CHAR CHARACTER SET utf8mb4)");
+}

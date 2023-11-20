@@ -12,7 +12,7 @@
 
 //! Recursive visitors for ast Nodes. See [`Visitor`] for more details.
 
-use crate::ast::{Expr, ObjectName, Statement, TableFactor};
+use crate::ast::{Expr, ObjectName, Query, Statement, TableFactor};
 use core::ops::ControlFlow;
 
 /// A type that can be visited by a [`Visitor`]. See [`Visitor`] for
@@ -179,6 +179,16 @@ pub trait Visitor {
     /// Type returned when the recursion returns early.
     type Break;
 
+    /// Invoked for any queries that appear in the AST before visiting children
+    fn pre_visit_query(&mut self, _query: &Query) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any queries that appear in the AST after visiting children
+    fn post_visit_query(&mut self, _query: &Query) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
     /// Invoked for any relations (e.g. tables) that appear in the AST before visiting children
     fn pre_visit_relation(&mut self, _relation: &ObjectName) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
@@ -266,6 +276,16 @@ pub trait Visitor {
 pub trait VisitorMut {
     /// Type returned when the recursion returns early.
     type Break;
+
+    /// Invoked for any queries that appear in the AST before visiting children
+    fn pre_visit_query(&mut self, _query: &mut Query) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any queries that appear in the AST after visiting children
+    fn post_visit_query(&mut self, _query: &mut Query) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
 
     /// Invoked for any relations (e.g. tables) that appear in the AST before visiting children
     fn pre_visit_relation(&mut self, _relation: &mut ObjectName) -> ControlFlow<Self::Break> {

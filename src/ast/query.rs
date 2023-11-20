@@ -26,6 +26,7 @@ use crate::ast::*;
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "visitor", visit(with = "visit_query"))]
 pub struct Query {
     /// WITH (common table expressions, or CTEs)
     pub with: Option<With>,

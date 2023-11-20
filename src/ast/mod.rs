@@ -2986,12 +2986,14 @@ impl fmt::Display for Statement {
                 global,
                 session,
             } => {
-                write!(
-                    f,
-                    "SHOW {global}{session}VARIABLES",
-                    global = if *global { "GLOBAL " } else { "" },
-                    session = if *session { "SESSION " } else { "" }
-                )?;
+                write!(f, "SHOW")?;
+                if *global {
+                    write!(f, " GLOBAL")?;
+                }
+                if *session {
+                    write!(f, " SESSION")?;
+                }
+                write!(f, " VARIABLES")?;
                 if filter.is_some() {
                     write!(f, " {}", filter.as_ref().unwrap())?;
                 }

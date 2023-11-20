@@ -6443,6 +6443,8 @@ impl<'a> Parser<'a> {
     pub fn parse_show(&mut self) -> Result<Statement, ParserError> {
         let extended = self.parse_keyword(Keyword::EXTENDED);
         let full = self.parse_keyword(Keyword::FULL);
+        let session = self.parse_keyword(Keyword::SESSION);
+        let global = self.parse_keyword(Keyword::GLOBAL);
         if self
             .parse_one_of_keywords(&[Keyword::COLUMNS, Keyword::FIELDS])
             .is_some()
@@ -6463,9 +6465,10 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::VARIABLES)
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {
-            // TODO: Support GLOBAL|SESSION
             Ok(Statement::ShowVariables {
                 filter: self.parse_show_statement_filter()?,
+                session,
+                global,
             })
         } else {
             Ok(Statement::ShowVariable {

@@ -159,7 +159,7 @@ fn parse_insert_default_values() {
     }
 
     let insert_with_default_values_and_on_conflict =
-        verified_stmt("INSERT INTO test_table DEFAULT VALUES  ON CONFLICT DO NOTHING");
+        verified_stmt("INSERT INTO test_table DEFAULT VALUES ON CONFLICT DO NOTHING");
 
     match insert_with_default_values_and_on_conflict {
         Statement::Insert {

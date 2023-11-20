@@ -1943,7 +1943,7 @@ pub enum Statement {
     },
     /// SAVEPOINT -- define a new savepoint within the current transaction
     Savepoint { name: Ident },
-    /// RELEASE [ SAVEPOINT ] savepoint_name
+    /// RELEASE \[ SAVEPOINT \] savepoint_name
     ReleaseSavepoint { name: Ident },
     // MERGE INTO statement, based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
     Merge {

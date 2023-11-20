@@ -3513,7 +3513,7 @@ impl fmt::Display for OnInsert {
                 " ON DUPLICATE KEY UPDATE {}",
                 display_comma_separated(expr)
             ),
-            Self::OnConflict(o) => write!(f, " {o}"),
+            Self::OnConflict(o) => write!(f, "{o}"),
         }
     }
 }

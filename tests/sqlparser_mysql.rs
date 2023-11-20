@@ -508,6 +508,17 @@ fn parse_create_table_comment_character_set() {
 }
 
 #[test]
+fn parse_create_table_gencol() {
+    let sql_default = "CREATE TABLE t1 (a INT, b INT GENERATED ALWAYS AS (a * 2))";
+    let sql_virt = "CREATE TABLE t1 (a INT, b INT GENERATED ALWAYS AS (a * 2) VIRTUAL)";
+    mysql_and_generic().verified_stmt(sql_virt);
+    mysql_and_generic().one_statement_parses_to(sql_default, sql_virt);
+
+    let sql_stored = "CREATE TABLE t1 (a INT, b INT GENERATED ALWAYS AS (a * 2) STORED)";
+    mysql_and_generic().verified_stmt(sql_stored);
+}
+
+#[test]
 fn parse_quote_identifiers() {
     let sql = "CREATE TABLE `PRIMARY` (`BEGIN` INT PRIMARY KEY)";
     match mysql().verified_stmt(sql) {

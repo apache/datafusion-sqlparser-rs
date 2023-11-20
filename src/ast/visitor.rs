@@ -832,6 +832,31 @@ mod tests {
                     "POST: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2) UNION SELECT * FROM t3",
                 ],
             ),
+            (
+                concat!(
+                    "SELECT * FROM monthly_sales ",
+                    "PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ",
+                    "ORDER BY EMPID"
+                ),
+                vec![
+                    "PRE: STATEMENT: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ORDER BY EMPID",
+                    "PRE: QUERY: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ORDER BY EMPID",
+                    "PRE: TABLE FACTOR: monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d)",
+                    "PRE: TABLE FACTOR: monthly_sales",
+                    "PRE: RELATION: monthly_sales",
+                    "POST: RELATION: monthly_sales",
+                    "POST: TABLE FACTOR: monthly_sales",
+                    "PRE: EXPR: SUM(a.amount)",
+                    "PRE: EXPR: a.amount",
+                    "POST: EXPR: a.amount",
+                    "POST: EXPR: SUM(a.amount)",
+                    "POST: TABLE FACTOR: monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d)",
+                    "PRE: EXPR: EMPID",
+                    "POST: EXPR: EMPID",
+                    "POST: QUERY: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ORDER BY EMPID",
+                    "POST: STATEMENT: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ORDER BY EMPID",
+                ]
+            )
         ];
         for (sql, expected) in tests {
             let actual = do_visit(sql);

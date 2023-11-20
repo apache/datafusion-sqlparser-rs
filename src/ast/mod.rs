@@ -37,12 +37,12 @@ pub use self::ddl::{
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
-    Cte, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, GroupByExpr, IdentWithAlias, Join,
-    JoinConstraint, JoinOperator, LateralView, LockClause, LockType, NamedWindowDefinition,
-    NonBlock, Offset, OffsetRows, OrderByExpr, Query, RenameSelectItem, ReplaceSelectElement,
-    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Table,
-    TableAlias, TableFactor, TableVersion, TableWithJoins, Top, Values, WildcardAdditionalOptions,
-    With,
+    Cte, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, ForClause, ForJson, ForXml,
+    GroupByExpr, IdentWithAlias, Join, JoinConstraint, JoinOperator, LateralView, LockClause,
+    LockType, NamedWindowDefinition, NonBlock, Offset, OffsetRows, OrderByExpr, Query,
+    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
+    SetExpr, SetOperator, SetQuantifier, Table, TableAlias, TableFactor, TableVersion,
+    TableWithJoins, Top, Values, WildcardAdditionalOptions, With,
 };
 pub use self::value::{
     escape_quoted_string, DateTimeField, DollarQuotedString, TrimWhereField, Value,
@@ -473,6 +473,17 @@ pub enum Expr {
     },
     /// Unary operation e.g. `NOT foo`
     UnaryOp { op: UnaryOperator, expr: Box<Expr> },
+    /// CONVERT a value to a different data type or character encoding `CONVERT(foo USING utf8mb4)`
+    Convert {
+        /// The expression to convert
+        expr: Box<Expr>,
+        /// The target data type
+        data_type: Option<DataType>,
+        /// The target character encoding
+        charset: Option<ObjectName>,
+        /// whether the target comes before the expr (MSSQL syntax)
+        target_before_value: bool,
+    },
     /// CAST an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
     Cast {
         expr: Box<Expr>,
@@ -843,6 +854,28 @@ impl fmt::Display for Expr {
                 } else {
                     write!(f, "{op}{expr}")
                 }
+            }
+            Expr::Convert {
+                expr,
+                target_before_value,
+                data_type,
+                charset,
+            } => {
+                write!(f, "CONVERT(")?;
+                if let Some(data_type) = data_type {
+                    if let Some(charset) = charset {
+                        write!(f, "{expr}, {data_type} CHARACTER SET {charset}")
+                    } else if *target_before_value {
+                        write!(f, "{data_type}, {expr}")
+                    } else {
+                        write!(f, "{expr}, {data_type}")
+                    }
+                } else if let Some(charset) = charset {
+                    write!(f, "{expr} USING {charset}")
+                } else {
+                    write!(f, "{expr}") // This should never happen
+                }?;
+                write!(f, ")")
             }
             Expr::Cast {
                 expr,
@@ -1739,7 +1772,11 @@ pub enum Statement {
     /// SHOW VARIABLES
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowVariables { filter: Option<ShowStatementFilter> },
+    ShowVariables {
+        filter: Option<ShowStatementFilter>,
+        global: bool,
+        session: bool,
+    },
     /// SHOW CREATE TABLE
     ///
     /// Note: this is a MySQL-specific statement.
@@ -2984,8 +3021,19 @@ impl fmt::Display for Statement {
                 }
                 Ok(())
             }
-            Statement::ShowVariables { filter } => {
-                write!(f, "SHOW VARIABLES")?;
+            Statement::ShowVariables {
+                filter,
+                global,
+                session,
+            } => {
+                write!(f, "SHOW")?;
+                if *global {
+                    write!(f, " GLOBAL")?;
+                }
+                if *session {
+                    write!(f, " SESSION")?;
+                }
+                write!(f, " VARIABLES")?;
                 if filter.is_some() {
                     write!(f, " {}", filter.as_ref().unwrap())?;
                 }
@@ -3520,7 +3568,7 @@ impl fmt::Display for OnInsert {
                 " ON DUPLICATE KEY UPDATE {}",
                 display_comma_separated(expr)
             ),
-            Self::OnConflict(o) => write!(f, " {o}"),
+            Self::OnConflict(o) => write!(f, "{o}"),
         }
     }
 }

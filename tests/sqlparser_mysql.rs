@@ -566,6 +566,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
             offset: None,
             fetch: None,
             locks: vec![],
+            for_clause: None,
         }))
     );
 }
@@ -609,6 +610,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
             offset: None,
             fetch: None,
             locks: vec![],
+            for_clause: None,
         }))
     );
 }
@@ -649,6 +651,7 @@ fn parse_escaped_backticks_with_escape() {
             offset: None,
             fetch: None,
             locks: vec![],
+            for_clause: None,
         }))
     );
 }
@@ -689,6 +692,7 @@ fn parse_escaped_backticks_with_no_escape() {
             offset: None,
             fetch: None,
             locks: vec![],
+            for_clause: None,
         }))
     );
 }
@@ -964,6 +968,7 @@ fn parse_simple_insert() {
                     offset: None,
                     fetch: None,
                     locks: vec![],
+                    for_clause: None,
                 })),
                 source
             );
@@ -1004,7 +1009,8 @@ fn parse_ignore_insert() {
                     limit_by: vec![],
                     offset: None,
                     fetch: None,
-                    locks: vec![]
+                    locks: vec![],
+                    for_clause: None,
                 })),
                 source
             );
@@ -1041,6 +1047,7 @@ fn parse_empty_row_insert() {
                     offset: None,
                     fetch: None,
                     locks: vec![],
+                    for_clause: None,
                 })),
                 source
             );
@@ -1100,6 +1107,7 @@ fn parse_insert_with_on_duplicate_update() {
                     offset: None,
                     fetch: None,
                     locks: vec![],
+                    for_clause: None,
                 })),
                 source
             );
@@ -1490,6 +1498,7 @@ fn parse_substring_in_select() {
                     offset: None,
                     fetch: None,
                     locks: vec![],
+                    for_clause: None,
                 }),
                 query
             );
@@ -1503,6 +1512,12 @@ fn parse_show_variables() {
     mysql_and_generic().verified_stmt("SHOW VARIABLES");
     mysql_and_generic().verified_stmt("SHOW VARIABLES LIKE 'admin%'");
     mysql_and_generic().verified_stmt("SHOW VARIABLES WHERE value = '3306'");
+    mysql_and_generic().verified_stmt("SHOW GLOBAL VARIABLES");
+    mysql_and_generic().verified_stmt("SHOW GLOBAL VARIABLES LIKE 'admin%'");
+    mysql_and_generic().verified_stmt("SHOW GLOBAL VARIABLES WHERE value = '3306'");
+    mysql_and_generic().verified_stmt("SHOW SESSION VARIABLES");
+    mysql_and_generic().verified_stmt("SHOW SESSION VARIABLES LIKE 'admin%'");
+    mysql_and_generic().verified_stmt("SHOW GLOBAL VARIABLES WHERE value = '3306'");
 }
 
 #[test]
@@ -1785,6 +1800,7 @@ fn parse_hex_string_introducer() {
             offset: None,
             fetch: None,
             locks: vec![],
+            for_clause: None,
         }))
     )
 }
@@ -1826,4 +1842,19 @@ fn parse_drop_temporary_table() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_convert_using() {
+    // https://dev.mysql.com/doc/refman/8.0/en/cast-functions.html#function_convert
+
+    // CONVERT(expr USING transcoding_name)
+    mysql().verified_only_select("SELECT CONVERT('x' USING latin1)");
+    mysql().verified_only_select("SELECT CONVERT(my_column USING utf8mb4) FROM my_table");
+
+    // CONVERT(expr, type)
+    mysql().verified_only_select("SELECT CONVERT('abc', CHAR(60))");
+    mysql().verified_only_select("SELECT CONVERT(123.456, DECIMAL(5,2))");
+    // with a type + a charset
+    mysql().verified_only_select("SELECT CONVERT('test', CHAR CHARACTER SET utf8mb4)");
 }

@@ -821,6 +821,7 @@ impl<'a> Parser<'a> {
                     self.parse_time_functions(ObjectName(vec![w.to_ident()]))
                 }
                 Keyword::CASE => self.parse_case_expr(),
+                Keyword::CONVERT => self.parse_convert_expr(),
                 Keyword::CAST => self.parse_cast_expr(),
                 Keyword::TRY_CAST => self.parse_try_cast_expr(),
                 Keyword::SAFE_CAST => self.parse_safe_cast_expr(),
@@ -1225,6 +1226,57 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    /// mssql-like convert function
+    fn parse_mssql_convert(&mut self) -> Result<Expr, ParserError> {
+        self.expect_token(&Token::LParen)?;
+        let data_type = self.parse_data_type()?;
+        self.expect_token(&Token::Comma)?;
+        let expr = self.parse_expr()?;
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::Convert {
+            expr: Box::new(expr),
+            data_type: Some(data_type),
+            charset: None,
+            target_before_value: true,
+        })
+    }
+
+    /// Parse a SQL CONVERT function:
+    ///  - `CONVERT('héhé' USING utf8mb4)` (MySQL)
+    ///  - `CONVERT('héhé', CHAR CHARACTER SET utf8mb4)` (MySQL)
+    ///  - `CONVERT(DECIMAL(10, 5), 42)` (MSSQL) - the type comes first
+    pub fn parse_convert_expr(&mut self) -> Result<Expr, ParserError> {
+        if self.dialect.convert_type_before_value() {
+            return self.parse_mssql_convert();
+        }
+        self.expect_token(&Token::LParen)?;
+        let expr = self.parse_expr()?;
+        if self.parse_keyword(Keyword::USING) {
+            let charset = self.parse_object_name()?;
+            self.expect_token(&Token::RParen)?;
+            return Ok(Expr::Convert {
+                expr: Box::new(expr),
+                data_type: None,
+                charset: Some(charset),
+                target_before_value: false,
+            });
+        }
+        self.expect_token(&Token::Comma)?;
+        let data_type = self.parse_data_type()?;
+        let charset = if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
+            Some(self.parse_object_name()?)
+        } else {
+            None
+        };
+        self.expect_token(&Token::RParen)?;
+        Ok(Expr::Convert {
+            expr: Box::new(expr),
+            data_type: Some(data_type),
+            charset,
+            target_before_value: false,
+        })
     }
 
     /// Parse a SQL CAST function e.g. `CAST(expr AS FLOAT)`
@@ -5617,6 +5669,9 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_character_length(&mut self) -> Result<CharacterLength, ParserError> {
+        if self.parse_keyword(Keyword::MAX) {
+            return Ok(CharacterLength::Max);
+        }
         let length = self.parse_literal_uint()?;
         let unit = if self.parse_keyword(Keyword::CHARACTERS) {
             Some(CharLengthUnits::Characters)
@@ -5625,8 +5680,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-
-        Ok(CharacterLength { length, unit })
+        Ok(CharacterLength::IntegerLength { length, unit })
     }
 
     pub fn parse_optional_precision_scale(
@@ -5823,6 +5877,7 @@ impl<'a> Parser<'a> {
                 offset: None,
                 fetch: None,
                 locks: vec![],
+                for_clause: None,
             })
         } else if self.parse_keyword(Keyword::UPDATE) {
             let update = self.parse_update()?;
@@ -5835,6 +5890,7 @@ impl<'a> Parser<'a> {
                 offset: None,
                 fetch: None,
                 locks: vec![],
+                for_clause: None,
             })
         } else {
             let body = Box::new(self.parse_query_body(0)?);
@@ -5886,9 +5942,15 @@ impl<'a> Parser<'a> {
                 None
             };
 
+            let mut for_clause = None;
             let mut locks = Vec::new();
             while self.parse_keyword(Keyword::FOR) {
-                locks.push(self.parse_lock()?);
+                if let Some(parsed_for_clause) = self.parse_for_clause()? {
+                    for_clause = Some(parsed_for_clause);
+                    break;
+                } else {
+                    locks.push(self.parse_lock()?);
+                }
             }
 
             Ok(Query {
@@ -5900,8 +5962,111 @@ impl<'a> Parser<'a> {
                 offset,
                 fetch,
                 locks,
+                for_clause,
             })
         }
+    }
+
+    /// Parse a mssql `FOR [XML | JSON | BROWSE]` clause
+    pub fn parse_for_clause(&mut self) -> Result<Option<ForClause>, ParserError> {
+        if self.parse_keyword(Keyword::XML) {
+            Ok(Some(self.parse_for_xml()?))
+        } else if self.parse_keyword(Keyword::JSON) {
+            Ok(Some(self.parse_for_json()?))
+        } else if self.parse_keyword(Keyword::BROWSE) {
+            Ok(Some(ForClause::Browse))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse a mssql `FOR XML` clause
+    pub fn parse_for_xml(&mut self) -> Result<ForClause, ParserError> {
+        let for_xml = if self.parse_keyword(Keyword::RAW) {
+            let mut element_name = None;
+            if self.peek_token().token == Token::LParen {
+                self.expect_token(&Token::LParen)?;
+                element_name = Some(self.parse_literal_string()?);
+                self.expect_token(&Token::RParen)?;
+            }
+            ForXml::Raw(element_name)
+        } else if self.parse_keyword(Keyword::AUTO) {
+            ForXml::Auto
+        } else if self.parse_keyword(Keyword::EXPLICIT) {
+            ForXml::Explicit
+        } else if self.parse_keyword(Keyword::PATH) {
+            let mut element_name = None;
+            if self.peek_token().token == Token::LParen {
+                self.expect_token(&Token::LParen)?;
+                element_name = Some(self.parse_literal_string()?);
+                self.expect_token(&Token::RParen)?;
+            }
+            ForXml::Path(element_name)
+        } else {
+            return Err(ParserError::ParserError(
+                "Expected FOR XML [RAW | AUTO | EXPLICIT | PATH ]".to_string(),
+            ));
+        };
+        let mut elements = false;
+        let mut binary_base64 = false;
+        let mut root = None;
+        let mut r#type = false;
+        while self.peek_token().token == Token::Comma {
+            self.next_token();
+            if self.parse_keyword(Keyword::ELEMENTS) {
+                elements = true;
+            } else if self.parse_keyword(Keyword::BINARY) {
+                self.expect_keyword(Keyword::BASE64)?;
+                binary_base64 = true;
+            } else if self.parse_keyword(Keyword::ROOT) {
+                self.expect_token(&Token::LParen)?;
+                root = Some(self.parse_literal_string()?);
+                self.expect_token(&Token::RParen)?;
+            } else if self.parse_keyword(Keyword::TYPE) {
+                r#type = true;
+            }
+        }
+        Ok(ForClause::Xml {
+            for_xml,
+            elements,
+            binary_base64,
+            root,
+            r#type,
+        })
+    }
+
+    /// Parse a mssql `FOR JSON` clause
+    pub fn parse_for_json(&mut self) -> Result<ForClause, ParserError> {
+        let for_json = if self.parse_keyword(Keyword::AUTO) {
+            ForJson::Auto
+        } else if self.parse_keyword(Keyword::PATH) {
+            ForJson::Path
+        } else {
+            return Err(ParserError::ParserError(
+                "Expected FOR JSON [AUTO | PATH ]".to_string(),
+            ));
+        };
+        let mut root = None;
+        let mut include_null_values = false;
+        let mut without_array_wrapper = false;
+        while self.peek_token().token == Token::Comma {
+            self.next_token();
+            if self.parse_keyword(Keyword::ROOT) {
+                self.expect_token(&Token::LParen)?;
+                root = Some(self.parse_literal_string()?);
+                self.expect_token(&Token::RParen)?;
+            } else if self.parse_keyword(Keyword::INCLUDE_NULL_VALUES) {
+                include_null_values = true;
+            } else if self.parse_keyword(Keyword::WITHOUT_ARRAY_WRAPPER) {
+                without_array_wrapper = true;
+            }
+        }
+        Ok(ForClause::Json {
+            for_json,
+            root,
+            include_null_values,
+            without_array_wrapper,
+        })
     }
 
     /// Parse a CTE (`alias [( col1, col2, ... )] AS (subquery)`)
@@ -6330,6 +6495,8 @@ impl<'a> Parser<'a> {
     pub fn parse_show(&mut self) -> Result<Statement, ParserError> {
         let extended = self.parse_keyword(Keyword::EXTENDED);
         let full = self.parse_keyword(Keyword::FULL);
+        let session = self.parse_keyword(Keyword::SESSION);
+        let global = self.parse_keyword(Keyword::GLOBAL);
         if self
             .parse_one_of_keywords(&[Keyword::COLUMNS, Keyword::FIELDS])
             .is_some()
@@ -6350,9 +6517,10 @@ impl<'a> Parser<'a> {
         } else if self.parse_keyword(Keyword::VARIABLES)
             && dialect_of!(self is MySqlDialect | GenericDialect)
         {
-            // TODO: Support GLOBAL|SESSION
             Ok(Statement::ShowVariables {
                 filter: self.parse_show_statement_filter()?,
+                session,
+                global,
             })
         } else {
             Ok(Statement::ShowVariable {
@@ -6624,9 +6792,20 @@ impl<'a> Parser<'a> {
             // `parse_derived_table_factor` below will return success after parsing the
             // subquery, followed by the closing ')', and the alias of the derived table.
             // In the example above this is case (3).
-            return_ok_if_some!(
+            if let Some(mut table) =
                 self.maybe_parse(|parser| parser.parse_derived_table_factor(NotLateral))
-            );
+            {
+                while let Some(kw) = self.parse_one_of_keywords(&[Keyword::PIVOT, Keyword::UNPIVOT])
+                {
+                    table = match kw {
+                        Keyword::PIVOT => self.parse_pivot_table_factor(table)?,
+                        Keyword::UNPIVOT => self.parse_unpivot_table_factor(table)?,
+                        _ => unreachable!(),
+                    }
+                }
+                return Ok(table);
+            }
+
             // A parsing error from `parse_derived_table_factor` indicates that the '(' we've
             // recently consumed does not start a derived table (cases 1, 2, or 4).
             // `maybe_parse` will ignore such an error and rewind to be after the opening '('.
@@ -8124,7 +8303,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHARACTER(20)",
-                DataType::Character(Some(CharacterLength {
+                DataType::Character(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: None
                 }))
@@ -8133,7 +8312,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHARACTER(20 CHARACTERS)",
-                DataType::Character(Some(CharacterLength {
+                DataType::Character(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Characters)
                 }))
@@ -8142,7 +8321,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHARACTER(20 OCTETS)",
-                DataType::Character(Some(CharacterLength {
+                DataType::Character(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Octets)
                 }))
@@ -8153,7 +8332,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHAR(20)",
-                DataType::Char(Some(CharacterLength {
+                DataType::Char(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: None
                 }))
@@ -8162,7 +8341,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHAR(20 CHARACTERS)",
-                DataType::Char(Some(CharacterLength {
+                DataType::Char(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Characters)
                 }))
@@ -8171,7 +8350,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHAR(20 OCTETS)",
-                DataType::Char(Some(CharacterLength {
+                DataType::Char(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Octets)
                 }))
@@ -8180,7 +8359,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHARACTER VARYING(20)",
-                DataType::CharacterVarying(Some(CharacterLength {
+                DataType::CharacterVarying(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: None
                 }))
@@ -8189,7 +8368,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHARACTER VARYING(20 CHARACTERS)",
-                DataType::CharacterVarying(Some(CharacterLength {
+                DataType::CharacterVarying(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Characters)
                 }))
@@ -8198,7 +8377,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHARACTER VARYING(20 OCTETS)",
-                DataType::CharacterVarying(Some(CharacterLength {
+                DataType::CharacterVarying(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Octets)
                 }))
@@ -8207,7 +8386,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHAR VARYING(20)",
-                DataType::CharVarying(Some(CharacterLength {
+                DataType::CharVarying(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: None
                 }))
@@ -8216,7 +8395,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHAR VARYING(20 CHARACTERS)",
-                DataType::CharVarying(Some(CharacterLength {
+                DataType::CharVarying(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Characters)
                 }))
@@ -8225,7 +8404,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "CHAR VARYING(20 OCTETS)",
-                DataType::CharVarying(Some(CharacterLength {
+                DataType::CharVarying(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: Some(CharLengthUnits::Octets)
                 }))
@@ -8234,7 +8413,7 @@ mod tests {
             test_parse_data_type!(
                 dialect,
                 "VARCHAR(20)",
-                DataType::Varchar(Some(CharacterLength {
+                DataType::Varchar(Some(CharacterLength::IntegerLength {
                     length: 20,
                     unit: None
                 }))

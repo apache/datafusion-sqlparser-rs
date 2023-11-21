@@ -2,8 +2,9 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::spanned::Spanned;
 use syn::{
-    parse_macro_input, parse_quote, Attribute, Data, DeriveInput, Expr, ExprLit, ExprPath,
-    Fields, GenericParam, Generics, Ident, Index, Lit, Meta, MetaNameValue,
+    parse::{Parse, ParseStream},
+    parse_macro_input, parse_quote, Attribute, Data, DeriveInput,
+    Fields, GenericParam, Generics, Ident, Index, LitStr, Meta, Token
 };
 
 
@@ -78,36 +79,41 @@ struct Attributes {
     with: Option<Ident>,
 }
 
+struct WithIdent {
+    with: Option<Ident>,
+}
+impl Parse for WithIdent {
+    fn parse(input: ParseStream) -> Result<Self, syn::Error> {
+        let mut result = WithIdent { with: None };
+        let ident = input.parse::<Ident>()?;
+        if ident != "with" {
+            return Err(syn::Error::new(ident.span(), "Expected identifier to be `with`"));
+        }
+        input.parse::<Token!(=)>()?;
+        let s = input.parse::<LitStr>()?;
+        result.with = Some(format_ident!("{}", s.value(), span = s.span()));
+        Ok(result)
+    }
+}
+
 impl Attributes {
     fn parse(attrs: &[Attribute]) -> Self {
         let mut out = Self::default();
         for attr in attrs {
-            if let Meta::NameValue(ref namevalue) = attr.meta {
-                if namevalue.path.is_ident("visit") {
-                    out.parse_name_value(namevalue);
+            if let Meta::List(ref metalist) = attr.meta {
+                if metalist.path.is_ident("visit") {
+                    match syn::parse2::<WithIdent>(metalist.tokens.clone()) {
+                        Ok(with_ident) => {
+                            out.with = with_ident.with;
+                        }
+                        Err(e) => {
+                            panic!("{}", e);
+                        }
+                    }
                 }
             }
-        }
-        if out.with.is_none() {
-            panic!("Expected #[visit(...)]");
         }
         out
-    }
-
-    /// Updates self with a name value attribute
-    fn parse_name_value(&mut self, v: &MetaNameValue) {
-        if let Expr::Assign(ref assign) = v.value {
-            if let Expr::Path(ExprPath { ref path, .. }) = *assign.left {
-                if path.is_ident("with") {
-                    match *assign.right {
-                        Expr::Lit(ExprLit { lit: Lit::Str(ref s), .. }) => self.with = Some(format_ident!("{}", s.value(), span = s.span())),
-                        _ => panic!("Expected a string value, got {}", v.value.to_token_stream()),
-                    }
-                    return;
-                }
-            }
-        }
-        panic!("Unrecognised kv attribute {}", v.to_token_stream())
     }
 
     /// Returns the pre and post visit token streams

@@ -7817,7 +7817,6 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_end(&mut self) -> Result<Statement, ParserError> {
-        // let _ = self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]);
         Ok(Statement::Commit {
             chain: self.parse_commit_rollback_chain()?,
         })

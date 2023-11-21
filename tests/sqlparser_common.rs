@@ -6234,12 +6234,38 @@ fn parse_commit() {
 #[test]
 fn parse_rollback() {
     match verified_stmt("ROLLBACK") {
-        Statement::Rollback { chain: false } => (),
+        Statement::Rollback {
+            chain: false,
+            savepoint: None,
+        } => (),
         _ => unreachable!(),
     }
 
     match verified_stmt("ROLLBACK AND CHAIN") {
-        Statement::Rollback { chain: true } => (),
+        Statement::Rollback {
+            chain: true,
+            savepoint: None,
+        } => (),
+        _ => unreachable!(),
+    }
+
+    match verified_stmt("ROLLBACK TO SAVEPOINT test1") {
+        Statement::Rollback {
+            chain: false,
+            savepoint,
+        } => {
+            assert_eq!(savepoint, Some(Ident::new("test1")));
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt("ROLLBACK AND CHAIN TO SAVEPOINT test1") {
+        Statement::Rollback {
+            chain: true,
+            savepoint,
+        } => {
+            assert_eq!(savepoint, Some(Ident::new("test1")));
+        }
         _ => unreachable!(),
     }
 
@@ -6250,6 +6276,11 @@ fn parse_rollback() {
     one_statement_parses_to("ROLLBACK TRANSACTION AND CHAIN", "ROLLBACK AND CHAIN");
     one_statement_parses_to("ROLLBACK WORK", "ROLLBACK");
     one_statement_parses_to("ROLLBACK TRANSACTION", "ROLLBACK");
+    one_statement_parses_to("ROLLBACK TO test1", "ROLLBACK TO SAVEPOINT test1");
+    one_statement_parses_to(
+        "ROLLBACK AND CHAIN TO test1",
+        "ROLLBACK AND CHAIN TO SAVEPOINT test1",
+    );
 }
 
 #[test]
@@ -7863,4 +7894,26 @@ fn parse_binary_operators_without_whitespace() {
         "SELECT tbl1.field%tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
         "SELECT tbl1.field % tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
     );
+}
+
+#[test]
+fn test_savepoint() {
+    match verified_stmt("SAVEPOINT test1") {
+        Statement::Savepoint { name } => {
+            assert_eq!(Ident::new("test1"), name);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_release_savepoint() {
+    match verified_stmt("RELEASE SAVEPOINT test1") {
+        Statement::ReleaseSavepoint { name } => {
+            assert_eq!(Ident::new("test1"), name);
+        }
+        _ => unreachable!(),
+    }
+
+    one_statement_parses_to("RELEASE test1", "RELEASE SAVEPOINT test1");
 }

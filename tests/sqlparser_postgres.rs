@@ -2094,16 +2094,6 @@ fn test_transaction_statement() {
 }
 
 #[test]
-fn test_savepoint() {
-    match pg().verified_stmt("SAVEPOINT test1") {
-        Statement::Savepoint { name } => {
-            assert_eq!(Ident::new("test1"), name);
-        }
-        _ => unreachable!(),
-    }
-}
-
-#[test]
 fn test_json() {
     let sql = "SELECT params ->> 'name' FROM events";
     let select = pg().verified_only_select(sql);

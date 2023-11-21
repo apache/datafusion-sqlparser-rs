@@ -941,7 +941,7 @@ fn parse_simple_insert() {
             assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
             assert!(on.is_none());
             assert_eq!(
-                Box::new(Query {
+                Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
@@ -969,7 +969,7 @@ fn parse_simple_insert() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
-                }),
+                })),
                 source
             );
         }
@@ -995,7 +995,7 @@ fn parse_ignore_insert() {
             assert!(on.is_none());
             assert!(ignore);
             assert_eq!(
-                Box::new(Query {
+                Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
@@ -1011,7 +1011,7 @@ fn parse_ignore_insert() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
-                }),
+                })),
                 source
             );
         }
@@ -1035,7 +1035,7 @@ fn parse_empty_row_insert() {
             assert!(columns.is_empty());
             assert!(on.is_none());
             assert_eq!(
-                Box::new(Query {
+                Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
@@ -1048,7 +1048,7 @@ fn parse_empty_row_insert() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
-                }),
+                })),
                 source
             );
         }
@@ -1084,7 +1084,7 @@ fn parse_insert_with_on_duplicate_update() {
                 columns
             );
             assert_eq!(
-                Box::new(Query {
+                Some(Box::new(Query {
                     with: None,
                     body: Box::new(SetExpr::Values(Values {
                         explicit_row: false,
@@ -1108,7 +1108,7 @@ fn parse_insert_with_on_duplicate_update() {
                     fetch: None,
                     locks: vec![],
                     for_clause: None,
-                }),
+                })),
                 source
             );
             assert_eq!(

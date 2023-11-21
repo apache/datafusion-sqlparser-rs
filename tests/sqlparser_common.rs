@@ -85,7 +85,7 @@ fn parse_insert_values() {
             Statement::Insert {
                 table_name,
                 columns,
-                source,
+                source: Some(source),
                 ..
             } => {
                 assert_eq!(table_name.to_string(), expected_table_name);
@@ -93,7 +93,7 @@ fn parse_insert_values() {
                 for (index, column) in columns.iter().enumerate() {
                     assert_eq!(column, &Ident::new(expected_columns[index].clone()));
                 }
-                match &*source.body {
+                match *source.body {
                     SetExpr::Values(Values { rows, .. }) => {
                         assert_eq!(rows.as_slice(), expected_rows)
                     }
@@ -105,6 +105,111 @@ fn parse_insert_values() {
     }
 
     verified_stmt("INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)");
+}
+
+#[test]
+fn parse_insert_default_values() {
+    let insert_with_default_values = verified_stmt("INSERT INTO test_table DEFAULT VALUES");
+
+    match insert_with_default_values {
+        Statement::Insert {
+            after_columns,
+            columns,
+            on,
+            partitioned,
+            returning,
+            source,
+            table_name,
+            ..
+        } => {
+            assert_eq!(columns, vec![]);
+            assert_eq!(after_columns, vec![]);
+            assert_eq!(on, None);
+            assert_eq!(partitioned, None);
+            assert_eq!(returning, None);
+            assert_eq!(source, None);
+            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+        }
+        _ => unreachable!(),
+    }
+
+    let insert_with_default_values_and_returning =
+        verified_stmt("INSERT INTO test_table DEFAULT VALUES RETURNING test_column");
+
+    match insert_with_default_values_and_returning {
+        Statement::Insert {
+            after_columns,
+            columns,
+            on,
+            partitioned,
+            returning,
+            source,
+            table_name,
+            ..
+        } => {
+            assert_eq!(after_columns, vec![]);
+            assert_eq!(columns, vec![]);
+            assert_eq!(on, None);
+            assert_eq!(partitioned, None);
+            assert!(returning.is_some());
+            assert_eq!(source, None);
+            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+        }
+        _ => unreachable!(),
+    }
+
+    let insert_with_default_values_and_on_conflict =
+        verified_stmt("INSERT INTO test_table DEFAULT VALUES ON CONFLICT DO NOTHING");
+
+    match insert_with_default_values_and_on_conflict {
+        Statement::Insert {
+            after_columns,
+            columns,
+            on,
+            partitioned,
+            returning,
+            source,
+            table_name,
+            ..
+        } => {
+            assert_eq!(after_columns, vec![]);
+            assert_eq!(columns, vec![]);
+            assert!(on.is_some());
+            assert_eq!(partitioned, None);
+            assert_eq!(returning, None);
+            assert_eq!(source, None);
+            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+        }
+        _ => unreachable!(),
+    }
+
+    let insert_with_columns_and_default_values = "INSERT INTO test_table (test_col) DEFAULT VALUES";
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected SELECT, VALUES, or a subquery in the query body, found: DEFAULT".to_string()
+        ),
+        parse_sql_statements(insert_with_columns_and_default_values).unwrap_err()
+    );
+
+    let insert_with_default_values_and_hive_after_columns =
+        "INSERT INTO test_table DEFAULT VALUES (some_column)";
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: (".to_string()),
+        parse_sql_statements(insert_with_default_values_and_hive_after_columns).unwrap_err()
+    );
+
+    let insert_with_default_values_and_hive_partition =
+        "INSERT INTO test_table DEFAULT VALUES PARTITION (some_column)";
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: PARTITION".to_string()),
+        parse_sql_statements(insert_with_default_values_and_hive_partition).unwrap_err()
+    );
+
+    let insert_with_default_values_and_values_list = "INSERT INTO test_table DEFAULT VALUES (1)";
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: (".to_string()),
+        parse_sql_statements(insert_with_default_values_and_values_list).unwrap_err()
+    );
 }
 
 #[test]

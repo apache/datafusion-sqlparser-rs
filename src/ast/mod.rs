@@ -1418,7 +1418,7 @@ pub enum Statement {
         /// Overwrite (Hive)
         overwrite: bool,
         /// A SQL query that specifies what to insert
-        source: Box<Query>,
+        source: Option<Box<Query>>,
         /// partitioned insert (Hive)
         partitioned: Option<Vec<Expr>>,
         /// Columns defined after PARTITION
@@ -2283,7 +2283,14 @@ impl fmt::Display for Statement {
                 if !after_columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(after_columns))?;
                 }
-                write!(f, "{source}")?;
+
+                if let Some(source) = source {
+                    write!(f, "{source}")?;
+                }
+
+                if source.is_none() && columns.is_empty() {
+                    write!(f, "DEFAULT VALUES")?;
+                }
 
                 if let Some(on) = on {
                     write!(f, "{on}")?;

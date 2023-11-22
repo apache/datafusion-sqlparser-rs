@@ -120,6 +120,8 @@ impl TestedDialects {
 
         let only_statement = statements.pop().unwrap();
         if !canonical.is_empty() {
+            println!("Canonical: {canonical}");
+            println!("Reformed:  {only_statement}");
             assert_eq!(canonical, only_statement.to_string())
         }
         only_statement

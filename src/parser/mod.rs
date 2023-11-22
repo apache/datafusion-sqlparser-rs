@@ -4299,6 +4299,7 @@ impl<'a> Parser<'a> {
                 generated_as: GeneratedAs::Always,
                 sequence_options: Some(sequence_options),
                 generation_expr: None,
+                generation_expr_mode: None,
             }))
         } else if self.parse_keywords(&[
             Keyword::BY,
@@ -4315,16 +4316,31 @@ impl<'a> Parser<'a> {
                 generated_as: GeneratedAs::ByDefault,
                 sequence_options: Some(sequence_options),
                 generation_expr: None,
+                generation_expr_mode: None,
             }))
         } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::AS]) {
             if self.expect_token(&Token::LParen).is_ok() {
                 let expr = self.parse_expr()?;
                 self.expect_token(&Token::RParen)?;
-                let _ = self.parse_keywords(&[Keyword::STORED]);
+                let (gen_as, expr_mode) = if self.parse_keywords(&[Keyword::STORED]) {
+                    Ok((
+                        GeneratedAs::ExpStored,
+                        Some(GeneratedExpressionMode::Stored),
+                    ))
+                } else if dialect_of!(self is PostgreSqlDialect) {
+                    // Postgres' AS IDENTITY branches are above, this one needs STORED
+                    self.expected("STORED", self.peek_token())
+                } else if self.parse_keywords(&[Keyword::VIRTUAL]) {
+                    Ok((GeneratedAs::Always, Some(GeneratedExpressionMode::Virtual)))
+                } else {
+                    Ok((GeneratedAs::Always, None))
+                }?;
+
                 Ok(Some(ColumnOption::Generated {
-                    generated_as: GeneratedAs::ExpStored,
+                    generated_as: gen_as,
                     sequence_options: None,
                     generation_expr: Some(expr),
+                    generation_expr_mode: expr_mode,
                 }))
             } else {
                 Ok(None)

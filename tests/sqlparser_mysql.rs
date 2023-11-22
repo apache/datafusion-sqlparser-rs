@@ -15,7 +15,6 @@
 //! is also tested (on the inputs it can handle).
 
 use matches::assert_matches;
-use sqlparser;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Value;
 use sqlparser::ast::*;

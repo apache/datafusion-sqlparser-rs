@@ -1437,6 +1437,8 @@ pub enum Statement {
         /// TABLE
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
+        /// AS table_alias (Postgres)
+        table_alias: Option<Ident>,
         /// COLUMNS
         columns: Vec<Ident>,
         /// Overwrite (Hive)
@@ -2492,6 +2494,7 @@ impl fmt::Display for Statement {
                 ignore,
                 into,
                 table_name,
+                table_alias,
                 overwrite,
                 partitioned,
                 columns,
@@ -2524,6 +2527,10 @@ impl fmt::Display for Statement {
                         int = if *into { " INTO" } else { "" },
                         tbl = if *table { " TABLE" } else { "" },
                     )?;
+
+                    if let Some(table_alias) = table_alias {
+                        write!(f, "AS {table_alias} ")?;
+                    }
                 }
                 if !columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(columns))?;

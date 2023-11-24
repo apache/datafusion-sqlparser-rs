@@ -8467,14 +8467,13 @@ impl<'a> Parser<'a> {
                 self.parse_parenthesized_column_list(Optional, is_mysql)?
             };
 
-            let table_alias =
-                if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::AS) {
-                    Some(self.parse_identifier(false)?)
-                } else {
-                    None
-                };
+            let is_postgresql = dialect_of!(self is PostgreSqlDialect);
 
-            let is_mysql = dialect_of!(self is MySqlDialect);
+            let table_alias = if is_postgresql {
+                self.parse_insert_table_alias()?
+            } else {
+                None
+            };
 
             let (columns, partitioned, after_columns, source) =
                 if self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]) {
@@ -8597,6 +8596,16 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn parse_insert_table_alias(&mut self) -> Result<Option<Ident>, ParserError> {
+        let table_alias = if self.parse_keyword(Keyword::AS) {
+            Some(self.parse_identifier()?)
+        } else {
+            None
+        };
+
+        Ok(table_alias)
     }
 
     pub fn parse_update(&mut self) -> Result<Statement, ParserError> {

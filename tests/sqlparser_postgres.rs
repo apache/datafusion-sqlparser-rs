@@ -3960,3 +3960,18 @@ fn parse_mat_cte() {
     let sql2 = r#"WITH cte AS NOT MATERIALIZED (SELECT id FROM accounts) SELECT id FROM cte"#;
     pg().verified_stmt(sql2);
 }
+
+#[test]
+fn parse_insert_with_table_alias() {
+    match pg().verified_stmt("INSERT INTO table_1 AS t1 (c1) VALUES (1)") {
+        Statement::Insert {
+            table_name,
+            table_alias,
+            ..
+        } => {
+            assert_eq!(table_name, ObjectName(vec!["table_1".into()]));
+            assert_eq!(table_alias, Some(Ident::new("t1")));
+        }
+        _ => unreachable!(),
+    }
+}

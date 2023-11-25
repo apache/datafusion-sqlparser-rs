@@ -3975,3 +3975,83 @@ fn parse_insert_with_table_alias() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_select_order_by_using() {
+    let select = pg().verified_query(
+        "SELECT name, email FROM users ORDER BY name USING >",
+    );
+    assert_eq!(
+        vec![OrderByExpr {
+            expr: Expr::Identifier(Ident::new("name")),
+            asc: None,
+            nulls_first: None,
+            using: Some(BinaryOperator::Gt),
+        }],
+        select.order_by
+    );
+}
+
+#[test]
+fn parse_select_order_by_asc() {
+    let select = pg().verified_query(
+        "SELECT name, email FROM users ORDER BY name ASC",
+    );
+    assert_eq!(
+        vec![OrderByExpr {
+            expr: Expr::Identifier(Ident::new("name")),
+            asc: Some(true),
+            nulls_first: None,
+            using: None,
+        }],
+        select.order_by
+    );
+}
+
+#[test]
+fn parse_select_order_by_desc() {
+    let select = pg().verified_query(
+        "SELECT name, email FROM users ORDER BY name DESC",
+    );
+    assert_eq!(
+        vec![OrderByExpr {
+            expr: Expr::Identifier(Ident::new("name")),
+            asc: Some(false),
+            nulls_first: None,
+            using: None,
+        }],
+        select.order_by
+    );
+}
+
+#[test]
+fn parse_select_order_by_desc_nulls_first() {
+    let select = pg().verified_query(
+        "SELECT name, email FROM users ORDER BY name DESC NULLS FIRST",
+    );
+    assert_eq!(
+        vec![OrderByExpr {
+            expr: Expr::Identifier(Ident::new("name")),
+            asc: Some(false),
+            nulls_first: Some(true),
+            using: None,
+        }],
+        select.order_by
+    );
+}
+
+#[test]
+fn parse_select_order_by_using_nulls_last() {
+    let select = pg().verified_query(
+        "SELECT name, email FROM users ORDER BY name USING < NULLS LAST",
+    );
+    assert_eq!(
+        vec![OrderByExpr {
+            expr: Expr::Identifier(Ident::new("name")),
+            asc: None,
+            nulls_first: Some(false),
+            using: Some(BinaryOperator::Lt),
+        }],
+        select.order_by
+    );
+}

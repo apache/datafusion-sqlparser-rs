@@ -1925,16 +1925,19 @@ fn parse_select_order_by() {
                     expr: Expr::Identifier(Ident::new("lname")),
                     asc: Some(true),
                     nulls_first: None,
+                    using: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("fname")),
                     asc: Some(false),
                     nulls_first: None,
+                    using: None,
                 },
                 OrderByExpr {
                     expr: Expr::Identifier(Ident::new("id")),
                     asc: None,
                     nulls_first: None,
+                    using: None,
                 },
             ],
             select.order_by
@@ -1957,11 +1960,13 @@ fn parse_select_order_by_limit() {
                 expr: Expr::Identifier(Ident::new("lname")),
                 asc: Some(true),
                 nulls_first: None,
+                using: None,
             },
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("fname")),
                 asc: Some(false),
                 nulls_first: None,
+                using: None,
             },
         ],
         select.order_by
@@ -1980,11 +1985,13 @@ fn parse_select_order_by_nulls_order() {
                 expr: Expr::Identifier(Ident::new("lname")),
                 asc: Some(true),
                 nulls_first: Some(true),
+                using: None,
             },
             OrderByExpr {
                 expr: Expr::Identifier(Ident::new("fname")),
                 asc: Some(false),
                 nulls_first: Some(false),
+                using: None,
             },
         ],
         select.order_by
@@ -2067,6 +2074,7 @@ fn parse_select_qualify() {
                         expr: Expr::Identifier(Ident::new("o")),
                         asc: None,
                         nulls_first: None,
+                        using: None,
                     }],
                     window_frame: None,
                 })),
@@ -2398,6 +2406,7 @@ fn parse_listagg() {
             }),
             asc: None,
             nulls_first: None,
+            using: None,
         },
         OrderByExpr {
             expr: Expr::Identifier(Ident {
@@ -2406,6 +2415,7 @@ fn parse_listagg() {
             }),
             asc: None,
             nulls_first: None,
+            using: None,
         },
     ];
     assert_eq!(
@@ -4106,6 +4116,7 @@ fn parse_window_functions() {
                     expr: Expr::Identifier(Ident::new("dt")),
                     asc: Some(false),
                     nulls_first: None,
+                    using: None,
                 }],
                 window_frame: None,
             })),
@@ -4223,6 +4234,7 @@ fn test_parse_named_window() {
                         }),
                         asc: None,
                         nulls_first: None,
+                        using: None,
                     }],
                     window_frame: None,
                 },
@@ -6811,11 +6823,13 @@ fn parse_create_index() {
             expr: Expr::Identifier(Ident::new("name")),
             asc: None,
             nulls_first: None,
+            using: None,
         },
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("age")),
             asc: Some(false),
             nulls_first: None,
+            using: None,
         },
     ];
     match verified_stmt(sql) {
@@ -6845,11 +6859,13 @@ fn test_create_index_with_using_function() {
             expr: Expr::Identifier(Ident::new("name")),
             asc: None,
             nulls_first: None,
+            using: None,
         },
         OrderByExpr {
             expr: Expr::Identifier(Ident::new("age")),
             asc: Some(false),
             nulls_first: None,
+            using: None,
         },
     ];
     match verified_stmt(sql) {

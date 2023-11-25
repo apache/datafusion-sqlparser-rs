@@ -6532,6 +6532,22 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
+    pub fn parse_operator(&mut self) -> Option<BinaryOperator> {
+        let token = self.next_token();
+        match token.token {
+            Token::Eq => Some(BinaryOperator::Eq),
+            Token::Neq => Some(BinaryOperator::NotEq),
+            Token::Lt => Some(BinaryOperator::Lt),
+            Token::LtEq => Some(BinaryOperator::LtEq),
+            Token::Gt => Some(BinaryOperator::Gt),
+            _ => None,
+
+            // TODO: Handle all the other operators
+            // Postgres needs it for ORDER BY x USING <op>
+            // CREATE OPERATOR is also currently not supported
+        }
+    }
+
     pub fn parse_set_operator(&mut self, token: &Token) -> Option<SetOperator> {
         match token {
             Token::Word(w) if w.keyword == Keyword::UNION => Some(SetOperator::Union),
@@ -8132,7 +8148,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)
+    /// Parse an expression, optionally followed by ASC, DESC or USING (used in ORDER BY)
     pub fn parse_order_by_expr(&mut self) -> Result<OrderByExpr, ParserError> {
         let expr = self.parse_expr()?;
 
@@ -8140,6 +8156,12 @@ impl<'a> Parser<'a> {
             Some(true)
         } else if self.parse_keyword(Keyword::DESC) {
             Some(false)
+        } else {
+            None
+        };
+
+        let using = if dialect_of!(self is PostgreSqlDialect | GenericDialect) && self.parse_keyword(Keyword::USING) {
+            self.parse_operator()
         } else {
             None
         };
@@ -8156,6 +8178,7 @@ impl<'a> Parser<'a> {
             expr,
             asc,
             nulls_first,
+            using,
         })
     }
 

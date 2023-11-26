@@ -34,7 +34,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::DollarQuotedString;
+use crate::{ast::DollarQuotedString, dialect::PostgreSqlDialect};
 use crate::dialect::{
     BigQueryDialect, DuckDbDialect, GenericDialect, HiveDialect, SnowflakeDialect,
 };
@@ -199,6 +199,8 @@ pub enum Token {
     /// for the specified JSON value. Only the first item of the result is taken into
     /// account. If the result is not Boolean, then NULL is returned.
     AtAt,
+    /// Bidirectional arrow <->
+    BidirectionalArrow,
 }
 
 impl fmt::Display for Token {
@@ -278,6 +280,7 @@ impl fmt::Display for Token {
             Token::HashMinus => write!(f, "#-"),
             Token::AtQuestion => write!(f, "@?"),
             Token::AtAt => write!(f, "@@"),
+            Token::BidirectionalArrow => write!(f, "<->"),
         }
     }
 }
@@ -939,6 +942,14 @@ impl<'a> Tokenizer<'a> {
                             match chars.peek() {
                                 Some('>') => self.consume_and_return(chars, Token::Spaceship),
                                 _ => Ok(Some(Token::LtEq)),
+                            }
+                        }
+                        // Handle PostgreSQL's '<->' operator
+                        Some('-') if dialect_of!(self is PostgreSqlDialect | GenericDialect) => {
+                            chars.next();
+                            match chars.peek() {
+                                Some('>') => self.consume_and_return(chars, Token::BidirectionalArrow),
+                                _ => self.tokenizer_error(chars.location(), "Expected '>' after '-'"),
                             }
                         }
                         Some('>') => self.consume_and_return(chars, Token::Neq),
@@ -2225,6 +2236,25 @@ mod tests {
             TokenWithLocation::new(Token::Whitespace(Whitespace::Newline), 1, 10),
             TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 2, 1),
             TokenWithLocation::new(Token::make_word("b", None), 2, 2),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_biderectional_arrow() {
+        let sql = "SELECT a <-> b";
+        let dialect = GenericDialect {};
+        let tokens = Tokenizer::new(&dialect, sql)
+            .tokenize_with_location()
+            .unwrap();
+        let expected = vec![
+            TokenWithLocation::new(Token::make_keyword("SELECT"), 1, 1),
+            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 1, 7),
+            TokenWithLocation::new(Token::make_word("a", None), 1, 8),
+            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 1, 9),
+            TokenWithLocation::new(Token::BidirectionalArrow, 1, 10),
+            TokenWithLocation::new(Token::Whitespace(Whitespace::Space), 1, 13),
+            TokenWithLocation::new(Token::make_word("b", None), 1, 14),
         ];
         compare(expected, tokens);
     }

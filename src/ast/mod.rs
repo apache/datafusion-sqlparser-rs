@@ -172,6 +172,21 @@ impl fmt::Display for Ident {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ObjectName(pub Vec<Ident>);
 
+/// Quality of life assistance for devs writing tests.
+/// Useful when needing an object name and you want to just pass a string.
+/// 
+/// ## Example
+/// 
+/// ```
+/// use sqlparser::ast::ObjectName;
+/// let on: ObjectName = "foo.bar".into();
+/// ```
+impl From<&'static str> for ObjectName {
+    fn from(value: &'static str) -> Self {
+        Self(value.split(".").into_iter().map(Ident::from).collect())
+    }
+}
+
 impl fmt::Display for ObjectName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", display_separated(&self.0, "."))

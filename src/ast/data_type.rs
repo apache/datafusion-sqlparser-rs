@@ -227,6 +227,12 @@ pub enum DataType {
     Unspecified,
 }
 
+impl DataType {
+    pub fn new_custom(name: impl Into<ObjectName>, modifiers: Vec<String>) -> Self {
+        DataType::Custom(name.into(), modifiers)
+    }
+}
+
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

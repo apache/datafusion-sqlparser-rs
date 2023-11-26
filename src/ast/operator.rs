@@ -113,6 +113,8 @@ pub enum BinaryOperator {
     MyIntegerDivide,
     /// Support for custom operators (built by parsers outside this crate)
     Custom(String),
+    /// Geodistance operator, e.g. `a <-> b` (PostgreSQL-specific)
+    PGGeoDistance,
     /// Bitwise XOR, e.g. `a # b` (PostgreSQL-specific)
     PGBitwiseXor,
     /// Bitwise shift left, e.g. `a << b` (PostgreSQL-specific)
@@ -173,6 +175,7 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::DuckIntegerDivide => f.write_str("//"),
             BinaryOperator::MyIntegerDivide => f.write_str("DIV"),
             BinaryOperator::Custom(s) => f.write_str(s),
+            BinaryOperator::PGGeoDistance => f.write_str("<->"),
             BinaryOperator::PGBitwiseXor => f.write_str("#"),
             BinaryOperator::PGBitwiseShiftLeft => f.write_str("<<"),
             BinaryOperator::PGBitwiseShiftRight => f.write_str(">>"),

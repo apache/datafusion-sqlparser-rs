@@ -3610,7 +3610,7 @@ fn parse_insert_with_table_alias() {
             table_alias,
             ..
         } => {
-            assert_eq!(table_name, ObjectName(vec!["table_1".into()]));
+            assert_eq!(table_name, "table_1".into());
             assert_eq!(table_alias, Some(Ident::new("t1")));
         }
         _ => unreachable!(),
@@ -3692,6 +3692,39 @@ fn parse_select_order_by_using_nulls_last() {
             asc: None,
             nulls_first: Some(false),
             using: Some(BinaryOperator::Lt),
+        }],
+        select.order_by
+    );
+}
+
+#[test]
+fn parse_select_with_biderectional_arrow() {
+    pg_and_generic().verified_only_select_with_canonical(
+        "SELECT location <-> '(101,456)'::point",
+        "SELECT location <-> CAST('(101,456)' AS point)",
+    );
+}
+
+#[test]
+fn parse_query_with_biderectional_arrow() {
+    let select = pg_and_generic().verified_query_with_canonical(
+        "SELECT name, email FROM users ORDER BY location <-> '(101,456)'::point",
+        "SELECT name, email FROM users ORDER BY location <-> CAST('(101,456)' AS point)",
+    );
+    assert_eq!(
+        vec![OrderByExpr {
+            expr: Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("location"))),
+                op: BinaryOperator::PGGeoDistance,
+                right: Box::new(Expr::Cast {
+                    expr: Box::new(Expr::Value(Value::SingleQuotedString("(101,456)".into()))),
+                    data_type: DataType::new_custom("point", vec![]),
+                    format: None
+                }),
+            },
+            asc: None,
+            nulls_first: None,
+            using: None,
         }],
         select.order_by
     );

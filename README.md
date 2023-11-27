@@ -62,7 +62,7 @@ analysis, feel free to use this project as a base.
 ## Preserves Syntax Round Trip 
 
 This crate allows users to recover the original SQL text (with normalized
-whitespace and identifier capitalization), which is useful for tools that
+whitespace and keyword capitalization), which is useful for tools that
 analyze and manipulate SQL.
 
 This means that other than whitespace and the capitalization of keywords, the

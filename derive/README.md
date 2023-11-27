@@ -131,3 +131,19 @@ visitor.post_visit_expr(<is null operand>)
 visitor.post_visit_expr(<is null operand>)
 visitor.post_visit_expr(<is null expr>)
 ```
+
+## Releasing
+
+This crate's release is not automated. Instead it is released manually as needed
+
+Steps:
+1. Update the version in `Cargo.toml`
+2. Update the corresponding version in `../Cargo.toml`
+3. Commit via PR
+4. Publish to crates.io:
+
+```shell
+# update to latest checked in main branch and publish via
+cargo publish 
+```
+

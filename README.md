@@ -59,6 +59,28 @@ This crate avoids semantic analysis because it varies drastically
 between dialects and implementations. If you want to do semantic
 analysis, feel free to use this project as a base.
 
+## Preserves Syntax Round Trip 
+
+This crate allows users to recover the original SQL text (with normalized
+whitespace and keyword capitalization), which is useful for tools that
+analyze and manipulate SQL.
+
+This means that other than whitespace and the capitalization of keywords, the
+following should hold true for all SQL:
+
+```rust
+// Parse SQL
+let ast = Parser::parse_sql(&GenericDialect, sql).unwrap();
+
+// The original SQL text can be generated from the AST
+assert_eq!(ast[0].to_string(), sql);
+```
+
+There are still some cases in this crate where different SQL with seemingly
+similar semantics are represented with the same AST. We welcome PRs to fix such
+issues and distinguish different syntaxes in the AST.
+
+
 ## SQL compliance
 
 SQL was first standardized in 1987, and revisions of the standard have been

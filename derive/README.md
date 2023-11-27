@@ -48,33 +48,102 @@ impl Visit for Bar {
 }
 ```
 
-Additionally certain types may wish to call a corresponding method on visitor before recursing
+Some types may wish to call a corresponding method on the visitor:
 
 ```rust
 #[derive(Visit, VisitMut)]
 #[visit(with = "visit_expr")]
 enum Expr {
-    A(),
-    B(String, #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))] ObjectName, bool),
+    IsNull(Box<Expr>),
+    ..
 }
 ```
 
-Will generate
+This will result in the following sequence of visitor calls when an `IsNull`
+expression is visited
+
+```
+visitor.pre_visit_expr(<is null expr>)
+visitor.pre_visit_expr(<is null operand>)
+visitor.post_visit_expr(<is null operand>)
+visitor.post_visit_expr(<is null expr>)
+```
+
+For some types it is only appropriate to call a particular visitor method in
+some contexts. For example, not every `ObjectName` refers to a relation.
+
+In these cases, the `visit` attribute can be used on the field for which we'd
+like to call the method:
 
 ```rust
-impl Visit for Bar {
+#[derive(Visit, VisitMut)]
+#[visit(with = "visit_table_factor")]
+pub enum TableFactor {
+    Table {
+        #[visit(with = "visit_relation")]
+        name: ObjectName,
+        alias: Option<TableAlias>,
+    },
+    ..
+}
+```
+
+This will generate
+
+```rust
+impl Visit for TableFactor {
     fn visit<V: Visitor>(&self, visitor: &mut V) -> ControlFlow<V::Break> {
-        visitor.visit_expr(self)?;
+        visitor.pre_visit_table_factor(self)?;
         match self {
-            Self::A() => {}
-            Self::B(_1, _2, _3) => {
-                _1.visit(visitor)?;
-                visitor.visit_relation(_3)?;
-                _2.visit(visitor)?;
-                _3.visit(visitor)?;
+            Self::Table { name, alias } => {
+                visitor.pre_visit_relation(name)?;
+                alias.visit(name)?;
+                visitor.post_visit_relation(name)?;
+                alias.visit(visitor)?;
             }
         }
+        visitor.post_visit_table_factor(self)?;
         ControlFlow::Continue(())
     }
 }
 ```
+
+Note that annotating both the type and the field is incorrect as it will result
+in redundant calls to the method. For example
+
+```rust
+#[derive(Visit, VisitMut)]
+#[visit(with = "visit_expr")]
+enum Expr {
+    IsNull(#[visit(with = "visit_expr")] Box<Expr>),
+    ..
+}
+```
+
+will result in these calls to the visitor
+
+
+```
+visitor.pre_visit_expr(<is null expr>)
+visitor.pre_visit_expr(<is null operand>)
+visitor.pre_visit_expr(<is null operand>)
+visitor.post_visit_expr(<is null operand>)
+visitor.post_visit_expr(<is null operand>)
+visitor.post_visit_expr(<is null expr>)
+```
+
+## Releasing
+
+This crate's release is not automated. Instead it is released manually as needed
+
+Steps:
+1. Update the version in `Cargo.toml`
+2. Update the corresponding version in `../Cargo.toml`
+3. Commit via PR
+4. Publish to crates.io:
+
+```shell
+# update to latest checked in main branch and publish via
+cargo publish 
+```
+

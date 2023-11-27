@@ -206,6 +206,18 @@ fn parse_create_sqlite_quote() {
 }
 
 #[test]
+fn parse_create_table_gencol() {
+    let sql_default = "CREATE TABLE t1 (a INT, b INT GENERATED ALWAYS AS (a * 2))";
+    sqlite_and_generic().verified_stmt(sql_default);
+
+    let sql_virt = "CREATE TABLE t1 (a INT, b INT GENERATED ALWAYS AS (a * 2) VIRTUAL)";
+    sqlite_and_generic().verified_stmt(sql_virt);
+
+    let sql_stored = "CREATE TABLE t1 (a INT, b INT GENERATED ALWAYS AS (a * 2) STORED)";
+    sqlite_and_generic().verified_stmt(sql_stored);
+}
+
+#[test]
 fn test_placeholder() {
     // In postgres, this would be the absolute value operator '@' applied to the column 'xxx'
     // But in sqlite, this is a named parameter.
@@ -435,7 +447,6 @@ fn sqlite_with_options(options: ParserOptions) -> TestedDialects {
 
 fn sqlite_and_generic() -> TestedDialects {
     TestedDialects {
-        // we don't have a separate SQLite dialect, so test only the generic dialect for now
         dialects: vec![Box::new(SQLiteDialect {}), Box::new(GenericDialect {})],
         options: None,
     }

@@ -1379,7 +1379,7 @@ fn parse_prepare() {
         Statement::Insert {
             table_name,
             columns,
-            source,
+            source: Some(source),
             ..
         } => {
             assert_eq!(table_name.to_string(), "customers");
@@ -2091,16 +2091,6 @@ fn test_transaction_statement() {
             session: true
         }
     );
-}
-
-#[test]
-fn test_savepoint() {
-    match pg().verified_stmt("SAVEPOINT test1") {
-        Statement::Savepoint { name } => {
-            assert_eq!(Ident::new("test1"), name);
-        }
-        _ => unreachable!(),
-    }
 }
 
 #[test]

@@ -8,6 +8,29 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+
+## [0.40.0] 2023-11-27
+
+### Added
+* Add `{pre,post}_visit_query` to `Visitor` (#1044) - Thanks @jmhain
+* Support generated virtual columns with expression (#1051) - Thanks @takluyver
+* Support PostgreSQL `END` (#1035) - Thanks @tobyhede
+* Support `INSERT INTO ... DEFAULT VALUES ...` (#1036) - Thanks @CDThomas
+* Support `RELEASE` and `ROLLBACK TO SAVEPOINT` (#1045) - Thanks @CDThomas
+* Support `CONVERT` expressions (#1048) - Thanks @lovasoa
+* Support `GLOBAL` and `SESSION` parts in `SHOW VARIABLES` for mysql and generic - Thanks @emin100
+* Support snowflake `PIVOT` on derived table factors (#1027) - Thanks @lustefaniak
+* Support mssql json and xml extensions (#1043) - Thanks @lovasoa
+* Support for `MAX` as a character length (#1038) - Thanks @lovasoa
+* Support `IN ()` syntax of SQLite (#1028) - Thanks @alamb
+
+### Fixed
+* Fix extra whitespace printed before `ON CONFLICT` (#1037) - Thanks @CDThomas
+
+### Changed
+* Document round trip ability (#1052) - Thanks @alamb
+* Add PRQL to list of users (#1031) - Thanks @vanillajonathan
+
 ## [0.39.0] 2023-10-27
 
 ### Added

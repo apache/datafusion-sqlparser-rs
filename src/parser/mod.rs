@@ -420,7 +420,11 @@ impl<'a> Parser<'a> {
                 Token::EOF => break,
 
                 // end of statement
-                Token::Word(word) if word.keyword == Keyword::END => break,
+                Token::Word(word) => {
+                    if expecting_statement_delimiter && word.keyword == Keyword::END {
+                        break;
+                    }
+                }
                 _ => {}
             }
 
@@ -501,7 +505,12 @@ impl<'a> Parser<'a> {
                 // standard `START TRANSACTION` statement. It is supported
                 // by at least PostgreSQL and MySQL.
                 Keyword::BEGIN => Ok(self.parse_begin()?),
+                // `END` is a nonstandard but common alias for the
+                // standard `COMMIT TRANSACTION` statement. It is supported
+                // by PostgreSQL.
+                Keyword::END => Ok(self.parse_end()?),
                 Keyword::SAVEPOINT => Ok(self.parse_savepoint()?),
+                Keyword::RELEASE => Ok(self.parse_release()?),
                 Keyword::COMMIT => Ok(self.parse_commit()?),
                 Keyword::ROLLBACK => Ok(self.parse_rollback()?),
                 Keyword::ASSERT => Ok(self.parse_assert()?),
@@ -745,6 +754,13 @@ impl<'a> Parser<'a> {
     pub fn parse_savepoint(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_identifier()?;
         Ok(Statement::Savepoint { name })
+    }
+
+    pub fn parse_release(&mut self) -> Result<Statement, ParserError> {
+        let _ = self.parse_keyword(Keyword::SAVEPOINT);
+        let name = self.parse_identifier()?;
+
+        Ok(Statement::ReleaseSavepoint { name })
     }
 
     /// Parse an expression prefix
@@ -4283,6 +4299,7 @@ impl<'a> Parser<'a> {
                 generated_as: GeneratedAs::Always,
                 sequence_options: Some(sequence_options),
                 generation_expr: None,
+                generation_expr_mode: None,
             }))
         } else if self.parse_keywords(&[
             Keyword::BY,
@@ -4299,16 +4316,31 @@ impl<'a> Parser<'a> {
                 generated_as: GeneratedAs::ByDefault,
                 sequence_options: Some(sequence_options),
                 generation_expr: None,
+                generation_expr_mode: None,
             }))
         } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::AS]) {
             if self.expect_token(&Token::LParen).is_ok() {
                 let expr = self.parse_expr()?;
                 self.expect_token(&Token::RParen)?;
-                let _ = self.parse_keywords(&[Keyword::STORED]);
+                let (gen_as, expr_mode) = if self.parse_keywords(&[Keyword::STORED]) {
+                    Ok((
+                        GeneratedAs::ExpStored,
+                        Some(GeneratedExpressionMode::Stored),
+                    ))
+                } else if dialect_of!(self is PostgreSqlDialect) {
+                    // Postgres' AS IDENTITY branches are above, this one needs STORED
+                    self.expected("STORED", self.peek_token())
+                } else if self.parse_keywords(&[Keyword::VIRTUAL]) {
+                    Ok((GeneratedAs::Always, Some(GeneratedExpressionMode::Virtual)))
+                } else {
+                    Ok((GeneratedAs::Always, None))
+                }?;
+
                 Ok(Some(ColumnOption::Generated {
-                    generated_as: GeneratedAs::ExpStored,
+                    generated_as: gen_as,
                     sequence_options: None,
                     generation_expr: Some(expr),
+                    generation_expr_mode: expr_mode,
                 }))
             } else {
                 Ok(None)
@@ -7269,21 +7301,23 @@ impl<'a> Parser<'a> {
             let table = self.parse_keyword(Keyword::TABLE);
             let table_name = self.parse_object_name()?;
             let is_mysql = dialect_of!(self is MySqlDialect);
-            let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
 
-            let partitioned = if self.parse_keyword(Keyword::PARTITION) {
-                self.expect_token(&Token::LParen)?;
-                let r = Some(self.parse_comma_separated(Parser::parse_expr)?);
-                self.expect_token(&Token::RParen)?;
-                r
-            } else {
-                None
-            };
+            let (columns, partitioned, after_columns, source) =
+                if self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]) {
+                    (vec![], None, vec![], None)
+                } else {
+                    let columns = self.parse_parenthesized_column_list(Optional, is_mysql)?;
 
-            // Hive allows you to specify columns after partitions as well if you want.
-            let after_columns = self.parse_parenthesized_column_list(Optional, false)?;
+                    let partitioned = self.parse_insert_partition()?;
 
-            let source = Box::new(self.parse_query()?);
+                    // Hive allows you to specify columns after partitions as well if you want.
+                    let after_columns = self.parse_parenthesized_column_list(Optional, false)?;
+
+                    let source = Some(Box::new(self.parse_query()?));
+
+                    (columns, partitioned, after_columns, source)
+                };
+
             let on = if self.parse_keyword(Keyword::ON) {
                 if self.parse_keyword(Keyword::CONFLICT) {
                     let conflict_target =
@@ -7351,6 +7385,17 @@ impl<'a> Parser<'a> {
                 on,
                 returning,
             })
+        }
+    }
+
+    pub fn parse_insert_partition(&mut self) -> Result<Option<Vec<Expr>>, ParserError> {
+        if self.parse_keyword(Keyword::PARTITION) {
+            self.expect_token(&Token::LParen)?;
+            let partition_cols = Some(self.parse_comma_separated(Parser::parse_expr)?);
+            self.expect_token(&Token::RParen)?;
+            Ok(partition_cols)
+        } else {
+            Ok(None)
         }
     }
 
@@ -7800,6 +7845,12 @@ impl<'a> Parser<'a> {
         })
     }
 
+    pub fn parse_end(&mut self) -> Result<Statement, ParserError> {
+        Ok(Statement::Commit {
+            chain: self.parse_commit_rollback_chain()?,
+        })
+    }
+
     pub fn parse_transaction_modes(&mut self) -> Result<Vec<TransactionMode>, ParserError> {
         let mut modes = vec![];
         let mut required = false;
@@ -7843,9 +7894,10 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_rollback(&mut self) -> Result<Statement, ParserError> {
-        Ok(Statement::Rollback {
-            chain: self.parse_commit_rollback_chain()?,
-        })
+        let chain = self.parse_commit_rollback_chain()?;
+        let savepoint = self.parse_rollback_savepoint()?;
+
+        Ok(Statement::Rollback { chain, savepoint })
     }
 
     pub fn parse_commit_rollback_chain(&mut self) -> Result<bool, ParserError> {
@@ -7856,6 +7908,17 @@ impl<'a> Parser<'a> {
             Ok(chain)
         } else {
             Ok(false)
+        }
+    }
+
+    pub fn parse_rollback_savepoint(&mut self) -> Result<Option<Ident>, ParserError> {
+        if self.parse_keyword(Keyword::TO) {
+            let _ = self.parse_keyword(Keyword::SAVEPOINT);
+            let savepoint = self.parse_identifier()?;
+
+            Ok(Some(savepoint))
+        } else {
+            Ok(None)
         }
     }
 

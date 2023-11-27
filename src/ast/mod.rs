@@ -31,8 +31,8 @@ pub use self::data_type::{
 pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue};
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
-    ColumnOptionDef, GeneratedAs, IndexType, KeyOrIndexDisplay, Partition, ProcedureParam,
-    ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
+    ColumnOptionDef, GeneratedAs, GeneratedExpressionMode, IndexType, KeyOrIndexDisplay, Partition,
+    ProcedureParam, ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
     UserDefinedTypeRepresentation,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
@@ -1418,7 +1418,7 @@ pub enum Statement {
         /// Overwrite (Hive)
         overwrite: bool,
         /// A SQL query that specifies what to insert
-        source: Box<Query>,
+        source: Option<Box<Query>>,
         /// partitioned insert (Hive)
         partitioned: Option<Vec<Expr>>,
         /// Columns defined after PARTITION
@@ -1839,8 +1839,11 @@ pub enum Statement {
     },
     /// `COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
     Commit { chain: bool },
-    /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
-    Rollback { chain: bool },
+    /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ] [ TO [ SAVEPOINT ] savepoint_name ]`
+    Rollback {
+        chain: bool,
+        savepoint: Option<Ident>,
+    },
     /// CREATE SCHEMA
     CreateSchema {
         /// `<schema name> | AUTHORIZATION <schema authorization identifier>  | <schema name>  AUTHORIZATION <schema authorization identifier>`
@@ -1977,6 +1980,8 @@ pub enum Statement {
     },
     /// SAVEPOINT -- define a new savepoint within the current transaction
     Savepoint { name: Ident },
+    /// RELEASE \[ SAVEPOINT \] savepoint_name
+    ReleaseSavepoint { name: Ident },
     // MERGE INTO statement, based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
     Merge {
         // optional INTO keyword
@@ -2278,7 +2283,14 @@ impl fmt::Display for Statement {
                 if !after_columns.is_empty() {
                     write!(f, "({}) ", display_comma_separated(after_columns))?;
                 }
-                write!(f, "{source}")?;
+
+                if let Some(source) = source {
+                    write!(f, "{source}")?;
+                }
+
+                if source.is_none() && columns.is_empty() {
+                    write!(f, "DEFAULT VALUES")?;
+                }
 
                 if let Some(on) = on {
                     write!(f, "{on}")?;
@@ -3127,8 +3139,18 @@ impl fmt::Display for Statement {
             Statement::Commit { chain } => {
                 write!(f, "COMMIT{}", if *chain { " AND CHAIN" } else { "" },)
             }
-            Statement::Rollback { chain } => {
-                write!(f, "ROLLBACK{}", if *chain { " AND CHAIN" } else { "" },)
+            Statement::Rollback { chain, savepoint } => {
+                write!(f, "ROLLBACK")?;
+
+                if *chain {
+                    write!(f, " AND CHAIN")?;
+                }
+
+                if let Some(savepoint) = savepoint {
+                    write!(f, " TO SAVEPOINT {savepoint}")?;
+                }
+
+                Ok(())
             }
             Statement::CreateSchema {
                 schema_name,
@@ -3224,6 +3246,9 @@ impl fmt::Display for Statement {
             Statement::Savepoint { name } => {
                 write!(f, "SAVEPOINT ")?;
                 write!(f, "{name}")
+            }
+            Statement::ReleaseSavepoint { name } => {
+                write!(f, "RELEASE SAVEPOINT {name}")
             }
             Statement::Merge {
                 into,

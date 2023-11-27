@@ -85,7 +85,7 @@ fn parse_insert_values() {
             Statement::Insert {
                 table_name,
                 columns,
-                source,
+                source: Some(source),
                 ..
             } => {
                 assert_eq!(table_name.to_string(), expected_table_name);
@@ -93,7 +93,7 @@ fn parse_insert_values() {
                 for (index, column) in columns.iter().enumerate() {
                     assert_eq!(column, &Ident::new(expected_columns[index].clone()));
                 }
-                match &*source.body {
+                match *source.body {
                     SetExpr::Values(Values { rows, .. }) => {
                         assert_eq!(rows.as_slice(), expected_rows)
                     }
@@ -105,6 +105,111 @@ fn parse_insert_values() {
     }
 
     verified_stmt("INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)");
+}
+
+#[test]
+fn parse_insert_default_values() {
+    let insert_with_default_values = verified_stmt("INSERT INTO test_table DEFAULT VALUES");
+
+    match insert_with_default_values {
+        Statement::Insert {
+            after_columns,
+            columns,
+            on,
+            partitioned,
+            returning,
+            source,
+            table_name,
+            ..
+        } => {
+            assert_eq!(columns, vec![]);
+            assert_eq!(after_columns, vec![]);
+            assert_eq!(on, None);
+            assert_eq!(partitioned, None);
+            assert_eq!(returning, None);
+            assert_eq!(source, None);
+            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+        }
+        _ => unreachable!(),
+    }
+
+    let insert_with_default_values_and_returning =
+        verified_stmt("INSERT INTO test_table DEFAULT VALUES RETURNING test_column");
+
+    match insert_with_default_values_and_returning {
+        Statement::Insert {
+            after_columns,
+            columns,
+            on,
+            partitioned,
+            returning,
+            source,
+            table_name,
+            ..
+        } => {
+            assert_eq!(after_columns, vec![]);
+            assert_eq!(columns, vec![]);
+            assert_eq!(on, None);
+            assert_eq!(partitioned, None);
+            assert!(returning.is_some());
+            assert_eq!(source, None);
+            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+        }
+        _ => unreachable!(),
+    }
+
+    let insert_with_default_values_and_on_conflict =
+        verified_stmt("INSERT INTO test_table DEFAULT VALUES ON CONFLICT DO NOTHING");
+
+    match insert_with_default_values_and_on_conflict {
+        Statement::Insert {
+            after_columns,
+            columns,
+            on,
+            partitioned,
+            returning,
+            source,
+            table_name,
+            ..
+        } => {
+            assert_eq!(after_columns, vec![]);
+            assert_eq!(columns, vec![]);
+            assert!(on.is_some());
+            assert_eq!(partitioned, None);
+            assert_eq!(returning, None);
+            assert_eq!(source, None);
+            assert_eq!(table_name, ObjectName(vec!["test_table".into()]));
+        }
+        _ => unreachable!(),
+    }
+
+    let insert_with_columns_and_default_values = "INSERT INTO test_table (test_col) DEFAULT VALUES";
+    assert_eq!(
+        ParserError::ParserError(
+            "Expected SELECT, VALUES, or a subquery in the query body, found: DEFAULT".to_string()
+        ),
+        parse_sql_statements(insert_with_columns_and_default_values).unwrap_err()
+    );
+
+    let insert_with_default_values_and_hive_after_columns =
+        "INSERT INTO test_table DEFAULT VALUES (some_column)";
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: (".to_string()),
+        parse_sql_statements(insert_with_default_values_and_hive_after_columns).unwrap_err()
+    );
+
+    let insert_with_default_values_and_hive_partition =
+        "INSERT INTO test_table DEFAULT VALUES PARTITION (some_column)";
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: PARTITION".to_string()),
+        parse_sql_statements(insert_with_default_values_and_hive_partition).unwrap_err()
+    );
+
+    let insert_with_default_values_and_values_list = "INSERT INTO test_table DEFAULT VALUES (1)";
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: (".to_string()),
+        parse_sql_statements(insert_with_default_values_and_values_list).unwrap_err()
+    );
 }
 
 #[test]
@@ -6232,14 +6337,51 @@ fn parse_commit() {
 }
 
 #[test]
+fn parse_end() {
+    one_statement_parses_to("END AND NO CHAIN", "COMMIT");
+    one_statement_parses_to("END WORK AND NO CHAIN", "COMMIT");
+    one_statement_parses_to("END TRANSACTION AND NO CHAIN", "COMMIT");
+    one_statement_parses_to("END WORK AND CHAIN", "COMMIT AND CHAIN");
+    one_statement_parses_to("END TRANSACTION AND CHAIN", "COMMIT AND CHAIN");
+    one_statement_parses_to("END WORK", "COMMIT");
+    one_statement_parses_to("END TRANSACTION", "COMMIT");
+}
+
+#[test]
 fn parse_rollback() {
     match verified_stmt("ROLLBACK") {
-        Statement::Rollback { chain: false } => (),
+        Statement::Rollback {
+            chain: false,
+            savepoint: None,
+        } => (),
         _ => unreachable!(),
     }
 
     match verified_stmt("ROLLBACK AND CHAIN") {
-        Statement::Rollback { chain: true } => (),
+        Statement::Rollback {
+            chain: true,
+            savepoint: None,
+        } => (),
+        _ => unreachable!(),
+    }
+
+    match verified_stmt("ROLLBACK TO SAVEPOINT test1") {
+        Statement::Rollback {
+            chain: false,
+            savepoint,
+        } => {
+            assert_eq!(savepoint, Some(Ident::new("test1")));
+        }
+        _ => unreachable!(),
+    }
+
+    match verified_stmt("ROLLBACK AND CHAIN TO SAVEPOINT test1") {
+        Statement::Rollback {
+            chain: true,
+            savepoint,
+        } => {
+            assert_eq!(savepoint, Some(Ident::new("test1")));
+        }
         _ => unreachable!(),
     }
 
@@ -6250,6 +6392,11 @@ fn parse_rollback() {
     one_statement_parses_to("ROLLBACK TRANSACTION AND CHAIN", "ROLLBACK AND CHAIN");
     one_statement_parses_to("ROLLBACK WORK", "ROLLBACK");
     one_statement_parses_to("ROLLBACK TRANSACTION", "ROLLBACK");
+    one_statement_parses_to("ROLLBACK TO test1", "ROLLBACK TO SAVEPOINT test1");
+    one_statement_parses_to(
+        "ROLLBACK AND CHAIN TO test1",
+        "ROLLBACK AND CHAIN TO SAVEPOINT test1",
+    );
 }
 
 #[test]
@@ -7863,4 +8010,26 @@ fn parse_binary_operators_without_whitespace() {
         "SELECT tbl1.field%tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
         "SELECT tbl1.field % tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
     );
+}
+
+#[test]
+fn test_savepoint() {
+    match verified_stmt("SAVEPOINT test1") {
+        Statement::Savepoint { name } => {
+            assert_eq!(Ident::new("test1"), name);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_release_savepoint() {
+    match verified_stmt("RELEASE SAVEPOINT test1") {
+        Statement::ReleaseSavepoint { name } => {
+            assert_eq!(Ident::new("test1"), name);
+        }
+        _ => unreachable!(),
+    }
+
+    one_statement_parses_to("RELEASE test1", "RELEASE SAVEPOINT test1");
 }

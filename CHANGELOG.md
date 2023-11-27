@@ -11,71 +11,25 @@ Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented
 
 ## [0.40.0] 2023-11-27
 
+### Added
+* Add `{pre,post}_visit_query` to `Visitor` (#1044) - Thanks @jmhain
+* Support generated virtual columns with expression (#1051) - Thanks @takluyver
+* Support PostgreSQL `END` (#1035) - Thanks @tobyhede
+* Support `INSERT INTO ... DEFAULT VALUES ...` (#1036) - Thanks @CDThomas
+* Support `RELEASE` and `ROLLBACK TO SAVEPOINT` (#1045) - Thanks @CDThomas
+* Support `CONVERT` expressions (#1048) - Thanks @lovasoa
+* Support `GLOBAL` and `SESSION` parts in `SHOW VARIABLES` for mysql and generic - Thanks @emin100
+* Support snowflake `PIVOT` on derived table factors (#1027) - Thanks @lustefaniak
+* Support mssql json and xml extensions (#1043) - Thanks @lovasoa
+* Support for `MAX` as a character length (#1038) - Thanks @lovasoa
+* Support `IN ()` syntax of SQLite (#1028) - Thanks @alamb
 
-Document round trip ability (#1052)
+### Fixed
+* Fix extra whitespace printed before `ON CONFLICT` (#1037) - Thanks @CDThomas
 
-@alamb
-alamb committed now
-add {pre,post}_visit_query to Visitor (#1044)
-
-@jmhain
-jmhain committed 19 minutes ago
-Commits on Nov 22, 2023
-Add support for generated virtual columns with expression (#1051)
-
-@takluyver
-takluyver committed 5 days ago
-Commits on Nov 21, 2023
-Adds support for PostgreSQL "END" (#1035)
-
-@tobyhede
-tobyhede committed last week
-Support INSERT INTO ... DEFAULT VALUES ... (#1036)
-
-@CDThomas
-CDThomas committed last week
-Commits on Nov 20, 2023
-Add support for release and rollback to savepoint syntax (#1045)
-
-@CDThomas
-CDThomas committed last week
-Support CONVERT expressions (#1048)
-
-@lovasoa
-lovasoa committed last week
-Support global and session parts in show variables for mysql and gene…
-
-@emin100
-emin100 committed last week
-snowflake: PIVOT on derived table factors (#1027)
-
-@lustefaniak
-lustefaniak committed last week
-Fix extra whitespace printed before ON CONFLICT (#1037)
-
-@CDThomas
-CDThomas committed last week
-Commits on Nov 18, 2023
-Add PRQLto list of users (#1031)
-
-@vanillajonathan
-@alamb
-vanillajonathan and alamb committed last week
-Support mssql json and xml extensions (#1043)
-
-@lovasoa
-lovasoa committed last week
-Commits on Nov 10, 2023
-add support for MAX as a character length (#1038)
-
-@lovasoa
-lovasoa committed 2 weeks ago
-Commits on Oct 29, 2023
-Support IN () syntax of SQLite, alternate proposal (#1028)
-
-@alamb
-alamb committed last month
-
+### Changed
+* Document round trip ability (#1052) - Thanks @alamb
+* Add PRQL to list of users (#1031) - Thanks @vanillajonathan
 
 ## [0.39.0] 2023-10-27
 

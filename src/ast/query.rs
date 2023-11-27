@@ -26,6 +26,7 @@ use crate::ast::*;
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "visitor", visit(with = "visit_query"))]
 pub struct Query {
     /// WITH (common table expressions, or CTEs)
     pub with: Option<With>,
@@ -739,7 +740,6 @@ pub enum TableFactor {
     /// For example `FROM monthly_sales PIVOT(sum(amount) FOR MONTH IN ('JAN', 'FEB'))`
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/pivot>
     Pivot {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table_factor"))]
         table: Box<TableFactor>,
         aggregate_function: Expr, // Function expression
         value_column: Vec<Ident>,
@@ -755,7 +755,6 @@ pub enum TableFactor {
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/unpivot>.
     Unpivot {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table_factor"))]
         table: Box<TableFactor>,
         value: Ident,
         name: Ident,

@@ -66,7 +66,7 @@ whitespace and keyword capitalization), which is useful for tools that
 analyze and manipulate SQL.
 
 This means that other than whitespace and the capitalization of keywords, the
-following should hold true for all any SQL:
+following should hold true for all SQL:
 
 ```rust
 // Parse SQL

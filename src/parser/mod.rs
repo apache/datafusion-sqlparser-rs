@@ -4282,6 +4282,10 @@ impl<'a> Parser<'a> {
             Ok(Some(ColumnOption::OnUpdate(expr)))
         } else if self.parse_keyword(Keyword::GENERATED) {
             self.parse_optional_column_option_generated()
+        } else if self.parse_keyword(Keyword::AS)
+            && dialect_of!(self is MySqlDialect | SQLiteDialect | DuckDbDialect | GenericDialect)
+        {
+            self.parse_optional_column_option_as()
         } else {
             Ok(None)
         }
@@ -4300,6 +4304,7 @@ impl<'a> Parser<'a> {
                 sequence_options: Some(sequence_options),
                 generation_expr: None,
                 generation_expr_mode: None,
+                generated_kw: true,
             }))
         } else if self.parse_keywords(&[
             Keyword::BY,
@@ -4317,6 +4322,7 @@ impl<'a> Parser<'a> {
                 sequence_options: Some(sequence_options),
                 generation_expr: None,
                 generation_expr_mode: None,
+                generated_kw: true,
             }))
         } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::AS]) {
             if self.expect_token(&Token::LParen).is_ok() {
@@ -4341,6 +4347,7 @@ impl<'a> Parser<'a> {
                     sequence_options: None,
                     generation_expr: Some(expr),
                     generation_expr_mode: expr_mode,
+                    generated_kw: true,
                 }))
             } else {
                 Ok(None)
@@ -4348,6 +4355,32 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    fn parse_optional_column_option_as(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+        // Some DBs allow 'AS (expr)', shorthand for GENERATED ALWAYS AS
+        self.expect_token(&Token::LParen)?;
+        let expr = self.parse_expr()?;
+        self.expect_token(&Token::RParen)?;
+
+        let (gen_as, expr_mode) = if self.parse_keywords(&[Keyword::STORED]) {
+            (
+                GeneratedAs::ExpStored,
+                Some(GeneratedExpressionMode::Stored),
+            )
+        } else if self.parse_keywords(&[Keyword::VIRTUAL]) {
+            (GeneratedAs::Always, Some(GeneratedExpressionMode::Virtual))
+        } else {
+            (GeneratedAs::Always, None)
+        };
+
+        Ok(Some(ColumnOption::Generated {
+            generated_as: gen_as,
+            sequence_options: None,
+            generation_expr: Some(expr),
+            generation_expr_mode: expr_mode,
+            generated_kw: false,
+        }))
     }
 
     pub fn parse_referential_action(&mut self) -> Result<ReferentialAction, ParserError> {

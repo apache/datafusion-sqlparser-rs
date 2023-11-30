@@ -4011,17 +4011,6 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let comment = if self.parse_keyword(Keyword::COMMENT) {
-            let _ = self.consume_token(&Token::Eq);
-            let next_token = self.next_token();
-            match next_token.token {
-                Token::SingleQuotedString(str) => Some(str),
-                _ => self.expected("comment", next_token)?,
-            }
-        } else {
-            None
-        };
-
         let auto_increment_offset = if self.parse_keyword(Keyword::AUTO_INCREMENT) {
             let _ = self.consume_token(&Token::Eq);
             let next_token = self.next_token();
@@ -4096,6 +4085,18 @@ impl<'a> Parser<'a> {
             };
 
         let strict = self.parse_keyword(Keyword::STRICT);
+
+        let comment = if self.parse_keyword(Keyword::COMMENT) {
+            let _ = self.consume_token(&Token::Eq);
+            let next_token = self.next_token();
+            match next_token.token {
+                Token::SingleQuotedString(str) => Some(str),
+                _ => self.expected("comment", next_token)?,
+            }
+        } else {
+            None
+        };
+
         Ok(CreateTableBuilder::new(table_name)
             .temporary(temporary)
             .columns(columns)
@@ -4182,7 +4183,7 @@ impl<'a> Parser<'a> {
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
         let name = self.parse_identifier()?;
         let data_type = self.parse_data_type()?;
-        let collation = if self.parse_keyword(Keyword::COLLATE) {
+        let mut collation = if self.parse_keyword(Keyword::COLLATE) {
             Some(self.parse_object_name()?)
         } else {
             None
@@ -4201,6 +4202,10 @@ impl<'a> Parser<'a> {
                 }
             } else if let Some(option) = self.parse_optional_column_option()? {
                 options.push(ColumnOptionDef { name: None, option });
+            } else if dialect_of!(self is MySqlDialect | GenericDialect)
+                && self.parse_keyword(Keyword::COLLATE)
+            {
+                collation = Some(self.parse_object_name()?);
             } else {
                 break;
             };

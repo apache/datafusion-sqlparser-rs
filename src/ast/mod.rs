@@ -2041,6 +2041,13 @@ pub enum Statement {
         value: Option<Value>,
         is_eq: bool,
     },
+    /// LOCK TABLES
+    ///
+    /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
+    LockTables { tables: Vec<LockTable> },
+    ///
+    /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
+    UnlockTables,
 }
 
 impl fmt::Display for Statement {
@@ -3447,6 +3454,12 @@ impl fmt::Display for Statement {
                     }
                 }
                 Ok(())
+            }
+            Statement::LockTables { tables } => {
+                write!(f, "LOCK TABLES {}", display_comma_separated(tables))
+            }
+            Statement::UnlockTables => {
+                write!(f, "UNLOCK TABLES")
             }
         }
     }
@@ -4943,6 +4956,61 @@ impl fmt::Display for SearchModifier {
             }
             Self::WithQueryExpansion => {
                 write!(f, "WITH QUERY EXPANSION")?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct LockTable {
+    pub table: Ident,
+    pub alias: Option<Ident>,
+    pub lock_type: LockTableType,
+}
+
+impl fmt::Display for LockTable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {
+            table: tbl_name,
+            alias,
+            lock_type,
+        } = self;
+
+        write!(f, "{tbl_name} ")?;
+        if let Some(alias) = alias {
+            write!(f, "AS {alias} ")?;
+        }
+        write!(f, "{lock_type}")?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum LockTableType {
+    Read { local: bool },
+    Write { low_priority: bool },
+}
+
+impl fmt::Display for LockTableType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Read { local } => {
+                write!(f, "READ")?;
+                if *local {
+                    write!(f, " LOCAL")?;
+                }
+            }
+            Self::Write { low_priority } => {
+                if *low_priority {
+                    write!(f, "LOW_PRIORITY ")?;
+                }
+                write!(f, "WRITE")?;
             }
         }
 

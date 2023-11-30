@@ -4304,7 +4304,7 @@ impl<'a> Parser<'a> {
                 sequence_options: Some(sequence_options),
                 generation_expr: None,
                 generation_expr_mode: None,
-                generated_kw: true,
+                generated_keyword: true,
             }))
         } else if self.parse_keywords(&[
             Keyword::BY,
@@ -4322,7 +4322,7 @@ impl<'a> Parser<'a> {
                 sequence_options: Some(sequence_options),
                 generation_expr: None,
                 generation_expr_mode: None,
-                generated_kw: true,
+                generated_keyword: true,
             }))
         } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::AS]) {
             if self.expect_token(&Token::LParen).is_ok() {
@@ -4347,7 +4347,7 @@ impl<'a> Parser<'a> {
                     sequence_options: None,
                     generation_expr: Some(expr),
                     generation_expr_mode: expr_mode,
-                    generated_kw: true,
+                    generated_keyword: true,
                 }))
             } else {
                 Ok(None)
@@ -4379,7 +4379,7 @@ impl<'a> Parser<'a> {
             sequence_options: None,
             generation_expr: Some(expr),
             generation_expr_mode: expr_mode,
-            generated_kw: false,
+            generated_keyword: false,
         }))
     }
 

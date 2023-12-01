@@ -21,6 +21,18 @@ use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 use sqlparser::parser::ParserError;
 use test_utils::*;
 
+/// Strips out newlines and spaces from the `sql` so that it can
+/// be comparable with the serialized result
+fn trim_sql(sql: &str) -> String {
+    sql.split('\n')
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.trim_start())
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim()
+        .to_string()
+}
+
 #[test]
 fn parse_literal_string() {
     let sql = r#"SELECT 'single', "double""#;
@@ -84,6 +96,177 @@ fn parse_raw_literal() {
         }
     }
     panic!("invalid query")
+}
+
+#[test]
+fn parse_create_view_with_options() {
+    let sql = trim_sql(
+        r#"
+    CREATE VIEW myproject.mydataset.newview
+    (name, age OPTIONS (description = "field age"))
+    OPTIONS
+    (expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR),
+     friendly_name = "newview",
+     description = "a view that expires in 2 days",
+     labels = [("org_unit", "development")])
+    AS SELECT column_1, column_2, column_3 FROM myproject.mydataset.mytable"#,
+    );
+    match bigquery().verified_stmt(sql.as_str()) {
+        Statement::CreateView {
+            name,
+            query,
+            options,
+            columns,
+            ..
+        } => {
+            assert_eq!(
+                name,
+                ObjectName(vec![
+                    "myproject".into(),
+                    "mydataset".into(),
+                    "newview".into()
+                ])
+            );
+            assert_eq!(
+                vec![
+                    ViewColumnDef {
+                        name: Ident::new("name"),
+                        options: None,
+                    },
+                    ViewColumnDef {
+                        name: Ident::new("age"),
+                        options: Some(vec![SqlOption {
+                            name: Ident::new("description"),
+                            value: Expr::Value(Value::DoubleQuotedString("field age".to_string())),
+                        }])
+                    },
+                ],
+                columns
+            );
+            assert_eq!(
+                "SELECT column_1, column_2, column_3 FROM myproject.mydataset.mytable",
+                query.to_string()
+            );
+            assert_eq!(
+                r#"OPTIONS (expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR), friendly_name = "newview", description = "a view that expires in 2 days", labels = [("org_unit", "development")])"#,
+                options.to_string()
+            );
+            let CreateTableOptions::Options(options) = options else {
+                unreachable!()
+            };
+            assert_eq!(
+                &SqlOption {
+                    name: Ident::new("description"),
+                    value: Expr::Value(Value::DoubleQuotedString(
+                        "a view that expires in 2 days".to_string()
+                    )),
+                },
+                &options[2],
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_create_table_with_options() {
+    let sql = trim_sql(
+        r#"
+    CREATE TABLE mydataset.newtable
+    (x INT64 NOT NULL OPTIONS (description = "field x"),
+     y BOOL OPTIONS (description = "field y"))
+
+    PARTITION BY _PARTITIONDATE
+    CLUSTER BY userid, age
+    OPTIONS(partition_expiration_days = 1,
+            description = "table option description")
+    "#,
+    );
+    match bigquery().verified_stmt(sql.as_str()) {
+        Statement::CreateTable {
+            name,
+            columns,
+            big_query_config,
+            ..
+        } => {
+            assert_eq!(
+                name,
+                ObjectName(vec!["mydataset".into(), "newtable".into()])
+            );
+            assert_eq!(
+                vec![
+                    ColumnDef {
+                        name: Ident::new("x"),
+                        data_type: DataType::Int64,
+                        collation: None,
+                        options: vec![
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::NotNull,
+                            },
+                            ColumnOptionDef {
+                                name: None,
+                                option: ColumnOption::SqlOptions(vec![SqlOption {
+                                    name: Ident::new("description"),
+                                    value: Expr::Value(Value::DoubleQuotedString(
+                                        "field x".to_string()
+                                    )),
+                                },])
+                            },
+                        ]
+                    },
+                    ColumnDef {
+                        name: Ident::new("y"),
+                        data_type: DataType::Bool,
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::SqlOptions(vec![SqlOption {
+                                name: Ident::new("description"),
+                                value: Expr::Value(Value::DoubleQuotedString(
+                                    "field y".to_string()
+                                )),
+                            },])
+                        }]
+                    },
+                ],
+                columns
+            );
+            assert_eq!(
+                BigQueryCreateTableConfiguration {
+                    partition_by: Some(Expr::Identifier(Ident::new("_PARTITIONDATE"))),
+                    cluster_by: Some(vec![Ident::new("userid"), Ident::new("age"),]),
+                    options: Some(vec![
+                        SqlOption {
+                            name: Ident::new("partition_expiration_days"),
+                            value: Expr::Value(number("1")),
+                        },
+                        SqlOption {
+                            name: Ident::new("description"),
+                            value: Expr::Value(Value::DoubleQuotedString(
+                                "table option description".to_string()
+                            )),
+                        },
+                    ])
+                },
+                *big_query_config.unwrap(),
+            )
+        }
+        _ => unreachable!(),
+    }
+
+    let sql = trim_sql(
+        r#"
+    CREATE TABLE mydataset.newtable
+    (x INT64 NOT NULL OPTIONS (description = "field x"),
+     y BOOL OPTIONS (description = "field y"))
+
+    CLUSTER BY userid
+    OPTIONS(partition_expiration_days = 1,
+            description = "table option description")
+    "#,
+    );
+    bigquery().verified_stmt(sql.as_str());
 }
 
 #[test]

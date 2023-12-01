@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::{
-    ColumnDef, FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit, Query,
-    SqlOption, Statement, TableConstraint,
+    BigQueryCreateTableConfiguration, ColumnDef, FileFormat, HiveDistributionStyle, HiveFormat,
+    Ident, ObjectName, OnCommit, Query, SqlOption, Statement, TableConstraint,
 };
 use crate::parser::ParserError;
 
@@ -72,6 +72,7 @@ pub struct CreateTableBuilder {
     pub on_commit: Option<OnCommit>,
     pub on_cluster: Option<String>,
     pub order_by: Option<Vec<Ident>>,
+    pub big_query_config: Option<Box<BigQueryCreateTableConfiguration>>,
     pub strict: bool,
 }
 
@@ -105,6 +106,7 @@ impl CreateTableBuilder {
             on_commit: None,
             on_cluster: None,
             order_by: None,
+            big_query_config: None,
             strict: false,
         }
     }
@@ -236,6 +238,14 @@ impl CreateTableBuilder {
         self
     }
 
+    pub fn big_query_config(
+        mut self,
+        big_query_config: Option<Box<BigQueryCreateTableConfiguration>>,
+    ) -> Self {
+        self.big_query_config = big_query_config;
+        self
+    }
+
     pub fn strict(mut self, strict: bool) -> Self {
         self.strict = strict;
         self
@@ -270,6 +280,7 @@ impl CreateTableBuilder {
             on_commit: self.on_commit,
             on_cluster: self.on_cluster,
             order_by: self.order_by,
+            big_query_config: self.big_query_config,
             strict: self.strict,
         }
     }
@@ -310,6 +321,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 on_commit,
                 on_cluster,
                 order_by,
+                big_query_config,
                 strict,
             } => Ok(Self {
                 or_replace,
@@ -339,6 +351,7 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 on_commit,
                 on_cluster,
                 order_by,
+                big_query_config,
                 strict,
             }),
             _ => Err(ParserError::ParserError(format!(

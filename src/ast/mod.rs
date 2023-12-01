@@ -33,7 +33,7 @@ pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
     ColumnOptionDef, GeneratedAs, GeneratedExpressionMode, IndexType, KeyOrIndexDisplay, Partition,
     ProcedureParam, ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeRepresentation,
+    UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
@@ -1364,6 +1364,38 @@ pub enum Password {
     NullPassword,
 }
 
+/// Sql options of a `CREATE TABLE` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateTableOptions {
+    None,
+    /// Options specified using the `WITH` keyword.
+    /// e.g. `WITH (description = "123")`
+    ///
+    /// <https://www.postgresql.org/docs/current/sql-createtable.html>
+    With(Vec<SqlOption>),
+    /// Options specified using the `OPTIONS` keyword.
+    /// e.g. `OPTIONS (description = "123")`
+    ///
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
+    Options(Vec<SqlOption>),
+}
+
+impl fmt::Display for CreateTableOptions {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CreateTableOptions::With(with_options) => {
+                write!(f, "WITH ({})", display_comma_separated(with_options))
+            }
+            CreateTableOptions::Options(options) => {
+                write!(f, "OPTIONS ({})", display_comma_separated(options))
+            }
+            CreateTableOptions::None => Ok(()),
+        }
+    }
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1512,9 +1544,9 @@ pub enum Statement {
         materialized: bool,
         /// View name
         name: ObjectName,
-        columns: Vec<Ident>,
+        columns: Vec<ViewColumnDef>,
         query: Box<Query>,
-        with_options: Vec<SqlOption>,
+        options: CreateTableOptions,
         cluster_by: Vec<Ident>,
         /// if true, has RedShift [`WITH NO SCHEMA BINDING`] clause <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_VIEW.html>
         with_no_schema_binding: bool,
@@ -1560,6 +1592,9 @@ pub enum Statement {
         /// than empty (represented as ()), the latter meaning "no sorting".
         /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
         order_by: Option<Vec<Ident>>,
+        /// BigQuery specific configuration during table creation.
+        /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_statement>
+        big_query_config: Option<Box<BigQueryCreateTableConfiguration>>,
         /// SQLite "STRICT" clause.
         /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
         /// then strict typing rules apply to that table.
@@ -2499,7 +2534,7 @@ impl fmt::Display for Statement {
                 columns,
                 query,
                 materialized,
-                with_options,
+                options,
                 cluster_by,
                 with_no_schema_binding,
                 if_not_exists,
@@ -2514,14 +2549,17 @@ impl fmt::Display for Statement {
                     temporary = if *temporary { "TEMPORARY " } else { "" },
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" }
                 )?;
-                if !with_options.is_empty() {
-                    write!(f, " WITH ({})", display_comma_separated(with_options))?;
+                if matches!(options, CreateTableOptions::With(_)) {
+                    write!(f, " {options}")?;
                 }
                 if !columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(columns))?;
                 }
                 if !cluster_by.is_empty() {
                     write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
+                }
+                if matches!(options, CreateTableOptions::Options(_)) {
+                    write!(f, " {options}")?;
                 }
                 write!(f, " AS {query}")?;
                 if *with_no_schema_binding {
@@ -2557,6 +2595,7 @@ impl fmt::Display for Statement {
                 on_commit,
                 on_cluster,
                 order_by,
+                big_query_config,
                 strict,
             } => {
                 // We want to allow the following options
@@ -2712,6 +2751,25 @@ impl fmt::Display for Statement {
                 }
                 if let Some(order_by) = order_by {
                     write!(f, " ORDER BY ({})", display_comma_separated(order_by))?;
+                }
+                if let Some(bigquery_config) = big_query_config {
+                    if let Some(partition_by) = bigquery_config.partition_by.as_ref() {
+                        write!(f, " PARTITION BY {partition_by}")?;
+                    }
+                    if let Some(cluster_by) = bigquery_config.cluster_by.as_ref() {
+                        write!(
+                            f,
+                            " CLUSTER BY {}",
+                            display_comma_separated(cluster_by.as_slice())
+                        )?;
+                    }
+                    if let Some(options) = bigquery_config.options.as_ref() {
+                        write!(
+                            f,
+                            " OPTIONS({})",
+                            display_comma_separated(options.as_slice())
+                        )?;
+                    }
                 }
                 if let Some(query) = query {
                     write!(f, " AS {query}")?;
@@ -4220,12 +4278,31 @@ pub struct HiveFormat {
     pub location: Option<String>,
 }
 
+/// Represents BigQuery specific configuration like partitioning, clustering
+/// information during table creation.
+///
+/// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_statement>
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct BigQueryCreateTableConfiguration {
+    /// A partition expression for the table.
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#partition_expression>
+    pub partition_by: Option<Expr>,
+    /// Table clustering column list.
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
+    pub cluster_by: Option<Vec<Ident>>,
+    /// Table options list.
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
+    pub options: Option<Vec<SqlOption>>,
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct SqlOption {
     pub name: Ident,
-    pub value: Value,
+    pub value: Expr,
 }
 
 impl fmt::Display for SqlOption {

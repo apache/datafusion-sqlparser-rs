@@ -3357,8 +3357,12 @@ impl<'a> Parser<'a> {
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let name = self.parse_object_name()?;
-        let columns = self.parse_parenthesized_column_list(Optional, false)?;
+        let columns = self.parse_view_columns()?;
+        let mut options = CreateTableOptions::None;
         let with_options = self.parse_options(Keyword::WITH)?;
+        if !with_options.is_empty() {
+            options = CreateTableOptions::With(with_options);
+        }
 
         let cluster_by = if self.parse_keyword(Keyword::CLUSTER) {
             self.expect_keyword(Keyword::BY)?;
@@ -3366,6 +3370,17 @@ impl<'a> Parser<'a> {
         } else {
             vec![]
         };
+
+        if dialect_of!(self is BigQueryDialect | GenericDialect) {
+            if let Token::Word(word) = self.peek_token().token {
+                if word.keyword == Keyword::OPTIONS {
+                    let opts = self.parse_options(Keyword::OPTIONS)?;
+                    if !opts.is_empty() {
+                        options = CreateTableOptions::Options(opts);
+                    }
+                }
+            };
+        }
 
         self.expect_keyword(Keyword::AS)?;
         let query = Box::new(self.parse_query()?);
@@ -3385,7 +3400,7 @@ impl<'a> Parser<'a> {
             query,
             materialized,
             or_replace,
-            with_options,
+            options,
             cluster_by,
             with_no_schema_binding,
             if_not_exists,
@@ -4049,6 +4064,12 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let big_query_config = if dialect_of!(self is BigQueryDialect | GenericDialect) {
+            self.parse_optional_big_query_create_table_config()?
+        } else {
+            None
+        };
+
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
             Some(Box::new(self.parse_query()?))
@@ -4120,8 +4141,42 @@ impl<'a> Parser<'a> {
             .collation(collation)
             .on_commit(on_commit)
             .on_cluster(on_cluster)
+            .big_query_config(big_query_config)
             .strict(strict)
             .build())
+    }
+
+    /// Parse configuration like partitioning, clustering information during big-query table creation.
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_2>
+    fn parse_optional_big_query_create_table_config(
+        &mut self,
+    ) -> Result<Option<Box<BigQueryCreateTableConfiguration>>, ParserError> {
+        let mut partition_by = None;
+        if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
+            partition_by = Some(self.parse_expr()?);
+        };
+
+        let mut cluster_by = None;
+        if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
+            cluster_by = Some(self.parse_comma_separated(Parser::parse_identifier)?);
+        };
+
+        let mut options = None;
+        if let Token::Word(word) = self.peek_token().token {
+            if word.keyword == Keyword::OPTIONS {
+                options = Some(self.parse_options(Keyword::OPTIONS)?);
+            }
+        };
+
+        if partition_by.is_some() || cluster_by.is_some() || options.is_some() {
+            Ok(Some(Box::new(BigQueryCreateTableConfiguration {
+                partition_by,
+                cluster_by,
+                options,
+            })))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn parse_optional_procedure_parameters(
@@ -4282,6 +4337,13 @@ impl<'a> Parser<'a> {
             Ok(Some(ColumnOption::OnUpdate(expr)))
         } else if self.parse_keyword(Keyword::GENERATED) {
             self.parse_optional_column_option_generated()
+        } else if dialect_of!(self is BigQueryDialect | GenericDialect)
+            && self.parse_keyword(Keyword::OPTIONS)
+        {
+            self.prev_token();
+            Ok(Some(ColumnOption::SqlOptions(
+                self.parse_options(Keyword::OPTIONS)?,
+            )))
         } else {
             Ok(None)
         }
@@ -4527,7 +4589,7 @@ impl<'a> Parser<'a> {
     pub fn parse_sql_option(&mut self) -> Result<SqlOption, ParserError> {
         let name = self.parse_identifier()?;
         self.expect_token(&Token::Eq)?;
-        let value = self.parse_value()?;
+        let value = self.parse_expr()?;
         Ok(SqlOption { name, value })
     }
 
@@ -5647,6 +5709,36 @@ impl<'a> Parser<'a> {
             Token::DoubleQuotedString(s) => Ok(Ident::with_quote('\"', s)),
             _ => self.expected("identifier", next_token),
         }
+    }
+
+    /// Parses a parenthesized, comma-separated list of column definitions within a view.
+    fn parse_view_columns(&mut self) -> Result<Vec<ViewColumnDef>, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            if self.peek_token().token == Token::RParen {
+                self.next_token();
+                Ok(vec![])
+            } else {
+                let cols = self.parse_comma_separated(Parser::parse_view_column)?;
+                self.expect_token(&Token::RParen)?;
+                Ok(cols)
+            }
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    /// Parses a column definition within a view.
+    fn parse_view_column(&mut self) -> Result<ViewColumnDef, ParserError> {
+        let name = self.parse_identifier()?;
+        let options = if dialect_of!(self is BigQueryDialect | GenericDialect)
+            && self.parse_keyword(Keyword::OPTIONS)
+        {
+            self.prev_token();
+            Some(self.parse_options(Keyword::OPTIONS)?)
+        } else {
+            None
+        };
+        Ok(ViewColumnDef { name, options })
     }
 
     /// Parse a parenthesized comma-separated list of unqualified, possibly quoted identifiers

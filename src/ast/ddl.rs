@@ -543,7 +543,7 @@ impl fmt::Display for ViewColumnDef {
         if let Some(options) = self.options.as_ref() {
             write!(
                 f,
-                " OPTIONS ({})",
+                " OPTIONS({})",
                 display_comma_separated(options.as_slice())
             )?;
         }
@@ -628,7 +628,7 @@ pub enum ColumnOption {
     /// BigQuery specific: Explicit column options in a view [1] or table [2]
     /// Syntax
     /// ```sql
-    /// OPTIONS (description="field desc")
+    /// OPTIONS(description="field desc")
     /// ```
     /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#view_column_option_list
     /// [2]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#column_option_list
@@ -707,7 +707,7 @@ impl fmt::Display for ColumnOption {
                 }
             }
             SqlOptions(options) => {
-                write!(f, "OPTIONS ({})", display_comma_separated(options))
+                write!(f, "OPTIONS({})", display_comma_separated(options))
             }
         }
     }

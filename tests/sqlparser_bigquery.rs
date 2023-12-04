@@ -21,18 +21,6 @@ use sqlparser::dialect::{BigQueryDialect, GenericDialect};
 use sqlparser::parser::ParserError;
 use test_utils::*;
 
-/// Strips out newlines and spaces from the `sql` so that it can
-/// be comparable with the serialized result
-fn trim_sql(sql: &str) -> String {
-    sql.split('\n')
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| line.trim_start())
-        .collect::<Vec<_>>()
-        .join(" ")
-        .trim()
-        .to_string()
-}
-
 #[test]
 fn parse_literal_string() {
     let sql = r#"SELECT 'single', "double""#;
@@ -100,18 +88,14 @@ fn parse_raw_literal() {
 
 #[test]
 fn parse_create_view_with_options() {
-    let sql = trim_sql(
-        r#"
-    CREATE VIEW myproject.mydataset.newview
-    (name, age OPTIONS (description = "field age"))
-    OPTIONS
-    (expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR),
-     friendly_name = "newview",
-     description = "a view that expires in 2 days",
-     labels = [("org_unit", "development")])
-    AS SELECT column_1, column_2, column_3 FROM myproject.mydataset.mytable"#,
+    let sql = concat!(
+        "CREATE VIEW myproject.mydataset.newview ",
+        r#"(name, age OPTIONS(description = "field age")) "#,
+        r#"OPTIONS(expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR), "#,
+        r#"friendly_name = "newview", description = "a view that expires in 2 days", labels = [("org_unit", "development")]) "#,
+        "AS SELECT column_1, column_2, column_3 FROM myproject.mydataset.mytable",
     );
-    match bigquery().verified_stmt(sql.as_str()) {
+    match bigquery().verified_stmt(sql) {
         Statement::CreateView {
             name,
             query,
@@ -148,7 +132,7 @@ fn parse_create_view_with_options() {
                 query.to_string()
             );
             assert_eq!(
-                r#"OPTIONS (expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR), friendly_name = "newview", description = "a view that expires in 2 days", labels = [("org_unit", "development")])"#,
+                r#"OPTIONS(expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR), friendly_name = "newview", description = "a view that expires in 2 days", labels = [("org_unit", "development")])"#,
                 options.to_string()
             );
             let CreateTableOptions::Options(options) = options else {
@@ -170,19 +154,15 @@ fn parse_create_view_with_options() {
 
 #[test]
 fn parse_create_table_with_options() {
-    let sql = trim_sql(
-        r#"
-    CREATE TABLE mydataset.newtable
-    (x INT64 NOT NULL OPTIONS (description = "field x"),
-     y BOOL OPTIONS (description = "field y"))
-
-    PARTITION BY _PARTITIONDATE
-    CLUSTER BY userid, age
-    OPTIONS(partition_expiration_days = 1,
-            description = "table option description")
-    "#,
+    let sql = concat!(
+        "CREATE TABLE mydataset.newtable ",
+        r#"(x INT64 NOT NULL OPTIONS(description = "field x"), "#,
+        r#"y BOOL OPTIONS(description = "field y")) "#,
+        "PARTITION BY _PARTITIONDATE ",
+        "CLUSTER BY userid, age ",
+        r#"OPTIONS(partition_expiration_days = 1, description = "table option description")"#
     );
-    match bigquery().verified_stmt(sql.as_str()) {
+    match bigquery().verified_stmt(sql) {
         Statement::CreateTable {
             name,
             columns,
@@ -255,18 +235,15 @@ fn parse_create_table_with_options() {
         _ => unreachable!(),
     }
 
-    let sql = trim_sql(
-        r#"
-    CREATE TABLE mydataset.newtable
-    (x INT64 NOT NULL OPTIONS (description = "field x"),
-     y BOOL OPTIONS (description = "field y"))
-
-    CLUSTER BY userid
-    OPTIONS(partition_expiration_days = 1,
-            description = "table option description")
-    "#,
+    let sql = concat!(
+        "CREATE TABLE mydataset.newtable ",
+        r#"(x INT64 NOT NULL OPTIONS(description = "field x"), "#,
+        r#"y BOOL OPTIONS(description = "field y")) "#,
+        "CLUSTER BY userid ",
+        r#"OPTIONS(partition_expiration_days = 1, "#,
+        r#"description = "table option description")"#
     );
-    bigquery().verified_stmt(sql.as_str());
+    bigquery().verified_stmt(sql);
 }
 
 #[test]

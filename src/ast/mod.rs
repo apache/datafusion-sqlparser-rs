@@ -1376,7 +1376,7 @@ pub enum CreateTableOptions {
     /// <https://www.postgresql.org/docs/current/sql-createtable.html>
     With(Vec<SqlOption>),
     /// Options specified using the `OPTIONS` keyword.
-    /// e.g. `OPTIONS (description = "123")`
+    /// e.g. `OPTIONS(description = "123")`
     ///
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
     Options(Vec<SqlOption>),
@@ -1389,7 +1389,7 @@ impl fmt::Display for CreateTableOptions {
                 write!(f, "WITH ({})", display_comma_separated(with_options))
             }
             CreateTableOptions::Options(options) => {
-                write!(f, "OPTIONS ({})", display_comma_separated(options))
+                write!(f, "OPTIONS({})", display_comma_separated(options))
             }
             CreateTableOptions::None => Ok(()),
         }

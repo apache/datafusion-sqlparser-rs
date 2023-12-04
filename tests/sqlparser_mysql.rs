@@ -1818,6 +1818,14 @@ fn parse_hex_string_introducer() {
 }
 
 #[test]
+fn parse_call() {
+    mysql().verified_stmt("CALL my_procedure()");
+    mysql().verified_stmt("CALL my_procedure(1, 'a')");
+    mysql().verified_stmt("CALL my_procedure(1, 'a', @my_var)");
+    mysql().verified_stmt("CALL my_procedure");
+}
+
+#[test]
 fn parse_string_introducers() {
     mysql().verified_stmt("SELECT _binary 'abc'");
     mysql().one_statement_parses_to("SELECT _utf8'abc'", "SELECT _utf8 'abc'");

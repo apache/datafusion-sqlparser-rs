@@ -2428,6 +2428,12 @@ impl<'a> Parser<'a> {
         ret
     }
 
+    pub fn parse_projection_only(&mut self) -> Result<Vec<WithSpan<SelectItem>>, ParserError> {
+        let projection = self.parse_projection()?;
+        self.expect_token(&sqlparser::parser::Token::EOF)?;
+        Ok(projection)
+    }
+
     /// Parse a comma-separated list of 1+ items accepted by `F`
     pub fn parse_comma_separated<T, F>(&mut self, mut f: F) -> Result<Vec<T>, ParserError>
     where

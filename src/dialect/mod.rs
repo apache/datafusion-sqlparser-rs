@@ -260,6 +260,9 @@ mod tests {
 
     #[test]
     fn parse_with_wrapped_dialect() {
+        /// Wrapper for a dialect. In a real-world example, this wrapper
+        /// would tweak the behavior of the dialect. For the test case,
+        /// it wraps all methods unaltered.
         #[derive(Debug)]
         struct WrappedDialect(MySqlDialect);
 
@@ -269,7 +272,7 @@ mod tests {
             }
 
             fn is_identifier_start(&self, ch: char) -> bool {
-                ch == '%' || self.0.is_identifier_start(ch)
+                self.0.is_identifier_start(ch)
             }
 
             fn is_delimited_identifier_start(&self, ch: char) -> bool {
@@ -311,7 +314,6 @@ mod tests {
                 &self,
                 parser: &mut sqlparser::parser::Parser,
             ) -> Option<Result<Expr, sqlparser::parser::ParserError>> {
-                // return None to fall back to the default behavior
                 self.0.parse_prefix(parser)
             }
 
@@ -321,7 +323,6 @@ mod tests {
                 expr: &Expr,
                 precedence: u8,
             ) -> Option<Result<Expr, sqlparser::parser::ParserError>> {
-                // return None to fall back to the default behavior
                 self.0.parse_infix(parser, expr, precedence)
             }
 
@@ -329,7 +330,6 @@ mod tests {
                 &self,
                 parser: &sqlparser::parser::Parser,
             ) -> Option<Result<u8, sqlparser::parser::ParserError>> {
-                // return None to fall back to the default behavior
                 self.0.get_next_precedence(parser)
             }
 
@@ -337,7 +337,6 @@ mod tests {
                 &self,
                 parser: &mut sqlparser::parser::Parser,
             ) -> Option<Result<Statement, sqlparser::parser::ParserError>> {
-                // return None to fall back to the default behavior
                 self.0.parse_statement(parser)
             }
 

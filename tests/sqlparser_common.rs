@@ -6233,6 +6233,40 @@ fn parse_start_transaction() {
 }
 
 #[test]
+fn parse_start_transaction_sqlite() {
+    let dialect = SQLiteDialect {};
+
+    let check = |sql: &str, expected_modifier: Option<TransactionModifier>| match Parser::parse_sql(
+        &dialect, &sql,
+    )
+    .unwrap()
+    .pop()
+    .unwrap()
+    {
+        Statement::StartTransaction { modifier, .. } => assert_eq!(modifier, expected_modifier),
+        _ => panic!("{}", sql),
+    };
+
+    let sql = "BEGIN DEFERRED";
+    check(sql, Some(TransactionModifier::Deferred));
+
+    let sql = "BEGIN DEFERRED TRANSACTION";
+    check(sql, Some(TransactionModifier::Deferred));
+
+    let sql = "BEGIN IMMEDIATE";
+    check(sql, Some(TransactionModifier::Immediate));
+
+    let sql = "BEGIN IMMEDIATE TRANSACTION";
+    check(sql, Some(TransactionModifier::Immediate));
+
+    let sql = "BEGIN EXCLUSIVE";
+    check(sql, Some(TransactionModifier::Exclusive));
+
+    let sql = "BEGIN EXCLUSIVE TRANSACTION";
+    check(sql, Some(TransactionModifier::Exclusive));
+}
+
+#[test]
 fn parse_set_transaction() {
     // SET TRANSACTION shares transaction mode parsing code with START
     // TRANSACTION, so no need to duplicate the tests here. We just do a quick

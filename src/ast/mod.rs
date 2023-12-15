@@ -1819,6 +1819,8 @@ pub enum Statement {
     StartTransaction {
         modes: Vec<TransactionMode>,
         begin: bool,
+        // Only for sqlite
+        modifier: Option<TransactionModifier>,
     },
     /// `SET TRANSACTION ...`
     SetTransaction {
@@ -3107,9 +3109,14 @@ impl fmt::Display for Statement {
             Statement::StartTransaction {
                 modes,
                 begin: syntax_begin,
+                modifier,
             } => {
                 if *syntax_begin {
-                    write!(f, "BEGIN TRANSACTION")?;
+                    if let Some(modifier) = *modifier {
+                        write!(f, "BEGIN {} TRANSACTION", modifier)?;
+                    } else {
+                        write!(f, "BEGIN TRANSACTION")?;
+                    }
                 } else {
                     write!(f, "START TRANSACTION")?;
                 }
@@ -4288,6 +4295,29 @@ impl fmt::Display for TransactionIsolationLevel {
             ReadCommitted => "READ COMMITTED",
             RepeatableRead => "REPEATABLE READ",
             Serializable => "SERIALIZABLE",
+        })
+    }
+}
+
+/// Sqlite specific syntax
+///
+/// https://sqlite.org/lang_transaction.html
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TransactionModifier {
+    Deferred,
+    Immediate,
+    Exclusive,
+}
+
+impl fmt::Display for TransactionModifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use TransactionModifier::*;
+        f.write_str(match self {
+            Deferred => "DEFERRED",
+            Immediate => "IMMEDIATE",
+            Exclusive => "EXCLUSIVE",
         })
     }
 }

@@ -166,7 +166,7 @@ fn parse_create_table_with_options() {
         Statement::CreateTable {
             name,
             columns,
-            big_query_config,
+            table_config,
             ..
         } => {
             assert_eq!(
@@ -213,7 +213,7 @@ fn parse_create_table_with_options() {
                 columns
             );
             assert_eq!(
-                BigQueryCreateTableConfiguration {
+                CreateTableConfiguration::BigQuery(BigQueryCreateTableConfiguration {
                     partition_by: Some(Expr::Identifier(Ident::new("_PARTITIONDATE"))),
                     cluster_by: Some(vec![Ident::new("userid"), Ident::new("age"),]),
                     options: Some(vec![
@@ -228,8 +228,8 @@ fn parse_create_table_with_options() {
                             )),
                         },
                     ])
-                },
-                *big_query_config.unwrap(),
+                }),
+                *table_config.unwrap(),
             )
         }
         _ => unreachable!(),

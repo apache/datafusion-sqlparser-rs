@@ -4064,7 +4064,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let big_query_config = if dialect_of!(self is BigQueryDialect | GenericDialect) {
+        let table_config = if dialect_of!(self is BigQueryDialect | GenericDialect) {
             self.parse_optional_big_query_create_table_config()?
         } else {
             None
@@ -4141,7 +4141,7 @@ impl<'a> Parser<'a> {
             .collation(collation)
             .on_commit(on_commit)
             .on_cluster(on_cluster)
-            .big_query_config(big_query_config)
+            .table_config(table_config)
             .strict(strict)
             .build())
     }
@@ -4150,7 +4150,7 @@ impl<'a> Parser<'a> {
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_2>
     fn parse_optional_big_query_create_table_config(
         &mut self,
-    ) -> Result<Option<Box<BigQueryCreateTableConfiguration>>, ParserError> {
+    ) -> Result<Option<Box<CreateTableConfiguration>>, ParserError> {
         let mut partition_by = None;
         if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
             partition_by = Some(self.parse_expr()?);
@@ -4169,11 +4169,13 @@ impl<'a> Parser<'a> {
         };
 
         if partition_by.is_some() || cluster_by.is_some() || options.is_some() {
-            Ok(Some(Box::new(BigQueryCreateTableConfiguration {
-                partition_by,
-                cluster_by,
-                options,
-            })))
+            Ok(Some(Box::new(CreateTableConfiguration::BigQuery(
+                BigQueryCreateTableConfiguration {
+                    partition_by,
+                    cluster_by,
+                    options,
+                },
+            ))))
         } else {
             Ok(None)
         }

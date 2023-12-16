@@ -1592,9 +1592,8 @@ pub enum Statement {
         /// than empty (represented as ()), the latter meaning "no sorting".
         /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
         order_by: Option<Vec<Ident>>,
-        /// BigQuery specific configuration during table creation.
-        /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_statement>
-        big_query_config: Option<Box<BigQueryCreateTableConfiguration>>,
+        /// Database specific configuration during table creation.
+        table_config: Option<Box<CreateTableConfiguration>>,
         /// SQLite "STRICT" clause.
         /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
         /// then strict typing rules apply to that table.
@@ -2595,7 +2594,7 @@ impl fmt::Display for Statement {
                 on_commit,
                 on_cluster,
                 order_by,
-                big_query_config,
+                table_config,
                 strict,
             } => {
                 // We want to allow the following options
@@ -2752,18 +2751,20 @@ impl fmt::Display for Statement {
                 if let Some(order_by) = order_by {
                     write!(f, " ORDER BY ({})", display_comma_separated(order_by))?;
                 }
-                if let Some(bigquery_config) = big_query_config {
-                    if let Some(partition_by) = bigquery_config.partition_by.as_ref() {
+                if let Some(CreateTableConfiguration::BigQuery(big_query_config)) =
+                    table_config.as_ref().map(|c| c.as_ref())
+                {
+                    if let Some(partition_by) = big_query_config.partition_by.as_ref() {
                         write!(f, " PARTITION BY {partition_by}")?;
                     }
-                    if let Some(cluster_by) = bigquery_config.cluster_by.as_ref() {
+                    if let Some(cluster_by) = big_query_config.cluster_by.as_ref() {
                         write!(
                             f,
                             " CLUSTER BY {}",
                             display_comma_separated(cluster_by.as_slice())
                         )?;
                     }
-                    if let Some(options) = bigquery_config.options.as_ref() {
+                    if let Some(options) = big_query_config.options.as_ref() {
                         write!(
                             f,
                             " OPTIONS({})",
@@ -4295,6 +4296,14 @@ pub struct BigQueryCreateTableConfiguration {
     /// Table options list.
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
     pub options: Option<Vec<SqlOption>>,
+}
+
+/// Represents database specific configuration during table creation.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateTableConfiguration {
+    BigQuery(BigQueryCreateTableConfiguration),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]

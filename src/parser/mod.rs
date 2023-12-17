@@ -7839,7 +7839,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_begin(&mut self) -> Result<Statement, ParserError> {
-        let modifier = if !dialect_of!(self is SQLiteDialect) {
+        let modifier = if !self.dialect.supports_start_transaction_modifier() {
             None
         } else if self.parse_keyword(Keyword::DEFERRED) {
             Some(TransactionModifier::Deferred)

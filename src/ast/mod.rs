@@ -1819,7 +1819,7 @@ pub enum Statement {
     StartTransaction {
         modes: Vec<TransactionMode>,
         begin: bool,
-        // Only for sqlite
+        /// Only for SQLite
         modifier: Option<TransactionModifier>,
     },
     /// `SET TRANSACTION ...`

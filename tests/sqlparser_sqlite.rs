@@ -431,6 +431,16 @@ fn invalid_empty_list() {
     );
 }
 
+#[test]
+fn parse_start_transaction_with_modifier() {
+    sqlite_and_generic().verified_stmt("BEGIN DEFERRED TRANSACTION");
+    sqlite_and_generic().verified_stmt("BEGIN IMMEDIATE TRANSACTION");
+    sqlite_and_generic().verified_stmt("BEGIN EXCLUSIVE TRANSACTION");
+    sqlite_and_generic().one_statement_parses_to("BEGIN DEFERRED", "BEGIN DEFERRED TRANSACTION");
+    sqlite_and_generic().one_statement_parses_to("BEGIN IMMEDIATE", "BEGIN IMMEDIATE TRANSACTION");
+    sqlite_and_generic().one_statement_parses_to("BEGIN EXCLUSIVE", "BEGIN EXCLUSIVE TRANSACTION");
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SQLiteDialect {})],

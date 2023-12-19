@@ -38,11 +38,12 @@ pub use self::ddl::{
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
     Cte, Distinct, ExceptSelectItem, ExcludeSelectItem, Fetch, ForClause, ForJson, ForXml,
-    GroupByExpr, IdentWithAlias, Join, JoinConstraint, JoinOperator, LateralView, LockClause,
-    LockType, NamedWindowDefinition, NonBlock, Offset, OffsetRows, OrderByExpr, Query,
-    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
-    SetExpr, SetOperator, SetQuantifier, Table, TableAlias, TableFactor, TableVersion,
-    TableWithJoins, Top, Values, WildcardAdditionalOptions, With,
+    GroupByExpr, IdentWithAlias, Join, JoinConstraint, JoinOperator, JsonTableColumn,
+    JsonTableColumnErrorHandling, LateralView, LockClause, LockType, NamedWindowDefinition,
+    NonBlock, Offset, OffsetRows, OrderByExpr, Query, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SetOperator, SetQuantifier, Table,
+    TableAlias, TableFactor, TableVersion, TableWithJoins, Top, Values, WildcardAdditionalOptions,
+    With,
 };
 pub use self::value::{
     escape_quoted_string, DateTimeField, DollarQuotedString, TrimWhereField, Value,
@@ -1437,6 +1438,7 @@ pub enum Statement {
         file_format: Option<FileFormat>,
         source: Box<Query>,
     },
+    Call(Function),
     Copy {
         /// The source of 'COPY TO', or the target of 'COPY FROM'
         source: CopySource,
@@ -1715,7 +1717,9 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
-    Discard { object_type: DiscardObject },
+    Discard {
+        object_type: DiscardObject,
+    },
     /// SET `[ SESSION | LOCAL ]` ROLE role_name. Examples: [ANSI][1], [Postgresql][2], [MySQL][3], and [Oracle][4].
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#set-role-statement
@@ -1747,7 +1751,10 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statements
     /// `SET TIME ZONE <value>` is an alias for `SET timezone TO <value>` in PostgreSQL
-    SetTimeZone { local: bool, value: Expr },
+    SetTimeZone {
+        local: bool,
+        value: Expr,
+    },
     /// SET NAMES 'charset_name' [COLLATE 'collation_name']
     ///
     /// Note: this is a MySQL-specific statement.
@@ -1762,13 +1769,17 @@ pub enum Statement {
     /// SHOW FUNCTIONS
     ///
     /// Note: this is a Presto-specific statement.
-    ShowFunctions { filter: Option<ShowStatementFilter> },
+    ShowFunctions {
+        filter: Option<ShowStatementFilter>,
+    },
     /// ```sql
     /// SHOW <variable>
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    ShowVariable { variable: Vec<Ident> },
+    ShowVariable {
+        variable: Vec<Ident>,
+    },
     /// SHOW VARIABLES
     ///
     /// Note: this is a MySQL-specific statement.
@@ -1806,11 +1817,15 @@ pub enum Statement {
     /// SHOW COLLATION
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowCollation { filter: Option<ShowStatementFilter> },
+    ShowCollation {
+        filter: Option<ShowStatementFilter>,
+    },
     /// USE
     ///
     /// Note: This is a MySQL-specific statement.
-    Use { db_name: Ident },
+    Use {
+        db_name: Ident,
+    },
     /// `START  [ TRANSACTION | WORK ] | START TRANSACTION } ...`
     /// If `begin` is false.
     ///
@@ -1838,7 +1853,9 @@ pub enum Statement {
         if_exists: bool,
     },
     /// `COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
-    Commit { chain: bool },
+    Commit {
+        chain: bool,
+    },
     /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ] [ TO [ SAVEPOINT ] savepoint_name ]`
     Rollback {
         chain: bool,
@@ -1934,11 +1951,17 @@ pub enum Statement {
     /// `DEALLOCATE [ PREPARE ] { name | ALL }`
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Deallocate { name: Ident, prepare: bool },
+    Deallocate {
+        name: Ident,
+        prepare: bool,
+    },
     /// `EXECUTE name [ ( parameter [, ...] ) ]`
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Execute { name: Ident, parameters: Vec<Expr> },
+    Execute {
+        name: Ident,
+        parameters: Vec<Expr>,
+    },
     /// `PREPARE name [ ( data_type [, ...] ) ] AS statement`
     ///
     /// Note: this is a PostgreSQL-specific statement.
@@ -1979,9 +2002,13 @@ pub enum Statement {
         format: Option<AnalyzeFormat>,
     },
     /// SAVEPOINT -- define a new savepoint within the current transaction
-    Savepoint { name: Ident },
+    Savepoint {
+        name: Ident,
+    },
     /// RELEASE \[ SAVEPOINT \] savepoint_name
-    ReleaseSavepoint { name: Ident },
+    ReleaseSavepoint {
+        name: Ident,
+    },
     // MERGE INTO statement, based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
     Merge {
         // optional INTO keyword
@@ -2309,6 +2336,8 @@ impl fmt::Display for Statement {
 
                 Ok(())
             }
+
+            Statement::Call(function) => write!(f, "CALL {function}"),
 
             Statement::Copy {
                 source,

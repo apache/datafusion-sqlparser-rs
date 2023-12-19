@@ -493,6 +493,7 @@ impl<'a> Parser<'a> {
                 Keyword::UNCACHE => Ok(self.parse_uncache_table()?),
                 Keyword::UPDATE => Ok(self.parse_update()?),
                 Keyword::ALTER => Ok(self.parse_alter()?),
+                Keyword::CALL => Ok(self.parse_call()?),
                 Keyword::COPY => Ok(self.parse_copy()?),
                 Keyword::CLOSE => Ok(self.parse_close()?),
                 Keyword::SET => Ok(self.parse_set()?),
@@ -4778,6 +4779,32 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse a `CALL procedure_name(arg1, arg2, ...)`
+    /// or `CALL procedure_name` statement
+    pub fn parse_call(&mut self) -> Result<Statement, ParserError> {
+        let object_name = self.parse_object_name()?;
+        if self.peek_token().token == Token::LParen {
+            match self.parse_function(object_name)? {
+                Expr::Function(f) => Ok(Statement::Call(f)),
+                other => parser_err!(
+                    format!("Expected a simple procedure call but found: {other}"),
+                    self.peek_token().location
+                ),
+            }
+        } else {
+            Ok(Statement::Call(Function {
+                name: object_name,
+                args: vec![],
+                over: None,
+                distinct: false,
+                filter: None,
+                null_treatment: None,
+                special: true,
+                order_by: vec![],
+            }))
+        }
+    }
+
     /// Parse a copy statement
     pub fn parse_copy(&mut self) -> Result<Statement, ParserError> {
         let source;
@@ -6891,6 +6918,7 @@ impl<'a> Parser<'a> {
                         | TableFactor::Table { alias, .. }
                         | TableFactor::Function { alias, .. }
                         | TableFactor::UNNEST { alias, .. }
+                        | TableFactor::JsonTable { alias, .. }
                         | TableFactor::TableFunction { alias, .. }
                         | TableFactor::Pivot { alias, .. }
                         | TableFactor::Unpivot { alias, .. }
@@ -6948,6 +6976,23 @@ impl<'a> Parser<'a> {
                 array_exprs,
                 with_offset,
                 with_offset_alias,
+            })
+        } else if self.parse_keyword(Keyword::JSON_TABLE) {
+            self.expect_token(&Token::LParen)?;
+            let json_expr = self.parse_expr()?;
+            self.expect_token(&Token::Comma)?;
+            let json_path = self.parse_value()?;
+            self.expect_keyword(Keyword::COLUMNS)?;
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(Parser::parse_json_table_column_def)?;
+            self.expect_token(&Token::RParen)?;
+            self.expect_token(&Token::RParen)?;
+            let alias = self.parse_optional_table_alias(keywords::RESERVED_FOR_TABLE_ALIAS)?;
+            Ok(TableFactor::JsonTable {
+                json_expr,
+                json_path,
+                columns,
+                alias,
             })
         } else {
             let name = self.parse_object_name()?;
@@ -7017,6 +7062,50 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    /// Parses MySQL's JSON_TABLE column definition.
+    /// For example: `id INT EXISTS PATH '$' DEFAULT '0' ON EMPTY ERROR ON ERROR`
+    pub fn parse_json_table_column_def(&mut self) -> Result<JsonTableColumn, ParserError> {
+        let name = self.parse_identifier()?;
+        let r#type = self.parse_data_type()?;
+        let exists = self.parse_keyword(Keyword::EXISTS);
+        self.expect_keyword(Keyword::PATH)?;
+        let path = self.parse_value()?;
+        let mut on_empty = None;
+        let mut on_error = None;
+        while let Some(error_handling) = self.parse_json_table_column_error_handling()? {
+            if self.parse_keyword(Keyword::EMPTY) {
+                on_empty = Some(error_handling);
+            } else {
+                self.expect_keyword(Keyword::ERROR)?;
+                on_error = Some(error_handling);
+            }
+        }
+        Ok(JsonTableColumn {
+            name,
+            r#type,
+            path,
+            exists,
+            on_empty,
+            on_error,
+        })
+    }
+
+    fn parse_json_table_column_error_handling(
+        &mut self,
+    ) -> Result<Option<JsonTableColumnErrorHandling>, ParserError> {
+        let res = if self.parse_keyword(Keyword::NULL) {
+            JsonTableColumnErrorHandling::Null
+        } else if self.parse_keyword(Keyword::ERROR) {
+            JsonTableColumnErrorHandling::Error
+        } else if self.parse_keyword(Keyword::DEFAULT) {
+            JsonTableColumnErrorHandling::Default(self.parse_value()?)
+        } else {
+            return Ok(None);
+        };
+        self.expect_keyword(Keyword::ON)?;
+        Ok(Some(res))
     }
 
     pub fn parse_derived_table_factor(

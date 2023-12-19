@@ -1870,3 +1870,57 @@ fn parse_convert_using() {
     // with a type + a charset
     mysql().verified_only_select("SELECT CONVERT('test', CHAR CHARACTER SET utf8mb4)");
 }
+
+#[test]
+fn parse_json_table() {
+    mysql().verified_only_select("SELECT * FROM JSON_TABLE('[[1, 2], [3, 4]]', '$[*]' COLUMNS(a INT PATH '$[0]', b INT PATH '$[1]')) AS t");
+    mysql().verified_only_select(
+        r#"SELECT * FROM JSON_TABLE('["x", "y"]', '$[*]' COLUMNS(a VARCHAR(20) PATH '$')) AS t"#,
+    );
+    // with a bound parameter
+    mysql().verified_only_select(
+        r#"SELECT * FROM JSON_TABLE(?, '$[*]' COLUMNS(a VARCHAR(20) PATH '$')) AS t"#,
+    );
+    // quote escaping
+    mysql().verified_only_select(r#"SELECT * FROM JSON_TABLE('{"''": [1,2,3]}', '$."''"[*]' COLUMNS(a VARCHAR(20) PATH '$')) AS t"#);
+    // double quotes
+    mysql().verified_only_select(
+        r#"SELECT * FROM JSON_TABLE("[]", "$[*]" COLUMNS(a VARCHAR(20) PATH "$")) AS t"#,
+    );
+    // exists
+    mysql().verified_only_select(r#"SELECT * FROM JSON_TABLE('[{}, {"x":1}]', '$[*]' COLUMNS(x INT EXISTS PATH '$.x')) AS t"#);
+    // error handling
+    mysql().verified_only_select(
+        r#"SELECT * FROM JSON_TABLE('[1,2]', '$[*]' COLUMNS(x INT PATH '$' ERROR ON ERROR)) AS t"#,
+    );
+    mysql().verified_only_select(
+        r#"SELECT * FROM JSON_TABLE('[1,2]', '$[*]' COLUMNS(x INT PATH '$' ERROR ON EMPTY)) AS t"#,
+    );
+    mysql().verified_only_select(r#"SELECT * FROM JSON_TABLE('[1,2]', '$[*]' COLUMNS(x INT PATH '$' ERROR ON EMPTY DEFAULT '0' ON ERROR)) AS t"#);
+    assert_eq!(
+        mysql()
+            .verified_only_select(
+                r#"SELECT * FROM JSON_TABLE('[1,2]', '$[*]' COLUMNS(x INT PATH '$' DEFAULT '0' ON EMPTY NULL ON ERROR)) AS t"#
+            )
+            .from[0]
+            .relation,
+        TableFactor::JsonTable {
+            json_expr: Expr::Value(Value::SingleQuotedString("[1,2]".to_string())),
+            json_path: Value::SingleQuotedString("$[*]".to_string()),
+            columns: vec![
+                JsonTableColumn {
+                    name: Ident::new("x"),
+                    r#type: DataType::Int(None),
+                    path: Value::SingleQuotedString("$".to_string()),
+                    exists: false,
+                    on_empty: Some(JsonTableColumnErrorHandling::Default(Value::SingleQuotedString("0".to_string()))),
+                    on_error: Some(JsonTableColumnErrorHandling::Null),
+                },
+            ],
+            alias: Some(TableAlias {
+                name: Ident::new("t"),
+                columns: vec![],
+            }),
+        }
+    );
+}

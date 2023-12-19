@@ -726,6 +726,33 @@ pub enum TableFactor {
         with_offset: bool,
         with_offset_alias: Option<Ident>,
     },
+    /// The `JSON_TABLE` table-valued function.
+    /// Part of the SQL standard, but implemented only by MySQL, Oracle, and DB2.
+    ///
+    /// <https://modern-sql.com/blog/2017-06/whats-new-in-sql-2016#json_table>
+    /// <https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#function_json-table>
+    ///
+    /// ```sql
+    /// SELECT * FROM JSON_TABLE(
+    ///    '[{"a": 1, "b": 2}, {"a": 3, "b": 4}]',
+    ///    '$[*]' COLUMNS(
+    ///        a INT PATH '$.a' DEFAULT '0' ON EMPTY,
+    ///        b INT PATH '$.b' NULL ON ERROR
+    ///     )
+    /// ) AS jt;
+    /// ````
+    JsonTable {
+        /// The JSON expression to be evaluated. It must evaluate to a json string
+        json_expr: Expr,
+        /// The path to the array or object to be iterated over.
+        /// It must evaluate to a json array or object.
+        json_path: Value,
+        /// The columns to be extracted from each element of the array or object.
+        /// Each column must have a name and a type.
+        columns: Vec<JsonTableColumn>,
+        /// The alias for the table.
+        alias: Option<TableAlias>,
+    },
     /// Represents a parenthesized table factor. The SQL spec only allows a
     /// join expression (`(foo <JOIN> bar [ <JOIN> baz ... ])`) to be nested,
     /// possibly several times.
@@ -844,6 +871,22 @@ impl fmt::Display for TableFactor {
                     write!(f, " WITH OFFSET")?;
                 }
                 if let Some(alias) = with_offset_alias {
+                    write!(f, " AS {alias}")?;
+                }
+                Ok(())
+            }
+            TableFactor::JsonTable {
+                json_expr,
+                json_path,
+                columns,
+                alias,
+            } => {
+                write!(
+                    f,
+                    "JSON_TABLE({json_expr}, {json_path} COLUMNS({columns}))",
+                    columns = display_comma_separated(columns)
+                )?;
+                if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }
                 Ok(())
@@ -1440,6 +1483,77 @@ impl fmt::Display for ForJson {
         match self {
             ForJson::Auto => write!(f, "AUTO"),
             ForJson::Path => write!(f, "PATH"),
+        }
+    }
+}
+
+/// A single column definition in MySQL's `JSON_TABLE` table valued function.
+/// ```sql
+/// SELECT *
+/// FROM JSON_TABLE(
+///     '["a", "b"]',
+///     '$[*]' COLUMNS (
+///         value VARCHAR(20) PATH '$'
+///     )
+/// ) AS jt;
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct JsonTableColumn {
+    /// The name of the column to be extracted.
+    pub name: Ident,
+    /// The type of the column to be extracted.
+    pub r#type: DataType,
+    /// The path to the column to be extracted. Must be a literal string.
+    pub path: Value,
+    /// true if the column is a boolean set to true if the given path exists
+    pub exists: bool,
+    /// The empty handling clause of the column
+    pub on_empty: Option<JsonTableColumnErrorHandling>,
+    /// The error handling clause of the column
+    pub on_error: Option<JsonTableColumnErrorHandling>,
+}
+
+impl fmt::Display for JsonTableColumn {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{} {}{} PATH {}",
+            self.name,
+            self.r#type,
+            if self.exists { " EXISTS" } else { "" },
+            self.path
+        )?;
+        if let Some(on_empty) = &self.on_empty {
+            write!(f, " {} ON EMPTY", on_empty)?;
+        }
+        if let Some(on_error) = &self.on_error {
+            write!(f, " {} ON ERROR", on_error)?;
+        }
+        Ok(())
+    }
+}
+
+/// Stores the error handling clause of a `JSON_TABLE` table valued function:
+/// {NULL | DEFAULT json_string | ERROR} ON {ERROR | EMPTY }
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum JsonTableColumnErrorHandling {
+    Null,
+    Default(Value),
+    Error,
+}
+
+impl fmt::Display for JsonTableColumnErrorHandling {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            JsonTableColumnErrorHandling::Null => write!(f, "NULL"),
+            JsonTableColumnErrorHandling::Default(json_string) => {
+                write!(f, "DEFAULT {}", json_string)
+            }
+            JsonTableColumnErrorHandling::Error => write!(f, "ERROR"),
         }
     }
 }

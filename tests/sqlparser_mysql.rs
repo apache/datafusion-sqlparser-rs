@@ -1872,6 +1872,42 @@ fn parse_convert_using() {
 }
 
 #[test]
+fn parse_create_table_with_column_collate() {
+    let sql = "CREATE TABLE tb (id TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci)";
+    let canonical = "CREATE TABLE tb (id TEXT COLLATE utf8mb4_0900_ai_ci CHARACTER SET utf8mb4)";
+    match mysql().one_statement_parses_to(sql, canonical) {
+        Statement::CreateTable { name, columns, .. } => {
+            assert_eq!(name.to_string(), "tb");
+            assert_eq!(
+                vec![ColumnDef {
+                    name: Ident::new("id"),
+                    data_type: DataType::Text,
+                    collation: Some(ObjectName(vec![Ident::new("utf8mb4_0900_ai_ci")])),
+                    options: vec![ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::CharacterSet(ObjectName(vec![Ident::new("utf8mb4")]))
+                    }],
+                },],
+                columns
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn parse_lock_tables() {
+    mysql().one_statement_parses_to(
+        "LOCK TABLES trans t READ, customer WRITE",
+        "LOCK TABLES trans AS t READ, customer WRITE",
+    );
+    mysql().verified_stmt("LOCK TABLES trans AS t READ, customer WRITE");
+    mysql().verified_stmt("LOCK TABLES trans AS t READ LOCAL, customer WRITE");
+    mysql().verified_stmt("LOCK TABLES trans AS t READ, customer LOW_PRIORITY WRITE");
+    mysql().verified_stmt("UNLOCK TABLES");
+}
+
+#[test]
 fn parse_json_table() {
     mysql().verified_only_select("SELECT * FROM JSON_TABLE('[[1, 2], [3, 4]]', '$[*]' COLUMNS(a INT PATH '$[0]', b INT PATH '$[1]')) AS t");
     mysql().verified_only_select(

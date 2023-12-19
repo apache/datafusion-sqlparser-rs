@@ -2047,7 +2047,8 @@ pub enum Statement {
         table_name: ObjectName,
         if_exists: bool,
     },
-    ///CreateSequence -- define a new sequence
+    /// Define a new sequence:
+    ///
     /// CREATE [ { TEMPORARY | TEMP } ] SEQUENCE [ IF NOT EXISTS ] <sequence_name>
     CreateSequence {
         temporary: bool,
@@ -2068,13 +2069,13 @@ pub enum Statement {
         value: Option<Value>,
         is_eq: bool,
     },
-    /// LOCK TABLES
+    /// `LOCK TABLES <table_name> [READ [LOCAL] | [LOW_PRIORITY] WRITE]`
     ///
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
     LockTables {
         tables: Vec<LockTable>,
     },
-    ///
+    /// `UNLOCK TABLES`
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
     UnlockTables,
 }

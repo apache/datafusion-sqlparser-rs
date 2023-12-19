@@ -1901,9 +1901,13 @@ fn parse_lock_tables() {
         "LOCK TABLES trans t READ, customer WRITE",
         "LOCK TABLES trans AS t READ, customer WRITE",
     );
-    mysql().one_statement_parses_to("UNLOCK TABLES", "UNLOCK TABLES");
+    mysql().verified_stmt("LOCK TABLES trans AS t READ, customer WRITE");
+    mysql().verified_stmt("LOCK TABLES trans AS t READ LOCAL, customer WRITE");
+    mysql().verified_stmt("LOCK TABLES trans AS t READ, customer LOW_PRIORITY WRITE");
+    mysql().verified_stmt("UNLOCK TABLES");
 }
 
+#[test]
 fn parse_json_table() {
     mysql().verified_only_select("SELECT * FROM JSON_TABLE('[[1, 2], [3, 4]]', '$[*]' COLUMNS(a INT PATH '$[0]', b INT PATH '$[1]')) AS t");
     mysql().verified_only_select(

@@ -7950,6 +7950,29 @@ fn parse_create_type() {
 }
 
 #[test]
+fn parse_call() {
+    all_dialects().verified_stmt("CALL my_procedure()");
+    all_dialects().verified_stmt("CALL my_procedure(1, 'a')");
+    pg_and_generic().verified_stmt("CALL my_procedure(1, 'a', $1)");
+    all_dialects().verified_stmt("CALL my_procedure");
+    assert_eq!(
+        verified_stmt("CALL my_procedure('a')"),
+        Statement::Call(Function {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                Value::SingleQuotedString("a".to_string())
+            ))),],
+            name: ObjectName(vec![Ident::new("my_procedure")]),
+            filter: None,
+            null_treatment: None,
+            over: None,
+            distinct: false,
+            special: false,
+            order_by: vec![]
+        })
+    );
+}
+
+#[test]
 fn parse_create_table_collate() {
     pg_and_generic().verified_stmt("CREATE TABLE tbl (foo INT, bar TEXT COLLATE \"de_DE\")");
 }

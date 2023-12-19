@@ -41,9 +41,9 @@
 //!
 //! # Creating SQL text from AST
 //!
-//! This crate allows users to recover the original SQL text (with normalized
-//! whitespace and identifier capitalization), which is useful for tools that
-//! analyze and manipulate SQL.
+//! This crate allows users to recover the original SQL text (with comments
+//! removed, normalized whitespace and identifier capitalization), which is
+//! useful for tools that analyze and manipulate SQL.
 //!
 //! ```
 //! # use sqlparser::dialect::GenericDialect;

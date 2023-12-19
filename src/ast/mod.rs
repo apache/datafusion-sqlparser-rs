@@ -2071,7 +2071,9 @@ pub enum Statement {
     /// LOCK TABLES
     ///
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
-    LockTables { tables: Vec<LockTable> },
+    LockTables {
+        tables: Vec<LockTable>,
+    },
     ///
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
     UnlockTables,

@@ -1234,6 +1234,19 @@ fn parse_pivot_of_table_factor_derived() {
 }
 
 #[test]
+fn parse_create_table_column_comment() {
+    snowflake()
+        .verified_stmt("CREATE TABLE my_table (my_column STRING COMMENT 'this is comment3')");
+}
+
+#[test]
+fn parse_create_view_comment() {
+    snowflake().verified_stmt(
+        "CREATE VIEW my_view COMMENT='this is comment5' AS (SELECT * FROM my_table)",
+    );
+}
+
+#[test]
 fn parse_create_table_cluster_by() {
     snowflake().verified_stmt(
         "CREATE OR REPLACE TABLE t3 (vc VARCHAR) CLUSTER BY (SUBSTRING(vc FROM 5 FOR 5))",

@@ -1511,6 +1511,7 @@ pub enum Statement {
         columns_with_types: Vec<ColumnDef>,
         late_binding: bool,
         auto_refresh: Option<bool>,
+        comment: Option<String>,
     },
     /// CREATE TABLE
     CreateTable {
@@ -2469,6 +2470,7 @@ impl fmt::Display for Statement {
                 columns_with_types,
                 late_binding,
                 auto_refresh,
+                comment,
             } => {
                 write!(
                     f,
@@ -2520,11 +2522,16 @@ impl fmt::Display for Statement {
                         write!(f, " AUTO REFRESH NO")?;
                     }
                 }
+                if let Some(comment) = comment {
+                    write!(f, " COMMENT='{comment}'")?;
+                }
+
                 write!(f, " AS {query}")?;
 
                 if *late_binding {
                     write!(f, " WITH NO SCHEMA BINDING")?;
                 }
+
                 Ok(())
             }
             Statement::CreateTable {

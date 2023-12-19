@@ -47,7 +47,8 @@ pub use self::query::{
     TableSampleSeed, TableVersion, TableWithJoins, Top, Values, WildcardAdditionalOptions, With,
 };
 pub use self::value::{
-    escape_quoted_string, DateTimeField, DollarQuotedString, TrimWhereField, Value,
+    escape_quoted_string, DateTimeField, DollarQuotedString, ObjectConstantKeyValue,
+    TrimWhereField, Value,
 };
 
 use crate::ast::helpers::stmt_data_loading::{

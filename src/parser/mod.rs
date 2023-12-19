@@ -906,7 +906,8 @@ impl<'a> Parser<'a> {
             | Token::DoubleQuotedByteStringLiteral(_)
             | Token::RawStringLiteral(_)
             | Token::NationalStringLiteral(_)
-            | Token::HexStringLiteral(_) => {
+            | Token::HexStringLiteral(_)
+            | Token::LBrace => {
                 self.prev_token();
                 Ok(Expr::Value(self.parse_value()?))
             }
@@ -4912,6 +4913,23 @@ impl<'a> Parser<'a> {
                 let ident = self.parse_identifier()?;
                 let placeholder = tok.to_string() + &ident.value;
                 Ok(Value::Placeholder(placeholder))
+            }
+            Token::LBrace => {
+                if self.consume_token(&Token::RBrace) {
+                    return Ok(Value::ObjectConstant(vec![]));
+                }
+                let mut fields = vec![];
+                loop {
+                    let key = self.parse_literal_string()?;
+                    self.expect_token(&Token::Colon)?;
+                    let value = self.parse_value()?;
+                    fields.push(ObjectConstantKeyValue { key, value });
+                    if !self.consume_token(&Token::Comma) {
+                        break;
+                    }
+                }
+                self.expect_token(&Token::RBrace)?;
+                Ok(Value::ObjectConstant(fields))
             }
             unexpected => self.expected(
                 "a value",

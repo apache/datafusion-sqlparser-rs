@@ -24,4 +24,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@nextest
       - name: Run tests
-        run: cargo nextest run
+        run: cargo nextest run --all-features

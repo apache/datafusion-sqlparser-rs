@@ -612,10 +612,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::dialect::GenericDialect;
     use crate::parser::Parser;
     use crate::tokenizer::Tokenizer;
+
+    use super::*;
 
     #[derive(Default)]
     struct TestVisitor {

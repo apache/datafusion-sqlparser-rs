@@ -23,6 +23,14 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ObjectConstantKeyValue {
+    pub key: String,
+    pub value: Value,
+}
+
 /// Primitive SQL values such as number and string
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -65,6 +73,10 @@ pub enum Value {
     Placeholder(String),
     /// Add support of snowflake field:key - key should be a value
     UnQuotedString(String),
+
+    /// OBJECT constant as used by Snowflake
+    /// https://docs.snowflake.com/en/sql-reference/data-types-semistructured#object-constants
+    ObjectConstant(Vec<ObjectConstantKeyValue>),
 }
 
 impl fmt::Display for Value {
@@ -84,6 +96,23 @@ impl fmt::Display for Value {
             Value::Null => write!(f, "NULL"),
             Value::Placeholder(v) => write!(f, "{v}"),
             Value::UnQuotedString(v) => write!(f, "{v}"),
+            Value::ObjectConstant(fields) => {
+                if fields.is_empty() {
+                    write!(f, "{}", "{}")
+                } else {
+                    let mut first = true;
+                    write!(f, "{}", "{ ")?;
+                    for ObjectConstantKeyValue { key, value } in fields {
+                        if first {
+                            first = false;
+                        } else {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "'{}': {}", key, value)?;
+                    }
+                    write!(f, "{}", " }")
+                }
+            }
         }
     }
 }

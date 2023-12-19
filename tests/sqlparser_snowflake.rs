@@ -1186,6 +1186,16 @@ fn parse_array_index_json_colon() {
 }
 
 #[test]
+fn parse_object_constants() {
+    snowflake().verified_stmt("SELECT { 'Manitoba': 'Winnipeg' } AS province_capital");
+    snowflake().verified_stmt("SELECT {} AS province_capital");
+    snowflake().verified_stmt(
+        "UPDATE my_table SET my_object = { 'Alberta': 'Edmonton', 'Manitoba': 'Winnipeg' }",
+    );
+    snowflake().verified_stmt("UPDATE my_table SET my_object = OBJECT_CONSTRUCT('Alberta', 'Edmonton', 'Manitoba', 'Winnipeg')");
+}
+
+#[test]
 fn parse_array_index_json_dot() {
     let stmt = snowflake().verified_only_select("SELECT src[0].order_number FROM car_sales");
 

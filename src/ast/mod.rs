@@ -1510,6 +1510,7 @@ pub enum Statement {
         destination_table: Option<ObjectName>,
         columns_with_types: Vec<ColumnDef>,
         late_binding: bool,
+        auto_refresh: Option<bool>,
     },
     /// CREATE TABLE
     CreateTable {
@@ -2467,6 +2468,7 @@ impl fmt::Display for Statement {
                 destination_table,
                 columns_with_types,
                 late_binding,
+                auto_refresh,
             } => {
                 write!(
                     f,
@@ -2510,6 +2512,13 @@ impl fmt::Display for Statement {
                         " SETTINGS {}",
                         display_comma_separated(clickhouse_settings)
                     )?;
+                }
+                if let Some(auto_refresh) = auto_refresh {
+                    if *auto_refresh {
+                        write!(f, " AUTO REFRESH YES")?;
+                    } else {
+                        write!(f, " AUTO REFRESH NO")?;
+                    }
                 }
                 write!(f, " AS {query}")?;
 

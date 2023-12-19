@@ -96,6 +96,7 @@ define_keywords!(
     AT,
     ATOMIC,
     AUTHORIZATION,
+    AUTO,
     AUTOINCREMENT,
     AUTO_INCREMENT,
     AVG,
@@ -501,6 +502,7 @@ define_keywords!(
     REF,
     REFERENCES,
     REFERENCING,
+    REFRESH,
     REGCLASS,
     REGEXP,
     REGR_AVGX,
@@ -688,6 +690,7 @@ define_keywords!(
     WRITE,
     XOR,
     YEAR,
+    YES,
     ZONE,
     ZORDER
 );

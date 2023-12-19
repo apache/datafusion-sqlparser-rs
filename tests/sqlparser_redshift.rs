@@ -321,6 +321,12 @@ fn test_select_ignore_nulls() {
 }
 
 #[test]
+fn test_materialized_view_auto_refresh() {
+    redshift().verified_stmt(r#"CREATE MATERIALIZED VIEW view AUTO REFRESH YES AS (SELECT MAX("events"."derived_tstamp") AS "aggvar_2" FROM "atomic"."events" AS "events")"#);
+    redshift().verified_stmt(r#"CREATE MATERIALIZED VIEW view AUTO REFRESH NO AS (SELECT MAX("events"."derived_tstamp") AS "aggvar_2" FROM "atomic"."events" AS "events")"#);
+}
+
+#[test]
 fn test_create_view_late_binding() {
     redshift()
         .verified_stmt("CREATE VIEW myevent AS SELECT eventname FROM event WITH NO SCHEMA BINDING");

@@ -3120,6 +3120,17 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let auto_refresh = if self.parse_keywords(&[Keyword::AUTO, Keyword::REFRESH]) {
+            if self.parse_keyword(Keyword::YES) {
+                Some(true)
+            } else {
+                self.expect_keyword(Keyword::NO)?;
+                Some(false)
+            }
+        } else {
+            None
+        };
+
         self.expect_keyword(Keyword::AS)?;
         let query = Box::new(self.parse_query()?);
         // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
@@ -3148,6 +3159,7 @@ impl<'a> Parser<'a> {
             destination_table,
             columns_with_types,
             late_binding,
+            auto_refresh,
         })
     }
 

@@ -527,6 +527,14 @@ pub enum Expr {
         pattern: Box<Expr>,
         escape_char: Option<char>,
     },
+    /// REGEXP
+    /// Snowflake: <subject> REGEXP <pattern>
+    /// https://docs.snowflake.com/en/sql-reference/functions/regexp
+    Regexp {
+        negated: bool,
+        expr: Box<Expr>,
+        pattern: Box<Expr>,
+    },
     /// ILIKE (case-insensitive LIKE)
     ILike {
         negated: bool,
@@ -863,6 +871,17 @@ impl fmt::Display for Expr {
                     pattern
                 ),
             },
+            Expr::Regexp {
+                negated,
+                expr,
+                pattern,
+            } => write!(
+                f,
+                "{} {}REGEXP {}",
+                expr,
+                if *negated { "NOT " } else { "" },
+                pattern
+            ),
             Expr::AnyOp {
                 left,
                 compare_op,

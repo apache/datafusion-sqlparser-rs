@@ -1277,6 +1277,12 @@ fn parse_interval_as_alias() {
 }
 
 #[test]
+fn parse_regexp() {
+    snowflake_and_generic().verified_stmt(r#"SELECT v FROM strings WHERE v REGEXP 'San* [fF].*'"#);
+    snowflake_and_generic().verified_stmt(r#"SELECT v, v REGEXP 'San\\b.*' AS ok FROM strings"#);
+}
+
+#[test]
 fn parse_tablesample() {
     snowflake().verified_stmt("SELECT * FROM testtable SAMPLE (10)");
     snowflake().verified_stmt("SELECT * FROM testtable TABLESAMPLE BERNOULLI (20.3)");

@@ -1822,3 +1822,9 @@ fn parse_drop_temporary_table() {
         _ => unreachable!(),
     }
 }
+
+#[test]
+fn parse_regexp() {
+    mysql_and_generic().verified_stmt(r#"SELECT v FROM strings WHERE v REGEXP 'San* [fF].*'"#);
+    mysql_and_generic().verified_stmt(r#"SELECT 'Michael!' REGEXP '.*'"#);
+}

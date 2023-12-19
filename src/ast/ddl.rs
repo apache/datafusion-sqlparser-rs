@@ -600,6 +600,8 @@ pub enum ColumnOption {
         sequence_options: Option<Vec<SequenceOptions>>,
         generation_expr: Option<Expr>,
         generation_expr_mode: Option<GeneratedExpressionMode>,
+        /// false if 'GENERATED ALWAYS' is skipped (option starts with AS)
+        generated_keyword: bool,
     },
 }
 
@@ -641,6 +643,7 @@ impl fmt::Display for ColumnOption {
                 sequence_options,
                 generation_expr,
                 generation_expr_mode,
+                generated_keyword,
             } => {
                 if let Some(expr) = generation_expr {
                     let modifier = match generation_expr_mode {
@@ -648,7 +651,11 @@ impl fmt::Display for ColumnOption {
                         Some(GeneratedExpressionMode::Virtual) => " VIRTUAL",
                         Some(GeneratedExpressionMode::Stored) => " STORED",
                     };
-                    write!(f, "GENERATED ALWAYS AS ({expr}){modifier}")?;
+                    if *generated_keyword {
+                        write!(f, "GENERATED ALWAYS AS ({expr}){modifier}")?;
+                    } else {
+                        write!(f, "AS ({expr}){modifier}")?;
+                    }
                     Ok(())
                 } else {
                     // Like Postgres - generated from sequence

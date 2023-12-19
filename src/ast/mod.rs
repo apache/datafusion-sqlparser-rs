@@ -431,14 +431,14 @@ pub enum Expr {
         op: BinaryOperator,
         right: Box<Expr>,
     },
-    /// LIKE
+    /// `[NOT] LIKE <pattern> [ESCAPE <escape_character>]`
     Like {
         negated: bool,
         expr: Box<Expr>,
         pattern: Box<Expr>,
         escape_char: Option<char>,
     },
-    /// ILIKE (case-insensitive LIKE)
+    /// `ILIKE` (case-insensitive `LIKE`)
     ILike {
         negated: bool,
         expr: Box<Expr>,
@@ -460,13 +460,13 @@ pub enum Expr {
         // true for REGEXP, false for RLIKE (no difference in semantics)
         regexp: bool,
     },
-    /// Any operation e.g. `foo > ANY(bar)`, comparison operator is one of [=, >, <, =>, =<, !=]
+    /// `ANY` operation e.g. `foo > ANY(bar)`, comparison operator is one of `[=, >, <, =>, =<, !=]`
     AnyOp {
         left: Box<Expr>,
         compare_op: BinaryOperator,
         right: Box<Expr>,
     },
-    /// ALL operation e.g. `foo > ALL(bar)`, comparison operator is one of [=, >, <, =>, =<, !=]
+    /// `ALL` operation e.g. `foo > ALL(bar)`, comparison operator is one of `[=, >, <, =>, =<, !=]`
     AllOp {
         left: Box<Expr>,
         compare_op: BinaryOperator,
@@ -474,7 +474,7 @@ pub enum Expr {
     },
     /// Unary operation e.g. `NOT foo`
     UnaryOp { op: UnaryOperator, expr: Box<Expr> },
-    /// CONVERT a value to a different data type or character encoding `CONVERT(foo USING utf8mb4)`
+    /// CONVERT a value to a different data type or character encoding. e.g. `CONVERT(foo USING utf8mb4)`
     Convert {
         /// The expression to convert
         expr: Box<Expr>,
@@ -485,7 +485,7 @@ pub enum Expr {
         /// whether the target comes before the expr (MSSQL syntax)
         target_before_value: bool,
     },
-    /// CAST an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
+    /// `CAST` an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
     Cast {
         expr: Box<Expr>,
         data_type: DataType,
@@ -493,7 +493,7 @@ pub enum Expr {
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
         format: Option<CastFormat>,
     },
-    /// TRY_CAST an expression to a different data type e.g. `TRY_CAST(foo AS VARCHAR(123))`
+    /// `TRY_CAST` an expression to a different data type e.g. `TRY_CAST(foo AS VARCHAR(123))`
     //  this differs from CAST in the choice of how to implement invalid conversions
     TryCast {
         expr: Box<Expr>,
@@ -502,7 +502,7 @@ pub enum Expr {
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#formatting_syntax
         format: Option<CastFormat>,
     },
-    /// SAFE_CAST an expression to a different data type e.g. `SAFE_CAST(foo AS FLOAT64)`
+    /// `SAFE_CAST` an expression to a different data type e.g. `SAFE_CAST(foo AS FLOAT64)`
     //  only available for BigQuery: https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-and-operators#safe_casting
     //  this works the same as `TRY_CAST`
     SafeCast {
@@ -517,6 +517,9 @@ pub enum Expr {
         timestamp: Box<Expr>,
         time_zone: String,
     },
+    /// Extract a field from a timestamp e.g. `EXTRACT(MONTH FROM foo)`
+    ///
+    /// Syntax:
     /// ```sql
     /// EXTRACT(DateTimeField FROM <expr>)
     /// ```
@@ -665,8 +668,6 @@ pub enum Expr {
     /// <col> = CompoundIdentifier
     /// <expr> = String literal
     /// ```
-    ///
-    ///
     /// [(1)]: https://dev.mysql.com/doc/refman/8.0/en/fulltext-search.html#function_match
     MatchAgainst {
         /// `(<col>, <col>, ...)`.
@@ -1375,6 +1376,9 @@ pub enum Password {
     visit(with = "visit_statement")
 )]
 pub enum Statement {
+    /// ```sql
+    /// ANALYZE
+    /// ```
     /// Analyze (Hive)
     Analyze {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
@@ -1386,6 +1390,9 @@ pub enum Statement {
         noscan: bool,
         compute_statistics: bool,
     },
+    /// ```sql
+    /// TRUNCATE
+    /// ```
     /// Truncate (Hive)
     Truncate {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
@@ -1394,6 +1401,9 @@ pub enum Statement {
         /// TABLE - optional keyword;
         table: bool,
     },
+    /// ```sql
+    /// MSCK
+    /// ```
     /// Msck (Hive)
     Msck {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
@@ -1401,9 +1411,13 @@ pub enum Statement {
         repair: bool,
         partition_action: Option<AddDropSync>,
     },
+    /// ```sql
     /// SELECT
+    /// ```
     Query(Box<Query>),
+    /// ```sql
     /// INSERT
+    /// ```
     Insert {
         /// Only for Sqlite
         or: Option<SqliteOnConflict>,
@@ -1438,7 +1452,13 @@ pub enum Statement {
         file_format: Option<FileFormat>,
         source: Box<Query>,
     },
+    /// ```sql
+    /// CALL <function>
+    /// ```
     Call(Function),
+    /// ```sql
+    /// COPY [TO | FROM] ...
+    /// ```
     Copy {
         /// The source of 'COPY TO', or the target of 'COPY FROM'
         source: CopySource,
@@ -1473,12 +1493,17 @@ pub enum Statement {
         copy_options: DataLoadingOptions,
         validation_mode: Option<String>,
     },
-    /// Close - closes the portal underlying an open cursor.
+    /// ```sql
+    /// CLOSE
+    /// ```
+    /// Closes the portal underlying an open cursor.
     Close {
         /// Cursor name
         cursor: CloseCursor,
     },
+    /// ```sql
     /// UPDATE
+    /// ```
     Update {
         /// TABLE
         table: TableWithJoins,
@@ -1491,7 +1516,9 @@ pub enum Statement {
         /// RETURNING
         returning: Option<Vec<SelectItem>>,
     },
+    /// ```sql
     /// DELETE
+    /// ```
     Delete {
         /// Multi tables delete are supported in mysql
         tables: Vec<ObjectName>,
@@ -1508,7 +1535,9 @@ pub enum Statement {
         /// LIMIT (MySQL)
         limit: Option<Expr>,
     },
+    /// ```sql
     /// CREATE VIEW
+    /// ```
     CreateView {
         or_replace: bool,
         materialized: bool,
@@ -1525,7 +1554,9 @@ pub enum Statement {
         /// if true, has SQLite `TEMP` or `TEMPORARY` clause <https://www.sqlite.org/lang_createview.html>
         temporary: bool,
     },
+    /// ```sql
     /// CREATE TABLE
+    /// ```
     CreateTable {
         or_replace: bool,
         temporary: bool,
@@ -1567,7 +1598,10 @@ pub enum Statement {
         /// then strict typing rules apply to that table.
         strict: bool,
     },
-    /// SQLite's `CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
+    /// ```sql
+    /// CREATE VIRTUAL TABLE .. USING <module_name> (<module_args>)`
+    /// ```
+    /// Sqlite specific statement
     CreateVirtualTable {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         name: ObjectName,
@@ -1575,7 +1609,9 @@ pub enum Statement {
         module_name: Ident,
         module_args: Vec<Ident>,
     },
-    /// CREATE INDEX
+    /// ```sql
+    /// `CREATE INDEX`
+    /// ```
     CreateIndex {
         /// index name
         name: Option<ObjectName>,
@@ -1590,7 +1626,9 @@ pub enum Statement {
         nulls_distinct: Option<bool>,
         predicate: Option<Expr>,
     },
+    /// ```sql
     /// CREATE ROLE
+    /// ```
     /// See [postgres](https://www.postgresql.org/docs/current/sql-createrole.html)
     CreateRole {
         names: Vec<ObjectName>,
@@ -1614,7 +1652,9 @@ pub enum Statement {
         // MSSQL
         authorization_owner: Option<ObjectName>,
     },
+    /// ```sql
     /// ALTER TABLE
+    /// ```
     AlterTable {
         /// Table name
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
@@ -1623,11 +1663,16 @@ pub enum Statement {
         only: bool,
         operations: Vec<AlterTableOperation>,
     },
+    /// ```sql
+    /// ALTER INDEX
+    /// ```
     AlterIndex {
         name: ObjectName,
         operation: AlterIndexOperation,
     },
+    /// ```sql
     /// ALTER VIEW
+    /// ```
     AlterView {
         /// View name
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
@@ -1636,12 +1681,16 @@ pub enum Statement {
         query: Box<Query>,
         with_options: Vec<SqlOption>,
     },
+    /// ```sql
     /// ALTER ROLE
+    /// ```
     AlterRole {
         name: Ident,
         operation: AlterRoleOperation,
     },
+    /// ```sql
     /// ATTACH DATABASE 'path/to/file' AS alias
+    /// ```
     /// (SQLite-specific)
     AttachDatabase {
         /// The name to bind to the newly attached database
@@ -1651,7 +1700,9 @@ pub enum Statement {
         /// true if the syntax is 'ATTACH DATABASE', false if it's just 'ATTACH'
         database: bool,
     },
-    /// DROP
+    /// ```sql
+    /// DROP [TABLE, VIEW, ...]
+    /// ```
     Drop {
         /// The type of the object to drop: TABLE, VIEW, etc.
         object_type: ObjectType,
@@ -1671,7 +1722,9 @@ pub enum Statement {
         /// MySQL-specific "TEMPORARY" keyword
         temporary: bool,
     },
-    /// DROP Function
+    /// ```sql
+    /// DROP FUNCTION
+    /// ```
     DropFunction {
         if_exists: bool,
         /// One or more function to drop
@@ -1679,7 +1732,10 @@ pub enum Statement {
         /// `CASCADE` or `RESTRICT`
         option: Option<ReferentialAction>,
     },
-    /// DECLARE - Declaring Cursor Variables
+    /// ```sql
+    /// DECLARE
+    /// ```
+    /// Declare Cursor Variables
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
@@ -1702,7 +1758,10 @@ pub enum Statement {
         hold: Option<bool>,
         query: Box<Query>,
     },
-    /// FETCH - retrieve rows from a query using a cursor
+    /// ```sql
+    /// FETCH
+    /// ```
+    /// Retrieve rows from a query using a cursor
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
@@ -1713,14 +1772,18 @@ pub enum Statement {
         /// Optional, It's possible to fetch rows form cursor to the table
         into: Option<ObjectName>,
     },
+    /// ```sql
     /// DISCARD [ ALL | PLANS | SEQUENCES | TEMPORARY | TEMP ]
+    /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement,
     /// but may also compatible with other SQL.
-    Discard {
-        object_type: DiscardObject,
-    },
-    /// SET `[ SESSION | LOCAL ]` ROLE role_name. Examples: [ANSI][1], [Postgresql][2], [MySQL][3], and [Oracle][4].
+    Discard { object_type: DiscardObject },
+    /// ```sql
+    /// SET [ SESSION | LOCAL ] ROLE role_name
+    /// ```
+    ///
+    /// Sets sesssion state. Examples: [ANSI][1], [Postgresql][2], [MySQL][3], and [Oracle][4]
     ///
     /// [1]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html#set-role-statement
     /// [2]: https://www.postgresql.org/docs/14/sql-set-role.html
@@ -1751,36 +1814,35 @@ pub enum Statement {
     ///
     /// Note: this is a PostgreSQL-specific statements
     /// `SET TIME ZONE <value>` is an alias for `SET timezone TO <value>` in PostgreSQL
-    SetTimeZone {
-        local: bool,
-        value: Expr,
-    },
+    SetTimeZone { local: bool, value: Expr },
+    /// ```sql
     /// SET NAMES 'charset_name' [COLLATE 'collation_name']
+    /// ```
     ///
     /// Note: this is a MySQL-specific statement.
     SetNames {
         charset_name: String,
         collation_name: Option<String>,
     },
+    /// ```sql
     /// SET NAMES DEFAULT
+    /// ```
     ///
     /// Note: this is a MySQL-specific statement.
     SetNamesDefault {},
-    /// SHOW FUNCTIONS
+    /// `SHOW FUNCTIONS`
     ///
     /// Note: this is a Presto-specific statement.
-    ShowFunctions {
-        filter: Option<ShowStatementFilter>,
-    },
+    ShowFunctions { filter: Option<ShowStatementFilter> },
     /// ```sql
     /// SHOW <variable>
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    ShowVariable {
-        variable: Vec<Ident>,
-    },
+    ShowVariable { variable: Vec<Ident> },
+    /// ```sql
     /// SHOW VARIABLES
+    /// ```
     ///
     /// Note: this is a MySQL-specific statement.
     ShowVariables {
@@ -1788,14 +1850,18 @@ pub enum Statement {
         global: bool,
         session: bool,
     },
+    /// ```sql
     /// SHOW CREATE TABLE
+    /// ```
     ///
     /// Note: this is a MySQL-specific statement.
     ShowCreate {
         obj_type: ShowCreateObject,
         obj_name: ObjectName,
     },
+    /// ```sql
     /// SHOW COLUMNS
+    /// ```
     ///
     /// Note: this is a MySQL-specific statement.
     ShowColumns {
@@ -1805,8 +1871,9 @@ pub enum Statement {
         table_name: ObjectName,
         filter: Option<ShowStatementFilter>,
     },
+    /// ```sql
     /// SHOW TABLES
-    ///
+    /// ```
     /// Note: this is a MySQL-specific statement.
     ShowTables {
         extended: bool,
@@ -1814,34 +1881,42 @@ pub enum Statement {
         db_name: Option<Ident>,
         filter: Option<ShowStatementFilter>,
     },
+    /// ```sql
     /// SHOW COLLATION
+    /// ```
     ///
     /// Note: this is a MySQL-specific statement.
-    ShowCollation {
-        filter: Option<ShowStatementFilter>,
-    },
+    ShowCollation { filter: Option<ShowStatementFilter> },
+    /// ```sql
     /// USE
+    /// ```
     ///
     /// Note: This is a MySQL-specific statement.
-    Use {
-        db_name: Ident,
-    },
-    /// `START  [ TRANSACTION | WORK ] | START TRANSACTION } ...`
+    Use { db_name: Ident },
+    /// ```sql
+    /// START  [ TRANSACTION | WORK ] | START TRANSACTION } ...
+    /// ```
     /// If `begin` is false.
     ///
+    /// ```sql
     /// `BEGIN  [ TRANSACTION | WORK ] | START TRANSACTION } ...`
+    /// ```
     /// If `begin` is true
     StartTransaction {
         modes: Vec<TransactionMode>,
         begin: bool,
     },
-    /// `SET TRANSACTION ...`
+    /// ```sql
+    /// SET TRANSACTION ...
+    /// ```
     SetTransaction {
         modes: Vec<TransactionMode>,
         snapshot: Option<Value>,
         session: bool,
     },
-    /// `COMMENT ON ...`
+    /// ```sql
+    /// COMMENT ON ...
+    /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
     Comment {
@@ -1852,22 +1927,28 @@ pub enum Statement {
         /// See <https://docs.snowflake.com/en/sql-reference/sql/comment>
         if_exists: bool,
     },
-    /// `COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]`
-    Commit {
-        chain: bool,
-    },
-    /// `ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ] [ TO [ SAVEPOINT ] savepoint_name ]`
+    /// ```sql
+    /// COMMIT [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ]
+    /// ```
+    Commit { chain: bool },
+    /// ```sql
+    /// ROLLBACK [ TRANSACTION | WORK ] [ AND [ NO ] CHAIN ] [ TO [ SAVEPOINT ] savepoint_name ]
+    /// ```
     Rollback {
         chain: bool,
         savepoint: Option<Ident>,
     },
+    /// ```sql
     /// CREATE SCHEMA
+    /// ```
     CreateSchema {
         /// `<schema name> | AUTHORIZATION <schema authorization identifier>  | <schema name>  AUTHORIZATION <schema authorization identifier>`
         schema_name: SchemaName,
         if_not_exists: bool,
     },
+    /// ```sql
     /// CREATE DATABASE
+    /// ```
     CreateDatabase {
         db_name: ObjectName,
         if_not_exists: bool,
@@ -1927,12 +2008,16 @@ pub enum Statement {
         copy_options: DataLoadingOptions,
         comment: Option<String>,
     },
-    /// `ASSERT <condition> [AS <message>]`
+    /// ```sql
+    /// ASSERT <condition> [AS <message>]
+    /// ```
     Assert {
         condition: Expr,
         message: Option<Expr>,
     },
+    /// ```sql
     /// GRANT privileges ON objects TO grantees
+    /// ```
     Grant {
         privileges: Privileges,
         objects: GrantObjects,
@@ -1940,7 +2025,9 @@ pub enum Statement {
         with_grant_option: bool,
         granted_by: Option<Ident>,
     },
+    /// ```sql
     /// REVOKE privileges ON objects FROM grantees
+    /// ```
     Revoke {
         privileges: Privileges,
         objects: GrantObjects,
@@ -1948,21 +2035,21 @@ pub enum Statement {
         granted_by: Option<Ident>,
         cascade: bool,
     },
-    /// `DEALLOCATE [ PREPARE ] { name | ALL }`
+    /// ```sql
+    /// DEALLOCATE [ PREPARE ] { name | ALL }
+    /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Deallocate {
-        name: Ident,
-        prepare: bool,
-    },
-    /// `EXECUTE name [ ( parameter [, ...] ) ]`
+    Deallocate { name: Ident, prepare: bool },
+    /// ```sql
+    /// EXECUTE name [ ( parameter [, ...] ) ]
+    /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Execute {
-        name: Ident,
-        parameters: Vec<Expr>,
-    },
-    /// `PREPARE name [ ( data_type [, ...] ) ] AS statement`
+    Execute { name: Ident, parameters: Vec<Expr> },
+    /// ```sql
+    /// PREPARE name [ ( data_type [, ...] ) ] AS statement
+    /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
     Prepare {
@@ -1970,7 +2057,9 @@ pub enum Statement {
         data_types: Vec<DataType>,
         statement: Box<Statement>,
     },
+    /// ```sql
     /// KILL [CONNECTION | QUERY | MUTATION]
+    /// ```
     ///
     /// See <https://clickhouse.com/docs/ru/sql-reference/statements/kill/>
     /// See <https://dev.mysql.com/doc/refman/8.0/en/kill.html>
@@ -1979,7 +2068,9 @@ pub enum Statement {
         // processlist_id
         id: u64,
     },
+    /// ```sql
     /// EXPLAIN TABLE
+    /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/explain.html>
     ExplainTable {
         /// If true, query used the MySQL `DESCRIBE` alias for explain
@@ -1988,7 +2079,9 @@ pub enum Statement {
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
     },
-    /// EXPLAIN / DESCRIBE for select_statement
+    /// ```sql
+    /// [EXPLAIN | DESCRIBE <select statement>
+    /// ```
     Explain {
         // If true, query used the MySQL `DESCRIBE` alias for explain
         describe_alias: bool,
@@ -2001,15 +2094,19 @@ pub enum Statement {
         /// Optional output format of explain
         format: Option<AnalyzeFormat>,
     },
-    /// SAVEPOINT -- define a new savepoint within the current transaction
-    Savepoint {
-        name: Ident,
-    },
-    /// RELEASE \[ SAVEPOINT \] savepoint_name
-    ReleaseSavepoint {
-        name: Ident,
-    },
-    // MERGE INTO statement, based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
+    /// ```sql
+    /// SAVEPOINT
+    /// ```
+    /// Define a new savepoint within the current transaction
+    Savepoint { name: Ident },
+    /// ```sql
+    /// RELEASE [ SAVEPOINT ] savepoint_name
+    /// ```
+    ReleaseSavepoint { name: Ident },
+    /// ```sql
+    /// MERGE INTO <statement>
+    /// ```
+    /// Based on Snowflake. See <https://docs.snowflake.com/en/sql-reference/sql/merge.html>
     Merge {
         // optional INTO keyword
         into: bool,
@@ -2022,7 +2119,9 @@ pub enum Statement {
         // Specifies the actions to perform when values match or do not match.
         clauses: Vec<MergeClause>,
     },
-    /// `CACHE [ FLAG ] TABLE <table_name> [ OPTIONS('K1' = 'V1', 'K2' = V2) ] [ AS ] [ <query> ]`.
+    /// ```sql
+    /// CACHE [ FLAG ] TABLE <table_name> [ OPTIONS('K1' = 'V1', 'K2' = V2) ] [ AS ] [ <query> ]
+    /// ```
     ///
     /// See [Spark SQL docs] for more details.
     ///
@@ -2040,16 +2139,19 @@ pub enum Statement {
         /// Cache table as a Query
         query: Option<Query>,
     },
+    /// ```sql
     /// UNCACHE TABLE [ IF EXISTS ]  <table_name>
+    /// ```
     UNCache {
         /// Table name
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
         if_exists: bool,
     },
-    /// Define a new sequence:
-    ///
+    /// ```sql
     /// CREATE [ { TEMPORARY | TEMP } ] SEQUENCE [ IF NOT EXISTS ] <sequence_name>
+    /// ```
+    /// Define a new sequence:
     CreateSequence {
         temporary: bool,
         if_not_exists: bool,
@@ -2058,24 +2160,29 @@ pub enum Statement {
         sequence_options: Vec<SequenceOptions>,
         owned_by: Option<ObjectName>,
     },
-    /// CREATE TYPE `<name>`
+    /// ```sql
+    /// CREATE TYPE <name>
+    /// ```
     CreateType {
         name: ObjectName,
         representation: UserDefinedTypeRepresentation,
     },
-    // PRAGMA <schema-name>.<pragma-name> = <pragma-value>
+    /// ```sql
+    /// PRAGMA <schema-name>.<pragma-name> = <pragma-value>
+    /// ```
     Pragma {
         name: ObjectName,
         value: Option<Value>,
         is_eq: bool,
     },
-    /// `LOCK TABLES <table_name> [READ [LOCAL] | [LOW_PRIORITY] WRITE]`
-    ///
+    /// ```sql
+    /// LOCK TABLES <table_name> [READ [LOCAL] | [LOW_PRIORITY] WRITE]
+    /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
-    LockTables {
-        tables: Vec<LockTable>,
-    },
-    /// `UNLOCK TABLES`
+    LockTables { tables: Vec<LockTable> },
+    /// ```sql
+    /// UNLOCK TABLES
+    /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
     UnlockTables,
 }

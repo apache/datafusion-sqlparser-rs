@@ -1205,7 +1205,7 @@ fn parse_array_index_json_dot() {
             Expr::JsonAccess {
                 left: Box::new(MapAccess {
                     column: Box::new(Expr::Identifier(Ident::new("src").empty_span())),
-                    keys: vec![Expr::Value(Value::Number("0".to_string(), false)),],
+                    keys: vec![Expr::Value(number("0")),],
                 }),
                 operator: JsonOperator::Period,
                 right: Box::new(Expr::Value(Value::UnQuotedString(

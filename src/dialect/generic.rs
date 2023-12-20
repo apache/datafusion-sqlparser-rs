@@ -38,4 +38,8 @@ impl Dialect for GenericDialect {
     fn supports_group_by_expr(&self) -> bool {
         true
     }
+
+    fn supports_start_transaction_modifier(&self) -> bool {
+        true
+    }
 }

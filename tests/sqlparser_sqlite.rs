@@ -22,7 +22,7 @@ use test_utils::*;
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SQLiteDialect};
-use sqlparser::parser::ParserOptions;
+use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::tokenizer::Token;
 
 #[test]
@@ -432,6 +432,40 @@ fn invalid_empty_list() {
     assert_eq!(
         "sql parser error: Expected an expression:, found: ,",
         sqlite.parse_sql_statements(sql).unwrap_err().to_string()
+    );
+}
+
+#[test]
+fn parse_start_transaction_with_modifier() {
+    sqlite_and_generic().verified_stmt("BEGIN DEFERRED TRANSACTION");
+    sqlite_and_generic().verified_stmt("BEGIN IMMEDIATE TRANSACTION");
+    sqlite_and_generic().verified_stmt("BEGIN EXCLUSIVE TRANSACTION");
+    sqlite_and_generic().one_statement_parses_to("BEGIN DEFERRED", "BEGIN DEFERRED TRANSACTION");
+    sqlite_and_generic().one_statement_parses_to("BEGIN IMMEDIATE", "BEGIN IMMEDIATE TRANSACTION");
+    sqlite_and_generic().one_statement_parses_to("BEGIN EXCLUSIVE", "BEGIN EXCLUSIVE TRANSACTION");
+
+    let unsupported_dialects = TestedDialects {
+        dialects: all_dialects()
+            .dialects
+            .into_iter()
+            .filter(|x| !(x.is::<SQLiteDialect>() || x.is::<GenericDialect>()))
+            .collect(),
+        options: None,
+    };
+    let res = unsupported_dialects.parse_sql_statements("BEGIN DEFERRED");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: DEFERRED".to_string()),
+        res.unwrap_err(),
+    );
+    let res = unsupported_dialects.parse_sql_statements("BEGIN IMMEDIATE");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: IMMEDIATE".to_string()),
+        res.unwrap_err(),
+    );
+    let res = unsupported_dialects.parse_sql_statements("BEGIN EXCLUSIVE");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: EXCLUSIVE".to_string()),
+        res.unwrap_err(),
     );
 }
 

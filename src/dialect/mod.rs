@@ -137,6 +137,10 @@ pub trait Dialect: Debug + Any {
     fn supports_in_empty_list(&self) -> bool {
         false
     }
+    /// Returns true if the dialect supports `BEGIN {DEFERRED | IMMEDIATE | EXCLUSIVE} [TRANSACTION]` statements
+    fn supports_start_transaction_modifier(&self) -> bool {
+        false
+    }
     /// Returns true if the dialect has a CONVERT function which accepts a type first
     /// and an expression second, e.g. `CONVERT(varchar, 1)`
     fn convert_type_before_value(&self) -> bool {

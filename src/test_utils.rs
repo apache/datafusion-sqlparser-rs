@@ -212,50 +212,6 @@ pub fn all_dialects() -> TestedDialects {
     }
 }
 
-static ALL_DIALECT_NAMES: &[&str] = &[
-    "generic",
-    "mysql",
-    "postgresql",
-    "hive",
-    "sqlite",
-    "snowflake",
-    "redshift",
-    "mssql",
-    "clickhouse",
-    "bigquery",
-    "ansi",
-    "duckdb",
-];
-
-pub fn partition_all_dialects_by_inclusion(
-    dialect_names: Vec<&str>,
-) -> (TestedDialects, TestedDialects) {
-    for dialect_name in &dialect_names {
-        assert!(
-            ALL_DIALECT_NAMES.contains(dialect_name),
-            "Unknown dialect: {}",
-            dialect_name
-        );
-    }
-
-    let (included_dialect_names, excluded_dialect_names) = ALL_DIALECT_NAMES
-        .iter()
-        .partition(|&dialect_name| dialect_names.contains(dialect_name));
-
-    let build_tested_dialects = |names: Vec<&str>| TestedDialects {
-        dialects: names
-            .iter()
-            .map(|&name| dialect_from_str(name).unwrap())
-            .collect(),
-        options: None,
-    };
-
-    (
-        build_tested_dialects(included_dialect_names),
-        build_tested_dialects(excluded_dialect_names),
-    )
-}
-
 pub fn assert_eq_vec<T: ToString>(expected: &[&str], actual: &[T]) {
     assert_eq!(
         expected,

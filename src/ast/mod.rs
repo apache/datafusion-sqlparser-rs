@@ -4299,9 +4299,9 @@ impl fmt::Display for TransactionIsolationLevel {
     }
 }
 
-/// Sqlite specific syntax
+/// SQLite specific syntax
 ///
-/// https://sqlite.org/lang_transaction.html
+/// <https://sqlite.org/lang_transaction.html>
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]

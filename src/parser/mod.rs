@@ -4955,7 +4955,7 @@ impl<'a> Parser<'a> {
                 loop {
                     let key = self.parse_literal_string()?;
                     self.expect_token(&Token::Colon)?;
-                    let value = self.parse_value()?;
+                    let value = Box::new(self.parse_expr()?);
                     fields.push(ObjectConstantKeyValue { key, value });
                     if !self.consume_token(&Token::Comma) {
                         break;

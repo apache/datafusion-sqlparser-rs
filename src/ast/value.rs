@@ -20,6 +20,7 @@ use bigdecimal::BigDecimal;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::ast::Expr;
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -28,7 +29,7 @@ use sqlparser_derive::{Visit, VisitMut};
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct ObjectConstantKeyValue {
     pub key: String,
-    pub value: Value,
+    pub value: Box<Expr>,
 }
 
 /// Primitive SQL values such as number and string

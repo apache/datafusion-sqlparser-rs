@@ -1196,6 +1196,11 @@ fn parse_object_constants() {
 }
 
 #[test]
+fn parse_object_constants_expr() {
+    snowflake().verified_stmt("SELECT { 'foo': bar.baz } AS r FROM tbl AS bar");
+}
+
+#[test]
 fn parse_array_index_json_dot() {
     let stmt = snowflake().verified_only_select("SELECT src[0].order_number FROM car_sales");
 

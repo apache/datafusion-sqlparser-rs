@@ -5577,6 +5577,17 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Snowflake allow specifying comment, for now ignore it to allow parsing rest of the SQL
+    pub fn parse_column_identifier_with_optional_comment(
+        &mut self,
+    ) -> Result<WithSpan<Ident>, ParserError> {
+        let ident = self.parse_identifier()?;
+        if self.parse_keyword(Keyword::COMMENT) {
+            self.parse_literal_string()?;
+        }
+        Ok(ident)
+    }
+
     /// Parse a parenthesized comma-separated list of unqualified, possibly quoted identifiers
     pub fn parse_parenthesized_column_list(
         &mut self,
@@ -5588,7 +5599,8 @@ impl<'a> Parser<'a> {
                 self.next_token();
                 Ok(vec![])
             } else {
-                let cols = self.parse_comma_separated(|p| p.parse_identifier())?;
+                let cols = self
+                    .parse_comma_separated(|p| p.parse_column_identifier_with_optional_comment())?;
                 self.expect_token(&Token::RParen)?;
                 Ok(cols)
             }

@@ -1247,6 +1247,13 @@ fn parse_create_view_comment() {
 }
 
 #[test]
+fn parse_create_view_column_comment() {
+    snowflake()
+        .one_statement_parses_to(r#"CREATE OR REPLACE VIEW DB.SCHEMA.STORAGE_USAGE_HISTORY (DATE COMMENT 'Date of this storage usage record.', AVERAGE_STAGE_BYTES COMMENT 'Number of bytes of stage storage used.') COMMENT='See https://docs.snowflake.com/en/sql-reference/account-usage/stage_storage_usage_history.html' AS (SELECT usage_date AS date, average_stage_bytes FROM snowflake.account_usage.stage_storage_usage_history)"#,
+     r#"CREATE OR REPLACE VIEW DB.SCHEMA.STORAGE_USAGE_HISTORY (DATE, AVERAGE_STAGE_BYTES) COMMENT='See https://docs.snowflake.com/en/sql-reference/account-usage/stage_storage_usage_history.html' AS (SELECT usage_date AS date, average_stage_bytes FROM snowflake.account_usage.stage_storage_usage_history)"#);
+}
+
+#[test]
 fn parse_create_table_cluster_by() {
     snowflake().verified_stmt(
         "CREATE OR REPLACE TABLE t3 (vc VARCHAR) CLUSTER BY (SUBSTRING(vc FROM 5 FOR 5))",

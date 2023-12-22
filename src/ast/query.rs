@@ -1278,9 +1278,21 @@ impl fmt::Display for Distinct {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Top {
     /// SQL semantic equivalent of LIMIT but with same structure as FETCH.
+    /// MSSQL only.
     pub with_ties: bool,
+    /// MSSQL only.
     pub percent: bool,
-    pub quantity: Option<Expr>,
+    pub quantity: Option<TopQuantity>,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TopQuantity {
+    // A parenthesized expression. MSSQL only.
+    Expr(Expr),
+    // An unparenthesized integer constant.
+    Constant(u64),
 }
 
 impl fmt::Display for Top {
@@ -1288,7 +1300,12 @@ impl fmt::Display for Top {
         let extension = if self.with_ties { " WITH TIES" } else { "" };
         if let Some(ref quantity) = self.quantity {
             let percent = if self.percent { " PERCENT" } else { "" };
-            write!(f, "TOP ({quantity}){percent}{extension}")
+            match quantity {
+                TopQuantity::Expr(quantity) => write!(f, "TOP ({quantity}){percent}{extension}"),
+                TopQuantity::Constant(quantity) => {
+                    write!(f, "TOP {quantity}{percent}{extension}")
+                }
+            }
         } else {
             write!(f, "TOP{extension}")
         }

@@ -2424,7 +2424,7 @@ impl fmt::Display for Statement {
                         tbl = if *table { " TABLE" } else { "" },
                         start = if *replace_into { "REPLACE" } else { "INSERT" },
                         prior = if let Some(priority) = priority {
-                            " ".to_owned() + &priority.to_string()
+                            " ".to_string() + &priority.to_string()
                         } else {
                             "".to_string()
                         },

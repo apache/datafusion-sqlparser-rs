@@ -7402,7 +7402,7 @@ impl<'a> Parser<'a> {
             *replace_into = true;
         }
 
-        Ok(insert.to_owned())
+        Ok(insert.clone())
     }
 
     /// Parse an INSERT statement

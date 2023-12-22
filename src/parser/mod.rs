@@ -7382,8 +7382,8 @@ impl<'a> Parser<'a> {
 
     /// Parse an REPLACE statement
     pub fn parse_replace(&mut self) -> Result<Statement, ParserError> {
-        if !dialect_of!(self is MySqlDialect) {
-            return parser_err!("unmatched dialect", self.peek_token().location);
+        if !dialect_of!(self is MySqlDialect | GenericDialect) {
+            return parser_err!("Unsupported statement REPLACE", self.peek_token().location);
         }
 
         let insert = &mut self.parse_insert().unwrap();
@@ -7395,7 +7395,7 @@ impl<'a> Parser<'a> {
         {
             if *priority == Some(MysqlInsertPriority::HighPriority) {
                 return parser_err!(
-                    "unmatched priority type for replace statement",
+                    "Unmatched priority type for replace statement",
                     self.peek_token().location
                 );
             }
@@ -7425,7 +7425,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let priority = if !dialect_of!(self is MySqlDialect) {
+        let priority = if !dialect_of!(self is MySqlDialect | GenericDialect) {
             None
         } else if self.parse_keyword(Keyword::LOW_PRIORITY) {
             Some(MysqlInsertPriority::LowPriority)

@@ -16,7 +16,7 @@
 
 use matches::assert_matches;
 use sqlparser::ast::Expr;
-use sqlparser::ast::MysqlInsertPriority::{Delayed, HighPriority};
+use sqlparser::ast::MysqlInsertPriority::{Delayed, HighPriority, LowPriority};
 use sqlparser::ast::Value;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, MySqlDialect};
@@ -1040,7 +1040,7 @@ fn parse_ignore_insert() {
 fn parse_priority_insert() {
     let sql = r"INSERT HIGH_PRIORITY INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
 
-    match mysql().verified_stmt(sql) {
+    match mysql_and_generic().verified_stmt(sql) {
         Statement::Insert {
             table_name,
             columns,
@@ -1076,12 +1076,50 @@ fn parse_priority_insert() {
         }
         _ => unreachable!(),
     }
+
+    let sql2 = r"INSERT LOW_PRIORITY INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
+
+    match mysql().verified_stmt(sql2) {
+        Statement::Insert {
+            table_name,
+            columns,
+            source,
+            on,
+            priority,
+            ..
+        } => {
+            assert_eq!(ObjectName(vec![Ident::new("tasks")]), table_name);
+            assert_eq!(vec![Ident::new("title"), Ident::new("priority")], columns);
+            assert!(on.is_none());
+            assert_eq!(priority, Some(LowPriority));
+            assert_eq!(
+                Some(Box::new(Query {
+                    with: None,
+                    body: Box::new(SetExpr::Values(Values {
+                        explicit_row: false,
+                        rows: vec![vec![
+                            Expr::Value(Value::SingleQuotedString("Test Some Inserts".to_string())),
+                            Expr::Value(number("1"))
+                        ]]
+                    })),
+                    order_by: vec![],
+                    limit: None,
+                    limit_by: vec![],
+                    offset: None,
+                    fetch: None,
+                    locks: vec![],
+                    for_clause: None,
+                })),
+                source
+            );
+        }
+        _ => unreachable!(),
+    }
 }
 
 #[test]
 fn parse_replace_insert() {
     let sql = r"REPLACE DELAYED INTO tasks (title, priority) VALUES ('Test Some Inserts', 1)";
-
     match mysql().verified_stmt(sql) {
         Statement::Insert {
             table_name,

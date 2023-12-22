@@ -7843,9 +7843,14 @@ impl<'a> Parser<'a> {
         let quantity = if self.consume_token(&Token::LParen) {
             let quantity = self.parse_expr()?;
             self.expect_token(&Token::RParen)?;
-            Some(quantity)
+            Some(TopQuantity::Expr(quantity))
         } else {
-            Some(Expr::Value(self.parse_number_value()?))
+            let next_token = self.next_token();
+            let quantity = match next_token.token {
+                Token::Number(s, _) => s.parse::<u64>().expect("literal int"),
+                _ => self.expected("literal int", next_token)?,
+            };
+            Some(TopQuantity::Constant(quantity))
         };
 
         let percent = self.parse_keyword(Keyword::PERCENT);

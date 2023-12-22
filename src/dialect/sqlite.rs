@@ -40,6 +40,10 @@ impl Dialect for SQLiteDialect {
         true
     }
 
+    fn supports_start_transaction_modifier(&self) -> bool {
+        true
+    }
+
     fn is_identifier_part(&self, ch: char) -> bool {
         self.is_identifier_start(ch) || ch.is_ascii_digit()
     }

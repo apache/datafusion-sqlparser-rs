@@ -9,6 +9,24 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
 
+## [0.41.0] 2023-12-22
+
+### Added
+* Support `DEFERRED`, `IMMEDIATE`, and `EXCLUSIVE` in SQLite's `BEGIN TRANSACTION` command (#1067) - Thanks @takaebato
+* Support generated columns skipping `GENERATED ALWAYS` keywords (#1058) - Thanks @takluyver
+* Support `LOCK/UNLOCK TABLES` for MySQL (#1059) - Thanks @zzzdong
+* Support `JSON_TABLE` (#1062) - Thanks @lovasoa
+* Support `CALL` statements (#1063) - Thanks @lovasoa
+
+### Fixed
+* fix rendering of SELECT TOP (#1070) for Snowflake - Thanks jmhain
+
+### Changed
+* Improve documentation formatting (#1068) - Thanks @alamb
+* Replace type_id() by trait method to allow wrapping dialects (#1065) - Thanks @jjbayer
+* Document that comments aren't preserved for round trip (#1060) - Thanks @takluyver
+* Update sqlparser-derive to use `syn 2.0` (#1040) - Thanks @serprex
+
 ## [0.40.0] 2023-11-27
 
 ### Added

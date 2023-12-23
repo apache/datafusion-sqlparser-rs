@@ -7387,18 +7387,7 @@ impl<'a> Parser<'a> {
         }
 
         let insert = &mut self.parse_insert().unwrap();
-        if let Statement::Insert {
-            replace_into,
-            priority,
-            ..
-        } = insert
-        {
-            if *priority == Some(MysqlInsertPriority::HighPriority) {
-                return parser_err!(
-                    "Unmatched priority type for replace statement",
-                    self.peek_token().location
-                );
-            }
+        if let Statement::Insert { replace_into, .. } = insert {
             *replace_into = true;
         }
 

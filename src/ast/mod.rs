@@ -2416,18 +2416,21 @@ impl fmt::Display for Statement {
                 } else {
                     write!(
                         f,
-                        "{start}{prior}{ignore}{over}{int}{tbl} {table_name} ",
+                        "{start}",
+                        start = if *replace_into { "REPLACE" } else { "INSERT" },
+                    )?;
+                    if let Some(priority) = priority {
+                        write!(f, " {priority}",)?;
+                    }
+
+                    write!(
+                        f,
+                        "{ignore}{over}{int}{tbl} {table_name} ",
                         table_name = table_name,
                         ignore = if *ignore { " IGNORE" } else { "" },
                         over = if *overwrite { " OVERWRITE" } else { "" },
                         int = if *into { " INTO" } else { "" },
                         tbl = if *table { " TABLE" } else { "" },
-                        start = if *replace_into { "REPLACE" } else { "INSERT" },
-                        prior = if let Some(priority) = priority {
-                            " ".to_string() + &priority.to_string()
-                        } else {
-                            "".to_string()
-                        },
                     )?;
                 }
                 if !columns.is_empty() {

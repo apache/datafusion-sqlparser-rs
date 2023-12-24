@@ -4226,19 +4226,19 @@ impl<'a> Parser<'a> {
     fn sqlite_untyped_col_helper(&mut self) -> bool {
         if dialect_of!(self is SQLiteDialect) {
             match self.peek_token().token {
-                Token::Word(word) => match word.keyword {
+                Token::Word(word) => matches!(
+                    word.keyword,
                     Keyword::CONSTRAINT
-                    | Keyword::PRIMARY
-                    | Keyword::NOT
-                    | Keyword::UNIQUE
-                    | Keyword::CHECK
-                    | Keyword::DEFAULT
-                    | Keyword::COLLATE
-                    | Keyword::REFERENCES
-                    | Keyword::GENERATED
-                    | Keyword::AS => true,
-                    _ => false,
-                },
+                        | Keyword::PRIMARY
+                        | Keyword::NOT
+                        | Keyword::UNIQUE
+                        | Keyword::CHECK
+                        | Keyword::DEFAULT
+                        | Keyword::COLLATE
+                        | Keyword::REFERENCES
+                        | Keyword::GENERATED
+                        | Keyword::AS
+                ),
                 _ => true, // e.g. comma immediately after column name
             }
         } else {

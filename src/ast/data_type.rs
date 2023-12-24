@@ -219,6 +219,8 @@ pub enum DataType {
     /// [hive]: https://docs.cloudera.com/cdw-runtime/cloud/impala-sql-reference/topics/impala-struct.html
     /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
     Struct(Vec<StructField>),
+    /// Specific to SQLite: no type specified (no coercion)
+    Unspecified,
 }
 
 impl fmt::Display for DataType {
@@ -379,6 +381,7 @@ impl fmt::Display for DataType {
                     write!(f, "STRUCT")
                 }
             }
+            DataType::Unspecified => Ok(()),
         }
     }
 }

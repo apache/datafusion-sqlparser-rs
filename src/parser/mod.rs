@@ -4183,7 +4183,11 @@ impl<'a> Parser<'a> {
 
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
         let name = self.parse_identifier()?;
-        let data_type = self.parse_data_type()?;
+        let data_type = if self.sqlite_untyped_col_helper() {
+            DataType::Unspecified
+        } else {
+            self.parse_data_type()?
+        };
         let mut collation = if self.parse_keyword(Keyword::COLLATE) {
             Some(self.parse_object_name()?)
         } else {
@@ -4217,6 +4221,29 @@ impl<'a> Parser<'a> {
             collation,
             options,
         })
+    }
+
+    fn sqlite_untyped_col_helper(&mut self) -> bool {
+        if dialect_of!(self is SQLiteDialect) {
+            match self.peek_token().token {
+                Token::Word(word) => match word.keyword {
+                    Keyword::CONSTRAINT
+                    | Keyword::PRIMARY
+                    | Keyword::NOT
+                    | Keyword::UNIQUE
+                    | Keyword::CHECK
+                    | Keyword::DEFAULT
+                    | Keyword::COLLATE
+                    | Keyword::REFERENCES
+                    | Keyword::GENERATED
+                    | Keyword::AS => true,
+                    _ => false,
+                },
+                _ => true, // e.g. comma immediately after column name
+            }
+        } else {
+            false
+        }
     }
 
     pub fn parse_optional_column_option(&mut self) -> Result<Option<ColumnOption>, ParserError> {

@@ -222,6 +222,11 @@ fn parse_create_table_gencol() {
 }
 
 #[test]
+fn parse_create_table_untyped() {
+    sqlite().verified_stmt("CREATE TABLE t1 (a, b AS (a * 2), c NOT NULL)");
+}
+
+#[test]
 fn test_placeholder() {
     // In postgres, this would be the absolute value operator '@' applied to the column 'xxx'
     // But in sqlite, this is a named parameter.

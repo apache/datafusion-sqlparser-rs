@@ -108,6 +108,17 @@ fn parse_insert_values() {
 }
 
 #[test]
+fn parse_replace_into() {
+    let dialect = PostgreSqlDialect {};
+    let sql = "REPLACE INTO public.customer (id, name, active) VALUES (1, 2, 3)";
+
+    assert_eq!(
+        ParserError::ParserError("Unsupported statement REPLACE at Line: 1, Column 9".to_string()),
+        Parser::parse_sql(&dialect, sql,).unwrap_err(),
+    )
+}
+
+#[test]
 fn parse_insert_default_values() {
     let insert_with_default_values = verified_stmt("INSERT INTO test_table DEFAULT VALUES");
 

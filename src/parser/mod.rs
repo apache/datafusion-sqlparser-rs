@@ -597,9 +597,6 @@ impl<'a> Parser<'a> {
                         }
                         _ => {}
                     },
-                    Token::EOF => {
-                        break;
-                    }
                     _ => {
                         break;
                     }

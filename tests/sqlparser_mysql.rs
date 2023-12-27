@@ -48,6 +48,176 @@ fn parse_literal_string() {
 }
 
 #[test]
+fn parse_flush() {
+    assert_eq!(
+        mysql_and_generic().verified_stmt("FLUSH OPTIMIZER_COSTS"),
+        Statement::Flush {
+            location: None,
+            object_type: FlushType::OptimizerCosts,
+            channel: None,
+            read_lock: false,
+            export: false,
+            tables: vec![]
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("FLUSH BINARY LOGS"),
+        Statement::Flush {
+            location: None,
+            object_type: FlushType::BinaryLogs,
+            channel: None,
+            read_lock: false,
+            export: false,
+            tables: vec![]
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("FLUSH ENGINE LOGS"),
+        Statement::Flush {
+            location: None,
+            object_type: FlushType::EngineLogs,
+            channel: None,
+            read_lock: false,
+            export: false,
+            tables: vec![]
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("FLUSH ERROR LOGS"),
+        Statement::Flush {
+            location: None,
+            object_type: FlushType::ErrorLogs,
+            channel: None,
+            read_lock: false,
+            export: false,
+            tables: vec![]
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("FLUSH NO_WRITE_TO_BINLOG GENERAL LOGS"),
+        Statement::Flush {
+            location: Some(FlushLocation::NoWriteToBinlog),
+            object_type: FlushType::GeneralLogs,
+            channel: None,
+            read_lock: false,
+            export: false,
+            tables: vec![]
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("FLUSH RELAY LOGS FOR CHANNEL test"),
+        Statement::Flush {
+            location: None,
+            object_type: FlushType::RelayLogs,
+            channel: Some("test".to_string()),
+            read_lock: false,
+            export: false,
+            tables: vec![]
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("FLUSH LOCAL SLOW LOGS"),
+        Statement::Flush {
+            location: Some(FlushLocation::Local),
+            object_type: FlushType::SlowLogs,
+            channel: None,
+            read_lock: false,
+            export: false,
+            tables: vec![]
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("FLUSH TABLES `mek`.`table1`, table2"),
+        Statement::Flush {
+            location: None,
+            object_type: FlushType::Tables,
+            channel: None,
+            read_lock: false,
+            export: false,
+            tables: vec![
+                ObjectName(vec![
+                    Ident {
+                        value: "mek".to_string(),
+                        quote_style: Some('`')
+                    },
+                    Ident {
+                        value: "table1".to_string(),
+                        quote_style: Some('`')
+                    }
+                ]),
+                ObjectName(vec![Ident {
+                    value: "table2".to_string(),
+                    quote_style: None
+                }])
+            ]
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("FLUSH TABLES WITH READ LOCK"),
+        Statement::Flush {
+            location: None,
+            object_type: FlushType::Tables,
+            channel: None,
+            read_lock: true,
+            export: false,
+            tables: vec![]
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("FLUSH TABLES `mek`.`table1`, table2 WITH READ LOCK"),
+        Statement::Flush {
+            location: None,
+            object_type: FlushType::Tables,
+            channel: None,
+            read_lock: true,
+            export: false,
+            tables: vec![
+                ObjectName(vec![
+                    Ident {
+                        value: "mek".to_string(),
+                        quote_style: Some('`')
+                    },
+                    Ident {
+                        value: "table1".to_string(),
+                        quote_style: Some('`')
+                    }
+                ]),
+                ObjectName(vec![Ident {
+                    value: "table2".to_string(),
+                    quote_style: None
+                }])
+            ]
+        }
+    );
+    assert_eq!(
+        mysql_and_generic().verified_stmt("FLUSH TABLES `mek`.`table1`, table2 FOR EXPORT"),
+        Statement::Flush {
+            location: None,
+            object_type: FlushType::Tables,
+            channel: None,
+            read_lock: false,
+            export: true,
+            tables: vec![
+                ObjectName(vec![
+                    Ident {
+                        value: "mek".to_string(),
+                        quote_style: Some('`')
+                    },
+                    Ident {
+                        value: "table1".to_string(),
+                        quote_style: Some('`')
+                    }
+                ]),
+                ObjectName(vec![Ident {
+                    value: "table2".to_string(),
+                    quote_style: None
+                }])
+            ]
+        }
+    );
+}
+
+#[test]
 fn parse_show_columns() {
     let table_name = ObjectName(vec![Ident::new("mytable")]);
     assert_eq!(

@@ -1777,6 +1777,20 @@ pub enum Statement {
         into: Option<ObjectName>,
     },
     /// ```sql
+    /// FLUSH [NO_WRITE_TO_BINLOG | LOCAL] flush_option [, flush_option] ... | tables_option
+    /// ```
+    ///
+    /// Note: this is a Mysql-specific statement,
+    /// but may also compatible with other SQL.
+    Flush {
+        object_type: FlushType,
+        location: Option<FlushLocation>,
+        channel: Option<String>,
+        read_lock: bool,
+        export: bool,
+        tables: Vec<ObjectName>,
+    },
+    /// ```sql
     /// DISCARD [ ALL | PLANS | SEQUENCES | TEMPORARY | TEMP ]
     /// ```
     ///
@@ -2199,6 +2213,36 @@ impl fmt::Display for Statement {
     #[allow(clippy::cognitive_complexity)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Statement::Flush {
+                object_type,
+                location,
+                channel,
+                read_lock,
+                export,
+                tables,
+            } => {
+                write!(f, "FLUSH")?;
+                if let Some(location) = location {
+                    write!(f, " {location}")?;
+                }
+                write!(f, " {object_type}")?;
+
+                if let Some(channel) = channel {
+                    write!(f, " FOR CHANNEL {channel}")?;
+                }
+
+                write!(
+                    f,
+                    "{tables}{read}{export}",
+                    tables = if !tables.is_empty() {
+                        " ".to_string() + &display_comma_separated(tables).to_string()
+                    } else {
+                        "".to_string()
+                    },
+                    export = if *export { " FOR EXPORT" } else { "" },
+                    read = if *read_lock { " WITH READ LOCK" } else { "" }
+                )
+            }
             Statement::Kill { modifier, id } => {
                 write!(f, "KILL ")?;
 
@@ -4814,6 +4858,62 @@ impl fmt::Display for DiscardObject {
             DiscardObject::PLANS => f.write_str("PLANS"),
             DiscardObject::SEQUENCES => f.write_str("SEQUENCES"),
             DiscardObject::TEMP => f.write_str("TEMP"),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FlushType {
+    BinaryLogs,
+    EngineLogs,
+    ErrorLogs,
+    GeneralLogs,
+    Hosts,
+    Logs,
+    Privileges,
+    OptimizerCosts,
+    RelayLogs,
+    SlowLogs,
+    Status,
+    UserResources,
+    Tables,
+}
+
+impl fmt::Display for FlushType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FlushType::BinaryLogs => f.write_str("BINARY LOGS"),
+            FlushType::EngineLogs => f.write_str("ENGINE LOGS"),
+            FlushType::ErrorLogs => f.write_str("ERROR LOGS"),
+            FlushType::GeneralLogs => f.write_str("GENERAL LOGS"),
+            FlushType::Hosts => f.write_str("HOSTS"),
+            FlushType::Logs => f.write_str("LOGS"),
+            FlushType::Privileges => f.write_str("PRIVILEGES"),
+            FlushType::OptimizerCosts => f.write_str("OPTIMIZER_COSTS"),
+            FlushType::RelayLogs => f.write_str("RELAY LOGS"),
+            FlushType::SlowLogs => f.write_str("SLOW LOGS"),
+            FlushType::Status => f.write_str("STATUS"),
+            FlushType::UserResources => f.write_str("USER_RESOURCES"),
+            FlushType::Tables => f.write_str("TABLES"),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FlushLocation {
+    NoWriteToBinlog,
+    Local,
+}
+
+impl fmt::Display for FlushLocation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FlushLocation::NoWriteToBinlog => f.write_str("NO_WRITE_TO_BINLOG"),
+            FlushLocation::Local => f.write_str("LOCAL"),
         }
     }
 }

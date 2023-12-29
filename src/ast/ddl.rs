@@ -45,6 +45,18 @@ pub enum AlterTableOperation {
         /// <column_def>.
         column_def: ColumnDef,
     },
+    /// DISABLE TRIGGER [ trigger_name | ALL | USER ]
+    /// DISABLE RULE rewrite_rule_name
+    /// DISABLE ROW LEVEL SECURITY
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    DisableTrigger {
+        name: Ident,
+    },
+    DisableRule {
+        name: Ident,
+    },
+    DisableRowLevelSecurity,
     /// `DROP CONSTRAINT [ IF EXISTS ] <name>`
     DropConstraint {
         if_exists: bool,
@@ -142,6 +154,15 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::AlterColumn { column_name, op } => {
                 write!(f, "ALTER COLUMN {column_name} {op}")
+            }
+            AlterTableOperation::DisableTrigger { name } => {
+                write!(f, "DISABLE TRIGGER {name}")
+            }
+            AlterTableOperation::DisableRule { name } => {
+                write!(f, "DISABLE RULE {name}")
+            }
+            AlterTableOperation::DisableRowLevelSecurity => {
+                write!(f, "DISABLE ROW LEVEL SECURITY")
             }
             AlterTableOperation::DropPartitions {
                 partitions,

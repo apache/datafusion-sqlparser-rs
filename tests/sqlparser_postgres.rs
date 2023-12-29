@@ -579,6 +579,8 @@ fn parse_alter_table_disable_trigger() {
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER ALL");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER USER");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER trigger_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE RULE rule_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE ROW LEVEL SECURITY");
 }
 
 #[test]

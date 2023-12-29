@@ -4828,6 +4828,33 @@ impl<'a> Parser<'a> {
                     self.peek_token(),
                 );
             }
+        } else if self.parse_keyword(Keyword::ENABLE) {
+            if self.parse_keyword(Keyword::TRIGGER) {
+                let name = self.parse_identifier()?;
+                AlterTableOperation::EnableTrigger { name }
+            } else if self.parse_keyword(Keyword::RULE) {
+                let name = self.parse_identifier()?;
+                AlterTableOperation::EnableRule { name }
+            } else if self.parse_keywords(&[Keyword::ROW, Keyword::LEVEL, Keyword::SECURITY]) {
+                AlterTableOperation::EnableRowLevelSecurity {}
+            } else if self.parse_keywords(&[Keyword::REPLICA, Keyword::RULE]) {
+                let name = self.parse_identifier()?;
+                AlterTableOperation::EnableReplicaRule { name }
+            } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::RULE]) {
+                let name = self.parse_identifier()?;
+                AlterTableOperation::EnableAlwaysRule { name }
+            } else if self.parse_keywords(&[Keyword::REPLICA, Keyword::TRIGGER]) {
+                let name = self.parse_identifier()?;
+                AlterTableOperation::EnableReplicaTrigger { name }
+            } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::TRIGGER]) {
+                let name = self.parse_identifier()?;
+                AlterTableOperation::EnableAlwaysTrigger { name }
+            } else {
+                return self.expected(
+                    "TRIGGER, RULE or ROW LEVEL SECURITY after ENABLE",
+                    self.peek_token(),
+                );
+            }
         } else if self.parse_keyword(Keyword::DROP) {
             if self.parse_keywords(&[Keyword::IF, Keyword::EXISTS, Keyword::PARTITION]) {
                 self.expect_token(&Token::LParen)?;
@@ -7680,14 +7707,6 @@ impl<'a> Parser<'a> {
             let table_name = self.parse_object_name()?;
             let is_mysql = dialect_of!(self is MySqlDialect);
 
-            let is_default_values = self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]);
-
-            let columns = if is_default_values {
-                vec![]
-            } else {
-                self.parse_parenthesized_column_list(Optional, is_mysql)?
-            };
-
             let (columns, partitioned, after_columns, source) =
                 if self.parse_keywords(&[Keyword::DEFAULT, Keyword::VALUES]) {
                     (vec![], None, vec![], None)
@@ -8252,13 +8271,6 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_end(&mut self) -> Result<Statement, ParserError> {
-        Ok(Statement::Commit {
-            chain: self.parse_commit_rollback_chain()?,
-        })
-    }
-
-    pub fn parse_end(&mut self) -> Result<Statement, ParserError> {
-        // let _ = self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]);
         Ok(Statement::Commit {
             chain: self.parse_commit_rollback_chain()?,
         })

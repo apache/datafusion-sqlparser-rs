@@ -572,6 +572,10 @@ fn parse_alter_table_constraints_rename() {
 fn parse_alter_table_disable() {
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE ROW LEVEL SECURITY");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE RULE rule_name");
+}
+
+#[test]
+fn parse_alter_table_disable_trigger() {
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER ALL");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER USER");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER trigger_name");

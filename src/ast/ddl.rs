@@ -189,11 +189,11 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::DisableRowLevelSecurity => {
                 write!(f, "DISABLE ROW LEVEL SECURITY")
             }
-            AlterTableOperation::DisableRule { name } => {
-                write!(f, "DISABLE RULE {name}")
-            }
             AlterTableOperation::DisableTrigger { name } => {
                 write!(f, "DISABLE TRIGGER {name}")
+            }
+            AlterTableOperation::DisableRule { name } => {
+                write!(f, "DISABLE RULE {name}")
             }
             AlterTableOperation::DropPartitions {
                 partitions,

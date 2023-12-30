@@ -565,24 +565,24 @@ fn parse_alter_table_constraints_rename() {
 
 #[test]
 fn parse_alter_table_disable() {
+    pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE ROW LEVEL SECURITY");
+    pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE RULE rule_name");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER ALL");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER USER");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER trigger_name");
-    pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE RULE rule_name");
-    pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE ROW LEVEL SECURITY");
 }
 
 #[test]
 fn parse_alter_table_enable() {
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ALWAYS RULE rule_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ALWAYS TRIGGER trigger_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA TRIGGER trigger_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA RULE rule_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ROW LEVEL SECURITY");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE RULE rule_name");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER ALL");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER USER");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER trigger_name");
-    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE RULE rule_name");
-    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ROW LEVEL SECURITY");
-    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA TRIGGER trigger_name");
-    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ALWAYS TRIGGER trigger_name");
-    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA RULE rule_name");
-    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ALWAYS rule_name");
 }
 #[test]
 fn parse_alter_table_alter_column() {

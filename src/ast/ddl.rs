@@ -45,18 +45,18 @@ pub enum AlterTableOperation {
         /// <column_def>.
         column_def: ColumnDef,
     },
-    /// DISABLE TRIGGER [ trigger_name | ALL | USER ]
-    /// DISABLE RULE rewrite_rule_name
-    /// DISABLE ROW LEVEL SECURITY
+    /// `DISABLE ROW LEVEL SECURITY`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    DisableTrigger {
-        name: Ident,
-    },
-    DisableRule {
-        name: Ident,
-    },
     DisableRowLevelSecurity,
+    /// `DISABLE RULE rewrite_rule_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    DisableRule { name: Ident },
+    /// `DISABLE TRIGGER [ trigger_name | ALL | USER ]`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    DisableTrigger { name: Ident },
     /// `DROP CONSTRAINT [ IF EXISTS ] <name>`
     DropConstraint {
         if_exists: bool,
@@ -73,47 +73,34 @@ pub enum AlterTableOperation {
     ///
     /// Note: this is a MySQL-specific operation.
     DropPrimaryKey,
-
-    /// `ENABLE TRIGGER [ trigger_name | ALL | USER ]`
+    /// `ENABLE ALWAYS RULE rewrite_rule_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableTrigger {
-        name: Ident,
-    },
-    /// `ENABLE RULE rewrite_rule_name`
+    EnableAlwaysRule { name: Ident },
+    /// `ENABLE ALWAYS TRIGGER trigger_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableRule {
-        name: Ident,
-    },
+    EnableAlwaysTrigger { name: Ident },
+    /// `ENABLE REPLICA RULE rewrite_rule_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableReplicaRule { name: Ident },
+    /// `ENABLE REPLICA TRIGGER trigger_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableReplicaTrigger { name: Ident },
     /// `ENABLE ROW LEVEL SECURITY`
     ///
     /// Note: this is a PostgreSQL-specific operation.
     EnableRowLevelSecurity,
-    /// `ENABLE REPLICA TRIGGER trigger_name`
+    /// `ENABLE RULE rewrite_rule_name`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableReplicaTrigger {
-        name: Ident,
-    },
-    /// `ENABLE ALWAYS TRIGGER trigger_name`
+    EnableRule { name: Ident },
+    /// `ENABLE TRIGGER [ trigger_name | ALL | USER ]`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    EnableAlwaysTrigger {
-        name: Ident,
-    },
-    /// `ENABLE REPLICA RULE rewrite_rule_name`
-    ///
-    /// Note: this is a PostgreSQL-specific operation.
-    EnableReplicaRule {
-        name: Ident,
-    },
-    /// `ENABLE ALWAYS RULE rewrite_rule_name`
-    ///
-    /// Note: this is a PostgreSQL-specific operation.
-    EnableAlwaysRule {
-        name: Ident,
-    },
+    EnableTrigger { name: Ident },
     /// `RENAME TO PARTITION (partition=val)`
     RenamePartitions {
         old_partitions: Vec<Expr>,
@@ -134,9 +121,7 @@ pub enum AlterTableOperation {
         new_column_name: Ident,
     },
     /// `RENAME TO <table_name>`
-    RenameTable {
-        table_name: ObjectName,
-    },
+    RenameTable { table_name: ObjectName },
     // CHANGE [ COLUMN ] <old_name> <new_name> <data_type> [ <options> ]
     ChangeColumn {
         old_name: Ident,
@@ -147,10 +132,7 @@ pub enum AlterTableOperation {
     /// `RENAME CONSTRAINT <old_constraint_name> TO <new_constraint_name>`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    RenameConstraint {
-        old_name: Ident,
-        new_name: Ident,
-    },
+    RenameConstraint { old_name: Ident, new_name: Ident },
     /// `ALTER [ COLUMN ]`
     AlterColumn {
         column_name: Ident,
@@ -159,9 +141,7 @@ pub enum AlterTableOperation {
     /// 'SWAP WITH <table_name>'
     ///
     /// Note: this is Snowflake specific <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
-    SwapWith {
-        table_name: ObjectName,
-    },
+    SwapWith { table_name: ObjectName },
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -203,14 +183,14 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::AlterColumn { column_name, op } => {
                 write!(f, "ALTER COLUMN {column_name} {op}")
             }
-            AlterTableOperation::DisableTrigger { name } => {
-                write!(f, "DISABLE TRIGGER {name}")
+            AlterTableOperation::DisableRowLevelSecurity => {
+                write!(f, "DISABLE ROW LEVEL SECURITY")
             }
             AlterTableOperation::DisableRule { name } => {
                 write!(f, "DISABLE RULE {name}")
             }
-            AlterTableOperation::DisableRowLevelSecurity => {
-                write!(f, "DISABLE ROW LEVEL SECURITY")
+            AlterTableOperation::DisableTrigger { name } => {
+                write!(f, "DISABLE TRIGGER {name}")
             }
             AlterTableOperation::DropPartitions {
                 partitions,
@@ -246,17 +226,8 @@ impl fmt::Display for AlterTableOperation {
                 column_name,
                 if *cascade { " CASCADE" } else { "" }
             ),
-            AlterTableOperation::EnableTrigger { name } => {
-                write!(f, "ENABLE TRIGGER {name}")
-            }
-            AlterTableOperation::EnableRule { name } => {
-                write!(f, "ENABLE RULE {name}")
-            }
-            AlterTableOperation::EnableRowLevelSecurity => {
-                write!(f, "ENABLE ROW LEVEL SECURITY")
-            }
-            AlterTableOperation::EnableReplicaTrigger { name } => {
-                write!(f, "ENABLE REPLICA TRIGGER {name}")
+            AlterTableOperation::EnableAlwaysRule { name } => {
+                write!(f, "ENABLE ALWAYS RULE {name}")
             }
             AlterTableOperation::EnableAlwaysTrigger { name } => {
                 write!(f, "ENABLE ALWAYS TRIGGER {name}")
@@ -264,8 +235,17 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::EnableReplicaRule { name } => {
                 write!(f, "ENABLE REPLICA RULE {name}")
             }
-            AlterTableOperation::EnableAlwaysRule { name } => {
-                write!(f, "ENABLE ALWAYS RULE {name}")
+            AlterTableOperation::EnableReplicaTrigger { name } => {
+                write!(f, "ENABLE REPLICA TRIGGER {name}")
+            }
+            AlterTableOperation::EnableRowLevelSecurity => {
+                write!(f, "ENABLE ROW LEVEL SECURITY")
+            }
+            AlterTableOperation::EnableRule { name } => {
+                write!(f, "ENABLE RULE {name}")
+            }
+            AlterTableOperation::EnableTrigger { name } => {
+                write!(f, "ENABLE TRIGGER {name}")
             }
             AlterTableOperation::RenamePartitions {
                 old_partitions,

@@ -4637,44 +4637,44 @@ impl<'a> Parser<'a> {
                 }
             }
         } else if self.parse_keyword(Keyword::DISABLE) {
-            if self.parse_keyword(Keyword::TRIGGER) {
-                let name = self.parse_identifier()?;
-                AlterTableOperation::DisableTrigger { name }
+            if self.parse_keywords(&[Keyword::ROW, Keyword::LEVEL, Keyword::SECURITY]) {
+                AlterTableOperation::DisableRowLevelSecurity {}
             } else if self.parse_keyword(Keyword::RULE) {
                 let name = self.parse_identifier()?;
                 AlterTableOperation::DisableRule { name }
-            } else if self.parse_keywords(&[Keyword::ROW, Keyword::LEVEL, Keyword::SECURITY]) {
-                AlterTableOperation::DisableRowLevelSecurity {}
+            } else if self.parse_keyword(Keyword::TRIGGER) {
+                let name = self.parse_identifier()?;
+                AlterTableOperation::DisableTrigger { name }
             } else {
                 return self.expected(
-                    "TRIGGER, RULE or ROW LEVEL SECURITY after DISABLE",
+                    "ROW LEVEL SECURITY, RULE, or TRIGGER after DISABLE",
                     self.peek_token(),
                 );
             }
         } else if self.parse_keyword(Keyword::ENABLE) {
-            if self.parse_keyword(Keyword::TRIGGER) {
+            if self.parse_keywords(&[Keyword::ALWAYS, Keyword::RULE]) {
                 let name = self.parse_identifier()?;
-                AlterTableOperation::EnableTrigger { name }
-            } else if self.parse_keyword(Keyword::RULE) {
+                AlterTableOperation::EnableAlwaysRule { name }
+            } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::TRIGGER]) {
                 let name = self.parse_identifier()?;
-                AlterTableOperation::EnableRule { name }
+                AlterTableOperation::EnableAlwaysTrigger { name }
             } else if self.parse_keywords(&[Keyword::ROW, Keyword::LEVEL, Keyword::SECURITY]) {
                 AlterTableOperation::EnableRowLevelSecurity {}
             } else if self.parse_keywords(&[Keyword::REPLICA, Keyword::RULE]) {
                 let name = self.parse_identifier()?;
                 AlterTableOperation::EnableReplicaRule { name }
-            } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::RULE]) {
-                let name = self.parse_identifier()?;
-                AlterTableOperation::EnableAlwaysRule { name }
             } else if self.parse_keywords(&[Keyword::REPLICA, Keyword::TRIGGER]) {
                 let name = self.parse_identifier()?;
                 AlterTableOperation::EnableReplicaTrigger { name }
-            } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::TRIGGER]) {
+            } else if self.parse_keyword(Keyword::RULE) {
                 let name = self.parse_identifier()?;
-                AlterTableOperation::EnableAlwaysTrigger { name }
+                AlterTableOperation::EnableRule { name }
+            } else if self.parse_keyword(Keyword::TRIGGER) {
+                let name = self.parse_identifier()?;
+                AlterTableOperation::EnableTrigger { name }
             } else {
                 return self.expected(
-                    "TRIGGER, RULE or ROW LEVEL SECURITY after ENABLE",
+                    "ALWAYS, REPLICA, ROW LEVEL SECURITY, RULE, or TRIGGER after ENABLE",
                     self.peek_token(),
                 );
             }

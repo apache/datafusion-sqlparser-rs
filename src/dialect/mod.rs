@@ -349,6 +349,7 @@ mod tests {
             }
         }
 
+        #[allow(clippy::needless_raw_string_hashes)]
         let statement = r#"SELECT 'Wayne\'s World'"#;
         let res1 = Parser::parse_sql(&MySqlDialect {}, statement);
         let res2 = Parser::parse_sql(&WrappedDialect(MySqlDialect {}), statement);

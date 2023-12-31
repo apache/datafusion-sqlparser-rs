@@ -564,6 +564,27 @@ fn parse_alter_table_constraints_rename() {
 }
 
 #[test]
+fn parse_alter_table_disable() {
+    pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE ROW LEVEL SECURITY");
+    pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE RULE rule_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER ALL");
+    pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER USER");
+    pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER trigger_name");
+}
+
+#[test]
+fn parse_alter_table_enable() {
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ALWAYS RULE rule_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ALWAYS TRIGGER trigger_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA TRIGGER trigger_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA RULE rule_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ROW LEVEL SECURITY");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE RULE rule_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER ALL");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER USER");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER trigger_name");
+}
+#[test]
 fn parse_alter_table_alter_column() {
     pg().one_statement_parses_to(
         "ALTER TABLE tab ALTER COLUMN is_active TYPE TEXT USING 'text'",
@@ -3256,7 +3277,7 @@ fn parse_dollar_quoted_string() {
 
     let stmt = pg().parse_sql_statements(sql).unwrap();
 
-    let projection = match stmt.get(0).unwrap() {
+    let projection = match stmt.first().unwrap() {
         Statement::Query(query) => match &*query.body {
             SetExpr::Select(select) => &select.projection,
             _ => unreachable!(),

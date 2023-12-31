@@ -1763,6 +1763,21 @@ pub enum Statement {
         query: Box<Query>,
     },
     /// ```sql
+    /// CREATE EXTENSION [ IF NOT EXISTS ] extension_name
+    ///     [ WITH ] [ SCHEMA schema_name ]
+    ///              [ VERSION version ]
+    ///              [ CASCADE ]
+    /// ```
+    ///
+    /// Note: this is a PostgreSQL-specific statement,
+    CreateExtension {
+        name: Ident,
+        if_not_exists: bool,
+        cascade: bool,
+        schema: Option<Ident>,
+        version: Option<Ident>,
+    },
+    /// ```sql
     /// FETCH
     /// ```
     /// Retrieve rows from a query using a cursor
@@ -3002,6 +3017,34 @@ impl fmt::Display for Statement {
                 if let Some(predicate) = predicate {
                     write!(f, " WHERE {predicate}")?;
                 }
+                Ok(())
+            }
+            Statement::CreateExtension {
+                name,
+                if_not_exists,
+                cascade,
+                schema,
+                version,
+            } => {
+                write!(
+                    f,
+                    "CREATE EXTENSION {if_not_exists}{name}",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" }
+                )?;
+                if *cascade || schema.is_some() || version.is_some() {
+                    write!(f, " WITH")?;
+
+                    if let Some(name) = schema {
+                        write!(f, " SCHEMA {name}")?;
+                    }
+                    if let Some(version) = version {
+                        write!(f, " VERSION {version}")?;
+                    }
+                    if *cascade {
+                        write!(f, " CASCADE")?;
+                    }
+                }
+
                 Ok(())
             }
             Statement::CreateRole {

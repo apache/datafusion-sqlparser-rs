@@ -621,8 +621,30 @@ fn parse_alter_table_alter_column_add_generated() {
     pg_and_generic().verified_stmt(
         "ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY ( INCREMENT 1 MINVALUE 1 )",
     );
-
     pg_and_generic().verified_stmt("ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY ( )");
+
+    let res = pg().parse_sql_statements(
+        "ALTER TABLE t ALTER COLUMN id ADD GENERATED ( INCREMENT 1 MINVALUE 1 )",
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected AS, found: (".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements(
+        "ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY ( INCREMENT )",
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected a value, found: )".to_string()),
+        res.unwrap_err()
+    );
+
+    let res =
+        pg().parse_sql_statements("ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY (");
+    assert_eq!(
+        ParserError::ParserError("Expected ), found: EOF".to_string()),
+        res.unwrap_err()
+    );
 }
 
 #[test]

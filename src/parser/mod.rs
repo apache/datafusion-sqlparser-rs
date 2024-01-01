@@ -4874,13 +4874,13 @@ impl<'a> Parser<'a> {
                     None
                 };
 
-                let _ = self.expect_keywords(&[Keyword::AS, Keyword::IDENTITY]);
+                self.expect_keywords(&[Keyword::AS, Keyword::IDENTITY])?;
 
                 let mut sequence_options: Option<Vec<SequenceOptions>> = None;
 
                 if self.peek_token().token == Token::LParen {
                     self.expect_token(&Token::LParen)?;
-                    sequence_options = self.parse_create_sequence_options().ok();
+                    sequence_options = Some(self.parse_create_sequence_options()?);
                     self.expect_token(&Token::RParen)?;
                 }
 

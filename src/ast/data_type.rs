@@ -219,7 +219,9 @@ pub enum DataType {
     /// [hive]: https://docs.cloudera.com/cdw-runtime/cloud/impala-sql-reference/topics/impala-struct.html
     /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
     Struct(Vec<StructField>),
-    /// Specific to SQLite: no type specified (no coercion)
+    /// No type specified - only used with
+    /// [`SQLiteDialect`](crate::dialect::SQLiteDialect), from statements such
+    /// as `CREATE TABLE t1 (a)`.
     Unspecified,
 }
 

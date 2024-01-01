@@ -4183,7 +4183,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
         let name = self.parse_identifier()?;
-        let data_type = if self.sqlite_untyped_col_helper() {
+        let data_type = if self.is_column_type_sqlite_unspecified() {
             DataType::Unspecified
         } else {
             self.parse_data_type()?
@@ -4223,7 +4223,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn sqlite_untyped_col_helper(&mut self) -> bool {
+    fn is_column_type_sqlite_unspecified(&mut self) -> bool {
         if dialect_of!(self is SQLiteDialect) {
             match self.peek_token().token {
                 Token::Word(word) => matches!(

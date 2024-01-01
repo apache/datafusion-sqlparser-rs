@@ -4841,7 +4841,11 @@ impl<'a> Parser<'a> {
             let column_name = self.parse_identifier()?;
             let is_postgresql = dialect_of!(self is PostgreSqlDialect);
 
-            let op = if self.parse_keywords(&[Keyword::SET, Keyword::NOT, Keyword::NULL]) {
+            let op: AlterColumnOperation = if self.parse_keywords(&[
+                Keyword::SET,
+                Keyword::NOT,
+                Keyword::NULL,
+            ]) {
                 AlterColumnOperation::SetNotNull {}
             } else if self.parse_keywords(&[Keyword::DROP, Keyword::NOT, Keyword::NULL]) {
                 AlterColumnOperation::DropNotNull {}
@@ -4861,11 +4865,37 @@ impl<'a> Parser<'a> {
                     None
                 };
                 AlterColumnOperation::SetDataType { data_type, using }
+            } else if self.parse_keywords(&[Keyword::ADD, Keyword::GENERATED]) {
+                let generated_as = if self.parse_keyword(Keyword::ALWAYS) {
+                    Some(GeneratedAs::Always)
+                } else if self.parse_keywords(&[Keyword::BY, Keyword::DEFAULT]) {
+                    Some(GeneratedAs::ByDefault)
+                } else {
+                    None
+                };
+
+                let _ = self.expect_keywords(&[Keyword::AS, Keyword::IDENTITY]);
+
+                let mut sequence_options: Option<Vec<SequenceOptions>> = None;
+
+                if self.peek_token().token == Token::LParen {
+                    self.expect_token(&Token::LParen)?;
+                    sequence_options = self.parse_create_sequence_options().ok();
+                    self.expect_token(&Token::RParen)?;
+                }
+
+                AlterColumnOperation::AddGenerated {
+                    generated_as,
+                    sequence_options,
+                }
             } else {
-                return self.expected(
-                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN",
-                    self.peek_token(),
-                );
+                let message = if is_postgresql {
+                    "SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE, or ADD GENERATED after ALTER COLUMN"
+                } else {
+                    "SET/DROP NOT NULL, SET DEFAULT, or SET DATA TYPE after ALTER COLUMN"
+                };
+
+                return self.expected(message, self.peek_token());
             };
             AlterTableOperation::AlterColumn { column_name, op }
         } else if self.parse_keyword(Keyword::SWAP) {

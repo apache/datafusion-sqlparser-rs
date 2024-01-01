@@ -586,7 +586,11 @@ pub struct ColumnDef {
 
 impl fmt::Display for ColumnDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {}", self.name, self.data_type)?;
+        if self.data_type == DataType::Unspecified {
+            write!(f, "{}", self.name)?;
+        } else {
+            write!(f, "{} {}", self.name, self.data_type)?;
+        }
         if let Some(collation) = &self.collation {
             write!(f, " COLLATE {collation}")?;
         }

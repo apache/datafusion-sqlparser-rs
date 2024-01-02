@@ -315,6 +315,13 @@ pub enum AlterColumnOperation {
         /// PostgreSQL specific
         using: Option<Expr>,
     },
+    /// `ADD GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY [ ( sequence_options ) ]`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    AddGenerated {
+        generated_as: Option<GeneratedAs>,
+        sequence_options: Option<Vec<SequenceOptions>>,
+    },
 }
 
 impl fmt::Display for AlterColumnOperation {
@@ -334,6 +341,32 @@ impl fmt::Display for AlterColumnOperation {
                 } else {
                     write!(f, "SET DATA TYPE {data_type}")
                 }
+            }
+            AlterColumnOperation::AddGenerated {
+                generated_as,
+                sequence_options,
+            } => {
+                let generated_as = match generated_as {
+                    Some(GeneratedAs::Always) => " ALWAYS",
+                    Some(GeneratedAs::ByDefault) => " BY DEFAULT",
+                    _ => "",
+                };
+
+                write!(f, "ADD GENERATED{generated_as} AS IDENTITY",)?;
+                if let Some(options) = sequence_options {
+                    if !options.is_empty() {
+                        write!(f, " (")?;
+                    }
+
+                    for sequence_option in options {
+                        write!(f, "{sequence_option}")?;
+                    }
+
+                    if !options.is_empty() {
+                        write!(f, " )")?;
+                    }
+                }
+                Ok(())
             }
         }
     }

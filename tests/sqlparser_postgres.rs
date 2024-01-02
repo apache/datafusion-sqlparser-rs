@@ -584,6 +584,23 @@ fn parse_alter_table_enable() {
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER USER");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER trigger_name");
 }
+
+#[test]
+fn parse_create_extension() {
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name");
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name WITH SCHEMA schema_name");
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name WITH VERSION version");
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name WITH CASCADE");
+    pg_and_generic().verified_stmt(
+        "CREATE EXTENSION extension_name WITH SCHEMA schema_name VERSION version CASCADE",
+    );
+    pg_and_generic()
+        .verified_stmt("CREATE EXTENSION extension_name WITH SCHEMA schema_name CASCADE");
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name WITH VERSION version CASCADE");
+    pg_and_generic()
+        .verified_stmt("CREATE EXTENSION extension_name WITH SCHEMA schema_name VERSION version");
+}
+
 #[test]
 fn parse_alter_table_alter_column() {
     pg().one_statement_parses_to(

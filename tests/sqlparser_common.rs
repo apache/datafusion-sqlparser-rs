@@ -158,6 +158,7 @@ fn parse_insert_default_values() {
             table_name,
             ..
         } => {
+
             assert_eq!(after_columns, vec![]);
             assert_eq!(columns, vec![]);
             assert_eq!(on, None);
@@ -193,7 +194,6 @@ fn parse_insert_default_values() {
         }
         _ => unreachable!(),
     }
-
     let insert_with_columns_and_default_values = "INSERT INTO test_table (test_col) DEFAULT VALUES";
     assert_eq!(
         ParserError::ParserError(

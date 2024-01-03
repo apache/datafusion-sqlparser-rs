@@ -121,7 +121,9 @@ pub enum AlterTableOperation {
         new_column_name: Ident,
     },
     /// `RENAME TO <table_name>`
-    RenameTable { table_name: ObjectName },
+    RenameTable {
+        table_name: ObjectName,
+    },
     // CHANGE [ COLUMN ] <old_name> <new_name> <data_type> [ <options> ]
     ChangeColumn {
         old_name: Ident,
@@ -132,7 +134,10 @@ pub enum AlterTableOperation {
     /// `RENAME CONSTRAINT <old_constraint_name> TO <new_constraint_name>`
     ///
     /// Note: this is a PostgreSQL-specific operation.
-    RenameConstraint { old_name: Ident, new_name: Ident },
+    RenameConstraint {
+        old_name: Ident,
+        new_name: Ident,
+    },
     /// `ALTER [ COLUMN ]`
     AlterColumn {
         column_name: Ident,
@@ -141,7 +146,9 @@ pub enum AlterTableOperation {
     /// 'SWAP WITH <table_name>'
     ///
     /// Note: this is Snowflake specific <https://docs.snowflake.com/en/sql-reference/sql/alter-table>
-    SwapWith { table_name: ObjectName },
+    SwapWith {
+        table_name: ObjectName,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -234,6 +241,7 @@ impl fmt::Display for AlterTableOperation {
             }
             AlterTableOperation::EnableReplicaRule { name } => {
                 write!(f, "ENABLE REPLICA RULE {name}")
+
             }
             AlterTableOperation::EnableReplicaTrigger { name } => {
                 write!(f, "ENABLE REPLICA TRIGGER {name}")

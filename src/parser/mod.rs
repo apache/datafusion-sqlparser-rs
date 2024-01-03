@@ -7722,7 +7722,6 @@ impl<'a> Parser<'a> {
 
                     (columns, partitioned, after_columns, source)
                 };
-
             let on = if self.parse_keyword(Keyword::ON) {
                 if self.parse_keyword(Keyword::CONFLICT) {
                     let conflict_target =
@@ -8271,6 +8270,13 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_end(&mut self) -> Result<Statement, ParserError> {
+        Ok(Statement::Commit {
+            chain: self.parse_commit_rollback_chain()?,
+        })
+    }
+
+    pub fn parse_end(&mut self) -> Result<Statement, ParserError> {
+        // let _ = self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]);
         Ok(Statement::Commit {
             chain: self.parse_commit_rollback_chain()?,
         })

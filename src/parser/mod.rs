@@ -7456,6 +7456,14 @@ impl<'a> Parser<'a> {
             // Hive lets you put table here regardless
             let table = self.parse_keyword(Keyword::TABLE);
             let table_name = self.parse_object_name()?;
+
+            let table_alias =
+                if dialect_of!(self is PostgreSqlDialect) && self.parse_keyword(Keyword::AS) {
+                    Some(self.parse_identifier()?)
+                } else {
+                    None
+                };
+
             let is_mysql = dialect_of!(self is MySqlDialect);
 
             let (columns, partitioned, after_columns, source) =
@@ -7530,6 +7538,7 @@ impl<'a> Parser<'a> {
             Ok(Statement::Insert {
                 or,
                 table_name,
+                table_alias,
                 ignore,
                 into,
                 overwrite,

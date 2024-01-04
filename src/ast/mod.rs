@@ -14,6 +14,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::{
     boxed::Box,
+    format,
     string::{String, ToString},
     vec::Vec,
 };
@@ -1428,6 +1429,8 @@ pub enum Statement {
         /// TABLE
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
+        /// table_name as foo (for PostgreSQL)
+        table_alias: Option<Ident>,
         /// COLUMNS
         columns: Vec<Ident>,
         /// Overwrite (Hive)
@@ -2400,6 +2403,7 @@ impl fmt::Display for Statement {
                 ignore,
                 into,
                 table_name,
+                table_alias,
                 overwrite,
                 partitioned,
                 columns,
@@ -2411,6 +2415,12 @@ impl fmt::Display for Statement {
                 replace_into,
                 priority,
             } => {
+                let table_name = if let Some(alias) = table_alias {
+                    format!("{table_name} AS {alias}")
+                } else {
+                    table_name.to_string()
+                };
+
                 if let Some(action) = or {
                     write!(f, "INSERT OR {action} INTO {table_name} ")?;
                 } else {

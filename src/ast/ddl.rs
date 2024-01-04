@@ -104,10 +104,6 @@ pub enum AlterTableOperation {
     ///
     /// Note: this is a PostgreSQL-specific operation.
     EnableRule { name: Ident },
-    /// `ENABLE TRIGGER [ trigger_name | ALL | USER ]`
-    ///
-    /// Note: this is a PostgreSQL-specific operation.
-    EnableTrigger { name: Ident },
     /// `RENAME TO PARTITION (partition=val)`
     RenamePartitions {
         old_partitions: Vec<Expr>,

@@ -5303,10 +5303,10 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keyword(Keyword::DISABLE) {
             if self.parse_keyword(Keyword::TRIGGER) {
-                let name = self.parse_identifier()?;
+                let name = self.parse_identifier(false)?;
                 AlterTableOperation::DisableTrigger { name }
             } else if self.parse_keyword(Keyword::RULE) {
-                let name = self.parse_identifier()?;
+                let name = self.parse_identifier(false)?;
                 AlterTableOperation::DisableRule { name }
             } else if self.parse_keywords(&[Keyword::ROW, Keyword::LEVEL, Keyword::SECURITY]) {
                 AlterTableOperation::DisableRowLevelSecurity {}
@@ -5351,24 +5351,24 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keyword(Keyword::ENABLE) {
             if self.parse_keyword(Keyword::TRIGGER) {
-                let name = self.parse_identifier()?;
+                let name = self.parse_identifier(false)?;
                 AlterTableOperation::EnableTrigger { name }
             } else if self.parse_keyword(Keyword::RULE) {
-                let name = self.parse_identifier()?;
+                let name = self.parse_identifier(false)?;
                 AlterTableOperation::EnableRule { name }
             } else if self.parse_keywords(&[Keyword::ROW, Keyword::LEVEL, Keyword::SECURITY]) {
                 AlterTableOperation::EnableRowLevelSecurity {}
             } else if self.parse_keywords(&[Keyword::REPLICA, Keyword::RULE]) {
-                let name = self.parse_identifier()?;
+                let name = self.parse_identifier(false)?;
                 AlterTableOperation::EnableReplicaRule { name }
             } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::RULE]) {
-                let name = self.parse_identifier()?;
+                let name = self.parse_identifier(false)?;
                 AlterTableOperation::EnableAlwaysRule { name }
             } else if self.parse_keywords(&[Keyword::REPLICA, Keyword::TRIGGER]) {
-                let name = self.parse_identifier()?;
+                let name = self.parse_identifier(false)?;
                 AlterTableOperation::EnableReplicaTrigger { name }
             } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::TRIGGER]) {
-                let name = self.parse_identifier()?;
+                let name = self.parse_identifier(false)?;
                 AlterTableOperation::EnableAlwaysTrigger { name }
             } else {
                 return self.expected(
@@ -5378,24 +5378,24 @@ impl<'a> Parser<'a> {
             }
         } else if self.parse_keyword(Keyword::ENABLE) {
             if self.parse_keyword(Keyword::TRIGGER) {
-                let name = self.parse_identifier()?;
+                let name = self.parse_identifier(false)?;
                 AlterTableOperation::EnableTrigger { name }
             } else if self.parse_keyword(Keyword::RULE) {
-                let name = self.parse_identifier()?;
+                let name = self.parse_identifier(false)?;
                 AlterTableOperation::EnableRule { name }
             } else if self.parse_keywords(&[Keyword::ROW, Keyword::LEVEL, Keyword::SECURITY]) {
                 AlterTableOperation::EnableRowLevelSecurity {}
             } else if self.parse_keywords(&[Keyword::REPLICA, Keyword::RULE]) {
-                let name = self.parse_identifier()?;
+                let name = self.parse_identifier(false)?;
                 AlterTableOperation::EnableReplicaRule { name }
             } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::RULE]) {
-                let name = self.parse_identifier()?;
+                let name = self.parse_identifier(false)?;
                 AlterTableOperation::EnableAlwaysRule { name }
             } else if self.parse_keywords(&[Keyword::REPLICA, Keyword::TRIGGER]) {
-                let name = self.parse_identifier()?;
+                let name = self.parse_identifier(false)?;
                 AlterTableOperation::EnableReplicaTrigger { name }
             } else if self.parse_keywords(&[Keyword::ALWAYS, Keyword::TRIGGER]) {
-                let name = self.parse_identifier()?;
+                let name = self.parse_identifier(false)?;
                 AlterTableOperation::EnableAlwaysTrigger { name }
             } else {
                 return self.expected(
@@ -9056,13 +9056,6 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_end(&mut self) -> Result<Statement, ParserError> {
-        Ok(Statement::Commit {
-            chain: self.parse_commit_rollback_chain()?,
-        })
-    }
-
-    pub fn parse_end(&mut self) -> Result<Statement, ParserError> {
-        // let _ = self.parse_one_of_keywords(&[Keyword::TRANSACTION, Keyword::WORK]);
         Ok(Statement::Commit {
             chain: self.parse_commit_rollback_chain()?,
         })

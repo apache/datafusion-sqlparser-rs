@@ -21,7 +21,7 @@
 //! 2. [`ast`] for the AST structure
 //! 3. [`Dialect`] for supported SQL dialects
 //!
-//! # Example
+//! # Example parsing SQL text
 //!
 //! ```
 //! use sqlparser::dialect::GenericDialect;
@@ -37,6 +37,24 @@
 //! let ast = Parser::parse_sql(&dialect, sql).unwrap();
 //!
 //! println!("AST: {:?}", ast);
+//! ```
+//!
+//! # Creating SQL text from AST
+//!
+//! This crate allows users to recover the original SQL text (with comments
+//! removed, normalized whitespace and identifier capitalization), which is
+//! useful for tools that analyze and manipulate SQL.
+//!
+//! ```
+//! # use sqlparser::dialect::GenericDialect;
+//! # use sqlparser::parser::Parser;
+//! let sql = "SELECT a FROM table_1";
+//!
+//! // parse to a Vec<Statement>
+//! let ast = Parser::parse_sql(&GenericDialect, sql).unwrap();
+//!
+//! // The original SQL text can be generated from the AST
+//! assert_eq!(ast[0].to_string(), sql);
 //! ```
 //!
 //! [sqlparser crates.io page]: https://crates.io/crates/sqlparser

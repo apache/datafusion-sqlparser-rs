@@ -12,7 +12,7 @@
 
 //! Recursive visitors for ast Nodes. See [`Visitor`] for more details.
 
-use crate::ast::{Expr, ObjectName, Statement, TableFactor};
+use crate::ast::{Expr, ObjectName, Query, Statement, TableFactor};
 use core::ops::ControlFlow;
 
 /// A type that can be visited by a [`Visitor`]. See [`Visitor`] for
@@ -179,6 +179,16 @@ pub trait Visitor {
     /// Type returned when the recursion returns early.
     type Break;
 
+    /// Invoked for any queries that appear in the AST before visiting children
+    fn pre_visit_query(&mut self, _query: &Query) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any queries that appear in the AST after visiting children
+    fn post_visit_query(&mut self, _query: &Query) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
     /// Invoked for any relations (e.g. tables) that appear in the AST before visiting children
     fn pre_visit_relation(&mut self, _relation: &ObjectName) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
@@ -266,6 +276,16 @@ pub trait Visitor {
 pub trait VisitorMut {
     /// Type returned when the recursion returns early.
     type Break;
+
+    /// Invoked for any queries that appear in the AST before visiting children
+    fn pre_visit_query(&mut self, _query: &mut Query) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any queries that appear in the AST after visiting children
+    fn post_visit_query(&mut self, _query: &mut Query) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
 
     /// Invoked for any relations (e.g. tables) that appear in the AST before visiting children
     fn pre_visit_relation(&mut self, _relation: &mut ObjectName) -> ControlFlow<Self::Break> {
@@ -626,6 +646,18 @@ mod tests {
     impl Visitor for TestVisitor {
         type Break = ();
 
+        /// Invoked for any queries that appear in the AST before visiting children
+        fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("PRE: QUERY: {query}"));
+            ControlFlow::Continue(())
+        }
+
+        /// Invoked for any queries that appear in the AST after visiting children
+        fn post_visit_query(&mut self, query: &Query) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("POST: QUERY: {query}"));
+            ControlFlow::Continue(())
+        }
+
         fn pre_visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<Self::Break> {
             self.visited.push(format!("PRE: RELATION: {relation}"));
             ControlFlow::Continue(())
@@ -695,10 +727,12 @@ mod tests {
                 "SELECT * from table_name as my_table",
                 vec![
                     "PRE: STATEMENT: SELECT * FROM table_name AS my_table",
+                    "PRE: QUERY: SELECT * FROM table_name AS my_table",
                     "PRE: TABLE FACTOR: table_name AS my_table",
                     "PRE: RELATION: table_name",
                     "POST: RELATION: table_name",
                     "POST: TABLE FACTOR: table_name AS my_table",
+                    "POST: QUERY: SELECT * FROM table_name AS my_table",
                     "POST: STATEMENT: SELECT * FROM table_name AS my_table",
                 ],
             ),
@@ -706,6 +740,7 @@ mod tests {
                 "SELECT * from t1 join t2 on t1.id = t2.t1_id",
                 vec![
                     "PRE: STATEMENT: SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id",
+                    "PRE: QUERY: SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id",
                     "PRE: TABLE FACTOR: t1",
                     "PRE: RELATION: t1",
                     "POST: RELATION: t1",
@@ -720,6 +755,7 @@ mod tests {
                     "PRE: EXPR: t2.t1_id",
                     "POST: EXPR: t2.t1_id",
                     "POST: EXPR: t1.id = t2.t1_id",
+                    "POST: QUERY: SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id",
                     "POST: STATEMENT: SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id",
                 ],
             ),
@@ -727,18 +763,22 @@ mod tests {
                 "SELECT * from t1 where EXISTS(SELECT column from t2)",
                 vec![
                     "PRE: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
+                    "PRE: QUERY: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                     "PRE: TABLE FACTOR: t1",
                     "PRE: RELATION: t1",
                     "POST: RELATION: t1",
                     "POST: TABLE FACTOR: t1",
                     "PRE: EXPR: EXISTS (SELECT column FROM t2)",
+                    "PRE: QUERY: SELECT column FROM t2",
                     "PRE: EXPR: column",
                     "POST: EXPR: column",
                     "PRE: TABLE FACTOR: t2",
                     "PRE: RELATION: t2",
                     "POST: RELATION: t2",
                     "POST: TABLE FACTOR: t2",
+                    "POST: QUERY: SELECT column FROM t2",
                     "POST: EXPR: EXISTS (SELECT column FROM t2)",
+                    "POST: QUERY: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                     "POST: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                 ],
             ),
@@ -746,18 +786,22 @@ mod tests {
                 "SELECT * from t1 where EXISTS(SELECT column from t2)",
                 vec![
                     "PRE: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
+                    "PRE: QUERY: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                     "PRE: TABLE FACTOR: t1",
                     "PRE: RELATION: t1",
                     "POST: RELATION: t1",
                     "POST: TABLE FACTOR: t1",
                     "PRE: EXPR: EXISTS (SELECT column FROM t2)",
+                    "PRE: QUERY: SELECT column FROM t2",
                     "PRE: EXPR: column",
                     "POST: EXPR: column",
                     "PRE: TABLE FACTOR: t2",
                     "PRE: RELATION: t2",
                     "POST: RELATION: t2",
                     "POST: TABLE FACTOR: t2",
+                    "POST: QUERY: SELECT column FROM t2",
                     "POST: EXPR: EXISTS (SELECT column FROM t2)",
+                    "POST: QUERY: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                     "POST: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2)",
                 ],
             ),
@@ -765,25 +809,54 @@ mod tests {
                 "SELECT * from t1 where EXISTS(SELECT column from t2) UNION SELECT * from t3",
                 vec![
                     "PRE: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2) UNION SELECT * FROM t3",
+                    "PRE: QUERY: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2) UNION SELECT * FROM t3",
                     "PRE: TABLE FACTOR: t1",
                     "PRE: RELATION: t1",
                     "POST: RELATION: t1",
                     "POST: TABLE FACTOR: t1",
                     "PRE: EXPR: EXISTS (SELECT column FROM t2)",
+                    "PRE: QUERY: SELECT column FROM t2",
                     "PRE: EXPR: column",
                     "POST: EXPR: column",
                     "PRE: TABLE FACTOR: t2",
                     "PRE: RELATION: t2",
                     "POST: RELATION: t2",
                     "POST: TABLE FACTOR: t2",
+                    "POST: QUERY: SELECT column FROM t2",
                     "POST: EXPR: EXISTS (SELECT column FROM t2)",
                     "PRE: TABLE FACTOR: t3",
                     "PRE: RELATION: t3",
                     "POST: RELATION: t3",
                     "POST: TABLE FACTOR: t3",
+                    "POST: QUERY: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2) UNION SELECT * FROM t3",
                     "POST: STATEMENT: SELECT * FROM t1 WHERE EXISTS (SELECT column FROM t2) UNION SELECT * FROM t3",
                 ],
             ),
+            (
+                concat!(
+                    "SELECT * FROM monthly_sales ",
+                    "PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ",
+                    "ORDER BY EMPID"
+                ),
+                vec![
+                    "PRE: STATEMENT: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ORDER BY EMPID",
+                    "PRE: QUERY: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ORDER BY EMPID",
+                    "PRE: TABLE FACTOR: monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d)",
+                    "PRE: TABLE FACTOR: monthly_sales",
+                    "PRE: RELATION: monthly_sales",
+                    "POST: RELATION: monthly_sales",
+                    "POST: TABLE FACTOR: monthly_sales",
+                    "PRE: EXPR: SUM(a.amount)",
+                    "PRE: EXPR: a.amount",
+                    "POST: EXPR: a.amount",
+                    "POST: EXPR: SUM(a.amount)",
+                    "POST: TABLE FACTOR: monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d)",
+                    "PRE: EXPR: EMPID",
+                    "POST: EXPR: EMPID",
+                    "POST: QUERY: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ORDER BY EMPID",
+                    "POST: STATEMENT: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ORDER BY EMPID",
+                ]
+            )
         ];
         for (sql, expected) in tests {
             let actual = do_visit(sql);

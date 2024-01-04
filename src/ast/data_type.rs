@@ -219,6 +219,10 @@ pub enum DataType {
     /// [hive]: https://docs.cloudera.com/cdw-runtime/cloud/impala-sql-reference/topics/impala-struct.html
     /// [bigquery]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
     Struct(Vec<StructField>),
+    /// No type specified - only used with
+    /// [`SQLiteDialect`](crate::dialect::SQLiteDialect), from statements such
+    /// as `CREATE TABLE t1 (a)`.
+    Unspecified,
 }
 
 impl fmt::Display for DataType {
@@ -379,6 +383,7 @@ impl fmt::Display for DataType {
                     write!(f, "STRUCT")
                 }
             }
+            DataType::Unspecified => Ok(()),
         }
     }
 }
@@ -518,18 +523,29 @@ impl fmt::Display for ExactNumberInfo {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub struct CharacterLength {
-    /// Default (if VARYING) or maximum (if not VARYING) length
-    pub length: u64,
-    /// Optional unit. If not informed, the ANSI handles it as CHARACTERS implicitly
-    pub unit: Option<CharLengthUnits>,
+pub enum CharacterLength {
+    IntegerLength {
+        /// Default (if VARYING) or maximum (if not VARYING) length
+        length: u64,
+        /// Optional unit. If not informed, the ANSI handles it as CHARACTERS implicitly
+        unit: Option<CharLengthUnits>,
+    },
+    /// VARCHAR(MAX) or NVARCHAR(MAX), used in T-SQL (Miscrosoft SQL Server)
+    Max,
 }
 
 impl fmt::Display for CharacterLength {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.length)?;
-        if let Some(unit) = &self.unit {
-            write!(f, " {unit}")?;
+        match self {
+            CharacterLength::IntegerLength { length, unit } => {
+                write!(f, "{}", length)?;
+                if let Some(unit) = unit {
+                    write!(f, " {unit}")?;
+                }
+            }
+            CharacterLength::Max => {
+                write!(f, "MAX")?;
+            }
         }
         Ok(())
     }

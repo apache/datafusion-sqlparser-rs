@@ -1,7 +1,7 @@
 [package]
 name = "sqlparser_derive"
 description = "proc macro for sqlparser"
-version = "0.1.1"
+version = "0.2.1"
 authors = ["sqlparser-rs authors"]
 homepage = "https://github.com/sqlparser-rs/sqlparser-rs"
 documentation = "https://docs.rs/sqlparser_derive/"
@@ -18,6 +18,6 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
-syn = "1.0"
+syn = { version = "2.0", default-features = false, features = ["printing", "parsing", "derive", "proc-macro"] }
 proc-macro2 = "1.0"
 quote = "1.0"

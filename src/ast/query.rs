@@ -26,6 +26,7 @@ use crate::ast::*;
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "visitor", visit(with = "visit_query"))]
 pub struct Query {
     /// WITH (common table expressions, or CTEs)
     pub with: Option<With>,
@@ -45,6 +46,10 @@ pub struct Query {
     pub fetch: Option<Fetch>,
     /// `FOR { UPDATE | SHARE } [ OF table_name ] [ SKIP LOCKED | NOWAIT ]`
     pub locks: Vec<LockClause>,
+    /// `FOR XML { RAW | AUTO | EXPLICIT | PATH } [ , ELEMENTS ]`
+    /// `FOR JSON { AUTO | PATH } [ , INCLUDE_NULL_VALUES ]`
+    /// (MSSQL-specific)
+    pub for_clause: Option<ForClause>,
 }
 
 impl fmt::Display for Query {
@@ -70,6 +75,9 @@ impl fmt::Display for Query {
         }
         if !self.locks.is_empty() {
             write!(f, " {}", display_separated(&self.locks, " "))?;
+        }
+        if let Some(ref for_clause) = self.for_clause {
+            write!(f, " {}", for_clause)?;
         }
         Ok(())
     }
@@ -718,6 +726,33 @@ pub enum TableFactor {
         with_offset: bool,
         with_offset_alias: Option<Ident>,
     },
+    /// The `JSON_TABLE` table-valued function.
+    /// Part of the SQL standard, but implemented only by MySQL, Oracle, and DB2.
+    ///
+    /// <https://modern-sql.com/blog/2017-06/whats-new-in-sql-2016#json_table>
+    /// <https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#function_json-table>
+    ///
+    /// ```sql
+    /// SELECT * FROM JSON_TABLE(
+    ///    '[{"a": 1, "b": 2}, {"a": 3, "b": 4}]',
+    ///    '$[*]' COLUMNS(
+    ///        a INT PATH '$.a' DEFAULT '0' ON EMPTY,
+    ///        b INT PATH '$.b' NULL ON ERROR
+    ///     )
+    /// ) AS jt;
+    /// ````
+    JsonTable {
+        /// The JSON expression to be evaluated. It must evaluate to a json string
+        json_expr: Expr,
+        /// The path to the array or object to be iterated over.
+        /// It must evaluate to a json array or object.
+        json_path: Value,
+        /// The columns to be extracted from each element of the array or object.
+        /// Each column must have a name and a type.
+        columns: Vec<JsonTableColumn>,
+        /// The alias for the table.
+        alias: Option<TableAlias>,
+    },
     /// Represents a parenthesized table factor. The SQL spec only allows a
     /// join expression (`(foo <JOIN> bar [ <JOIN> baz ... ])`) to be nested,
     /// possibly several times.
@@ -732,7 +767,6 @@ pub enum TableFactor {
     /// For example `FROM monthly_sales PIVOT(sum(amount) FOR MONTH IN ('JAN', 'FEB'))`
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/pivot>
     Pivot {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table_factor"))]
         table: Box<TableFactor>,
         aggregate_function: Expr, // Function expression
         value_column: Vec<Ident>,
@@ -748,7 +782,6 @@ pub enum TableFactor {
     ///
     /// See <https://docs.snowflake.com/en/sql-reference/constructs/unpivot>.
     Unpivot {
-        #[cfg_attr(feature = "visitor", visit(with = "visit_table_factor"))]
         table: Box<TableFactor>,
         value: Ident,
         name: Ident,
@@ -838,6 +871,22 @@ impl fmt::Display for TableFactor {
                     write!(f, " WITH OFFSET")?;
                 }
                 if let Some(alias) = with_offset_alias {
+                    write!(f, " AS {alias}")?;
+                }
+                Ok(())
+            }
+            TableFactor::JsonTable {
+                json_expr,
+                json_path,
+                columns,
+                alias,
+            } => {
+                write!(
+                    f,
+                    "JSON_TABLE({json_expr}, {json_path} COLUMNS({columns}))",
+                    columns = display_comma_separated(columns)
+                )?;
+                if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }
                 Ok(())
@@ -1229,9 +1278,21 @@ impl fmt::Display for Distinct {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Top {
     /// SQL semantic equivalent of LIMIT but with same structure as FETCH.
+    /// MSSQL only.
     pub with_ties: bool,
+    /// MSSQL only.
     pub percent: bool,
-    pub quantity: Option<Expr>,
+    pub quantity: Option<TopQuantity>,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TopQuantity {
+    // A parenthesized expression. MSSQL only.
+    Expr(Expr),
+    // An unparenthesized integer constant.
+    Constant(u64),
 }
 
 impl fmt::Display for Top {
@@ -1239,7 +1300,12 @@ impl fmt::Display for Top {
         let extension = if self.with_ties { " WITH TIES" } else { "" };
         if let Some(ref quantity) = self.quantity {
             let percent = if self.percent { " PERCENT" } else { "" };
-            write!(f, "TOP ({quantity}){percent}{extension}")
+            match quantity {
+                TopQuantity::Expr(quantity) => write!(f, "TOP ({quantity}){percent}{extension}"),
+                TopQuantity::Constant(quantity) => {
+                    write!(f, "TOP {quantity}{percent}{extension}")
+                }
+            }
         } else {
             write!(f, "TOP{extension}")
         }
@@ -1312,6 +1378,199 @@ impl fmt::Display for GroupByExpr {
                 let col_names = display_comma_separated(col_names);
                 write!(f, "GROUP BY ({col_names})")
             }
+        }
+    }
+}
+
+/// FOR XML or FOR JSON clause, specific to MSSQL
+/// (formats the output of a query as XML or JSON)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ForClause {
+    Browse,
+    Json {
+        for_json: ForJson,
+        root: Option<String>,
+        include_null_values: bool,
+        without_array_wrapper: bool,
+    },
+    Xml {
+        for_xml: ForXml,
+        elements: bool,
+        binary_base64: bool,
+        root: Option<String>,
+        r#type: bool,
+    },
+}
+
+impl fmt::Display for ForClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ForClause::Browse => write!(f, "FOR BROWSE"),
+            ForClause::Json {
+                for_json,
+                root,
+                include_null_values,
+                without_array_wrapper,
+            } => {
+                write!(f, "FOR JSON ")?;
+                write!(f, "{}", for_json)?;
+                if let Some(root) = root {
+                    write!(f, ", ROOT('{}')", root)?;
+                }
+                if *include_null_values {
+                    write!(f, ", INCLUDE_NULL_VALUES")?;
+                }
+                if *without_array_wrapper {
+                    write!(f, ", WITHOUT_ARRAY_WRAPPER")?;
+                }
+                Ok(())
+            }
+            ForClause::Xml {
+                for_xml,
+                elements,
+                binary_base64,
+                root,
+                r#type,
+            } => {
+                write!(f, "FOR XML ")?;
+                write!(f, "{}", for_xml)?;
+                if *binary_base64 {
+                    write!(f, ", BINARY BASE64")?;
+                }
+                if *r#type {
+                    write!(f, ", TYPE")?;
+                }
+                if let Some(root) = root {
+                    write!(f, ", ROOT('{}')", root)?;
+                }
+                if *elements {
+                    write!(f, ", ELEMENTS")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum ForXml {
+    Raw(Option<String>),
+    Auto,
+    Explicit,
+    Path(Option<String>),
+}
+
+impl fmt::Display for ForXml {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ForXml::Raw(root) => {
+                write!(f, "RAW")?;
+                if let Some(root) = root {
+                    write!(f, "('{}')", root)?;
+                }
+                Ok(())
+            }
+            ForXml::Auto => write!(f, "AUTO"),
+            ForXml::Explicit => write!(f, "EXPLICIT"),
+            ForXml::Path(root) => {
+                write!(f, "PATH")?;
+                if let Some(root) = root {
+                    write!(f, "('{}')", root)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ForJson {
+    Auto,
+    Path,
+}
+
+impl fmt::Display for ForJson {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ForJson::Auto => write!(f, "AUTO"),
+            ForJson::Path => write!(f, "PATH"),
+        }
+    }
+}
+
+/// A single column definition in MySQL's `JSON_TABLE` table valued function.
+/// ```sql
+/// SELECT *
+/// FROM JSON_TABLE(
+///     '["a", "b"]',
+///     '$[*]' COLUMNS (
+///         value VARCHAR(20) PATH '$'
+///     )
+/// ) AS jt;
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct JsonTableColumn {
+    /// The name of the column to be extracted.
+    pub name: Ident,
+    /// The type of the column to be extracted.
+    pub r#type: DataType,
+    /// The path to the column to be extracted. Must be a literal string.
+    pub path: Value,
+    /// true if the column is a boolean set to true if the given path exists
+    pub exists: bool,
+    /// The empty handling clause of the column
+    pub on_empty: Option<JsonTableColumnErrorHandling>,
+    /// The error handling clause of the column
+    pub on_error: Option<JsonTableColumnErrorHandling>,
+}
+
+impl fmt::Display for JsonTableColumn {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{} {}{} PATH {}",
+            self.name,
+            self.r#type,
+            if self.exists { " EXISTS" } else { "" },
+            self.path
+        )?;
+        if let Some(on_empty) = &self.on_empty {
+            write!(f, " {} ON EMPTY", on_empty)?;
+        }
+        if let Some(on_error) = &self.on_error {
+            write!(f, " {} ON ERROR", on_error)?;
+        }
+        Ok(())
+    }
+}
+
+/// Stores the error handling clause of a `JSON_TABLE` table valued function:
+/// {NULL | DEFAULT json_string | ERROR} ON {ERROR | EMPTY }
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum JsonTableColumnErrorHandling {
+    Null,
+    Default(Value),
+    Error,
+}
+
+impl fmt::Display for JsonTableColumnErrorHandling {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            JsonTableColumnErrorHandling::Null => write!(f, "NULL"),
+            JsonTableColumnErrorHandling::Default(json_string) => {
+                write!(f, "DEFAULT {}", json_string)
+            }
+            JsonTableColumnErrorHandling::Error => write!(f, "ERROR"),
         }
     }
 }

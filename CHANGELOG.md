@@ -8,6 +8,47 @@ Given that the parser produces a typed AST, any changes to the AST will technica
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+
+## [0.41.0] 2023-12-22
+
+### Added
+* Support `DEFERRED`, `IMMEDIATE`, and `EXCLUSIVE` in SQLite's `BEGIN TRANSACTION` command (#1067) - Thanks @takaebato
+* Support generated columns skipping `GENERATED ALWAYS` keywords (#1058) - Thanks @takluyver
+* Support `LOCK/UNLOCK TABLES` for MySQL (#1059) - Thanks @zzzdong
+* Support `JSON_TABLE` (#1062) - Thanks @lovasoa
+* Support `CALL` statements (#1063) - Thanks @lovasoa
+
+### Fixed
+* fix rendering of SELECT TOP (#1070) for Snowflake - Thanks jmhain
+
+### Changed
+* Improve documentation formatting (#1068) - Thanks @alamb
+* Replace type_id() by trait method to allow wrapping dialects (#1065) - Thanks @jjbayer
+* Document that comments aren't preserved for round trip (#1060) - Thanks @takluyver
+* Update sqlparser-derive to use `syn 2.0` (#1040) - Thanks @serprex
+
+## [0.40.0] 2023-11-27
+
+### Added
+* Add `{pre,post}_visit_query` to `Visitor` (#1044) - Thanks @jmhain
+* Support generated virtual columns with expression (#1051) - Thanks @takluyver
+* Support PostgreSQL `END` (#1035) - Thanks @tobyhede
+* Support `INSERT INTO ... DEFAULT VALUES ...` (#1036) - Thanks @CDThomas
+* Support `RELEASE` and `ROLLBACK TO SAVEPOINT` (#1045) - Thanks @CDThomas
+* Support `CONVERT` expressions (#1048) - Thanks @lovasoa
+* Support `GLOBAL` and `SESSION` parts in `SHOW VARIABLES` for mysql and generic - Thanks @emin100
+* Support snowflake `PIVOT` on derived table factors (#1027) - Thanks @lustefaniak
+* Support mssql json and xml extensions (#1043) - Thanks @lovasoa
+* Support for `MAX` as a character length (#1038) - Thanks @lovasoa
+* Support `IN ()` syntax of SQLite (#1028) - Thanks @alamb
+
+### Fixed
+* Fix extra whitespace printed before `ON CONFLICT` (#1037) - Thanks @CDThomas
+
+### Changed
+* Document round trip ability (#1052) - Thanks @alamb
+* Add PRQL to list of users (#1031) - Thanks @vanillajonathan
+
 ## [0.39.0] 2023-10-27
 
 ### Added

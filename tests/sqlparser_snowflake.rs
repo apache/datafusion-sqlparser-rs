@@ -1140,3 +1140,18 @@ fn parse_division_correctly() {
         "SELECT tbl1.field / tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
     );
 }
+
+#[test]
+fn parse_pivot_of_table_factor_derived() {
+    snowflake().verified_stmt(
+        "SELECT * FROM (SELECT place_id, weekday, open FROM times AS p) PIVOT(max(open) FOR weekday IN (0, 1, 2, 3, 4, 5, 6)) AS p (place_id, open_sun, open_mon, open_tue, open_wed, open_thu, open_fri, open_sat)"
+    );
+}
+
+#[test]
+fn parse_top() {
+    snowflake().one_statement_parses_to(
+        "SELECT TOP 4 c1 FROM testtable",
+        "SELECT TOP 4 c1 FROM testtable",
+    );
+}

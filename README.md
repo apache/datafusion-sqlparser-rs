@@ -59,6 +59,28 @@ This crate avoids semantic analysis because it varies drastically
 between dialects and implementations. If you want to do semantic
 analysis, feel free to use this project as a base.
 
+## Preserves Syntax Round Trip 
+
+This crate allows users to recover the original SQL text (with comments removed,
+normalized whitespace and keyword capitalization), which is useful for tools
+that analyze and manipulate SQL.
+
+This means that other than comments, whitespace and the capitalization of
+keywords, the following should hold true for all SQL:
+
+```rust
+// Parse SQL
+let ast = Parser::parse_sql(&GenericDialect, sql).unwrap();
+
+// The original SQL text can be generated from the AST
+assert_eq!(ast[0].to_string(), sql);
+```
+
+There are still some cases in this crate where different SQL with seemingly
+similar semantics are represented with the same AST. We welcome PRs to fix such
+issues and distinguish different syntaxes in the AST.
+
+
 ## SQL compliance
 
 SQL was first standardized in 1987, and revisions of the standard have been
@@ -93,7 +115,7 @@ $ cargo run --features json_example --example cli FILENAME.sql [--dialectname]
 ## Users
 
 This parser is currently being used by the [DataFusion] query engine,
-[LocustDB], [Ballista], [GlueSQL], [Opteryx], and [JumpWire].
+[LocustDB], [Ballista], [GlueSQL], [Opteryx], [PRQL], and [JumpWire].
 
 If your project is using sqlparser-rs feel free to make a PR to add it
 to this list.
@@ -188,6 +210,7 @@ licensed as above, without any additional terms or conditions.
 [Ballista]: https://github.com/apache/arrow-ballista
 [GlueSQL]: https://github.com/gluesql/gluesql
 [Opteryx]: https://github.com/mabel-dev/opteryx
+[PRQL]: https://github.com/PRQL/prql
 [JumpWire]: https://github.com/extragoodlabs/jumpwire
 [Pratt Parser]: https://tdop.github.io/
 [sql-2016-grammar]: https://jakewheat.github.io/sql-overview/sql-2016-foundation-grammar.html

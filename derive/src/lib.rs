@@ -2,8 +2,9 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::spanned::Spanned;
 use syn::{
-    parse_macro_input, parse_quote, Attribute, Data, DeriveInput, Fields, GenericParam, Generics,
-    Ident, Index, Lit, Meta, MetaNameValue, NestedMeta,
+    parse::{Parse, ParseStream},
+    parse_macro_input, parse_quote, Attribute, Data, DeriveInput,
+    Fields, GenericParam, Generics, Ident, Index, LitStr, Meta, Token
 };
 
 
@@ -78,36 +79,41 @@ struct Attributes {
     with: Option<Ident>,
 }
 
+struct WithIdent {
+    with: Option<Ident>,
+}
+impl Parse for WithIdent {
+    fn parse(input: ParseStream) -> Result<Self, syn::Error> {
+        let mut result = WithIdent { with: None };
+        let ident = input.parse::<Ident>()?;
+        if ident != "with" {
+            return Err(syn::Error::new(ident.span(), "Expected identifier to be `with`"));
+        }
+        input.parse::<Token!(=)>()?;
+        let s = input.parse::<LitStr>()?;
+        result.with = Some(format_ident!("{}", s.value(), span = s.span()));
+        Ok(result)
+    }
+}
+
 impl Attributes {
     fn parse(attrs: &[Attribute]) -> Self {
         let mut out = Self::default();
-        for attr in attrs.iter().filter(|a| a.path.is_ident("visit")) {
-            let meta = attr.parse_meta().expect("visit attribute");
-            match meta {
-                Meta::List(l) => {
-                    for nested in &l.nested {
-                        match nested {
-                            NestedMeta::Meta(Meta::NameValue(v)) => out.parse_name_value(v),
-                            _ => panic!("Expected #[visit(key = \"value\")]"),
+        for attr in attrs {
+            if let Meta::List(ref metalist) = attr.meta {
+                if metalist.path.is_ident("visit") {
+                    match syn::parse2::<WithIdent>(metalist.tokens.clone()) {
+                        Ok(with_ident) => {
+                            out.with = with_ident.with;
+                        }
+                        Err(e) => {
+                            panic!("{}", e);
                         }
                     }
                 }
-                _ => panic!("Expected #[visit(...)]"),
             }
         }
         out
-    }
-
-    /// Updates self with a name value attribute
-    fn parse_name_value(&mut self, v: &MetaNameValue) {
-        if v.path.is_ident("with") {
-            match &v.lit {
-                Lit::Str(s) => self.with = Some(format_ident!("{}", s.value(), span = s.span())),
-                _ => panic!("Expected a string value, got {}", v.lit.to_token_stream()),
-            }
-            return;
-        }
-        panic!("Unrecognised kv attribute {}", v.path.to_token_stream())
     }
 
     /// Returns the pre and post visit token streams

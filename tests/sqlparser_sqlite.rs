@@ -22,7 +22,7 @@ use test_utils::*;
 use sqlparser::ast::SelectItem::UnnamedExpr;
 use sqlparser::ast::*;
 use sqlparser::dialect::{GenericDialect, SQLiteDialect};
-use sqlparser::parser::ParserOptions;
+use sqlparser::parser::{ParserError, ParserOptions};
 use sqlparser::tokenizer::Token;
 
 #[test]
@@ -203,6 +203,27 @@ fn parse_create_sqlite_quote() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_create_table_gencol() {
+    let sql_default = "CREATE TABLE t1 (a INT, b INT GENERATED ALWAYS AS (a * 2))";
+    sqlite_and_generic().verified_stmt(sql_default);
+
+    let sql_virt = "CREATE TABLE t1 (a INT, b INT GENERATED ALWAYS AS (a * 2) VIRTUAL)";
+    sqlite_and_generic().verified_stmt(sql_virt);
+
+    let sql_stored = "CREATE TABLE t1 (a INT, b INT GENERATED ALWAYS AS (a * 2) STORED)";
+    sqlite_and_generic().verified_stmt(sql_stored);
+
+    sqlite_and_generic().verified_stmt("CREATE TABLE t1 (a INT, b INT AS (a * 2))");
+    sqlite_and_generic().verified_stmt("CREATE TABLE t1 (a INT, b INT AS (a * 2) VIRTUAL)");
+    sqlite_and_generic().verified_stmt("CREATE TABLE t1 (a INT, b INT AS (a * 2) STORED)");
+}
+
+#[test]
+fn parse_create_table_untyped() {
+    sqlite().verified_stmt("CREATE TABLE t1 (a, b AS (a * 2), c NOT NULL)");
 }
 
 #[test]
@@ -419,6 +440,40 @@ fn invalid_empty_list() {
     );
 }
 
+#[test]
+fn parse_start_transaction_with_modifier() {
+    sqlite_and_generic().verified_stmt("BEGIN DEFERRED TRANSACTION");
+    sqlite_and_generic().verified_stmt("BEGIN IMMEDIATE TRANSACTION");
+    sqlite_and_generic().verified_stmt("BEGIN EXCLUSIVE TRANSACTION");
+    sqlite_and_generic().one_statement_parses_to("BEGIN DEFERRED", "BEGIN DEFERRED TRANSACTION");
+    sqlite_and_generic().one_statement_parses_to("BEGIN IMMEDIATE", "BEGIN IMMEDIATE TRANSACTION");
+    sqlite_and_generic().one_statement_parses_to("BEGIN EXCLUSIVE", "BEGIN EXCLUSIVE TRANSACTION");
+
+    let unsupported_dialects = TestedDialects {
+        dialects: all_dialects()
+            .dialects
+            .into_iter()
+            .filter(|x| !(x.is::<SQLiteDialect>() || x.is::<GenericDialect>()))
+            .collect(),
+        options: None,
+    };
+    let res = unsupported_dialects.parse_sql_statements("BEGIN DEFERRED");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: DEFERRED".to_string()),
+        res.unwrap_err(),
+    );
+    let res = unsupported_dialects.parse_sql_statements("BEGIN IMMEDIATE");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: IMMEDIATE".to_string()),
+        res.unwrap_err(),
+    );
+    let res = unsupported_dialects.parse_sql_statements("BEGIN EXCLUSIVE");
+    assert_eq!(
+        ParserError::ParserError("Expected end of statement, found: EXCLUSIVE".to_string()),
+        res.unwrap_err(),
+    );
+}
+
 fn sqlite() -> TestedDialects {
     TestedDialects {
         dialects: vec![Box::new(SQLiteDialect {})],
@@ -435,7 +490,6 @@ fn sqlite_with_options(options: ParserOptions) -> TestedDialects {
 
 fn sqlite_and_generic() -> TestedDialects {
     TestedDialects {
-        // we don't have a separate SQLite dialect, so test only the generic dialect for now
         dialects: vec![Box::new(SQLiteDialect {}), Box::new(GenericDialect {})],
         options: None,
     }

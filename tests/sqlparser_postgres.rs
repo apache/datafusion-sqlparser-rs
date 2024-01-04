@@ -349,10 +349,12 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "first_name".into(),
-                        data_type: DataType::CharacterVarying(Some(CharacterLength {
-                            length: 45,
-                            unit: None
-                        })),
+                        data_type: DataType::CharacterVarying(Some(
+                            CharacterLength::IntegerLength {
+                                length: 45,
+                                unit: None
+                            }
+                        )),
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -361,10 +363,12 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "last_name".into(),
-                        data_type: DataType::CharacterVarying(Some(CharacterLength {
-                            length: 45,
-                            unit: None
-                        })),
+                        data_type: DataType::CharacterVarying(Some(
+                            CharacterLength::IntegerLength {
+                                length: 45,
+                                unit: None
+                            }
+                        )),
                         collation: Some(ObjectName(vec![Ident::with_quote('"', "es_ES")])),
                         options: vec![ColumnOptionDef {
                             name: None,
@@ -373,10 +377,12 @@ fn parse_create_table_with_defaults() {
                     },
                     ColumnDef {
                         name: "email".into(),
-                        data_type: DataType::CharacterVarying(Some(CharacterLength {
-                            length: 50,
-                            unit: None
-                        })),
+                        data_type: DataType::CharacterVarying(Some(
+                            CharacterLength::IntegerLength {
+                                length: 50,
+                                unit: None
+                            }
+                        )),
                         collation: None,
                         options: vec![],
                     },
@@ -559,25 +565,43 @@ fn parse_alter_table_constraints_rename() {
 
 #[test]
 fn parse_alter_table_disable() {
+    pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE ROW LEVEL SECURITY");
+    pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE RULE rule_name");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER ALL");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER USER");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER trigger_name");
-    pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE RULE rule_name");
-    pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE ROW LEVEL SECURITY");
+
 }
 
 #[test]
 fn parse_alter_table_enable() {
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ALWAYS RULE rule_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ALWAYS TRIGGER trigger_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA TRIGGER trigger_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA RULE rule_name");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ROW LEVEL SECURITY");
+    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE RULE rule_name");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER ALL");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER USER");
     pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE TRIGGER trigger_name");
-    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE RULE rule_name");
-    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ROW LEVEL SECURITY");
-    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA TRIGGER trigger_name");
-    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ALWAYS TRIGGER trigger_name");
-    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE REPLICA RULE rule_name");
-    pg_and_generic().verified_stmt("ALTER TABLE tab ENABLE ALWAYS rule_name");
 }
+
+#[test]
+fn parse_create_extension() {
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name");
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name WITH SCHEMA schema_name");
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name WITH VERSION version");
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name WITH CASCADE");
+    pg_and_generic().verified_stmt(
+        "CREATE EXTENSION extension_name WITH SCHEMA schema_name VERSION version CASCADE",
+    );
+    pg_and_generic()
+        .verified_stmt("CREATE EXTENSION extension_name WITH SCHEMA schema_name CASCADE");
+    pg_and_generic().verified_stmt("CREATE EXTENSION extension_name WITH VERSION version CASCADE");
+    pg_and_generic()
+        .verified_stmt("CREATE EXTENSION extension_name WITH SCHEMA schema_name VERSION version");
+}
+
 #[test]
 fn parse_alter_table_alter_column() {
     pg().one_statement_parses_to(
@@ -603,6 +627,42 @@ fn parse_alter_table_alter_column() {
         }
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn parse_alter_table_alter_column_add_generated() {
+    pg_and_generic()
+        .verified_stmt("ALTER TABLE t ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY");
+    pg_and_generic()
+        .verified_stmt("ALTER TABLE t ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY");
+    pg_and_generic().verified_stmt("ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY");
+    pg_and_generic().verified_stmt(
+        "ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY ( INCREMENT 1 MINVALUE 1 )",
+    );
+    pg_and_generic().verified_stmt("ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY ( )");
+
+    let res = pg().parse_sql_statements(
+        "ALTER TABLE t ALTER COLUMN id ADD GENERATED ( INCREMENT 1 MINVALUE 1 )",
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected AS, found: (".to_string()),
+        res.unwrap_err()
+    );
+
+    let res = pg().parse_sql_statements(
+        "ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY ( INCREMENT )",
+    );
+    assert_eq!(
+        ParserError::ParserError("Expected a value, found: )".to_string()),
+        res.unwrap_err()
+    );
+
+    let res =
+        pg().parse_sql_statements("ALTER TABLE t ALTER COLUMN id ADD GENERATED AS IDENTITY (");
+    assert_eq!(
+        ParserError::ParserError("Expected ), found: EOF".to_string()),
+        res.unwrap_err()
+    );
 }
 
 #[test]
@@ -1025,6 +1085,7 @@ fn parse_copy_to() {
                 offset: None,
                 fetch: None,
                 locks: vec![],
+                for_clause: None,
             })),
             to: true,
             target: CopyTarget::File {
@@ -1442,7 +1503,7 @@ fn parse_prepare() {
 fn parse_pg_on_conflict() {
     let stmt = pg_and_generic().verified_stmt(
         "INSERT INTO distributors (did, dname) \
-        VALUES (5, 'Gizmo Transglobal'), (6, 'Associated Computing, Inc')  \
+        VALUES (5, 'Gizmo Transglobal'), (6, 'Associated Computing, Inc') \
         ON CONFLICT(did) \
         DO UPDATE SET dname = EXCLUDED.dname",
     );
@@ -1472,7 +1533,7 @@ fn parse_pg_on_conflict() {
 
     let stmt = pg_and_generic().verified_stmt(
         "INSERT INTO distributors (did, dname, area) \
-        VALUES (5, 'Gizmo Transglobal', 'Mars'), (6, 'Associated Computing, Inc', 'Venus')  \
+        VALUES (5, 'Gizmo Transglobal', 'Mars'), (6, 'Associated Computing, Inc', 'Venus') \
         ON CONFLICT(did, area) \
         DO UPDATE SET dname = EXCLUDED.dname, area = EXCLUDED.area",
     );
@@ -1511,7 +1572,7 @@ fn parse_pg_on_conflict() {
 
     let stmt = pg_and_generic().verified_stmt(
         "INSERT INTO distributors (did, dname) \
-    VALUES (5, 'Gizmo Transglobal'), (6, 'Associated Computing, Inc')  \
+    VALUES (5, 'Gizmo Transglobal'), (6, 'Associated Computing, Inc') \
     ON CONFLICT DO NOTHING",
     );
     match stmt {
@@ -1530,7 +1591,7 @@ fn parse_pg_on_conflict() {
 
     let stmt = pg_and_generic().verified_stmt(
         "INSERT INTO distributors (did, dname, dsize) \
-        VALUES (5, 'Gizmo Transglobal', 1000), (6, 'Associated Computing, Inc', 1010)  \
+        VALUES (5, 'Gizmo Transglobal', 1000), (6, 'Associated Computing, Inc', 1010) \
         ON CONFLICT(did) \
         DO UPDATE SET dname = $1 WHERE dsize > $2",
     );
@@ -1567,7 +1628,7 @@ fn parse_pg_on_conflict() {
 
     let stmt = pg_and_generic().verified_stmt(
         "INSERT INTO distributors (did, dname, dsize) \
-        VALUES (5, 'Gizmo Transglobal', 1000), (6, 'Associated Computing, Inc', 1010)  \
+        VALUES (5, 'Gizmo Transglobal', 1000), (6, 'Associated Computing, Inc', 1010) \
         ON CONFLICT ON CONSTRAINT distributors_did_pkey \
         DO UPDATE SET dname = $1 WHERE dsize > $2",
     );
@@ -2075,6 +2136,7 @@ fn parse_array_subquery_expr() {
             offset: None,
             fetch: None,
             locks: vec![],
+            for_clause: None,
         })),
         expr_from_projection(only(&select.projection)),
     );
@@ -3269,7 +3331,7 @@ fn parse_dollar_quoted_string() {
 
     let stmt = pg().parse_sql_statements(sql).unwrap();
 
-    let projection = match stmt.get(0).unwrap() {
+    let projection = match stmt.first().unwrap() {
         Statement::Query(query) => match &*query.body {
             SetExpr::Select(select) => &select.projection,
             _ => unreachable!(),

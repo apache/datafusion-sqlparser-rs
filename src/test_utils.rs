@@ -102,6 +102,11 @@ impl TestedDialects {
     /// Ensures that `sql` parses as a single [Statement] for all tested
     /// dialects.
     ///
+    /// In general, the canonical SQL should be the same (see crate
+    /// documentation for rationale) and you should prefer the `verified_`
+    /// variants in testing, such as  [`verified_statement`] or
+    /// [`verified_query`].
+    ///
     /// If `canonical` is non empty,this function additionally asserts
     /// that:
     ///

@@ -539,21 +539,29 @@ impl<'a> Tokenizer<'a> {
 
     /// Tokenize the statement and produce a vector of tokens with location information
     pub fn tokenize_with_location(&mut self) -> Result<Vec<TokenWithLocation>, TokenizerError> {
+        let mut tokens: Vec<TokenWithLocation> = vec![];
+        self.tokenize_with_location_into(&mut tokens)
+            .map(|_| tokens)
+    }
+
+    /// Tokenize the statement and append tokens with location information into the provided buffer
+    pub fn tokenize_with_location_into(
+        &mut self,
+        buf: &mut Vec<TokenWithLocation>,
+    ) -> Result<(), TokenizerError> {
         let mut state = State {
             peekable: self.query.chars().peekable(),
             line: 1,
             col: 1,
         };
 
-        let mut tokens: Vec<TokenWithLocation> = vec![];
-
         let mut location = state.location();
         while let Some(token) = self.next_token(&mut state)? {
-            tokens.push(TokenWithLocation { token, location });
+            buf.push(TokenWithLocation { token, location });
 
             location = state.location();
         }
-        Ok(tokens)
+        Ok(())
     }
 
     // Tokenize the identifer or keywords in `ch`

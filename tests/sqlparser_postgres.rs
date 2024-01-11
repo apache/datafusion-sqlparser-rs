@@ -3773,3 +3773,22 @@ fn test_simple_insert_with_quoted_alias() {
         }
     )
 }
+
+#[test]
+fn parse_array_agg() {
+    // follows general function with wildcard code path
+    let sql = r#"SELECT GREATEST(sections_tbl.*) AS sections FROM sections_tbl"#;
+    pg().verified_stmt(sql);
+
+    // follows special-case array_agg code path
+    let sql2 = "SELECT ARRAY_AGG(sections_tbl.*) AS sections FROM sections_tbl";
+    pg().verified_stmt(sql2);
+
+    // handles multi-part identifier with general code path
+    let sql3 = "SELECT GREATEST(my_schema.sections_tbl.*) AS sections FROM sections_tbl";
+    pg().verified_stmt(sql3);
+
+    // handles multi-part identifier with array_agg code path
+    let sql4 = "SELECT ARRAY_AGG(my_schema.sections_tbl.*) AS sections FROM sections_tbl";
+    pg().verified_stmt(sql4);
+}

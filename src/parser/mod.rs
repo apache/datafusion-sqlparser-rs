@@ -161,16 +161,6 @@ pub enum WildcardExpr {
     Wildcard,
 }
 
-impl From<WildcardExpr> for FunctionArgExpr {
-    fn from(wildcard_expr: WildcardExpr) -> Self {
-        match wildcard_expr {
-            WildcardExpr::Expr(expr) => Self::Expr(expr),
-            WildcardExpr::QualifiedWildcard(prefix) => Self::QualifiedWildcard(prefix),
-            WildcardExpr::Wildcard => Self::Wildcard,
-        }
-    }
-}
-
 impl From<TokenizerError> for ParserError {
     fn from(e: TokenizerError) -> Self {
         ParserError::TokenizerError(e.to_string())
@@ -734,7 +724,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a new expression including wildcard & qualified wildcard
-    pub fn parse_wildcard_expr(&mut self) -> Result<WildcardExpr, ParserError> {
+    pub fn parse_wildcard_expr(&mut self) -> Result<Expr, ParserError> {
         let index = self.index;
 
         let next_token = self.next_token();
@@ -756,7 +746,7 @@ impl<'a> Parser<'a> {
                                 id_parts.push(Ident::with_quote('\'', s))
                             }
                             Token::Mul => {
-                                return Ok(WildcardExpr::QualifiedWildcard(ObjectName(id_parts)));
+                                return Ok(Expr::QualifiedWildcard(ObjectName(id_parts)));
                             }
                             _ => {
                                 return self
@@ -767,13 +757,13 @@ impl<'a> Parser<'a> {
                 }
             }
             Token::Mul => {
-                return Ok(WildcardExpr::Wildcard);
+                return Ok(Expr::Wildcard);
             }
             _ => (),
         };
 
         self.index = index;
-        self.parse_expr().map(WildcardExpr::Expr)
+        self.parse_expr()
     }
 
     /// Parse a new expression
@@ -969,10 +959,22 @@ impl<'a> Parser<'a> {
                 _ => match self.peek_token().token {
                     Token::LParen | Token::Period => {
                         let mut id_parts: Vec<Ident> = vec![w.to_ident()];
+                        let mut ends_with_wildcard = false;
                         while self.consume_token(&Token::Period) {
                             let next_token = self.next_token();
                             match next_token.token {
                                 Token::Word(w) => id_parts.push(w.to_ident()),
+                                Token::Mul => {
+                                    // Postgres explicitly allows funcnm(tablenm.*) and the
+                                    // function array_agg traverses this control flow
+                                    if dialect_of!(self is PostgreSqlDialect) {
+                                        ends_with_wildcard = true;
+                                        break;
+                                    } else {
+                                        return self
+                                            .expected("an identifier after '.'", next_token);
+                                    }
+                                }
                                 Token::SingleQuotedString(s) => {
                                     id_parts.push(Ident::with_quote('\'', s))
                                 }
@@ -983,7 +985,9 @@ impl<'a> Parser<'a> {
                             }
                         }
 
-                        if self.consume_token(&Token::LParen) {
+                        if ends_with_wildcard {
+                            Ok(Expr::QualifiedWildcard(ObjectName(id_parts)))
+                        } else if self.consume_token(&Token::LParen) {
                             self.prev_token();
                             self.parse_function(ObjectName(id_parts))
                         } else {
@@ -7871,9 +7875,9 @@ impl<'a> Parser<'a> {
                 let subquery = self.parse_query()?;
                 self.expect_token(&Token::RParen)?;
                 return Ok((
-                    vec![FunctionArg::Unnamed(FunctionArgExpr::from(
-                        WildcardExpr::Expr(Expr::Subquery(Box::new(subquery))),
-                    ))],
+                    vec![FunctionArg::Unnamed(FunctionArgExpr::from(Expr::Subquery(
+                        Box::new(subquery),
+                    )))],
                     vec![],
                 ));
             }
@@ -7892,7 +7896,14 @@ impl<'a> Parser<'a> {
     /// Parse a comma-delimited list of projections after SELECT
     pub fn parse_select_item(&mut self) -> Result<SelectItem, ParserError> {
         match self.parse_wildcard_expr()? {
-            WildcardExpr::Expr(expr) => {
+            Expr::QualifiedWildcard(prefix) => Ok(SelectItem::QualifiedWildcard(
+                prefix,
+                self.parse_wildcard_additional_options()?,
+            )),
+            Expr::Wildcard => Ok(SelectItem::Wildcard(
+                self.parse_wildcard_additional_options()?,
+            )),
+            expr => {
                 let expr: Expr = if self.dialect.supports_filter_during_aggregation()
                     && self.parse_keyword(Keyword::FILTER)
                 {
@@ -7917,13 +7928,6 @@ impl<'a> Parser<'a> {
                         None => SelectItem::UnnamedExpr(expr),
                     })
             }
-            WildcardExpr::QualifiedWildcard(prefix) => Ok(SelectItem::QualifiedWildcard(
-                prefix,
-                self.parse_wildcard_additional_options()?,
-            )),
-            WildcardExpr::Wildcard => Ok(SelectItem::Wildcard(
-                self.parse_wildcard_additional_options()?,
-            )),
         }
     }
 

@@ -60,7 +60,8 @@ pub enum Token {
     DoubleQuotedString(String),
     /// Dollar quoted string: i.e: $$string$$ or $tag_name$string$tag_name$
     DollarQuotedString(DollarQuotedString),
-    /// Byte string literal: i.e: b'string' or B'string'
+    /// Byte string literal: i.e: b'string' or B'string' (note that some backends, such as
+    /// PostgreSQL, may treat this syntax as a bit string literal instead, i.e: b'10010101')
     SingleQuotedByteStringLiteral(String),
     /// Byte string literal: i.e: b"string" or B"string"
     DoubleQuotedByteStringLiteral(String),
@@ -114,7 +115,7 @@ pub enum Token {
     Period,
     /// Colon `:`
     Colon,
-    /// DoubleColon `::` (used for casting in postgresql)
+    /// DoubleColon `::` (used for casting in PostgreSQL)
     DoubleColon,
     /// Assignment `:=` (used for keyword argument in DuckDB macros)
     DuckAssignment,
@@ -152,7 +153,7 @@ pub enum Token {
     ShiftLeft,
     /// `>>`, a bitwise shift right operator in PostgreSQL
     ShiftRight,
-    /// '&&', an overlap operator in PostgreSQL
+    /// `&&`, an overlap operator in PostgreSQL
     Overlap,
     /// Exclamation Mark `!` used for PostgreSQL factorial operator
     ExclamationMark,
@@ -160,19 +161,21 @@ pub enum Token {
     DoubleExclamationMark,
     /// AtSign `@` used for PostgreSQL abs operator
     AtSign,
+    /// `^@`, a "starts with" string operator in PostgreSQL
+    CaretAt,
     /// `|/`, a square root math operator in PostgreSQL
     PGSquareRoot,
     /// `||/`, a cube root math operator in PostgreSQL
     PGCubeRoot,
     /// `?` or `$` , a prepared statement arg placeholder
     Placeholder(String),
-    /// ->, used as a operator to extract json field in PostgreSQL
+    /// `->`, used as a operator to extract json field in PostgreSQL
     Arrow,
-    /// ->>, used as a operator to extract json field as text in PostgreSQL
+    /// `->>`, used as a operator to extract json field as text in PostgreSQL
     LongArrow,
-    /// #> Extracts JSON sub-object at the specified path
+    /// `#>`, extracts JSON sub-object at the specified path
     HashArrow,
-    /// #>> Extracts JSON sub-object at the specified path as text
+    /// `#>>`, extracts JSON sub-object at the specified path as text
     HashLongArrow,
     /// jsonb @> jsonb -> boolean: Test whether left json contains the right json
     AtArrow,
@@ -247,6 +250,7 @@ impl fmt::Display for Token {
             Token::ExclamationMarkTilde => f.write_str("!~"),
             Token::ExclamationMarkTildeAsterisk => f.write_str("!~*"),
             Token::AtSign => f.write_str("@"),
+            Token::CaretAt => f.write_str("^@"),
             Token::ShiftLeft => f.write_str("<<"),
             Token::ShiftRight => f.write_str(">>"),
             Token::Overlap => f.write_str("&&"),
@@ -940,7 +944,13 @@ impl<'a> Tokenizer<'a> {
                         _ => Ok(Some(Token::Ampersand)),
                     }
                 }
-                '^' => self.consume_and_return(chars, Token::Caret),
+                '^' => {
+                    chars.next(); // consume the '^'
+                    match chars.peek() {
+                        Some('@') => self.consume_and_return(chars, Token::CaretAt),
+                        _ => Ok(Some(Token::Caret)),
+                    }
+                }
                 '{' => self.consume_and_return(chars, Token::LBrace),
                 '}' => self.consume_and_return(chars, Token::RBrace),
                 '#' if dialect_of!(self is SnowflakeDialect) => {

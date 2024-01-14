@@ -3574,3 +3574,201 @@ fn parse_join_constraint_unnest_alias() {
         }]
     );
 }
+
+#[test]
+fn test_complex_postgres_insert_with_alias() {
+    let sql1 = "WITH existing AS (SELECT test_table.id FROM test_tables AS test_table WHERE (a = 12) AND (b = 34)), inserted AS (INSERT INTO test_tables AS test_table (id, a, b, c) VALUES (DEFAULT, 56, 78, 90) ON CONFLICT(a, b) DO UPDATE SET c = EXCLUDED.c WHERE (test_table.c <> EXCLUDED.c)) SELECT c FROM existing";
+
+    pg().verified_stmt(sql1);
+}
+
+#[cfg(not(feature = "bigdecimal"))]
+#[test]
+fn test_simple_postgres_insert_with_alias() {
+    let sql2 = "INSERT INTO test_tables AS test_table (id, a) VALUES (DEFAULT, 123)";
+
+    let statement = pg().verified_stmt(sql2);
+
+    assert_eq!(
+        statement,
+        Statement::Insert {
+            or: None,
+            ignore: false,
+            into: true,
+            table_name: ObjectName(vec![Ident {
+                value: "test_tables".to_string(),
+                quote_style: None
+            }]),
+            table_alias: Some(Ident {
+                value: "test_table".to_string(),
+                quote_style: None
+            }),
+            columns: vec![
+                Ident {
+                    value: "id".to_string(),
+                    quote_style: None
+                },
+                Ident {
+                    value: "a".to_string(),
+                    quote_style: None
+                }
+            ],
+            overwrite: false,
+            source: Some(Box::new(Query {
+                with: None,
+                body: Box::new(SetExpr::Values(Values {
+                    explicit_row: false,
+                    rows: vec![vec![
+                        Expr::Identifier(Ident {
+                            value: "DEFAULT".to_string(),
+                            quote_style: None
+                        }),
+                        Expr::Value(Value::Number("123".to_string(), false))
+                    ]]
+                })),
+                order_by: vec![],
+                limit: None,
+                limit_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None
+            })),
+            partitioned: None,
+            after_columns: vec![],
+            table: false,
+            on: None,
+            returning: None,
+            replace_into: false,
+            priority: None
+        }
+    )
+}
+
+#[cfg(feature = "bigdecimal")]
+#[test]
+fn test_simple_postgres_insert_with_alias() {
+    let sql2 = "INSERT INTO test_tables AS test_table (id, a) VALUES (DEFAULT, 123)";
+
+    let statement = pg().verified_stmt(sql2);
+
+    assert_eq!(
+        statement,
+        Statement::Insert {
+            or: None,
+            ignore: false,
+            into: true,
+            table_name: ObjectName(vec![Ident {
+                value: "test_tables".to_string(),
+                quote_style: None
+            }]),
+            table_alias: Some(Ident {
+                value: "test_table".to_string(),
+                quote_style: None
+            }),
+            columns: vec![
+                Ident {
+                    value: "id".to_string(),
+                    quote_style: None
+                },
+                Ident {
+                    value: "a".to_string(),
+                    quote_style: None
+                }
+            ],
+            overwrite: false,
+            source: Some(Box::new(Query {
+                with: None,
+                body: Box::new(SetExpr::Values(Values {
+                    explicit_row: false,
+                    rows: vec![vec![
+                        Expr::Identifier(Ident {
+                            value: "DEFAULT".to_string(),
+                            quote_style: None
+                        }),
+                        Expr::Value(Value::Number(
+                            bigdecimal::BigDecimal::new(123.into(), 0),
+                            false
+                        ))
+                    ]]
+                })),
+                order_by: vec![],
+                limit: None,
+                limit_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None
+            })),
+            partitioned: None,
+            after_columns: vec![],
+            table: false,
+            on: None,
+            returning: None,
+            replace_into: false,
+            priority: None
+        }
+    )
+}
+
+#[test]
+fn test_simple_insert_with_quoted_alias() {
+    let sql = r#"INSERT INTO test_tables AS "Test_Table" (id, a) VALUES (DEFAULT, '0123')"#;
+
+    let statement = pg().verified_stmt(sql);
+
+    assert_eq!(
+        statement,
+        Statement::Insert {
+            or: None,
+            ignore: false,
+            into: true,
+            table_name: ObjectName(vec![Ident {
+                value: "test_tables".to_string(),
+                quote_style: None
+            }]),
+            table_alias: Some(Ident {
+                value: "Test_Table".to_string(),
+                quote_style: Some('"')
+            }),
+            columns: vec![
+                Ident {
+                    value: "id".to_string(),
+                    quote_style: None
+                },
+                Ident {
+                    value: "a".to_string(),
+                    quote_style: None
+                }
+            ],
+            overwrite: false,
+            source: Some(Box::new(Query {
+                with: None,
+                body: Box::new(SetExpr::Values(Values {
+                    explicit_row: false,
+                    rows: vec![vec![
+                        Expr::Identifier(Ident {
+                            value: "DEFAULT".to_string(),
+                            quote_style: None
+                        }),
+                        Expr::Value(Value::SingleQuotedString("0123".to_string()))
+                    ]]
+                })),
+                order_by: vec![],
+                limit: None,
+                limit_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None
+            })),
+            partitioned: None,
+            after_columns: vec![],
+            table: false,
+            on: None,
+            returning: None,
+            replace_into: false,
+            priority: None
+        }
+    )
+}

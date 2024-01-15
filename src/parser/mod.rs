@@ -5645,6 +5645,7 @@ impl<'a> Parser<'a> {
                 // parse_interval for a taste.
                 Keyword::INTERVAL => Ok(DataType::Interval),
                 Keyword::JSON => Ok(DataType::JSON),
+                Keyword::JSONB => Ok(DataType::JSONB),
                 Keyword::REGCLASS => Ok(DataType::Regclass),
                 Keyword::STRING => Ok(DataType::String(self.parse_optional_precision()?)),
                 Keyword::TEXT => Ok(DataType::Text),

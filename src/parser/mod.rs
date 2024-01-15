@@ -8682,6 +8682,11 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::RParen)?;
         Ok(partitions)
     }
+
+    /// consume the parser and return its underlying token buffer
+    pub fn tokens(self) -> Vec<TokenWithLocation> {
+        self.tokens
+    }
 }
 
 impl Word {

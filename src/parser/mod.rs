@@ -8683,7 +8683,7 @@ impl<'a> Parser<'a> {
         Ok(partitions)
     }
 
-    /// consume the parser and return its underlying token buffer
+    /// Consume the parser and return its underlying token buffer
     pub fn tokens(self) -> Vec<TokenWithLocation> {
         self.tokens
     }

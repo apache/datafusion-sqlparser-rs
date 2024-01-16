@@ -131,6 +131,14 @@ pub enum BinaryOperator {
     PGRegexNotMatch,
     /// String does not match regular expression (case insensitively), e.g. `a !~* b` (PostgreSQL-specific)
     PGRegexNotIMatch,
+    /// String matches pattern (case sensitively), e.g. `a ~~ b` (PostgreSQL-specific)
+    PGLikeMatch,
+    /// String matches pattern (case insensitively), e.g. `a ~~* b` (PostgreSQL-specific)
+    PGILikeMatch,
+    /// String does not match pattern (case sensitively), e.g. `a !~~ b` (PostgreSQL-specific)
+    PGNotLikeMatch,
+    /// String does not match pattern (case insensitively), e.g. `a !~~* b` (PostgreSQL-specific)
+    PGNotILikeMatch,
     /// String "starts with", eg: `a ^@ b` (PostgreSQL-specific)
     PGStartsWith,
     /// PostgreSQL-specific custom operator.
@@ -174,6 +182,10 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::PGRegexIMatch => f.write_str("~*"),
             BinaryOperator::PGRegexNotMatch => f.write_str("!~"),
             BinaryOperator::PGRegexNotIMatch => f.write_str("!~*"),
+            BinaryOperator::PGLikeMatch => f.write_str("~~"),
+            BinaryOperator::PGILikeMatch => f.write_str("~~*"),
+            BinaryOperator::PGNotLikeMatch => f.write_str("!~~"),
+            BinaryOperator::PGNotILikeMatch => f.write_str("!~~*"),
             BinaryOperator::PGStartsWith => f.write_str("^@"),
             BinaryOperator::PGCustomBinaryOperator(idents) => {
                 write!(f, "OPERATOR({})", display_separated(idents, "."))

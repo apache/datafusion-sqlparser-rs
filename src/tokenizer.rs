@@ -149,6 +149,14 @@ pub enum Token {
     ExclamationMarkTilde,
     /// `!~*` , a case insensitive not match regular expression operator in PostgreSQL
     ExclamationMarkTildeAsterisk,
+    /// `~~`, a case sensitive match pattern operator in PostgreSQL
+    DoubleTilde,
+    /// `~~*`, a case insensitive match pattern operator in PostgreSQL
+    DoubleTildeAsterisk,
+    /// `!~~`, a case sensitive not match pattern operator in PostgreSQL
+    ExclamationMarkDoubleTilde,
+    /// `!~~*`, a case insensitive not match pattern operator in PostgreSQL
+    ExclamationMarkDoubleTildeAsterisk,
     /// `<<`, a bitwise shift left operator in PostgreSQL
     ShiftLeft,
     /// `>>`, a bitwise shift right operator in PostgreSQL
@@ -249,6 +257,10 @@ impl fmt::Display for Token {
             Token::TildeAsterisk => f.write_str("~*"),
             Token::ExclamationMarkTilde => f.write_str("!~"),
             Token::ExclamationMarkTildeAsterisk => f.write_str("!~*"),
+            Token::DoubleTilde => f.write_str("~~"),
+            Token::DoubleTildeAsterisk => f.write_str("~~*"),
+            Token::ExclamationMarkDoubleTilde => f.write_str("!~~"),
+            Token::ExclamationMarkDoubleTildeAsterisk => f.write_str("!~~*"),
             Token::AtSign => f.write_str("@"),
             Token::CaretAt => f.write_str("^@"),
             Token::ShiftLeft => f.write_str("<<"),
@@ -894,6 +906,16 @@ impl<'a> Tokenizer<'a> {
                             match chars.peek() {
                                 Some('*') => self
                                     .consume_and_return(chars, Token::ExclamationMarkTildeAsterisk),
+                                Some('~') => {
+                                    chars.next();
+                                    match chars.peek() {
+                                        Some('*') => self.consume_and_return(
+                                            chars,
+                                            Token::ExclamationMarkDoubleTildeAsterisk,
+                                        ),
+                                        _ => Ok(Some(Token::ExclamationMarkDoubleTilde)),
+                                    }
+                                }
                                 _ => Ok(Some(Token::ExclamationMarkTilde)),
                             }
                         }
@@ -965,6 +987,15 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('*') => self.consume_and_return(chars, Token::TildeAsterisk),
+                        Some('~') => {
+                            chars.next();
+                            match chars.peek() {
+                                Some('*') => {
+                                    self.consume_and_return(chars, Token::DoubleTildeAsterisk)
+                                }
+                                _ => Ok(Some(Token::DoubleTilde)),
+                            }
+                        }
                         _ => Ok(Some(Token::Tilde)),
                     }
                 }
@@ -1981,6 +2012,44 @@ mod tests {
             Token::ExclamationMarkTildeAsterisk,
             Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_pg_like_match() {
+        let sql = "SELECT col ~~ '_a%', col ~~* '_a%', col !~~ '_a%', col !~~* '_a%'";
+        let dialect = GenericDialect {};
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::DoubleTilde,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("_a%".into()),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::DoubleTildeAsterisk,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("_a%".into()),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::ExclamationMarkDoubleTilde,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("_a%".into()),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::ExclamationMarkDoubleTildeAsterisk,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("_a%".into()),
         ];
         compare(expected, tokens);
     }

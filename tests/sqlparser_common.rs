@@ -2474,10 +2474,10 @@ fn parse_create_table() {
                constrained INT NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0),
                ref INT REFERENCES othertable (a, b),\
                ref2 INT references othertable2 on delete cascade on update no action,\
-               constraint fkey foreign key (lat) references othertable3 (lat) on delete restrict,\
-               constraint fkey2 foreign key (lat) references othertable4(lat) on delete no action on update restrict, \
-               foreign key (lat) references othertable4(lat) on update set default on delete cascade, \
-               FOREIGN KEY (lng) REFERENCES othertable4 (longitude) ON UPDATE SET NULL
+               constraint fkey foreign key (lat) references othertable3 (lat) on delete restrict deferrable initially deferred,\
+               constraint fkey2 foreign key (lat) references othertable4(lat) on delete no action on update restrict deferrable initially immediate, \
+               foreign key (lat) references othertable4(lat) on update set default on delete cascade not deferrable initially deferred not enforced, \
+               FOREIGN KEY (lng) REFERENCES othertable4 (longitude) ON UPDATE SET NULL enforced not deferrable initially immediate
                )";
     let ast = one_statement_parses_to(
         sql,
@@ -2488,10 +2488,10 @@ fn parse_create_table() {
          constrained INT NULL CONSTRAINT pkey PRIMARY KEY NOT NULL UNIQUE CHECK (constrained > 0), \
          ref INT REFERENCES othertable (a, b), \
          ref2 INT REFERENCES othertable2 ON DELETE CASCADE ON UPDATE NO ACTION, \
-         CONSTRAINT fkey FOREIGN KEY (lat) REFERENCES othertable3(lat) ON DELETE RESTRICT, \
-         CONSTRAINT fkey2 FOREIGN KEY (lat) REFERENCES othertable4(lat) ON DELETE NO ACTION ON UPDATE RESTRICT, \
-         FOREIGN KEY (lat) REFERENCES othertable4(lat) ON DELETE CASCADE ON UPDATE SET DEFAULT, \
-         FOREIGN KEY (lng) REFERENCES othertable4(longitude) ON UPDATE SET NULL)",
+         CONSTRAINT fkey FOREIGN KEY (lat) REFERENCES othertable3(lat) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED, \
+         CONSTRAINT fkey2 FOREIGN KEY (lat) REFERENCES othertable4(lat) ON DELETE NO ACTION ON UPDATE RESTRICT DEFERRABLE INITIALLY IMMEDIATE, \
+         FOREIGN KEY (lat) REFERENCES othertable4(lat) ON DELETE CASCADE ON UPDATE SET DEFAULT NOT DEFERRABLE INITIALLY DEFERRED NOT ENFORCED, \
+         FOREIGN KEY (lng) REFERENCES othertable4(longitude) ON UPDATE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE ENFORCED)",
     );
     match ast {
         Statement::CreateTable {
@@ -2547,7 +2547,10 @@ fn parse_create_table() {
                             },
                             ColumnOptionDef {
                                 name: Some("pkey".into()),
-                                option: ColumnOption::Unique { is_primary: true },
+                                option: ColumnOption::Unique {
+                                    is_primary: true,
+                                    characteristics: None
+                                },
                             },
                             ColumnOptionDef {
                                 name: None,
@@ -2555,7 +2558,10 @@ fn parse_create_table() {
                             },
                             ColumnOptionDef {
                                 name: None,
-                                option: ColumnOption::Unique { is_primary: false },
+                                option: ColumnOption::Unique {
+                                    is_primary: false,
+                                    characteristics: None
+                                },
                             },
                             ColumnOptionDef {
                                 name: None,
@@ -2574,6 +2580,7 @@ fn parse_create_table() {
                                 referred_columns: vec!["a".into(), "b".into()],
                                 on_delete: None,
                                 on_update: None,
+                                characteristics: None,
                             },
                         }],
                     },
@@ -2588,6 +2595,7 @@ fn parse_create_table() {
                                 referred_columns: vec![],
                                 on_delete: Some(ReferentialAction::Cascade),
                                 on_update: Some(ReferentialAction::NoAction),
+                                characteristics: None,
                             },
                         },],
                     },
@@ -2603,6 +2611,11 @@ fn parse_create_table() {
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Restrict),
                         on_update: None,
+                        characteristics: Some(ConstraintCharacteristics {
+                            deferrable: Some(true),
+                            initially: Some(DeferrableInitial::Deferred),
+                            enforced: None
+                        }),
                     },
                     TableConstraint::ForeignKey {
                         name: Some("fkey2".into()),
@@ -2611,6 +2624,11 @@ fn parse_create_table() {
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::NoAction),
                         on_update: Some(ReferentialAction::Restrict),
+                        characteristics: Some(ConstraintCharacteristics {
+                            deferrable: Some(true),
+                            initially: Some(DeferrableInitial::Immediate),
+                            enforced: None,
+                        }),
                     },
                     TableConstraint::ForeignKey {
                         name: None,
@@ -2619,6 +2637,11 @@ fn parse_create_table() {
                         referred_columns: vec!["lat".into()],
                         on_delete: Some(ReferentialAction::Cascade),
                         on_update: Some(ReferentialAction::SetDefault),
+                        characteristics: Some(ConstraintCharacteristics {
+                            deferrable: Some(false),
+                            initially: Some(DeferrableInitial::Deferred),
+                            enforced: Some(false),
+                        }),
                     },
                     TableConstraint::ForeignKey {
                         name: None,
@@ -2627,6 +2650,11 @@ fn parse_create_table() {
                         referred_columns: vec!["longitude".into()],
                         on_delete: None,
                         on_update: Some(ReferentialAction::SetNull),
+                        characteristics: Some(ConstraintCharacteristics {
+                            deferrable: Some(false),
+                            initially: Some(DeferrableInitial::Immediate),
+                            enforced: Some(true),
+                        }),
                     },
                 ]
             );
@@ -2646,6 +2674,112 @@ fn parse_create_table() {
         .unwrap_err()
         .to_string()
         .contains("Expected constraint details after CONSTRAINT <name>"));
+}
+
+#[test]
+fn parse_create_table_column_constraint_characteristics() {
+    fn test_combo(
+        syntax: &str,
+        deferrable: Option<bool>,
+        initially: Option<DeferrableInitial>,
+        enforced: Option<bool>,
+    ) {
+        let message = if syntax.is_empty() {
+            "No clause"
+        } else {
+            syntax
+        };
+
+        let sql = format!("CREATE TABLE t (a int UNIQUE {})", syntax);
+        let expected_clause = if syntax.is_empty() {
+            String::new()
+        } else {
+            format!(" {syntax}")
+        };
+        let expected = format!("CREATE TABLE t (a INT UNIQUE{})", expected_clause);
+        let ast = one_statement_parses_to(&sql, &expected);
+
+        let expected_value = if deferrable.is_some() || initially.is_some() || enforced.is_some() {
+            Some(ConstraintCharacteristics {
+                deferrable,
+                initially,
+                enforced,
+            })
+        } else {
+            None
+        };
+
+        match ast {
+            Statement::CreateTable { columns, .. } => {
+                assert_eq!(
+                    columns,
+                    vec![ColumnDef {
+                        name: "a".into(),
+                        data_type: DataType::Int(None),
+                        collation: None,
+                        options: vec![ColumnOptionDef {
+                            name: None,
+                            option: ColumnOption::Unique {
+                                is_primary: false,
+                                characteristics: expected_value
+                            }
+                        }]
+                    }],
+                    "{message}"
+                )
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    for deferrable in [None, Some(true), Some(false)] {
+        for initially in [
+            None,
+            Some(DeferrableInitial::Immediate),
+            Some(DeferrableInitial::Deferred),
+        ] {
+            for enforced in [None, Some(true), Some(false)] {
+                let deferrable_text =
+                    deferrable.map(|d| if d { "DEFERRABLE" } else { "NOT DEFERRABLE" });
+                let initially_text = initially.map(|i| match i {
+                    DeferrableInitial::Immediate => "INITIALLY IMMEDIATE",
+                    DeferrableInitial::Deferred => "INITIALLY DEFERRED",
+                });
+                let enforced_text = enforced.map(|e| if e { "ENFORCED" } else { "NOT ENFORCED" });
+
+                let syntax = [deferrable_text, initially_text, enforced_text]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .join(" ");
+
+                test_combo(&syntax, deferrable, initially, enforced);
+            }
+        }
+    }
+
+    let res = parse_sql_statements(
+        "CREATE TABLE t (a int NOT NULL UNIQUE DEFERRABLE INITIALLY BADVALUE)",
+    );
+    assert!(res
+        .unwrap_err()
+        .to_string()
+        .contains("Expected one of DEFERRED or IMMEDIATE, found: BADVALUE"));
+
+    let res = parse_sql_statements(
+        "CREATE TABLE t (a int NOT NULL UNIQUE INITIALLY IMMEDIATE DEFERRABLE INITIALLY DEFERRED)",
+    );
+    res.expect_err("INITIALLY {IMMEDIATE|DEFERRED} setting should only be allowed once");
+
+    let res = parse_sql_statements(
+        "CREATE TABLE t (a int NOT NULL UNIQUE DEFERRABLE INITIALLY DEFERRED NOT DEFERRABLE)",
+    );
+    res.expect_err("[NOT] DEFERRABLE setting should only be allowed once");
+
+    let res = parse_sql_statements(
+        "CREATE TABLE t (a int NOT NULL UNIQUE DEFERRABLE INITIALLY DEFERRED ENFORCED NOT ENFORCED)",
+    );
+    res.expect_err("[NOT] ENFORCED setting should only be allowed once");
 }
 
 #[test]

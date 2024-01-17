@@ -451,7 +451,10 @@ fn parse_create_table_auto_increment() {
                     options: vec![
                         ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Unique { is_primary: true },
+                            option: ColumnOption::Unique {
+                                is_primary: true,
+                                characteristics: None
+                            },
                         },
                         ColumnOptionDef {
                             name: None,
@@ -484,7 +487,8 @@ fn parse_create_table_unique_key() {
                 vec![TableConstraint::Unique {
                     name: Some(Ident::new("bar_key")),
                     columns: vec![Ident::new("bar")],
-                    is_primary: false
+                    is_primary: false,
+                    characteristics: None,
                 }],
                 constraints
             );
@@ -497,7 +501,10 @@ fn parse_create_table_unique_key() {
                         options: vec![
                             ColumnOptionDef {
                                 name: None,
-                                option: ColumnOption::Unique { is_primary: true },
+                                option: ColumnOption::Unique {
+                                    is_primary: true,
+                                    characteristics: None
+                                },
                             },
                             ColumnOptionDef {
                                 name: None,
@@ -707,7 +714,10 @@ fn parse_quote_identifiers() {
                     collation: None,
                     options: vec![ColumnOptionDef {
                         name: None,
-                        option: ColumnOption::Unique { is_primary: true },
+                        option: ColumnOption::Unique {
+                            is_primary: true,
+                            characteristics: None
+                        },
                     }],
                 }],
                 columns

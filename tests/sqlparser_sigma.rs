@@ -1428,7 +1428,6 @@ fn parse_complicated_sql() {
                                         quote_style: None,
                                     }])),
                                     except: vec![],
-                                    exclude: vec![],
                                     replace: vec![],
                                 },
                                 ExprWithAlias {
@@ -2045,7 +2044,6 @@ fn parse_complicated_sql() {
                                 SelectItem::Wildcard {
                                     prefix: None,
                                     except: vec![],
-                                    exclude: vec![],
                                     replace: vec![],
                                 },
                                 ExprWithAlias {
@@ -2122,7 +2120,6 @@ fn parse_complicated_sql() {
                                         quote_style: None,
                                     }])),
                                     except: vec![],
-                                    exclude: vec![],
                                     replace: vec![],
                                 },
                                 ExprWithAlias {
@@ -2643,7 +2640,6 @@ fn parse_complicated_sql() {
                                         quote_style: None,
                                     }])),
                                     except: vec![],
-                                    exclude: vec![],
                                     replace: vec![],
                                 },
                                 ExprWithAlias {
@@ -2768,7 +2764,6 @@ fn parse_complicated_sql() {
                         quote_style: None,
                     }])),
                     except: vec![],
-                    exclude: vec![],
                     replace: vec![],
                 },
                 ExprWithAlias {

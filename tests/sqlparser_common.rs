@@ -273,7 +273,6 @@ fn parse_select_wildcard() {
         &SelectItem::Wildcard {
             prefix: None,
             except: vec![],
-            exclude: vec![],
             replace: vec![]
         },
         only(&select.projection)
@@ -285,7 +284,6 @@ fn parse_select_wildcard() {
         &SelectItem::Wildcard {
             prefix: Some(ObjectName(vec![Ident::new("foo")])),
             except: vec![],
-            exclude: vec![],
             replace: vec![]
         },
         only(&select.projection)
@@ -300,7 +298,6 @@ fn parse_select_wildcard() {
                 Ident::new("mytable"),
             ])),
             except: vec![],
-            exclude: vec![],
             replace: vec![]
         },
         only(&select.projection)

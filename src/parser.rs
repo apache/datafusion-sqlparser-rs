@@ -28,7 +28,6 @@ pub enum ParserError {
 }
 
 pub type WildcardExcept = Vec<Ident>;
-pub type WildcardExclude = Vec<Ident>;
 pub type WildcardReplace = Vec<(Expr, Ident)>;
 
 // Use `Parser::expected` instead, if possible
@@ -2872,19 +2871,17 @@ impl<'a> Parser<'a> {
     pub fn parse_select_item(&mut self) -> Result<SelectItem, ParserError> {
         let expr = self.parse_expr()?;
         if let Expr::Wildcard = expr {
-            let (except, exclude, replace) = self.parse_wildcard_modifiers()?;
+            let (except, replace) = self.parse_wildcard_modifiers()?;
             Ok(SelectItem::Wildcard {
                 prefix: None,
                 except,
-                exclude,
                 replace,
             })
         } else if let Expr::QualifiedWildcard(prefix) = expr {
-            let (except, exclude, replace) = self.parse_wildcard_modifiers()?;
+            let (except, replace) = self.parse_wildcard_modifiers()?;
             Ok(SelectItem::Wildcard {
                 prefix: Some(ObjectName(prefix)),
                 except,
-                exclude,
                 replace,
             })
         } else {
@@ -2911,7 +2908,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_wildcard_modifiers(
         &mut self,
-    ) -> Result<(WildcardExcept, WildcardExclude, WildcardReplace), ParserError> {
+    ) -> Result<(WildcardExcept, WildcardReplace), ParserError> {
         let except = if self.parse_keyword(Keyword::EXCEPT) {
             self.expect_token(&Token::LParen)?;
             let aliases = self.parse_comma_separated(Parser::parse_identifier)?;
@@ -2920,18 +2917,7 @@ impl<'a> Parser<'a> {
         } else {
             vec![]
         };
-        let exclude = if self.parse_keyword(Keyword::EXCLUDE) {
-            if self.consume_token(&Token::LParen) {
-                let aliases = self.parse_comma_separated(Parser::parse_identifier)?;
-                self.expect_token(&Token::RParen)?;
-                aliases
-            } else {
-                vec![self.parse_identifier()?]
-            }
-        } else {
-            vec![]
-        };
-        let replace = if self.parse_keyword(Keyword::REPLACE) {
+        let replace = if self.parse_keyword(Keyword::EXCEPT) {
             self.expect_token(&Token::LParen)?;
             let replace = self.parse_comma_separated(Parser::parse_replace_item)?;
             self.expect_token(&Token::RParen)?;
@@ -2939,7 +2925,7 @@ impl<'a> Parser<'a> {
         } else {
             vec![]
         };
-        Ok((except, exclude, replace))
+        Ok((except, replace))
     }
 
     /// Parse an expression, optionally followed by ASC or DESC (used in ORDER BY)

@@ -71,6 +71,54 @@ fn pragma_funciton_style() {
 }
 
 #[test]
+fn pragma_eq_string_style() {
+    let sql = "PRAGMA table_info = 'sqlite_master'";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::Pragma {
+            name,
+            value: Some(val),
+            is_eq: true,
+        } => {
+            assert_eq!("table_info", name.to_string());
+            assert_eq!("'sqlite_master'", val.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn pragma_function_string_style() {
+    let sql = "PRAGMA table_info(\"sqlite_master\")";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::Pragma {
+            name,
+            value: Some(val),
+            is_eq: false,
+        } => {
+            assert_eq!("table_info", name.to_string());
+            assert_eq!("\"sqlite_master\"", val.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn pragma_eq_placehoder_style() {
+    let sql = "PRAGMA table_info = ?";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::Pragma {
+            name,
+            value: Some(val),
+            is_eq: true,
+        } => {
+            assert_eq!("table_info", name.to_string());
+            assert_eq!("?", val.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_without_rowid() {
     let sql = "CREATE TABLE t (a INT) WITHOUT ROWID";
     match sqlite_and_generic().verified_stmt(sql) {

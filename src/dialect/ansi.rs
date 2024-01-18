@@ -12,18 +12,16 @@
 
 use crate::dialect::Dialect;
 
+/// A [`Dialect`] for [ANSI SQL](https://en.wikipedia.org/wiki/SQL:2011).
 #[derive(Debug)]
 pub struct AnsiDialect {}
 
 impl Dialect for AnsiDialect {
     fn is_identifier_start(&self, ch: char) -> bool {
-        (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+        ch.is_ascii_lowercase() || ch.is_ascii_uppercase()
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        (ch >= 'a' && ch <= 'z')
-            || (ch >= 'A' && ch <= 'Z')
-            || (ch >= '0' && ch <= '9')
-            || ch == '_'
+        ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_'
     }
 }

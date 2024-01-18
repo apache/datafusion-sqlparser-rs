@@ -15,21 +15,42 @@
 /// on this module, as it will change without notice.
 //
 // Integration tests (i.e. everything under `tests/`) import this
-// via `tests/test_utils/mod.rs`.
-use std::fmt::Debug;
+// via `tests/test_utils/helpers`.
 
-use super::ast::*;
-use super::dialect::*;
-use super::parser::{Parser, ParserError};
-use super::tokenizer::Tokenizer;
+#[cfg(not(feature = "std"))]
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::fmt::Debug;
+
+use crate::dialect::*;
+use crate::parser::{Parser, ParserError};
+use crate::tokenizer::Tokenizer;
+use crate::{ast::*, parser::ParserOptions};
+
+#[cfg(test)]
+use pretty_assertions::assert_eq;
 
 /// Tests use the methods on this struct to invoke the parser on one or
 /// multiple dialects.
 pub struct TestedDialects {
     pub dialects: Vec<Box<dyn Dialect>>,
+    pub options: Option<ParserOptions>,
 }
 
 impl TestedDialects {
+    fn new_parser<'a>(&self, dialect: &'a dyn Dialect) -> Parser<'a> {
+        let parser = Parser::new(dialect);
+        if let Some(options) = &self.options {
+            parser.with_options(options.clone())
+        } else {
+            parser
+        }
+    }
+
     /// Run the given function for all of `self.dialects`, assert that they
     /// return the same result, and return that result.
     pub fn one_of_identical_results<F, T: Debug + PartialEq>(&self, f: F) -> T
@@ -42,8 +63,7 @@ impl TestedDialects {
                 if let Some((prev_dialect, prev_parsed)) = s {
                     assert_eq!(
                         prev_parsed, parsed,
-                        "Parse results with {:?} are different from {:?}",
-                        prev_dialect, dialect
+                        "Parse results with {prev_dialect:?} are different from {dialect:?}"
                     );
                 }
                 Some((dialect, parsed))
@@ -57,29 +77,50 @@ impl TestedDialects {
         F: Fn(&mut Parser) -> T,
     {
         self.one_of_identical_results(|dialect| {
-            let mut tokenizer = Tokenizer::new(dialect, sql);
-            let tokens = tokenizer.tokenize().unwrap();
-            f(&mut Parser::new(tokens, dialect))
+            let mut parser = self.new_parser(dialect).try_with_sql(sql).unwrap();
+            f(&mut parser)
         })
     }
 
+    /// Parses a single SQL string into multiple statements, ensuring
+    /// the result is the same for all tested dialects.
     pub fn parse_sql_statements(&self, sql: &str) -> Result<Vec<Statement>, ParserError> {
-        self.one_of_identical_results(|dialect| Parser::parse_sql(dialect, &sql))
+        self.one_of_identical_results(|dialect| {
+            let mut tokenizer = Tokenizer::new(dialect, sql);
+            if let Some(options) = &self.options {
+                tokenizer = tokenizer.with_unescape(options.unescape);
+            }
+            let tokens = tokenizer.tokenize()?;
+            self.new_parser(dialect)
+                .with_tokens(tokens)
+                .parse_statements()
+        })
         // To fail the `ensure_multiple_dialects_are_tested` test:
         // Parser::parse_sql(&**self.dialects.first().unwrap(), sql)
     }
 
-    /// Ensures that `sql` parses as a single statement and returns it.
-    /// If non-empty `canonical` SQL representation is provided,
-    /// additionally asserts that parsing `sql` results in the same parse
-    /// tree as parsing `canonical`, and that serializing it back to string
-    /// results in the `canonical` representation.
+    /// Ensures that `sql` parses as a single [Statement] for all tested
+    /// dialects.
+    ///
+    /// In general, the canonical SQL should be the same (see crate
+    /// documentation for rationale) and you should prefer the `verified_`
+    /// variants in testing, such as  [`verified_statement`] or
+    /// [`verified_query`].
+    ///
+    /// If `canonical` is non empty,this function additionally asserts
+    /// that:
+    ///
+    /// 1. parsing `sql` results in the same [`Statement`] as parsing
+    /// `canonical`.
+    ///
+    /// 2. re-serializing the result of parsing `sql` produces the same
+    /// `canonical` sql string
     pub fn one_statement_parses_to(&self, sql: &str, canonical: &str) -> Statement {
-        let mut statements = self.parse_sql_statements(&sql).unwrap();
+        let mut statements = self.parse_sql_statements(sql).expect(sql);
         assert_eq!(statements.len(), 1);
 
         if !canonical.is_empty() && sql != canonical {
-            assert_eq!(self.parse_sql_statements(&canonical).unwrap(), statements);
+            assert_eq!(self.parse_sql_statements(canonical).unwrap(), statements);
         }
 
         let only_statement = statements.pop().unwrap();
@@ -89,14 +130,26 @@ impl TestedDialects {
         only_statement
     }
 
-    /// Ensures that `sql` parses as a single [Statement], and is not modified
-    /// after a serialization round-trip.
-    pub fn verified_stmt(&self, query: &str) -> Statement {
-        self.one_statement_parses_to(query, query)
+    /// Ensures that `sql` parses as an [`Expr`], and that
+    /// re-serializing the parse result produces canonical
+    pub fn expr_parses_to(&self, sql: &str, canonical: &str) -> Expr {
+        let ast = self
+            .run_parser_method(sql, |parser| parser.parse_expr())
+            .unwrap();
+        assert_eq!(canonical, &ast.to_string());
+        ast
     }
 
-    /// Ensures that `sql` parses as a single [Query], and is not modified
-    /// after a serialization round-trip.
+    /// Ensures that `sql` parses as a single [Statement], and that
+    /// re-serializing the parse result produces the same `sql`
+    /// string (is not modified after a serialization round-trip).
+    pub fn verified_stmt(&self, sql: &str) -> Statement {
+        self.one_statement_parses_to(sql, sql)
+    }
+
+    /// Ensures that `sql` parses as a single [Query], and that
+    /// re-serializing the parse result produces the same `sql`
+    /// string (is not modified after a serialization round-trip).
     pub fn verified_query(&self, sql: &str) -> Query {
         match self.verified_stmt(sql) {
             Statement::Query(query) => *query,
@@ -104,23 +157,39 @@ impl TestedDialects {
         }
     }
 
-    /// Ensures that `sql` parses as a single [Select], and is not modified
-    /// after a serialization round-trip.
+    /// Ensures that `sql` parses as a single [Select], and that
+    /// re-serializing the parse result produces the same `sql`
+    /// string (is not modified after a serialization round-trip).
     pub fn verified_only_select(&self, query: &str) -> Select {
-        match self.verified_query(query).body {
+        match *self.verified_query(query).body {
             SetExpr::Select(s) => *s,
             _ => panic!("Expected SetExpr::Select"),
         }
     }
 
-    /// Ensures that `sql` parses as an expression, and is not modified
-    /// after a serialization round-trip.
+    /// Ensures that `sql` parses as a single [`Select`], and that additionally:
+    ///
+    /// 1. parsing `sql` results in the same [`Statement`] as parsing
+    /// `canonical`.
+    ///
+    /// 2. re-serializing the result of parsing `sql` produces the same
+    /// `canonical` sql string
+    pub fn verified_only_select_with_canonical(&self, query: &str, canonical: &str) -> Select {
+        let q = match self.one_statement_parses_to(query, canonical) {
+            Statement::Query(query) => *query,
+            _ => panic!("Expected Query"),
+        };
+        match *q.body {
+            SetExpr::Select(s) => *s,
+            _ => panic!("Expected SetExpr::Select"),
+        }
+    }
+
+    /// Ensures that `sql` parses as an [`Expr`], and that
+    /// re-serializing the parse result produces the same `sql`
+    /// string (is not modified after a serialization round-trip).
     pub fn verified_expr(&self, sql: &str) -> Expr {
-        let ast = self
-            .run_parser_method(sql, |parser| parser.parse_expr())
-            .unwrap();
-        assert_eq!(sql, &ast.to_string(), "round-tripping without changes");
-        ast
+        self.expr_parses_to(sql, sql)
     }
 }
 
@@ -132,8 +201,22 @@ pub fn all_dialects() -> TestedDialects {
             Box::new(MsSqlDialect {}),
             Box::new(AnsiDialect {}),
             Box::new(SnowflakeDialect {}),
+            Box::new(HiveDialect {}),
+            Box::new(RedshiftSqlDialect {}),
+            Box::new(MySqlDialect {}),
+            Box::new(BigQueryDialect {}),
+            Box::new(SQLiteDialect {}),
+            Box::new(DuckDbDialect {}),
         ],
+        options: None,
     }
+}
+
+pub fn assert_eq_vec<T: ToString>(expected: &[&str], actual: &[T]) {
+    assert_eq!(
+        expected,
+        actual.iter().map(ToString::to_string).collect::<Vec<_>>()
+    );
 }
 
 pub fn only<T>(v: impl IntoIterator<Item = T>) -> T {
@@ -152,8 +235,29 @@ pub fn expr_from_projection(item: &SelectItem) -> &Expr {
     }
 }
 
-pub fn number(n: &'static str) -> Value {
-    Value::Number(n.parse().unwrap())
+pub fn alter_table_op_with_name(stmt: Statement, expected_name: &str) -> AlterTableOperation {
+    match stmt {
+        Statement::AlterTable {
+            name,
+            if_exists,
+            only: is_only,
+            operations,
+        } => {
+            assert_eq!(name.to_string(), expected_name);
+            assert!(!if_exists);
+            assert!(!is_only);
+            only(operations)
+        }
+        _ => panic!("Expected ALTER TABLE statement"),
+    }
+}
+pub fn alter_table_op(stmt: Statement) -> AlterTableOperation {
+    alter_table_op_with_name(stmt, "tab")
+}
+
+/// Creates a `Value::Number`, panic'ing if n is not a number
+pub fn number(n: &str) -> Value {
+    Value::Number(n.parse().unwrap(), false)
 }
 
 pub fn table_alias(name: impl Into<String>) -> Option<TableAlias> {
@@ -167,8 +271,10 @@ pub fn table(name: impl Into<String>) -> TableFactor {
     TableFactor::Table {
         name: ObjectName(vec![Ident::new(name.into())]),
         alias: None,
-        args: vec![],
+        args: None,
         with_hints: vec![],
+        version: None,
+        partitions: vec![],
     }
 }
 

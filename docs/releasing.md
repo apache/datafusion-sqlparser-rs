@@ -2,7 +2,7 @@
 
 ## Prerequisites
 Publishing to crates.io has been automated via GitHub Actions, so you will only
-need push access to the [ballista-compute GitHub repository](https://github.com/ballista-compute/sqlparser-rs)
+need push access to the [sqlparser-rs GitHub repository](https://github.com/sqlparser-rs/sqlparser-rs)
 in order to publish a release.
 
 We use the [`cargo release`](https://github.com/sunng87/cargo-release)
@@ -31,8 +31,8 @@ $ cargo install cargo-release
     $ cargo release minor --push-remote upstream
     ```
 
-    You can add `--dry-run` to see what the command is going to do,
-    or `--skip-push` to stop before actually publishing the release.
+    After verifying, you can rerun with `--execute` if all looks good.
+    You can add `--no-push` to stop before actually publishing the release.
 
     `cargo release` will then:
 
@@ -41,18 +41,22 @@ $ cargo install cargo-release
     * Create a new tag (e.g. `v0.8.0`) locally
     * Push the new tag to the specified remote (`upstream` in the above
       example), which will trigger a publishing process to crates.io as part of
-      the [corresponding GitHub Action](https://github.com/ballista-compute/sqlparser-rs/blob/main/.github/workflows/rust.yml).
+      the [corresponding GitHub Action](https://github.com/sqlparser-rs/sqlparser-rs/blob/main/.github/workflows/rust.yml).
 
       Note that credentials for authoring in this way are securely stored in
       the (GitHub) repo secrets as `CRATE_TOKEN`.
-    * Bump the crate version again (to something like `0.8.1-alpha.0`) to
-      indicate the start of new development cycle.
-
-3. Push the updates to the `main` branch upstream:
-    ```
-    $ git push upstream
-    ```
 
 4. Check that the new version of the crate is available on crates.io:
     https://crates.io/crates/sqlparser
 
+
+## `sqlparser_derive` crate
+
+Currently this crate is manually published via `cargo publish`.
+
+crates.io homepage: https://crates.io/crates/sqlparser_derive
+
+```shell
+cd derive
+cargo publish
+```

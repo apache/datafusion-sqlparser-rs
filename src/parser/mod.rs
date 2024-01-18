@@ -2402,27 +2402,37 @@ impl<'a> Parser<'a> {
                 negated,
             });
         }
-        self.expect_token(&Token::LParen)?;
-        let in_op = if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH) {
-            self.prev_token();
-            Expr::InSubquery {
-                expr: Box::new(expr),
-                subquery: Box::new(self.parse_query()?),
-                negated,
-            }
+        if self.consume_token(&Token::LParen) {
+            let in_op = if self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH)
+            {
+                self.prev_token();
+                Expr::InSubquery {
+                    expr: Box::new(expr),
+                    subquery: Box::new(self.parse_query()?),
+                    negated,
+                }
+            } else {
+                Expr::InList {
+                    expr: Box::new(expr),
+                    list: if self.dialect.supports_in_empty_list() {
+                        self.parse_comma_separated0(Parser::parse_expr)?
+                    } else {
+                        self.parse_comma_separated(Parser::parse_expr)?
+                    },
+                    negated,
+                }
+            };
+            self.expect_token(&Token::RParen)?;
+            Ok(in_op)
         } else {
-            Expr::InList {
+            // parse an expr
+            let in_expr = self.parse_expr()?;
+            Ok(Expr::InExpr {
                 expr: Box::new(expr),
-                list: if self.dialect.supports_in_empty_list() {
-                    self.parse_comma_separated0(Parser::parse_expr)?
-                } else {
-                    self.parse_comma_separated(Parser::parse_expr)?
-                },
+                in_expr: Box::new(in_expr),
                 negated,
-            }
-        };
-        self.expect_token(&Token::RParen)?;
-        Ok(in_op)
+            })
+        }
     }
 
     /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed

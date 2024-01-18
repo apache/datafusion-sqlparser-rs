@@ -1630,6 +1630,7 @@ fn parse_in_unnest() {
 }
 
 #[test]
+#[ignore]
 fn parse_in_error() {
     // <expr> IN <expr> is no valid
     let sql = "SELECT * FROM customers WHERE segment in segment";

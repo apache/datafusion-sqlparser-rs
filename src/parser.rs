@@ -1220,7 +1220,6 @@ impl<'a> Parser<'a> {
     }
 
     /// Return the first unprocessed token, possibly whitespace.
-    /// FIXME: This function skips the token
     pub fn next_token_no_skip(&mut self) -> Option<&Token> {
         self.index += 1;
         self.tokens.get(self.index - 1)
@@ -2784,13 +2783,6 @@ impl<'a> Parser<'a> {
 
             Ok(FunctionArg::Named { name, arg })
         } else {
-            // subqueries can be used in snowflake function calls without parantheses 
-            if dialect_of!(self is SnowflakeDialect) && 
-            (self.parse_keyword(Keyword::SELECT) || self.parse_keyword(Keyword::WITH))  {
-                self.prev_token();
-                let expr = Expr::Subquery(Box::new(self.parse_query()?));
-                return Ok(FunctionArg::Unnamed(expr))
-            }
             Ok(FunctionArg::Unnamed(self.parse_expr()?))
         }
     }

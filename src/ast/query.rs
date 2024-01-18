@@ -654,19 +654,9 @@ impl fmt::Display for Fetch {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Top {
     /// SQL semantic equivalent of LIMIT but with same structure as FETCH.
-    /// MSSQL only.
     pub with_ties: bool,
-    /// MSSQL only.
     pub percent: bool,
-    pub quantity: Option<TopQuantity>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum TopQuantity {
-    // A parenthesized expression. MSSQL only.
-    Expr(Expr),
-    // An unparenthesized integer constant.
-    Constant(u64),
+    pub quantity: Option<Expr>,
 }
 
 impl fmt::Display for Top {
@@ -674,12 +664,7 @@ impl fmt::Display for Top {
         let extension = if self.with_ties { " WITH TIES" } else { "" };
         if let Some(ref quantity) = self.quantity {
             let percent = if self.percent { " PERCENT" } else { "" };
-            match quantity {
-                TopQuantity::Expr(quantity) => write!(f, "TOP ({quantity}){percent}{extension}"),
-                TopQuantity::Constant(quantity) => {
-                    write!(f, "TOP {quantity}{percent}{extension}")
-                }
-            }
+            write!(f, "TOP ({}){}{}", quantity, percent, extension)
         } else {
             write!(f, "TOP{}", extension)
         }

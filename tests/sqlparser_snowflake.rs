@@ -200,11 +200,3 @@ fn snowflake_and_generic() -> TestedDialects {
         dialects: vec![Box::new(SnowflakeDialect {}), Box::new(GenericDialect {})],
     }
 }
-
-#[test]
-fn parse_top() {
-    snowflake().one_statement_parses_to(
-        "SELECT TOP 4 c1 FROM testtable",
-        "SELECT TOP 4 c1 FROM testtable",
-    );
-}

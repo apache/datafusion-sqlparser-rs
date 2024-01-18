@@ -288,6 +288,7 @@ fn parse_delimited_identifiers() {
             args: vec![],
             filter: None,
             null_treatment: None,
+            within_group: None,
             over: None,
             distinct: false,
             special: false,
@@ -1171,5 +1172,12 @@ fn parse_top() {
     snowflake().one_statement_parses_to(
         "SELECT TOP 4 c1 FROM testtable",
         "SELECT TOP 4 c1 FROM testtable",
+    );
+}
+
+#[test]
+fn parse_percentile_cont_within_group_over() {
+    snowflake().verified_only_select(
+        "SELECT PERCENTILE_DISC(0.90) WITHIN GROUP (ORDER BY foo) OVER (PARTITION BY bar)",
     );
 }

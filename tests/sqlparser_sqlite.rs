@@ -377,6 +377,7 @@ fn parse_window_function_with_filter() {
                     Expr::Identifier(Ident::new("x"))
                 ))],
                 null_treatment: None,
+                within_group: None,
                 over: Some(WindowType::WindowSpec(WindowSpec {
                     partition_by: vec![],
                     order_by: vec![],

@@ -824,6 +824,7 @@ impl<'a> Parser<'a> {
                         args: vec![],
                         null_treatment: None,
                         filter: None,
+                        within_group: None,
                         over: None,
                         distinct: false,
                         special: true,
@@ -1019,6 +1020,15 @@ impl<'a> Parser<'a> {
         self.expect_token(&Token::LParen)?;
         let distinct = self.parse_all_or_distinct()?.is_some();
         let (args, order_by) = self.parse_optional_args_with_orderby()?;
+        let within_group = if self.parse_keywords(&[Keyword::WITHIN, Keyword::GROUP]) {
+            self.expect_token(&Token::LParen)?;
+            self.expect_keywords(&[Keyword::ORDER, Keyword::BY])?;
+            let group = self.parse_comma_separated(Parser::parse_order_by_expr)?;
+            self.expect_token(&Token::RParen)?;
+            Some(group)
+        } else {
+            None
+        };
         let filter = if self.dialect.supports_filter_during_aggregation()
             && self.parse_keyword(Keyword::FILTER)
             && self.consume_token(&Token::LParen)
@@ -1058,6 +1068,7 @@ impl<'a> Parser<'a> {
             args,
             null_treatment,
             filter,
+            within_group,
             over,
             distinct,
             special: false,
@@ -1077,6 +1088,7 @@ impl<'a> Parser<'a> {
             args,
             null_treatment: None,
             filter: None,
+            within_group: None,
             over: None,
             distinct: false,
             special,
@@ -4838,6 +4850,7 @@ impl<'a> Parser<'a> {
             Ok(Statement::Call(Function {
                 name: object_name,
                 args: vec![],
+                within_group: None,
                 over: None,
                 distinct: false,
                 filter: None,

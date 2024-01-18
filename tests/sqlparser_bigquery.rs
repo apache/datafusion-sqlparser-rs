@@ -1053,6 +1053,7 @@ fn parse_map_access_offset() {
                 ))),],
                 null_treatment: None,
                 filter: None,
+                within_group: None,
                 over: None,
                 distinct: false,
                 special: false,

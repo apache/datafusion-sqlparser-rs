@@ -139,6 +139,7 @@ fn parse_delimited_identifiers() {
             args: vec![],
             null_treatment: None,
             filter: None,
+            within_group: None,
             over: None,
             distinct: false,
             special: false,

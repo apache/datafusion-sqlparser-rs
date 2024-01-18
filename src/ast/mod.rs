@@ -4085,6 +4085,7 @@ pub struct Function {
     pub filter: Option<Box<Expr>>,
     // Snowflake/MSSQL supports diffrent options for null treatment in rank functions
     pub null_treatment: Option<NullTreatment>,
+    pub within_group: Option<Vec<OrderByExpr>>,
     pub over: Option<WindowType>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
@@ -4139,6 +4140,10 @@ impl fmt::Display for Function {
 
             if let Some(o) = &self.null_treatment {
                 write!(f, " {o}")?;
+            }
+
+            if let Some(o) = &self.within_group {
+                write!(f, " WITHIN GROUP (ORDER BY {})", display_comma_separated(o))?;
             }
 
             if let Some(o) = &self.over {

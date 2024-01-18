@@ -8478,7 +8478,7 @@ impl<'a> Parser<'a> {
             v @ Value::Placeholder(_) => Ok(v),
             _ => {
                 self.prev_token();
-                self.expected("number or string", self.peek_token())
+                self.expected("number or string or ? placeholder", self.peek_token())
             }
         }
     }

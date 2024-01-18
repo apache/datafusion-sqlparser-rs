@@ -2072,10 +2072,7 @@ impl<'a> Parser<'a> {
             //    ignore the <separator> and treat the multiple strings as
             //    a single <literal>."
             Token::SingleQuotedString(s) => Ok(Some(Ident::with_quote('\'', s))),
-            Token::BacktickQuotedString(s)
-                if dialect_of!(self is BigQueryDialect)
-                    || dialect_of!(self is DatabricksDialect) =>
-            {
+            Token::BacktickQuotedString(s) if dialect_of!(self is BigQueryDialect) => {
                 Ok(Some(Ident::with_quote('`', s)))
             }
             not_an_ident => {

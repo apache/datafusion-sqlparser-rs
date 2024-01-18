@@ -254,7 +254,6 @@ impl fmt::Display for ColumnOption {
     }
 }
 
-#[allow(clippy::needless_lifetimes)]
 fn display_constraint_name<'a>(name: &'a Option<Ident>) -> impl fmt::Display + 'a {
     struct ConstraintName<'a>(&'a Option<Ident>);
     impl<'a> fmt::Display for ConstraintName<'a> {

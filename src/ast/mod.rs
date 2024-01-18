@@ -161,12 +161,11 @@ pub enum Expr {
     QualifiedWildcard(Vec<Ident>),
     /// Multi-part identifier, e.g. `table_alias.column` or `schema.table.col`
     CompoundIdentifier(Vec<Ident>),
-    /// `IS [NOT] { NULL | FALSE | TRUE | UNKNOWN }` expression
-    Is {
-        expr: Box<Expr>,
-        check: IsCheck,
-        negated: bool,
-    },
+    /// `IS NULL` expression
+    IsNull(Box<Expr>),
+    /// `IS NOT NULL` expression
+    IsNotNull(Box<Expr>),
+    /// `[ NOT ] IN (val1, val2, ...)`
     InList {
         expr: Box<Expr>,
         list: Vec<Expr>,
@@ -178,33 +177,12 @@ pub enum Expr {
         subquery: Box<Query>,
         negated: bool,
     },
-    /// `[ NOT ] IN <in_expr>`
-    InExpr {
-        expr: Box<Expr>,
-        in_expr: Box<Expr>,
-        negated: bool,
-    },
     /// `<expr> [ NOT ] BETWEEN <low> AND <high>`
     Between {
         expr: Box<Expr>,
         negated: bool,
         low: Box<Expr>,
         high: Box<Expr>,
-    },
-    /// `<expr> [I]LIKE <pattern> [ ESCAPE <escape> ]`
-    Like {
-        expr: Box<Expr>,
-        case_sensitive: bool,
-        negated: bool,
-        pat: Box<Expr>,
-        esc: Option<Box<Expr>>,
-    },
-    /// `<expr> SIMILAR TO <pattern> [ ESCAPE <escape> ]`
-    Similar {
-        expr: Box<Expr>,
-        pat: Box<Expr>,
-        negated: bool,
-        esc: Option<Box<Expr>>,
     },
     /// Binary operation e.g. `1 + 1` or `foo > bar`
     BinaryOp {
@@ -213,22 +191,9 @@ pub enum Expr {
         right: Box<Expr>,
     },
     /// Unary operation e.g. `NOT foo`
-    UnaryOp {
-        op: UnaryOperator,
-        expr: Box<Expr>,
-    },
-    AtTimeZone {
-        expr: Box<Expr>,
-        tz: String,
-    },
-    IgnoreRespectNulls {
-        expr: Box<Expr>,
-        ignore: bool,
-    },
+    UnaryOp { op: UnaryOperator, expr: Box<Expr> },
     /// CAST an expression to a different data type e.g. `CAST(foo AS VARCHAR(123))`
     Cast {
-        /// try_cast is a snowflake feature
-        try_cast: bool,
         expr: Box<Expr>,
         data_type: DataType,
     },
@@ -241,27 +206,14 @@ pub enum Expr {
         expr: Box<Expr>,
         collation: ObjectName,
     },
-    /// `json_col['json_key']`
-    Index {
-        expr: Box<Expr>,
-        index_expr: Box<Expr>,
-    },
     /// Nested expression e.g. `(foo > bar)` or `(1)`
-    /// Snowflake allows multiple comma-separated expressions here
-    Nested(Vec<Expr>),
-    /// redshift seems to allow brackets around identifiers, e.g.
-    /// select ["a"] from (select 1 a);
-    /// We preserve them even though it's not clear that they have any effect
-    Brackets(Box<Expr>),
+    Nested(Box<Expr>),
     /// A literal value, such as string, number, date or NULL
     Value(Value),
     /// A constant of form `<data_type> 'value'`.
     /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
     /// as well as constants of other types (a non-standard PostgreSQL extension).
-    TypedString {
-        data_type: DataType,
-        value: String,
-    },
+    TypedString { data_type: DataType, value: String },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
@@ -283,9 +235,6 @@ pub enum Expr {
     Subquery(Box<Query>),
     /// The `LISTAGG` function `SELECT LISTAGG(...) WITHIN GROUP (ORDER BY ...)`
     ListAgg(ListAgg),
-    /// bigquery structs https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
-    /// `STRUCT( expr1 [AS field_name] [, ... ])`
-    Struct(Struct),
 }
 
 impl fmt::Display for Expr {
@@ -295,17 +244,8 @@ impl fmt::Display for Expr {
             Expr::Wildcard => f.write_str("*"),
             Expr::QualifiedWildcard(q) => write!(f, "{}.*", display_separated(q, ".")),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
-            Expr::Is {
-                expr,
-                check,
-                negated,
-            } => write!(
-                f,
-                "{} IS {}{}",
-                expr,
-                if *negated { "NOT " } else { "" },
-                check
-            ),
+            Expr::IsNull(ast) => write!(f, "{} IS NULL", ast),
+            Expr::IsNotNull(ast) => write!(f, "{} IS NOT NULL", ast),
             Expr::InList {
                 expr,
                 list,
@@ -328,17 +268,6 @@ impl fmt::Display for Expr {
                 if *negated { "NOT " } else { "" },
                 subquery
             ),
-            Expr::InExpr {
-                expr,
-                in_expr,
-                negated,
-            } => write!(
-                f,
-                "{} {}IN {}",
-                expr,
-                if *negated { "NOT " } else { "" },
-                in_expr,
-            ),
             Expr::Between {
                 expr,
                 negated,
@@ -352,46 +281,6 @@ impl fmt::Display for Expr {
                 low,
                 high
             ),
-            Expr::Like {
-                expr,
-                case_sensitive,
-                negated,
-                pat,
-                esc,
-            } => {
-                write!(
-                    f,
-                    "{} {}{}LIKE {}",
-                    expr,
-                    if *negated { "NOT " } else { "" },
-                    if *case_sensitive { "" } else { "I" },
-                    pat,
-                )?;
-                if let Some(esc) = esc {
-                    write!(f, "ESCAPE {}", esc)
-                } else {
-                    Ok(())
-                }
-            }
-            Expr::Similar {
-                expr,
-                negated,
-                pat,
-                esc,
-            } => {
-                write!(
-                    f,
-                    "{} {}SIMILAR TO {}",
-                    expr,
-                    if *negated { "NOT " } else { "" },
-                    pat,
-                )?;
-                if let Some(esc) = esc {
-                    write!(f, "ESCAPE {}", esc)
-                } else {
-                    Ok(())
-                }
-            }
             Expr::BinaryOp { left, op, right } => write!(f, "{} {} {}", left, op, right),
             Expr::UnaryOp { op, expr } => {
                 if op == &UnaryOperator::PGPostfixFactorial {
@@ -400,39 +289,10 @@ impl fmt::Display for Expr {
                     write!(f, "{} {}", op, expr)
                 }
             }
-            // rs/pg: https://docs.aws.amazon.com/redshift/latest/dg/r_AT_TIME_ZONE.html
-            Expr::AtTimeZone { expr, tz } => write!(f, "{} AT TIME ZONE '{}'", expr, tz),
-            // rs: https://docs.aws.amazon.com/redshift/latest/dg/r_WF_first_value.html
-            Expr::IgnoreRespectNulls { expr, ignore } => write!(
-                f,
-                "{} {} NULLS",
-                expr,
-                if *ignore { "IGNORE" } else { "RESPECT " }
-            ),
-            Expr::Cast {
-                try_cast,
-                expr,
-                data_type,
-            } => write!(
-                f,
-                "{}CAST({} AS {})",
-                if *try_cast { "TRY_" } else { "" },
-                expr,
-                data_type
-            ),
+            Expr::Cast { expr, data_type } => write!(f, "CAST({} AS {})", expr, data_type),
             Expr::Extract { field, expr } => write!(f, "EXTRACT({} FROM {})", field, expr),
             Expr::Collate { expr, collation } => write!(f, "{} COLLATE {}", expr, collation),
-            Expr::Index { expr, index_expr } => write!(f, "{}[{}]", expr, index_expr),
-            Expr::Nested(exprs) => {
-                write!(f, "(")?;
-                let mut delim = "";
-                for expr in exprs {
-                    write!(f, "{}{}", delim, expr)?;
-                    delim = ", ";
-                }
-                write!(f, ")")
-            }
-            Expr::Brackets(expr) => write!(f, "[{}]", expr),
+            Expr::Nested(ast) => write!(f, "({})", ast),
             Expr::Value(v) => write!(f, "{}", v),
             Expr::TypedString { data_type, value } => {
                 write!(f, "{}", data_type)?;
@@ -461,51 +321,20 @@ impl fmt::Display for Expr {
             Expr::Exists(s) => write!(f, "EXISTS ({})", s),
             Expr::Subquery(s) => write!(f, "({})", s),
             Expr::ListAgg(listagg) => write!(f, "{}", listagg),
-            Expr::Struct(strct) => write!(f, "{}", strct),
         }
     }
-}
-
-/// An enum for Is Expr
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum IsCheck {
-    NULL,
-    FALSE,
-    TRUE,
-    UNKNOWN,
-}
-
-impl fmt::Display for IsCheck {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            IsCheck::NULL => write!(f, "NULL"),
-            IsCheck::FALSE => write!(f, "FALSE"),
-            IsCheck::TRUE => write!(f, "TRUE"),
-            IsCheck::UNKNOWN => write!(f, "UNKNOWN"),
-        }
-    }
-}
-
-/// A window specification, either inline or named
-/// https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#window_clause
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum WindowSpec {
-    Inline(InlineWindowSpec),
-    Named(Ident),
 }
 
 /// A window specification (i.e. `OVER (PARTITION BY .. ORDER BY .. etc.)`)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct InlineWindowSpec {
+pub struct WindowSpec {
     pub partition_by: Vec<Expr>,
     pub order_by: Vec<OrderByExpr>,
     pub window_frame: Option<WindowFrame>,
 }
 
-impl fmt::Display for InlineWindowSpec {
+impl fmt::Display for WindowSpec {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut delim = "";
         if !self.partition_by.is_empty() {
@@ -522,14 +351,15 @@ impl fmt::Display for InlineWindowSpec {
             write!(f, "ORDER BY {}", display_comma_separated(&self.order_by))?;
         }
         if let Some(window_frame) = &self.window_frame {
-            f.write_str(delim)?;
             if let Some(end_bound) = &window_frame.end_bound {
+                f.write_str(delim)?;
                 write!(
                     f,
                     "{} BETWEEN {} AND {}",
                     window_frame.units, window_frame.start_bound, end_bound
                 )?;
             } else {
+                f.write_str(delim)?;
                 write!(f, "{} {}", window_frame.units, window_frame.start_bound)?;
             }
         }
@@ -1082,60 +912,22 @@ impl fmt::Display for FunctionArg {
 pub struct Function {
     pub name: ObjectName,
     pub args: Vec<FunctionArg>,
-    pub within_group: Vec<OrderByExpr>,
     pub over: Option<WindowSpec>,
     // aggregate functions may specify eg `COUNT(DISTINCT x)`
     pub distinct: bool,
-    // bq agg functions can have a whole lot of options, e.g.
-    // https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-and-operators#array_agg
-    /// Some(true) for IGNORE NULLS, Some(false) for RESPECT NULLS
-    pub ignore_respect_nulls: Option<bool>,
-    pub order_by: Vec<OrderByExpr>,
-    pub limit: Option<Box<Expr>>,
-    // for snowflake - this goes outside of the parens
-    // https://docs.snowflake.com/en/sql-reference/functions/first_value.html
-    /// Some(true) for IGNORE NULLS, Some(false) for RESPECT NULLS
-    pub outer_ignore_respect_nulls: Option<bool>,
 }
 
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{}({}{}",
+            "{}({}{})",
             self.name,
             if self.distinct { "DISTINCT " } else { "" },
             display_comma_separated(&self.args),
         )?;
-        if let Some(b) = self.ignore_respect_nulls {
-            write!(f, " {} NULLS", if b { "IGNORE" } else { "RESPECT" })?;
-        }
-        if !self.order_by.is_empty() {
-            write!(f, " ORDER BY ")?;
-            let mut delim = "";
-            for order_by in &self.order_by {
-                write!(f, "{}{}", delim, order_by)?;
-                delim = ", ";
-            }
-        }
-        if let Some(ref lim) = self.limit {
-            write!(f, " LIMIT {}", lim)?;
-        }
-        write!(f, ")")?;
-        if let Some(b) = self.outer_ignore_respect_nulls {
-            write!(f, " {} NULLS", if b { "IGNORE" } else { "RESPECT" })?;
-        }
-        if !self.within_group.is_empty() {
-            write!(
-                f,
-                " WITHIN GROUP (ORDER BY {})",
-                display_comma_separated(&self.within_group)
-            )?;
-        }
-        match &self.over {
-            Some(WindowSpec::Inline(over)) => write!(f, " OVER ({})", over)?,
-            Some(WindowSpec::Named(name)) => write!(f, " OVER {}", name)?,
-            None => {}
+        if let Some(o) = &self.over {
+            write!(f, " OVER ({})", o)?;
         }
         Ok(())
     }
@@ -1204,28 +996,6 @@ impl fmt::Display for ListAgg {
             )?;
         }
         Ok(())
-    }
-}
-
-/// A `STRUCT` invocation `STRUCT( expr1 [AS field_name] [, ... ])`
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Struct {
-    pub fields: Vec<(Expr, Option<Ident>)>,
-}
-
-impl fmt::Display for Struct {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "STRUCT(")?;
-        let mut delim = "";
-        for (expr, maybe_alias) in self.fields.iter() {
-            write!(f, "{}{}", delim, expr)?;
-            if let Some(alias) = maybe_alias {
-                write!(f, " AS {}", alias)?;
-            }
-            delim = ", ";
-        }
-        write!(f, ")")
     }
 }
 
@@ -1354,7 +1124,6 @@ impl fmt::Display for TransactionIsolationLevel {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[allow(clippy::large_enum_variant)]
 pub enum ShowStatementFilter {
     Like(String),
     Where(Expr),

@@ -11,7 +11,6 @@
 // limitations under the License.
 
 mod ansi;
-mod bigquery;
 mod generic;
 pub mod keywords;
 mod mssql;
@@ -24,7 +23,6 @@ use std::any::{Any, TypeId};
 use std::fmt::Debug;
 
 pub use self::ansi::AnsiDialect;
-pub use self::bigquery::BigQueryDialect;
 pub use self::generic::GenericDialect;
 pub use self::mssql::MsSqlDialect;
 pub use self::mysql::MySqlDialect;
@@ -85,11 +83,20 @@ mod tests {
             dialect: ansi_dialect,
         };
 
-        assert!(dialect_of!(generic_holder is GenericDialect |  AnsiDialect));
-        assert!(!dialect_of!(generic_holder is  AnsiDialect));
+        assert_eq!(
+            dialect_of!(generic_holder is GenericDialect |  AnsiDialect),
+            true
+        );
+        assert_eq!(dialect_of!(generic_holder is  AnsiDialect), false);
 
-        assert!(dialect_of!(ansi_holder is  AnsiDialect));
-        assert!(dialect_of!(ansi_holder is  GenericDialect | AnsiDialect));
-        assert!(!dialect_of!(ansi_holder is  GenericDialect | MsSqlDialect));
+        assert_eq!(dialect_of!(ansi_holder is  AnsiDialect), true);
+        assert_eq!(
+            dialect_of!(ansi_holder is  GenericDialect | AnsiDialect),
+            true
+        );
+        assert_eq!(
+            dialect_of!(ansi_holder is  GenericDialect | MsSqlDialect),
+            false
+        );
     }
 }

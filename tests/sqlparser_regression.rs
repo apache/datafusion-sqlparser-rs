@@ -59,6 +59,4 @@ tpch_tests! {
     tpch_20: 20,
     tpch_21: 21,
     tpch_22: 22,
-    tpch_23: 23,
-    tpch_24: 24,
 }

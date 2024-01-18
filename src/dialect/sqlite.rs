@@ -25,14 +25,14 @@ impl Dialect for SQLiteDialect {
 
     fn is_identifier_start(&self, ch: char) -> bool {
         // See https://www.sqlite.org/draft/tokenreq.html
-        ('a'..='z').contains(&ch)
-            || ('A'..='Z').contains(&ch)
+        (ch >= 'a' && ch <= 'z')
+            || (ch >= 'A' && ch <= 'Z')
             || ch == '_'
             || ch == '$'
-            || ('\u{007f}'..='\u{ffff}').contains(&ch)
+            || (ch >= '\u{007f}' && ch <= '\u{ffff}')
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        self.is_identifier_start(ch) || ('0'..='9').contains(&ch)
+        self.is_identifier_start(ch) || (ch >= '0' && ch <= '9')
     }
 }

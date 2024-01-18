@@ -17,17 +17,14 @@ pub struct SnowflakeDialect;
 
 impl Dialect for SnowflakeDialect {
     // see https://docs.snowflake.com/en/sql-reference/identifiers-syntax.html
-    // NOTE: $ is not generally a valid identifier start, but it is expected when
-    // querying stages:
-    // https://docs.snowflake.com/en/user-guide/querying-stage.html#query-syntax-and-parameters
     fn is_identifier_start(&self, ch: char) -> bool {
-        ('a'..='z').contains(&ch) || ('A'..='Z').contains(&ch) || ch == '_' || ch == '$'
+        (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        ('a'..='z').contains(&ch)
-            || ('A'..='Z').contains(&ch)
-            || ('0'..='9').contains(&ch)
+        (ch >= 'a' && ch <= 'z')
+            || (ch >= 'A' && ch <= 'Z')
+            || (ch >= '0' && ch <= '9')
             || ch == '$'
             || ch == '_'
     }

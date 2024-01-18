@@ -229,6 +229,24 @@ fn parse_json_using_colon() {
     );
 
     snowflake().one_statement_parses_to("SELECT a:b::int FROM t", "SELECT CAST(a:b AS INT) FROM t");
+
+    let sql = "SELECT a:start, a:end FROM t";
+    let select = snowflake().verified_only_select(sql);
+    assert_eq!(
+        vec![
+            SelectItem::UnnamedExpr(Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                operator: JsonOperator::Colon,
+                right: Box::new(Expr::Value(Value::UnQuotedString("start".to_string()))),
+            }),
+            SelectItem::UnnamedExpr(Expr::JsonAccess {
+                left: Box::new(Expr::Identifier(Ident::new("a"))),
+                operator: JsonOperator::Colon,
+                right: Box::new(Expr::Value(Value::UnQuotedString("end".to_string()))),
+            })
+        ],
+        select.projection
+    );
 }
 
 #[test]

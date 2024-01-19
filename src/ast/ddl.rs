@@ -46,6 +46,18 @@ pub enum AlterTableOperation {
         /// <column_def>.
         column_def: ColumnDef,
     },
+    /// `DISABLE ROW LEVEL SECURITY`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    DisableRowLevelSecurity,
+    /// `DISABLE RULE rewrite_rule_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    DisableRule { name: Ident },
+    /// `DISABLE TRIGGER [ trigger_name | ALL | USER ]`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    DisableTrigger { name: Ident },
     /// `DROP CONSTRAINT [ IF EXISTS ] <name>`
     DropConstraint {
         if_exists: bool,
@@ -62,6 +74,34 @@ pub enum AlterTableOperation {
     ///
     /// Note: this is a MySQL-specific operation.
     DropPrimaryKey,
+    /// `ENABLE ALWAYS RULE rewrite_rule_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableAlwaysRule { name: Ident },
+    /// `ENABLE ALWAYS TRIGGER trigger_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableAlwaysTrigger { name: Ident },
+    /// `ENABLE REPLICA RULE rewrite_rule_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableReplicaRule { name: Ident },
+    /// `ENABLE REPLICA TRIGGER trigger_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableReplicaTrigger { name: Ident },
+    /// `ENABLE ROW LEVEL SECURITY`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableRowLevelSecurity,
+    /// `ENABLE RULE rewrite_rule_name`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableRule { name: Ident },
+    /// `ENABLE TRIGGER [ trigger_name | ALL | USER ]`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    EnableTrigger { name: Ident },
     /// `RENAME TO PARTITION (partition=val)`
     RenamePartitions {
         old_partitions: Vec<Expr>,
@@ -144,6 +184,15 @@ impl fmt::Display for AlterTableOperation {
             AlterTableOperation::AlterColumn { column_name, op } => {
                 write!(f, "ALTER COLUMN {column_name} {op}")
             }
+            AlterTableOperation::DisableRowLevelSecurity => {
+                write!(f, "DISABLE ROW LEVEL SECURITY")
+            }
+            AlterTableOperation::DisableRule { name } => {
+                write!(f, "DISABLE RULE {name}")
+            }
+            AlterTableOperation::DisableTrigger { name } => {
+                write!(f, "DISABLE TRIGGER {name}")
+            }
             AlterTableOperation::DropPartitions {
                 partitions,
                 if_exists,
@@ -178,6 +227,27 @@ impl fmt::Display for AlterTableOperation {
                 column_name,
                 if *cascade { " CASCADE" } else { "" }
             ),
+            AlterTableOperation::EnableAlwaysRule { name } => {
+                write!(f, "ENABLE ALWAYS RULE {name}")
+            }
+            AlterTableOperation::EnableAlwaysTrigger { name } => {
+                write!(f, "ENABLE ALWAYS TRIGGER {name}")
+            }
+            AlterTableOperation::EnableReplicaRule { name } => {
+                write!(f, "ENABLE REPLICA RULE {name}")
+            }
+            AlterTableOperation::EnableReplicaTrigger { name } => {
+                write!(f, "ENABLE REPLICA TRIGGER {name}")
+            }
+            AlterTableOperation::EnableRowLevelSecurity => {
+                write!(f, "ENABLE ROW LEVEL SECURITY")
+            }
+            AlterTableOperation::EnableRule { name } => {
+                write!(f, "ENABLE RULE {name}")
+            }
+            AlterTableOperation::EnableTrigger { name } => {
+                write!(f, "ENABLE TRIGGER {name}")
+            }
             AlterTableOperation::RenamePartitions {
                 old_partitions,
                 new_partitions,
@@ -246,6 +316,13 @@ pub enum AlterColumnOperation {
         /// PostgreSQL specific
         using: Option<Expr>,
     },
+    /// `ADD GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY [ ( sequence_options ) ]`
+    ///
+    /// Note: this is a PostgreSQL-specific operation.
+    AddGenerated {
+        generated_as: Option<GeneratedAs>,
+        sequence_options: Option<Vec<SequenceOptions>>,
+    },
 }
 
 impl fmt::Display for AlterColumnOperation {
@@ -265,6 +342,32 @@ impl fmt::Display for AlterColumnOperation {
                 } else {
                     write!(f, "SET DATA TYPE {data_type}")
                 }
+            }
+            AlterColumnOperation::AddGenerated {
+                generated_as,
+                sequence_options,
+            } => {
+                let generated_as = match generated_as {
+                    Some(GeneratedAs::Always) => " ALWAYS",
+                    Some(GeneratedAs::ByDefault) => " BY DEFAULT",
+                    _ => "",
+                };
+
+                write!(f, "ADD GENERATED{generated_as} AS IDENTITY",)?;
+                if let Some(options) = sequence_options {
+                    if !options.is_empty() {
+                        write!(f, " (")?;
+                    }
+
+                    for sequence_option in options {
+                        write!(f, "{sequence_option}")?;
+                    }
+
+                    if !options.is_empty() {
+                        write!(f, " )")?;
+                    }
+                }
+                Ok(())
             }
         }
     }
@@ -517,7 +620,11 @@ pub struct ColumnDef {
 
 impl fmt::Display for ColumnDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {}", self.name, self.data_type)?;
+        if self.data_type == DataType::Unspecified {
+            write!(f, "{}", self.name)?;
+        } else {
+            write!(f, "{} {}", self.name, self.data_type)?;
+        }
         if let Some(collation) = &self.collation {
             write!(f, " COLLATE {collation}")?;
         }
@@ -624,6 +731,8 @@ pub enum ColumnOption {
         sequence_options: Option<Vec<SequenceOptions>>,
         generation_expr: Option<Expr>,
         generation_expr_mode: Option<GeneratedExpressionMode>,
+        /// false if 'GENERATED ALWAYS' is skipped (option starts with AS)
+        generated_keyword: bool,
     },
     /// BigQuery specific: Explicit column options in a view [1] or table [2]
     /// Syntax
@@ -673,6 +782,7 @@ impl fmt::Display for ColumnOption {
                 sequence_options,
                 generation_expr,
                 generation_expr_mode,
+                generated_keyword,
             } => {
                 if let Some(expr) = generation_expr {
                     let modifier = match generation_expr_mode {
@@ -680,7 +790,11 @@ impl fmt::Display for ColumnOption {
                         Some(GeneratedExpressionMode::Virtual) => " VIRTUAL",
                         Some(GeneratedExpressionMode::Stored) => " STORED",
                     };
-                    write!(f, "GENERATED ALWAYS AS ({expr}){modifier}")?;
+                    if *generated_keyword {
+                        write!(f, "GENERATED ALWAYS AS ({expr}){modifier}")?;
+                    } else {
+                        write!(f, "AS ({expr}){modifier}")?;
+                    }
                     Ok(())
                 } else {
                     // Like Postgres - generated from sequence

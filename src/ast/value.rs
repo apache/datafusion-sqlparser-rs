@@ -143,8 +143,10 @@ pub enum DateTimeField {
     Quarter,
     Time,
     Timezone,
+    TimezoneAbbr,
     TimezoneHour,
     TimezoneMinute,
+    TimezoneRegion,
     NoDateTime,
 }
 
@@ -181,8 +183,10 @@ impl fmt::Display for DateTimeField {
             DateTimeField::Quarter => "QUARTER",
             DateTimeField::Time => "TIME",
             DateTimeField::Timezone => "TIMEZONE",
+            DateTimeField::TimezoneAbbr => "TIMEZONE_ABBR",
             DateTimeField::TimezoneHour => "TIMEZONE_HOUR",
             DateTimeField::TimezoneMinute => "TIMEZONE_MINUTE",
+            DateTimeField::TimezoneRegion => "TIMEZONE_REGION",
             DateTimeField::NoDateTime => "NODATETIME",
         })
     }

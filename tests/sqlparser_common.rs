@@ -108,6 +108,17 @@ fn parse_insert_values() {
 }
 
 #[test]
+fn parse_replace_into() {
+    let dialect = PostgreSqlDialect {};
+    let sql = "REPLACE INTO public.customer (id, name, active) VALUES (1, 2, 3)";
+
+    assert_eq!(
+        ParserError::ParserError("Unsupported statement REPLACE at Line: 1, Column 9".to_string()),
+        Parser::parse_sql(&dialect, sql,).unwrap_err(),
+    )
+}
+
+#[test]
 fn parse_insert_default_values() {
     let insert_with_default_values = verified_stmt("INSERT INTO test_table DEFAULT VALUES");
 
@@ -2161,6 +2172,17 @@ fn parse_cast() {
         },
         expr_from_projection(only(&select.projection))
     );
+
+    let sql = "SELECT CAST(details AS JSONB) FROM customer";
+    let select = verified_only_select(sql);
+    assert_eq!(
+        &Expr::Cast {
+            expr: Box::new(Expr::Identifier(Ident::new("details"))),
+            data_type: DataType::JSONB,
+            format: None,
+        },
+        expr_from_projection(only(&select.projection))
+    );
 }
 
 #[test]
@@ -2227,8 +2249,10 @@ fn parse_extract() {
     verified_stmt("SELECT EXTRACT(MILLISECONDS FROM d)");
     verified_stmt("SELECT EXTRACT(QUARTER FROM d)");
     verified_stmt("SELECT EXTRACT(TIMEZONE FROM d)");
+    verified_stmt("SELECT EXTRACT(TIMEZONE_ABBR FROM d)");
     verified_stmt("SELECT EXTRACT(TIMEZONE_HOUR FROM d)");
     verified_stmt("SELECT EXTRACT(TIMEZONE_MINUTE FROM d)");
+    verified_stmt("SELECT EXTRACT(TIMEZONE_REGION FROM d)");
     verified_stmt("SELECT EXTRACT(TIME FROM d)");
 
     let res = parse_sql_statements("SELECT EXTRACT(JIFFY FROM d)");
@@ -3446,7 +3470,7 @@ fn parse_alter_table_alter_column_type() {
     let res =
         dialect.parse_sql_statements(&format!("{alter_stmt} ALTER COLUMN is_active TYPE TEXT"));
     assert_eq!(
-        ParserError::ParserError("Expected SET/DROP NOT NULL, SET DEFAULT, SET DATA TYPE after ALTER COLUMN, found: TYPE".to_string()),
+        ParserError::ParserError("Expected SET/DROP NOT NULL, SET DEFAULT, or SET DATA TYPE after ALTER COLUMN, found: TYPE".to_string()),
         res.unwrap_err()
     );
 
@@ -7955,6 +7979,29 @@ fn parse_create_type() {
             }
         },
         create_type
+    );
+}
+
+#[test]
+fn parse_call() {
+    all_dialects().verified_stmt("CALL my_procedure()");
+    all_dialects().verified_stmt("CALL my_procedure(1, 'a')");
+    pg_and_generic().verified_stmt("CALL my_procedure(1, 'a', $1)");
+    all_dialects().verified_stmt("CALL my_procedure");
+    assert_eq!(
+        verified_stmt("CALL my_procedure('a')"),
+        Statement::Call(Function {
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+                Value::SingleQuotedString("a".to_string())
+            ))),],
+            name: ObjectName(vec![Ident::new("my_procedure")]),
+            filter: None,
+            null_treatment: None,
+            over: None,
+            distinct: false,
+            special: false,
+            order_by: vec![]
+        })
     );
 }
 

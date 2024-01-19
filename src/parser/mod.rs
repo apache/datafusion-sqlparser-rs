@@ -27,7 +27,7 @@ use log::debug;
 use IsLateral::*;
 use IsOptional::*;
 
-use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
+use crate::ast::helpers::stmt_create_table::{BigQueryTableConfiguration, CreateTableBuilder};
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{self, Keyword, ALL_KEYWORDS};
@@ -4184,10 +4184,10 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let table_config = if dialect_of!(self is BigQueryDialect | GenericDialect) {
+        let big_query_config = if dialect_of!(self is BigQueryDialect | GenericDialect) {
             self.parse_optional_big_query_create_table_config()?
         } else {
-            None
+            Default::default()
         };
 
         // Parse optional `AS ( query )`
@@ -4273,7 +4273,9 @@ impl<'a> Parser<'a> {
             .collation(collation)
             .on_commit(on_commit)
             .on_cluster(on_cluster)
-            .table_config(table_config)
+            .partition_by(big_query_config.partition_by)
+            .cluster_by(big_query_config.cluster_by)
+            .options(big_query_config.options)
             .strict(strict)
             .build())
     }
@@ -4282,10 +4284,10 @@ impl<'a> Parser<'a> {
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_2>
     fn parse_optional_big_query_create_table_config(
         &mut self,
-    ) -> Result<Option<Box<CreateTableConfiguration>>, ParserError> {
+    ) -> Result<BigQueryTableConfiguration, ParserError> {
         let mut partition_by = None;
         if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
-            partition_by = Some(self.parse_expr()?);
+            partition_by = Some(Box::new(self.parse_expr()?));
         };
 
         let mut cluster_by = None;
@@ -4300,17 +4302,11 @@ impl<'a> Parser<'a> {
             }
         };
 
-        if partition_by.is_some() || cluster_by.is_some() || options.is_some() {
-            Ok(Some(Box::new(CreateTableConfiguration::BigQuery(
-                BigQueryCreateTableConfiguration {
-                    partition_by,
-                    cluster_by,
-                    options,
-                },
-            ))))
-        } else {
-            Ok(None)
-        }
+        Ok(BigQueryTableConfiguration {
+            partition_by,
+            cluster_by,
+            options,
+        })
     }
 
     pub fn parse_optional_procedure_parameters(
@@ -4506,7 +4502,7 @@ impl<'a> Parser<'a> {
             && self.parse_keyword(Keyword::OPTIONS)
         {
             self.prev_token();
-            Ok(Some(ColumnOption::SqlOptions(
+            Ok(Some(ColumnOption::Options(
                 self.parse_options(Keyword::OPTIONS)?,
             )))
         } else if self.parse_keyword(Keyword::AS)

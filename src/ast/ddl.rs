@@ -635,7 +635,20 @@ impl fmt::Display for ColumnDef {
     }
 }
 
-/// Column definition for a view.
+/// Column definition specified in a `CREATE VIEW` statement.
+///
+/// Syntax
+/// ```markdown
+/// <name> [OPTIONS(option, ...)]
+///
+/// option: <name> = <value>
+/// ```
+///
+/// Examples:
+/// ```sql
+/// name
+/// age OPTIONS(description = "age column", tag = "prod")
+/// ```
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -741,7 +754,7 @@ pub enum ColumnOption {
     /// ```
     /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#view_column_option_list
     /// [2]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#column_option_list
-    SqlOptions(Vec<SqlOption>),
+    Options(Vec<SqlOption>),
 }
 
 impl fmt::Display for ColumnOption {
@@ -820,7 +833,7 @@ impl fmt::Display for ColumnOption {
                     Ok(())
                 }
             }
-            SqlOptions(options) => {
+            Options(options) => {
                 write!(f, "OPTIONS({})", display_comma_separated(options))
             }
         }

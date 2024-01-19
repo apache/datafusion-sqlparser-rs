@@ -166,7 +166,9 @@ fn parse_create_table_with_options() {
         Statement::CreateTable {
             name,
             columns,
-            table_config,
+            partition_by,
+            cluster_by,
+            options,
             ..
         } => {
             assert_eq!(
@@ -186,7 +188,7 @@ fn parse_create_table_with_options() {
                             },
                             ColumnOptionDef {
                                 name: None,
-                                option: ColumnOption::SqlOptions(vec![SqlOption {
+                                option: ColumnOption::Options(vec![SqlOption {
                                     name: Ident::new("description"),
                                     value: Expr::Value(Value::DoubleQuotedString(
                                         "field x".to_string()
@@ -201,7 +203,7 @@ fn parse_create_table_with_options() {
                         collation: None,
                         options: vec![ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::SqlOptions(vec![SqlOption {
+                            option: ColumnOption::Options(vec![SqlOption {
                                 name: Ident::new("description"),
                                 value: Expr::Value(Value::DoubleQuotedString(
                                     "field y".to_string()
@@ -213,10 +215,10 @@ fn parse_create_table_with_options() {
                 columns
             );
             assert_eq!(
-                CreateTableConfiguration::BigQuery(BigQueryCreateTableConfiguration {
-                    partition_by: Some(Expr::Identifier(Ident::new("_PARTITIONDATE"))),
-                    cluster_by: Some(vec![Ident::new("userid"), Ident::new("age"),]),
-                    options: Some(vec![
+                (
+                    Some(Box::new(Expr::Identifier(Ident::new("_PARTITIONDATE")))),
+                    Some(vec![Ident::new("userid"), Ident::new("age"),]),
+                    Some(vec![
                         SqlOption {
                             name: Ident::new("partition_expiration_days"),
                             value: Expr::Value(number("1")),
@@ -228,8 +230,8 @@ fn parse_create_table_with_options() {
                             )),
                         },
                     ])
-                }),
-                *table_config.unwrap(),
+                ),
+                (partition_by, cluster_by, options)
             )
         }
         _ => unreachable!(),

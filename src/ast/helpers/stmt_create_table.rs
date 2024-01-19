@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use sqlparser_derive::{Visit, VisitMut};
 
 use crate::ast::{
-    ColumnDef, CreateTableConfiguration, FileFormat, HiveDistributionStyle, HiveFormat, Ident,
-    ObjectName, OnCommit, Query, SqlOption, Statement, TableConstraint,
+    ColumnDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident, ObjectName, OnCommit,
+    Query, SqlOption, Statement, TableConstraint,
 };
 use crate::parser::ParserError;
 
@@ -72,7 +72,9 @@ pub struct CreateTableBuilder {
     pub on_commit: Option<OnCommit>,
     pub on_cluster: Option<String>,
     pub order_by: Option<Vec<Ident>>,
-    pub table_config: Option<Box<CreateTableConfiguration>>,
+    pub partition_by: Option<Box<Expr>>,
+    pub cluster_by: Option<Vec<Ident>>,
+    pub options: Option<Vec<SqlOption>>,
     pub strict: bool,
 }
 
@@ -106,7 +108,9 @@ impl CreateTableBuilder {
             on_commit: None,
             on_cluster: None,
             order_by: None,
-            table_config: None,
+            partition_by: None,
+            cluster_by: None,
+            options: None,
             strict: false,
         }
     }
@@ -238,8 +242,18 @@ impl CreateTableBuilder {
         self
     }
 
-    pub fn table_config(mut self, table_config: Option<Box<CreateTableConfiguration>>) -> Self {
-        self.table_config = table_config;
+    pub fn partition_by(mut self, partition_by: Option<Box<Expr>>) -> Self {
+        self.partition_by = partition_by;
+        self
+    }
+
+    pub fn cluster_by(mut self, cluster_by: Option<Vec<Ident>>) -> Self {
+        self.cluster_by = cluster_by;
+        self
+    }
+
+    pub fn options(mut self, options: Option<Vec<SqlOption>>) -> Self {
+        self.options = options;
         self
     }
 
@@ -277,7 +291,9 @@ impl CreateTableBuilder {
             on_commit: self.on_commit,
             on_cluster: self.on_cluster,
             order_by: self.order_by,
-            table_config: self.table_config,
+            partition_by: self.partition_by,
+            cluster_by: self.cluster_by,
+            options: self.options,
             strict: self.strict,
         }
     }
@@ -318,7 +334,9 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 on_commit,
                 on_cluster,
                 order_by,
-                table_config: config,
+                partition_by,
+                cluster_by,
+                options,
                 strict,
             } => Ok(Self {
                 or_replace,
@@ -348,7 +366,9 @@ impl TryFrom<Statement> for CreateTableBuilder {
                 on_commit,
                 on_cluster,
                 order_by,
-                table_config: config,
+                partition_by,
+                cluster_by,
+                options,
                 strict,
             }),
             _ => Err(ParserError::ParserError(format!(
@@ -356,6 +376,14 @@ impl TryFrom<Statement> for CreateTableBuilder {
             ))),
         }
     }
+}
+
+/// Helper return type when parsing configuration for a BigQuery `CREATE TABLE` statement.
+#[derive(Default)]
+pub(crate) struct BigQueryTableConfiguration {
+    pub partition_by: Option<Box<Expr>>,
+    pub cluster_by: Option<Vec<Ident>>,
+    pub options: Option<Vec<SqlOption>>,
 }
 
 #[cfg(test)]

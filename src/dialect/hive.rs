@@ -12,23 +12,30 @@
 
 use crate::dialect::Dialect;
 
+/// A [`Dialect`] for [Hive](https://hive.apache.org/).
 #[derive(Debug)]
-pub struct DatabricksDialect {}
+pub struct HiveDialect {}
 
-// derived from AnsiDialect, but modified with backtick identifier
-impl Dialect for DatabricksDialect {
+impl Dialect for HiveDialect {
+    fn is_delimited_identifier_start(&self, ch: char) -> bool {
+        (ch == '"') || (ch == '`')
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
-        ('a'..='z').contains(&ch) || ('A'..='Z').contains(&ch)
+        ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '$'
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        ('a'..='z').contains(&ch)
-            || ('A'..='Z').contains(&ch)
-            || ('0'..='9').contains(&ch)
+        ch.is_ascii_lowercase()
+            || ch.is_ascii_uppercase()
+            || ch.is_ascii_digit()
             || ch == '_'
+            || ch == '$'
+            || ch == '{'
+            || ch == '}'
     }
 
-    fn is_delimited_identifier_start(&self, ch: char) -> bool {
-        ch == '`'
+    fn supports_filter_during_aggregation(&self) -> bool {
+        true
     }
 }

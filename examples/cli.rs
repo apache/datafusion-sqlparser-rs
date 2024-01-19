@@ -12,13 +12,14 @@
 
 #![warn(clippy::all)]
 
-///! A small command-line app to run the parser.
+/// A small command-line app to run the parser.
 /// Run with `cargo run --example cli`
 use std::fs;
 
 use simple_logger::SimpleLogger;
 use sqlparser::dialect::*;
 use sqlparser::parser::Parser;
+
 fn main() {
     SimpleLogger::new().init().unwrap();
 
@@ -37,11 +38,18 @@ $ cargo run --feature json_example --example cli FILENAME.sql [--dialectname]
 
     let dialect: Box<dyn Dialect> = match std::env::args().nth(2).unwrap_or_default().as_ref() {
         "--ansi" => Box::new(AnsiDialect {}),
+        "--bigquery" => Box::new(BigQueryDialect {}),
         "--postgres" => Box::new(PostgreSqlDialect {}),
         "--ms" => Box::new(MsSqlDialect {}),
+        "--mysql" => Box::new(MySqlDialect {}),
         "--snowflake" => Box::new(SnowflakeDialect {}),
+        "--hive" => Box::new(HiveDialect {}),
+        "--redshift" => Box::new(RedshiftSqlDialect {}),
+        "--clickhouse" => Box::new(ClickHouseDialect {}),
+        "--duckdb" => Box::new(DuckDbDialect {}),
+        "--sqlite" => Box::new(SQLiteDialect {}),
         "--generic" | "" => Box::new(GenericDialect {}),
-        s => panic!("Unexpected parameter: {}", s),
+        s => panic!("Unexpected parameter: {s}"),
     };
 
     println!("Parsing from file '{}' using {:?}", &filename, dialect);
@@ -70,16 +78,16 @@ $ cargo run --feature json_example --example cli FILENAME.sql [--dialectname]
                 #[cfg(feature = "json_example")]
                 {
                     let serialized = serde_json::to_string_pretty(&statements).unwrap();
-                    println!("Serialized as JSON:\n{}", serialized);
+                    println!("Serialized as JSON:\n{serialized}");
                 }
             } else {
-                println!("Parse results:\n{:#?}", statements);
+                println!("Parse results:\n{statements:#?}");
             }
 
             std::process::exit(0);
         }
         Err(e) => {
-            println!("Error during parsing: {:?}", e);
+            println!("Error during parsing: {e:?}");
             std::process::exit(1);
         }
     }

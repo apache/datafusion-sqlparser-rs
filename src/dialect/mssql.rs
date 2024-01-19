@@ -12,6 +12,7 @@
 
 use crate::dialect::Dialect;
 
+/// A [`Dialect`] for [Microsoft SQL Server](https://www.microsoft.com/en-us/sql-server/)
 #[derive(Debug)]
 pub struct MsSqlDialect {}
 
@@ -22,21 +23,25 @@ impl Dialect for MsSqlDialect {
 
     fn is_identifier_start(&self, ch: char) -> bool {
         // See https://docs.microsoft.com/en-us/sql/relational-databases/databases/database-identifiers?view=sql-server-2017#rules-for-regular-identifiers
-        // We don't support non-latin "letters" currently.
-        ('a'..='z').contains(&ch)
-            || ('A'..='Z').contains(&ch)
-            || ch == '_'
-            || ch == '#'
-            || ch == '@'
+        ch.is_alphabetic() || ch == '_' || ch == '#' || ch == '@'
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        ('a'..='z').contains(&ch)
-            || ('A'..='Z').contains(&ch)
-            || ('0'..='9').contains(&ch)
+        ch.is_alphabetic()
+            || ch.is_ascii_digit()
             || ch == '@'
             || ch == '$'
             || ch == '#'
             || ch == '_'
+    }
+
+    /// SQL Server has `CONVERT(type, value)` instead of `CONVERT(value, type)`
+    /// <https://learn.microsoft.com/en-us/sql/t-sql/functions/cast-and-convert-transact-sql?view=sql-server-ver16>
+    fn convert_type_before_value(&self) -> bool {
+        true
+    }
+
+    fn supports_substring_from_for_expr(&self) -> bool {
+        false
     }
 }

@@ -10,8 +10,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::ast::Statement;
 use crate::dialect::Dialect;
+use crate::keywords::Keyword;
+use crate::parser::{Parser, ParserError};
 
+/// A [`Dialect`] for [SQLite](https://www.sqlite.org)
 #[derive(Debug)]
 pub struct SQLiteDialect {}
 
@@ -25,14 +29,35 @@ impl Dialect for SQLiteDialect {
 
     fn is_identifier_start(&self, ch: char) -> bool {
         // See https://www.sqlite.org/draft/tokenreq.html
-        ('a'..='z').contains(&ch)
-            || ('A'..='Z').contains(&ch)
+        ch.is_ascii_lowercase()
+            || ch.is_ascii_uppercase()
             || ch == '_'
             || ch == '$'
             || ('\u{007f}'..='\u{ffff}').contains(&ch)
     }
 
+    fn supports_filter_during_aggregation(&self) -> bool {
+        true
+    }
+
+    fn supports_start_transaction_modifier(&self) -> bool {
+        true
+    }
+
     fn is_identifier_part(&self, ch: char) -> bool {
-        self.is_identifier_start(ch) || ('0'..='9').contains(&ch)
+        self.is_identifier_start(ch) || ch.is_ascii_digit()
+    }
+
+    fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
+        if parser.parse_keyword(Keyword::REPLACE) {
+            parser.prev_token();
+            Some(parser.parse_insert())
+        } else {
+            None
+        }
+    }
+
+    fn supports_in_empty_list(&self) -> bool {
+        true
     }
 }

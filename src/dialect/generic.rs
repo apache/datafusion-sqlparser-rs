@@ -12,25 +12,34 @@
 
 use crate::dialect::Dialect;
 
+/// A permissive, general purpose [`Dialect`], which parses a wide variety of SQL
+/// statements, from many different dialects.
 #[derive(Debug, Default)]
 pub struct GenericDialect;
 
 impl Dialect for GenericDialect {
+    fn is_delimited_identifier_start(&self, ch: char) -> bool {
+        ch == '"' || ch == '`'
+    }
+
     fn is_identifier_start(&self, ch: char) -> bool {
-        ('a'..='z').contains(&ch)
-            || ('A'..='Z').contains(&ch)
-            || ch == '_'
-            || ch == '#'
-            || ch == '@'
+        ch.is_alphabetic() || ch == '_' || ch == '#' || ch == '@'
     }
 
     fn is_identifier_part(&self, ch: char) -> bool {
-        ('a'..='z').contains(&ch)
-            || ('A'..='Z').contains(&ch)
-            || ('0'..='9').contains(&ch)
+        ch.is_alphabetic()
+            || ch.is_ascii_digit()
             || ch == '@'
             || ch == '$'
             || ch == '#'
             || ch == '_'
+    }
+
+    fn supports_group_by_expr(&self) -> bool {
+        true
+    }
+
+    fn supports_start_transaction_modifier(&self) -> bool {
+        true
     }
 }

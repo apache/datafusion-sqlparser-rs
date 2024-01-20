@@ -3734,8 +3734,8 @@ impl fmt::Display for Statement {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SequenceOptions {
     IncrementBy(Expr, bool),
-    MinValue(MinMaxValue),
-    MaxValue(MinMaxValue),
+    MinValue(Option<Expr>),
+    MaxValue(Option<Expr>),
     StartWith(Expr, bool),
     Cache(Expr),
     Cycle(bool),
@@ -3752,28 +3752,18 @@ impl fmt::Display for SequenceOptions {
                     increment = increment
                 )
             }
-            SequenceOptions::MinValue(value) => match value {
-                MinMaxValue::Empty => {
-                    write!(f, "")
-                }
-                MinMaxValue::None => {
-                    write!(f, " NO MINVALUE")
-                }
-                MinMaxValue::Some(minvalue) => {
-                    write!(f, " MINVALUE {minvalue}")
-                }
+            SequenceOptions::MinValue(Some(expr)) => {
+                write!(f, " MINVALUE {expr}")
             },
-            SequenceOptions::MaxValue(value) => match value {
-                MinMaxValue::Empty => {
-                    write!(f, "")
-                }
-                MinMaxValue::None => {
-                    write!(f, " NO MAXVALUE")
-                }
-                MinMaxValue::Some(maxvalue) => {
-                    write!(f, " MAXVALUE {maxvalue}")
-                }
+            SequenceOptions::MinValue(None) => {
+                write!(f, " NO MINVALUE")
+            }
+            SequenceOptions::MaxValue(Some(expr)) => {
+                write!(f, " MAXVALUE {expr}")
             },
+            SequenceOptions::MaxValue(None) => {
+                write!(f, " NO MAXVALUE")
+            }
             SequenceOptions::StartWith(start, with) => {
                 write!(
                     f,

@@ -8563,24 +8563,21 @@ impl<'a> Parser<'a> {
         }
         //[ MINVALUE minvalue | NO MINVALUE ]
         if self.parse_keyword(Keyword::MINVALUE) {
-            sequence_options.push(SequenceOptions::MinValue(MinMaxValue::Some(Expr::Value(
+            sequence_options.push(SequenceOptions::MinValue(Some(Expr::Value(
                 self.parse_number_value()?,
             ))));
         } else if self.parse_keywords(&[Keyword::NO, Keyword::MINVALUE]) {
-            sequence_options.push(SequenceOptions::MinValue(MinMaxValue::None));
-        } else {
-            sequence_options.push(SequenceOptions::MinValue(MinMaxValue::Empty));
+            sequence_options.push(SequenceOptions::MinValue(None));
         }
         //[ MAXVALUE maxvalue | NO MAXVALUE ]
         if self.parse_keywords(&[Keyword::MAXVALUE]) {
-            sequence_options.push(SequenceOptions::MaxValue(MinMaxValue::Some(Expr::Value(
+            sequence_options.push(SequenceOptions::MaxValue(Some(Expr::Value(
                 self.parse_number_value()?,
             ))));
         } else if self.parse_keywords(&[Keyword::NO, Keyword::MAXVALUE]) {
-            sequence_options.push(SequenceOptions::MaxValue(MinMaxValue::None));
-        } else {
-            sequence_options.push(SequenceOptions::MaxValue(MinMaxValue::Empty));
+            sequence_options.push(SequenceOptions::MaxValue(None));
         }
+
         //[ START [ WITH ] start ]
         if self.parse_keywords(&[Keyword::START]) {
             if self.parse_keywords(&[Keyword::WITH]) {

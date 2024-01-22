@@ -1805,6 +1805,28 @@ fn parse_pg_regex_match_ops() {
 }
 
 #[test]
+fn parse_pg_like_match_ops() {
+    let pg_like_match_ops = &[
+        ("~~", BinaryOperator::PGLikeMatch),
+        ("~~*", BinaryOperator::PGILikeMatch),
+        ("!~~", BinaryOperator::PGNotLikeMatch),
+        ("!~~*", BinaryOperator::PGNotILikeMatch),
+    ];
+
+    for (str_op, op) in pg_like_match_ops {
+        let select = pg().verified_only_select(&format!("SELECT 'abc' {} 'a_c%'", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::BinaryOp {
+                left: Box::new(Expr::Value(Value::SingleQuotedString("abc".into()))),
+                op: op.clone(),
+                right: Box::new(Expr::Value(Value::SingleQuotedString("a_c%".into()))),
+            }),
+            select.projection[0]
+        );
+    }
+}
+
+#[test]
 fn parse_array_index_expr() {
     let num: Vec<Expr> = (0..=10)
         .map(|s| Expr::Value(number(&s.to_string())))

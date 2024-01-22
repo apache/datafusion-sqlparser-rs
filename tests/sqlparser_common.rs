@@ -31,6 +31,7 @@ use sqlparser::dialect::{
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
+use sqlparser::tokenizer::Tokenizer;
 use test_utils::{
     all_dialects, alter_table_op, assert_eq_vec, expr_from_projection, join, number, only, table,
     table_alias, TestedDialects,
@@ -8077,4 +8078,17 @@ fn test_release_savepoint() {
     }
 
     one_statement_parses_to("RELEASE test1", "RELEASE SAVEPOINT test1");
+}
+
+#[test]
+fn test_buffer_reuse() {
+    let d = GenericDialect {};
+    let q = "INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)";
+    let mut buf = Vec::new();
+    Tokenizer::new(&d, q)
+        .tokenize_with_location_into_buf(&mut buf)
+        .unwrap();
+    let mut p = Parser::new(&d).with_tokens_with_locations(buf);
+    p.parse_statements().unwrap();
+    let _ = p.into_tokens();
 }

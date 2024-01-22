@@ -8698,7 +8698,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Consume the parser and return its underlying token buffer
-    pub fn tokens(self) -> Vec<TokenWithLocation> {
+    pub fn into_tokens(self) -> Vec<TokenWithLocation> {
         self.tokens
     }
 }

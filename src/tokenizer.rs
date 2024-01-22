@@ -544,13 +544,13 @@ impl<'a> Tokenizer<'a> {
     /// Tokenize the statement and produce a vector of tokens with location information
     pub fn tokenize_with_location(&mut self) -> Result<Vec<TokenWithLocation>, TokenizerError> {
         let mut tokens: Vec<TokenWithLocation> = vec![];
-        self.tokenize_with_location_into(&mut tokens)
+        self.tokenize_with_location_into_buf(&mut tokens)
             .map(|_| tokens)
     }
-    
+
     /// Tokenize the statement and append tokens with location information into the provided buffer.
     /// If an error is thrown, the buffer will contain all tokens that were successfully parsed before the error.
-    pub fn tokenize_with_location_into(
+    pub fn tokenize_with_location_into_buf(
         &mut self,
         buf: &mut Vec<TokenWithLocation>,
     ) -> Result<(), TokenizerError> {

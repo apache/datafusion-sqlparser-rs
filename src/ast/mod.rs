@@ -3754,13 +3754,13 @@ impl fmt::Display for SequenceOptions {
             }
             SequenceOptions::MinValue(Some(expr)) => {
                 write!(f, " MINVALUE {expr}")
-            },
+            }
             SequenceOptions::MinValue(None) => {
                 write!(f, " NO MINVALUE")
             }
             SequenceOptions::MaxValue(Some(expr)) => {
                 write!(f, " MAXVALUE {expr}")
-            },
+            }
             SequenceOptions::MaxValue(None) => {
                 write!(f, " NO MAXVALUE")
             }

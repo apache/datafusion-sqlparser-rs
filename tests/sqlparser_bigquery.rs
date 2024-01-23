@@ -899,6 +899,26 @@ fn parse_hyphenated_table_identifiers() {
         "select * from foo-bar f join baz-qux b on f.id = b.id",
         "SELECT * FROM foo-bar AS f JOIN baz-qux AS b ON f.id = b.id",
     );
+
+    assert_eq!(
+        bigquery()
+            .verified_only_select_with_canonical(
+                "SELECT foo-bar.x FROM t",
+                "SELECT foo - bar.x FROM t"
+            )
+            .projection[0],
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("foo"))),
+            op: BinaryOperator::Minus,
+            right: Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("bar"),
+                Ident::new("x")
+            ]))
+        })
+    );
+
+    let error_sql = "select foo-bar.* from foo-bar";
+    assert!(bigquery().parse_sql_statements(error_sql).is_err());
 }
 
 #[test]

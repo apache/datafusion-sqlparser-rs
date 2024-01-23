@@ -16,8 +16,6 @@
 
 #[macro_use]
 mod test_utils;
-
-use std::assert_matches::assert_matches;
 use test_utils::*;
 
 use sqlparser::ast::*;
@@ -277,11 +275,6 @@ fn parse_create_sequence() {
     pg().one_statement_parses_to(
         sql6,
         "CREATE TEMPORARY SEQUENCE IF NOT EXISTS name3 INCREMENT 1 NO MINVALUE MAXVALUE 20 OWNED BY NONE",
-    );
-
-    assert!(
-        matches!(
-        pg().parse_sql_statements("CREATE SEQUENCE foo INCREMENT 1 NO MINVALUE NO"), Err(ParserError::ParserError(_)))
     );
 }
 

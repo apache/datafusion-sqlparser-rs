@@ -277,10 +277,10 @@ fn parse_create_sequence() {
         "CREATE TEMPORARY SEQUENCE IF NOT EXISTS name3 INCREMENT 1 NO MINVALUE MAXVALUE 20 OWNED BY NONE",
     );
 
-    assert!(
-        matches!(
-        pg().parse_sql_statements("CREATE SEQUENCE foo INCREMENT 1 NO MINVALUE NO"), Err(ParserError::ParserError(_)))
-    );
+    assert!(matches!(
+        pg().parse_sql_statements("CREATE SEQUENCE foo INCREMENT 1 NO MINVALUE NO"),
+        Err(ParserError::ParserError(_))
+    ));
 }
 
 #[test]

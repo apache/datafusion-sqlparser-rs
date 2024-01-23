@@ -716,6 +716,27 @@ fn parse_table_identifiers() {
             Ident::with_quote('`', "da-sh-es"),
         ],
     );
+
+    test_table_ident(
+        "foo-bar.baz-123",
+        Some("foo-bar.baz-123"),
+        vec![Ident::new("foo-bar"), Ident::new("baz-123")],
+    );
+
+    test_table_ident_err("foo-`bar`");
+    test_table_ident_err("`foo`-bar");
+    test_table_ident_err("foo-123a");
+    test_table_ident_err("foo - bar");
+    test_table_ident_err("123-bar");
+    test_table_ident_err("bar-");
+}
+
+#[test]
+fn parse_hyphenated_table_identifiers() {
+    bigquery().one_statement_parses_to(
+        "select * from foo-bar f join baz-qux b on f.id = b.id",
+        "SELECT * FROM foo-bar AS f JOIN baz-qux AS b ON f.id = b.id",
+    );
 }
 
 #[test]

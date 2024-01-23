@@ -459,15 +459,15 @@ fn parse_create_table_with_defaults() {
                 vec![
                     SqlOption {
                         name: "fillfactor".into(),
-                        value: number("20")
+                        value: Expr::Value(number("20"))
                     },
                     SqlOption {
                         name: "user_catalog_table".into(),
-                        value: Value::Boolean(true)
+                        value: Expr::Value(Value::Boolean(true))
                     },
                     SqlOption {
                         name: "autovacuum_vacuum_threshold".into(),
-                        value: number("100")
+                        value: Expr::Value(number("100"))
                     },
                 ]
             );
@@ -1798,6 +1798,28 @@ fn parse_pg_regex_match_ops() {
                 left: Box::new(Expr::Value(Value::SingleQuotedString("abc".into()))),
                 op: op.clone(),
                 right: Box::new(Expr::Value(Value::SingleQuotedString("^a".into()))),
+            }),
+            select.projection[0]
+        );
+    }
+}
+
+#[test]
+fn parse_pg_like_match_ops() {
+    let pg_like_match_ops = &[
+        ("~~", BinaryOperator::PGLikeMatch),
+        ("~~*", BinaryOperator::PGILikeMatch),
+        ("!~~", BinaryOperator::PGNotLikeMatch),
+        ("!~~*", BinaryOperator::PGNotILikeMatch),
+    ];
+
+    for (str_op, op) in pg_like_match_ops {
+        let select = pg().verified_only_select(&format!("SELECT 'abc' {} 'a_c%'", &str_op));
+        assert_eq!(
+            SelectItem::UnnamedExpr(Expr::BinaryOp {
+                left: Box::new(Expr::Value(Value::SingleQuotedString("abc".into()))),
+                op: op.clone(),
+                right: Box::new(Expr::Value(Value::SingleQuotedString("a_c%".into()))),
             }),
             select.projection[0]
         );

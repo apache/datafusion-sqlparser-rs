@@ -31,6 +31,7 @@ use sqlparser::dialect::{
 };
 use sqlparser::keywords::ALL_KEYWORDS;
 use sqlparser::parser::{Parser, ParserError, ParserOptions};
+use sqlparser::tokenizer::Tokenizer;
 use test_utils::{
     all_dialects, alter_table_op, assert_eq_vec, expr_from_projection, join, number, only, table,
     table_alias, TestedDialects,
@@ -3271,11 +3272,11 @@ fn parse_create_table_with_options() {
                 vec![
                     SqlOption {
                         name: "foo".into(),
-                        value: Value::SingleQuotedString("bar".into()),
+                        value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption {
                         name: "a".into(),
-                        value: number("123"),
+                        value: Expr::Value(number("123")),
                     },
                 ],
                 with_options
@@ -3534,11 +3535,11 @@ fn parse_alter_view_with_options() {
                 vec![
                     SqlOption {
                         name: "foo".into(),
-                        value: Value::SingleQuotedString("bar".into()),
+                        value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption {
                         name: "a".into(),
-                        value: number("123"),
+                        value: Expr::Value(number("123")),
                     },
                 ],
                 with_options
@@ -5863,18 +5864,18 @@ fn parse_create_view() {
             query,
             or_replace,
             materialized,
-            with_options,
+            options,
             cluster_by,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
-            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(!materialized);
             assert!(!or_replace);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(options, CreateTableOptions::None);
             assert_eq!(cluster_by, vec![]);
             assert!(!late_binding);
             assert!(!if_not_exists);
@@ -5888,19 +5889,19 @@ fn parse_create_view() {
 fn parse_create_view_with_options() {
     let sql = "CREATE VIEW v WITH (foo = 'bar', a = 123) AS SELECT 1";
     match verified_stmt(sql) {
-        Statement::CreateView { with_options, .. } => {
+        Statement::CreateView { options, .. } => {
             assert_eq!(
-                vec![
+                CreateTableOptions::With(vec![
                     SqlOption {
                         name: "foo".into(),
-                        value: Value::SingleQuotedString("bar".into()),
+                        value: Expr::Value(Value::SingleQuotedString("bar".into())),
                     },
                     SqlOption {
                         name: "a".into(),
-                        value: number("123"),
+                        value: Expr::Value(number("123")),
                     },
-                ],
-                with_options
+                ]),
+                options
             );
         }
         _ => unreachable!(),
@@ -5915,7 +5916,7 @@ fn parse_create_view_with_columns() {
             name,
             columns,
             or_replace,
-            with_options,
+            options,
             query,
             materialized,
             cluster_by,
@@ -5924,8 +5925,17 @@ fn parse_create_view_with_columns() {
             temporary,
         } => {
             assert_eq!("v", name.to_string());
-            assert_eq!(columns, vec![Ident::new("has"), Ident::new("cols")]);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(
+                columns,
+                vec![Ident::new("has"), Ident::new("cols"),]
+                    .into_iter()
+                    .map(|name| ViewColumnDef {
+                        name,
+                        options: None
+                    })
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(options, CreateTableOptions::None);
             assert_eq!("SELECT 1, 2", query.to_string());
             assert!(!materialized);
             assert!(!or_replace);
@@ -5948,18 +5958,18 @@ fn parse_create_view_temporary() {
             query,
             or_replace,
             materialized,
-            with_options,
+            options,
             cluster_by,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
-            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(!materialized);
             assert!(!or_replace);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(options, CreateTableOptions::None);
             assert_eq!(cluster_by, vec![]);
             assert!(!late_binding);
             assert!(!if_not_exists);
@@ -5977,7 +5987,7 @@ fn parse_create_or_replace_view() {
             name,
             columns,
             or_replace,
-            with_options,
+            options,
             query,
             materialized,
             cluster_by,
@@ -5987,7 +5997,7 @@ fn parse_create_or_replace_view() {
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(options, CreateTableOptions::None);
             assert_eq!("SELECT 1", query.to_string());
             assert!(!materialized);
             assert!(or_replace);
@@ -6012,7 +6022,7 @@ fn parse_create_or_replace_materialized_view() {
             name,
             columns,
             or_replace,
-            with_options,
+            options,
             query,
             materialized,
             cluster_by,
@@ -6022,7 +6032,7 @@ fn parse_create_or_replace_materialized_view() {
         } => {
             assert_eq!("v", name.to_string());
             assert_eq!(columns, vec![]);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(options, CreateTableOptions::None);
             assert_eq!("SELECT 1", query.to_string());
             assert!(materialized);
             assert!(or_replace);
@@ -6045,17 +6055,17 @@ fn parse_create_materialized_view() {
             columns,
             query,
             materialized,
-            with_options,
+            options,
             cluster_by,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
-            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(materialized);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(options, CreateTableOptions::None);
             assert!(!or_replace);
             assert_eq!(cluster_by, vec![]);
             assert!(!late_binding);
@@ -6076,17 +6086,17 @@ fn parse_create_materialized_view_with_cluster_by() {
             columns,
             query,
             materialized,
-            with_options,
+            options,
             cluster_by,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
-            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(materialized);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(options, CreateTableOptions::None);
             assert!(!or_replace);
             assert_eq!(cluster_by, vec![Ident::new("foo")]);
             assert!(!late_binding);
@@ -7713,11 +7723,11 @@ fn parse_cache_table() {
             options: vec![
                 SqlOption {
                     name: Ident::with_quote('\'', "K1"),
-                    value: Value::SingleQuotedString("V1".into()),
+                    value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
                 SqlOption {
                     name: Ident::with_quote('\'', "K2"),
-                    value: number("0.88"),
+                    value: Expr::Value(number("0.88")),
                 },
             ],
             query: None,
@@ -7738,11 +7748,11 @@ fn parse_cache_table() {
             options: vec![
                 SqlOption {
                     name: Ident::with_quote('\'', "K1"),
-                    value: Value::SingleQuotedString("V1".into()),
+                    value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
                 SqlOption {
                     name: Ident::with_quote('\'', "K2"),
-                    value: number("0.88"),
+                    value: Expr::Value(number("0.88")),
                 },
             ],
             query: Some(query.clone()),
@@ -7763,11 +7773,11 @@ fn parse_cache_table() {
             options: vec![
                 SqlOption {
                     name: Ident::with_quote('\'', "K1"),
-                    value: Value::SingleQuotedString("V1".into()),
+                    value: Expr::Value(Value::SingleQuotedString("V1".into())),
                 },
                 SqlOption {
                     name: Ident::with_quote('\'', "K2"),
-                    value: number("0.88"),
+                    value: Expr::Value(number("0.88")),
                 },
             ],
             query: Some(query.clone()),
@@ -8354,4 +8364,17 @@ fn test_release_savepoint() {
     }
 
     one_statement_parses_to("RELEASE test1", "RELEASE SAVEPOINT test1");
+}
+
+#[test]
+fn test_buffer_reuse() {
+    let d = GenericDialect {};
+    let q = "INSERT INTO customer WITH foo AS (SELECT 1) SELECT * FROM foo UNION VALUES (1)";
+    let mut buf = Vec::new();
+    Tokenizer::new(&d, q)
+        .tokenize_with_location_into_buf(&mut buf)
+        .unwrap();
+    let mut p = Parser::new(&d).with_tokens_with_locations(buf);
+    p.parse_statements().unwrap();
+    let _ = p.into_tokens();
 }

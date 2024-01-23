@@ -26,6 +26,7 @@ use sqlparser_derive::{Visit, VisitMut};
 use crate::ast::value::escape_single_quote_string;
 use crate::ast::{
     display_comma_separated, display_separated, DataType, Expr, Ident, ObjectName, SequenceOptions,
+    SqlOption,
 };
 use crate::tokenizer::Token;
 
@@ -649,6 +650,42 @@ impl fmt::Display for ColumnDef {
     }
 }
 
+/// Column definition specified in a `CREATE VIEW` statement.
+///
+/// Syntax
+/// ```markdown
+/// <name> [OPTIONS(option, ...)]
+///
+/// option: <name> = <value>
+/// ```
+///
+/// Examples:
+/// ```sql
+/// name
+/// age OPTIONS(description = "age column", tag = "prod")
+/// ```
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ViewColumnDef {
+    pub name: Ident,
+    pub options: Option<Vec<SqlOption>>,
+}
+
+impl fmt::Display for ViewColumnDef {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(options) = self.options.as_ref() {
+            write!(
+                f,
+                " OPTIONS({})",
+                display_comma_separated(options.as_slice())
+            )?;
+        }
+        Ok(())
+    }
+}
+
 /// An optionally-named `ColumnOption`: `[ CONSTRAINT <name> ] <column-option>`.
 ///
 /// Note that implementations are substantially more permissive than the ANSI
@@ -729,6 +766,14 @@ pub enum ColumnOption {
         /// false if 'GENERATED ALWAYS' is skipped (option starts with AS)
         generated_keyword: bool,
     },
+    /// BigQuery specific: Explicit column options in a view [1] or table [2]
+    /// Syntax
+    /// ```sql
+    /// OPTIONS(description="field desc")
+    /// ```
+    /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#view_column_option_list
+    /// [2]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#column_option_list
+    Options(Vec<SqlOption>),
 }
 
 impl fmt::Display for ColumnOption {
@@ -817,6 +862,9 @@ impl fmt::Display for ColumnOption {
                     }
                     Ok(())
                 }
+            }
+            Options(options) => {
+                write!(f, "OPTIONS({})", display_comma_separated(options))
             }
         }
     }

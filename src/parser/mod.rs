@@ -27,7 +27,7 @@ use log::debug;
 use IsLateral::*;
 use IsOptional::*;
 
-use crate::ast::helpers::stmt_create_table::CreateTableBuilder;
+use crate::ast::helpers::stmt_create_table::{BigQueryTableConfiguration, CreateTableBuilder};
 use crate::ast::*;
 use crate::dialect::*;
 use crate::keywords::{self, Keyword, ALL_KEYWORDS};
@@ -2205,6 +2205,10 @@ impl<'a> Parser<'a> {
             Token::TildeAsterisk => Some(BinaryOperator::PGRegexIMatch),
             Token::ExclamationMarkTilde => Some(BinaryOperator::PGRegexNotMatch),
             Token::ExclamationMarkTildeAsterisk => Some(BinaryOperator::PGRegexNotIMatch),
+            Token::DoubleTilde => Some(BinaryOperator::PGLikeMatch),
+            Token::DoubleTildeAsterisk => Some(BinaryOperator::PGILikeMatch),
+            Token::ExclamationMarkDoubleTilde => Some(BinaryOperator::PGNotLikeMatch),
+            Token::ExclamationMarkDoubleTildeAsterisk => Some(BinaryOperator::PGNotILikeMatch),
             Token::Word(w) => match w.keyword {
                 Keyword::AND => Some(BinaryOperator::And),
                 Keyword::OR => Some(BinaryOperator::Or),
@@ -2620,6 +2624,10 @@ impl<'a> Parser<'a> {
             | Token::TildeAsterisk
             | Token::ExclamationMarkTilde
             | Token::ExclamationMarkTildeAsterisk
+            | Token::DoubleTilde
+            | Token::DoubleTildeAsterisk
+            | Token::ExclamationMarkDoubleTilde
+            | Token::ExclamationMarkDoubleTildeAsterisk
             | Token::Spaceship => Ok(20),
             Token::Pipe => Ok(21),
             Token::Caret | Token::Sharp | Token::ShiftRight | Token::ShiftLeft => Ok(22),
@@ -3455,8 +3463,12 @@ impl<'a> Parser<'a> {
         // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
         // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let name = self.parse_object_name()?;
-        let columns = self.parse_parenthesized_column_list(Optional, false)?;
+        let columns = self.parse_view_columns()?;
+        let mut options = CreateTableOptions::None;
         let with_options = self.parse_options(Keyword::WITH)?;
+        if !with_options.is_empty() {
+            options = CreateTableOptions::With(with_options);
+        }
 
         let cluster_by = if self.parse_keyword(Keyword::CLUSTER) {
             self.expect_keyword(Keyword::BY)?;
@@ -3464,6 +3476,17 @@ impl<'a> Parser<'a> {
         } else {
             vec![]
         };
+
+        if dialect_of!(self is BigQueryDialect | GenericDialect) {
+            if let Token::Word(word) = self.peek_token().token {
+                if word.keyword == Keyword::OPTIONS {
+                    let opts = self.parse_options(Keyword::OPTIONS)?;
+                    if !opts.is_empty() {
+                        options = CreateTableOptions::Options(opts);
+                    }
+                }
+            };
+        }
 
         self.expect_keyword(Keyword::AS)?;
         let query = Box::new(self.parse_query()?);
@@ -3483,7 +3506,7 @@ impl<'a> Parser<'a> {
             query,
             materialized,
             or_replace,
-            with_options,
+            options,
             cluster_by,
             with_no_schema_binding,
             if_not_exists,
@@ -4169,6 +4192,12 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let big_query_config = if dialect_of!(self is BigQueryDialect | GenericDialect) {
+            self.parse_optional_big_query_create_table_config()?
+        } else {
+            Default::default()
+        };
+
         // Parse optional `AS ( query )`
         let query = if self.parse_keyword(Keyword::AS) {
             Some(Box::new(self.parse_query()?))
@@ -4252,8 +4281,40 @@ impl<'a> Parser<'a> {
             .collation(collation)
             .on_commit(on_commit)
             .on_cluster(on_cluster)
+            .partition_by(big_query_config.partition_by)
+            .cluster_by(big_query_config.cluster_by)
+            .options(big_query_config.options)
             .strict(strict)
             .build())
+    }
+
+    /// Parse configuration like partitioning, clustering information during big-query table creation.
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#syntax_2>
+    fn parse_optional_big_query_create_table_config(
+        &mut self,
+    ) -> Result<BigQueryTableConfiguration, ParserError> {
+        let mut partition_by = None;
+        if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
+            partition_by = Some(Box::new(self.parse_expr()?));
+        };
+
+        let mut cluster_by = None;
+        if self.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
+            cluster_by = Some(self.parse_comma_separated(Parser::parse_identifier)?);
+        };
+
+        let mut options = None;
+        if let Token::Word(word) = self.peek_token().token {
+            if word.keyword == Keyword::OPTIONS {
+                options = Some(self.parse_options(Keyword::OPTIONS)?);
+            }
+        };
+
+        Ok(BigQueryTableConfiguration {
+            partition_by,
+            cluster_by,
+            options,
+        })
     }
 
     pub fn parse_optional_procedure_parameters(
@@ -4456,6 +4517,13 @@ impl<'a> Parser<'a> {
             Ok(Some(ColumnOption::OnUpdate(expr)))
         } else if self.parse_keyword(Keyword::GENERATED) {
             self.parse_optional_column_option_generated()
+        } else if dialect_of!(self is BigQueryDialect | GenericDialect)
+            && self.parse_keyword(Keyword::OPTIONS)
+        {
+            self.prev_token();
+            Ok(Some(ColumnOption::Options(
+                self.parse_options(Keyword::OPTIONS)?,
+            )))
         } else if self.parse_keyword(Keyword::AS)
             && dialect_of!(self is MySqlDialect | SQLiteDialect | DuckDbDialect | GenericDialect)
         {
@@ -4781,7 +4849,7 @@ impl<'a> Parser<'a> {
     pub fn parse_sql_option(&mut self) -> Result<SqlOption, ParserError> {
         let name = self.parse_identifier()?;
         self.expect_token(&Token::Eq)?;
-        let value = self.parse_value()?;
+        let value = self.parse_expr()?;
         Ok(SqlOption { name, value })
     }
 
@@ -6000,6 +6068,36 @@ impl<'a> Parser<'a> {
             Token::DoubleQuotedString(s) => Ok(Ident::with_quote('\"', s)),
             _ => self.expected("identifier", next_token),
         }
+    }
+
+    /// Parses a parenthesized, comma-separated list of column definitions within a view.
+    fn parse_view_columns(&mut self) -> Result<Vec<ViewColumnDef>, ParserError> {
+        if self.consume_token(&Token::LParen) {
+            if self.peek_token().token == Token::RParen {
+                self.next_token();
+                Ok(vec![])
+            } else {
+                let cols = self.parse_comma_separated(Parser::parse_view_column)?;
+                self.expect_token(&Token::RParen)?;
+                Ok(cols)
+            }
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    /// Parses a column definition within a view.
+    fn parse_view_column(&mut self) -> Result<ViewColumnDef, ParserError> {
+        let name = self.parse_identifier()?;
+        let options = if dialect_of!(self is BigQueryDialect | GenericDialect)
+            && self.parse_keyword(Keyword::OPTIONS)
+        {
+            self.prev_token();
+            Some(self.parse_options(Keyword::OPTIONS)?)
+        } else {
+            None
+        };
+        Ok(ViewColumnDef { name, options })
     }
 
     /// Parse a parenthesized comma-separated list of unqualified, possibly quoted identifiers
@@ -8528,11 +8626,24 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_pragma_value(&mut self) -> Result<Value, ParserError> {
+        match self.parse_value()? {
+            v @ Value::SingleQuotedString(_) => Ok(v),
+            v @ Value::DoubleQuotedString(_) => Ok(v),
+            v @ Value::Number(_, _) => Ok(v),
+            v @ Value::Placeholder(_) => Ok(v),
+            _ => {
+                self.prev_token();
+                self.expected("number or string or ? placeholder", self.peek_token())
+            }
+        }
+    }
+
     // PRAGMA [schema-name '.'] pragma-name [('=' pragma-value) | '(' pragma-value ')']
     pub fn parse_pragma(&mut self) -> Result<Statement, ParserError> {
         let name = self.parse_object_name()?;
         if self.consume_token(&Token::LParen) {
-            let value = self.parse_number_value()?;
+            let value = self.parse_pragma_value()?;
             self.expect_token(&Token::RParen)?;
             Ok(Statement::Pragma {
                 name,
@@ -8542,7 +8653,7 @@ impl<'a> Parser<'a> {
         } else if self.consume_token(&Token::Eq) {
             Ok(Statement::Pragma {
                 name,
-                value: Some(self.parse_number_value()?),
+                value: Some(self.parse_pragma_value()?),
                 is_eq: true,
             })
         } else {
@@ -8755,6 +8866,11 @@ impl<'a> Parser<'a> {
         let partitions = self.parse_comma_separated(Parser::parse_identifier)?;
         self.expect_token(&Token::RParen)?;
         Ok(partitions)
+    }
+
+    /// Consume the parser and return its underlying token buffer
+    pub fn into_tokens(self) -> Vec<TokenWithLocation> {
+        self.tokens
     }
 }
 

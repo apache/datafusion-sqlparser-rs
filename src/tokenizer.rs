@@ -149,6 +149,14 @@ pub enum Token {
     ExclamationMarkTilde,
     /// `!~*` , a case insensitive not match regular expression operator in PostgreSQL
     ExclamationMarkTildeAsterisk,
+    /// `~~`, a case sensitive match pattern operator in PostgreSQL
+    DoubleTilde,
+    /// `~~*`, a case insensitive match pattern operator in PostgreSQL
+    DoubleTildeAsterisk,
+    /// `!~~`, a case sensitive not match pattern operator in PostgreSQL
+    ExclamationMarkDoubleTilde,
+    /// `!~~*`, a case insensitive not match pattern operator in PostgreSQL
+    ExclamationMarkDoubleTildeAsterisk,
     /// `<<`, a bitwise shift left operator in PostgreSQL
     ShiftLeft,
     /// `>>`, a bitwise shift right operator in PostgreSQL
@@ -249,6 +257,10 @@ impl fmt::Display for Token {
             Token::TildeAsterisk => f.write_str("~*"),
             Token::ExclamationMarkTilde => f.write_str("!~"),
             Token::ExclamationMarkTildeAsterisk => f.write_str("!~*"),
+            Token::DoubleTilde => f.write_str("~~"),
+            Token::DoubleTildeAsterisk => f.write_str("~~*"),
+            Token::ExclamationMarkDoubleTilde => f.write_str("!~~"),
+            Token::ExclamationMarkDoubleTildeAsterisk => f.write_str("!~~*"),
             Token::AtSign => f.write_str("@"),
             Token::CaretAt => f.write_str("^@"),
             Token::ShiftLeft => f.write_str("<<"),
@@ -543,21 +555,30 @@ impl<'a> Tokenizer<'a> {
 
     /// Tokenize the statement and produce a vector of tokens with location information
     pub fn tokenize_with_location(&mut self) -> Result<Vec<TokenWithLocation>, TokenizerError> {
+        let mut tokens: Vec<TokenWithLocation> = vec![];
+        self.tokenize_with_location_into_buf(&mut tokens)
+            .map(|_| tokens)
+    }
+
+    /// Tokenize the statement and append tokens with location information into the provided buffer.
+    /// If an error is thrown, the buffer will contain all tokens that were successfully parsed before the error.
+    pub fn tokenize_with_location_into_buf(
+        &mut self,
+        buf: &mut Vec<TokenWithLocation>,
+    ) -> Result<(), TokenizerError> {
         let mut state = State {
             peekable: self.query.chars().peekable(),
             line: 1,
             col: 1,
         };
 
-        let mut tokens: Vec<TokenWithLocation> = vec![];
-
         let mut location = state.location();
         while let Some(token) = self.next_token(&mut state)? {
-            tokens.push(TokenWithLocation { token, location });
+            buf.push(TokenWithLocation { token, location });
 
             location = state.location();
         }
-        Ok(tokens)
+        Ok(())
     }
 
     // Tokenize the identifer or keywords in `ch`
@@ -894,6 +915,16 @@ impl<'a> Tokenizer<'a> {
                             match chars.peek() {
                                 Some('*') => self
                                     .consume_and_return(chars, Token::ExclamationMarkTildeAsterisk),
+                                Some('~') => {
+                                    chars.next();
+                                    match chars.peek() {
+                                        Some('*') => self.consume_and_return(
+                                            chars,
+                                            Token::ExclamationMarkDoubleTildeAsterisk,
+                                        ),
+                                        _ => Ok(Some(Token::ExclamationMarkDoubleTilde)),
+                                    }
+                                }
                                 _ => Ok(Some(Token::ExclamationMarkTilde)),
                             }
                         }
@@ -965,6 +996,15 @@ impl<'a> Tokenizer<'a> {
                     chars.next(); // consume
                     match chars.peek() {
                         Some('*') => self.consume_and_return(chars, Token::TildeAsterisk),
+                        Some('~') => {
+                            chars.next();
+                            match chars.peek() {
+                                Some('*') => {
+                                    self.consume_and_return(chars, Token::DoubleTildeAsterisk)
+                                }
+                                _ => Ok(Some(Token::DoubleTilde)),
+                            }
+                        }
                         _ => Ok(Some(Token::Tilde)),
                     }
                 }
@@ -1981,6 +2021,44 @@ mod tests {
             Token::ExclamationMarkTildeAsterisk,
             Token::Whitespace(Whitespace::Space),
             Token::SingleQuotedString("^a".into()),
+        ];
+        compare(expected, tokens);
+    }
+
+    #[test]
+    fn tokenize_pg_like_match() {
+        let sql = "SELECT col ~~ '_a%', col ~~* '_a%', col !~~ '_a%', col !~~* '_a%'";
+        let dialect = GenericDialect {};
+        let tokens = Tokenizer::new(&dialect, sql).tokenize().unwrap();
+        let expected = vec![
+            Token::make_keyword("SELECT"),
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::DoubleTilde,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("_a%".into()),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::DoubleTildeAsterisk,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("_a%".into()),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::ExclamationMarkDoubleTilde,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("_a%".into()),
+            Token::Comma,
+            Token::Whitespace(Whitespace::Space),
+            Token::make_word("col", None),
+            Token::Whitespace(Whitespace::Space),
+            Token::ExclamationMarkDoubleTildeAsterisk,
+            Token::Whitespace(Whitespace::Space),
+            Token::SingleQuotedString("_a%".into()),
         ];
         compare(expected, tokens);
     }

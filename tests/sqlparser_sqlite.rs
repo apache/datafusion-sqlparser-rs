@@ -165,18 +165,18 @@ fn parse_create_view_temporary_if_not_exists() {
             query,
             or_replace,
             materialized,
-            with_options,
+            options,
             cluster_by,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
-            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(!materialized);
             assert!(!or_replace);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(options, CreateTableOptions::None);
             assert_eq!(cluster_by, vec![]);
             assert!(!late_binding);
             assert!(if_not_exists);

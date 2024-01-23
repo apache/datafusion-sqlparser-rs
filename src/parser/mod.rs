@@ -6029,8 +6029,8 @@ impl<'a> Parser<'a> {
             Token::Word(w) => {
                 let mut ident = w.to_ident();
 
-                // On BigQuery, unquoted identifiers support hyphenated identifiers when referenced
-                // in a FROM or TABLE clause [0].
+                // On BigQuery, hyphens are permitted in unquoted identifiers inside of a FROM or
+                // TABLE clause [0].
                 //
                 // The first segment must be an ordinary unquoted identifier, e.g. it must not start
                 // with a digit. Subsequent segments are either must either be valid identifiers or

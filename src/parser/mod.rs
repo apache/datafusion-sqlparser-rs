@@ -61,7 +61,7 @@ macro_rules! return_ok_if_some {
 #[cfg(feature = "std")]
 /// Implementation [`RecursionCounter`] if std is available
 mod recursion {
-    use core::sync::atomic::{AtomicUsize, Ordering};
+    use std::cell::Cell;
     use std::rc::Rc;
 
     use super::ParserError;
@@ -70,12 +70,11 @@ mod recursion {
     /// each call to `try_decrease()`, when it reaches 0 an error will
     /// be returned.
     ///
-    /// Note: Uses an Rc and AtomicUsize in order to satisfy the Rust
+    /// Note: Uses an Rc and Cell in order to satisfy the Rust
     /// borrow checker so the automatic DepthGuard decrement a
-    /// reference to the counter. The actual value is not modified
-    /// concurrently
+    /// reference to the counter.
     pub(crate) struct RecursionCounter {
-        remaining_depth: Rc<AtomicUsize>,
+        remaining_depth: Rc<Cell<usize>>,
     }
 
     impl RecursionCounter {
@@ -94,11 +93,12 @@ mod recursion {
         /// Returns a [`DepthGuard`] which will adds 1 to the
         /// remaining depth upon drop;
         pub fn try_decrease(&self) -> Result<DepthGuard, ParserError> {
-            let old_value = self.remaining_depth.fetch_sub(1, Ordering::SeqCst);
+            let old_value = self.remaining_depth.get();
             // ran out of space
             if old_value == 0 {
                 Err(ParserError::RecursionLimitExceeded)
             } else {
+                self.remaining_depth.set(old_value - 1);
                 Ok(DepthGuard::new(Rc::clone(&self.remaining_depth)))
             }
         }
@@ -106,17 +106,18 @@ mod recursion {
 
     /// Guard that increass the remaining depth by 1 on drop
     pub struct DepthGuard {
-        remaining_depth: Rc<AtomicUsize>,
+        remaining_depth: Rc<Cell<usize>>,
     }
 
     impl DepthGuard {
-        fn new(remaining_depth: Rc<AtomicUsize>) -> Self {
+        fn new(remaining_depth: Rc<Cell<usize>>) -> Self {
             Self { remaining_depth }
         }
     }
     impl Drop for DepthGuard {
         fn drop(&mut self) {
-            self.remaining_depth.fetch_add(1, Ordering::SeqCst);
+            let old_value = self.remaining_depth.get();
+            self.remaining_depth.set(old_value + 1);
         }
     }
 }

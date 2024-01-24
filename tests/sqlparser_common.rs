@@ -2403,6 +2403,12 @@ fn parse_array_agg_func() {
     ] {
         supported_dialects.verified_stmt(sql);
     }
+
+    // follows special-case array_agg code path. fails in everything except postgres
+    let wc_sql = "SELECT ARRAY_AGG(sections_tbl.*) AS sections FROM sections_tbl";
+    all_dialects_but_pg()
+        .parse_sql_statements(wc_sql)
+        .expect_err("should have failed");
 }
 
 #[test]

@@ -380,7 +380,10 @@ pub enum Expr {
         right: Box<Expr>,
     },
     /// CompositeAccess (postgres) eg: SELECT (information_schema._pg_expandarray(array['i','i'])).n
-    CompositeAccess { expr: Box<Expr>, key: Ident },
+    CompositeAccess {
+        expr: Box<Expr>,
+        key: Ident,
+    },
     /// `IS FALSE` operator
     IsFalse(Box<Expr>),
     /// `IS NOT FALSE` operator
@@ -474,7 +477,10 @@ pub enum Expr {
         right: Box<Expr>,
     },
     /// Unary operation e.g. `NOT foo`
-    UnaryOp { op: UnaryOperator, expr: Box<Expr> },
+    UnaryOp {
+        op: UnaryOperator,
+        expr: Box<Expr>,
+    },
     /// CONVERT a value to a different data type or character encoding. e.g. `CONVERT(foo USING utf8mb4)`
     Convert {
         /// The expression to convert
@@ -545,7 +551,10 @@ pub enum Expr {
     /// ```sql
     /// POSITION(<expr> in <expr>)
     /// ```
-    Position { expr: Box<Expr>, r#in: Box<Expr> },
+    Position {
+        expr: Box<Expr>,
+        r#in: Box<Expr>,
+    },
     /// ```sql
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     /// ```
@@ -589,20 +598,32 @@ pub enum Expr {
     /// A literal value, such as string, number, date or NULL
     Value(Value),
     /// <https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html>
-    IntroducedString { introducer: String, value: Value },
+    IntroducedString {
+        introducer: String,
+        value: Value,
+    },
     /// A constant of form `<data_type> 'value'`.
     /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
     /// as well as constants of other types (a non-standard PostgreSQL extension).
-    TypedString { data_type: DataType, value: String },
+    TypedString {
+        data_type: DataType,
+        value: String,
+    },
     /// Access a map-like object by field (e.g. `column['field']` or `column[4]`
     /// Note that depending on the dialect, struct like accesses may be
     /// parsed as [`ArrayIndex`](Self::ArrayIndex) or [`MapAccess`](Self::MapAccess)
     /// <https://clickhouse.com/docs/en/sql-reference/data-types/map/>
-    MapAccess { column: Box<Expr>, keys: Vec<Expr> },
+    MapAccess {
+        column: Box<Expr>,
+        keys: Vec<Expr>,
+    },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
     /// Aggregate function with filter
-    AggregateExpressionWithFilter { expr: Box<Expr>, filter: Box<Expr> },
+    AggregateExpressionWithFilter {
+        expr: Box<Expr>,
+        filter: Box<Expr>,
+    },
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
     ///
     /// Note we only recognize a complete single expression as `<condition>`,
@@ -616,7 +637,10 @@ pub enum Expr {
     },
     /// An exists expression `[ NOT ] EXISTS(SELECT ...)`, used in expressions like
     /// `WHERE [ NOT ] EXISTS (SELECT ...)`.
-    Exists { subquery: Box<Query>, negated: bool },
+    Exists {
+        subquery: Box<Query>,
+        negated: bool,
+    },
     /// A parenthesized subquery `(SELECT ...)`, used in expression like
     /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
     Subquery(Box<Query>),
@@ -653,9 +677,15 @@ pub enum Expr {
     /// 1 AS A
     /// ```
     /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
-    Named { expr: Box<Expr>, name: Ident },
+    Named {
+        expr: Box<Expr>,
+        name: Ident,
+    },
     /// An array index expression e.g. `(ARRAY[1, 2])[1]` or `(current_schemas(FALSE))[1]`
-    ArrayIndex { obj: Box<Expr>, indexes: Vec<Expr> },
+    ArrayIndex {
+        obj: Box<Expr>,
+        indexes: Vec<Expr>,
+    },
     /// An array expression e.g. `ARRAY[1, 2]`
     Array(Array),
     /// An interval expression e.g. `INTERVAL '1' YEAR`
@@ -678,6 +708,10 @@ pub enum Expr {
         /// `<search modifier>`
         opt_search_modifier: Option<SearchModifier>,
     },
+    Wildcard,
+    /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
+    /// (Same caveats apply to `QualifiedWildcard` as to `Wildcard`.)
+    QualifiedWildcard(ObjectName),
 }
 
 impl fmt::Display for CastFormat {
@@ -704,6 +738,8 @@ impl fmt::Display for Expr {
                 }
                 Ok(())
             }
+            Expr::Wildcard => f.write_str("*"),
+            Expr::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
             Expr::IsTrue(ast) => write!(f, "{ast} IS TRUE"),
             Expr::IsNotTrue(ast) => write!(f, "{ast} IS NOT TRUE"),
@@ -4186,6 +4222,16 @@ pub enum FunctionArgExpr {
     QualifiedWildcard(ObjectName),
     /// An unqualified `*`
     Wildcard,
+}
+
+impl From<Expr> for FunctionArgExpr {
+    fn from(wildcard_expr: Expr) -> Self {
+        match wildcard_expr {
+            Expr::QualifiedWildcard(prefix) => Self::QualifiedWildcard(prefix),
+            Expr::Wildcard => Self::Wildcard,
+            expr => Self::Expr(expr),
+        }
+    }
 }
 
 impl fmt::Display for FunctionArgExpr {

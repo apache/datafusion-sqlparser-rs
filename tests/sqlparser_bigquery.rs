@@ -878,6 +878,47 @@ fn parse_table_identifiers() {
             Ident::with_quote('`', "da-sh-es"),
         ],
     );
+
+    test_table_ident(
+        "foo-bar.baz-123",
+        Some("foo-bar.baz-123"),
+        vec![Ident::new("foo-bar"), Ident::new("baz-123")],
+    );
+
+    test_table_ident_err("foo-`bar`");
+    test_table_ident_err("`foo`-bar");
+    test_table_ident_err("foo-123a");
+    test_table_ident_err("foo - bar");
+    test_table_ident_err("123-bar");
+    test_table_ident_err("bar-");
+}
+
+#[test]
+fn parse_hyphenated_table_identifiers() {
+    bigquery().one_statement_parses_to(
+        "select * from foo-bar f join baz-qux b on f.id = b.id",
+        "SELECT * FROM foo-bar AS f JOIN baz-qux AS b ON f.id = b.id",
+    );
+
+    assert_eq!(
+        bigquery()
+            .verified_only_select_with_canonical(
+                "SELECT foo-bar.x FROM t",
+                "SELECT foo - bar.x FROM t"
+            )
+            .projection[0],
+        SelectItem::UnnamedExpr(Expr::BinaryOp {
+            left: Box::new(Expr::Identifier(Ident::new("foo"))),
+            op: BinaryOperator::Minus,
+            right: Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new("bar"),
+                Ident::new("x")
+            ]))
+        })
+    );
+
+    let error_sql = "select foo-bar.* from foo-bar";
+    assert!(bigquery().parse_sql_statements(error_sql).is_err());
 }
 
 #[test]

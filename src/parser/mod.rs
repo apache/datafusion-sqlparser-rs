@@ -651,6 +651,8 @@ impl<'a> Parser<'a> {
 
     pub fn parse_truncate(&mut self) -> Result<Statement, ParserError> {
         let table = self.parse_keyword(Keyword::TABLE);
+        let only = self.parse_keyword(Keyword::ONLY);
+
         let table_name = self.parse_object_name()?;
         let mut partitions = None;
         if self.parse_keyword(Keyword::PARTITION) {
@@ -658,10 +660,30 @@ impl<'a> Parser<'a> {
             partitions = Some(self.parse_comma_separated(Parser::parse_expr)?);
             self.expect_token(&Token::RParen)?;
         }
+
+        let identity = if self.parse_keywords(&[Keyword::RESTART, Keyword::IDENTITY]) {
+            Some(TruncateIdentityOption::Restart)
+        } else if self.parse_keywords(&[Keyword::CONTINUE, Keyword::IDENTITY]) {
+            Some(TruncateIdentityOption::Continue)
+        } else {
+            None
+        };
+
+        let cascade = if self.parse_keyword(Keyword::CASCADE) {
+            Some(TruncateCascadeOption::Cascade)
+        } else if self.parse_keyword(Keyword::RESTRICT) {
+            Some(TruncateCascadeOption::Restrict)
+        } else {
+            None
+        };
+
         Ok(Statement::Truncate {
             table_name,
             partitions,
             table,
+            only,
+            identity,
+            cascade,
         })
     }
 

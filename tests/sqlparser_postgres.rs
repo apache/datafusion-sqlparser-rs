@@ -570,7 +570,6 @@ fn parse_alter_table_disable() {
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER ALL");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER USER");
     pg_and_generic().verified_stmt("ALTER TABLE tab DISABLE TRIGGER trigger_name");
-
 }
 
 #[test]
@@ -3465,7 +3464,27 @@ fn parse_truncate() {
         Statement::Truncate {
             table_name: ObjectName(vec![Ident::new("db"), Ident::new("table_name")]),
             partitions: None,
-            table: false
+            table: false,
+            only: false,
+            identity: None,
+            cascade: None,
+        },
+        truncate
+    );
+}
+
+#[test]
+fn parse_truncate_with_options() {
+    let truncate = pg_and_generic()
+        .verified_stmt("TRUNCATE TABLE ONLY db.table_name RESTART IDENTITY CASCADE");
+    assert_eq!(
+        Statement::Truncate {
+            table_name: ObjectName(vec![Ident::new("db"), Ident::new("table_name")]),
+            partitions: None,
+            table: true,
+            only: true,
+            identity: Some(TruncateIdentityOption::Restart),
+            cascade: Some(TruncateCascadeOption::Cascade)
         },
         truncate
     );

@@ -8700,13 +8700,12 @@ impl<'a> Parser<'a> {
             )));
         }
         // [ [ NO ] CYCLE ]
-        if self.parse_keywords(&[Keyword::NO]) {
-            if self.parse_keywords(&[Keyword::CYCLE]) {
-                sequence_options.push(SequenceOptions::Cycle(true));
-            }
+        if self.parse_keywords(&[Keyword::NO, Keyword::CYCLE]) {
+            sequence_options.push(SequenceOptions::Cycle(true));
         } else if self.parse_keywords(&[Keyword::CYCLE]) {
             sequence_options.push(SequenceOptions::Cycle(false));
         }
+
         Ok(sequence_options)
     }
 

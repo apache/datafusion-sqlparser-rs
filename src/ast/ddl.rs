@@ -355,17 +355,13 @@ impl fmt::Display for AlterColumnOperation {
 
                 write!(f, "ADD GENERATED{generated_as} AS IDENTITY",)?;
                 if let Some(options) = sequence_options {
-                    if !options.is_empty() {
-                        write!(f, " (")?;
-                    }
+                    write!(f, " (")?;
 
                     for sequence_option in options {
                         write!(f, "{sequence_option}")?;
                     }
 
-                    if !options.is_empty() {
-                        write!(f, " )")?;
-                    }
+                    write!(f, " )")?;
                 }
                 Ok(())
             }

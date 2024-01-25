@@ -10,6 +10,14 @@ changes that break via addition as "Added".
 ## [Unreleased]
 Check https://github.com/sqlparser-rs/sqlparser-rs/commits/main for undocumented changes.
 
+## [0.43.1] 2024-01-22
+### Changes
+* Fixed CHANGELOG
+
+
+## [0.43.0] 2024-01-22
+* NO CHANGES
+
 ## [0.42.0] 2024-01-22
 
 ### Added

@@ -16,6 +16,11 @@ use crate::keywords::Keyword;
 use crate::parser::{Parser, ParserError};
 
 /// A [`Dialect`] for [SQLite](https://www.sqlite.org)
+///
+/// This dialect allows columns in a
+/// [`CREATE TABLE`](https://sqlite.org/lang_createtable.html) statement with no
+/// type specified, as in `CREATE TABLE t1 (a)`. In the AST, these columns will
+/// have the data type [`Unspecified`](crate::ast::DataType::Unspecified).
 #[derive(Debug)]
 pub struct SQLiteDialect {}
 

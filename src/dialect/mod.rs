@@ -65,7 +65,9 @@ macro_rules! dialect_of {
 /// encapsulates the parsing differences between dialects.
 ///
 /// [`GenericDialect`] is the most permissive dialect, and parses the union of
-/// all the other dialects, when there is no ambiguity.
+/// all the other dialects, when there is no ambiguity. However, it does not
+/// currently allow `CREATE TABLE` statements without types specified for all
+/// columns; use [`SQLiteDialect`] if you require that.
 ///
 /// # Examples
 /// Most users create a [`Dialect`] directly, as shown on the [module
@@ -349,6 +351,7 @@ mod tests {
             }
         }
 
+        #[allow(clippy::needless_raw_string_hashes)]
         let statement = r#"SELECT 'Wayne\'s World'"#;
         let res1 = Parser::parse_sql(&MySqlDialect {}, statement);
         let res2 = Parser::parse_sql(&WrappedDialect(MySqlDialect {}), statement);

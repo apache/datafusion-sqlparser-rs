@@ -14,6 +14,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::{
     boxed::Box,
+    format,
     string::{String, ToString},
     vec::Vec,
 };
@@ -31,9 +32,10 @@ pub use self::data_type::{
 pub use self::dcl::{AlterRoleOperation, ResetConfig, RoleOption, SetConfigValue};
 pub use self::ddl::{
     AlterColumnOperation, AlterIndexOperation, AlterTableOperation, ColumnDef, ColumnOption,
-    ColumnOptionDef, GeneratedAs, GeneratedExpressionMode, IndexType, KeyOrIndexDisplay, Partition,
-    ProcedureParam, ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeRepresentation,
+    ColumnOptionDef, ConstraintCharacteristics, DeferrableInitial, GeneratedAs,
+    GeneratedExpressionMode, IndexType, KeyOrIndexDisplay, Partition, ProcedureParam,
+    ReferentialAction, TableConstraint, UserDefinedTypeCompositeAttributeDef,
+    UserDefinedTypeRepresentation, ViewColumnDef,
 };
 pub use self::operator::{BinaryOperator, UnaryOperator};
 pub use self::query::{
@@ -379,7 +381,10 @@ pub enum Expr {
         right: Box<Expr>,
     },
     /// CompositeAccess (postgres) eg: SELECT (information_schema._pg_expandarray(array['i','i'])).n
-    CompositeAccess { expr: Box<Expr>, key: Ident },
+    CompositeAccess {
+        expr: Box<Expr>,
+        key: Ident,
+    },
     /// `IS FALSE` operator
     IsFalse(Box<Expr>),
     /// `IS NOT FALSE` operator
@@ -480,7 +485,10 @@ pub enum Expr {
         right: Box<Expr>,
     },
     /// Unary operation e.g. `NOT foo`
-    UnaryOp { op: UnaryOperator, expr: Box<Expr> },
+    UnaryOp {
+        op: UnaryOperator,
+        expr: Box<Expr>,
+    },
     /// CONVERT a value to a different data type or character encoding. e.g. `CONVERT(foo USING utf8mb4)`
     Convert {
         /// The expression to convert
@@ -551,7 +559,10 @@ pub enum Expr {
     /// ```sql
     /// POSITION(<expr> in <expr>)
     /// ```
-    Position { expr: Box<Expr>, r#in: Box<Expr> },
+    Position {
+        expr: Box<Expr>,
+        r#in: Box<Expr>,
+    },
     /// ```sql
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     /// ```
@@ -595,20 +606,32 @@ pub enum Expr {
     /// A literal value, such as string, number, date or NULL
     Value(Value),
     /// <https://dev.mysql.com/doc/refman/8.0/en/charset-introducer.html>
-    IntroducedString { introducer: String, value: Value },
+    IntroducedString {
+        introducer: String,
+        value: Value,
+    },
     /// A constant of form `<data_type> 'value'`.
     /// This can represent ANSI SQL `DATE`, `TIME`, and `TIMESTAMP` literals (such as `DATE '2020-01-01'`),
     /// as well as constants of other types (a non-standard PostgreSQL extension).
-    TypedString { data_type: DataType, value: String },
+    TypedString {
+        data_type: DataType,
+        value: String,
+    },
     /// Access a map-like object by field (e.g. `column['field']` or `column[4]`
     /// Note that depending on the dialect, struct like accesses may be
     /// parsed as [`ArrayIndex`](Self::ArrayIndex) or [`MapAccess`](Self::MapAccess)
     /// <https://clickhouse.com/docs/en/sql-reference/data-types/map/>
-    MapAccess { column: Box<Expr>, keys: Vec<Expr> },
+    MapAccess {
+        column: Box<Expr>,
+        keys: Vec<Expr>,
+    },
     /// Scalar function call e.g. `LEFT(foo, 5)`
     Function(Function),
     /// Aggregate function with filter
-    AggregateExpressionWithFilter { expr: Box<Expr>, filter: Box<Expr> },
+    AggregateExpressionWithFilter {
+        expr: Box<Expr>,
+        filter: Box<Expr>,
+    },
     /// `CASE [<operand>] WHEN <condition> THEN <result> ... [ELSE <result>] END`
     ///
     /// Note we only recognize a complete single expression as `<condition>`,
@@ -622,7 +645,10 @@ pub enum Expr {
     },
     /// An exists expression `[ NOT ] EXISTS(SELECT ...)`, used in expressions like
     /// `WHERE [ NOT ] EXISTS (SELECT ...)`.
-    Exists { subquery: Box<Query>, negated: bool },
+    Exists {
+        subquery: Box<Query>,
+        negated: bool,
+    },
     /// A parenthesized subquery `(SELECT ...)`, used in expression like
     /// `SELECT (subquery) AS x` or `WHERE (subquery) = x`
     Subquery(Box<Query>),
@@ -659,9 +685,15 @@ pub enum Expr {
     /// 1 AS A
     /// ```
     /// [1]: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
-    Named { expr: Box<Expr>, name: Ident },
+    Named {
+        expr: Box<Expr>,
+        name: Ident,
+    },
     /// An array index expression e.g. `(ARRAY[1, 2])[1]` or `(current_schemas(FALSE))[1]`
-    ArrayIndex { obj: Box<Expr>, indexes: Vec<Expr> },
+    ArrayIndex {
+        obj: Box<Expr>,
+        indexes: Vec<Expr>,
+    },
     /// An array expression e.g. `ARRAY[1, 2]`
     Array(Array),
     /// An interval expression e.g. `INTERVAL '1' YEAR`
@@ -684,6 +716,10 @@ pub enum Expr {
         /// `<search modifier>`
         opt_search_modifier: Option<SearchModifier>,
     },
+    Wildcard,
+    /// Qualified wildcard, e.g. `alias.*` or `schema.table.*`.
+    /// (Same caveats apply to `QualifiedWildcard` as to `Wildcard`.)
+    QualifiedWildcard(ObjectName),
 }
 
 impl fmt::Display for CastFormat {
@@ -710,6 +746,8 @@ impl fmt::Display for Expr {
                 }
                 Ok(())
             }
+            Expr::Wildcard => f.write_str("*"),
+            Expr::QualifiedWildcard(prefix) => write!(f, "{}.*", prefix),
             Expr::CompoundIdentifier(s) => write!(f, "{}", display_separated(s, ".")),
             Expr::IsTrue(ast) => write!(f, "{ast} IS TRUE"),
             Expr::IsNotTrue(ast) => write!(f, "{ast} IS NOT TRUE"),
@@ -1384,6 +1422,38 @@ pub enum Password {
     NullPassword,
 }
 
+/// Sql options of a `CREATE TABLE` statement.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateTableOptions {
+    None,
+    /// Options specified using the `WITH` keyword.
+    /// e.g. `WITH (description = "123")`
+    ///
+    /// <https://www.postgresql.org/docs/current/sql-createtable.html>
+    With(Vec<SqlOption>),
+    /// Options specified using the `OPTIONS` keyword.
+    /// e.g. `OPTIONS(description = "123")`
+    ///
+    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
+    Options(Vec<SqlOption>),
+}
+
+impl fmt::Display for CreateTableOptions {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CreateTableOptions::With(with_options) => {
+                write!(f, "WITH ({})", display_comma_separated(with_options))
+            }
+            CreateTableOptions::Options(options) => {
+                write!(f, "OPTIONS({})", display_comma_separated(options))
+            }
+            CreateTableOptions::None => Ok(()),
+        }
+    }
+}
+
 /// A top-level statement (SELECT, INSERT, CREATE, etc.)
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -1446,6 +1516,8 @@ pub enum Statement {
         /// TABLE
         #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
         table_name: ObjectName,
+        /// table_name as foo (for PostgreSQL)
+        table_alias: Option<Ident>,
         /// COLUMNS
         columns: Vec<Ident>,
         /// Overwrite (Hive)
@@ -1461,6 +1533,10 @@ pub enum Statement {
         on: Option<OnInsert>,
         /// RETURNING
         returning: Option<Vec<SelectItem>>,
+        /// Only for mysql
+        replace_into: bool,
+        /// Only for mysql
+        priority: Option<MysqlInsertPriority>,
     },
     // TODO: Support ROW FORMAT
     Directory {
@@ -1561,9 +1637,9 @@ pub enum Statement {
         materialized: bool,
         /// View name
         name: ObjectName,
-        columns: Vec<Ident>,
+        columns: Vec<ViewColumnDef>,
         query: Box<Query>,
-        with_options: Vec<SqlOption>,
+        options: CreateTableOptions,
         cluster_by: Vec<Ident>,
         /// if true, has RedShift [`WITH NO SCHEMA BINDING`] clause <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_VIEW.html>
         with_no_schema_binding: bool,
@@ -1611,6 +1687,15 @@ pub enum Statement {
         /// than empty (represented as ()), the latter meaning "no sorting".
         /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
         order_by: Option<Vec<Ident>>,
+        /// BigQuery: A partition expression for the table.
+        /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#partition_expression>
+        partition_by: Option<Box<Expr>>,
+        /// BigQuery: Table clustering column list.
+        /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
+        cluster_by: Option<Vec<Ident>>,
+        /// BigQuery: Table options list.
+        /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
+        options: Option<Vec<SqlOption>>,
         /// SQLite "STRICT" clause.
         /// if the "STRICT" table-option keyword is added to the end, after the closing ")",
         /// then strict typing rules apply to that table.
@@ -1777,6 +1862,21 @@ pub enum Statement {
         query: Box<Query>,
     },
     /// ```sql
+    /// CREATE EXTENSION [ IF NOT EXISTS ] extension_name
+    ///     [ WITH ] [ SCHEMA schema_name ]
+    ///              [ VERSION version ]
+    ///              [ CASCADE ]
+    /// ```
+    ///
+    /// Note: this is a PostgreSQL-specific statement,
+    CreateExtension {
+        name: Ident,
+        if_not_exists: bool,
+        cascade: bool,
+        schema: Option<Ident>,
+        version: Option<Ident>,
+    },
+    /// ```sql
     /// FETCH
     /// ```
     /// Retrieve rows from a query using a cursor
@@ -1789,6 +1889,20 @@ pub enum Statement {
         direction: FetchDirection,
         /// Optional, It's possible to fetch rows form cursor to the table
         into: Option<ObjectName>,
+    },
+    /// ```sql
+    /// FLUSH [NO_WRITE_TO_BINLOG | LOCAL] flush_option [, flush_option] ... | tables_option
+    /// ```
+    ///
+    /// Note: this is a Mysql-specific statement,
+    /// but may also compatible with other SQL.
+    Flush {
+        object_type: FlushType,
+        location: Option<FlushLocation>,
+        channel: Option<String>,
+        read_lock: bool,
+        export: bool,
+        tables: Vec<ObjectName>,
     },
     /// ```sql
     /// DISCARD [ ALL | PLANS | SEQUENCES | TEMPORARY | TEMP ]
@@ -2213,6 +2327,36 @@ impl fmt::Display for Statement {
     #[allow(clippy::cognitive_complexity)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Statement::Flush {
+                object_type,
+                location,
+                channel,
+                read_lock,
+                export,
+                tables,
+            } => {
+                write!(f, "FLUSH")?;
+                if let Some(location) = location {
+                    write!(f, " {location}")?;
+                }
+                write!(f, " {object_type}")?;
+
+                if let Some(channel) = channel {
+                    write!(f, " FOR CHANNEL {channel}")?;
+                }
+
+                write!(
+                    f,
+                    "{tables}{read}{export}",
+                    tables = if !tables.is_empty() {
+                        " ".to_string() + &display_comma_separated(tables).to_string()
+                    } else {
+                        "".to_string()
+                    },
+                    export = if *export { " FOR EXPORT" } else { "" },
+                    read = if *read_lock { " WITH READ LOCK" } else { "" }
+                )
+            }
             Statement::Kill { modifier, id } => {
                 write!(f, "KILL ")?;
 
@@ -2414,6 +2558,7 @@ impl fmt::Display for Statement {
                 ignore,
                 into,
                 table_name,
+                table_alias,
                 overwrite,
                 partitioned,
                 columns,
@@ -2422,18 +2567,35 @@ impl fmt::Display for Statement {
                 table,
                 on,
                 returning,
+                replace_into,
+                priority,
             } => {
+                let table_name = if let Some(alias) = table_alias {
+                    format!("{table_name} AS {alias}")
+                } else {
+                    table_name.to_string()
+                };
+
                 if let Some(action) = or {
                     write!(f, "INSERT OR {action} INTO {table_name} ")?;
                 } else {
                     write!(
                         f,
-                        "INSERT{ignore}{over}{int}{tbl} {table_name} ",
+                        "{start}",
+                        start = if *replace_into { "REPLACE" } else { "INSERT" },
+                    )?;
+                    if let Some(priority) = priority {
+                        write!(f, " {priority}",)?;
+                    }
+
+                    write!(
+                        f,
+                        "{ignore}{over}{int}{tbl} {table_name} ",
                         table_name = table_name,
                         ignore = if *ignore { " IGNORE" } else { "" },
                         over = if *overwrite { " OVERWRITE" } else { "" },
                         int = if *into { " INTO" } else { "" },
-                        tbl = if *table { " TABLE" } else { "" }
+                        tbl = if *table { " TABLE" } else { "" },
                     )?;
                 }
                 if !columns.is_empty() {
@@ -2665,7 +2827,7 @@ impl fmt::Display for Statement {
                 columns,
                 query,
                 materialized,
-                with_options,
+                options,
                 cluster_by,
                 with_no_schema_binding,
                 if_not_exists,
@@ -2680,14 +2842,17 @@ impl fmt::Display for Statement {
                     temporary = if *temporary { "TEMPORARY " } else { "" },
                     if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" }
                 )?;
-                if !with_options.is_empty() {
-                    write!(f, " WITH ({})", display_comma_separated(with_options))?;
+                if matches!(options, CreateTableOptions::With(_)) {
+                    write!(f, " {options}")?;
                 }
                 if !columns.is_empty() {
                     write!(f, " ({})", display_comma_separated(columns))?;
                 }
                 if !cluster_by.is_empty() {
                     write!(f, " CLUSTER BY ({})", display_comma_separated(cluster_by))?;
+                }
+                if matches!(options, CreateTableOptions::Options(_)) {
+                    write!(f, " {options}")?;
                 }
                 write!(f, " AS {query}")?;
                 if *with_no_schema_binding {
@@ -2723,6 +2888,9 @@ impl fmt::Display for Statement {
                 on_commit,
                 on_cluster,
                 order_by,
+                partition_by,
+                cluster_by,
+                options,
                 strict,
             } => {
                 // We want to allow the following options
@@ -2879,6 +3047,23 @@ impl fmt::Display for Statement {
                 if let Some(order_by) = order_by {
                     write!(f, " ORDER BY ({})", display_comma_separated(order_by))?;
                 }
+                if let Some(partition_by) = partition_by.as_ref() {
+                    write!(f, " PARTITION BY {partition_by}")?;
+                }
+                if let Some(cluster_by) = cluster_by.as_ref() {
+                    write!(
+                        f,
+                        " CLUSTER BY {}",
+                        display_comma_separated(cluster_by.as_slice())
+                    )?;
+                }
+                if let Some(options) = options.as_ref() {
+                    write!(
+                        f,
+                        " OPTIONS({})",
+                        display_comma_separated(options.as_slice())
+                    )?;
+                }
                 if let Some(query) = query {
                     write!(f, " AS {query}")?;
                 }
@@ -2961,6 +3146,34 @@ impl fmt::Display for Statement {
                 if let Some(predicate) = predicate {
                     write!(f, " WHERE {predicate}")?;
                 }
+                Ok(())
+            }
+            Statement::CreateExtension {
+                name,
+                if_not_exists,
+                cascade,
+                schema,
+                version,
+            } => {
+                write!(
+                    f,
+                    "CREATE EXTENSION {if_not_exists}{name}",
+                    if_not_exists = if *if_not_exists { "IF NOT EXISTS " } else { "" }
+                )?;
+                if *cascade || schema.is_some() || version.is_some() {
+                    write!(f, " WITH")?;
+
+                    if let Some(name) = schema {
+                        write!(f, " SCHEMA {name}")?;
+                    }
+                    if let Some(version) = version {
+                        write!(f, " VERSION {version}")?;
+                    }
+                    if *cascade {
+                        write!(f, " CASCADE")?;
+                    }
+                }
+
                 Ok(())
             }
             Statement::CreateRole {
@@ -3640,8 +3853,8 @@ impl fmt::Display for Statement {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub enum SequenceOptions {
     IncrementBy(Expr, bool),
-    MinValue(MinMaxValue),
-    MaxValue(MinMaxValue),
+    MinValue(Option<Expr>),
+    MaxValue(Option<Expr>),
     StartWith(Expr, bool),
     Cache(Expr),
     Cycle(bool),
@@ -3658,28 +3871,18 @@ impl fmt::Display for SequenceOptions {
                     increment = increment
                 )
             }
-            SequenceOptions::MinValue(value) => match value {
-                MinMaxValue::Empty => {
-                    write!(f, "")
-                }
-                MinMaxValue::None => {
-                    write!(f, " NO MINVALUE")
-                }
-                MinMaxValue::Some(minvalue) => {
-                    write!(f, " MINVALUE {minvalue}")
-                }
-            },
-            SequenceOptions::MaxValue(value) => match value {
-                MinMaxValue::Empty => {
-                    write!(f, "")
-                }
-                MinMaxValue::None => {
-                    write!(f, " NO MAXVALUE")
-                }
-                MinMaxValue::Some(maxvalue) => {
-                    write!(f, " MAXVALUE {maxvalue}")
-                }
-            },
+            SequenceOptions::MinValue(Some(expr)) => {
+                write!(f, " MINVALUE {expr}")
+            }
+            SequenceOptions::MinValue(None) => {
+                write!(f, " NO MINVALUE")
+            }
+            SequenceOptions::MaxValue(Some(expr)) => {
+                write!(f, " MAXVALUE {expr}")
+            }
+            SequenceOptions::MaxValue(None) => {
+                write!(f, " NO MAXVALUE")
+            }
             SequenceOptions::StartWith(start, with) => {
                 write!(
                     f,
@@ -4028,6 +4231,16 @@ pub enum FunctionArgExpr {
     QualifiedWildcard(ObjectName),
     /// An unqualified `*`
     Wildcard,
+}
+
+impl From<Expr> for FunctionArgExpr {
+    fn from(wildcard_expr: Expr) -> Self {
+        match wildcard_expr {
+            Expr::QualifiedWildcard(prefix) => Self::QualifiedWildcard(prefix),
+            Expr::Wildcard => Self::Wildcard,
+            expr => Self::Expr(expr),
+        }
+    }
 }
 
 impl fmt::Display for FunctionArgExpr {
@@ -4407,7 +4620,7 @@ pub struct HiveFormat {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct SqlOption {
     pub name: Ident,
-    pub value: Value,
+    pub value: Expr,
 }
 
 impl fmt::Display for SqlOption {
@@ -4541,6 +4754,31 @@ impl fmt::Display for SqliteOnConflict {
             Fail => write!(f, "FAIL"),
             Ignore => write!(f, "IGNORE"),
             Replace => write!(f, "REPLACE"),
+        }
+    }
+}
+
+/// Mysql specific syntax
+///
+/// See [Mysql documentation](https://dev.mysql.com/doc/refman/8.0/en/replace.html)
+/// See [Mysql documentation](https://dev.mysql.com/doc/refman/8.0/en/insert.html)
+/// for more details.
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MysqlInsertPriority {
+    LowPriority,
+    Delayed,
+    HighPriority,
+}
+
+impl fmt::Display for crate::ast::MysqlInsertPriority {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use MysqlInsertPriority::*;
+        match self {
+            LowPriority => write!(f, "LOW_PRIORITY"),
+            Delayed => write!(f, "DELAYED"),
+            HighPriority => write!(f, "HIGH_PRIORITY"),
         }
     }
 }
@@ -4797,6 +5035,62 @@ impl fmt::Display for DiscardObject {
             DiscardObject::PLANS => f.write_str("PLANS"),
             DiscardObject::SEQUENCES => f.write_str("SEQUENCES"),
             DiscardObject::TEMP => f.write_str("TEMP"),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FlushType {
+    BinaryLogs,
+    EngineLogs,
+    ErrorLogs,
+    GeneralLogs,
+    Hosts,
+    Logs,
+    Privileges,
+    OptimizerCosts,
+    RelayLogs,
+    SlowLogs,
+    Status,
+    UserResources,
+    Tables,
+}
+
+impl fmt::Display for FlushType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FlushType::BinaryLogs => f.write_str("BINARY LOGS"),
+            FlushType::EngineLogs => f.write_str("ENGINE LOGS"),
+            FlushType::ErrorLogs => f.write_str("ERROR LOGS"),
+            FlushType::GeneralLogs => f.write_str("GENERAL LOGS"),
+            FlushType::Hosts => f.write_str("HOSTS"),
+            FlushType::Logs => f.write_str("LOGS"),
+            FlushType::Privileges => f.write_str("PRIVILEGES"),
+            FlushType::OptimizerCosts => f.write_str("OPTIMIZER_COSTS"),
+            FlushType::RelayLogs => f.write_str("RELAY LOGS"),
+            FlushType::SlowLogs => f.write_str("SLOW LOGS"),
+            FlushType::Status => f.write_str("STATUS"),
+            FlushType::UserResources => f.write_str("USER_RESOURCES"),
+            FlushType::Tables => f.write_str("TABLES"),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum FlushLocation {
+    NoWriteToBinlog,
+    Local,
+}
+
+impl fmt::Display for FlushLocation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FlushLocation::NoWriteToBinlog => f.write_str("NO_WRITE_TO_BINLOG"),
+            FlushLocation::Local => f.write_str("LOCAL"),
         }
     }
 }

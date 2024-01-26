@@ -37,17 +37,17 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_mssql_alter_role(&mut self) -> Result<Statement, ParserError> {
-        let role_name = self.parse_identifier()?;
+        let role_name = self.parse_identifier(false)?;
 
         let operation = if self.parse_keywords(&[Keyword::ADD, Keyword::MEMBER]) {
-            let member_name = self.parse_identifier()?;
+            let member_name = self.parse_identifier(false)?;
             AlterRoleOperation::AddMember { member_name }
         } else if self.parse_keywords(&[Keyword::DROP, Keyword::MEMBER]) {
-            let member_name = self.parse_identifier()?;
+            let member_name = self.parse_identifier(false)?;
             AlterRoleOperation::DropMember { member_name }
         } else if self.parse_keywords(&[Keyword::WITH, Keyword::NAME]) {
             if self.consume_token(&Token::Eq) {
-                let role_name = self.parse_identifier()?;
+                let role_name = self.parse_identifier(false)?;
                 AlterRoleOperation::RenameRole { role_name }
             } else {
                 return self.expected("= after WITH NAME ", self.peek_token());
@@ -63,25 +63,25 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_pg_alter_role(&mut self) -> Result<Statement, ParserError> {
-        let role_name = self.parse_identifier()?;
+        let role_name = self.parse_identifier(false)?;
 
         // [ IN DATABASE _`database_name`_ ]
         let in_database = if self.parse_keywords(&[Keyword::IN, Keyword::DATABASE]) {
-            self.parse_object_name().ok()
+            self.parse_object_name(false).ok()
         } else {
             None
         };
 
         let operation = if self.parse_keyword(Keyword::RENAME) {
             if self.parse_keyword(Keyword::TO) {
-                let role_name = self.parse_identifier()?;
+                let role_name = self.parse_identifier(false)?;
                 AlterRoleOperation::RenameRole { role_name }
             } else {
                 return self.expected("TO after RENAME", self.peek_token());
             }
         // SET
         } else if self.parse_keyword(Keyword::SET) {
-            let config_name = self.parse_object_name()?;
+            let config_name = self.parse_object_name(false)?;
             // FROM CURRENT
             if self.parse_keywords(&[Keyword::FROM, Keyword::CURRENT]) {
                 AlterRoleOperation::Set {
@@ -117,7 +117,7 @@ impl<'a> Parser<'a> {
                     in_database,
                 }
             } else {
-                let config_name = self.parse_object_name()?;
+                let config_name = self.parse_object_name(false)?;
                 AlterRoleOperation::Reset {
                     config_name: ResetConfig::ConfigName(config_name),
                     in_database,

@@ -71,6 +71,54 @@ fn pragma_funciton_style() {
 }
 
 #[test]
+fn pragma_eq_string_style() {
+    let sql = "PRAGMA table_info = 'sqlite_master'";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::Pragma {
+            name,
+            value: Some(val),
+            is_eq: true,
+        } => {
+            assert_eq!("table_info", name.to_string());
+            assert_eq!("'sqlite_master'", val.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn pragma_function_string_style() {
+    let sql = "PRAGMA table_info(\"sqlite_master\")";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::Pragma {
+            name,
+            value: Some(val),
+            is_eq: false,
+        } => {
+            assert_eq!("table_info", name.to_string());
+            assert_eq!("\"sqlite_master\"", val.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn pragma_eq_placehoder_style() {
+    let sql = "PRAGMA table_info = ?";
+    match sqlite_and_generic().verified_stmt(sql) {
+        Statement::Pragma {
+            name,
+            value: Some(val),
+            is_eq: true,
+        } => {
+            assert_eq!("table_info", name.to_string());
+            assert_eq!("?", val.to_string());
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_table_without_rowid() {
     let sql = "CREATE TABLE t (a INT) WITHOUT ROWID";
     match sqlite_and_generic().verified_stmt(sql) {
@@ -117,18 +165,18 @@ fn parse_create_view_temporary_if_not_exists() {
             query,
             or_replace,
             materialized,
-            with_options,
+            options,
             cluster_by,
             with_no_schema_binding: late_binding,
             if_not_exists,
             temporary,
         } => {
             assert_eq!("myschema.myview", name.to_string());
-            assert_eq!(Vec::<Ident>::new(), columns);
+            assert_eq!(Vec::<ViewColumnDef>::new(), columns);
             assert_eq!("SELECT foo FROM bar", query.to_string());
             assert!(!materialized);
             assert!(!or_replace);
-            assert_eq!(with_options, vec![]);
+            assert_eq!(options, CreateTableOptions::None);
             assert_eq!(cluster_by, vec![]);
             assert!(!late_binding);
             assert!(if_not_exists);
@@ -160,7 +208,10 @@ fn parse_create_table_auto_increment() {
                     options: vec![
                         ColumnOptionDef {
                             name: None,
-                            option: ColumnOption::Unique { is_primary: true },
+                            option: ColumnOption::Unique {
+                                is_primary: true,
+                                characteristics: None
+                            },
                         },
                         ColumnOptionDef {
                             name: None,
@@ -219,6 +270,11 @@ fn parse_create_table_gencol() {
     sqlite_and_generic().verified_stmt("CREATE TABLE t1 (a INT, b INT AS (a * 2))");
     sqlite_and_generic().verified_stmt("CREATE TABLE t1 (a INT, b INT AS (a * 2) VIRTUAL)");
     sqlite_and_generic().verified_stmt("CREATE TABLE t1 (a INT, b INT AS (a * 2) STORED)");
+}
+
+#[test]
+fn parse_create_table_untyped() {
+    sqlite().verified_stmt("CREATE TABLE t1 (a, b AS (a * 2), c NOT NULL)");
 }
 
 #[test]

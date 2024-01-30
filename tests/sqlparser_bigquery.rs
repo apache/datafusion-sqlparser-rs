@@ -151,6 +151,36 @@ fn parse_create_view_with_options() {
         _ => unreachable!(),
     }
 }
+#[test]
+fn parse_create_view_if_not_exists() {
+    let sql = "CREATE VIEW IF NOT EXISTS mydataset.newview AS SELECT foo FROM bar";
+    match bigquery().verified_stmt(sql) {
+        Statement::CreateView {
+            name,
+            columns,
+            query,
+            or_replace,
+            materialized,
+            options,
+            cluster_by,
+            with_no_schema_binding: late_binding,
+            if_not_exists,
+            temporary,
+        } => {
+            assert_eq!("mydataset.newview", name.to_string());
+            assert_eq!(Vec::<ViewColumnDef>::new(), columns);
+            assert_eq!("SELECT foo FROM bar", query.to_string());
+            assert!(!materialized);
+            assert!(!or_replace);
+            assert_eq!(options, CreateTableOptions::None);
+            assert_eq!(cluster_by, vec![]);
+            assert!(!late_binding);
+            assert!(if_not_exists);
+            assert!(!temporary);
+        }
+        _ => unreachable!(),
+    }
+}
 
 #[test]
 fn parse_create_table_with_options() {

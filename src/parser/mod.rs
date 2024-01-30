@@ -7097,6 +7097,14 @@ impl<'a> Parser<'a> {
                 session,
                 global,
             })
+        } else if self.parse_keyword(Keyword::STATUS)
+            && dialect_of!(self is MySqlDialect | GenericDialect)
+        {
+            Ok(Statement::ShowStatus {
+                filter: self.parse_show_statement_filter()?,
+                session,
+                global,
+            })
         } else {
             Ok(Statement::ShowVariable {
                 variable: self.parse_identifiers()?,

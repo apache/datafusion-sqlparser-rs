@@ -1955,6 +1955,16 @@ pub enum Statement {
     /// Note: this is a PostgreSQL-specific statement.
     ShowVariable { variable: Vec<Ident> },
     /// ```sql
+    /// SHOW [GLOBAL | SESSION] STATUS [LIKE 'pattern' | WHERE expr]
+    /// ```
+    ///
+    /// Note: this is a MySQL-specific statement.
+    ShowStatus {
+        filter: Option<ShowStatementFilter>,
+        global: bool,
+        session: bool,
+    },
+    /// ```sql
     /// SHOW VARIABLES
     /// ```
     ///
@@ -3384,6 +3394,24 @@ impl fmt::Display for Statement {
                 write!(f, "SHOW")?;
                 if !variable.is_empty() {
                     write!(f, " {}", display_separated(variable, " "))?;
+                }
+                Ok(())
+            }
+            Statement::ShowStatus {
+                filter,
+                global,
+                session,
+            } => {
+                write!(f, "SHOW")?;
+                if *global {
+                    write!(f, " GLOBAL")?;
+                }
+                if *session {
+                    write!(f, " SESSION")?;
+                }
+                write!(f, " STATUS")?;
+                if filter.is_some() {
+                    write!(f, " {}", filter.as_ref().unwrap())?;
                 }
                 Ok(())
             }

@@ -87,6 +87,30 @@ fn parse_raw_literal() {
 }
 
 #[test]
+fn parse_delete_statement() {
+    let sql = "DELETE \"table\" WHERE 1";
+    match bigquery_and_generic().verified_stmt(sql) {
+        Statement::Delete {
+            from: FromTable::WithoutKeyword(from),
+            ..
+        } => {
+            assert_eq!(
+                TableFactor::Table {
+                    name: ObjectName(vec![Ident::with_quote('"', "table")]),
+                    alias: None,
+                    args: None,
+                    with_hints: vec![],
+                    version: None,
+                    partitions: vec![],
+                },
+                from[0].relation
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
 fn parse_create_view_with_options() {
     let sql = concat!(
         "CREATE VIEW myproject.mydataset.newview ",

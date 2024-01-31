@@ -42,6 +42,7 @@ mod test_utils;
 
 #[cfg(test)]
 use pretty_assertions::assert_eq;
+use sqlparser::test_utils::all_dialects_except;
 
 #[test]
 fn parse_insert_values() {
@@ -523,7 +524,10 @@ fn parse_no_table_name() {
 fn parse_delete_statement() {
     let sql = "DELETE FROM \"table\"";
     match verified_stmt(sql) {
-        Statement::Delete { from, .. } => {
+        Statement::Delete {
+            from: FromTable::WithFromKeyword(from),
+            ..
+        } => {
             assert_eq!(
                 TableFactor::Table {
                     name: ObjectName(vec![Ident::with_quote('"', "table")]),
@@ -541,10 +545,27 @@ fn parse_delete_statement() {
 }
 
 #[test]
+fn parse_delete_without_from_error() {
+    let sql = "DELETE \"table\" WHERE 1";
+
+    let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
+    let res = dialects.parse_sql_statements(sql);
+    assert_eq!(
+        ParserError::ParserError("Expected FROM, found: WHERE".to_string()),
+        res.unwrap_err()
+    );
+}
+
+#[test]
 fn parse_delete_statement_for_multi_tables() {
     let sql = "DELETE schema1.table1, schema2.table2 FROM schema1.table1 JOIN schema2.table2 ON schema2.table2.col1 = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
-    match verified_stmt(sql) {
-        Statement::Delete { tables, from, .. } => {
+    let dialects = all_dialects_except(|d| d.is::<BigQueryDialect>() || d.is::<GenericDialect>());
+    match dialects.verified_stmt(sql) {
+        Statement::Delete {
+            tables,
+            from: FromTable::WithFromKeyword(from),
+            ..
+        } => {
             assert_eq!(
                 ObjectName(vec![Ident::new("schema1"), Ident::new("table1")]),
                 tables[0]
@@ -585,7 +606,7 @@ fn parse_delete_statement_for_multi_tables_with_using() {
     let sql = "DELETE FROM schema1.table1, schema2.table2 USING schema1.table1 JOIN schema2.table2 ON schema2.table2.pk = schema1.table1.col1 WHERE schema2.table2.col2 = 1";
     match verified_stmt(sql) {
         Statement::Delete {
-            from,
+            from: FromTable::WithFromKeyword(from),
             using: Some(using),
             ..
         } => {
@@ -646,7 +667,7 @@ fn parse_where_delete_statement() {
     match verified_stmt(sql) {
         Statement::Delete {
             tables: _,
-            from,
+            from: FromTable::WithFromKeyword(from),
             using,
             selection,
             returning,
@@ -687,7 +708,7 @@ fn parse_where_delete_with_alias_statement() {
     match verified_stmt(sql) {
         Statement::Delete {
             tables: _,
-            from,
+            from: FromTable::WithFromKeyword(from),
             using,
             selection,
             returning,

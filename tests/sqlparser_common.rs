@@ -42,8 +42,6 @@ mod test_utils;
 
 #[cfg(test)]
 use pretty_assertions::assert_eq;
-use sqlparser::ast::Value::RawStringLiteral;
-use sqlparser::tokenizer::Token::{DollarQuotedString, SingleQuotedString};
 
 #[test]
 fn parse_insert_values() {
@@ -8368,33 +8366,6 @@ fn parse_binary_operators_without_whitespace() {
         "SELECT tbl1.field%tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
         "SELECT tbl1.field % tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
     );
-}
-
-#[test]
-fn temp() {
-    let dialects: Vec<Box<dyn Dialect>> = vec![
-        Box::new(GenericDialect {}),
-        Box::new(BigQueryDialect {}),
-        Box::new(HiveDialect {}),
-        Box::new(RedshiftSqlDialect {}),
-        Box::new(PostgreSqlDialect {}),
-    ];
-
-    //ctas, execute, insert_select, set, unload
-
-    for dialect in dialects {
-
-        let result = Parser::parse_sql(&*dialect, "");
-
-        match result {
-            Ok(parsed) => {
-                print!("YAYYY");
-            },
-            Err(parse_error) => {
-                print!("NOOO")
-            },
-        }
-    };
 }
 
 #[test]

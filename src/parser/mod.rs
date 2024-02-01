@@ -21,7 +21,6 @@ use alloc::{
     vec::Vec,
 };
 use core::fmt;
-use std::sync::atomic::spin_loop_hint;
 
 use log::debug;
 

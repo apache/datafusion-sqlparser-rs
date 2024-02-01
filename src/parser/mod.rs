@@ -4115,9 +4115,12 @@ impl<'a> Parser<'a> {
                     hive_format.location = Some(self.parse_literal_string()?);
                 }
                 Some(Keyword::WITH) => {
-                    let properties = self.parse_options(Keyword::SERDEPROPERTIES)?;
+                    self.prev_token();
+                    let properties = self.parse_options_with_keywords(&[Keyword::WITH, Keyword::SERDEPROPERTIES])?;
                     if properties.len() > 0 {
                         hive_format.serde_properties = Some(properties);
+                    } else {
+                        break;
                     }
                 }
                 None => break,

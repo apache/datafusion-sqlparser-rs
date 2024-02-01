@@ -3002,13 +3002,6 @@ impl fmt::Display for Statement {
                         }
                         _ => (),
                     }
-                    if let Some(options) = options.as_ref() {
-                        write!(
-                            f,
-                            " OPTIONS({})",
-                            display_comma_separated(options.as_slice())
-                        )?;
-                    }
                     if let Some(serde_properties) = serde_properties.as_ref() {
                         write!(
                             f,

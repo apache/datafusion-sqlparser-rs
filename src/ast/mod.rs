@@ -2158,11 +2158,11 @@ pub enum Statement {
     /// Note: this is a PostgreSQL-specific statement.
     Deallocate { name: Ident, prepare: bool },
     /// ```sql
-    /// EXECUTE name [ ( parameter [, ...] ) ]
+    /// EXECUTE name [ ( parameter [, ...] ) ] [USING <expr>]
     /// ```
     ///
     /// Note: this is a PostgreSQL-specific statement.
-    Execute { name: Ident, parameters: Vec<Expr> },
+    Execute { name: Ident, parameters: Vec<Expr>, using: Option<Expr> },
     /// ```sql
     /// PREPARE name [ ( data_type [, ...] ) ] AS statement
     /// ```
@@ -2301,6 +2301,14 @@ pub enum Statement {
     /// ```
     /// Note: this is a MySQL-specific statement. See <https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html>
     UnlockTables,
+    /// ```sql
+    /// UNLOAD(statement) TO <destination> [ WITH options ]
+    /// ```
+    Unload {
+        query: Box<Query>,
+        to: Ident,
+        with: Vec<SqlOption>
+    }
 }
 
 impl fmt::Display for Statement {
@@ -2969,6 +2977,7 @@ impl fmt::Display for Statement {
 
                 if let Some(HiveFormat {
                     row_format,
+                    serde_properties,
                     storage,
                     location,
                 }) = hive_formats
@@ -2992,6 +3001,20 @@ impl fmt::Display for Statement {
                             write!(f, " STORED AS {format}")?
                         }
                         _ => (),
+                    }
+                    if let Some(options) = options.as_ref() {
+                        write!(
+                            f,
+                            " OPTIONS({})",
+                            display_comma_separated(options.as_slice())
+                        )?;
+                    }
+                    if let Some(serde_properties) = serde_properties.as_ref() {
+                        write!(
+                            f,
+                            " WITH SERDEPROPERTIES ({})",
+                            display_comma_separated(serde_properties)
+                        )?;
                     }
                     if !*external {
                         if let Some(loc) = location {
@@ -3574,11 +3597,14 @@ impl fmt::Display for Statement {
                 prepare = if *prepare { "PREPARE " } else { "" },
                 name = name,
             ),
-            Statement::Execute { name, parameters } => {
+            Statement::Execute { name, parameters, using } => {
                 write!(f, "EXECUTE {name}")?;
                 if !parameters.is_empty() {
                     write!(f, "({})", display_comma_separated(parameters))?;
                 }
+                if let Some(using) = using {
+                    write!(f, " USING {using}")?;
+                };
                 Ok(())
             }
             Statement::Prepare {
@@ -3819,6 +3845,15 @@ impl fmt::Display for Statement {
             }
             Statement::UnlockTables => {
                 write!(f, "UNLOCK TABLES")
+            }
+            Statement::Unload { query, to, with } => {
+                write!(f, "UNLOAD({query}) TO {to}")?;
+
+                if with.len() > 0 {
+                    write!(f, " WITH ({})", display_comma_separated(with))?;
+                }
+
+                Ok(())
             }
         }
     }
@@ -4588,6 +4623,7 @@ pub enum HiveIOFormat {
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct HiveFormat {
     pub row_format: Option<HiveRowFormat>,
+    pub serde_properties: Option<Vec<SqlOption>>,
     pub storage: Option<HiveIOFormat>,
     pub location: Option<String>,
 }

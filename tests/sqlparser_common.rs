@@ -42,6 +42,8 @@ mod test_utils;
 
 #[cfg(test)]
 use pretty_assertions::assert_eq;
+use sqlparser::ast::Value::RawStringLiteral;
+use sqlparser::tokenizer::Token::{DollarQuotedString, SingleQuotedString};
 
 #[test]
 fn parse_insert_values() {
@@ -3494,6 +3496,23 @@ fn parse_alter_table() {
         } => {
             assert_eq!(old_column_name.to_string(), "foo");
             assert_eq!(new_column_name.to_string(), "new_foo");
+        }
+        _ => unreachable!(),
+    }
+
+    let set_table_properties = "ALTER TABLE tab SET TBLPROPERTIES('classification' = 'parquet')";
+    match alter_table_op(verified_stmt(set_table_properties)) {
+        AlterTableOperation::SetTblProperties {
+            table_properties,
+        } => {
+            assert_eq!(table_properties, [
+                SqlOption {
+                    name: Ident { value: "classification".to_string(), quote_style: Some('\'') },
+                    value: Expr::Value(Value::SingleQuotedString(
+                        "parquet".to_string()
+                    )),
+                }
+            ]);
         }
         _ => unreachable!(),
     }
@@ -8348,6 +8367,94 @@ fn parse_binary_operators_without_whitespace() {
     all_dialects().one_statement_parses_to(
         "SELECT tbl1.field%tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
         "SELECT tbl1.field % tbl2.field FROM tbl1 JOIN tbl2 ON tbl1.id = tbl2.entity_id",
+    );
+}
+
+#[test]
+fn temp() {
+    let dialects: Vec<Box<dyn Dialect>> = vec![
+        Box::new(GenericDialect {}),
+        Box::new(BigQueryDialect {}),
+        Box::new(HiveDialect {}),
+        Box::new(RedshiftSqlDialect {}),
+        Box::new(PostgreSqlDialect {}),
+    ];
+
+    //ctas, execute, insert_select, set, unload
+
+    for dialect in dialects {
+
+        let result = Parser::parse_sql(&*dialect, "");
+
+        match result {
+            Ok(parsed) => {
+                print!("YAYYY");
+            },
+            Err(parse_error) => {
+                print!("NOOO")
+            },
+        }
+    };
+}
+
+#[test]
+fn parse_unload() {
+    let unload = verified_stmt("UNLOAD(SELECT cola FROM tab) TO 's3://...' WITH (format = 'AVRO')");
+    assert_eq!(
+        unload,
+        Statement::Unload {
+            query: Box::new(Query {
+                body: Box::new(
+                    SetExpr::Select(Box::new(Select {
+                        distinct: None,
+                        top: None,
+                        projection: vec![
+                            UnnamedExpr(Expr::Identifier(Ident::new("cola"))),
+                        ],
+                        into: None,
+                        from: vec![TableWithJoins {
+                            relation: TableFactor::Table {
+                                name: ObjectName(vec![Ident::new("tab")]),
+                                alias: None,
+                                args: None,
+                                with_hints: vec![],
+                                version: None,
+                                partitions: vec![],
+                            },
+                            joins: vec![],
+                        }],
+                        lateral_views: vec![],
+                        selection: None,
+                        group_by: GroupByExpr::Expressions(vec![]),
+                        cluster_by: vec![],
+                        distribute_by: vec![],
+                        sort_by: vec![],
+                        having: None,
+                        named_window: vec![],
+                        qualify: None
+                    }))
+                ),
+                with: None,
+                limit: None,
+                limit_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+                order_by: vec![],
+            }),
+            to: Ident {
+                value: "s3://...".to_string(),
+                quote_style: Some('\'')
+            },
+            with: vec![SqlOption {
+                name: Ident {
+                    value: "format".to_string(),
+                    quote_style: None
+                },
+                value: Expr::Value(Value::SingleQuotedString("AVRO".to_string()))
+            }]
+        }
     );
 }
 

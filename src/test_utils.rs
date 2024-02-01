@@ -251,6 +251,7 @@ pub fn alter_table_op_with_name(stmt: Statement, expected_name: &str) -> AlterTa
         _ => panic!("Expected ALTER TABLE statement"),
     }
 }
+
 pub fn alter_table_op(stmt: Statement) -> AlterTableOperation {
     alter_table_op_with_name(stmt, "tab")
 }
